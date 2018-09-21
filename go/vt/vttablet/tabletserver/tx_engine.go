@@ -98,7 +98,7 @@ type TxEngine struct {
 }
 
 // NewTxEngine creates a new TxEngine.
-func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *TxEngine {
+func NewTxEngine(tsv connpool.TabletService, config tabletenv.TabletConfig) *TxEngine {
 	te := &TxEngine{
 		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
 	}
@@ -120,7 +120,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 		config.TxPoolWaiterCap,
-		checker,
+		tsv,
 		limiter,
 	)
 	te.twopcEnabled = config.TwoPCEnable
@@ -149,7 +149,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 		3,
 		0,
 		time.Duration(config.IdleTimeout*1e9),
-		checker,
+		tsv,
 	)
 	te.twoPC = NewTwoPC(readPool)
 	te.transitionSignal = make(chan struct{})
