@@ -276,6 +276,23 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 	return &dbConfigs, nil
 }
 
+// NewDirectDBConfigs returns a DBConfigs suited for TabletServers within VTGates.
+func NewDirectDBConfigs(genParams mysql.ConnParams, dbName string) *DBConfigs {
+	dbcfgs := &DBConfigs{
+		userConfigs: map[string]*userConfig{
+			App:      {param: genParams},
+			AppDebug: {param: genParams},
+			Dba:      {param: genParams},
+		},
+	}
+	dbcfgs.userConfigs[App].param.Uname = dbName + ".vt_app"
+	dbcfgs.userConfigs[AppDebug].param.Uname = dbName + ".vt_appdebug"
+	dbcfgs.userConfigs[Dba].param.Uname = dbName + ".vt_dba"
+	dbcfgs.DBName.Set(dbName)
+	dbcfgs.SidecarDBName.Set("_vt")
+	return dbcfgs
+}
+
 // NewTestDBConfigs returns a DBConfigs meant for testing.
 func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbName string) *DBConfigs {
 	dbcfgs := &DBConfigs{
