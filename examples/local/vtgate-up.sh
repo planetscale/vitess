@@ -84,7 +84,7 @@ $VTROOT/bin/vtgate \
   -gateway_implementation discoverygateway \
   -service_map 'grpc-vtgateservice' \
   -pid_file $VTDATAROOT/tmp/vtgate.pid \
-  -tablet_protocol grpc \
+  -tablet_protocol direct \
   $optional_auth_args \
   $optional_grpc_auth_args \
   $optional_tls_args \

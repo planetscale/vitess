@@ -21,6 +21,7 @@ package direct
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -28,17 +29,25 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// templateOnce is used to change the tablet stats URLs to point
+// to the embedded tablet servers instead of the remote vttablets.
+var templateOnce sync.Once
 
 func init() {
 	tabletconn.RegisterDialer("direct", newEmbeddedTS)
@@ -63,6 +72,11 @@ type embeddedTS struct {
 }
 
 func newEmbeddedTS(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	templateOnce.Do(func() {
+		*discovery.TabletURLTemplateString = "{{.EmbeddedStatusURL}}"
+		discovery.ParseTabletURLTemplateFromFlag()
+	})
+
 	// Dial into vttablet for proxying some of the requests.
 	tc, err := tabletconn.GetDialerByName("grpc")(tablet, failFast)
 	if err != nil {
@@ -79,6 +93,26 @@ func newEmbeddedTS(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (que
 			TabletType: tablet.Type,
 		},
 	}
+	// TODO(sougou): need to add a link to the remote vttablet here.
+	ets.ts.AddStatusHeader()
+	ets.ts.AddStatusPart()
+
+	ets.ts.RegisterQueryRuleSource("embeddedMode")
+	erules := rules.New()
+	rule1 := rules.NewQueryRule("redirect_to_vttablet", "redirect_to_vttablet", rules.QRFailRetry)
+	rule1.AddPlanCond(planbuilder.PlanNextval)
+	rule1.AddPlanCond(planbuilder.PlanDDL)
+	erules.Add(rule1)
+	// TODO(sougou): we still don't have a way to intercept updates and deletes to messages.
+	rule2 := rules.NewQueryRule("disallow_plans", "disallow_plans", rules.QRFail)
+	rule2.AddPlanCond(planbuilder.PlanInsertMessage)
+	rule2.AddPlanCond(planbuilder.PlanMessageStream)
+	erules.Add(rule2)
+	if err := ets.ts.SetQueryRules("embeddedMode", erules); err != nil {
+		tc.Close(context.TODO())
+		return nil, err
+	}
+
 	// Provide errors for unsupported functions.
 	ets.QueryService = queryservice.Wrap(
 		nil,
@@ -106,9 +140,34 @@ func newEmbeddedTS(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (que
 func (ets *embeddedTS) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	result, err := ets.ts.Execute(ctx, target, query, sqltypes.CopyBindVariables(bindVars), transactionID, options)
 	if err != nil {
+		if vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION && strings.Contains(err.Error(), "due to rule: redirect_to_vttablet") {
+			return ets.tabletConn.Execute(ctx, target, query, bindVars, 0, options)
+		}
 		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
 	return result.Copy(), nil
+}
+
+func (ets *embeddedTS) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
+	q := make([]*querypb.BoundQuery, len(queries))
+	for i, query := range queries {
+		q[i] = &querypb.BoundQuery{
+			Sql:           query.Sql,
+			BindVariables: sqltypes.CopyBindVariables(query.BindVariables),
+		}
+	}
+	results, err := ets.ts.ExecuteBatch(ctx, target, q, asTransaction, transactionID, options)
+	if err != nil {
+		if vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION && strings.Contains(err.Error(), "due to rule: redirect_to_vttablet") {
+			return ets.tabletConn.ExecuteBatch(ctx, target, q, asTransaction, 0, options)
+		}
+		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+	}
+	copied := make([]sqltypes.Result, len(results))
+	for i, result := range results {
+		copied[i] = *result.Copy()
+	}
+	return copied, nil
 }
 
 func (ets *embeddedTS) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
@@ -138,6 +197,12 @@ func (ets *embeddedTS) Rollback(ctx context.Context, target *querypb.Target, tra
 
 func (ets *embeddedTS) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	qr, transactionID, err := ets.ts.BeginExecute(ctx, target, query, sqltypes.CopyBindVariables(bindVars), options)
+	if err != nil && vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION && strings.Contains(err.Error(), "due to rule: redirect_to_vttablet") {
+		// We can still send the requests to vttablet because these are transactionless statements.
+		// TODO(sougou): but what do we do about this dangling transaction?
+		qr, err = ets.tabletConn.Execute(ctx, target, query, bindVars, 0, options)
+		return qr, transactionID, err
+	}
 	return qr.Copy(), transactionID, err
 }
 
@@ -165,6 +230,7 @@ func (ets *embeddedTS) HandlePanic(err *error) {
 }
 
 func (ets *embeddedTS) Close(ctx context.Context) error {
+	// TODO(sougou): implement Embedder.Reset and call it here.
 	ets.tabletConn.Close(ctx)
 	ets.ts.StopService()
 	return nil
