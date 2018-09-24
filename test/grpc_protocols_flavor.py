@@ -76,3 +76,11 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def vttest_protocol(self):
     return 'grpc'
+
+class TabletDirectProtocolsFlavor(GRpcProtocolsFlavor):
+  """Definitons to use gRPC everywhere
+  except fpr tabletconn, which will be direct.
+  """
+
+  def tabletconn_protocol(self):
+    return 'direct'

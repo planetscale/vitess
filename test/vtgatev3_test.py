@@ -481,6 +481,9 @@ vschema = {
     }''',
 }
 
+# transaction_mode is overridden by vtgatedirect_test.py
+transaction_mode = 'TWOPC'
+
 
 def setUpModule():
   global keyspace_env
@@ -540,7 +543,7 @@ def setUpModule():
     utils.apply_vschema(vschema)
     utils.VtGate().start(
         tablets=[shard_0_master, shard_1_master, lookup_master],
-        extra_args=['-transaction_mode', 'TWOPC'])
+        extra_args=['-transaction_mode', transaction_mode])
     utils.vtgate.wait_for_endpoints('user.-80.master', 1)
     utils.vtgate.wait_for_endpoints('user.80-.master', 1)
     utils.vtgate.wait_for_endpoints('lookup.0.master', 1)
@@ -670,7 +673,7 @@ class TestVTGateFunctions(unittest.TestCase):
       self.fail('Execute went through')
     except dbexceptions.DatabaseError as e:
       s = str(e)
-      self.assertIn(protocols_flavor().rpc_timeout_message(), s)
+      self.assertIn('DeadlineExceeded', s)
 
     # test directive timeout longer than the query time
     cursor.execute('SELECT /*vt+ QUERY_TIMEOUT_MS=2000 */ SLEEP(1)', {})

@@ -500,6 +500,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vtgatedirect": {
+			"File": "vtgatedirect_test.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 0,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"messaging": {
 			"File": "messaging.py",
 			"Args": [],

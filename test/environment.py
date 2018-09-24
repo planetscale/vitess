@@ -222,6 +222,10 @@ def setup_protocol_flavor(flavor):
     import grpc_protocols_flavor  # pylint: disable=g-import-not-at-top
     protocols_flavor.set_protocols_flavor(
         grpc_protocols_flavor.GRpcProtocolsFlavor())
+  elif flavor == 'direct':
+    import grpc_protocols_flavor  # pylint: disable=g-import-not-at-top
+    protocols_flavor.set_protocols_flavor(
+        grpc_protocols_flavor.TabletDirectProtocolsFlavor())
 
   else:
     logging.error('Unknown protocols flavor %s', flavor)
