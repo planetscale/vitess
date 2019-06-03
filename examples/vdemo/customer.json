@@ -1,0 +1,34 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "hash"
+        }
+      ],
+      "auto_increment": {
+        "column": "cid",
+        "sequence": "customer_seq"
+      }
+    },
+    "orders": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "hash"
+        }
+      ],
+      "auto_increment": {
+        "column": "oid",
+        "sequence": "order_seq"
+      }
+    }
+  }
+}

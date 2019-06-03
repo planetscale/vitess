@@ -1,0 +1,25 @@
+Fill data
+kmysql <data.sql
+
+Product Materialized view
+kvtctl Materialize -workflow UserProduct -create_table -is_reference product.product customer.product
+
+Product auto-routing
+kvtctl ApplyRoutingRules -rules='{"rules":[{"fromTable":"product","toTables":["product.product","customer.product"]}]}'
+
+Merchant Orders
+kvtctl Materialize -workflow MerchantOrder -create_table -primary_vindex mname:md5 customer.orders merchant.orders
+
+Merchant Orders auto-routing
+kvtctl ApplyRoutingRules -rules='{"rules":[{"fromTable":"orders","toTables":["customer.orders","merchant.orders"]}, {"fromTable":"product","toTables":["product.product","customer.product"]}]}'
+
+Sales schema
+kvtctl ApplySchema -sql='create table sales(pid int, kount int, amount int, primary key(pid))' product
+
+Materialize sales
+kvtctl Materialize -workflow ProductSales -expression 'select pid, count(*) as kount, sum(price) as amount from orders group by pid' customer.orders product.sales
+
+Migrate orders
+kvtctl MigrateReads merchant MerchantOrder rdonly
+kvtctl MigrateReads merchant MerchantOrder replica
+kvtctl MigrateWrites merchant MerchantOrder

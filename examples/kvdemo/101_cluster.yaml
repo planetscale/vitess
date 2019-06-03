@@ -1,0 +1,190 @@
+topology:
+  cells:
+    - name: "zone1"
+      etcd:
+        replicas: 1
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 1
+      mysqlProtocol:
+        enabled: true
+        authType: "none"
+      keyspaces:
+        - name: "product"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+          schema:
+            initial: |-
+              create table product(pid bigint, description varchar(128), primary key(pid));
+              create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
+              insert into customer_seq(id, next_id, cache) values(0, 100, 100);
+              create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
+              insert into order_seq(id, next_id, cache) values(0, 100, 100);
+          vschema:
+            initial: |-
+              {
+                "tables": {
+                  "product": {
+                    "columns": [
+                      {
+                        "name": "pid"
+                      },{
+                        "name": "description",
+                        "type": "VARCHAR"
+                      }
+                    ],
+                    "column_list_authoritative": true
+                  },
+                  "customer_seq": {
+                    "type": "sequence"
+                  },
+                  "order_seq": {
+                    "type": "sequence"
+                  }
+                }
+              }
+        - name: "customer"
+          shards:
+            - name: "-80"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+            - name: "80-"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+          schema:
+            initial: |-
+              create table customer(cid int, name varchar(128), balance bigint, primary key(cid));
+              create table orders(oid int, cid int, mname varchar(128), pid int, price int, primary key(oid));
+          vschema:
+            initial: |-
+              {
+                "sharded": true,
+                "vindexes": {
+                  "hash": {
+                    "type": "hash"
+                  }
+                },
+                "tables": {
+                  "customer": {
+                    "column_vindexes": [
+                      {
+                        "column": "cid",
+                        "name": "hash"
+                      }
+                    ],
+                    "auto_increment": {
+                      "column": "cid",
+                      "sequence": "customer_seq"
+                    },
+                    "columns": [
+                      {
+                        "name": "cid"
+                      },{
+                        "name": "name",
+                        "type": "VARCHAR"
+                      },{
+                        "name": "balance"
+                      }
+                    ],
+                    "column_list_authoritative": true
+                  },
+                  "orders": {
+                    "column_vindexes": [
+                      {
+                        "column": "cid",
+                        "name": "hash"
+                      }
+                    ],
+                    "auto_increment": {
+                      "column": "oid",
+                      "sequence": "order_seq"
+                    },
+                    "columns": [
+                      {
+                        "name": "oid"
+                      },{
+                        "name": "cid"
+                      },{
+                        "name": "mname",
+                        "type": "VARCHAR"
+                      },{
+                        "name": "pid"
+                      },{
+                        "name": "price"
+                      }
+                    ],
+                    "column_list_authoritative": true
+                  }
+                }
+              }
+        - name: "merchant"
+          shards:
+            - name: "-80"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+            - name: "80-"
+              tablets:
+                - type: "replica"
+                  vttablet:
+                    replicas: 2
+          schema:
+            initial: |-
+              create table merchant(mname varchar(128), category varchar(128), primary key(mname));
+          vschema:
+            initial: |-
+              {
+                "sharded": true,
+                "vindexes": {
+                  "md5": {
+                    "type": "unicode_loose_md5"
+                  }
+                },
+                "tables": {
+                  "merchant": {
+                    "column_vindexes": [
+                      {
+                        "column": "mname",
+                        "name": "md5"
+                      }
+                    ],
+                    "columns": [
+                      {
+                        "name": "mname",
+                        "type": "VARCHAR"
+                      },{
+                        "name": "category"
+                      }
+                    ],
+                    "column_list_authoritative": true
+                  }
+                }
+              }
+
+
+vtctld:
+  serviceType: LoadBalancer
+  vitessTag: percona-demo
+
+vtgate:
+  serviceType: LoadBalancer
+  vitessTag: percona-demo
+
+vttablet:
+  vitessTag: percona-demo
+
+pmm:
+  enabled: false
+
+orchestrator:
+  enabled: false

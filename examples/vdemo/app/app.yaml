@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: commerce
+spec:
+  selector:
+    matchLabels:
+      run: commerce
+  replicas: 10
+  template:
+    metadata:
+      labels:
+        run: commerce
+    spec:
+      containers:
+      - name: commerce
+        image: sougou/percona:latest
+        ports:
+        - containerPort: 8000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: commerce
+  labels:
+    run: commerce
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 8000
+  selector:
+    run: commerce
+  type: LoadBalancer
