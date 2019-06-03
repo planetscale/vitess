@@ -1,0 +1,11 @@
+{
+  "tables": {
+    "product": {},
+    "customer_seq": {
+      "type": "sequence"
+    },
+    "order_seq": {
+      "type": "sequence"
+    }
+  }
+}
