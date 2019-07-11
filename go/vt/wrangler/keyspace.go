@@ -33,11 +33,14 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vschema"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const (
@@ -88,6 +91,156 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 	ki.ShardingColumnName = shardingColumnName
 	ki.ShardingColumnType = shardingColumnType
 	return wr.ts.UpdateKeyspace(ctx, ki)
+}
+
+// Materialize materializes a table.
+func (wr *Wrangler) Materialize(ctx context.Context, src, tgt, workflow, purpose string, createTable, isReference bool, primaryVindex, expression string) error {
+	split := func(in, separator string) (string, string) {
+		splits := strings.Split(in, separator)
+		if len(splits) != 2 {
+			return in, ""
+		}
+		return splits[0], splits[1]
+	}
+
+	if workflow == "" {
+		return fmt.Errorf("need workflow")
+	}
+
+	sourceKeyspace, sourceTable := split(src, ".")
+	targetKeyspace, targetTable := split(tgt, ".")
+	targetVSchema, err := wr.ts.GetVSchema(ctx, targetKeyspace)
+	if err != nil {
+		return err
+	}
+	colVindex, vindexName := split(primaryVindex, ":")
+	ti, ok := targetVSchema.Tables[targetTable]
+	if !ok {
+		// Table not in VSchema.
+		if !targetVSchema.Sharded {
+			// Keyspace is not sharded.
+			targetVSchema.Tables[targetTable] = &vschema.Table{}
+		} else {
+			// Keyspace is sharded.
+			if !isReference {
+				// Not a Reference table.
+				if vindexName == "" {
+					return fmt.Errorf("need a primary vindex for target table")
+				}
+				ti = &vschemapb.Table{
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: colVindex,
+						Name:   vindexName,
+					}},
+				}
+				targetVSchema.Tables[targetTable] = ti
+				if vindex, ok := targetVSchema.Vindexes[vindexName]; !ok {
+					// Vindex not in VSchema.
+					targetVSchema.Vindexes[vindexName] = &vschemapb.Vindex{
+						Type: vindexName,
+					}
+				} else {
+					// Vindex in VSchema.
+					vindexName = vindex.Type
+				}
+			} else {
+				// Reference Table.
+				ti = &vschema.Table{
+					Type: vindexes.TypeReference,
+				}
+				targetVSchema.Tables[targetTable] = ti
+			}
+		}
+		if err := wr.ts.SaveVSchema(ctx, targetKeyspace, targetVSchema); err != nil {
+			return err
+		}
+		if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+			return err
+		}
+	} else {
+		// Table is found. Override flags with vschema settings.
+		if targetVSchema.Sharded {
+			// Keyspace is sharded.
+			if ti.Type != vindexes.TypeReference {
+				// Not a Reference table.
+				colVindex = ti.ColumnVindexes[0].Column
+				vindexName = targetVSchema.Vindexes[ti.ColumnVindexes[0].Name].Type
+			} else {
+				// Reference Table.
+				isReference = true
+			}
+		}
+	}
+	sourceShards, err := wr.ts.GetShardNames(ctx, sourceKeyspace)
+	if err != nil {
+		return err
+	}
+	targetShards, err := wr.ts.GetShardNames(ctx, targetKeyspace)
+	if err != nil {
+		return err
+	}
+	if createTable {
+		for _, targetShard := range targetShards {
+			if err := wr.CopySchemaShardFromShard(ctx, []string{targetTable}, nil, false, sourceKeyspace, sourceShards[0], targetKeyspace, targetShard, 1*time.Second); err != nil {
+				return err
+			}
+		}
+	}
+	for _, targetShard := range targetShards {
+		target, err := wr.ts.GetShard(ctx, targetKeyspace, targetShard)
+		if err != nil {
+			return err
+		}
+		targetMaster, err := wr.ts.GetTablet(ctx, target.MasterAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.MasterAlias)
+		}
+		rule := &binlogdatapb.Rule{
+			Match: targetTable,
+		}
+		if targetVSchema.Sharded && !isReference {
+			if expression == "" {
+				rule.Filter = fmt.Sprintf("select * from %s where in_keyrange(%s, '%s', '%s')", sourceTable, colVindex, vindexName, key.KeyRangeString(target.KeyRange))
+			} else {
+				rule.Filter = fmt.Sprintf("%s where in_keyrange(%s, '%s', '%s')", expression, colVindex, vindexName, key.KeyRangeString(target.KeyRange))
+			}
+		} else if expression != "" {
+			rule.Filter = expression
+		}
+		for _, sourceShard := range sourceShards {
+			filter := &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{rule},
+			}
+			bls := &binlogdatapb.BinlogSource{
+				Keyspace: sourceKeyspace,
+				Shard:    sourceShard,
+				Filter:   filter,
+			}
+			cmd := binlogplayer.CreateVReplicationState(workflow, bls, "", binlogplayer.BlpRunning, targetMaster.DbName())
+			if _, err := wr.TabletManagerClient().VReplicationExec(ctx, targetMaster.Tablet, cmd); err != nil {
+				return err
+			}
+		}
+	}
+
+	if purpose == "" {
+		return nil
+	}
+	rules, err := wr.getRoutingRules(ctx)
+	if err != nil {
+		return err
+	}
+	switch purpose {
+	case "unified_view":
+		rules[targetTable] = []string{src, tgt}
+	case "migration":
+		rules[targetTable] = []string{src}
+		rules[tgt] = []string{src}
+	}
+	if err := wr.saveRoutingRules(ctx, rules); err != nil {
+		return err
+	}
+	return wr.ts.RebuildSrvVSchema(ctx, nil)
 }
 
 // SplitClone initiates a SplitClone workflow.
