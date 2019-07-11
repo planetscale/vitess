@@ -1,0 +1,65 @@
+<nav class="navbar navbar-light bg-light navbar-expand-sm">
+  <a class="navbar-brand" href="https://vitess.io"
+    ><img
+      src="/vitess-logo.png"
+      width="30"
+      height="30"
+      class="d-inline-block align-top mr-2"
+      alt=""
+    />VReplication Demo</a
+  >
+  <div class="collapse navbar-collapse justify-content-between" id="navbarNav">
+    <ul class="navbar-nav">
+      <li class="nav-item">
+        <a class="nav-link" href="/index.html">i0</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/i1.html">i1</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/i2.html">i2</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/i3.html">i3</a>
+      </li>
+    </ul>
+    <form class="form-inline w-75" data-ng-submit="submitQuery()">
+      <div class="input-group w-100">
+        <div class="input-group-prepend">
+          <button
+            class="btn btn-outline-secondary dropdown-toggle"
+            type="button"
+            data-toggle="dropdown"
+          >
+            Samples <span class="caret"></span>
+          </button>
+          <div class="dropdown-menu">
+            <a
+              class="dropdown-item"
+              data-ng-class="{'divider': !sample}"
+              data-ng-repeat="sample in samples track by $index"
+              data-ng-click="setQuery(sample)"
+            >
+              {{ sample }}
+            </a>
+          </div>
+        </div>
+        <input
+          type="text"
+          class="form-control"
+          placeholder="Query"
+          data-ng-model="query"
+          id="query_input"
+        />
+        <div class="input-group-append">
+          <button
+            class="btn btn-secondary"
+            data-ng-click="setQuery(query); submitQuery()"
+          >
+            Search
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</nav>
