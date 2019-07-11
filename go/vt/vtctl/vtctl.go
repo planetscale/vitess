@@ -314,6 +314,9 @@ var commands = []commandGroup{
 			{"VerticalSplitClone", commandVerticalSplitClone,
 				"<from_keyspace> <to_keyspace> <tables>",
 				"Start the VerticalSplitClone process to perform vertical resharding. Example: SplitClone from_ks to_ks 'a,/b.*/'"},
+			{"Materialize", commandMaterialize,
+				"[--workflow=<workflow>] [--create_table] [--is_reference] [--primary_vindex=col:vindex] [--expression=<expression>] <source_keyspace.table> <target_keyspace.table>",
+				"Creae a materialized view"},
 			{"MigrateServedTypes", commandMigrateServedTypes,
 				"[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] <keyspace/shard> <served tablet type>",
 				"Migrates a serving type from the source shard to the shards that it replicates to. This command also rebuilds the serving graph. The <keyspace/shard> argument can specify any of the shards involved in the migration."},
@@ -1762,6 +1765,24 @@ func commandVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFl
 	toKeyspace := subFlags.Arg(1)
 	tables := strings.Split(subFlags.Arg(2), ",")
 	return wr.VerticalSplitClone(ctx, fromKeyspace, toKeyspace, tables)
+}
+
+func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	workflow := subFlags.String("workflow", "", "Unique workflow name")
+	purpose := subFlags.String("purpose", "", "Purpose can be omitted, 'unified_view' or 'migration'")
+	createTable := subFlags.Bool("create_table", false, "Create the table")
+	isReference := subFlags.Bool("is_reference", false, "Create the table")
+	primaryVindex := subFlags.String("primary_vindex", "", "Primary vindex specified as col:vindex")
+	expression := subFlags.String("expression", "", "Expression representing the transformation")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("two arguments are required: <source_keyspace.table> <target_keyspace.table>")
+	}
+	src := subFlags.Arg(0)
+	tgt := subFlags.Arg(1)
+	return wr.Materialize(ctx, src, tgt, *workflow, *purpose, *createTable, *isReference, *primaryVindex, *expression)
 }
 
 func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
