@@ -1,19 +1,14 @@
-<div class="panel panel-info"
+<div class="card bg-info mb-3"
   data-ng-show="(!curResult.error) && curResult.description">
-  <div class="panel-heading">
-    <h5>{{curResult.title}}</h5>
-    <span data-ng-show="last_id">last_id: {{res.lastrowid}}</span>
-  </div>
-  <div class="panel-body">
-    <table class="table table-condensed">
+    <div class="card-title text-center"><b>{{curResult.title}}</b></div>
+    <table class="table table-sm text-dark table-bordered">
       <tr>
         <th data-ng-repeat="field in curResult.description">{{field[0]}}</th>
       </tr>
-      <tr data-ng-repeat="row in curResult.results">
-        <td data-ng-repeat="cell in row track by $index">{{cell}}</td>
+      <tr data-ng-repeat="row in curResult.results" data-ng-class="{'bg-secondary': row[0]}">
+        <td data-ng-repeat="cell in row.slice(1) track by $index">{{cell}}</td>
       </tr>
     </table>
-  </div>
 </div>
 <div class="alert alert-success"
   data-ng-show="(!curResult.error) && curResult.description.length == 0">

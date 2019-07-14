@@ -2,16 +2,19 @@ Fill data
 kmysql <data.sql
 
 Product Materialized view
-kvtctl Materialize -workflow=UserProduct -purpose=unified_view -create_table -is_reference product.product customer.product
+kvtctl Materialize -create_table -is_reference UserProduct product.product customer.product
+kvtctl Expose --auto_route customer UserProduct
 
 Merchant Orders
-kvtctl Materialize -workflow=MerchantOrder -purpose=unified_view -create_table -primary_vindex=mname:md5 customer.orders merchant.orders
+kvtctl Materialize -create_table -primary_vindex=mname:md5 MerchantOrder customer.orders merchant.orders
+kvtctl Expose --auto_route merchant MerchantOrder
 
 Sales schema
 kvtctl ApplySchema -sql='create table sales(pid int, kount int, amount int, primary key(pid))' product
 
 Materialize sales
-kvtctl Materialize -workflow ProductSales -expression 'select pid, count(*) as kount, sum(price) as amount from orders group by pid' customer.orders product.sales
+kvtctl Materialize ProductSales 'select pid, count(*) as kount, sum(price) as amount from customer.orders group by pid' product.sales
+kvtctl Expose product ProductSales
 
 Migrate orders
 kvtctl MigrateReads merchant MerchantOrder rdonly
