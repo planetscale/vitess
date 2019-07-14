@@ -26,24 +26,58 @@ import time
 import MySQLdb as db
 
 
-def exec_query(conn, title, query, response, keyspace=None, kr=None):  # pylint: disable=missing-docstring
+def exec_query(conn, title, table, query, response, keyspace=None, kr=""):  # pylint: disable=missing-docstring
   cursor = conn.cursor()
   try:
     if kr:
       cursor.execute('use `%s:%s`' % (keyspace, kr))
     cursor.execute(query)
+    results = cursor.fetchall()
+
+    # Load previous values.
+    fname = "/tmp/"+title+".json"
+    try:
+      with open(fname) as f:
+        rows = json.load(f)
+    except Exception:
+      rows = []
+    if not rows:
+      rows = []
+
+    # A hack:
+    # Insert an extra value that specifies if the row is new or not.
+    # True is new, False is old.
+    # result.html will remove this value before displaying
+    # the actual results.
+    # result is an exception: always treat as old.
+    qualified_results = []
+    for r in results:
+      newr = list(r)
+      if title == "result":
+        newr.insert(0, False)
+      else:
+        newr.insert(0, newr not in rows)
+      qualified_results.append(newr)
+
     response[title] = {
-        "title": title,
+        "title": table+" "+kr,
         "description": cursor.description,
         "rowcount": cursor.rowcount,
         "lastrowid": cursor.lastrowid,
-        "results": cursor.fetchall(),
+        "results": qualified_results,
         }
+
+    # Save latest values.
+    with open(fname, 'w') as f:
+      json.dump(results, f)
   except Exception as e:  # pylint: disable=broad-except
-    response[title] = {
-        "title": title,
-        "error": str(e),
-        }
+    if 'not found' in str(e):
+      response[title] = {}
+    else:
+      response[title] = {
+          "title": title,
+          "error": str(e),
+          }
   finally:
     cursor.close()
 
@@ -91,7 +125,7 @@ def main():
       stats5 = capture_log(15500, "merchant:80-", queries)
       time.sleep(0.25)
       if query and query != "undefined":
-        exec_query(conn, "result", query, response)
+        exec_query(conn, "result", "result", query, response)
     finally:
       stats1.terminate()
       stats2.terminate()
@@ -102,45 +136,45 @@ def main():
       response["queries"] = queries
 
     exec_query(
-        rconn, "product",
+        rconn, "product", "product",
         "select * from product", response, keyspace="product", kr="0")
     exec_query(
-        rconn, "sales",
+        rconn, "sales", "sales",
         "select * from sales", response, keyspace="product", kr="0")
 
     exec_query(
-        rconn, "customer0",
+        rconn, "customer0", "customer",
         "select * from customer", response, keyspace="customer", kr="-80")
     exec_query(
-        rconn, "customer1",
+        rconn, "customer1", "customer",
         "select * from customer", response, keyspace="customer", kr="80-")
 
     exec_query(
-        rconn, "uorder0",
+        rconn, "uorder0", "orders",
         "select * from orders", response, keyspace="customer", kr="-80")
     exec_query(
-        rconn, "uorder1",
+        rconn, "uorder1", "orders",
         "select * from orders", response, keyspace="customer", kr="80-")
 
     exec_query(
-        rconn, "uproduct0",
+        rconn, "uproduct0", "product",
         "select * from product", response, keyspace="customer", kr="-80")
     exec_query(
-        rconn, "uproduct1",
+        rconn, "uproduct1", "product",
         "select * from product", response, keyspace="customer", kr="80-")
 
     exec_query(
-        rconn, "merchant0",
+        rconn, "merchant0", "merchant",
         "select * from merchant", response, keyspace="merchant", kr="-80")
     exec_query(
-        rconn, "merchant1",
+        rconn, "merchant1", "merchant",
         "select * from merchant", response, keyspace="merchant", kr="80-")
 
     exec_query(
-        rconn, "morder0",
+        rconn, "morder0", "orders",
         "select * from orders", response, keyspace="merchant", kr="-80")
     exec_query(
-        rconn, "morder1",
+        rconn, "morder1", "orders",
         "select * from orders", response, keyspace="merchant", kr="80-")
 
     if response.get("error"):
