@@ -232,6 +232,9 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		ksvschema.Vindexes[vname] = vindex
 	}
 	for tname, table := range ks.Tables {
+		if table.Hidden {
+			continue
+		}
 		t := &Table{
 			Name:                    sqlparser.NewTableIdent(tname),
 			Keyspace:                keyspace,

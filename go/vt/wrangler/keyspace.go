@@ -33,8 +33,8 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -94,7 +94,7 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 }
 
 // Materialize materializes a table.
-func (wr *Wrangler) Materialize(ctx context.Context, src, tgt, workflow, purpose string, createTable, isReference bool, primaryVindex, expression string) error {
+func (wr *Wrangler) Materialize(ctx context.Context, workflow, sourceSpec, targetSpec string, createTable, isReference bool, primaryVindex string) error {
 	split := func(in, separator string) (string, string) {
 		splits := strings.Split(in, separator)
 		if len(splits) != 2 {
@@ -103,12 +103,28 @@ func (wr *Wrangler) Materialize(ctx context.Context, src, tgt, workflow, purpose
 		return splits[0], splits[1]
 	}
 
-	if workflow == "" {
-		return fmt.Errorf("need workflow")
+	var sourceKeyspace, expression string
+	if sqlparser.Preview(sourceSpec) == sqlparser.StmtSelect {
+		qualified, err := sqlparser.TableFromStatement(sourceSpec)
+		if err != nil {
+			return err
+		}
+		if qualified.Qualifier.IsEmpty() {
+			return fmt.Errorf("table must be qualified by a keyspace: %v", sqlparser.String(qualified))
+		}
+		sourceKeyspace = qualified.Qualifier.String()
+		qualified.Qualifier = sqlparser.NewTableIdent("")
+		expression, _ = sqlparser.SubstituteTableName(sourceSpec, qualified)
+	} else {
+		var sourceTable string
+		sourceKeyspace, sourceTable = split(sourceSpec, ".")
+		if sourceKeyspace == "" || sourceTable == "" {
+			return fmt.Errorf("sourceSpec must be a keyspace.table: %v", sourceSpec)
+		}
+		expression = fmt.Sprintf("select * from %s", sourceTable)
 	}
 
-	sourceKeyspace, sourceTable := split(src, ".")
-	targetKeyspace, targetTable := split(tgt, ".")
+	targetKeyspace, targetTable := split(targetSpec, ".")
 	targetVSchema, err := wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return err
@@ -119,7 +135,9 @@ func (wr *Wrangler) Materialize(ctx context.Context, src, tgt, workflow, purpose
 		// Table not in VSchema.
 		if !targetVSchema.Sharded {
 			// Keyspace is not sharded.
-			targetVSchema.Tables[targetTable] = &vschema.Table{}
+			targetVSchema.Tables[targetTable] = &vschemapb.Table{
+				Hidden: true,
+			}
 		} else {
 			// Keyspace is sharded.
 			if !isReference {
@@ -132,6 +150,7 @@ func (wr *Wrangler) Materialize(ctx context.Context, src, tgt, workflow, purpose
 						Column: colVindex,
 						Name:   vindexName,
 					}},
+					Hidden: true,
 				}
 				targetVSchema.Tables[targetTable] = ti
 				if vindex, ok := targetVSchema.Vindexes[vindexName]; !ok {
@@ -145,8 +164,9 @@ func (wr *Wrangler) Materialize(ctx context.Context, src, tgt, workflow, purpose
 				}
 			} else {
 				// Reference Table.
-				ti = &vschema.Table{
-					Type: vindexes.TypeReference,
+				ti = &vschemapb.Table{
+					Type:   vindexes.TypeReference,
+					Hidden: true,
 				}
 				targetVSchema.Tables[targetTable] = ti
 			}
@@ -199,12 +219,8 @@ func (wr *Wrangler) Materialize(ctx context.Context, src, tgt, workflow, purpose
 			Match: targetTable,
 		}
 		if targetVSchema.Sharded && !isReference {
-			if expression == "" {
-				rule.Filter = fmt.Sprintf("select * from %s where in_keyrange(%s, '%s', '%s')", sourceTable, colVindex, vindexName, key.KeyRangeString(target.KeyRange))
-			} else {
-				rule.Filter = fmt.Sprintf("%s where in_keyrange(%s, '%s', '%s')", expression, colVindex, vindexName, key.KeyRangeString(target.KeyRange))
-			}
-		} else if expression != "" {
+			rule.Filter = fmt.Sprintf("%s where in_keyrange(%s, '%s', '%s')", expression, colVindex, vindexName, key.KeyRangeString(target.KeyRange))
+		} else {
 			rule.Filter = expression
 		}
 		for _, sourceShard := range sourceShards {
@@ -222,24 +238,58 @@ func (wr *Wrangler) Materialize(ctx context.Context, src, tgt, workflow, purpose
 			}
 		}
 	}
+	return nil
+}
 
-	if purpose == "" {
-		return nil
-	}
-	rules, err := wr.getRoutingRules(ctx)
+// Expose makes a materialized table visible to the app.
+func (wr *Wrangler) Expose(ctx context.Context, targetKeyspace, workflow string, autoRoute bool) error {
+	targets, err := wr.buildMigrationTargets(ctx, targetKeyspace, workflow)
 	if err != nil {
 		return err
 	}
-	switch purpose {
-	case "unified_view":
-		rules[targetTable] = []string{src, tgt}
-	case "migration":
-		rules[targetTable] = []string{src}
-		rules[tgt] = []string{src}
+	var bls *binlogdatapb.BinlogSource
+outer:
+	for _, target := range targets {
+		for _, binlogsource := range target.sources {
+			bls = binlogsource
+			break outer
+		}
 	}
-	if err := wr.saveRoutingRules(ctx, rules); err != nil {
+	sourceKeyspace := bls.Keyspace
+	if len(bls.Filter.Rules) != 1 {
+		return fmt.Errorf("number of rules must be exactly 1: %v", bls.Filter.Rules)
+	}
+	targetTable := bls.Filter.Rules[0].Match
+	qualified, err := sqlparser.TableFromStatement(bls.Filter.Rules[0].Filter)
+	if err != nil {
 		return err
 	}
+	sourceTable := qualified.Name.String()
+
+	targetVSchema, err := wr.ts.GetVSchema(ctx, targetKeyspace)
+	if err != nil {
+		return err
+	}
+	ti, ok := targetVSchema.Tables[targetTable]
+	if !ok {
+		return fmt.Errorf("table %v not found in vschema", targetTable)
+	}
+	ti.Hidden = false
+	if err := wr.ts.SaveVSchema(ctx, targetKeyspace, targetVSchema); err != nil {
+		return err
+	}
+
+	if autoRoute {
+		rules, err := wr.getRoutingRules(ctx)
+		if err != nil {
+			return err
+		}
+		rules[sourceTable] = []string{sourceKeyspace + "." + sourceTable, targetKeyspace + "." + targetTable}
+		if err := wr.saveRoutingRules(ctx, rules); err != nil {
+			return err
+		}
+	}
+
 	return wr.ts.RebuildSrvVSchema(ctx, nil)
 }
 

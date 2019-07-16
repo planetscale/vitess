@@ -83,6 +83,11 @@ message Table {
   // an authoritative list for the table. This allows
   // us to expand 'select *' expressions.
   bool column_list_authoritative = 6;
+  // hidden specifies if the table should be hidden.
+  // If set, it's as if the table doesn't exist.
+  // This feature is used to preserve the metadata
+  // of a table that should not be seen by the app.
+  bool hidden = 7;
 }
 
 // ColumnVindex is used to associate a column to a vindex.
