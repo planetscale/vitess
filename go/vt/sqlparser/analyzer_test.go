@@ -157,6 +157,93 @@ func TestSplitAndExpression(t *testing.T) {
 	}
 }
 
+func TestTableFromStatement(t *testing.T) {
+	testcases := []struct {
+		in, out string
+	}{{
+		in:  "select * from t",
+		out: "t",
+	}, {
+		in:  "select * from t.t",
+		out: "t.t",
+	}, {
+		in:  "select * from t1, t2",
+		out: "table expression is complex",
+	}, {
+		in:  "select * from (t)",
+		out: "table expression is complex",
+	}, {
+		in:  "select * from t1 join t2",
+		out: "table expression is complex",
+	}, {
+		in:  "select * from (select * from t) as tt",
+		out: "table expression is complex",
+	}, {
+		in:  "update t set a=1",
+		out: "unrecognized statement: update t set a=1",
+	}, {
+		in:  "bad query",
+		out: "syntax error at position 4 near 'bad'",
+	}}
+
+	for _, tc := range testcases {
+		name, err := TableFromStatement(tc.in)
+		var got string
+		if err != nil {
+			got = err.Error()
+		} else {
+			got = String(name)
+		}
+		if got != tc.out {
+			t.Errorf("TableFromStatement('%s'): %s, want %s", tc.in, got, tc.out)
+		}
+	}
+}
+
+func TestSubstituteTableName(t *testing.T) {
+	testcases := []struct {
+		in, out string
+	}{{
+		in:  "select * from t",
+		out: "select * from a.b",
+	}, {
+		in:  "select * from t.t",
+		out: "select * from a.b",
+	}, {
+		in:  "select * from t1, t2",
+		out: "select * from a.b",
+	}, {
+		in:  "select * from (t)",
+		out: "select * from a.b",
+	}, {
+		in:  "select * from t1 join t2",
+		out: "select * from a.b",
+	}, {
+		in:  "select * from (select * from t) as tt",
+		out: "select * from a.b",
+	}, {
+		in:  "update t set a=1",
+		out: "unrecognized statement: update t set a=1",
+	}, {
+		in:  "bad query",
+		out: "syntax error at position 4 near 'bad'",
+	}}
+
+	tname := TableName{
+		Qualifier: NewTableIdent("a"),
+		Name:      NewTableIdent("b"),
+	}
+	for _, tc := range testcases {
+		got, err := SubstituteTableName(tc.in, tname)
+		if err != nil {
+			got = err.Error()
+		}
+		if got != tc.out {
+			t.Errorf("SubstituteTableName('%s'): %s, want %s", tc.in, got, tc.out)
+		}
+	}
+}
+
 func TestGetTableName(t *testing.T) {
 	testcases := []struct {
 		in, out string

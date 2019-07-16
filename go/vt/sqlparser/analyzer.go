@@ -173,6 +173,50 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
+// TableFromStatement returns the qualified table name for the query.
+// This works for select, stream, insert, update and delete queries.
+func TableFromStatement(sql string) (TableName, error) {
+	stmt, err := Parse(sql)
+	if err != nil {
+		return TableName{}, err
+	}
+	sel, ok := stmt.(*Select)
+	if !ok {
+		return TableName{}, fmt.Errorf("unrecognized statement: %s", sql)
+	}
+	if len(sel.From) != 1 {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	aliased, ok := sel.From[0].(*AliasedTableExpr)
+	if !ok {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	tableName, ok := aliased.Expr.(TableName)
+	if !ok {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	return tableName, nil
+}
+
+// SubstituteTableName changes the FROM clause of the select to the specified
+// table name.
+func SubstituteTableName(sql string, newTable TableName) (string, error) {
+	stmt, err := Parse(sql)
+	if err != nil {
+		return "", err
+	}
+	sel, ok := stmt.(*Select)
+	if !ok {
+		return "", fmt.Errorf("unrecognized statement: %s", sql)
+	}
+	sel.From = TableExprs{
+		&AliasedTableExpr{
+			Expr: newTable,
+		},
+	}
+	return String(sel), nil
+}
+
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
 func GetTableName(node SimpleTableExpr) TableIdent {
