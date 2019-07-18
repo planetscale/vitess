@@ -93,15 +93,47 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 	return wr.ts.UpdateKeyspace(ctx, ki)
 }
 
+type tableSpec struct {
+	table       string
+	isReference bool
+	colVindex   string
+	vindexName  string
+}
+
+// Migrate starts the migration process for a table.
+func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs string, createTables bool) error {
+	specs := make(map[string]*tableSpec)
+	splits := strings.Split(tableSpecs, ",")
+	for _, split := range splits {
+		table, colSpec := splitString(split, ".")
+		expression := fmt.Sprintf("select * from %s", table)
+		colVindex, vindexName := splitString(colSpec, ":")
+		specs[expression] = &tableSpec{
+			table:      table,
+			colVindex:  colVindex,
+			vindexName: vindexName,
+		}
+	}
+	if err := wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, createTables); err != nil {
+		return err
+	}
+
+	rules, err := wr.getRoutingRules(ctx)
+	if err != nil {
+		return err
+	}
+	for _, spec := range specs {
+		rules[spec.table] = []string{sourceKeyspace + "." + spec.table}
+		rules[targetKeyspace+"."+spec.table] = []string{sourceKeyspace + "." + spec.table}
+	}
+	if err := wr.saveRoutingRules(ctx, rules); err != nil {
+		return err
+	}
+	return wr.ts.RebuildSrvVSchema(ctx, nil)
+}
+
 // Materialize materializes a table.
 func (wr *Wrangler) Materialize(ctx context.Context, workflow, sourceSpec, targetSpec string, createTable, isReference bool, primaryVindex string) error {
-	split := func(in, separator string) (string, string) {
-		splits := strings.Split(in, separator)
-		if len(splits) != 2 {
-			return in, ""
-		}
-		return splits[0], splits[1]
-	}
 
 	var sourceKeyspace, expression string
 	if sqlparser.Preview(sourceSpec) == sqlparser.StmtSelect {
@@ -117,77 +149,92 @@ func (wr *Wrangler) Materialize(ctx context.Context, workflow, sourceSpec, targe
 		expression, _ = sqlparser.SubstituteTableName(sourceSpec, qualified)
 	} else {
 		var sourceTable string
-		sourceKeyspace, sourceTable = split(sourceSpec, ".")
+		sourceKeyspace, sourceTable = splitString(sourceSpec, ".")
 		if sourceKeyspace == "" || sourceTable == "" {
 			return fmt.Errorf("sourceSpec must be a keyspace.table: %v", sourceSpec)
 		}
 		expression = fmt.Sprintf("select * from %s", sourceTable)
 	}
 
-	targetKeyspace, targetTable := split(targetSpec, ".")
+	targetKeyspace, targetTable := splitString(targetSpec, ".")
+	if targetTable == "" {
+		return fmt.Errorf("must specify target table name")
+	}
+	colVindex, vindexName := splitString(primaryVindex, ":")
+	specs := map[string]*tableSpec{
+		expression: {
+			table:       targetTable,
+			isReference: isReference,
+			colVindex:   colVindex,
+			vindexName:  vindexName,
+		},
+	}
+	return wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, createTable)
+}
+
+// Materialize materializes a table.
+func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace string, specs map[string]*tableSpec, createTables bool) error {
 	targetVSchema, err := wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return err
 	}
-	colVindex, vindexName := split(primaryVindex, ":")
-	ti, ok := targetVSchema.Tables[targetTable]
-	if !ok {
-		// Table not in VSchema.
-		if !targetVSchema.Sharded {
-			// Keyspace is not sharded.
-			targetVSchema.Tables[targetTable] = &vschemapb.Table{
-				Hidden: true,
-			}
-		} else {
-			// Keyspace is sharded.
-			if !isReference {
-				// Not a Reference table.
-				if vindexName == "" {
-					return fmt.Errorf("need a primary vindex for target table")
-				}
-				ti = &vschemapb.Table{
-					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Column: colVindex,
-						Name:   vindexName,
-					}},
+	for _, spec := range specs {
+		ti, ok := targetVSchema.Tables[spec.table]
+		if !ok {
+			// Table not in VSchema.
+			if !targetVSchema.Sharded {
+				// Keyspace is not sharded.
+				targetVSchema.Tables[spec.table] = &vschemapb.Table{
 					Hidden: true,
 				}
-				targetVSchema.Tables[targetTable] = ti
-				if vindex, ok := targetVSchema.Vindexes[vindexName]; !ok {
-					// Vindex not in VSchema.
-					targetVSchema.Vindexes[vindexName] = &vschemapb.Vindex{
-						Type: vindexName,
+			} else {
+				// Keyspace is sharded.
+				if !spec.isReference {
+					// Not a Reference table.
+					if spec.vindexName == "" {
+						return fmt.Errorf("need a primary vindex for target table")
+					}
+					ti = &vschemapb.Table{
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: spec.colVindex,
+							Name:   spec.vindexName,
+						}},
+						Hidden: true,
+					}
+					targetVSchema.Tables[spec.table] = ti
+					if vindex, ok := targetVSchema.Vindexes[spec.vindexName]; !ok {
+						// Vindex not in VSchema.
+						targetVSchema.Vindexes[spec.vindexName] = &vschemapb.Vindex{
+							Type: spec.vindexName,
+						}
+					} else {
+						// Vindex in VSchema.
+						spec.vindexName = vindex.Type
 					}
 				} else {
-					// Vindex in VSchema.
-					vindexName = vindex.Type
+					// Reference Table.
+					ti = &vschemapb.Table{
+						Type:   vindexes.TypeReference,
+						Hidden: true,
+					}
+					targetVSchema.Tables[spec.table] = ti
 				}
-			} else {
-				// Reference Table.
-				ti = &vschemapb.Table{
-					Type:   vindexes.TypeReference,
-					Hidden: true,
-				}
-				targetVSchema.Tables[targetTable] = ti
 			}
-		}
-		if err := wr.ts.SaveVSchema(ctx, targetKeyspace, targetVSchema); err != nil {
-			return err
-		}
-		if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
-			return err
-		}
-	} else {
-		// Table is found. Override flags with vschema settings.
-		if targetVSchema.Sharded {
-			// Keyspace is sharded.
-			if ti.Type != vindexes.TypeReference {
-				// Not a Reference table.
-				colVindex = ti.ColumnVindexes[0].Column
-				vindexName = targetVSchema.Vindexes[ti.ColumnVindexes[0].Name].Type
-			} else {
-				// Reference Table.
-				isReference = true
+			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, targetVSchema); err != nil {
+				return err
+			}
+		} else {
+			// Table is found. Override flags with vschema settings.
+			if targetVSchema.Sharded {
+				// Keyspace is sharded.
+				if ti.Type != vindexes.TypeReference {
+					// Not a Reference table.
+					spec.colVindex = ti.ColumnVindexes[0].Column
+					spec.vindexName = targetVSchema.Vindexes[ti.ColumnVindexes[0].Name].Type
+				} else {
+					// Reference Table.
+					spec.isReference = true
+				}
 			}
 		}
 	}
@@ -199,9 +246,13 @@ func (wr *Wrangler) Materialize(ctx context.Context, workflow, sourceSpec, targe
 	if err != nil {
 		return err
 	}
-	if createTable {
+	if createTables {
+		tables := make([]string, 0, len(specs))
+		for _, spec := range specs {
+			tables = append(tables, spec.table)
+		}
 		for _, targetShard := range targetShards {
-			if err := wr.CopySchemaShardFromShard(ctx, []string{targetTable}, nil, false, sourceKeyspace, sourceShards[0], targetKeyspace, targetShard, 1*time.Second); err != nil {
+			if err := wr.CopySchemaShardFromShard(ctx, tables, nil, false, sourceKeyspace, sourceShards[0], targetKeyspace, targetShard, 1*time.Second); err != nil {
 				return err
 			}
 		}
@@ -215,22 +266,22 @@ func (wr *Wrangler) Materialize(ctx context.Context, workflow, sourceSpec, targe
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.MasterAlias)
 		}
-		rule := &binlogdatapb.Rule{
-			Match: targetTable,
-		}
-		if targetVSchema.Sharded && !isReference {
-			rule.Filter = fmt.Sprintf("%s where in_keyrange(%s, '%s', '%s')", expression, colVindex, vindexName, key.KeyRangeString(target.KeyRange))
-		} else {
-			rule.Filter = expression
-		}
 		for _, sourceShard := range sourceShards {
-			filter := &binlogdatapb.Filter{
-				Rules: []*binlogdatapb.Rule{rule},
-			}
 			bls := &binlogdatapb.BinlogSource{
 				Keyspace: sourceKeyspace,
 				Shard:    sourceShard,
-				Filter:   filter,
+				Filter:   &binlogdatapb.Filter{},
+			}
+			for expression, spec := range specs {
+				rule := &binlogdatapb.Rule{
+					Match: spec.table,
+				}
+				if targetVSchema.Sharded && !spec.isReference {
+					rule.Filter = fmt.Sprintf("%s where in_keyrange(%s, '%s', '%s')", expression, spec.colVindex, spec.vindexName, key.KeyRangeString(target.KeyRange))
+				} else {
+					rule.Filter = expression
+				}
+				bls.Filter.Rules = append(bls.Filter.Rules, rule)
 			}
 			cmd := binlogplayer.CreateVReplicationState(workflow, bls, "", binlogplayer.BlpRunning, targetMaster.DbName())
 			if _, err := wr.TabletManagerClient().VReplicationExec(ctx, targetMaster.Tablet, cmd); err != nil {
@@ -1640,4 +1691,12 @@ func encodeString(in string) string {
 	buf := bytes.NewBuffer(nil)
 	sqltypes.NewVarChar(in).EncodeSQL(buf)
 	return buf.String()
+}
+
+func splitString(in, separator string) (string, string) {
+	splits := strings.Split(in, separator)
+	if len(splits) != 2 {
+		return in, ""
+	}
+	return splits[0], splits[1]
 }
