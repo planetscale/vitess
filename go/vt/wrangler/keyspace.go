@@ -283,6 +283,7 @@ func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, ta
 				}
 				bls.Filter.Rules = append(bls.Filter.Rules, rule)
 			}
+			// TODO(sougou): do this in two phases.
 			cmd := binlogplayer.CreateVReplicationState(workflow, bls, "", binlogplayer.BlpRunning, targetMaster.DbName())
 			if _, err := wr.TabletManagerClient().VReplicationExec(ctx, targetMaster.Tablet, cmd); err != nil {
 				return err
@@ -342,6 +343,55 @@ outer:
 	}
 
 	return wr.ts.RebuildSrvVSchema(ctx, nil)
+}
+
+// Reshard initiates a resharding workflow.
+func (wr *Wrangler) Reshard(ctx context.Context, workflow, keyspace string, source, target []string) error {
+	var sourceShards, targetShards []*topo.ShardInfo
+	for _, shard := range source {
+		si, err := wr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetShard(%s) failed", shard)
+		}
+		sourceShards = append(sourceShards, si)
+	}
+	for _, shard := range target {
+		si, err := wr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetShard(%s) failed", shard)
+		}
+		targetShards = append(targetShards, si)
+	}
+	// TODO(sougou): validate source and target shards.
+
+	for _, dest := range targetShards {
+		master, err := wr.ts.GetTablet(ctx, dest.MasterAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", dest.MasterAlias)
+		}
+		for _, source := range sourceShards {
+			if !key.KeyRangesIntersect(dest.KeyRange, source.KeyRange) {
+				continue
+			}
+			filter := &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "/.*",
+					Filter: key.KeyRangeString(dest.KeyRange),
+				}},
+			}
+			bls := &binlogdatapb.BinlogSource{
+				Keyspace: keyspace,
+				Shard:    source.ShardName(),
+				Filter:   filter,
+			}
+			// TODO(sougou): do this in two phases.
+			cmd := binlogplayer.CreateVReplicationState(workflow, bls, "", binlogplayer.BlpRunning, master.DbName())
+			if _, err := wr.TabletManagerClient().VReplicationExec(ctx, master.Tablet, cmd); err != nil {
+				return vterrors.Wrapf(err, "VReplicationExec(%v, %s) failed", dest.MasterAlias, cmd)
+			}
+		}
+	}
+	return wr.refreshMasters(ctx, targetShards)
 }
 
 // SplitClone initiates a SplitClone workflow.

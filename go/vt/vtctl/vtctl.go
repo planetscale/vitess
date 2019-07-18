@@ -314,6 +314,9 @@ var commands = []commandGroup{
 			{"VerticalSplitClone", commandVerticalSplitClone,
 				"<from_keyspace> <to_keyspace> <tables>",
 				"Start the VerticalSplitClone process to perform vertical resharding. Example: SplitClone from_ks to_ks 'a,/b.*/'"},
+			{"Reshard", commandReshard,
+				"<workflow_name> <keyspace> <from_shards> <to_shards>",
+				"Start a Resharding process. Example: Reshard workflow001 ks '0' '-80,80-'"},
 			{"Migrate", commandMigrate,
 				"[-create_table] <workflow_name> <source_keyspace> <target_keyspace> <table_specs>",
 				"Initiate a migration of tables from one keyspace to another. For an unsharded keyspace target or if tables are already defined in the vschema, table_specs is 't1,t2,t3'. For sharded, it's 't1.colVindex:vindexname,t2.colVindex:vindexName'"},
@@ -1771,6 +1774,20 @@ func commandVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFl
 	toKeyspace := subFlags.Arg(1)
 	tables := strings.Split(subFlags.Arg(2), ",")
 	return wr.VerticalSplitClone(ctx, fromKeyspace, toKeyspace, tables)
+}
+
+func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 4 {
+		return fmt.Errorf("four arguments are required: workflow, keyspace, from_shards, to_shards")
+	}
+	workflow := subFlags.Arg(1)
+	keyspace := subFlags.Arg(1)
+	from := strings.Split(subFlags.Arg(2), ",")
+	to := strings.Split(subFlags.Arg(3), ",")
+	return wr.Reshard(ctx, workflow, keyspace, from, to)
 }
 
 func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
