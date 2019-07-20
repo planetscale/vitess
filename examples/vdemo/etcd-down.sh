@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2017 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,20 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-./vtgate-down.sh
-UID_BASE=100 ./vttablet-down.sh &
-UID_BASE=200 ./vttablet-down.sh &
-UID_BASE=300 ./vttablet-down.sh &
-UID_BASE=400 ./vttablet-down.sh &
-UID_BASE=500 ./vttablet-down.sh &
-wait
+# This is an example script that stops the ZooKeeper servers started by zk-up.sh.
 
-./vtctld-down.sh
+set -e
 
-if [ "${TOPO}" = "zk2" ]; then
-    CELL=test ./zk-down.sh
-else
-    CELL=test ./etcd-down.sh
-fi
+source ./env.sh
 
-rm -r $VTDATAROOT/*
+# Stop etcd servers.
+echo "Stopping etcd servers..."
+kill -9 "$(pgrep -f "${ETCD_BINDIR}/etcd")"

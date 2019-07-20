@@ -20,8 +20,15 @@ set -e
 
 source kalias.source
 
-./zk-up.sh
+# start topo server
+if [ "${TOPO}" = "zk2" ]; then
+    CELL=test ./zk-up.sh
+else
+    CELL=test ./etcd-up.sh
+fi
+
 ./vtctld-up.sh
+
 SHARD=0 UID_BASE=100 KEYSPACE=product ./vttablet-up.sh "$@" &
 SHARD=-80 UID_BASE=200 KEYSPACE=customer ./vttablet-up.sh "$@" &
 SHARD=80- UID_BASE=300 KEYSPACE=customer ./vttablet-up.sh "$@" &
