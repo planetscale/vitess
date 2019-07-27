@@ -94,6 +94,7 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 }
 
 type tableSpec struct {
+	expression  string
 	table       string
 	isReference bool
 	colVindex   string
@@ -102,17 +103,18 @@ type tableSpec struct {
 
 // Migrate starts the migration process for a table.
 func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs string, createTables bool) error {
-	specs := make(map[string]*tableSpec)
 	splits := strings.Split(tableSpecs, ",")
+	specs := make([]*tableSpec, 0, len(splits))
 	for _, split := range splits {
 		table, colSpec := splitString(split, ".")
-		expression := fmt.Sprintf("select * from %s", table)
+		expression := fmt.Sprintf("select * from %s", sqlparser.String(sqlparser.NewTableIdent(table)))
 		colVindex, vindexName := splitString(colSpec, ":")
-		specs[expression] = &tableSpec{
+		specs = append(specs, &tableSpec{
+			expression: expression,
 			table:      table,
 			colVindex:  colVindex,
 			vindexName: vindexName,
-		}
+		})
 	}
 	if err := wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, createTables); err != nil {
 		return err
@@ -134,7 +136,6 @@ func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targe
 
 // Materialize materializes a table.
 func (wr *Wrangler) Materialize(ctx context.Context, workflow, sourceSpec, targetSpec string, createTable, isReference bool, primaryVindex string) error {
-
 	var sourceKeyspace, expression string
 	if sqlparser.Preview(sourceSpec) == sqlparser.StmtSelect {
 		qualified, err := sqlparser.TableFromStatement(sourceSpec)
@@ -153,7 +154,7 @@ func (wr *Wrangler) Materialize(ctx context.Context, workflow, sourceSpec, targe
 		if sourceKeyspace == "" || sourceTable == "" {
 			return fmt.Errorf("sourceSpec must be a keyspace.table: %v", sourceSpec)
 		}
-		expression = fmt.Sprintf("select * from %s", sourceTable)
+		expression = fmt.Sprintf("select * from %s", sqlparser.String(sqlparser.NewTableIdent(sourceTable)))
 	}
 
 	targetKeyspace, targetTable := splitString(targetSpec, ".")
@@ -161,19 +162,18 @@ func (wr *Wrangler) Materialize(ctx context.Context, workflow, sourceSpec, targe
 		return fmt.Errorf("must specify target table name")
 	}
 	colVindex, vindexName := splitString(primaryVindex, ":")
-	specs := map[string]*tableSpec{
-		expression: {
-			table:       targetTable,
-			isReference: isReference,
-			colVindex:   colVindex,
-			vindexName:  vindexName,
-		},
-	}
+	specs := []*tableSpec{{
+		expression:  expression,
+		table:       targetTable,
+		isReference: isReference,
+		colVindex:   colVindex,
+		vindexName:  vindexName,
+	}}
 	return wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, createTable)
 }
 
 // Materialize materializes a table.
-func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace string, specs map[string]*tableSpec, createTables bool) error {
+func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace string, specs []*tableSpec, createTables bool) error {
 	targetVSchema, err := wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return err
@@ -251,6 +251,7 @@ func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, ta
 		for _, spec := range specs {
 			tables = append(tables, spec.table)
 		}
+		// TODO(sougou): this will work only if target is same schema as source.
 		for _, targetShard := range targetShards {
 			if err := wr.CopySchemaShardFromShard(ctx, tables, nil, false, sourceKeyspace, sourceShards[0], targetKeyspace, targetShard, 1*time.Second); err != nil {
 				return err
@@ -272,14 +273,33 @@ func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, ta
 				Shard:    sourceShard,
 				Filter:   &binlogdatapb.Filter{},
 			}
-			for expression, spec := range specs {
+			for _, spec := range specs {
 				rule := &binlogdatapb.Rule{
 					Match: spec.table,
 				}
 				if targetVSchema.Sharded && !spec.isReference {
-					rule.Filter = fmt.Sprintf("%s where in_keyrange(%s, '%s', '%s')", expression, spec.colVindex, spec.vindexName, key.KeyRangeString(target.KeyRange))
+					stmt, err := sqlparser.Parse(spec.expression)
+					if err != nil {
+						return err
+					}
+					sel, ok := stmt.(*sqlparser.Select)
+					if !ok {
+						return fmt.Errorf("unrecognized statement: %s", spec.expression)
+					}
+					sel.Where = &sqlparser.Where{
+						Type: sqlparser.WhereStr,
+						Expr: &sqlparser.FuncExpr{
+							Name: sqlparser.NewColIdent("in_keyrange"),
+							Exprs: sqlparser.SelectExprs{
+								&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent(spec.colVindex)}},
+								&sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(spec.vindexName))},
+								&sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(key.KeyRangeString(target.KeyRange)))},
+							},
+						},
+					}
+					rule.Filter = sqlparser.String(sel)
 				} else {
-					rule.Filter = expression
+					rule.Filter = spec.expression
 				}
 				bls.Filter.Rules = append(bls.Filter.Rules, rule)
 			}
