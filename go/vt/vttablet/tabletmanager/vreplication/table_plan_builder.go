@@ -47,7 +47,7 @@ type colExpr struct {
 	colName sqlparser.ColIdent
 	// operation==opExpr: full expression is set
 	// operation==opCount: nothing is set.
-	// operation==opSum: for 'sum(a)', expr is set to 'a'.
+	// operation==opSum, opMin, opMax: for 'sum(a)', expr is set to 'a'.
 	operation operation
 	expr      sqlparser.Expr
 	// references contains all the column names referenced in the expression.
@@ -65,7 +65,16 @@ const (
 	opExpr = operation(iota)
 	opCount
 	opSum
+	opMin
+	opMax
 )
+
+var funcToOp = map[string]operation{
+	"count": opCount,
+	"sum":   opSum,
+	"vmin":  opMin,
+	"vmax":  opMax,
+}
 
 // insertType describes the type of insert statement to generate.
 type insertType int
@@ -310,9 +319,9 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			if _, ok := expr.Exprs[0].(*sqlparser.StarExpr); !ok {
 				return nil, fmt.Errorf("only count(*) is supported: %v", sqlparser.String(expr))
 			}
-			cexpr.operation = opCount
+			cexpr.operation = funcToOp[fname]
 			return cexpr, nil
-		case "sum":
+		case "sum", "vmin", "vmax":
 			if len(expr.Exprs) != 1 {
 				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
@@ -327,7 +336,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			if !innerCol.Qualifier.IsEmpty() {
 				return nil, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(innerCol))
 			}
-			cexpr.operation = opSum
+			cexpr.operation = funcToOp[fname]
 			cexpr.expr = innerCol
 			tpb.addCol(innerCol.Name)
 			cexpr.references[innerCol.Name.Lowered()] = true
@@ -462,7 +471,7 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 		buf.Myprintf("%s", separator)
 		separator = ","
 		switch cexpr.operation {
-		case opExpr:
+		case opExpr, opMin, opMax:
 			buf.Myprintf("%v", cexpr.expr)
 		case opCount:
 			buf.WriteString("1")
@@ -482,7 +491,7 @@ func (tpb *tablePlanBuilder) generateSelectPart(buf *sqlparser.TrackedBuffer, bv
 		buf.Myprintf("%s", separator)
 		separator = ", "
 		switch cexpr.operation {
-		case opExpr:
+		case opExpr, opMin, opMax:
 			buf.Myprintf("%v", cexpr.expr)
 		case opCount:
 			buf.WriteString("1")
@@ -507,15 +516,17 @@ func (tpb *tablePlanBuilder) generateOnDupPart(buf *sqlparser.TrackedBuffer) *sq
 		}
 		buf.Myprintf("%s%v=", separator, cexpr.colName)
 		separator = ", "
-		// TODO: What to do here?
 		switch cexpr.operation {
 		case opExpr:
 			buf.Myprintf("values(%v)", cexpr.colName)
 		case opCount:
 			buf.Myprintf("%v+1", cexpr.colName)
 		case opSum:
-			buf.Myprintf("%v", cexpr.colName)
-			buf.Myprintf("+ifnull(values(%v), 0)", cexpr.colName)
+			buf.Myprintf("%v+ifnull(values(%v), 0)", cexpr.colName, cexpr.colName)
+		case opMin:
+			buf.Myprintf("least(ifnull(%v, values(%v)), ifnull(values(%v), %v))", cexpr.colName, cexpr.colName, cexpr.colName, cexpr.colName)
+		case opMax:
+			buf.Myprintf("greatest(ifnull(%v, values(%v)), ifnull(values(%v), %v))", cexpr.colName, cexpr.colName, cexpr.colName, cexpr.colName)
 		}
 	}
 	return buf.ParsedQuery()
@@ -547,6 +558,12 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 			buf.Myprintf("-ifnull(%v, 0)", cexpr.expr)
 			bvf.mode = bvAfter
 			buf.Myprintf("+ifnull(%v, 0)", cexpr.expr)
+		case opMin:
+			bvf.mode = bvAfter
+			buf.Myprintf("least(ifnull(%v, values(%v)), ifnull(values(%v), %v))", cexpr.colName, cexpr.colName, cexpr.colName, cexpr.colName)
+		case opMax:
+			bvf.mode = bvAfter
+			buf.Myprintf("greatest(ifnull(%v, values(%v)), ifnull(values(%v), %v))", cexpr.colName, cexpr.colName, cexpr.colName, cexpr.colName)
 		}
 	}
 	tpb.generateWhere(buf, bvf)
@@ -566,6 +583,9 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 		separator := ""
 		for _, cexpr := range tpb.colExprs {
 			if cexpr.isGrouped || cexpr.isPK {
+				continue
+			}
+			if cexpr.operation == opMin || cexpr.operation == opMax {
 				continue
 			}
 			buf.Myprintf("%s%v=", separator, cexpr.colName)
