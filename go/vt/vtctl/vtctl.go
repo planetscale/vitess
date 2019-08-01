@@ -320,6 +320,9 @@ var commands = []commandGroup{
 			{"Migrate", commandMigrate,
 				"[-create_table] <workflow_name> <source_keyspace> <target_keyspace> <table_specs>",
 				"Initiate a migration of tables from one keyspace to another. For an unsharded keyspace target or if tables are already defined in the vschema, table_specs is 't1,t2,t3'. For sharded, it's 't1.colVindex:vindexname,t2.colVindex:vindexName'"},
+			{"MultiMaterialize", commandMultiMaterialize,
+				"[-create_table] <workflow_name> <source_keyspace> <target_keyspace> <tables>",
+				"Creae multiple materialized views"},
 			{"Materialize", commandMaterialize,
 				"[-create_table] [-is_reference] [-primary_vindex=col:vindex] <workflow_name> <source_keyspace.table/sql expression> <target_keyspace.table>",
 				"Creae a materialized view"},
@@ -1803,6 +1806,21 @@ func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	targetKeyspace := subFlags.Arg(2)
 	tableSpecs := subFlags.Arg(3)
 	return wr.Migrate(ctx, workflow, sourceKeyspace, targetKeyspace, tableSpecs, *createTable)
+}
+
+func commandMultiMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	createTable := subFlags.Bool("create_table", false, "Create the table")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 4 {
+		return fmt.Errorf("four arguments are required: <workflow_name> <source_keyspace> <target_keyspace> <table_specs>")
+	}
+	workflow := subFlags.Arg(0)
+	sourceKeyspace := subFlags.Arg(1)
+	targetKeyspace := subFlags.Arg(2)
+	tableSpecs := subFlags.Arg(3)
+	return wr.MultiMaterialize(ctx, workflow, sourceKeyspace, targetKeyspace, tableSpecs, *createTable)
 }
 
 func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

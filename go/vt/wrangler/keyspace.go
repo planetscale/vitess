@@ -134,6 +134,21 @@ func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targe
 	return wr.ts.RebuildSrvVSchema(ctx, nil)
 }
 
+// MultiMaterialize materializes multiple tables.
+func (wr *Wrangler) MultiMaterialize(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs string, createTables bool) error {
+	tables := strings.Split(tableSpecs, ",")
+	specs := make([]*tableSpec, 0, len(tables))
+	for _, table := range tables {
+		expression := fmt.Sprintf("select * from %s", sqlparser.String(sqlparser.NewTableIdent(table)))
+		specs = append(specs, &tableSpec{
+			expression:  expression,
+			table:       table,
+			isReference: true,
+		})
+	}
+	return wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, createTables)
+}
+
 // Materialize materializes a table.
 func (wr *Wrangler) Materialize(ctx context.Context, workflow, sourceSpec, targetSpec string, createTable, isReference bool, primaryVindex string) error {
 	var sourceKeyspace, expression string
@@ -328,38 +343,38 @@ outer:
 		}
 	}
 	sourceKeyspace := bls.Keyspace
-	if len(bls.Filter.Rules) != 1 {
-		return fmt.Errorf("number of rules must be exactly 1: %v", bls.Filter.Rules)
-	}
-	targetTable := bls.Filter.Rules[0].Match
-	qualified, err := sqlparser.TableFromStatement(bls.Filter.Rules[0].Filter)
-	if err != nil {
-		return err
-	}
-	sourceTable := qualified.Name.String()
 
 	targetVSchema, err := wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return err
 	}
-	ti, ok := targetVSchema.Tables[targetTable]
-	if !ok {
-		return fmt.Errorf("table %v not found in vschema", targetTable)
-	}
-	ti.Hidden = false
-	if err := wr.ts.SaveVSchema(ctx, targetKeyspace, targetVSchema); err != nil {
+	rules, err := wr.getRoutingRules(ctx)
+	if err != nil {
 		return err
 	}
 
-	if autoRoute {
-		rules, err := wr.getRoutingRules(ctx)
+	for _, rule := range bls.Filter.Rules {
+		targetTable := rule.Match
+		qualified, err := sqlparser.TableFromStatement(rule.Filter)
 		if err != nil {
 			return err
 		}
-		rules[sourceTable] = []string{sourceKeyspace + "." + sourceTable, targetKeyspace + "." + targetTable}
-		if err := wr.saveRoutingRules(ctx, rules); err != nil {
-			return err
+		sourceTable := qualified.Name.String()
+		ti, ok := targetVSchema.Tables[targetTable]
+		if !ok {
+			return fmt.Errorf("table %v not found in vschema", targetTable)
 		}
+		ti.Hidden = false
+
+		if autoRoute {
+			rules[sourceTable] = []string{sourceKeyspace + "." + sourceTable, targetKeyspace + "." + targetTable}
+		}
+	}
+	if err := wr.ts.SaveVSchema(ctx, targetKeyspace, targetVSchema); err != nil {
+		return err
+	}
+	if err := wr.saveRoutingRules(ctx, rules); err != nil {
+		return err
 	}
 
 	return wr.ts.RebuildSrvVSchema(ctx, nil)
