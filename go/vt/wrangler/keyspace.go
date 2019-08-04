@@ -370,9 +370,11 @@ outer:
 			rules[sourceTable] = []string{sourceKeyspace + "." + sourceTable, targetKeyspace + "." + targetTable}
 		}
 	}
+	wr.Logger().Printf("Saving VSchema for keyspace %v: %v\n", targetKeyspace, targetVSchema)
 	if err := wr.ts.SaveVSchema(ctx, targetKeyspace, targetVSchema); err != nil {
 		return err
 	}
+	wr.Logger().Printf("Saving Routing Rules: %v\n", rules)
 	if err := wr.saveRoutingRules(ctx, rules); err != nil {
 		return err
 	}
