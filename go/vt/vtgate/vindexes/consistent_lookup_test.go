@@ -28,12 +28,13 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestConsistentLookupInit(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", true)
 	cols := []sqlparser.ColIdent{
 		sqlparser.NewColIdent("fc"),
 	}
@@ -42,10 +43,13 @@ func TestConsistentLookupInit(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SetOwnerInfo: %v, want %v", err, want)
 	}
+	if got := lookup.(*ConsistentLookup).writeOnly; !got {
+		t.Errorf("lookup.writeOnly: false, want true")
+	}
 }
 
 func TestConsistentLookupInfo(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	if lookup.Cost() != 20 {
 		t.Errorf("Cost(): %d, want 20", lookup.Cost())
 	}
@@ -61,7 +65,7 @@ func TestConsistentLookupInfo(t *testing.T) {
 }
 
 func TestConsistentLookupUniqueInfo(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup_unique")
+	lookup := createConsistentLookup(t, "consistent_lookup_unique", false)
 	if lookup.Cost() != 10 {
 		t.Errorf("Cost(): %d, want 10", lookup.Cost())
 	}
@@ -77,7 +81,7 @@ func TestConsistentLookupUniqueInfo(t *testing.T) {
 }
 
 func TestConsistentLookupMap(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(makeTestResult(2), nil)
 	vc.AddResult(makeTestResult(2), nil)
@@ -113,8 +117,28 @@ func TestConsistentLookupMap(t *testing.T) {
 	}
 }
 
+func TestConsistentLookupMapWriteOnly(t *testing.T) {
+	lookup := createConsistentLookup(t, "consistent_lookup", true)
+
+	got, err := lookup.Map(nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	if err != nil {
+		t.Error(err)
+	}
+	want := []key.Destination{
+		key.DestinationKeyRange{
+			KeyRange: &topodatapb.KeyRange{},
+		},
+		key.DestinationKeyRange{
+			KeyRange: &topodatapb.KeyRange{},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Map(): %#v, want %+v", got, want)
+	}
+}
+
 func TestConsistentLookupUniqueMap(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup_unique")
+	lookup := createConsistentLookup(t, "consistent_lookup_unique", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(makeTestResult(0), nil)
 	vc.AddResult(makeTestResult(1), nil)
@@ -144,8 +168,28 @@ func TestConsistentLookupUniqueMap(t *testing.T) {
 	}
 }
 
+func TestConsistentLookupUniqueMapWriteOnly(t *testing.T) {
+	lookup := createConsistentLookup(t, "consistent_lookup_unique", true)
+
+	got, err := lookup.Map(nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	if err != nil {
+		t.Error(err)
+	}
+	want := []key.Destination{
+		key.DestinationKeyRange{
+			KeyRange: &topodatapb.KeyRange{},
+		},
+		key.DestinationKeyRange{
+			KeyRange: &topodatapb.KeyRange{},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Map(): %#v, want %+v", got, want)
+	}
+}
+
 func TestConsistentLookupMapAbsent(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(makeTestResult(0), nil)
 	vc.AddResult(makeTestResult(0), nil)
@@ -168,7 +212,7 @@ func TestConsistentLookupMapAbsent(t *testing.T) {
 }
 
 func TestConsistentLookupVerify(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(makeTestResult(1), nil)
 	vc.AddResult(makeTestResult(1), nil)
@@ -189,10 +233,21 @@ func TestConsistentLookupVerify(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("lookup(query fail) err: %v, want %s", err, want)
 	}
+
+	// Test write_only.
+	lookup = createConsistentLookup(t, "consistent_lookup", true)
+	got, err := lookup.Verify(nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte(""), []byte("")})
+	if err != nil {
+		t.Error(err)
+	}
+	wantBools := []bool{true, true}
+	if !reflect.DeepEqual(got, wantBools) {
+		t.Errorf("lookup.Verify(writeOnly): %v, want %v", got, wantBools)
+	}
 }
 
 func TestConsistentLookupCreateSimple(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(&sqltypes.Result{}, nil)
 
@@ -214,7 +269,7 @@ func TestConsistentLookupCreateSimple(t *testing.T) {
 }
 
 func TestConsistentLookupCreateThenRecreate(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(nil, errors.New("Duplicate entry"))
 	vc.AddResult(&sqltypes.Result{}, nil)
@@ -237,7 +292,7 @@ func TestConsistentLookupCreateThenRecreate(t *testing.T) {
 }
 
 func TestConsistentLookupCreateThenUpdate(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(nil, errors.New("Duplicate entry"))
 	vc.AddResult(makeTestResult(1), nil)
@@ -262,7 +317,7 @@ func TestConsistentLookupCreateThenUpdate(t *testing.T) {
 }
 
 func TestConsistentLookupCreateThenSkipUpdate(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(nil, errors.New("Duplicate entry"))
 	vc.AddResult(makeTestResult(1), nil)
@@ -286,7 +341,7 @@ func TestConsistentLookupCreateThenSkipUpdate(t *testing.T) {
 }
 
 func TestConsistentLookupCreateThenDupkey(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(nil, errors.New("Duplicate entry"))
 	vc.AddResult(makeTestResult(1), nil)
@@ -312,7 +367,7 @@ func TestConsistentLookupCreateThenDupkey(t *testing.T) {
 }
 
 func TestConsistentLookupCreateNonDupError(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(nil, errors.New("general error"))
 
@@ -333,7 +388,7 @@ func TestConsistentLookupCreateNonDupError(t *testing.T) {
 }
 
 func TestConsistentLookupCreateThenBadRows(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(nil, errors.New("Duplicate entry"))
 	vc.AddResult(makeTestResult(2), nil)
@@ -356,7 +411,7 @@ func TestConsistentLookupCreateThenBadRows(t *testing.T) {
 }
 
 func TestConsistentLookupDelete(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(&sqltypes.Result{}, nil)
 
@@ -374,7 +429,7 @@ func TestConsistentLookupDelete(t *testing.T) {
 }
 
 func TestConsistentLookupUpdate(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(&sqltypes.Result{}, nil)
 	vc.AddResult(&sqltypes.Result{}, nil)
@@ -398,7 +453,7 @@ func TestConsistentLookupUpdate(t *testing.T) {
 }
 
 func TestConsistentLookupNoUpdate(t *testing.T) {
-	lookup := createConsistentLookup(t, "consistent_lookup")
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
 	vc.AddResult(&sqltypes.Result{}, nil)
 	vc.AddResult(&sqltypes.Result{}, nil)
@@ -418,12 +473,17 @@ func TestConsistentLookupNoUpdate(t *testing.T) {
 	vc.verifyLog(t, []string{})
 }
 
-func createConsistentLookup(t *testing.T, name string) Vindex {
+func createConsistentLookup(t *testing.T, name string, writeOnly bool) Vindex {
 	t.Helper()
+	write := "false"
+	if writeOnly {
+		write = "true"
+	}
 	l, err := CreateVindex(name, name, map[string]string{
-		"table": "t",
-		"from":  "fromc1,fromc2",
-		"to":    "toc",
+		"table":      "t",
+		"from":       "fromc1,fromc2",
+		"to":         "toc",
+		"write_only": write,
 	})
 	if err != nil {
 		t.Fatal(err)
