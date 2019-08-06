@@ -165,6 +165,10 @@ message BinlogSource {
 
   // on_ddl specifies the action to be taken when a DDL is encountered.
   OnDDLAction on_ddl = 7;
+
+  // stop_after_copy specifies if vreplication should be stopped
+  // after copying is done.
+  bool stop_after_copy = 8;
 }
 
 // VEventType enumerates the event types.
