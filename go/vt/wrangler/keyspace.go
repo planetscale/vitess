@@ -27,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
@@ -106,9 +107,9 @@ func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targe
 	splits := strings.Split(tableSpecs, ",")
 	specs := make([]*tableSpec, 0, len(splits))
 	for _, split := range splits {
-		table, colSpec := splitString(split, ".")
+		table, colSpec := splitString2(split, ".")
 		expression := fmt.Sprintf("select * from %s", sqlparser.String(sqlparser.NewTableIdent(table)))
-		colVindex, vindexName := splitString(colSpec, ":")
+		colVindex, vindexName := splitString2(colSpec, ":")
 		specs = append(specs, &tableSpec{
 			expression: expression,
 			table:      table,
@@ -132,6 +133,132 @@ func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targe
 		return err
 	}
 	return wr.ts.RebuildSrvVSchema(ctx, nil)
+}
+
+// CreateLookupVindex starts the process to create a lookup vindex.
+func (wr *Wrangler) CreateLookupVindex(ctx context.Context, workflow, on, backedBy, vindexType, mode string, createTable, createVindex bool) error {
+	if workflow == "" || on == "" || backedBy == "" || vindexType == "" || mode == "" {
+		return fmt.Errorf("workflow, on, backedBy, vindexType and mode are required parameters")
+	}
+	sourceKeyspace, sourceTable, sourceCol := splitString3(on, ".")
+	sourceShards, err := wr.ts.GetShardNames(ctx, sourceKeyspace)
+	if err != nil {
+		return err
+	}
+	if len(sourceShards) == 0 {
+		return fmt.Errorf("keyspace %s has no source shards", sourceKeyspace)
+	}
+	targetKeyspace, targetTable, primaryVindex := splitString3(backedBy, ".")
+	targetShards, err := wr.ts.GetShardNames(ctx, targetKeyspace)
+	if err != nil {
+		return err
+	}
+	if len(sourceShards) == 0 {
+		return fmt.Errorf("keyspace %s has no source shards", sourceKeyspace)
+	}
+	isUnique := false
+	if strings.Contains(vindexType, "unique") {
+		isUnique = true
+	}
+
+	sourceShardInfo, err := wr.ts.GetShard(ctx, sourceKeyspace, sourceShards[0])
+	if err != nil {
+		return err
+	}
+	if sourceShardInfo.MasterAlias == nil {
+		return fmt.Errorf("no master for source shard %s", sourceShards[0])
+	}
+
+	if createTable {
+		tableSchema, err := wr.GetSchema(ctx, sourceShardInfo.MasterAlias, []string{sourceTable}, nil, false)
+		if err != nil {
+			return err
+		}
+		if len(tableSchema.TableDefinitions) != 1 {
+			return fmt.Errorf("unexpected number of tables received: %v", tableSchema)
+		}
+		lines := strings.Split(tableSchema.TableDefinitions[0].Schema, "\n")
+		if len(lines) < 3 {
+			return fmt.Errorf("schema looks incorrect: %s, expecting at least four lines", tableSchema.TableDefinitions[0].Schema)
+		}
+		modified := make([]string, 0, 5)
+		modified = append(modified, strings.Replace(lines[0], fmt.Sprintf("`%s`", sourceTable), fmt.Sprintf("`{{.DatabaseName}}`.`%s`", targetTable), 1))
+		wantCol := fmt.Sprintf("`%s`", sourceCol)
+		found := false
+		for _, line := range lines[1:] {
+			if strings.Contains(line, wantCol) {
+				// TODO(sougou): This is not an exact science.
+				line = strings.Replace(line, " AUTO_INCREMENT", "", 1)
+				line = strings.Replace(line, " DEFAULT NULL", "", 1)
+				modified = append(modified, line)
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("column %s not found in schema %s", sourceCol, tableSchema.TableDefinitions[0].Schema)
+		}
+		modified = append(modified, "  `keyspace_id` varbinary(128),")
+		if isUnique {
+			modified = append(modified, fmt.Sprintf("  PRIMARY KEY (`%s`)", sourceCol))
+		} else {
+			modified = append(modified, fmt.Sprintf("  PRIMARY KEY (`%s`,`keyspace_id`)", sourceCol))
+		}
+		modified = append(modified, lines[len(lines)-1])
+		newTableSchema := strings.Join(modified, "\n")
+		wr.Logger().Printf("Schema: %s\n", newTableSchema)
+		for _, targetShard := range targetShards {
+			targetShardInfo, err := wr.ts.GetShard(ctx, targetKeyspace, targetShard)
+			if err != nil {
+				return err
+			}
+			if targetShardInfo.MasterAlias == nil {
+				return fmt.Errorf("no master for target shard %s", targetShard)
+			}
+			targetTabletInfo, err := wr.ts.GetTablet(ctx, targetShardInfo.MasterAlias)
+			if err != nil {
+				return err
+			}
+			filledChange, err := fillStringTemplate(newTableSchema, map[string]string{"DatabaseName": targetTabletInfo.DbName()})
+			if err != nil {
+				return err
+			}
+			_, err = wr.tmc.ExecuteFetchAsDba(ctx, targetTabletInfo.Tablet, false, []byte(filledChange), 0, false, true)
+			if err != nil {
+				return err
+			}
+			targetMasterPos, err := wr.tmc.MasterPosition(ctx, targetTabletInfo.Tablet)
+			if err != nil {
+				return err
+			}
+			concurrency := sync2.NewSemaphore(10, 0)
+			wr.ReloadSchemaShard(ctx, targetKeyspace, targetShard, targetMasterPos, concurrency, true /* includeMaster */)
+		}
+	}
+
+	buf := sqlparser.NewTrackedBuffer(nil)
+	fromCol := sqlparser.NewColIdent(sourceCol)
+	fromTable := sqlparser.NewTableIdent(sourceTable)
+	switch mode {
+	case "backfill":
+		buf.Myprintf("select %v, keyspace_id() as keyspace_id from %v group by %v, keyspace_id", fromCol, fromTable, fromCol)
+	case "best_effort":
+		if isUnique {
+			buf.Myprintf("select %v, keyspace_id() as keyspace_id from %v group by %v", fromCol, fromTable, fromCol)
+		} else {
+			buf.Myprintf("select %v, keyspace_id() as keyspace_id from %v group by %v, keyspace_id", fromCol, fromTable, fromCol)
+		}
+	case "eventually_consistent":
+		buf.Myprintf("select %v, keyspace_id() as keyspace_id from %v", fromCol, fromTable)
+	}
+	colVindex, vindexName := splitString2(primaryVindex, ":")
+	specs := []*tableSpec{{
+		expression: buf.ParsedQuery().Query,
+		table:      targetTable,
+		colVindex:  colVindex,
+		vindexName: vindexName,
+	}}
+	return wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, false)
 }
 
 // MultiMaterialize materializes multiple tables.
@@ -165,18 +292,18 @@ func (wr *Wrangler) Materialize(ctx context.Context, workflow, sourceSpec, targe
 		expression, _ = sqlparser.SubstituteTableName(sourceSpec, qualified)
 	} else {
 		var sourceTable string
-		sourceKeyspace, sourceTable = splitString(sourceSpec, ".")
+		sourceKeyspace, sourceTable = splitString2(sourceSpec, ".")
 		if sourceKeyspace == "" || sourceTable == "" {
 			return fmt.Errorf("sourceSpec must be a keyspace.table: %v", sourceSpec)
 		}
 		expression = fmt.Sprintf("select * from %s", sqlparser.String(sqlparser.NewTableIdent(sourceTable)))
 	}
 
-	targetKeyspace, targetTable := splitString(targetSpec, ".")
+	targetKeyspace, targetTable := splitString2(targetSpec, ".")
 	if targetTable == "" {
 		return fmt.Errorf("must specify target table name")
 	}
-	colVindex, vindexName := splitString(primaryVindex, ":")
+	colVindex, vindexName := splitString2(primaryVindex, ":")
 	specs := []*tableSpec{{
 		expression:  expression,
 		table:       targetTable,
@@ -1780,10 +1907,21 @@ func encodeString(in string) string {
 	return buf.String()
 }
 
-func splitString(in, separator string) (string, string) {
+func splitString2(in, separator string) (string, string) {
 	splits := strings.Split(in, separator)
 	if len(splits) != 2 {
 		return in, ""
 	}
 	return splits[0], splits[1]
+}
+
+func splitString3(in, separator string) (string, string, string) {
+	splits := strings.Split(in, separator)
+	switch len(splits) {
+	case 1:
+		return in, "", ""
+	case 2:
+		return splits[0], splits[1], ""
+	}
+	return splits[0], splits[1], splits[2]
 }

@@ -320,6 +320,9 @@ var commands = []commandGroup{
 			{"Migrate", commandMigrate,
 				"[-create_table] <workflow_name> <source_keyspace> <target_keyspace> <table_specs>",
 				"Initiate a migration of tables from one keyspace to another. For an unsharded keyspace target or if tables are already defined in the vschema, table_specs is 't1,t2,t3'. For sharded, it's 't1.colVindex:vindexname,t2.colVindex:vindexName'"},
+			{"CreateLookupVindex", commandCreateLookupVindex,
+				"-workflow=<workflow> -on=<keyspace.table.column> -backed_by=<keyspace.table[.colVindex:vindexName]> -vindex_type=<type> -mode=[backfill|best_effort|eventually_consistent] [-create_table] [-create_vindex]",
+				"Create a lookup Vindex"},
 			{"MultiMaterialize", commandMultiMaterialize,
 				"[-create_table] <workflow_name> <source_keyspace> <target_keyspace> <tables>",
 				"Creae multiple materialized views"},
@@ -1806,6 +1809,20 @@ func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	targetKeyspace := subFlags.Arg(2)
 	tableSpecs := subFlags.Arg(3)
 	return wr.Migrate(ctx, workflow, sourceKeyspace, targetKeyspace, tableSpecs, *createTable)
+}
+
+func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	workflow := subFlags.String("workflow", "", "Workflow Name")
+	on := subFlags.String("on", "", "The keyspace.table.column to create the vindex on")
+	backedBy := subFlags.String("backed_by", "", "The backing table specs")
+	vindexType := subFlags.String("vindex_type", "", "Vindex Type, like consistent_lookup_unique")
+	mode := subFlags.String("mode", "", "backfill, best_effort or eventually_consistent")
+	createTable := subFlags.Bool("create_table", false, "Create the table")
+	createVindex := subFlags.Bool("create_vindex", false, "Create the vindex")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	return wr.CreateLookupVindex(ctx, *workflow, *on, *backedBy, *vindexType, *mode, *createTable, *createVindex)
 }
 
 func commandMultiMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
