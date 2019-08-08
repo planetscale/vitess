@@ -323,6 +323,9 @@ var commands = []commandGroup{
 			{"CreateLookupVindex", commandCreateLookupVindex,
 				"-workflow=<workflow> -on=<keyspace.table.column> -backed_by=<keyspace.table[.colVindex:vindexName]> -vindex_type=<type> -mode=[backfill|best_effort|eventually_consistent] [-create_table] [-create_vindex]",
 				"Create a lookup Vindex"},
+			{"ExposeVindex", commandExposeVindex,
+				"<target_keyspace> <workflow_name>",
+				"Expose a lookup vindex."},
 			{"MultiMaterialize", commandMultiMaterialize,
 				"[-create_table] <workflow_name> <source_keyspace> <target_keyspace> <tables>",
 				"Creae multiple materialized views"},
@@ -1823,6 +1826,18 @@ func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return err
 	}
 	return wr.CreateLookupVindex(ctx, *workflow, *on, *backedBy, *vindexType, *mode, *createTable, *createVindex)
+}
+
+func commandExposeVindex(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("two arguments are required: <target_keyspace> <workflow_name>")
+	}
+	targetKeyspace := subFlags.Arg(0)
+	workflow := subFlags.Arg(1)
+	return wr.ExposeVindex(ctx, targetKeyspace, workflow)
 }
 
 func commandMultiMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

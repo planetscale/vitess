@@ -117,7 +117,7 @@ func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targe
 			vindexName: vindexName,
 		})
 	}
-	if err := wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, createTables); err != nil {
+	if err := wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, createTables, false /*stopAfterCopy */); err != nil {
 		return err
 	}
 
@@ -260,11 +260,8 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, workflow, on, backed
 		colVindex:  targetColVindex,
 		vindexName: targetVindexName,
 	}}
-	if err := wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, false); err != nil {
+	if err := wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, false, mode == "backfill" /* stopAfterCopy */); err != nil {
 		return err
-	}
-	if mode != "backfill" && mode != "best_effort" {
-		return nil
 	}
 	sourceVSchema, err := wr.ts.GetVSchema(ctx, sourceKeyspace)
 	if err != nil {
@@ -274,7 +271,7 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, workflow, on, backed
 	if sourceVSchema.Vindexes == nil {
 		sourceVSchema.Vindexes = make(map[string]*vschemapb.Vindex)
 	}
-	sourceVSchema.Vindexes[lookupVindexName] = &vschemapb.Vindex{
+	lookupVindex := &vschemapb.Vindex{
 		Type: vindexType,
 		Params: map[string]string{
 			"table":      fmt.Sprintf("%s.%s", targetKeyspace, targetTable),
@@ -282,8 +279,12 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, workflow, on, backed
 			"to":         "keyspace_id",
 			"write_only": "true",
 		},
-		Owner: sourceTable,
 	}
+	if mode == "backfill" || mode == "best_effort" {
+		lookupVindex.Owner = sourceTable
+		return nil
+	}
+	sourceVSchema.Vindexes[lookupVindexName] = lookupVindex
 	sourceVSchemaTable := sourceVSchema.Tables[sourceTable]
 	if sourceVSchemaTable == nil {
 		return fmt.Errorf("source table %s not found in vschema", sourceTable)
@@ -321,7 +322,7 @@ func (wr *Wrangler) MultiMaterialize(ctx context.Context, workflow, sourceKeyspa
 			isReference: true,
 		})
 	}
-	return wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, createTables)
+	return wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, createTables, false /* stopAfterCopy */)
 }
 
 // Materialize materializes a table.
@@ -359,11 +360,11 @@ func (wr *Wrangler) Materialize(ctx context.Context, workflow, sourceSpec, targe
 		colVindex:   colVindex,
 		vindexName:  vindexName,
 	}}
-	return wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, createTable)
+	return wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, createTable, false /* stopAfterCopy */)
 }
 
 // Materialize materializes a table.
-func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace string, specs []*tableSpec, createTables bool) error {
+func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace string, specs []*tableSpec, createTables, stopAfterCopy bool) error {
 	targetVSchema, err := wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
 		return err
@@ -459,9 +460,10 @@ func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, ta
 		}
 		for _, sourceShard := range sourceShards {
 			bls := &binlogdatapb.BinlogSource{
-				Keyspace: sourceKeyspace,
-				Shard:    sourceShard,
-				Filter:   &binlogdatapb.Filter{},
+				Keyspace:      sourceKeyspace,
+				Shard:         sourceShard,
+				Filter:        &binlogdatapb.Filter{},
+				StopAfterCopy: stopAfterCopy,
 			}
 			for _, spec := range specs {
 				rule := &binlogdatapb.Rule{
@@ -503,11 +505,40 @@ func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, ta
 	return nil
 }
 
-// Expose makes a materialized table visible to the app.
-func (wr *Wrangler) Expose(ctx context.Context, targetKeyspace, workflow string, autoRoute bool) error {
-	targets, err := wr.buildMigrationTargets(ctx, targetKeyspace, workflow)
+// ExposeVindex exposes a lookup vindex.
+func (wr *Wrangler) ExposeVindex(ctx context.Context, targetKeyspace, workflow string) error {
+	bls, err := wr.expose(ctx, targetKeyspace, workflow, false /* autoRoute */)
 	if err != nil {
 		return err
+	}
+	var lookupVindexName string
+	for _, rule := range bls.Filter.Rules {
+		lookupVindexName = rule.Match + "_vdx"
+		break
+	}
+	sourceKeyspace := bls.Keyspace
+	sourceVSchema, err := wr.ts.GetVSchema(ctx, sourceKeyspace)
+	if err != nil {
+		return err
+	}
+	vindex := sourceVSchema.Vindexes[lookupVindexName]
+	if vindex == nil {
+		return fmt.Errorf("vindex %s not found in source vschema", lookupVindexName)
+	}
+	delete(vindex.Params, "write_only")
+	return wr.ts.SaveVSchema(ctx, sourceKeyspace, sourceVSchema)
+}
+
+// Expose makes a materialized table visible to the app.
+func (wr *Wrangler) Expose(ctx context.Context, targetKeyspace, workflow string, autoRoute bool) error {
+	_, err := wr.expose(ctx, targetKeyspace, workflow, autoRoute)
+	return err
+}
+
+func (wr *Wrangler) expose(ctx context.Context, targetKeyspace, workflow string, autoRoute bool) (*binlogdatapb.BinlogSource, error) {
+	targets, err := wr.buildMigrationTargets(ctx, targetKeyspace, workflow)
+	if err != nil {
+		return nil, err
 	}
 	var bls *binlogdatapb.BinlogSource
 outer:
@@ -521,23 +552,23 @@ outer:
 
 	targetVSchema, err := wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	rules, err := wr.getRoutingRules(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, rule := range bls.Filter.Rules {
 		targetTable := rule.Match
 		qualified, err := sqlparser.TableFromStatement(rule.Filter)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		sourceTable := qualified.Name.String()
 		ti, ok := targetVSchema.Tables[targetTable]
 		if !ok {
-			return fmt.Errorf("table %v not found in vschema", targetTable)
+			return nil, fmt.Errorf("table %v not found in vschema", targetTable)
 		}
 		ti.Hidden = false
 
@@ -547,14 +578,17 @@ outer:
 	}
 	wr.Logger().Printf("Saving VSchema for keyspace %v: %v\n", targetKeyspace, targetVSchema)
 	if err := wr.ts.SaveVSchema(ctx, targetKeyspace, targetVSchema); err != nil {
-		return err
+		return nil, err
 	}
 	wr.Logger().Printf("Saving Routing Rules: %v\n", rules)
 	if err := wr.saveRoutingRules(ctx, rules); err != nil {
-		return err
+		return nil, err
 	}
 
-	return wr.ts.RebuildSrvVSchema(ctx, nil)
+	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+		return nil, err
+	}
+	return bls, nil
 }
 
 // Reshard initiates a resharding workflow.
