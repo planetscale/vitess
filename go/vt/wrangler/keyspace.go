@@ -250,15 +250,63 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, workflow, on, backed
 		}
 	case "eventually_consistent":
 		buf.Myprintf("select %v, keyspace_id() as keyspace_id from %v", fromCol, fromTable)
+	default:
+		return fmt.Errorf("unrecognize mode: %s", mode)
 	}
-	colVindex, vindexName := splitString2(primaryVindex, ":")
+	targetColVindex, targetVindexName := splitString2(primaryVindex, ":")
 	specs := []*tableSpec{{
 		expression: buf.ParsedQuery().Query,
 		table:      targetTable,
-		colVindex:  colVindex,
-		vindexName: vindexName,
+		colVindex:  targetColVindex,
+		vindexName: targetVindexName,
 	}}
-	return wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, false)
+	if err := wr.vreplicate(ctx, workflow, sourceKeyspace, targetKeyspace, specs, false); err != nil {
+		return err
+	}
+	if mode != "backfill" && mode != "best_effort" {
+		return nil
+	}
+	sourceVSchema, err := wr.ts.GetVSchema(ctx, sourceKeyspace)
+	if err != nil {
+		return err
+	}
+	lookupVindexName := targetTable + "_vdx"
+	if sourceVSchema.Vindexes == nil {
+		sourceVSchema.Vindexes = make(map[string]*vschemapb.Vindex)
+	}
+	sourceVSchema.Vindexes[lookupVindexName] = &vschemapb.Vindex{
+		Type: vindexType,
+		Params: map[string]string{
+			"table":      fmt.Sprintf("%s.%s", targetKeyspace, targetTable),
+			"from":       sourceCol,
+			"to":         "keyspace_id",
+			"write_only": "true",
+		},
+		Owner: sourceTable,
+	}
+	sourceVSchemaTable := sourceVSchema.Tables[sourceTable]
+	if sourceVSchemaTable == nil {
+		return fmt.Errorf("source table %s not found in vschema", sourceTable)
+	}
+	found := false
+	for _, colVindex := range sourceVSchemaTable.ColumnVindexes {
+		colName := colVindex.Column
+		if len(colVindex.Columns) != 0 {
+			colName = colVindex.Columns[0]
+		}
+		if colName == sourceCol {
+			found = true
+			colVindex.Name = lookupVindexName
+			break
+		}
+	}
+	if !found {
+		sourceVSchemaTable.ColumnVindexes = append(sourceVSchemaTable.ColumnVindexes, &vschemapb.ColumnVindex{
+			Name:    lookupVindexName,
+			Columns: []string{sourceCol},
+		})
+	}
+	return wr.ts.SaveVSchema(ctx, sourceKeyspace, sourceVSchema)
 }
 
 // MultiMaterialize materializes multiple tables.
