@@ -33,6 +33,7 @@ COPY --from=base /vt/bin/vtctlclient /vt/bin/
 COPY --from=base /vt/bin/vtgate /vt/bin/
 COPY --from=base /vt/bin/vttablet /vt/bin/
 COPY --from=base /vt/bin/vtworker /vt/bin/
+COPY --from=base /vt/bin/vtbackup /vt/bin/
 
 # copy web admin files
 COPY --from=base $VTTOP/web /vt/web/
@@ -40,21 +41,8 @@ COPY --from=base $VTTOP/web /vt/web/
 # copy vitess config
 COPY --from=base $VTTOP/config/init_db.sql /vt/config/
 
-# mysql flavor files for db specific .cnf settings
-COPY --from=base $VTTOP/config/mycnf/master_mysql56.cnf /vt/config/mycnf/
-COPY --from=base $VTTOP/config/mycnf/master_mariadb.cnf /vt/config/mycnf/
-COPY --from=base $VTTOP/config/mycnf/master_mariadb103.cnf /vt/config/mycnf/
-
-# settings for different types of instances
-COPY --from=base $VTTOP/config/mycnf/default.cnf /vt/config/mycnf/
-COPY --from=base $VTTOP/config/mycnf/default-fast.cnf /vt/config/mycnf/
-COPY --from=base $VTTOP/config/mycnf/master.cnf /vt/config/mycnf/
-COPY --from=base $VTTOP/config/mycnf/replica.cnf /vt/config/mycnf/
-COPY --from=base $VTTOP/config/mycnf/rdonly.cnf /vt/config/mycnf/
-COPY --from=base $VTTOP/config/mycnf/backup.cnf /vt/config/mycnf/
-
-# settings to support rbr
-COPY --from=base $VTTOP/config/mycnf/rbr.cnf /vt/config/mycnf/
+# my.cnf include files
+COPY --from=base $VTTOP/config/mycnf /vt/config/mycnf
 
 # add vitess user and add permissions
 RUN groupadd -r --gid 2000 vitess && useradd -r -g vitess --uid 1000 vitess && \

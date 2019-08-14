@@ -532,7 +532,7 @@ func (node *Stream) walkSubtree(visit Visit) error {
 // the row and re-inserts with new values. For that reason we keep it as an Insert struct.
 // Replaces are currently disallowed in sharded schemas because
 // of the implications the deletion part may have on vindexes.
-// If you add fields here, consider adding them to calls to validateSubquerySamePlan.
+// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 type Insert struct {
 	Action     string
 	Comments   Comments
@@ -584,7 +584,7 @@ func (Values) iInsertRows()       {}
 func (*ParenSelect) iInsertRows() {}
 
 // Update represents an UPDATE statement.
-// If you add fields here, consider adding them to calls to validateSubquerySamePlan.
+// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 type Update struct {
 	Comments   Comments
 	Ignore     string
@@ -618,7 +618,7 @@ func (node *Update) walkSubtree(visit Visit) error {
 }
 
 // Delete represents a DELETE statement.
-// If you add fields here, consider adding them to calls to validateSubquerySamePlan.
+// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 type Delete struct {
 	Comments   Comments
 	Targets    TableNames
@@ -755,6 +755,7 @@ const (
 	DropVschemaTableStr = "drop vschema table"
 	AddColVindexStr     = "on table add vindex"
 	DropColVindexStr    = "on table drop vindex"
+	AddSequenceStr      = "add sequence"
 
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
@@ -813,6 +814,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		}
 	case DropColVindexStr:
 		buf.Myprintf("alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
+	case AddSequenceStr:
+		buf.Myprintf("alter vschema add sequence %v", node.Table)
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}

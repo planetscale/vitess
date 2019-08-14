@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -99,14 +100,15 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	var ctx context.Context
+	ctx := context.Background()
 	var cancel context.CancelFunc
 	if *mysqlQueryTimeout != 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		ctx, cancel = context.WithTimeout(ctx, *mysqlQueryTimeout)
 		defer cancel()
-	} else {
-		ctx = context.Background()
 	}
+	span, ctx := trace.NewSpan(ctx, "vtgateHandler.ComQuery")
+	trace.AnnotateSQL(span, query)
+	defer span.Finish()
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
@@ -158,6 +160,128 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		return err
 	}
 	return callback(result)
+}
+
+// ComPrepare is the handler for command prepare.
+func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) {
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if *mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
+
+	ctx = callinfo.MysqlCallInfo(ctx, c)
+
+	// Fill in the ImmediateCallerID with the UserData returned by
+	// the AuthServer plugin for that user. If nothing was
+	// returned, use the User. This lets the plugin map a MySQL
+	// user used for authentication to a Vitess User used for
+	// Table ACLs and Vitess authentication in general.
+	im := c.UserData.Get()
+	ef := callerid.NewEffectiveCallerID(
+		c.User,                  /* principal: who */
+		c.RemoteAddr().String(), /* component: running client process */
+		"VTGate MySQL Connector" /* subcomponent: part of the client */)
+	ctx = callerid.NewContext(ctx, ef, im)
+
+	session, _ := c.ClientData.(*vtgatepb.Session)
+	if session == nil {
+		session = &vtgatepb.Session{
+			Options: &querypb.ExecuteOptions{
+				IncludedFields: querypb.ExecuteOptions_ALL,
+			},
+			Autocommit: true,
+		}
+		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
+			session.Options.ClientFoundRows = true
+		}
+	}
+
+	if !session.InTransaction {
+		atomic.AddInt32(&busyConnections, 1)
+	}
+	defer func() {
+		if !session.InTransaction {
+			atomic.AddInt32(&busyConnections, -1)
+		}
+	}()
+
+	if c.SchemaName != "" {
+		session.TargetString = c.SchemaName
+	}
+
+	session, fld, err := vh.vtg.Prepare(ctx, session, query, make(map[string]*querypb.BindVariable))
+	c.ClientData = session
+	err = mysql.NewSQLErrorFromError(err)
+	if err != nil {
+		return nil, err
+	}
+	return fld, nil
+}
+
+func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if *mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
+
+	ctx = callinfo.MysqlCallInfo(ctx, c)
+
+	// Fill in the ImmediateCallerID with the UserData returned by
+	// the AuthServer plugin for that user. If nothing was
+	// returned, use the User. This lets the plugin map a MySQL
+	// user used for authentication to a Vitess User used for
+	// Table ACLs and Vitess authentication in general.
+	im := c.UserData.Get()
+	ef := callerid.NewEffectiveCallerID(
+		c.User,                  /* principal: who */
+		c.RemoteAddr().String(), /* component: running client process */
+		"VTGate MySQL Connector" /* subcomponent: part of the client */)
+	ctx = callerid.NewContext(ctx, ef, im)
+
+	session, _ := c.ClientData.(*vtgatepb.Session)
+	if session == nil {
+		session = &vtgatepb.Session{
+			Options: &querypb.ExecuteOptions{
+				IncludedFields: querypb.ExecuteOptions_ALL,
+			},
+			Autocommit: true,
+		}
+		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
+			session.Options.ClientFoundRows = true
+		}
+	}
+
+	if !session.InTransaction {
+		atomic.AddInt32(&busyConnections, 1)
+	}
+	defer func() {
+		if !session.InTransaction {
+			atomic.AddInt32(&busyConnections, -1)
+		}
+	}()
+
+	if c.SchemaName != "" {
+		session.TargetString = c.SchemaName
+	}
+	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+		err := vh.vtg.StreamExecute(ctx, session, prepare.PrepareStmt, prepare.BindVars, callback)
+		return mysql.NewSQLErrorFromError(err)
+	}
+	_, qr, err := vh.vtg.Execute(ctx, session, prepare.PrepareStmt, prepare.BindVars)
+	if err != nil {
+		err = mysql.NewSQLErrorFromError(err)
+		return err
+	}
+
+	return callback(qr)
 }
 
 func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {

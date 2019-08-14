@@ -106,8 +106,8 @@ func TestMigrateServedFrom(t *testing.T) {
 	// Override with a fake VREngine after Agent is initialized in action loop.
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	destMaster.Agent.VREngine = vreplication.NewEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory)
-	dbClient.ExpectRequest("select * from _vt.vreplication", &sqltypes.Result{}, nil)
+	destMaster.Agent.VREngine = vreplication.NewEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory, dbClient.DBName())
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	if err := destMaster.Agent.VREngine.Open(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -117,8 +117,7 @@ func TestMigrateServedFrom(t *testing.T) {
 		sqltypes.NewVarBinary("Running"),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
+	expectDeleteVRepl(dbClient)
 
 	// simulate the clone, by fixing the dest shard record
 	if err := vp.Run([]string{"SourceShardAdd", "--tables", "gone1,gone2", "dest/0", "1", "source/0"}); err != nil {

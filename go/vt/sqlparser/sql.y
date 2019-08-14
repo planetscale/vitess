@@ -164,6 +164,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
+%token <bytes> SEQUENCE
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -181,7 +182,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -219,9 +220,9 @@ func skipToEnd(yylex interface{}) {
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
-%type <tableNames> table_name_list
+%type <tableNames> table_name_list delete_table_list
 %type <str> inner_join outer_join straight_join natural_join
-%type <tableName> table_name into_table_name
+%type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
@@ -454,6 +455,10 @@ delete_statement:
   {
     $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
   }
+|DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
+  {
+    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
+  }
 
 from_or_using:
   FROM {}
@@ -465,6 +470,16 @@ table_name_list:
     $$ = TableNames{$1}
   }
 | table_name_list ',' table_name
+  {
+    $$ = append($$, $3)
+  }
+
+delete_table_list:
+  delete_table_name
+  {
+    $$ = TableNames{$1}
+  }
+| delete_table_list ',' delete_table_name
   {
     $$ = append($$, $3)
   }
@@ -1338,6 +1353,10 @@ alter_statement:
         },
       }
   }
+| ALTER VSCHEMA ADD SEQUENCE table_name
+  {
+    $$ = &DDL{Action: AddSequenceStr, Table: $5}
+  }
 
 alter_object_type:
   COLUMN
@@ -1482,6 +1501,10 @@ show_statement:
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 | SHOW DATABASES ddl_skip_to_end
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW SCHEMAS ddl_skip_to_end
   {
     $$ = &Show{Type: string($2)}
   }
@@ -2058,6 +2081,12 @@ table_name:
     $$ = TableName{Qualifier: $1, Name: $3}
   }
 
+delete_table_name:
+table_id '.' '*'
+  {
+    $$ = TableName{Name: $1}
+  }
+
 index_hint_list:
   {
     $$ = nil
@@ -2450,23 +2479,7 @@ function_call_keyword:
   {
     $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
   }
-| SUBSTR openb column_name ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{Name: $3, From: $5, To: nil}
-  }
-| SUBSTR openb column_name ',' value_expression ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
-  }
 | SUBSTR openb column_name FROM value_expression FOR value_expression closeb
-  {
-    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
-  }
-| SUBSTRING openb column_name ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{Name: $3, From: $5, To: nil}
-  }
-| SUBSTRING openb column_name ',' value_expression ',' value_expression closeb
   {
     $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
   }
@@ -2474,23 +2487,7 @@ function_call_keyword:
   {
     $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
   }
-| SUBSTR openb STRING ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: nil}
-  }
-| SUBSTR openb STRING ',' value_expression ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
-  }
 | SUBSTR openb STRING FROM value_expression FOR value_expression closeb
-  {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
-  }
-| SUBSTRING openb STRING ',' value_expression closeb
-  {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: nil}
-  }
-| SUBSTRING openb STRING ',' value_expression ',' value_expression closeb
   {
     $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
   }
@@ -2625,6 +2622,14 @@ function_call_conflict:
 | REPLACE openb select_expression_list closeb
   {
     $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3}
+  }
+| SUBSTR openb select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
+  }
+| SUBSTRING openb select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
   }
 
 match_option:
@@ -3364,6 +3369,8 @@ non_reserved_keyword:
 | REPEATABLE
 | RESTRICT
 | ROLLBACK
+| SCHEMAS
+| SEQUENCE
 | SESSION
 | SERIALIZABLE
 | SHARE

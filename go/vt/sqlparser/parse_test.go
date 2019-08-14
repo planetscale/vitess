@@ -980,6 +980,8 @@ var (
 	}, {
 		input: "alter vschema add table a",
 	}, {
+		input: "alter vschema add sequence a_seq",
+	}, {
 		input: "alter vschema drop table a",
 	}, {
 		input: "alter vschema on a add vindex hash (id)",
@@ -1120,6 +1122,9 @@ var (
 	}, {
 		input:  "show databases",
 		output: "show databases",
+	}, {
+		input:  "show schemas",
+		output: "show schemas",
 	}, {
 		input:  "show engine INNODB",
 		output: "show engine",
@@ -1431,6 +1436,9 @@ var (
 	}, {
 		input:  "drop database if exists test_db",
 		output: "drop database test_db",
+	}, {
+		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
+		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
 	}}
 )
 
@@ -1841,6 +1849,15 @@ func TestSubStr(t *testing.T) {
 	}, {
 		input:  `select substring("foo", 1, 2) from t`,
 		output: `select substr('foo', 1, 2) from t`,
+	}, {
+		input:  `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
+		output: `select substr(substr('foo', 1, 2), 1, 2) from t`,
+	}, {
+		input:  `select substr(substring("foo", 1, 2), 3, 4) from t`,
+		output: `select substr(substr('foo', 1, 2), 3, 4) from t`,
+	}, {
+		input:  `select substring(substr("foo", 1), 2) from t`,
+		output: `select substr(substr('foo', 1), 2) from t`,
 	}}
 
 	for _, tcase := range validSQL {
