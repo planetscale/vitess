@@ -610,6 +610,21 @@ func (wr *Wrangler) Reshard(ctx context.Context, workflow, keyspace string, sour
 	}
 	// TODO(sougou): validate source and target shards.
 
+	// Exclude all reference tables.
+	vschema, err := wr.ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	var excludeRules []*binlogdatapb.Rule
+	for tableName, ti := range vschema.Tables {
+		if ti.Type == vindexes.TypeReference {
+			excludeRules = append(excludeRules, &binlogdatapb.Rule{
+				Match:  tableName,
+				Filter: "exclude",
+			})
+		}
+	}
+
 	for _, dest := range targetShards {
 		master, err := wr.ts.GetTablet(ctx, dest.MasterAlias)
 		if err != nil {
@@ -620,10 +635,10 @@ func (wr *Wrangler) Reshard(ctx context.Context, workflow, keyspace string, sour
 				continue
 			}
 			filter := &binlogdatapb.Filter{
-				Rules: []*binlogdatapb.Rule{{
+				Rules: append(excludeRules, &binlogdatapb.Rule{
 					Match:  "/.*",
 					Filter: key.KeyRangeString(dest.KeyRange),
-				}},
+				}),
 			}
 			bls := &binlogdatapb.BinlogSource{
 				Keyspace: keyspace,
