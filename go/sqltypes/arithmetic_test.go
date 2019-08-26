@@ -29,6 +29,61 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+func TestMultiply(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		out    Value
+		err    error
+	}{{
+
+		//All Nulls
+		v1:  NULL,
+		v2:  NULL,
+		out: NULL,
+	}, {
+
+		// First value null.
+		v1:  NewInt32(1),
+		v2:  NULL,
+		out: NULL,
+	}, {
+
+		// Second value null.
+		v1:  NULL,
+		v2:  NewInt32(1),
+		out: NULL,
+	}, {
+
+		// case with negative value
+		v1:  NewInt64(-1),
+		v2:  NewInt64(-2),
+		out: NewInt64(2),
+	}, {
+
+		// testing for int64 overflow with min negative value
+		v1:  NewInt64(math.MinInt64),
+		v2:  NewInt64(1),
+		out: NewInt64(math.MinInt64),
+	}}
+
+	for _, tcase := range tcases {
+
+		got, err := Multiply(tcase.v1, tcase.v2)
+
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Multiply(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("Multiply(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+		}
+	}
+
+}
+
 func TestSubtract(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value

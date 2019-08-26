@@ -87,8 +87,8 @@ func Subtract(v1, v2 Value) (Value, error) {
 	return castFromNumeric(lresult, lresult.typ), nil
 }
 
-// Multiplication takes two values and multiplies it together
-func Multiplication(v1, v2 Value) (Value, error) {
+// Multiply takes two values and multiplies it together
+func Multiply(v1, v2 Value) (Value, error) {
 	if v1.IsNull() {
 		return NULL, nil
 	}
@@ -459,9 +459,9 @@ func multiplyNumericWithError(v1, v2 numeric) (numeric, error) {
 	case Uint64:
 		switch v2.typ {
 		case Int64:
-			return uintMinusIntWithError(v1.uval, v2.ival)
+			return uintTimesIntWithError(v1.uval, v2.ival)
 		case Uint64:
-			return uintPlusUintWithError(v1.uval, v2.uval)
+			return uintTimesUintWithError(v1.uval, v2.uval)
 		}
 	case Float64:
 		return floatPlusAny(v1.fval, v2), nil
@@ -535,9 +535,7 @@ func uintPlusIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	if v2 >= math.MaxInt64 && v1 > 0 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
 	}
-
 	if v1 >= math.MaxUint64 && v2 > 0 {
-
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
 	}
 
@@ -550,44 +548,36 @@ func uintMinusIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	if v1 < uint64(v2) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
 	}
-
 	return uintMinusUintWithError(v1, uint64(v2))
 }
 
 func uintTimesIntWithError(v1 uint64, v2 int64) (numeric, error) {
-
 	return uintTimesUintWithError(v1, uint64(v2))
-
 }
 
 func uintPlusUint(v1, v2 uint64) numeric {
 	result := v1 + v2
 	if result < v2 {
 		return numeric{typ: Float64, fval: float64(v1) + float64(v2)}
-
 	}
 	return numeric{typ: Uint64, uval: result}
 }
 
 func uintPlusUintWithError(v1, v2 uint64) (numeric, error) {
 	result := v1 + v2
-
 	if result < v2 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
 	}
-
 	return numeric{typ: Uint64, uval: result}, nil
 }
 
 func uintMinusUintWithError(v1, v2 uint64) (numeric, error) {
 	result := v1 - v2
-
 	return numeric{typ: Uint64, uval: result}, nil
 }
 
 func uintTimesUintWithError(v1, v2 uint64) (numeric, error) {
 	result := v1 * v2
-
 	return numeric{typ: Uint64, uval: result}, nil
 }
 
