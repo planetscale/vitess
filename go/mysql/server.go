@@ -256,6 +256,7 @@ func (l *Listener) Accept() {
 // handle is called in a go routine for each client connection.
 // FIXME(alainjobart) handle per-connection logs in a way that makes sense.
 func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Time) {
+	log.Errorf("handle tls: %v", l.TLSConfig)
 	if l.connReadTimeout != 0 || l.connWriteTimeout != 0 {
 		conn = netutil.NewConnWithTimeouts(conn, l.connReadTimeout, l.connWriteTimeout)
 	}
@@ -282,6 +283,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	defer connCount.Add(-1)
 
 	// First build and send the server handshake packet.
+	log.Error("handle handshake tls: %v", l.TLSConfig)
 	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
 	if err != nil {
 		if err != io.EOF {
@@ -474,6 +476,7 @@ func (l *Listener) isShutdown() bool {
 // writeHandshakeV10 writes the Initial Handshake Packet, server side.
 // It returns the salt data.
 func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, enableTLS bool) ([]byte, error) {
+	log.Error("handshake")
 	capabilities := CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
 		CapabilityClientConnectWithDB |
@@ -487,6 +490,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 		CapabilityClientDeprecateEOF |
 		CapabilityClientConnAttr
 	if enableTLS {
+		log.Error("handshake include tls")
 		capabilities |= CapabilityClientSSL
 	}
 

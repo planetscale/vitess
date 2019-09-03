@@ -325,6 +325,7 @@ func initMySQLProtocol() {
 	var err error
 	vh := newVtgateHandler(rpcVTGate)
 	if *mysqlServerPort >= 0 {
+		log.Error("creating listener")
 		mysqlListener, err = mysql.NewListener(*mysqlTCPVersion, net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh, *mysqlConnReadTimeout, *mysqlConnWriteTimeout)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
@@ -332,12 +333,14 @@ func initMySQLProtocol() {
 		if *mysqlServerVersion != "" {
 			mysqlListener.ServerVersion = *mysqlServerVersion
 		}
+		log.Errorf("tls: %v, %v", *mysqlSslCert, *mysqlSslKey)
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
 			mysqlListener.TLSConfig, err = vttls.ServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
 			if err != nil {
 				log.Exitf("grpcutils.TLSServerConfig failed: %v", err)
 				return
 			}
+			log.Errorf("tlsconfig: %v", mysqlListener.TLSConfig)
 			mysqlListener.RequireSecureTransport = *mysqlServerRequireSecureTransport
 		}
 		mysqlListener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
