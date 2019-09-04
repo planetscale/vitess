@@ -35,22 +35,21 @@ if [ "$1" = "--enable-tls" ];
 then
 	echo "Enabling TLS with client authentication"
 	config_dir=../../java/grpc-client/src/test/resources
-    cert_dir=/Users/teejae/go/src/github.com/planetscale/planetscale-operator/temp
 	cert_dir=$VTDATAROOT/tls
-	rm -Rf $cert_dir
-	mkdir -p $cert_dir
+	# rm -Rf $cert_dir
+	# mkdir -p $cert_dir
 
-    # Create CA
-    openssl genrsa -out $cert_dir/ca-key.pem
-    openssl req -new -x509 -nodes -days 3600 -batch -config $config_dir/ca.config -key $cert_dir/ca-key.pem -out $cert_dir/ca-cert.pem
+    # # Create CA
+    # openssl genrsa -out $cert_dir/ca-key.pem
+    # openssl req -new -x509 -nodes -days 3600 -batch -config $config_dir/ca.config -key $cert_dir/ca-key.pem -out $cert_dir/ca-cert.pem
 
-    # Create server-side signed cert
-    openssl req -newkey rsa:2048 -days 3600 -nodes -batch -config $config_dir/cert.config -keyout $cert_dir/server-key.pem -out $cert_dir/server-req.pem
-    openssl x509 -req -in $cert_dir/server-req.pem -days 3600 -CA $cert_dir/ca-cert.pem -CAkey $cert_dir/ca-key.pem -set_serial 01 -out $cert_dir/server-cert.pem
+    # # Create server-side signed cert
+    # openssl req -newkey rsa:2048 -days 3600 -nodes -batch -config $config_dir/cert.config -keyout $cert_dir/server-key.pem -out $cert_dir/server-req.pem
+    # openssl x509 -req -in $cert_dir/server-req.pem -days 3600 -CA $cert_dir/ca-cert.pem -CAkey $cert_dir/ca-key.pem -set_serial 01 -out $cert_dir/server-cert.pem
 
-    # Create client-side signed cert
-    openssl req -newkey rsa:2048 -days 3600 -nodes -batch -config $config_dir/cert.config -keyout $cert_dir/client-key.pem -out $cert_dir/client-req.pem
-    openssl x509 -req -in $cert_dir/client-req.pem -days 3600 -CA $cert_dir/ca-cert.pem -CAkey $cert_dir/ca-key.pem -set_serial 02 -out $cert_dir/client-cert.pem
+    # # Create client-side signed cert
+    # openssl req -newkey rsa:2048 -days 3600 -nodes -batch -config $config_dir/cert.config -keyout $cert_dir/client-key.pem -out $cert_dir/client-req.pem
+    # openssl x509 -req -in $cert_dir/client-req.pem -days 3600 -CA $cert_dir/ca-cert.pem -CAkey $cert_dir/ca-key.pem -set_serial 02 -out $cert_dir/client-cert.pem
 
     # optional_tls_args="-grpc_cert $cert_dir/server-cert.pem -grpc_key $cert_dir/server-key.pem -grpc_ca $cert_dir/ca-cert.pem"
     optional_tls_args="-mysql_server_require_secure_transport -mysql_server_ssl_cert $cert_dir/server-cert.pem -mysql_server_ssl_key $cert_dir/server-key.pem -mysql_server_ssl_ca $cert_dir/ca-cert.pem"
