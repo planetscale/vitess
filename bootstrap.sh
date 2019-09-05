@@ -187,10 +187,10 @@ function install_zookeeper() {
   rm -rf "$zk" "$zk.tar.gz"
 }
 
-zk_ver=${ZK_VERSION:-3.4.14}
-if [ "$BUILD_JAVA" == 1 ] ; then
-  install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
-fi
+# zk_ver=${ZK_VERSION:-3.4.14}
+# if [ "$BUILD_JAVA" == 1 ] ; then
+#   install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
+# fi
 
 # Download and install etcd, link etcd binary into our root.
 function install_etcd() {
