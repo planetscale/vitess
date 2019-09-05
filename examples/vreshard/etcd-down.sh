@@ -18,12 +18,8 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
+source ./env.sh
 
-# Stop ZooKeeper servers.
-echo "Stopping zk servers..."
-for zkid in $zkids; do
-  $VTROOT/bin/zkctl -zk.myid $zkid -zk.cfg $zkcfg -log_dir $VTDATAROOT/tmp shutdown
-done
-
+# Stop etcd servers.
+echo "Stopping etcd servers..."
+kill -9 "$(pgrep -f "${ETCD_BINDIR}/etcd")"

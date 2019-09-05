@@ -1,0 +1,52 @@
+# Bring cluster up:
+./cup.sh
+
+# Create shortcuts
+source kalias.source
+
+Wait till cluster comes up, and fill data.
+kmysql -e "insert into customer(cid,name) values(1,'aa'),(2,'bb'),(3,'cc')"
+
+# Create lookup vindex
+kvtctl CreateLookupVindex -workflow=aaa -on customer.customer.name -backed_by=customer.name_idx.name:unicode_loose_md5 -vindex_type=lookup -mode=eventually_consistent -create_table -create_vindex
+
+# Observe the new vschema, and see that name_idx is hidden.
+kvtctl GetVSchema customer
+
+# The Expose command reveals name_idx and makes the vindex usable. This should be done once the vreplication is caught up.
+kvtctl ExposeVindex customer aaa
+
+# Note a single VReplication stream for name_idx
+kvtctl VReplicationExec test-100 "select * from _vt.vreplication"
+
+
+Reshard part 1
+kvtctl Reshard bbb customer '0' '-80,80-'
+
+# Note the resharding VReplication streams
+kvtctl VReplicationExec test-200 "select * from _vt.vreplication"
+kvtctl VReplicationExec test-300 "select * from _vt.vreplication"
+
+# Migrate
+kvtctl MigrateReads -workflow=bbb customer rdonly
+kvtctl MigrateReads -workflow=bbb customer replica
+kvtctl MigrateWrites -workflow=bbb customer
+
+# Note the changes: 100 has the reverse streams, 200 & 300 will have the migrated streams for name_idx
+kvtctl VReplicationExec test-100 "select * from _vt.vreplication"
+kvtctl VReplicationExec test-200 "select * from _vt.vreplication"
+kvtctl VReplicationExec test-300 "select * from _vt.vreplication"
+
+# Reshard again
+kvtctl Reshard ccc customer '-80' '-40,40-80'
+kvtctl MigrateReads -workflow=ccc customer rdonly
+kvtctl MigrateReads -workflow=ccc customer replica
+kvtctl MigrateWrites -workflow=ccc customer
+
+# Note the changes: 200, 400 and 500 will have three streams each. 300 will have no stream for name_idx
+kvtctl VReplicationExec test-100 "select * from _vt.vreplication"
+kvtctl VReplicationExec test-200 "select * from _vt.vreplication"
+kvtctl VReplicationExec test-300 "select * from _vt.vreplication"
+
+# Shutdown the cluster
+./cdown.sh
