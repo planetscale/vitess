@@ -256,6 +256,27 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 	return result, nil
 }
 
+// GetServingShards returns all shards where the master is serving.
+func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*ShardInfo, error) {
+	shards, err := ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
+	}
+
+	result := make([]*ShardInfo, 0, len(shards))
+	for _, shard := range shards {
+		si, err := ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
+		}
+		if !si.IsMasterServing {
+			continue
+		}
+		result = append(result, si)
+	}
+	return result, nil
+}
+
 // GetOnlyShard returns the single ShardInfo of an unsharded keyspace.
 func (ts *Server) GetOnlyShard(ctx context.Context, keyspace string) (*ShardInfo, error) {
 	allShards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)

@@ -429,11 +429,11 @@ func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, ta
 			}
 		}
 	}
-	sourceShards, err := wr.ts.GetShardNames(ctx, sourceKeyspace)
+	sources, err := wr.ts.GetServingShards(ctx, sourceKeyspace)
 	if err != nil {
 		return err
 	}
-	targetShards, err := wr.ts.GetShardNames(ctx, targetKeyspace)
+	targets, err := wr.ts.GetServingShards(ctx, targetKeyspace)
 	if err != nil {
 		return err
 	}
@@ -443,25 +443,21 @@ func (wr *Wrangler) vreplicate(ctx context.Context, workflow, sourceKeyspace, ta
 			tables = append(tables, spec.table)
 		}
 		// TODO(sougou): this will work only if target is same schema as source.
-		for _, targetShard := range targetShards {
-			if err := wr.CopySchemaShardFromShard(ctx, tables, nil, false, sourceKeyspace, sourceShards[0], targetKeyspace, targetShard, 1*time.Second); err != nil {
+		for _, target := range targets {
+			if err := wr.CopySchemaShardFromShard(ctx, tables, nil, false, sourceKeyspace, sources[0].ShardName(), targetKeyspace, target.ShardName(), 1*time.Second); err != nil {
 				return err
 			}
 		}
 	}
-	for _, targetShard := range targetShards {
-		target, err := wr.ts.GetShard(ctx, targetKeyspace, targetShard)
-		if err != nil {
-			return err
-		}
+	for _, target := range targets {
 		targetMaster, err := wr.ts.GetTablet(ctx, target.MasterAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.MasterAlias)
 		}
-		for _, sourceShard := range sourceShards {
+		for _, source := range sources {
 			bls := &binlogdatapb.BinlogSource{
 				Keyspace:      sourceKeyspace,
-				Shard:         sourceShard,
+				Shard:         source.ShardName(),
 				Filter:        &binlogdatapb.Filter{},
 				StopAfterCopy: stopAfterCopy,
 			}
