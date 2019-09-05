@@ -1792,7 +1792,7 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	if subFlags.NArg() != 4 {
 		return fmt.Errorf("four arguments are required: workflow, keyspace, from_shards, to_shards")
 	}
-	workflow := subFlags.Arg(1)
+	workflow := subFlags.Arg(0)
 	keyspace := subFlags.Arg(1)
 	from := strings.Split(subFlags.Arg(2), ",")
 	to := strings.Split(subFlags.Arg(3), ",")
@@ -1953,7 +1953,7 @@ func commandMigrateReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	}
 
 	keyspace := subFlags.Arg(0)
-	servedType, err := parseTabletType(subFlags.Arg(2), []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
+	servedType, err := parseTabletType(subFlags.Arg(1), []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
