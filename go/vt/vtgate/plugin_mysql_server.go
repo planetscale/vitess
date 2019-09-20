@@ -182,7 +182,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		}
 	}()
 
-	if session.TargetString == "" && c.SchemaName != "" {
+	if session.TargetString != c.SchemaName {
 		session.TargetString = c.SchemaName
 	}
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
@@ -190,6 +190,11 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		return mysql.NewSQLErrorFromError(err)
 	}
 	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
+	// If the session TargetString changed during the query, we had a "use query"
+	// reset the default schema name for the connection.
+	if session.TargetString != c.SchemaName {
+		c.SchemaName = session.TargetString
+	}
 	c.ClientData = session
 	err = mysql.NewSQLErrorFromError(err)
 	if err != nil {
@@ -245,7 +250,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 		}
 	}()
 
-	if session.TargetString == "" && c.SchemaName != "" {
+	if session.TargetString != c.SchemaName {
 		session.TargetString = c.SchemaName
 	}
 
@@ -304,7 +309,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		}
 	}()
 
-	if session.TargetString == "" && c.SchemaName != "" {
+	if session.TargetString != c.SchemaName {
 		session.TargetString = c.SchemaName
 	}
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {

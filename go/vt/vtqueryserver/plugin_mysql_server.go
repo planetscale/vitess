@@ -119,10 +119,15 @@ func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sql
 			session.Options.ClientFoundRows = true
 		}
 	}
-	if session.TargetString == "" && c.SchemaName != "" {
+	if session.TargetString != c.SchemaName {
 		session.TargetString = c.SchemaName
 	}
 	session, result, err := mh.mp.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
+	// If the session TargetString changed during the query, we had a "use query"
+	// reset the default schema name for the connection.
+	if session.TargetString != c.SchemaName {
+		c.SchemaName = session.TargetString
+	}
 	c.ClientData = session
 	err = mysql.NewSQLErrorFromError(err)
 	if err != nil {
