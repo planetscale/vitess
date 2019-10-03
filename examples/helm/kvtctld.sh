@@ -16,4 +16,4 @@
 
 # This is a convenience script to run vtctlclient against the local example.
 
-xdg-open "$(minikube service vtctld --url|head -n 1)"
+vtctlclient -server=127.0.0.1:15999 $*

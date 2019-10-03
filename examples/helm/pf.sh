@@ -16,4 +16,6 @@
 
 # This is a convenience script to run the mysql client against the local example.
 
-mysql -h 127.0.0.1 -P 15306 $*
+kubectl port-forward $(kubectl get pods|grep vtctld|awk '{print $1}') 15999:15999 &
+kubectl port-forward $(kubectl get pods|grep vtgate|awk '{print $1}') 15306:3306 &
+
