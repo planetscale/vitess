@@ -147,7 +147,7 @@ func startSpan(ctx context.Context, query, label string) (trace.Span, context.Co
 }
 
 // Regex for checking if a query is a SET or SHOW command
-var rSetOrShow = regexp.MustCompile("^(?i)(set|show) ")
+var rSetOrShow = regexp.MustCompile(`^(/\*.*?\*/)? *?(?i)(set|show) `)
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	ctx := context.Background()
