@@ -146,6 +146,9 @@ func startSpan(ctx context.Context, query, label string) (trace.Span, context.Co
 	return startSpanTestable(ctx, query, label, trace.NewSpan, trace.NewFromString)
 }
 
+// Regex for checking if a query is a SET or SHOW command
+var rSetOrShow = regexp.MustCompile("^(?i)(set|show) ")
+
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	ctx := context.Background()
 	var cancel context.CancelFunc
@@ -199,7 +202,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	if session.TargetString == "" && c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
-	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+	if session.Options.Workload == querypb.ExecuteOptions_OLAP && rSetOrShow.Find([]byte(query)) == nil {
 		err := vh.vtg.StreamExecute(ctx, session, query, make(map[string]*querypb.BindVariable), callback)
 		return mysql.NewSQLErrorFromError(err)
 	}
