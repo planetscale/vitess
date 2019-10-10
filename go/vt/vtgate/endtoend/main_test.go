@@ -95,6 +95,25 @@ create table user_info(
 	info varchar(128),
 	primary key(name)
 ) Engine=InnoDB;
+
+create table t3 (
+	user_id bigint,
+	lastname varchar(64),
+	address varchar(64),
+	primary key (user_id)
+) Engine=InnoDB;
+
+create table t3_lastname_map (
+	lastname varchar(64),
+	user_id bigint,
+	UNIQUE (lastname, user_id)
+) Engine=InnoDB;
+
+create table t3_address_map (
+	address varchar(64),
+	user_id bigint,
+	primary key (address)
+) Engine=InnoDB;
 `
 
 	vschema = &vschemapb.Keyspace{
@@ -124,6 +143,26 @@ create table user_info(
 					"autocommit": "true",
 				},
 				Owner: "t2",
+			},
+			"t3_lastname_map_vdx": {
+				Type: "lookup_hash",
+				Params: map[string]string{
+					"table":      "t3_lastname_map",
+					"from":       "lastname",
+					"to":         "user_id",
+					"autocommit": "true",
+				},
+				Owner: "t3",
+			},
+			"t3_address_map_vdx": {
+				Type: "lookup_hash_unique",
+				Params: map[string]string{
+					"table":      "t3_address_map",
+					"from":       "address",
+					"to":         "user_id",
+					"autocommit": "true",
+				},
+				Owner: "t3",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
@@ -201,6 +240,30 @@ create table user_info(
 				Columns: []*vschemapb.Column{{
 					Name: "info",
 					Type: sqltypes.VarChar,
+				}},
+			},
+			"t3": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "user_id",
+					Name:   "hash",
+				}, {
+					Column: "lastname",
+					Name:   "t3_lastname_map_vdx",
+				}, {
+					Column: "address",
+					Name:   "t3_address_map_vdx",
+				}},
+			},
+			"t3_lastname_map": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "user_id",
+					Name:   "hash",
+				}},
+			},
+			"t3_address_map": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "user_id",
+					Name:   "hash",
 				}},
 			},
 		},

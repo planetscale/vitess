@@ -300,6 +300,153 @@ func TestConsistentLookupMultiInsertIgnore(t *testing.T) {
 	}
 }
 
+func TestSecondaryLookup(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// conn2 is for queries that target shards.
+	conn2, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn2.Close()
+
+	// insert multiple values
+	exec(t, conn, "begin")
+	exec(t, conn, "insert into t3(user_id, lastname, address) values(1,'snow','castle_black'), (2,'stark','winterfell')")
+	exec(t, conn, "commit")
+	qr := exec(t, conn, "select * from t3")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) VARCHAR(\"snow\") VARCHAR(\"castle_black\")] [INT64(2) VARCHAR(\"stark\") VARCHAR(\"winterfell\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//verify that the lookup is created for lastname
+	qr = exec(t, conn, "select count(*) from t3_lastname_map")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select lastname from t3_lastname_map where user_id=1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"snow\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//verify that the lookup is created for address
+	qr = exec(t, conn, "select count(*) from t3_address_map")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select address from t3_address_map where user_id=2")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"winterfell\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//update both videxes
+	exec(t, conn, "begin")
+	exec(t, conn, "update t3 set lastname='targaryen', address='dragonstone' where user_id=2 ")
+	exec(t, conn, "commit")
+	//Verify that values are updated in the table by fecthin in all combination
+	qr = exec(t, conn, "select * from t3 where user_id=2")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) VARCHAR(\"targaryen\") VARCHAR(\"dragonstone\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select * from t3 where lastname='targaryen'")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) VARCHAR(\"targaryen\") VARCHAR(\"dragonstone\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select * from t3 where address='dragonstone'")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) VARCHAR(\"targaryen\") VARCHAR(\"dragonstone\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select * from t3 where address='dragonstone' and lastname='targaryen'")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) VARCHAR(\"targaryen\") VARCHAR(\"dragonstone\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//TODO: verify that values are updated in lookup table
+	// qr = exec(t, conn, "select lastname from t3_lastname_map where user_id=2")
+	// if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"targaryen\")]]"; got != want {
+	// 	t.Errorf("select:\n%v want\n%v", got, want)
+	// }
+	// qr = exec(t, conn, "select address from t3_address_map where user_id=2")
+	// if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"dragonstone\")]]"; got != want {
+	// 	t.Errorf("select:\n%v want\n%v", got, want)
+	// }
+
+	//update single value
+	exec(t, conn, "begin")
+	exec(t, conn, "update t3 set lastname='stark' where user_id=1 ")
+	exec(t, conn, "commit")
+	//Verify that value is updated in the table
+	qr = exec(t, conn, "select * from t3 where user_id=1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) VARCHAR(\"stark\") VARCHAR(\"castle_black\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Fetch table based of lookup indexes
+	qr = exec(t, conn, "select * from t3 where lastname='targaryen'")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) VARCHAR(\"targaryen\") VARCHAR(\"dragonstone\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select * from t3 where address='dragonstone'")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) VARCHAR(\"targaryen\") VARCHAR(\"dragonstone\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Insert another row with same lastname with autocommit
+	exec(t, conn, "insert into t3(user_id, lastname, address) values(3,'targaryen','kings_landing')")
+
+	// Verify that select on main table retuns the right results
+	qr = exec(t, conn, "select * from t3 where lastname='targaryen'")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) VARCHAR(\"targaryen\") VARCHAR(\"dragonstone\")] [INT64(3) VARCHAR(\"targaryen\") VARCHAR(\"kings_landing\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select * from t3 where lastname='targaryen' and user_id=3")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(3) VARCHAR(\"targaryen\") VARCHAR(\"kings_landing\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Insert row with same lastname should fail
+	exec(t, conn, "begin")
+	_, err = conn.ExecuteFetch("insert into t3(user_id, lastname, address) values(3,'targaryen','black_tower')", 1000, false)
+	exec(t, conn, "rollback")
+	want := "AlreadyExists"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("second insert: %v, must contain %s", err, want)
+	}
+
+	//Insert duplicate address direct into address lookup table should fail
+	// exec(t, conn, "begin")
+	// _, err = conn.ExecuteFetch("insert into t3_address_map(user_id, address) values(4,'castle_black')", 1000, false)
+	// exec(t, conn, "rollback")
+	// want = "AlreadyExists"
+	// fmt.Println(err)
+	// if err == nil || !strings.Contains(err.Error(), want) {
+	// 	t.Errorf("second insert: %v, must contain %s", err, want)
+	// }
+
+	//Insert duplicate address direct into main table should also fail
+	// exec(t, conn, "begin")
+	// _, err = conn.ExecuteFetch("insert into t3(user_id, lastname, address) values(4,'targaryen','castle_black')", 1000, false)
+	// exec(t, conn, "rollback")
+	// want = "AlreadyExists"
+	// fmt.Println(err)
+	// if err == nil || !strings.Contains(err.Error(), want) {
+	// 	t.Errorf("second insert: %v, must contain %s", err, want)
+	// }
+
+	/*
+
+
+
+
+
+
+	 */
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
