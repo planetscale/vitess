@@ -267,12 +267,19 @@ func TestSecondaryLookup(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	// conn2 is for queries that target shards.
-	conn2, err := mysql.Connect(ctx, &vtParams)
+	// connShard1 is for queries that target shards.
+	connShard1, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn2.Close()
+	defer connShard1.Close()
+
+	// connShard2 is for queries that target shards.
+	connShard2, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connShard2.Close()
 
 	// insert multiple values
 	exec(t, conn, "begin")
@@ -397,13 +404,67 @@ func TestSecondaryLookup(t *testing.T) {
 	// 	t.Errorf("second insert: %v, must contain %s", err, want)
 	// }
 
+	// Testing non-unique vindexes
+	// insert multiple values and verifying across multiple shards
+	exec(t, conn, "begin")
+	exec(t, conn, "insert into t3(user_id, lastname, address) values(4,'lannister','casterly_rock'), (5,'tyrell','highgarden')")
+	exec(t, conn, "commit")
+
+	exec(t, connShard1, "use `ks:-80`")
+	exec(t, connShard2, "use `ks:80-`")
+
+	//Shard1 will have 1,2,3,5
+	qr = exec(t, connShard1, "select * from t3")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) VARCHAR(\"stark\") VARCHAR(\"castle_black\")] [INT64(2) VARCHAR(\"targaryen\") VARCHAR(\"dragonstone\")] [INT64(3) VARCHAR(\"targaryen\") VARCHAR(\"kings_landing\")] [INT64(5) VARCHAR(\"tyrell\") VARCHAR(\"highgarden\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	//Shard2 will have value 4
+	qr = exec(t, connShard2, "select * from t3")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARCHAR(\"lannister\") VARCHAR(\"casterly_rock\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	//Shard2 will have value 4
+	qr = exec(t, connShard2, "select * from t3_lastname_map")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"lannister\") INT64(4)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	// Test IN clause using non-unique vindex
+	qr = exec(t, conn, "select user_id, lastname, address from t3 where lastname IN ('lannister','tyrell') ORDER by user_id")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARCHAR(\"lannister\") VARCHAR(\"casterly_rock\")] [INT64(5) VARCHAR(\"tyrell\") VARCHAR(\"highgarden\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Test Delete
+	exec(t, conn, "delete from t3 where user_id=5")
+	qr = exec(t, connShard1, "select * from t3")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) VARCHAR(\"stark\") VARCHAR(\"castle_black\")] [INT64(2) VARCHAR(\"targaryen\") VARCHAR(\"dragonstone\")] [INT64(3) VARCHAR(\"targaryen\") VARCHAR(\"kings_landing\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//TODO:Ajeet verify why there are multiple values and delete is not working
+	qr = exec(t, connShard1, "select * from t3_lastname_map")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"snow\") INT64(1)] [VARCHAR(\"stark\") INT64(1)] [VARCHAR(\"stark\") INT64(2)] [VARCHAR(\"targaryen\") INT64(2)] [VARCHAR(\"targaryen\") INT64(3)] [VARCHAR(\"tyrell\") INT64(5)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Test Scatter Delete, should throw unsupported error
+	exec(t, conn, "begin")
+	_, err = conn.ExecuteFetch("delete from t3 where user_id>2", 1000, false)
+	exec(t, conn, "rollback")
+	want = "unsupported: multi shard delete on a table with owned lookup vindexes"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Scatter delete: %v, must contain %s", err, want)
+	}
+
+	// Test scatter update
+	// exec(t, conn, "UPDATE t3 SET lastname='martell', address='drone' WHERE user_id>2")
+	// qr = exec(t, conn, "select user_id, lastname, address from t3 where user_id>2")
+	// if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARCHAR(\"lannister\") VARCHAR(\"casterly_rock\")] [INT64(5) VARCHAR(\"tyrell\") VARCHAR(\"highgarden\")]]"; got != want {
+	// 	t.Errorf("select:\n%v want\n%v", got, want)
+	// }
+
 	/*
-
-
-
-
-
-
 	 */
 }
 
