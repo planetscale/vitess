@@ -267,6 +267,7 @@ func TestSecondaryLookup(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
+
 	// connShard1 is for queries that target shards.
 	connShard1, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -331,16 +332,6 @@ func TestSecondaryLookup(t *testing.T) {
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) VARCHAR(\"targaryen\") VARCHAR(\"dragonstone\")]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
-
-	//TODO:Ajeet verify that values are updated in lookup table, found duplicate values.
-	// qr = exec(t, conn, "select lastname from t3_lastname_map where user_id=2")
-	// if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"targaryen\")]]"; got != want {
-	// 	t.Errorf("select:\n%v want\n%v", got, want)
-	// }
-	// qr = exec(t, conn, "select address from t3_address_map where user_id=2")
-	// if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"dragonstone\")]]"; got != want {
-	// 	t.Errorf("select:\n%v want\n%v", got, want)
-	// }
 
 	//update single value
 	exec(t, conn, "begin")
@@ -458,7 +449,7 @@ func TestSecondaryLookup(t *testing.T) {
 		t.Errorf("Scatter delete: %v, must contain %s", err, want)
 	}
 
-	// Test scatter  update
+	// Test scatter update
 	//TODO:Ajeet Understand below concept and delete the commented code.
 	//unsupported: multi shard update on a table with owned lookup vindexes
 	// exec(t, conn, "UPDATE t3 SET lastname='martell', address='drone' WHERE user_id>2")
