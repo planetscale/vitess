@@ -114,6 +114,26 @@ create table t3_address_map (
 	user_id bigint,
 	primary key (address)
 ) Engine=InnoDB;
+
+create table t4_music (
+	user_id bigint,
+	id bigint,
+	song varchar(64),
+	primary key (user_id, id)
+) Engine=InnoDB;
+
+create table t4_music_art (
+	music_id bigint,
+	user_id bigint,
+	artist varchar(64),
+	primary key (music_id)
+) Engine=InnoDB;
+
+create table t4_music_lookup (
+	music_id bigint,
+	user_id bigint,
+	primary key (music_id)
+) Engine=InnoDB;
 `
 
 	vschema = &vschemapb.Keyspace{
@@ -163,6 +183,16 @@ create table t3_address_map (
 					"autocommit": "true",
 				},
 				Owner: "t3",
+			},
+			"t4_music_lookup_vdx": {
+				Type: "lookup_hash_unique",
+				Params: map[string]string{
+					"table":      "t4_music_lookup",
+					"from":       "music_id",
+					"to":         "user_id",
+					"autocommit": "true",
+				},
+				Owner: "t4_music",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
@@ -261,6 +291,30 @@ create table t3_address_map (
 				}},
 			},
 			"t3_address_map": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "user_id",
+					Name:   "hash",
+				}},
+			},
+			"t4_music": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "user_id",
+					Name:   "hash",
+				}, {
+					Column: "id",
+					Name:   "t4_music_lookup_vdx",
+				}},
+			},
+			"t4_music_art": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "music_id",
+					Name:   "t4_music_lookup_vdx",
+				}, {
+					Column: "user_id",
+					Name:   "hash",
+				}},
+			},
+			"t4_music_lookup": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "user_id",
 					Name:   "hash",

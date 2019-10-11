@@ -332,7 +332,7 @@ func TestSecondaryLookup(t *testing.T) {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
-	//TODO: verify that values are updated in lookup table
+	//TODO:Ajeet verify that values are updated in lookup table, found duplicate values.
 	// qr = exec(t, conn, "select lastname from t3_lastname_map where user_id=2")
 	// if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"targaryen\")]]"; got != want {
 	// 	t.Errorf("select:\n%v want\n%v", got, want)
@@ -384,6 +384,7 @@ func TestSecondaryLookup(t *testing.T) {
 		t.Errorf("second insert: %v, must contain %s", err, want)
 	}
 
+	//TODO:Ajeet understand the below commented code and delete it.
 	//Insert duplicate address direct into address lookup table should fail
 	// exec(t, conn, "begin")
 	// _, err = conn.ExecuteFetch("insert into t3_address_map(user_id, address) values(4,'castle_black')", 1000, false)
@@ -457,15 +458,188 @@ func TestSecondaryLookup(t *testing.T) {
 		t.Errorf("Scatter delete: %v, must contain %s", err, want)
 	}
 
-	// Test scatter update
+	// Test scatter  update
+	//TODO:Ajeet Understand below concept and delete the commented code.
+	//unsupported: multi shard update on a table with owned lookup vindexes
 	// exec(t, conn, "UPDATE t3 SET lastname='martell', address='drone' WHERE user_id>2")
 	// qr = exec(t, conn, "select user_id, lastname, address from t3 where user_id>2")
 	// if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARCHAR(\"lannister\") VARCHAR(\"casterly_rock\")] [INT64(5) VARCHAR(\"tyrell\") VARCHAR(\"highgarden\")]]"; got != want {
 	// 	t.Errorf("select:\n%v want\n%v", got, want)
 	// }
+}
 
-	/*
-	 */
+/*
+	Function to test LookupUniqueOwned Vindexes
+*/
+func TestLookupUniqueOwned(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	// insert multiple values
+	exec(t, conn, "begin")
+	exec(t, conn, "insert into t4_music (user_id, id, song) values(1,1,'abc'), (2,2,'def'), (3,3,'ghi'), (4,4,'jkl')")
+	exec(t, conn, "commit")
+	//Select on multiple shards lookup by Primary Vindex
+	qr := exec(t, conn, "select user_id, id, song from t4_music where user_id>2 order by user_id")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(3) INT64(3) VARCHAR(\"ghi\")] [INT64(4) INT64(4) VARCHAR(\"jkl\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	//Select on multiple shards lookup by Secondary Vindex
+	qr = exec(t, conn, "select user_id, id, song from t4_music where id>2 order by id")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(3) INT64(3) VARCHAR(\"ghi\")] [INT64(4) INT64(4) VARCHAR(\"jkl\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Scatter select without Vindex will cost more
+	qr = exec(t, conn, "select user_id, id, song from t4_music where song IN ('abc','jkl') order by id")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(1) VARCHAR(\"abc\")] [INT64(4) INT64(4) VARCHAR(\"jkl\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Select on lookup table
+	qr = exec(t, conn, "select music_id, user_id from t4_music_lookup order by music_id")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Update row and verify lookup
+	exec(t, conn, "delete from t4_music_lookup where user_id=1")
+	exec(t, conn, "update t4_music set id=5, song='xyz' where user_id=1")
+	qr = exec(t, conn, "select * from t4_music where user_id=1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(5) VARCHAR(\"xyz\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select user_id, music_id from t4_music_lookup where user_id=1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(5)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Delete Lookup and try to fetch using it
+	exec(t, conn, "delete from t4_music_lookup where user_id=1")
+	qr = exec(t, conn, "select user_id, music_id from t4_music_lookup where user_id=1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	//Below will scatter and fetch as lookup is missing
+	qr = exec(t, conn, "select * from t4_music where user_id=1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(5) VARCHAR(\"xyz\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	//cleanup the row which does not have lookup
+	exec(t, conn, "delete from t4_music where user_id=1")
+
+	//Delete row and verify lookup is not deleted
+	exec(t, conn, "delete from t4_music where user_id=2")
+	qr = exec(t, conn, "select user_id, music_id from t4_music_lookup where user_id=2")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) INT64(2)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Cleanup all the data and verify
+	exec(t, conn, "delete from t4_music_lookup where user_id=2")
+	exec(t, conn, "delete from t4_music_lookup where user_id=3")
+	exec(t, conn, "delete from t4_music_lookup where user_id=4")
+	exec(t, conn, "delete from t4_music_lookup where user_id=5")
+	exec(t, conn, "delete from t4_music where user_id=2")
+	exec(t, conn, "delete from t4_music where user_id=3")
+	exec(t, conn, "delete from t4_music where user_id=4")
+	exec(t, conn, "delete from t4_music where user_id=5")
+	qr = exec(t, conn, "select * from t4_music")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select * from t4_music_lookup")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+}
+
+/*
+	Function to test LookupUniqueUnOwned Vindexes
+*/
+func TestLookupUniqueUnOwned(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// conn2 is for queries that target shards.
+	conn2, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn2.Close()
+
+	// Test UnOwned Vindex
+
+	// insert multiple values in main table, this will also insert values in lookup table
+	exec(t, conn, "begin")
+	exec(t, conn, "insert into t4_music (user_id, id, song) values(1,1,'abc'), (2,2,'def'), (3,3,'ghi'), (4,4,'jkl')")
+	exec(t, conn, "commit")
+
+	// insert multiple values in secondary table
+	exec(t, conn, "begin")
+	exec(t, conn, "insert into t4_music_art (music_id, user_id, artist) values(1,1,'celine_dion'), (2,2,'bob_dylan'), (3,3,'arijit_singh'), (4,4,'madona')")
+	exec(t, conn, "commit")
+
+	//Select on multiple shards lookup by UnOwned Primary Vindex
+	qr := exec(t, conn, "select music_id, user_id, artist from t4_music_art where music_id>2 order by music_id")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(3) INT64(3) VARCHAR(\"arijit_singh\")] [INT64(4) INT64(4) VARCHAR(\"madona\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	//Select on multiple shards lookup by Secondary Vindex
+	qr = exec(t, conn, "select music_id, user_id, artist from t4_music_art where user_id>2 order by user_id")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(3) INT64(3) VARCHAR(\"arijit_singh\")] [INT64(4) INT64(4) VARCHAR(\"madona\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	// //Scatter select without Vindex
+	qr = exec(t, conn, "select music_id, user_id, artist from t4_music_art where artist IN ('arijit_singh','madona') order by music_id")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(3) INT64(3) VARCHAR(\"arijit_singh\")] [INT64(4) INT64(4) VARCHAR(\"madona\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Insert on Secondary table will fail if there is no lookup entry.
+	exec(t, conn, "begin")
+	_, err = conn.ExecuteFetch("insert into t4_music_art (music_id, user_id, artist) values(5,5,'neha_kakkar')", 1000, false)
+	exec(t, conn, "rollback")
+	want := "could not map"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Unknown Insert: %v, must contain %s", err, want)
+	}
+
+	//Update using primary unowned vindex
+	exec(t, conn, "update t4_music_art set artist='neha_kakkar' where music_id=3")
+	qr = exec(t, conn, "select * from t4_music_art where music_id=3")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(3) INT64(3) VARCHAR(\"neha_kakkar\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Update using secondary vindex
+	exec(t, conn, "update t4_music_art set artist='arijit_singh' where user_id=3")
+	qr = exec(t, conn, "select * from t4_music_art where user_id=3")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(3) INT64(3) VARCHAR(\"arijit_singh\")]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Delete Lookup and try to fetch using it should return no results
+	exec(t, conn, "delete from t4_music_lookup where music_id=3")
+	qr = exec(t, conn, "select music_id,user_id, artist from t4_music_art where music_id=3")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Delete on secondary table will not affect unowned lookup table
+	exec(t, conn, "delete from t4_music_art where music_id=4")
+	qr = exec(t, conn, "select * from t4_music_lookup where music_id=4")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) INT64(4)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
