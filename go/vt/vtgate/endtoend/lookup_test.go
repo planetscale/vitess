@@ -474,7 +474,7 @@ func TestSecondaryLookup(t *testing.T) {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
-	//TODO:Ajeet verify why there are multiple values and delete is not working
+	//verify that there will be multiple values as client should handle the delete from lookup table.
 	qr = exec(t, connShard1, "select * from t3_lastname_map")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[VARCHAR(\"snow\") INT64(1)] [VARCHAR(\"stark\") INT64(1)] [VARCHAR(\"stark\") INT64(2)] [VARCHAR(\"targaryen\") INT64(2)] [VARCHAR(\"targaryen\") INT64(3)] [VARCHAR(\"tyrell\") INT64(5)]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
@@ -489,14 +489,14 @@ func TestSecondaryLookup(t *testing.T) {
 		t.Errorf("Scatter delete: %v, must contain %s", err, want)
 	}
 
-	// Test scatter update
-	//TODO:Ajeet Understand below concept and delete the commented code.
-	//unsupported: multi shard update on a table with owned lookup vindexes
-	// exec(t, conn, "UPDATE t3 SET lastname='martell', address='drone' WHERE user_id>2")
-	// qr = exec(t, conn, "select user_id, lastname, address from t3 where user_id>2")
-	// if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARCHAR(\"lannister\") VARCHAR(\"casterly_rock\")] [INT64(5) VARCHAR(\"tyrell\") VARCHAR(\"highgarden\")]]"; got != want {
-	// 	t.Errorf("select:\n%v want\n%v", got, want)
-	// }
+	// Test scatter update with unique & non unique Vindexes
+	exec(t, conn, "begin")
+	_, err = conn.ExecuteFetch("UPDATE t3 SET lastname='martell', address='drone' WHERE user_id>2", 1000, false)
+	exec(t, conn, "rollback")
+	want = "unsupported: multi shard update on a table with owned lookup vindexes"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Scatter update: %v, must contain %s", err, want)
+	}
 }
 
 /*
