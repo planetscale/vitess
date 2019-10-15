@@ -134,6 +134,18 @@ create table t4_music_lookup (
 	user_id bigint,
 	primary key (music_id)
 ) Engine=InnoDB;
+
+create table twopc_user (
+	user_id bigint,
+	name varchar(128),
+	primary key (user_id)
+) Engine=InnoDB;
+
+create table twopc_lookup (
+	name varchar(128),
+	id bigint,
+	primary key (id)
+) Engine=InnoDB;
 `
 
 	vschema = &vschemapb.Keyspace{
@@ -193,6 +205,16 @@ create table t4_music_lookup (
 					"autocommit": "true",
 				},
 				Owner: "t4_music",
+			},
+			"twopc_lookup_vdx": {
+				Type: "lookup_hash_unique",
+				Params: map[string]string{
+					"table":      "twopc_lookup",
+					"from":       "name",
+					"to":         "id",
+					"autocommit": "true",
+				},
+				Owner: "twopc_user",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
@@ -317,6 +339,21 @@ create table t4_music_lookup (
 			"t4_music_lookup": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "user_id",
+					Name:   "hash",
+				}},
+			},
+			"twopc_user": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "user_id",
+					Name:   "hash",
+				}, {
+					Column: "name",
+					Name:   "twopc_lookup_vdx",
+				}},
+			},
+			"twopc_lookup": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id",
 					Name:   "hash",
 				}},
 			},
