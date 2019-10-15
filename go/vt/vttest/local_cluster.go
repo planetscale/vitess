@@ -488,6 +488,43 @@ func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	return err
 }
 
+//GetVSchema outputs a JSON structure that contains information about the SrvVSchema
+func (db *LocalCluster) GetVSchema(cell string) (string, error) {
+	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
+	args := []string{"GetSrvVSchema", cell}
+	fmt.Printf("Fetching Vschema %v\n", args)
+	a := "<Nil>"
+	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
+		a = e.GetValue()
+	})
+
+	return a, err
+}
+
+//DeleteVSchema deletes the schema associated with a cell
+func (db *LocalCluster) DeleteVSchema(cell string) error {
+	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
+	args := []string{"DeleteSrvVSchema", cell}
+	fmt.Printf("Deleteing Vschema %v\n", args)
+	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
+		log.Info(e)
+	})
+
+	return err
+}
+
+//RebuildVSchema Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells
+func (db *LocalCluster) RebuildVSchema(cell string) error {
+	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
+	args := []string{"RebuildVSchemaGraph", "-cells", cell}
+	fmt.Printf("Rebuilding Vschema %v\n", args)
+	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
+		log.Info(e)
+	})
+
+	return err
+}
+
 // LoadSQLFile loads a parses a .sql file from disk, removing all the
 // different comments that mysql/mysqldump inserts in these, and returning
 // each individual SQL statement as its own string.
