@@ -501,7 +501,7 @@ func (db *LocalCluster) GetVSchema(cell string) (string, error) {
 	return a, err
 }
 
-//DeleteVSchema deletes the schema associated with a cell
+//DeleteVSchema deletes the schema associated with provided cell
 func (db *LocalCluster) DeleteVSchema(cell string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
 	args := []string{"DeleteSrvVSchema", cell}
@@ -513,7 +513,7 @@ func (db *LocalCluster) DeleteVSchema(cell string) error {
 	return err
 }
 
-//RebuildVSchema Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells
+//RebuildVSchema Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cell
 func (db *LocalCluster) RebuildVSchema(cell string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
 	args := []string{"RebuildVSchemaGraph", "-cells", cell}

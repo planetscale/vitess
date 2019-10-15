@@ -34,42 +34,47 @@ func TestVSchema(t *testing.T) {
 	}
 	defer conn.Close()
 
-	//Fetch VSchema and verify
-	val, _ := cluster.GetVSchema("test")
-	if got, want := isValidKeyspace(val), true; got != want {
+	//hardcoded cell name from vtcombo cluster.
+	cell := "test"
+
+	//Fetch VSchema and verify if it has a Keyspace
+	vSchema, _ := cluster.GetVSchema(cell)
+	if got, want := hasValidKeyspace(vSchema), true; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
-	//delete
-	cluster.DeleteVSchema("test")
-	_, err = cluster.GetVSchema("test")
+	//Delete the current VSchema, it should return an error if we try to refer it.
+	cluster.DeleteVSchema(cell)
+	_, err = cluster.GetVSchema(cell)
 	want := "node doesn't exist"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Deleted schema: %v, must contain %s", err, want)
 	}
 
-	//rebuild
-	cluster.RebuildVSchema("test")
+	//Rebuild the VSchema in the cluster
+	cluster.RebuildVSchema(cell)
 	time.Sleep(5 * time.Second)
 
-	//verify again
-	val, _ = cluster.GetVSchema("test")
-	if got, want := isValidKeyspace(val), true; got != want {
+	//Verify that Schema was build and has valid Keyspace
+	vSchema, _ = cluster.GetVSchema(cell)
+	if got, want := hasValidKeyspace(vSchema), true; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
 }
 
-func isValidKeyspace(val string) bool {
+//Function to check if the provided vschema has valid keyspace.
+func hasValidKeyspace(vSchema string) bool {
 	resultMap := make(map[string]interface{})
-	err := json.Unmarshal([]byte(val), &resultMap)
+	err := json.Unmarshal([]byte(vSchema), &resultMap)
 	if err != nil {
 		panic(err)
 	}
 	key := resultMap["keyspaces"]
 	if key != nil {
 		return true
-	} else {
-		return false
 	}
+	//TODO:Ajeet, add more checks to verify other fields inside Keyspace.
+
+	return false
 }
