@@ -71,10 +71,7 @@ func hasValidKeyspace(vSchema string) bool {
 		panic(err)
 	}
 	key := resultMap["keyspaces"]
-	if key != nil {
-		return true
-	}
-	//TODO:Ajeet, add more checks to verify other fields inside Keyspace.
 
-	return false
+	//TODO:Ajeet, add more checks to verify other fields inside Keyspace.
+	return key != nil
 }
