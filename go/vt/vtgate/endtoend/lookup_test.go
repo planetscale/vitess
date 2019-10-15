@@ -286,7 +286,7 @@ func TestSecondaryLookup(t *testing.T) {
 	exec(t, conn, "begin")
 	exec(t, conn, "insert into t3(user_id, lastname, address) values(1,'snow','castle_black'), (2,'stark','winterfell')")
 	exec(t, conn, "commit")
-	qr := exec(t, conn, "select * from t3")
+	qr := exec(t, conn, "select user_id, lastname, address from t3 order by user_id")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) VARCHAR(\"snow\") VARCHAR(\"castle_black\")] [INT64(2) VARCHAR(\"stark\") VARCHAR(\"winterfell\")]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
@@ -311,7 +311,7 @@ func TestSecondaryLookup(t *testing.T) {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
-	//update both videxes
+	//update both vindexes
 	exec(t, conn, "begin")
 	exec(t, conn, "update t3 set lastname='targaryen', address='dragonstone' where user_id=2 ")
 	exec(t, conn, "commit")
@@ -459,9 +459,7 @@ func TestSecondaryLookup(t *testing.T) {
 	}
 }
 
-/*
-	Function to test LookupUniqueOwned Vindexes
-*/
+// Function to test LookupUniqueOwned Vindexes
 func TestLookupUniqueOwned(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -549,9 +547,7 @@ func TestLookupUniqueOwned(t *testing.T) {
 	}
 }
 
-/*
-	Function to test LookupUniqueUnOwned Vindexes
-*/
+//Function to test LookupUniqueUnOwned Vindexes
 func TestLookupUniqueUnOwned(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
