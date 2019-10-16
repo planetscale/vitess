@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
-	//vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 func TestTruncateTable(t *testing.T) {
@@ -126,59 +125,6 @@ func TestAnalyzeTable(t *testing.T) {
 	// Test Analyze Table 2
 	qr = exec(t, conn, "analyze table user_details")
 	if got, want := fmt.Sprintf("%v %v", qr.Rows[0][2], qr.Rows[0][3]), `VARCHAR("status") TEXT("OK")`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-}
-
-func TestTransactionModes(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-
-	// cfg.TransactionMode = vtgatepb.TransactionMode_SINGLE
-	//extra_args=['-transaction_mode', 'TWOPC'])
-	// fmt.Println(cluster.Config.TransactionMode)
-
-	//Insert trageted to multiple tables should fail with SINGLE trx mode
-	cluster.Config.TransactionMode = "SINGLE"
-	exec(t, conn, "begin")
-	exec(t, conn, "insert into twopc_user(user_id, name) values(1,'john')")
-	exec(t, conn, "insert into twopc_lookup(name, id) values('paul',2)")
-	exec(t, conn, "commit")
-
-	//Insert trageted to multiple tables should PASS with TWOPC trx mode
-	cluster.Config.TransactionMode = "TWOPC"
-	exec(t, conn, "begin")
-	exec(t, conn, "insert into twopc_user(user_id, name) values(3,'mark')")
-	exec(t, conn, "insert into twopc_lookup(name, id) values('doug',4)")
-	exec(t, conn, "commit")
-
-	//Verify the values are present
-	qr := exec(t, conn, "select user_id from twopc_user where name='mark'")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(3)]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = exec(t, conn, "select name from twopc_lookup where id=3")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("mark")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-
-	//DELETE from multiple tables using TWOPC trnx mode
-	exec(t, conn, "begin")
-	exec(t, conn, "delete from twopc_user where user_id = 3")
-	exec(t, conn, "delete from twopc_lookup where id = 3")
-	exec(t, conn, "commit")
-
-	//VERIFY that values are deleted
-	qr = exec(t, conn, "select user_id from twopc_user where user_id=3")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = exec(t, conn, "select name from twopc_lookup where id=3")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 }
