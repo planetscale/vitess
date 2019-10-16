@@ -19,14 +19,14 @@ package endtoend
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"vitess.io/vitess/go/mysql"
 )
 
-func TestVSchema(t *testing.T) {
+func TestSrvVSchema(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -38,27 +38,32 @@ func TestVSchema(t *testing.T) {
 	cell := "test"
 
 	//Fetch VSchema and verify if it has a Keyspace
-	vSchema, _ := cluster.GetVSchema(cell)
-	if got, want := hasValidKeyspace(vSchema), true; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+	if vSchema, err := cluster.GetSrvVSchema(cell); err != nil {
+		t.Errorf("No srv vschema present: %v", err)
+	} else {
+		if got, want := hasValidKeyspace(vSchema), true; got != want {
+			t.Errorf("select:\n%v want\n%v", got, want)
+		}
 	}
 
 	//Delete the current VSchema, it should return an error if we try to refer it.
-	cluster.DeleteVSchema(cell)
-	_, err = cluster.GetVSchema(cell)
+	cluster.DeleteSrvVSchema(cell)
+	_, err = cluster.GetSrvVSchema(cell)
 	want := "node doesn't exist"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Deleted schema: %v, must contain %s", err, want)
 	}
 
 	//Rebuild the VSchema in the cluster
-	cluster.RebuildVSchema(cell)
-	time.Sleep(5 * time.Second)
+	cluster.RebuildSrvVSchema(cell)
 
 	//Verify that Schema was build and has valid Keyspace
-	vSchema, _ = cluster.GetVSchema(cell)
-	if got, want := hasValidKeyspace(vSchema), true; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+	if vSchema, err := cluster.GetSrvVSchema(cell); err != nil {
+		t.Errorf("No srv vschema present: %v", err)
+	} else {
+		if got, want := hasValidKeyspace(vSchema), true; got != want {
+			t.Errorf("select:\n%v want\n%v", got, want)
+		}
 	}
 
 }
@@ -70,8 +75,28 @@ func hasValidKeyspace(vSchema string) bool {
 	if err != nil {
 		panic(err)
 	}
-	key := resultMap["keyspaces"]
 
-	//TODO:Ajeet, add more checks to verify other fields inside Keyspace.
-	return key != nil
+	//Length of VSchema should be 2 (1 for keyspaces and 1 for routing_rules)
+	len := len(resultMap)
+	if len != 2 {
+		return false
+	}
+
+	keyspaces := resultMap["keyspaces"]
+	keyspace := keyspaces.(map[string]interface{})
+	// Keyspace name used for setting local cluster
+	keyspaceName := "ks"
+	validKeyspace := false
+
+	v := reflect.ValueOf(keyspace)
+	if v.Kind() == reflect.Map {
+		for _, key := range v.MapKeys() {
+			if keyspaceName == key.Interface() {
+				validKeyspace = true
+				break
+			}
+		}
+	}
+
+	return validKeyspace
 }

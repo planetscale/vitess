@@ -488,8 +488,8 @@ func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	return err
 }
 
-//GetVSchema outputs a JSON structure that contains information about the SrvVSchema
-func (db *LocalCluster) GetVSchema(cell string) (string, error) {
+//GetSrvVSchema outputs a JSON structure that contains information about the SrvVSchema
+func (db *LocalCluster) GetSrvVSchema(cell string) (string, error) {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
 	args := []string{"GetSrvVSchema", cell}
 	fmt.Printf("Fetching Vschema %v\n", args)
@@ -501,11 +501,11 @@ func (db *LocalCluster) GetVSchema(cell string) (string, error) {
 	return a, err
 }
 
-//DeleteVSchema deletes the schema associated with provided cell
-func (db *LocalCluster) DeleteVSchema(cell string) error {
+//DeleteSrvVSchema deletes the schema associated with provided cell
+func (db *LocalCluster) DeleteSrvVSchema(cell string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
 	args := []string{"DeleteSrvVSchema", cell}
-	fmt.Printf("Deleteing Vschema %v\n", args)
+	fmt.Printf("Deleting Vschema %v\n", args)
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
 		log.Info(e)
 	})
@@ -513,8 +513,8 @@ func (db *LocalCluster) DeleteVSchema(cell string) error {
 	return err
 }
 
-//RebuildVSchema Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cell
-func (db *LocalCluster) RebuildVSchema(cell string) error {
+//RebuildSrvVSchema Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cell
+func (db *LocalCluster) RebuildSrvVSchema(cell string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
 	args := []string{"RebuildVSchemaGraph", "-cells", cell}
 	fmt.Printf("Rebuilding Vschema %v\n", args)
