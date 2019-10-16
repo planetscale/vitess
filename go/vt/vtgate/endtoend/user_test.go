@@ -57,16 +57,6 @@ func TestUsers(t *testing.T) {
 		}
 	}
 
-	//Test select equal
-	for i := 1; i <= 4; i++ {
-		each := strconv.Itoa(i)
-		nameQ := "test " + each
-		qr := exec(t, conn, "select id,name from vt_user where id = "+each)
-		if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64("+each+") VARCHAR(\""+nameQ+"\")]]"; got != want {
-			t.Errorf("select:\n%v want\n%v", got, want)
-		}
-	}
-
 	//Test case sensitivity
 	qr := exec(t, conn, "select Id, Name from vt_user where iD = 1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("test 1")]]`; got != want {
@@ -85,12 +75,6 @@ func TestUsers(t *testing.T) {
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(0)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
-
-	//Test shard errors as warnings directive
-	//_, warningCount, err := conn.ExecuteFetchWithWarningCount("SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS QUERY_TIMEOUT_MS=10 */ SLEEP(1)", 1000, false)
-
-	//Test insert with no auto-inc
-	//move it to sequences
 
 	//Verify values in db
 	exec(t, conn, "insert into vt_user(id,name) values(6,'test 6')")
@@ -141,18 +125,6 @@ func TestUsers(t *testing.T) {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
-	//Test scatter delete
-	exec(t, conn, "insert into vt_user (id, name) values (22,'name2'),(33,'name2')")
-	qr = exec(t, conn, "select id, name from vt_user order by id")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(6) VARCHAR("test 6")] [INT64(22) VARCHAR("name2")] [INT64(33) VARCHAR("name2")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	exec(t, conn, "delete from vt_user where id > 20")
-	qr = exec(t, conn, "select id, name from vt_user order by id")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(6) VARCHAR("test 6")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-
 	//Test scatter update
 	exec(t, conn, "insert into vt_user (id, name) values (22,'name2'),(33,'name2')")
 	qr = exec(t, conn, "select id, name from vt_user order by id")
@@ -162,6 +134,13 @@ func TestUsers(t *testing.T) {
 	exec(t, conn, "update vt_user set name='jose' where id > 20")
 	qr = exec(t, conn, "select id, name from vt_user order by id")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(6) VARCHAR("test 6")] [INT64(22) VARCHAR("jose")] [INT64(33) VARCHAR("jose")]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Test scatter delete
+	exec(t, conn, "delete from vt_user where id > 20")
+	qr = exec(t, conn, "select id, name from vt_user order by id")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(6) VARCHAR("test 6")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
