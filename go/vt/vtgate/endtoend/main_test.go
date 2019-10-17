@@ -146,6 +146,27 @@ create table twopc_lookup (
 	id bigint,
 	primary key (id)
 ) Engine=InnoDB;
+
+create table cola_map (
+	cola varchar(64),
+	kid bigint,
+	primary key (cola, kid)
+	) Engine=InnoDB;
+
+create table colb_colc_map (
+	colb varchar(64),
+	colc varchar(64),
+	kid bigint,
+	primary key (colb, colc, kid)
+	) Engine=InnoDB;
+
+create table vt_multicolvin (
+	kid bigint,
+	cola varchar(64),
+	colb varchar(64),
+	colc varchar(64),
+	primary key (kid)
+	) Engine=InnoDB;
 `
 
 	vschema = &vschemapb.Keyspace{
@@ -215,6 +236,24 @@ create table twopc_lookup (
 					"autocommit": "true",
 				},
 				Owner: "twopc_user",
+			},
+			"cola_map": {
+				Type: "lookup_hash",
+				Params: map[string]string{
+					"table": "cola_map",
+					"from":  "cola",
+					"to":    "kid",
+				},
+				Owner: "vt_multicolvin",
+			},
+			"colb_colc_map": {
+				Type: "lookup_hash",
+				Params: map[string]string{
+					"table": "colb_colc_map",
+					"from":  "colb,colc",
+					"to":    "kid",
+				},
+				Owner: "vt_multicolvin",
 			},
 		},
 		Tables: map[string]*vschemapb.Table{
@@ -354,6 +393,30 @@ create table twopc_lookup (
 			"twopc_lookup": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "id",
+					Name:   "hash",
+				}},
+			},
+			"vt_multicolvin": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "kid",
+					Name:   "hash",
+				}, {
+					Column: "cola",
+					Name:   "cola_map",
+				}, {
+					Columns: []string{"colb", "colc"},
+					Name:    "colb_colc_map",
+				}},
+			},
+			"cola_map": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "kid",
+					Name:   "hash",
+				}},
+			},
+			"colb_colc_map": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "kid",
 					Name:   "hash",
 				}},
 			},
