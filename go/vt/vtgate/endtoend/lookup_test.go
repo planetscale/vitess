@@ -603,7 +603,6 @@ func TestLookupUniqueUnOwned(t *testing.T) {
 	defer conn2.Close()
 
 	// Test UnOwned Vindex
-
 	// insert multiple values in main table, this will also insert values in lookup table
 	exec(t, conn, "begin")
 	exec(t, conn, "insert into t4_music (user_id, id, song) values(1,1,'abc'), (2,2,'def'), (3,3,'ghi'), (4,4,'jkl')")
