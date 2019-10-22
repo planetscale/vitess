@@ -25,25 +25,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-// func TestSplitQuery(t *testing.T) {
-// 	ctx := context.Background()
-// 	conn, err := mysql.Connect(ctx, &vtParams)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	defer conn.Close()
-
-// 	exec(t, conn, "insert into user(id, name) values(1,'name1')")
-// 	exec(t, conn, "insert into user_details(user_id, email) values(1,'name1@email'), (2,'name2@email')")
-// 	exec(t, conn, "insert into user_info(name, info) values('name1','info1')")
-
-// 	// Test inner join
-// 	qr := exec(t, conn, "select u.id, u.name, ud.user_id, ud.email from user u inner join user_details ud on u.id = ud.user_id")
-// 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("name1") INT64(1) VARCHAR("name1@email")]]`; got != want {
-// 		t.Errorf("select:\n%v want\n%v", got, want)
-// 	}
-// }
-
 func TestSplitQuery(t *testing.T) {
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{

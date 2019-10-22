@@ -29,7 +29,7 @@ var (
 	KeyspaceName    = "ks"
 	Cell            = "zone1"
 	Hostname        = "localhost"
-	SQLSchema       = `
+	SchemaSql       = `
 create table user( 
 	id bigint,
 	name varchar(64),
@@ -75,7 +75,7 @@ func TestMain(m *testing.M) {
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      KeyspaceName,
-			SQLSchema: SQLSchema,
+			SchemaSQL: SchemaSql,
 			VSchema:   VSchema,
 		}
 
@@ -92,19 +92,3 @@ func TestMain(m *testing.M) {
 	}()
 	os.Exit(exitCode)
 }
-
-// func testURL(t *testing.T, url string, testCaseName string) {
-// 	statusCode := getStatusForURL(url)
-// 	if got, want := statusCode, 200; got != want {
-// 		t.Errorf("select:\n%v want\n%v for %s", got, want, testCaseName)
-// 	}
-// }
-
-// // getStatusForUrl returns the status code for the URL
-// func getStatusForURL(url string) int {
-// 	resp, _ := http.Get(url)
-// 	if resp != nil {
-// 		return resp.StatusCode
-// 	}
-// 	return 0
-// }
