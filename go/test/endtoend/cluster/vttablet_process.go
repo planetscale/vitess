@@ -71,6 +71,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-restore_from_backup",
 		"-service_map", vttablet.ServiceMap,
 		"-vtctld_addr", vttablet.VtctldAddress,
+		// "-queryserver-config-schema-reload-time", "1",
 	)
 
 	vttablet.proc.Stderr = os.Stderr

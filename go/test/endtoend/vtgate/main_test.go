@@ -39,7 +39,7 @@ create table user(
 
 	VSchema = `
 {
-	"sharded": false,
+	"sharded": true,
 	"vindexes": {
 		"hash_index": {
 			"type": "hash"
@@ -78,7 +78,9 @@ func TestMain(m *testing.M) {
 			SQLSchema: SQLSchema,
 			VSchema:   VSchema,
 		}
-		if err = ClusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+
+		shardNames := []string{"-80", "80-"}
+		if err = ClusterInstance.StartKeyspace(*keyspace, shardNames, 1, true); err != nil {
 			return 1
 		}
 

@@ -161,19 +161,21 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			return
 		}
 
-		// Apply SQLSchema
-		err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SQLSchema)
-		if err != nil {
-			return
-		}
-
-		//Apply VSchema
-		err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema)
-		if err != nil {
-			return
-		}
 		shards = append(shards, *shard)
 	}
+
+	// Apply SQLSchema
+	err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SQLSchema)
+	if err != nil {
+		return
+	}
+
+	//Apply VSchema
+	err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema)
+	if err != nil {
+		return
+	}
+
 	keyspace.Shards = shards
 	cluster.Keyspaces = append(cluster.Keyspaces, keyspace)
 	println("Done creating keyspace : " + keyspace.Name)
