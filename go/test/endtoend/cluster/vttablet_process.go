@@ -15,7 +15,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// VttabletProcess is a generic handle for a running vtctld .
+// VttabletProcess is a generic handle for a running vttablet .
 // It can be spawned manually
 type VttabletProcess struct {
 	Name                        string
@@ -93,7 +93,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
-		if vttablet.IsHealthy() {
+		if vttablet.WaitForStatus("NOT_SERVING") {
 			return nil
 		}
 		select {
@@ -107,8 +107,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
 }
 
-// IsHealthy function checks if vtctld process is up and running
-func (vttablet *VttabletProcess) IsHealthy() bool {
+// WaitForStatus function checks if vttablet process is up and running
+func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
 	resp, err := http.Get(vttablet.VerifyURL)
 	if err != nil {
 		return false
@@ -120,12 +120,12 @@ func (vttablet *VttabletProcess) IsHealthy() bool {
 		if err != nil {
 			panic(err)
 		}
-		return resultMap["TabletStateName"] == "NOT_SERVING"
+		return resultMap["TabletStateName"] == status
 	}
 	return false
 }
 
-// TearDown shutdowns the running vttablet service
+// TearDown shuts down the running vttablet service
 func (vttablet *VttabletProcess) TearDown() error {
 	if vttablet.proc == nil {
 		fmt.Printf("No process found for vttablet %d", vttablet.TabletUID)
@@ -150,7 +150,7 @@ func (vttablet *VttabletProcess) TearDown() error {
 	}
 }
 
-// VttabletProcessInstance returns a VtctlProcess handle for vtctl process
+// VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
 func VttabletProcessInstance(Port int, GrpcPort int, TabletUID int, Cell string, Shard string, Hostname string, Keyspace string, VtctldPort int, TabletType string, topoPort int, hostname string) *VttabletProcess {
