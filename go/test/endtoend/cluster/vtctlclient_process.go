@@ -26,7 +26,7 @@ import (
 	"strings"
 )
 
-// VtctlProcess is a generic handle for a running vtctl command .
+// VtctlClientProcess is a generic handle for a running vtctl command .
 // It can be spawned manually
 type VtctlClientProcess struct {
 	Name          string
@@ -102,4 +102,19 @@ func VtctlClientProcessInstance(Hostname string, GrpcPort int) *VtctlClientProce
 		TempDirectory: path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
 	}
 	return vtctlclient
+}
+
+// VtGateSplitQuery applies vitess schema (JSON format) to the keyspace
+func (vtctlclient *VtctlClientProcess) VtGateSplitQuery(keyspace string, sql string, splitCount int) (string, error) {
+	tmpProcess := exec.Command(
+		vtctlclient.Binary,
+		"-server", vtctlclient.Server,
+		"VtGateSplitQuery",
+		"-keyspace", keyspace,
+		"-split_count", fmt.Sprintf("%d", splitCount),
+		fmt.Sprintf("%s", sql),
+	)
+	print(fmt.Sprintf("Running VtGateSplitQuery with command => %v", strings.Join(tmpProcess.Args, " ")))
+	output, err := tmpProcess.CombinedOutput()
+	return string(output), err
 }
