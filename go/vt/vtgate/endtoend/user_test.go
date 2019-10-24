@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestUsers(t *testing.T) {
@@ -155,4 +156,59 @@ func TestUsers(t *testing.T) {
 	if got, want := warnings, uint16(1); got != want {
 		t.Errorf("select:\n%d want\n%d", got, want)
 	}
+
+	//deleting all records from vt_user table
+	exec(t, conn, "delete from vt_user where id > 0")
+}
+
+func TestQueryStream(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	//Test insert
+	for i := 1; i <= 4; i++ {
+		each := strconv.Itoa(i)
+		nameQ := "test " + each
+		exec(t, conn, "insert into vt_user(id,name) values ("+each+",'"+nameQ+"')")
+		qr := exec(t, conn, "select id,name from vt_user where id = "+strconv.Itoa(i))
+		if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64("+each+") VARCHAR(\""+nameQ+"\")]]"; got != want {
+			t.Errorf("select:\n%v want\n%v", got, want)
+		}
+	}
+
+	//Test stream over scatter
+	query := "select id, name from vt_user order by id"
+	if err := conn.ExecuteStreamFetch(query); err != nil {
+		t.Fatalf("ExecuteStreamFetch(%v) failed: %v", query, err)
+	}
+	qrS := &sqltypes.Result{}
+	qrS.Fields, err = conn.Fields()
+	if err != nil {
+		t.Fatalf("Fields(%v) failed: %v", query, err)
+	}
+	if len(qrS.Fields) == 0 {
+		qrS.Fields = nil
+	}
+	for {
+		row, err := conn.FetchNext()
+		if err != nil {
+			t.Fatalf("FetchNext(%v) failed: %v", query, err)
+		}
+		if row == nil {
+			// Done.
+			break
+		}
+		qrS.Rows = append(qrS.Rows, row)
+	}
+	conn.CloseResult()
+	if got, want := fmt.Sprintf("%v", qrS.Rows), `[[INT64(1) VARCHAR("test 1")] [INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(4) VARCHAR("test 4")]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//deleting all records from vt_user table
+	exec(t, conn, "delete from vt_user where id > 0")
 }
