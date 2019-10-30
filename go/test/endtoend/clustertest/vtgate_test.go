@@ -32,7 +32,7 @@ import (
 )
 
 func TestVtgateProcess(t *testing.T) {
-	verfiyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
+	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -48,7 +48,7 @@ func TestVtgateProcess(t *testing.T) {
 	}
 }
 
-func verfiyVtgateVariables(t *testing.T, url string) {
+func verifyVtgateVariables(t *testing.T, url string) {
 	resp, _ := http.Get(url)
 	if resp != nil && resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
@@ -63,6 +63,8 @@ func verfiyVtgateVariables(t *testing.T, url string) {
 		vschemaCountMap := getMapFromJSON(resultMap, "VtgateVSchemaCounts")
 		if _, present := vschemaCountMap["Reload"]; !present {
 			t.Error("Reload count should be present in vschemacount")
+		} else if object := reflect.ValueOf(vschemaCountMap["Reload"]); object.NumField() <= 0 {
+			t.Error("Reload count should be greater than 0")
 		}
 		if _, present := vschemaCountMap["WatchError"]; present {
 			t.Error("There should not be any WatchError in VschemaCount")
@@ -77,11 +79,13 @@ func verfiyVtgateVariables(t *testing.T, url string) {
 
 		healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
 		if len(healthCheckConnection) <= 0 {
-			t.Error("Atleast one healthy tablets need to be present")
+			t.Error("Atleast one healthy tablet needs to be present")
 		}
 		if !isMasterTabletPresent(healthCheckConnection) {
-			t.Error("Atleast one master tablet need to be present")
+			t.Error("Atleast one master tablet needs to be present")
 		}
+	} else {
+		t.Error("Vtgate api url response not found")
 	}
 }
 
