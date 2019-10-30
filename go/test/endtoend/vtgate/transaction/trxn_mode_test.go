@@ -101,7 +101,7 @@ func TestMain(m *testing.M) {
 		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
 		defer clusterInstance.Teardown()
 
-		// Reserver vtGate port inorder to pass it to vtTablet
+		// Reserve vtGate port in order to pass it to vtTablet
 		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
 		// Set extra tablet args for twopc
 		clusterInstance.VtTabletExtraArgs = []string{
@@ -209,7 +209,7 @@ func TestTransactionModes(t *testing.T) {
 	want = `[[VARCHAR("mark")]]`
 	assert.Equal(t, want, got)
 
-	// DELETE from multiple tables using TWOPC trnx mode
+	// DELETE from multiple tables using TWOPC transaction mode
 	exec(t, conn2, "begin")
 	exec(t, conn2, "delete from twopc_user where user_id = 3")
 	exec(t, conn2, "delete from twopc_lookup where id = 3")

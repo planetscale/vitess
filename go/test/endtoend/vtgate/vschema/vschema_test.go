@@ -101,7 +101,7 @@ func TestVSchema(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Test the blank database with no vschema
+	// Test the empty database with no vschema
 	exec(t, conn, "insert into vt_user (id,name) values(1,'test1'), (2,'test2'), (3,'test3'), (4,'test4')")
 
 	qr := exec(t, conn, "select id, name from vt_user order by id")
@@ -114,7 +114,7 @@ func TestVSchema(t *testing.T) {
 	want = `[]`
 	assert.Equal(t, want, got)
 
-	// Test Blank VSCHEMA
+	// Test empty vschema
 	qr = exec(t, conn, "SHOW VSCHEMA TABLES")
 	got = fmt.Sprintf("%v", qr.Rows)
 	want = `[[VARCHAR("dual")]]`
