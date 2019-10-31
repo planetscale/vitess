@@ -80,6 +80,7 @@ type Vttablet struct {
 	HTTPPort  int
 	GrpcPort  int
 	MySQLPort int
+	Alias     string
 
 	// background executable processes
 	mysqlctlProcess MysqlctlProcess
@@ -187,6 +188,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.Hostname,
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs)
+			tablet.Alias = tablet.vttabletProcess.TabletPath
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 			if err = tablet.vttabletProcess.Setup(); err != nil {
@@ -238,7 +240,7 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 		cluster.VtgateMySQLPort,
 		cluster.Cell,
 		cluster.Cell,
-    cluster.Hostname,
+		cluster.Hostname,
 		"MASTER,REPLICA",
 		cluster.topoProcess.Port,
 		cluster.TmpDirectory,

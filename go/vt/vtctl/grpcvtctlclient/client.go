@@ -96,3 +96,8 @@ func (client *gRPCVtctlClient) Close() {
 func init() {
 	vtctlclient.RegisterFactory("grpc", gRPCVtctlClientFactory)
 }
+
+// NewClient instantiates a vtctl client instance from address
+func NewClient(address string) (vtctlclient.VtctlClient, error) {
+	return gRPCVtctlClientFactory(address)
+}
