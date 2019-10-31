@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestConsistentLookup(t *testing.T) {
@@ -258,13 +257,4 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return qr
 }

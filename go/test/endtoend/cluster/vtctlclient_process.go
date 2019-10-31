@@ -96,3 +96,18 @@ func VtctlClientProcessInstance(hostname string, grpcPort int, tmpDirectory stri
 	}
 	return vtctlclient
 }
+
+// VtGateSplitQuery applies vitess schema (JSON format) to the keyspace
+func (vtctlclient *VtctlClientProcess) VtGateSplitQuery(keyspace string, sql string, splitCount int) (string, error) {
+	tmpProcess := exec.Command(
+		vtctlclient.Binary,
+		"-server", vtctlclient.Server,
+		"VtGateSplitQuery",
+		"-keyspace", keyspace,
+		"-split_count", fmt.Sprintf("%d", splitCount),
+		fmt.Sprintf("%s", sql),
+	)
+	print(fmt.Sprintf("Running VtGateSplitQuery with command => %v", strings.Join(tmpProcess.Args, " ")))
+	output, err := tmpProcess.CombinedOutput()
+	return string(output), err
+}

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -30,7 +31,9 @@ var (
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
 	Cell            = "test"
-	SchemaSQL       = `create table t1(
+	hostname        = "localhost"
+	SchemaSQL       = `
+  create table t1(
 	id1 bigint,
 	id2 bigint,
 	primary key(id1)
@@ -68,6 +71,12 @@ create table t2_id4_idx(
 	primary key(id),
 	key idx_id4(id4)
 ) Engine=InnoDB;
+
+create table user( 
+	id bigint,
+	name varchar(64),
+	primary key(id)
+) ENGINE=InnoDB;
 `
 
 	VSchema = `
@@ -159,7 +168,15 @@ create table t2_id4_idx(
           "type": "VARCHAR"
         }
       ]
-    }
+    },
+    "user": {
+			"column_vindexes": [
+				{
+				"column": "id",
+				"name": "hash"
+				}
+			]
+		}
   }
 }`
 )
@@ -168,7 +185,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = &cluster.LocalProcessCluster{Cell: Cell, Hostname: "localhost"}
+		clusterInstance = &cluster.LocalProcessCluster{Cell: Cell, Hostname: hostname}
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -200,4 +217,13 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+	t.Helper()
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return qr
 }
