@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -33,12 +34,16 @@ import (
 
 var (
 	clusterInstance       *cluster.LocalProcessCluster
+	tmClient              *tmc.Client
 	vtParams              mysql.ConnParams
 	masterTabletParams    mysql.ConnParams
 	replicaTabletParams   mysql.ConnParams
 	replicaTabletGrpcPort int
+	masterTabletGrpcPort  int
 	hostname              = "localhost"
 	keyspaceName          = "ks"
+	dbName                = "vt_" + keyspaceName
+	username              = "vt_dba"
 	cell                  = "zone1"
 	sqlSchema             = `
   create table t1(
@@ -84,6 +89,10 @@ func TestMain(m *testing.M) {
 
 		// List of users authorized to execute vschema ddl operations
 		clusterInstance.VtGateExtraArgs = []string{"-vschema_ddl_authorized_users=%"}
+		// Set extra tablet args for lock timeout
+		clusterInstance.VtTabletExtraArgs = []string{
+			"-lock_tables_timeout", "5s",
+		}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
@@ -91,7 +100,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		if err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true); err != nil {
+		if err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			return 1
 		}
 
@@ -99,11 +108,8 @@ func TestMain(m *testing.M) {
 		if err = clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
-		// vtParams = mysql.ConnParams{
-		// 	Host: clusterInstance.Hostname,
-		// 	Port: clusterInstance.VtgateMySQLPort,
-		// }
 
+		// Collect table paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		var masterTabletPath string
 		var replicaTabletPath string
@@ -111,23 +117,27 @@ func TestMain(m *testing.M) {
 			path := fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID)))
 			if tablet.Type == "master" {
 				masterTabletPath = path
+				masterTabletGrpcPort = tablet.GrpcPort
 			} else {
 				replicaTabletPath = path
-				// replicaTabletAddr = fmt.Sprintf("http://localhost:%d", tablet.GrpcPort)
 				replicaTabletGrpcPort = tablet.GrpcPort
 			}
 		}
 
+		// Set mysql tablet params
 		masterTabletParams = mysql.ConnParams{
-			Uname:      "vt_dba",
-			DbName:     "vt_" + keyspaceName,
+			Uname:      username,
+			DbName:     dbName,
 			UnixSocket: masterTabletPath + "/mysql.sock",
 		}
 		replicaTabletParams = mysql.ConnParams{
-			Uname:      "vt_dba",
-			DbName:     "vt_" + keyspaceName,
+			Uname:      username,
+			DbName:     dbName,
 			UnixSocket: replicaTabletPath + "/mysql.sock",
 		}
+
+		// create tablet manager client
+		tmClient = tmc.NewClient()
 
 		return m.Run()
 	}()
@@ -144,17 +154,32 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 }
 
 func tmcLockTables(ctx context.Context, tabletGrpcPort int) error {
-	portMap := make(map[string]int32)
-	portMap["grpc"] = int32(tabletGrpcPort)
-	vtablet := &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
-	client := tmc.NewClient()
-	return client.LockTables(ctx, vtablet)
+	vtablet := getTablet(tabletGrpcPort)
+	return tmClient.LockTables(ctx, vtablet)
 }
 
 func tmcUnlockTables(ctx context.Context, tabletGrpcPort int) error {
+	vtablet := getTablet(tabletGrpcPort)
+	return tmClient.UnlockTables(ctx, vtablet)
+}
+
+func tmcStopSlave(ctx context.Context, tabletGrpcPort int) error {
+	vtablet := getTablet(tabletGrpcPort)
+	return tmClient.StopSlave(ctx, vtablet)
+}
+
+func tmcMasterPosition(ctx context.Context, tabletGrpcPort int) (string, error) {
+	vtablet := getTablet(tabletGrpcPort)
+	return tmClient.MasterPosition(ctx, vtablet)
+}
+
+func tmcStartSlaveUntilAfter(ctx context.Context, tabletGrpcPort int, positon string, waittime time.Duration) error {
+	vtablet := getTablet(tabletGrpcPort)
+	return tmClient.StartSlaveUntilAfter(ctx, vtablet, positon, waittime)
+}
+
+func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)
-	vtablet := &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
-	client := tmc.NewClient()
-	return client.UnlockTables(ctx, vtablet)
+	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
 }

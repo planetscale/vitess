@@ -19,12 +19,15 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 )
 
+// TestLockAndUnlock tests the lock ability by locking a replica and asserting it does not see changes
 func TestLockAndUnlock(t *testing.T) {
 	ctx := context.Background()
 
@@ -41,14 +44,9 @@ func TestLockAndUnlock(t *testing.T) {
 	defer replicaConn.Close()
 
 	// first make sure that our writes to the master make it to the replica
+	exec(t, masterConn, "delete from t1")
 	exec(t, masterConn, "insert into t1(id, value) values(1,'a'), (2,'b')")
-
-	time.Sleep(200 * time.Millisecond)
-	// TODO a loop re-try
-	qr := exec(t, replicaConn, "select value from t1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("a")] [VARCHAR("b")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// now lock the replica
 	err = tmcLockTables(ctx, replicaTabletGrpcPort)
@@ -57,24 +55,149 @@ func TestLockAndUnlock(t *testing.T) {
 	}
 	// make sure that writing to the master does not show up on the replica while locked
 	exec(t, masterConn, "insert into t1(id, value) values(3,'c')")
-
-	// TODO a loop re-try
-	time.Sleep(500 * time.Millisecond)
-	qr = exec(t, replicaConn, "select value from t1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("a")] [VARCHAR("b")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// finally, make sure that unlocking the replica leads to the previous write showing up
 	err = tmcUnlockTables(ctx, replicaTabletGrpcPort)
 	if err != nil {
 		t.Fatal(err)
 	}
+	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")] [VARCHAR("c")]]`)
 
-	// TODO a loop re-try
-	time.Sleep(500 * time.Millisecond)
-	qr = exec(t, replicaConn, "select value from t1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("a")] [VARCHAR("b")] [VARCHAR("c")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+	// Unlocking when we do not have a valid lock should lead to an exception being raised
+	err = tmcUnlockTables(ctx, replicaTabletGrpcPort)
+	want := "tables were not locked"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Table unlock: %v, must contain %s", err, want)
+	}
+
+	// Clean the table for further testing
+	exec(t, masterConn, "delete from t1")
+}
+
+// TestStartSlaveUntilAfter tests by writing three rows, noting the gtid after each, and then replaying them one by one
+func TestStartSlaveUntilAfter(t *testing.T) {
+	ctx := context.Background()
+
+	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer masterConn.Close()
+
+	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer replicaConn.Close()
+
+	//first we stop replication to the replica, so we can move forward step by step.
+	err = tmcStopSlave(ctx, replicaTabletGrpcPort)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	qr := exec(t, masterConn, "insert into t1(id, value) values(1,'a')")
+	fmt.Println(fmt.Sprintf("%v", qr.Rows))
+	pos1, err := tmcMasterPosition(ctx, masterTabletGrpcPort)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec(t, masterConn, "insert into t1(id, value) values(2,'b')")
+	pos2, err := tmcMasterPosition(ctx, masterTabletGrpcPort)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec(t, masterConn, "insert into t1(id, value) values(3,'c')")
+	pos3, err := tmcMasterPosition(ctx, masterTabletGrpcPort)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Now, we'll resume stepwise position by position and make sure that we see the expected data
+	checkDataOnReplica(t, replicaConn, `[]`)
+
+	// starts the mysql replication until
+	timeout := 10 * time.Second
+	err = tmcStartSlaveUntilAfter(ctx, replicaTabletGrpcPort, pos1, timeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// first row should be visible
+	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
+
+	err = tmcStartSlaveUntilAfter(ctx, replicaTabletGrpcPort, pos2, timeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
+
+	err = tmcStartSlaveUntilAfter(ctx, replicaTabletGrpcPort, pos3, timeout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")] [VARCHAR("c")]]`)
+
+	// Clean the table for further testing
+	exec(t, masterConn, "delete from t1")
+}
+
+// TestLockAndTimeout tests that the lock times out and updates can be seen after timeout
+func TestLockAndTimeout(t *testing.T) {
+	ctx := context.Background()
+
+	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer masterConn.Close()
+
+	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer replicaConn.Close()
+
+	// first make sure that our writes to the master make it to the replica
+	exec(t, masterConn, "insert into t1(id, value) values(1,'a')")
+	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
+
+	// now lock the replica
+	err = tmcLockTables(ctx, replicaTabletGrpcPort)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// make sure that writing to the master does not show up on the replica while locked
+	exec(t, masterConn, "insert into t1(id, value) values(2,'b')")
+	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
+
+	// the tests sets the lock timeout to 5 seconds, so sleeping 8 should be safe
+	time.Sleep(8 * time.Second)
+	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
+
+	// Clean the table for further testing
+	exec(t, masterConn, "delete from t1")
+}
+
+func checkDataOnReplica(t *testing.T, replicaConn *mysql.Conn, want string) {
+	startTime := time.Now()
+	for {
+		qr := exec(t, replicaConn, "select value from t1")
+		got := fmt.Sprintf("%v", qr.Rows)
+
+		if time.Since(startTime) > 2*time.Second /* timeout */ {
+			assert.Equal(t, want, got)
+			break
+		}
+
+		if got == want {
+			assert.Equal(t, want, got)
+			break
+		} else {
+			time.Sleep(300 * time.Millisecond /* interval at which to check again */)
+		}
 	}
 }
