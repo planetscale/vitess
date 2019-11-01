@@ -24,17 +24,18 @@ import (
 	"io/ioutil"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/smartystreets/assertions"
+	"github.com/stretchr/testify/assert"
+
 	vtctl "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
 )
 
 var (
-	oneTableOutput = `
-+---+
+	oneTableOutput = `+---+
 | a |
 +---+
 | 1 |
@@ -51,87 +52,93 @@ func TestVtctldProcess(t *testing.T) {
 
 	url = fmt.Sprintf("http://%s:%d/api/topodata/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
 
-	testTopoDataAPI(url)
-	testListAllTablets()
-	testTabletStatus()
-	testExecuteAsDba()
-	testExecuteAsApp()
-	testListAllTabletsUsingVtctlGrpc()
+	testTopoDataAPI(t, url)
+	testListAllTablets(t)
+	testTabletStatus(t)
+	testExecuteAsDba(t)
+	testExecuteAsApp(t)
+	testListAllTabletsUsingVtctlGrpc(t)
 }
 
-func testTopoDataAPI(url string) {
+func testTopoDataAPI(t *testing.T, url string) {
 	resp, err := http.Get(url)
-	assertions.ShouldBeNil(err)
-	assertions.ShouldEqual(resp.StatusCode, 200)
+	assert.Nil(t, err)
+	assert.Equal(t, resp.StatusCode, 200)
 
 	resultMap := make(map[string]interface{})
 	respByte, _ := ioutil.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
-	assertions.ShouldBeNil(err)
+	assert.Nil(t, err)
 
 	errorValue := reflect.ValueOf(resultMap["Error"])
-	assertions.ShouldBeEmpty(errorValue.String())
+	assert.Empty(t, errorValue.String())
 
-	assertions.ShouldContainKey(resultMap, "Children")
+	assert.Contains(t, resultMap, "Children")
 	children := reflect.ValueOf(resultMap["Children"])
-	assertions.ShouldContain(children, "global")
-	assertions.ShouldContain(children, clusterInstance.Cell)
+	childrenGot := fmt.Sprintf("%s", children)
+	assert.Contains(t, childrenGot, "global")
+	assert.Contains(t, childrenGot, clusterInstance.Cell)
 }
 
-func testListAllTablets() {
+func testListAllTablets(t *testing.T) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets", clusterInstance.Cell)
-	assertions.ShouldBeNil(err)
+	assert.Nil(t, err)
 
 	tablets := getAllTablets()
 
 	tabletsFromCMD := strings.Split(result, "\n")
-	fmt.Println("len from cmd: " + fmt.Sprintf("%d", len(tabletsFromCMD)))
-	fmt.Println("len from tab: " + fmt.Sprintf("%d", len(tabletsFromCMD)))
-
-	assertions.ShouldEqual(len(tabletsFromCMD), len(tablets))
+	tabletCountFromCMD := 0
 
 	for _, line := range tabletsFromCMD {
-		assertions.ShouldContain(tablets, strings.Split(line, " ")[0])
+		if len(line) > 0 {
+			tabletCountFromCMD = tabletCountFromCMD + 1
+			assert.Contains(t, tablets, strings.Split(line, " ")[0])
+		}
 	}
+	assert.Equal(t, tabletCountFromCMD, len(tablets))
 }
 
-func testTabletStatus() {
+func testTabletStatus(t *testing.T) {
 	resp, err := http.Get(fmt.Sprintf("http://%s:%d", clusterInstance.Hostname, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort))
-	assertions.ShouldBeNil(err)
+	assert.Nil(t, err)
 	respByte, err := ioutil.ReadAll(resp.Body)
-	assertions.ShouldBeNil(err)
+	assert.Nil(t, err)
 	result := string(respByte)
-	assertions.ShouldBeTrue(strings.Contains(result, `Polling health information from. MySQLReplicationLag`))
-	assertions.ShouldBeTrue(strings.Contains(result, `Alias: <a href="http://localhost:`))
-	assertions.ShouldBeTrue(strings.Contains(result, `</html>`))
+	println(result)
+	println(strings.Contains(result, "Polling health information from."))
+	matched, err := regexp.Match(`Polling health information from.+MySQLReplicationLag`, []byte(result))
+	assert.Nil(t, err)
+	assert.True(t, matched)
+	assert.True(t, strings.Contains(result, `Alias: <a href="http://localhost:`))
+	assert.True(t, strings.Contains(result, `</html>`))
 }
 
-func testExecuteAsDba() {
+func testExecuteAsDba(t *testing.T) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, `SELECT 1 AS a`)
-	assertions.ShouldBeNil(err)
-	assertions.ShouldEqual(result, oneTableOutput)
+	assert.Nil(t, err)
+	assert.Equal(t, result, oneTableOutput)
 }
 
-func testExecuteAsApp() {
+func testExecuteAsApp(t *testing.T) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsApp", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, `SELECT 1 AS a`)
-	assertions.ShouldBeNil(err)
-	assertions.ShouldEqual(result, oneTableOutput)
+	assert.Nil(t, err)
+	assert.Equal(t, result, oneTableOutput)
 }
 
-func testListAllTabletsUsingVtctlGrpc() {
+func testListAllTabletsUsingVtctlGrpc(t *testing.T) {
 	client, err := vtctl.NewClient(clusterInstance.VtctlclientProcess.Server)
-	assertions.ShouldBeNil(err)
+	assert.Nil(t, err)
 
 	ctx := context.Background()
 	stream, err := client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", clusterInstance.Cell}, 1*time.Second)
-	assertions.ShouldBeNil(err)
+	assert.Nil(t, err)
 
 	tablets := getAllTablets()
 	for range tablets {
 		result, err := stream.Recv()
-		assertions.ShouldNotBeNil(result)
-		assertions.ShouldBeNil(err)
-		assertions.ShouldContain(tablets, strings.Split(result.String(), " ")[0])
+		assert.Nil(t, err)
+		assert.NotNil(t, result)
+		assert.Contains(t, tablets, strings.Split(result.Value, " ")[0])
 	}
 	client.Close()
 }
