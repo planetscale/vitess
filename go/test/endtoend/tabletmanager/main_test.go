@@ -38,19 +38,24 @@ var (
 	vtParams              mysql.ConnParams
 	masterTabletParams    mysql.ConnParams
 	replicaTabletParams   mysql.ConnParams
+	masterTablet          cluster.Vttablet
+	replicaTablet         cluster.Vttablet
 	replicaTabletGrpcPort int
 	masterTabletGrpcPort  int
+	masterTabletUID       int
+	masterTabletAlias     string
 	hostname              = "localhost"
 	keyspaceName          = "ks"
+	keyspacShard          = "ks/0"
 	dbName                = "vt_" + keyspaceName
 	username              = "vt_dba"
 	cell                  = "zone1"
 	sqlSchema             = `
-  create table t1(
-	id bigint,
-	value varchar(16),
-	primary key(id)
-) Engine=InnoDB;
+	create table t1(
+		id bigint,
+		value varchar(16),
+		primary key(id)
+	) Engine=InnoDB;
 `
 
 	vSchema = `
@@ -102,7 +107,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		if err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
 			return 1
 		}
 
@@ -120,11 +125,16 @@ func TestMain(m *testing.M) {
 			if tablet.Type == "master" {
 				masterTabletPath = path
 				masterTabletGrpcPort = tablet.GrpcPort
+				masterTabletUID = tablet.TabletUID
+				masterTablet = tablet
 			} else {
 				replicaTabletPath = path
 				replicaTabletGrpcPort = tablet.GrpcPort
+				replicaTablet = tablet
 			}
 		}
+
+		masterTabletAlias = fmt.Sprintf("zone1-%d", masterTabletUID)
 
 		// Set mysql tablet params
 		masterTabletParams = mysql.ConnParams{

@@ -79,8 +79,8 @@ type Vttablet struct {
 	MySQLPort int
 
 	// background executable processes
-	mysqlctlProcess MysqlctlProcess
-	vttabletProcess VttabletProcess
+	MysqlctlProcess MysqlctlProcess
+	VttabletProcess VttabletProcess
 }
 
 // StartTopo starts topology server
@@ -164,14 +164,14 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 			// Start Mysqlctl process
 			log.Info(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
-			tablet.mysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort)
-			if err = tablet.mysqlctlProcess.Start(); err != nil {
+			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort)
+			if err = tablet.MysqlctlProcess.Start(); err != nil {
 				log.Error(err.Error())
 				return
 			}
 
 			// start vttablet process
-			tablet.vttabletProcess = *VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = *VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				cluster.Cell,
@@ -184,7 +184,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.VtTabletExtraArgs)
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
-			if err = tablet.vttabletProcess.Setup(); err != nil {
+			if err = tablet.VttabletProcess.Setup(); err != nil {
 				log.Error(err.Error())
 				return
 			}
@@ -266,12 +266,12 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
-				if err = tablet.mysqlctlProcess.Stop(); err != nil {
+				if err = tablet.MysqlctlProcess.Stop(); err != nil {
 					log.Error(err.Error())
 					return
 				}
 
-				if err = tablet.vttabletProcess.TearDown(); err != nil {
+				if err = tablet.VttabletProcess.TearDown(); err != nil {
 					log.Error(err.Error())
 					return
 				}

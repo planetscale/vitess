@@ -56,6 +56,8 @@ type VttabletProcess struct {
 	VtctldAddress               string
 	Directory                   string
 	VerifyURL                   string
+	SupportBackup               bool
+	ServingStatus               string
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -86,10 +88,13 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-enable_replication_reporter",
 		"-backup_storage_implementation", vttablet.BackupStorageImplementation,
 		"-file_backup_storage_root", vttablet.FileBackupStorageRoot,
-		"-restore_from_backup",
 		"-service_map", vttablet.ServiceMap,
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
+
+	if vttablet.SupportBackup {
+		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
+	}
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
 
 	vttablet.proc.Stderr = os.Stderr
@@ -111,7 +116,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
-		if vttablet.WaitForStatus("NOT_SERVING") {
+		if vttablet.WaitForStatus(vttablet.ServingStatus) {
 			return nil
 		}
 		select {
@@ -168,6 +173,31 @@ func (vttablet *VttabletProcess) TearDown() error {
 	}
 }
 
+// Kill shuts down the running vttablet service
+func (vttablet *VttabletProcess) Kill() error {
+	if vttablet.proc == nil {
+		fmt.Printf("No process found for vttablet %d", vttablet.TabletUID)
+	}
+	if vttablet.proc == nil || vttablet.exit == nil {
+		return nil
+	}
+	// Attempt graceful shutdown with SIGTERM first
+	vttablet.proc.Process.Signal(syscall.SIGTERM)
+
+	os.RemoveAll(vttablet.PidFile)
+
+	select {
+	case err := <-vttablet.exit:
+		vttablet.proc = nil
+		return err
+
+	case <-time.After(10 * time.Second):
+		vttablet.proc.Process.Kill()
+		vttablet.proc = nil
+		return <-vttablet.exit
+	}
+}
+
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
@@ -194,6 +224,8 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttable.pid", tabletUID)),
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
+		SupportBackup:               true,
+		ServingStatus:               "NOT_SERVING",
 	}
 
 	if tabletType == "rdonly" {
