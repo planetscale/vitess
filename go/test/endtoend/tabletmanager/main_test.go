@@ -40,6 +40,7 @@ var (
 	replicaTabletParams   mysql.ConnParams
 	masterTablet          cluster.Vttablet
 	replicaTablet         cluster.Vttablet
+	rdonlyTablet          cluster.Vttablet
 	replicaTabletGrpcPort int
 	masterTabletGrpcPort  int
 	masterTabletUID       int
@@ -109,7 +110,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, true); err != nil {
 			return 1
 		}
 
@@ -129,10 +130,12 @@ func TestMain(m *testing.M) {
 				masterTabletGrpcPort = tablet.GrpcPort
 				masterTabletUID = tablet.TabletUID
 				masterTablet = tablet
-			} else {
+			} else if tablet.Type != "rdonly" {
 				replicaTabletPath = path
 				replicaTabletGrpcPort = tablet.GrpcPort
 				replicaTablet = tablet
+			} else {
+				rdonlyTablet = tablet
 			}
 		}
 

@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -150,6 +151,25 @@ func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
 		return resultMap["TabletStateName"] == status
 	}
 	return false
+}
+
+// GetTabletStatus function checks if vttablet process is up and running
+func (vttablet *VttabletProcess) GetTabletStatus() string {
+	resp, err := http.Get(vttablet.VerifyURL)
+	if err != nil {
+		return ""
+	}
+	if resp.StatusCode == 200 {
+		resultMap := make(map[string]interface{})
+		respByte, _ := ioutil.ReadAll(resp.Body)
+		err := json.Unmarshal(respByte, &resultMap)
+		if err != nil {
+			panic(err)
+		}
+		status := reflect.ValueOf(resultMap["TabletStateName"]).String()
+		return status
+	}
+	return ""
 }
 
 // TearDown shuts down the running vttablet service
