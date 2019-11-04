@@ -73,10 +73,10 @@ func TestTabletCommands(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", masterTabletAlias)
 	assert.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshStateByShard", keyspacShard)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshStateByShard", keyspaceShard)
 	assert.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshStateByShard", "--cells="+cell, keyspacShard)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshStateByShard", "--cells="+cell, keyspaceShard)
 	assert.Nil(t, err, "error should be Nil")
 
 	// Check basic actions.
@@ -104,10 +104,10 @@ func TestTabletCommands(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateKeyspace", "-ping-tablets=true", keyspaceName)
 	assert.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateShard", "-ping-tablets=false", keyspacShard)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateShard", "-ping-tablets=false", keyspaceShard)
 	assert.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateShard", "-ping-tablets=true", keyspacShard)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateShard", "-ping-tablets=true", keyspaceShard)
 	assert.Nil(t, err, "error should be Nil")
 
 }
@@ -258,4 +258,37 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expe
 		assert.Contains(t, stderr, expectedStderr)
 	}
 
+}
+
+func TestShardReplicationFix(t *testing.T) {
+	// make sure the replica is in the replication graph, 2 nodes: 1 master, 1 replica
+	qr, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	assert.Nil(t, err, "error should be Nil")
+	assertNodeCount(t, qr, int(2))
+
+	// Manually add a bogus entry to the replication graph, and check it is removed by ShardReplicationFix
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, fmt.Sprintf("%s-9000", cell))
+	assert.Nil(t, err, "error should be Nil")
+
+	qr, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	assert.Nil(t, err, "error should be Nil")
+	assertNodeCount(t, qr, int(3))
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ShardReplicationFix", cell, keyspaceShard)
+	assert.Nil(t, err, "error should be Nil")
+	qr, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	assert.Nil(t, err, "error should be Nil")
+	assertNodeCount(t, qr, int(2))
+}
+
+func assertNodeCount(t *testing.T, qr string, want int) {
+	resultMap := make(map[string]interface{})
+	err := json.Unmarshal([]byte(qr), &resultMap)
+	if err != nil {
+		panic(err)
+	}
+
+	nodes := reflect.ValueOf(resultMap["nodes"])
+	got := nodes.Len()
+	assert.Equal(t, want, got)
 }

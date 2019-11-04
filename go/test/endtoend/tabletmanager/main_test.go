@@ -46,7 +46,7 @@ var (
 	masterTabletAlias     string
 	hostname              = "localhost"
 	keyspaceName          = "ks"
-	keyspacShard          = "ks/0"
+	keyspaceShard         = "ks/0"
 	dbName                = "vt_" + keyspaceName
 	username              = "vt_dba"
 	cell                  = "zone1"
