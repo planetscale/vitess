@@ -95,6 +95,8 @@ func TestMain(m *testing.M) {
 			"-watch_replication_stream",
 			"-enable_replication_reporter",
 		}
+		// We do not need semiSync for this test case.
+		clusterInstance.EnableSemiSync = false
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
@@ -168,6 +170,11 @@ func tmcUnlockTables(ctx context.Context, tabletGrpcPort int) error {
 func tmcStopSlave(ctx context.Context, tabletGrpcPort int) error {
 	vtablet := getTablet(tabletGrpcPort)
 	return tmClient.StopSlave(ctx, vtablet)
+}
+
+func tmcStartSlave(ctx context.Context, tabletGrpcPort int) error {
+	vtablet := getTablet(tabletGrpcPort)
+	return tmClient.StartSlave(ctx, vtablet)
 }
 
 func tmcMasterPosition(ctx context.Context, tabletGrpcPort int) (string, error) {

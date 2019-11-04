@@ -97,10 +97,7 @@ func TestStartSlaveUntilAfter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Println("position test") //TODO: Remove this line after testing
-
-	qr := exec(t, masterConn, "insert into t1(id, value) values(1,'a')")
-	fmt.Println(fmt.Sprintf("%v", qr.Rows)) //TODO: Remove this line after testing
+	exec(t, masterConn, "insert into t1(id, value) values(1,'a')")
 	pos1, err := tmcMasterPosition(ctx, masterTabletGrpcPort)
 	if err != nil {
 		t.Fatal(err)
@@ -142,6 +139,11 @@ func TestStartSlaveUntilAfter(t *testing.T) {
 	}
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")] [VARCHAR("c")]]`)
 
+	// Strat replication to the replica
+	err = tmcStartSlave(ctx, replicaTabletGrpcPort)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Clean the table for further testing
 	exec(t, masterConn, "delete from t1")
 }
