@@ -18,7 +18,6 @@ limitations under the License.
 package clustertest
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -27,11 +26,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	vtctl "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
 )
 
 var (
@@ -57,7 +53,6 @@ func TestVtctldProcess(t *testing.T) {
 	testTabletStatus(t)
 	testExecuteAsDba(t)
 	testExecuteAsApp(t)
-	testListAllTabletsUsingVtctlGrpc(t)
 }
 
 func testTopoDataAPI(t *testing.T, url string) {
@@ -123,24 +118,6 @@ func testExecuteAsApp(t *testing.T) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsApp", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, `SELECT 1 AS a`)
 	assert.Nil(t, err)
 	assert.Equal(t, result, oneTableOutput)
-}
-
-func testListAllTabletsUsingVtctlGrpc(t *testing.T) {
-	client, err := vtctl.NewClient(clusterInstance.VtctlclientProcess.Server)
-	assert.Nil(t, err)
-
-	ctx := context.Background()
-	stream, err := client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", clusterInstance.Cell}, 1*time.Second)
-	assert.Nil(t, err)
-
-	tablets := getAllTablets()
-	for range tablets {
-		result, err := stream.Recv()
-		assert.Nil(t, err)
-		assert.NotNil(t, result)
-		assert.Contains(t, tablets, strings.Split(result.Value, " ")[0])
-	}
-	client.Close()
 }
 
 func getAllTablets() []string {
