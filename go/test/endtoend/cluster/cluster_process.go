@@ -57,6 +57,9 @@ type LocalProcessCluster struct {
 
 	//Extra arguments for vtGate
 	VtGateExtraArgs []string
+
+	//Extra arguments for vtctld
+	VtctldExtraArgs []string
 }
 
 // Keyspace : Cluster accepts keyspace to launch it
@@ -83,7 +86,7 @@ type Vttablet struct {
 
 	// background executable processes
 	mysqlctlProcess MysqlctlProcess
-	vttabletProcess VttabletProcess
+	VttabletProcess VttabletProcess
 }
 
 // StartTopo starts topology server
@@ -121,7 +124,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	cluster.vtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.topoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Info(fmt.Sprintf("Starting vtctld server on port : %d", cluster.vtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.vtctldProcess.Port
-	if err = cluster.vtctldProcess.Setup(cluster.Cell); err != nil {
+	if err = cluster.vtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
 		log.Error(err.Error())
 		return
 	}
@@ -145,7 +148,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	if rdonly {
 		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
 	}
-	shards := make([]Shard, 0)
+
 	log.Info("Starting keyspace : " + keyspace.Name)
 	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
 	for _, shardName := range shardNames {
@@ -175,7 +178,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 
 			// start vttablet process
-			tablet.vttabletProcess = *VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = *VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				cluster.Cell,
@@ -187,9 +190,13 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.Hostname,
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs)
+			if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
+				log.Error(err.Error())
+				return
+			}
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
-			if err = tablet.vttabletProcess.Setup(); err != nil {
+			if err = tablet.VttabletProcess.Setup(); err != nil {
 				log.Error(err.Error())
 				return
 			}
@@ -202,16 +209,26 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			log.Error(err.Error())
 			return
 		}
-
-		shards = append(shards, *shard)
+		keyspace.Shards = append(keyspace.Shards, *shard)
 	}
-	keyspace.Shards = shards
-	cluster.Keyspaces = append(cluster.Keyspaces, keyspace)
+	// if the keyspace is present then append the shard info
+	existingKeyspace := false
+	for idx, ks := range cluster.Keyspaces {
+		if ks.Name == keyspace.Name {
+			cluster.Keyspaces[idx].Shards = append(cluster.Keyspaces[idx].Shards, keyspace.Shards...)
+			existingKeyspace = true
+		}
+	}
+	if !existingKeyspace {
+		cluster.Keyspaces = append(cluster.Keyspaces, keyspace)
+	}
 
 	// Apply Schema SQL
-	if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
-		log.Error(err.Error())
-		return
+	if keyspace.SchemaSQL != "" {
+		if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
+			log.Error(err.Error())
+			return
+		}
 	}
 
 	//Apply VSchema
@@ -238,7 +255,7 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 		cluster.VtgateMySQLPort,
 		cluster.Cell,
 		cluster.Cell,
-    cluster.Hostname,
+		cluster.Hostname,
 		"MASTER,REPLICA",
 		cluster.topoProcess.Port,
 		cluster.TmpDirectory,
@@ -278,7 +295,7 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 					return
 				}
 
-				if err = tablet.vttabletProcess.TearDown(); err != nil {
+				if err = tablet.VttabletProcess.TearDown(); err != nil {
 					log.Error(err.Error())
 					return
 				}
