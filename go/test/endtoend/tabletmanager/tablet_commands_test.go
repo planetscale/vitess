@@ -63,13 +63,13 @@ func TestTabletCommands(t *testing.T) {
 		masterTabletAlias,
 		sql,
 	}
-	qr, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
-	assertExcludeFields(t, qr)
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
+	assertExcludeFields(t, result)
 
 	// make sure direct dba queries work
 	sql = "select * from t1"
-	qr, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "-json", masterTabletAlias, sql)
-	assertExecuteFetch(t, qr)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "-json", masterTabletAlias, sql)
+	assertExecuteFetch(t, result)
 
 	// check Ping / RefreshState / RefreshStateByShard
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", masterTabletAlias)
@@ -87,15 +87,15 @@ func TestTabletCommands(t *testing.T) {
 	// Check basic actions.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadOnly", masterTabletAlias)
 	assert.Nil(t, err, "error should be Nil")
-	result := exec(t, masterConn, "show variables like 'read_only'")
-	got := fmt.Sprintf("%v", result.Rows)
+	qr := exec(t, masterConn, "show variables like 'read_only'")
+	got := fmt.Sprintf("%v", qr.Rows)
 	want := "[[VARCHAR(\"read_only\") VARCHAR(\"ON\")]]"
 	assert.Equal(t, want, got)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", masterTabletAlias)
 	assert.Nil(t, err, "error should be Nil")
-	result = exec(t, masterConn, "show variables like 'read_only'")
-	got = fmt.Sprintf("%v", result.Rows)
+	qr = exec(t, masterConn, "show variables like 'read_only'")
+	got = fmt.Sprintf("%v", qr.Rows)
 	want = "[[VARCHAR(\"read_only\") VARCHAR(\"OFF\")]]"
 	assert.Equal(t, want, got)
 
@@ -267,28 +267,28 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expe
 
 func TestShardReplicationFix(t *testing.T) {
 	// make sure the replica is in the replication graph, 2 nodes: 1 master, 1 replica
-	qr, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
 	assert.Nil(t, err, "error should be Nil")
-	assertNodeCount(t, qr, int(3))
+	assertNodeCount(t, result, int(3))
 
 	// Manually add a bogus entry to the replication graph, and check it is removed by ShardReplicationFix
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ShardReplicationAdd", keyspaceShard, fmt.Sprintf("%s-9000", cell))
 	assert.Nil(t, err, "error should be Nil")
 
-	qr, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
 	assert.Nil(t, err, "error should be Nil")
-	assertNodeCount(t, qr, int(4))
+	assertNodeCount(t, result, int(4))
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ShardReplicationFix", cell, keyspaceShard)
 	assert.Nil(t, err, "error should be Nil")
-	qr, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
 	assert.Nil(t, err, "error should be Nil")
-	assertNodeCount(t, qr, int(3))
+	assertNodeCount(t, result, int(3))
 }
 
-func assertNodeCount(t *testing.T, qr string, want int) {
+func assertNodeCount(t *testing.T, result string, want int) {
 	resultMap := make(map[string]interface{})
-	err := json.Unmarshal([]byte(qr), &resultMap)
+	err := json.Unmarshal([]byte(result), &resultMap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,9 +341,9 @@ func TestHealthCheck(t *testing.T) {
 	checkHealth(t, replicaTablet.HTTPPort)
 
 	// Make sure the master is still master
-	qr, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", masterTabletAlias)
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", masterTabletAlias)
 	assert.Nil(t, err, "error should be Nil")
-	checkTabletType(t, qr, "MASTER")
+	checkTabletType(t, result, "MASTER")
 	exec(t, masterConn, "stop slave")
 
 	// stop replication, make sure we don't go unhealthy.
@@ -353,10 +353,10 @@ func TestHealthCheck(t *testing.T) {
 	assert.Nil(t, err, "error should be Nil")
 
 	// make sure the health stream is updated
-	qr, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", replicaTabletAlias)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", replicaTabletAlias)
 	assert.Nil(t, err, "error should be Nil")
-	assert.Containsf(t, qr, "serving", "Tablet should be in serving state")
-	assert.NotContainsf(t, qr, "seconds_behind_master", "Tablet should not be behind master")
+	assert.Containsf(t, result, "serving", "Tablet should be in serving state")
+	assert.NotContainsf(t, result, "seconds_behind_master", "Tablet should not be behind master")
 
 	// then restart replication, make sure we stay healthy
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", replicaTabletAlias)
@@ -366,33 +366,16 @@ func TestHealthCheck(t *testing.T) {
 	checkHealth(t, replicaTablet.HTTPPort)
 
 	// now test VtTabletStreamHealth returns the right thing
-	qr, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "2", replicaTabletAlias)
-	scanner := bufio.NewScanner(strings.NewReader(qr))
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "2", replicaTabletAlias)
+	scanner := bufio.NewScanner(strings.NewReader(result))
 	for scanner.Scan() {
 		fmt.Println(scanner.Text()) // Println will add back the final '\n'
-		assert.Containsf(t, qr, "realtime_stats", "Tablet should have realtime_stats")
-		assert.Containsf(t, qr, "serving", "Tablet should be in serving state")
-		assert.Containsf(t, qr, fmt.Sprintf("%d", replicaTablet.TabletUID), "Tablet should contain uid")
-		assert.True(t, !strings.Contains(qr, "seconds_behind_master") ||
-			strings.Contains(qr, "\"seconds_behind_master\":4"),
+		assert.Containsf(t, result, "realtime_stats", "Tablet should have realtime_stats")
+		assert.Containsf(t, result, "serving", "Tablet should be in serving state")
+		assert.Containsf(t, result, fmt.Sprintf("%d", replicaTablet.TabletUID), "Tablet should contain uid")
+		assert.True(t, !strings.Contains(result, "seconds_behind_master") ||
+			strings.Contains(result, "\"seconds_behind_master\":4"),
 			"seconds_behind_master", "Tablet should not be behind master")
-	}
-
-	//TODO: Ajeet, fix below test
-	// Test that VtTabletStreamHealth reports a QPS >0.0.
-	n := 0
-	for n < 10 {
-		n++
-		exec(t, replicaConn, "select 1 from dual")
-		exec(t, replicaConn, "select * from t1")
-	}
-	timeout := time.Now().Add(10 * time.Second)
-	for time.Now().Before(timeout) {
-		qr, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", replicaTabletAlias)
-		fmt.Println(qr)
-		time.Sleep(100 * time.Millisecond)
-		//if qps>0.0
-		//break
 	}
 
 	// Manual cleanup of processes
@@ -410,14 +393,15 @@ func checkHealth(t *testing.T, port int) {
 	assert.Equal(t, 200, resp.StatusCode)
 }
 
-func checkTabletType(t *testing.T, qr string, typeWant string) {
-	resultMap := make(map[string]interface{})
-	err := json.Unmarshal([]byte(qr), &resultMap)
+func checkTabletType(t *testing.T, jsonData string, typeWant string) {
+	var tablet topodatapb.Tablet
+	err := json.Unmarshal([]byte(jsonData), &tablet)
 	if err != nil {
 		t.Fatal(err)
 	}
-	actualType := reflect.ValueOf(resultMap["type"]).Float()
-	got := fmt.Sprintf("%.0f", actualType)
+
+	actualType := tablet.GetType()
+	got := fmt.Sprintf("%d", actualType)
 
 	tabletType := topodatapb.TabletType_value[typeWant]
 	want := fmt.Sprintf("%d", tabletType)
@@ -455,9 +439,9 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rdonlyTabletAlias)
 	assert.Nil(t, err, "error should be Nil")
 
-	qr, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", rdonlyTabletAlias)
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", rdonlyTabletAlias)
 	assert.Nil(t, err, "error should be Nil")
-	checkTabletType(t, qr, "DRAINED")
+	checkTabletType(t, result, "DRAINED")
 
 	// Query service is still running.
 	waitForTabletStatus(rdonlyTablet, "SERVING")
