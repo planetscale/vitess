@@ -57,6 +57,9 @@ type LocalProcessCluster struct {
 
 	//Extra arguments for vtGate
 	VtGateExtraArgs []string
+
+	// To enable SemiSync for vttablets
+	EnableSemiSync bool
 }
 
 // Keyspace : Cluster accepts keyspace to launch it
@@ -187,7 +190,8 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.topoProcess.Port,
 				cluster.Hostname,
 				cluster.TmpDirectory,
-				cluster.VtTabletExtraArgs)
+				cluster.VtTabletExtraArgs,
+				cluster.EnableSemiSync)
 			tablet.Alias = tablet.vttabletProcess.TabletPath
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
