@@ -1,11 +1,13 @@
 package schema
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -220,7 +222,13 @@ func testCopySchemaShardsWithDifferentDB(t *testing.T, shard int) {
 	masterTabletAlias := clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath
 	schema, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema", masterTabletAlias)
 	assert.Nil(t, err)
-	assert.True(t, strings.Contains(schema, "utf8"))
+
+	resultMap := make(map[string]interface{})
+	err = json.Unmarshal([]byte(schema), &resultMap)
+	assert.Nil(t, err)
+	dbSchema := reflect.ValueOf(resultMap["database_schema"])
+	assert.True(t, strings.Contains(dbSchema.String(), "utf8"))
+
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", "-json", masterTabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
 	assert.Nil(t, err)
 
