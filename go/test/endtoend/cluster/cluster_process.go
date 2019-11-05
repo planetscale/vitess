@@ -58,8 +58,9 @@ type LocalProcessCluster struct {
 	//Extra arguments for vtGate
 	VtGateExtraArgs []string
 
-	//Extra arguments for vtctld
 	VtctldExtraArgs []string
+
+	EnableSemiSync bool
 }
 
 // Keyspace : Cluster accepts keyspace to launch it
@@ -83,6 +84,7 @@ type Vttablet struct {
 	HTTPPort  int
 	GrpcPort  int
 	MySQLPort int
+	Alias     string
 
 	// background executable processes
 	mysqlctlProcess MysqlctlProcess
@@ -189,11 +191,13 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.topoProcess.Port,
 				cluster.Hostname,
 				cluster.TmpDirectory,
+        cluster.EnableSemiSync,
 				cluster.VtTabletExtraArgs)
 			if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
 				log.Error(err.Error())
 				return
 			}
+			tablet.Alias = tablet.vttabletProcess.TabletPath
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 			if err = tablet.VttabletProcess.Setup(); err != nil {
