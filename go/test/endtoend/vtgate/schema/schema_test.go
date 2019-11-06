@@ -101,11 +101,11 @@ func TestSchemaChange(t *testing.T) {
 	testWithInitialSchema(t)
 	testWithAlterSchema(t)
 	testWithDropCreateSchema(t)
-	testSchemaChangePreflightErrorPartialy(t)
+	testSchemaChangePreflightErrorPartially(t)
 	testDropNonExistentTables(t)
 	testCopySchemaShards(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, 2)
 	testCopySchemaShards(t, fmt.Sprintf("%s/0", keyspaceName), 3)
-	testCopySchemaShardsWithDifferentDB(t, 4)
+	testCopySchemaShardWithDifferentDB(t, 4)
 	testWithAutoSchemaFromChangeDir(t)
 }
 
@@ -183,9 +183,9 @@ func matchSchema(t *testing.T, firstTablet string, secondTablet string) {
 	assert.Equal(t, firstShardSchema, secondShardSchema)
 }
 
-// testSchemaChangePreflightErrorPartialy applying same schema + new schema should throw error for existing one
+// testSchemaChangePreflightErrorPartially applying same schema + new schema should throw error for existing one
 // Tests that some SQL statements fail properly during PreflightSchema.
-func testSchemaChangePreflightErrorPartialy(t *testing.T) {
+func testSchemaChangePreflightErrorPartially(t *testing.T) {
 	createNewTable := fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 5)) + fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 2))
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "-sql", createNewTable, keyspaceName)
 	assert.NotNil(t, err)
@@ -194,9 +194,7 @@ func testSchemaChangePreflightErrorPartialy(t *testing.T) {
 	checkTables(t, totalTableCount)
 }
 
-// testSchemaChangePreflightErrorPartialy applying same schema + new schema should throw error for existing one and also add the new schema
-//Tests the PreflightSchema logic for dropping nonexistent tables.
-//
+// testDropNonExistentTables applying same schema + new schema should throw error for existing one and also add the new schema
 //If a table does not exist, DROP TABLE should error during preflight
 //because the statement does not change the schema as there is
 //nothing to drop.
@@ -215,42 +213,42 @@ func testDropNonExistentTables(t *testing.T) {
 	checkTables(t, totalTableCount)
 }
 
-// checkTables check if first 2 tablets' table count match
+// checkTables checks the number of tables in the first two shards.
 func checkTables(t *testing.T, count int) {
-	checkTablesForCount(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0], count)
-	checkTablesForCount(t, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0], count)
+	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0], count)
+	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0], count)
 }
 
-// checkTablesForCount makes sql query to match supplied tablet's table
-func checkTablesForCount(t *testing.T, tablet cluster.Vttablet, count int) {
+// checkTablesCount checks the number of tables in the given tablet
+func checkTablesCount(t *testing.T, tablet cluster.Vttablet, count int) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet("show tables;", keyspaceName, true)
 	assert.Nil(t, err)
 	assert.Equal(t, len(queryResult.Rows), count)
 }
 
-// testCopySchemaShards copy schema from source should be applied to destination and tables, schema should match
+// testCopySchemaShards tests that schema from source is correctly applied to destination
 func testCopySchemaShards(t *testing.T, source string, shard int) {
 	addNewShard(t, shard)
 	// InitShardMaster creates the db, but there shouldn't be any tables yet.
-	checkTablesForCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
-	checkTablesForCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
+	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
+	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
 	// Run the command twice to make sure it's idempotent.
 	for i := 0; i < 2; i++ {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 		assert.Nil(t, err)
 	}
 	// shard_2_master should look the same as the replica we copied from
-	checkTablesForCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
-	checkTablesForCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], totalTableCount)
+	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
+	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], totalTableCount)
 
 	matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath)
 }
 
-// testCopySchemaShardsWithDifferentDB if we apply different schema to new shard, it should throw error
-func testCopySchemaShardsWithDifferentDB(t *testing.T, shard int) {
+// testCopySchemaShardWithDifferentDB if we apply different schema to new shard, it should throw error
+func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	addNewShard(t, shard)
-	checkTablesForCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
-	checkTablesForCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
+	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
+	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
 	source := fmt.Sprintf("%s/0", keyspaceName)
 
 	masterTabletAlias := clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath
@@ -277,7 +275,7 @@ func testCopySchemaShardsWithDifferentDB(t *testing.T, shard int) {
 
 	// shard_2_master should have the same number of tables. Only the db
 	// character set is different.
-	checkTablesForCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
+	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
 }
 
 // addNewShard adds a new shard dynamically
