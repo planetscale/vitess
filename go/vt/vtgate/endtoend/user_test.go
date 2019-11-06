@@ -20,9 +20,9 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -47,115 +47,121 @@ func TestUsers(t *testing.T) {
 	}
 	defer conn.Close()
 
+	assert := assert.New(t)
+
 	//Test insert
 	for i := 1; i <= 4; i++ {
 		each := strconv.Itoa(i)
-		nameQ := "test " + each
-		exec(t, conn, "insert into vt_user(id,name) values ("+each+",'"+nameQ+"')")
+		nameValue := "test " + each
+		exec(t, conn, "insert into vt_user(id,name) values ("+each+",'"+nameValue+"')")
 		qr := exec(t, conn, "select id,name from vt_user where id = "+strconv.Itoa(i))
-		if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64("+each+") VARCHAR(\""+nameQ+"\")]]"; got != want {
-			t.Errorf("select:\n%v want\n%v", got, want)
-		}
+		got := fmt.Sprintf("%v", qr.Rows)
+		want := "[[INT64(" + each + ") VARCHAR(\"" + nameValue + "\")]]"
+		assert.Equal(want, got)
 	}
 
 	//Test case sensitivity
 	qr := exec(t, conn, "select Id, Name from vt_user where iD = 1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("test 1")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got := fmt.Sprintf("%v", qr.Rows)
+	want := `[[INT64(1) VARCHAR("test 1")]]`
+	assert.Equal(want, got)
 
 	//Test directive timeout
 	_, err = conn.ExecuteFetch("SELECT /*vt+ QUERY_TIMEOUT_MS=10 */ SLEEP(1)", 1000, false)
-	want := "DeadlineExceeded"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("second insert: %v, must contain %s", err, want)
+	want = "DeadlineExceeded"
+	if assert.NotNil(err) {
+		assert.Contains(err.Error(), want)
 	}
 
 	//Test directive timeout longer than the query time
 	qr = exec(t, conn, "SELECT /*vt+ QUERY_TIMEOUT_MS=2000 */ SLEEP(1)")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(0)]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(0)]]`
+	assert.Equal(want, got)
 
 	//Verify values in db
 	exec(t, conn, "insert into vt_user(id,name) values(6,'test 6')")
 	exec(t, conn1, "use `ks:-80`")
 	qr = exec(t, conn1, "select id, name from vt_user")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("test 1")] [INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(1) VARCHAR("test 1")] [INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")]]`
+	assert.Equal(want, got)
+
 	exec(t, conn2, "use `ks:80-`")
 	qr = exec(t, conn2, "select id, name from vt_user")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(4) VARCHAR("test 4")] [INT64(6) VARCHAR("test 6")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(4) VARCHAR("test 4")] [INT64(6) VARCHAR("test 6")]]`
+	assert.Equal(want, got)
 
 	//Test IN clause
 	qr = exec(t, conn, "select id, name from vt_user where id in (1, 4) order by id")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("test 1")] [INT64(4) VARCHAR("test 4")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(1) VARCHAR("test 1")] [INT64(4) VARCHAR("test 4")]]`
+	assert.Equal(want, got)
 
 	//Test scatter
 	qr = exec(t, conn, "select id, name from vt_user order by id")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("test 1")] [INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(4) VARCHAR("test 4")] [INT64(6) VARCHAR("test 6")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(1) VARCHAR("test 1")] [INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(4) VARCHAR("test 4")] [INT64(6) VARCHAR("test 6")]]`
+	assert.Equal(want, got)
 
 	//Test updates
 	exec(t, conn, "update vt_user set name = 'test one' where id = 1")
 	exec(t, conn, "update vt_user set name = 'test four' where id = 4")
 	qr = exec(t, conn1, "select id, name from vt_user")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("test one")] [INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(1) VARCHAR("test one")] [INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")]]`
+	assert.Equal(want, got)
+
 	qr = exec(t, conn2, "select id, name from vt_user")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(4) VARCHAR("test four")] [INT64(6) VARCHAR("test 6")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(4) VARCHAR("test four")] [INT64(6) VARCHAR("test 6")]]`
+	assert.Equal(want, got)
 
 	//Test deletes
 	exec(t, conn, "delete from vt_user where id = 1")
 	exec(t, conn, "delete from vt_user where id = 4")
 	qr = exec(t, conn1, "select id, name from vt_user")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")]]`
+	assert.Equal(want, got)
+
 	qr = exec(t, conn2, "select id, name from vt_user")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(6) VARCHAR("test 6")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(6) VARCHAR("test 6")]]`
+	assert.Equal(want, got)
 
 	//Test scatter update
 	exec(t, conn, "insert into vt_user (id, name) values (22,'name2'),(33,'name2')")
 	qr = exec(t, conn, "select id, name from vt_user order by id")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(6) VARCHAR("test 6")] [INT64(22) VARCHAR("name2")] [INT64(33) VARCHAR("name2")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(6) VARCHAR("test 6")] [INT64(22) VARCHAR("name2")] [INT64(33) VARCHAR("name2")]]`
+	assert.Equal(want, got)
+
 	exec(t, conn, "update vt_user set name='jose' where id > 20")
 	qr = exec(t, conn, "select id, name from vt_user order by id")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(6) VARCHAR("test 6")] [INT64(22) VARCHAR("jose")] [INT64(33) VARCHAR("jose")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(6) VARCHAR("test 6")] [INT64(22) VARCHAR("jose")] [INT64(33) VARCHAR("jose")]]`
+	assert.Equal(want, got)
 
 	//Test scatter delete
 	exec(t, conn, "delete from vt_user where id > 20")
 	qr = exec(t, conn, "select id, name from vt_user order by id")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(6) VARCHAR("test 6")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got = fmt.Sprintf("%v", qr.Rows)
+	want = `[[INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(6) VARCHAR("test 6")]]`
+	assert.Equal(want, got)
 
 	//Test shard errors as warnings directive
 	_, warnings, err := conn.ExecuteFetchWithWarningCount("SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ bad from vt_user", 1000, false)
-	if got, want := warnings, uint16(2); got != want {
-		t.Errorf("select:\n%d want\n%d", got, want)
-	}
+	got = strconv.Itoa(int(warnings))
+	want = strconv.Itoa(2)
+	assert.Equal(want, got)
 
 	//Test shard errors as warnings directive with timeout
 	_, warnings, err = conn.ExecuteFetchWithWarningCount("SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS QUERY_TIMEOUT_MS=10 */ SLEEP(1)", 1000, false)
-	if got, want := warnings, uint16(1); got != want {
-		t.Errorf("select:\n%d want\n%d", got, want)
-	}
+	got = strconv.Itoa(int(warnings))
+	want = strconv.Itoa(1)
+	assert.Equal(want, got)
 
 	//deleting all records from vt_user table
 	exec(t, conn, "delete from vt_user where id > 0")
@@ -172,12 +178,12 @@ func TestQueryStream(t *testing.T) {
 	//Test insert
 	for i := 1; i <= 4; i++ {
 		each := strconv.Itoa(i)
-		nameQ := "test " + each
-		exec(t, conn, "insert into vt_user(id,name) values ("+each+",'"+nameQ+"')")
+		nameValue := "test " + each
+		exec(t, conn, "insert into vt_user(id,name) values ("+each+",'"+nameValue+"')")
 		qr := exec(t, conn, "select id,name from vt_user where id = "+strconv.Itoa(i))
-		if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64("+each+") VARCHAR(\""+nameQ+"\")]]"; got != want {
-			t.Errorf("select:\n%v want\n%v", got, want)
-		}
+		got := fmt.Sprintf("%v", qr.Rows)
+		want := "[[INT64(" + each + ") VARCHAR(\"" + nameValue + "\")]]"
+		assert.Equal(t, want, got)
 	}
 
 	//Test stream over scatter
@@ -185,13 +191,13 @@ func TestQueryStream(t *testing.T) {
 	if err := conn.ExecuteStreamFetch(query); err != nil {
 		t.Fatalf("ExecuteStreamFetch(%v) failed: %v", query, err)
 	}
-	qrS := &sqltypes.Result{}
-	qrS.Fields, err = conn.Fields()
+	qr := &sqltypes.Result{}
+	qr.Fields, err = conn.Fields()
 	if err != nil {
 		t.Fatalf("Fields(%v) failed: %v", query, err)
 	}
-	if len(qrS.Fields) == 0 {
-		qrS.Fields = nil
+	if len(qr.Fields) == 0 {
+		qr.Fields = nil
 	}
 	for {
 		row, err := conn.FetchNext()
@@ -202,12 +208,12 @@ func TestQueryStream(t *testing.T) {
 			// Done.
 			break
 		}
-		qrS.Rows = append(qrS.Rows, row)
+		qr.Rows = append(qr.Rows, row)
 	}
 	conn.CloseResult()
-	if got, want := fmt.Sprintf("%v", qrS.Rows), `[[INT64(1) VARCHAR("test 1")] [INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(4) VARCHAR("test 4")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got := fmt.Sprintf("%v", qr.Rows)
+	want := `[[INT64(1) VARCHAR("test 1")] [INT64(2) VARCHAR("test 2")] [INT64(3) VARCHAR("test 3")] [INT64(4) VARCHAR("test 4")]]`
+	assert.Equal(t, want, got)
 
 	//deleting all records from vt_user table
 	exec(t, conn, "delete from vt_user where id > 0")
