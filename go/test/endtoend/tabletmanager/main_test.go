@@ -33,25 +33,24 @@ import (
 )
 
 var (
-	clusterInstance       *cluster.LocalProcessCluster
-	tmClient              *tmc.Client
-	vtParams              mysql.ConnParams
-	masterTabletParams    mysql.ConnParams
-	replicaTabletParams   mysql.ConnParams
-	masterTablet          cluster.Vttablet
-	replicaTablet         cluster.Vttablet
-	rdonlyTablet          cluster.Vttablet
-	replicaTabletGrpcPort int
-	masterTabletGrpcPort  int
-	masterTabletUID       int
-	masterTabletAlias     string
-	hostname              = "localhost"
-	keyspaceName          = "ks"
-	keyspaceShard         = "ks/0"
-	dbName                = "vt_" + keyspaceName
-	username              = "vt_dba"
-	cell                  = "zone1"
-	sqlSchema             = `
+	clusterInstance     *cluster.LocalProcessCluster
+	tmClient            *tmc.Client
+	vtParams            mysql.ConnParams
+	masterTabletParams  mysql.ConnParams
+	replicaTabletParams mysql.ConnParams
+	masterTablet        cluster.Vttablet
+	replicaTablet       cluster.Vttablet
+	rdonlyTablet        cluster.Vttablet
+	replicaUID          int
+	masterUID           int
+	hostname            = "localhost"
+	keyspaceName        = "ks"
+	shardName           = "0"
+	keyspaceShard       = "ks/" + shardName
+	dbName              = "vt_" + keyspaceName
+	username            = "vt_dba"
+	cell                = "zone1"
+	sqlSchema           = `
 	create table t1(
 		id bigint,
 		value varchar(16),
@@ -121,37 +120,31 @@ func TestMain(m *testing.M) {
 
 		// Collect table paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-		var masterTabletPath string
-		var replicaTabletPath string
 		for _, tablet := range tablets {
-			path := fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID)))
 			if tablet.Type == "master" {
-				masterTabletPath = path
-				masterTabletGrpcPort = tablet.GrpcPort
-				masterTabletUID = tablet.TabletUID
 				masterTablet = tablet
 			} else if tablet.Type != "rdonly" {
-				replicaTabletPath = path
-				replicaTabletGrpcPort = tablet.GrpcPort
 				replicaTablet = tablet
 			} else {
 				rdonlyTablet = tablet
 			}
 		}
 
-		masterTabletAlias = fmt.Sprintf("zone1-%d", masterTabletUID)
-
 		// Set mysql tablet params
 		masterTabletParams = mysql.ConnParams{
 			Uname:      username,
 			DbName:     dbName,
-			UnixSocket: masterTabletPath + "/mysql.sock",
+			UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", masterTablet.TabletUID))),
 		}
 		replicaTabletParams = mysql.ConnParams{
 			Uname:      username,
 			DbName:     dbName,
-			UnixSocket: replicaTabletPath + "/mysql.sock",
+			UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", replicaTablet.TabletUID))),
 		}
+
+		// Fixed UIDs for tablet which we will spawn during these tests
+		replicaUID = 62044
+		masterUID = 62344
 
 		// create tablet manager client
 		tmClient = tmc.NewClient()

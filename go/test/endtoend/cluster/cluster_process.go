@@ -46,8 +46,8 @@ type LocalProcessCluster struct {
 	VtctlProcess       VtctlProcess
 
 	// background executable processes
-	topoProcess   EtcdProcess
-	vtctldProcess VtctldProcess
+	TopoProcess   EtcdProcess
+	VtctldProcess VtctldProcess
 	VtgateProcess VtgateProcess
 
 	nextPortForProcess int
@@ -78,11 +78,12 @@ type Shard struct {
 
 // Vttablet stores the properties needed to start a vttablet process
 type Vttablet struct {
-	Type      string
-	TabletUID int
-	HTTPPort  int
-	GrpcPort  int
-	MySQLPort int
+	Type        string
+	TabletUID   int
+	HTTPPort    int
+	GrpcPort    int
+	MySQLPort   int
+	TabletAlias string
 
 	// background executable processes
 	MysqlctlProcess MysqlctlProcess
@@ -96,40 +97,40 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	}
 	cluster.TopoPort = cluster.GetAndReservePort()
 	cluster.TmpDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp_%d", cluster.GetAndReservePort()))
-	cluster.topoProcess = *EtcdProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, "global")
+	cluster.TopoProcess = *EtcdProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, "global")
 	log.Info(fmt.Sprintf("Starting etcd server on port : %d", cluster.TopoPort))
-	if err = cluster.topoProcess.Setup(); err != nil {
+	if err = cluster.TopoProcess.Setup(); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
 	log.Info("Creating topo dirs")
-	if err = cluster.topoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
+	if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
-	if err = cluster.topoProcess.ManageTopoDir("mkdir", "/vitess/"+cluster.Cell); err != nil {
+	if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cluster.Cell); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
 	log.Info("Adding cell info")
-	cluster.VtctlProcess = *VtctlProcessInstance(cluster.topoProcess.Port, cluster.Hostname)
+	cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 	if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
 		log.Error(err)
 		return
 	}
 
-	cluster.vtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.topoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
-	log.Info(fmt.Sprintf("Starting vtctld server on port : %d", cluster.vtctldProcess.Port))
-	cluster.VtctldHTTPPort = cluster.vtctldProcess.Port
-	if err = cluster.vtctldProcess.Setup(cluster.Cell); err != nil {
+	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
+	log.Info(fmt.Sprintf("Starting vtctld server on port : %d", cluster.VtctldProcess.Port))
+	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
+	if err = cluster.VtctldProcess.Setup(cluster.Cell); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
-	cluster.VtctlclientProcess = *VtctlClientProcessInstance("localhost", cluster.vtctldProcess.GrpcPort, cluster.TmpDirectory)
+	cluster.VtctlclientProcess = *VtctlClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
 	return
 }
 
@@ -158,11 +159,13 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		log.Info("Starting shard : " + shardName)
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttable object with reserved ports
+			tabletUID := cluster.GetAndReserveTabletUID()
 			tablet := &Vttablet{
-				TabletUID: cluster.GetAndReserveTabletUID(),
-				HTTPPort:  cluster.GetAndReservePort(),
-				GrpcPort:  cluster.GetAndReservePort(),
-				MySQLPort: cluster.GetAndReservePort(),
+				TabletUID:   tabletUID,
+				HTTPPort:    cluster.GetAndReservePort(),
+				GrpcPort:    cluster.GetAndReservePort(),
+				MySQLPort:   cluster.GetAndReservePort(),
+				TabletAlias: fmt.Sprintf("%s-%d", cluster.Cell, tabletUID),
 			}
 			if i == 0 { // Make the first one as master
 				tablet.Type = "master"
@@ -184,9 +187,9 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.Cell,
 				shardName,
 				keyspace.Name,
-				cluster.vtctldProcess.Port,
+				cluster.VtctldProcess.Port,
 				tablet.Type,
-				cluster.topoProcess.Port,
+				cluster.TopoProcess.Port,
 				cluster.Hostname,
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
@@ -244,7 +247,7 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 		cluster.Cell,
 		cluster.Hostname,
 		"MASTER,REPLICA",
-		cluster.topoProcess.Port,
+		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
 		cluster.VtGateExtraArgs)
 
@@ -290,12 +293,12 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 		}
 	}
 
-	if err = cluster.vtctldProcess.TearDown(); err != nil {
+	if err = cluster.VtctldProcess.TearDown(); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
-	if err = cluster.topoProcess.TearDown(cluster.Cell); err != nil {
+	if err = cluster.TopoProcess.TearDown(cluster.Cell); err != nil {
 		log.Error(err.Error())
 		return
 	}
@@ -322,4 +325,42 @@ func (cluster *LocalProcessCluster) GetAndReserveTabletUID() int {
 
 func getRandomNumber(maxNumber int32, baseNumber int) int {
 	return int(rand.Int31n(maxNumber)) + baseNumber
+}
+
+// GetVtTabletInstance create a new vtTblet object
+func (cluster *LocalProcessCluster) GetVtTabletInstance(UID int) *Vttablet {
+	if UID == 0 {
+		UID = cluster.GetAndReserveTabletUID()
+	}
+	return &Vttablet{
+		TabletUID:   UID,
+		HTTPPort:    cluster.GetAndReservePort(),
+		GrpcPort:    cluster.GetAndReservePort(),
+		MySQLPort:   cluster.GetAndReservePort(),
+		Type:        "replica",
+		TabletAlias: fmt.Sprintf("%s-%010d", cluster.Cell, UID),
+	}
+}
+
+// StartVttablet start a new tablet
+func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatus string,
+	supportBackup bool, cell string, keyspaceName string, hostname string, shardName string) error {
+	tablet.VttabletProcess = *VttabletProcessInstance(
+		tablet.HTTPPort,
+		tablet.GrpcPort,
+		tablet.TabletUID,
+		cell,
+		shardName,
+		keyspaceName,
+		cluster.VtctldProcess.Port,
+		tablet.Type,
+		cluster.TopoProcess.Port,
+		hostname,
+		cluster.TmpDirectory,
+		cluster.VtTabletExtraArgs,
+		cluster.EnableSemiSync)
+
+	tablet.VttabletProcess.SupportBackup = supportBackup
+	tablet.VttabletProcess.ServingStatus = servingStatus
+	return tablet.VttabletProcess.Setup()
 }

@@ -18,7 +18,6 @@ package tabletmanager
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
@@ -30,11 +29,15 @@ import (
 func TestQPS(t *testing.T) {
 	ctx := context.Background()
 
-	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	vtGateConn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer masterConn.Close()
+	defer vtGateConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
 	if err != nil {
@@ -43,11 +46,9 @@ func TestQPS(t *testing.T) {
 	defer replicaConn.Close()
 
 	// Sanity Check
-	exec(t, masterConn, "delete from t1")
-	exec(t, masterConn, "insert into t1(id, value) values(1,'a'), (2,'b')")
+	exec(t, vtGateConn, "delete from t1")
+	exec(t, vtGateConn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
-
-	// replicaTabletAlias := fmt.Sprintf("%s-%d", cell, replicaTablet.TabletUID)
 
 	// Test that VtTabletStreamHealth reports a QPS >0.0.
 	// Therefore, issue several reads first.
@@ -59,16 +60,17 @@ func TestQPS(t *testing.T) {
 	n := 0
 	for n < 15 {
 		n++
-		// exec(t, replicaConn, "select 1 from dual")
-		exec(t, replicaConn, "select * from t1")
+		// Run queries via vtGate so that they are counted.
+		exec(t, vtGateConn, "select * from t1")
 	}
+
 	// This may take up to 5 seconds to become true because we sample the query
 	// counts for the rates only every 5 seconds.
 
-	var qpsPass bool
+	var qpsIncreased bool
 	timeout := time.Now().Add(12 * time.Second)
 	for time.Now().Before(timeout) {
-		result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", masterTabletAlias)
+		result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", masterTablet.TabletAlias)
 
 		var streamHealthResponse querypb.StreamHealthResponse
 
@@ -80,14 +82,10 @@ func TestQPS(t *testing.T) {
 		realTimeStats := streamHealthResponse.GetRealtimeStats()
 		qps := realTimeStats.GetQps()
 		if qps > 0.0 {
-			fmt.Println("*************", qps)
-			qpsPass = true
+			qpsIncreased = true
+			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-
-	if !qpsPass {
-		assert.Fail(t, "qps is not more that 0")
-	}
-
+	assert.True(t, qpsIncreased, "qps should be more that 0")
 }
