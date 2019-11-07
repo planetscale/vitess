@@ -108,8 +108,7 @@ func TestHealthCheck(t *testing.T) {
 	//Init Replica Tablet
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
 
-	// start vttablet process
-	fmt.Println(rTablet.HTTPPort)
+	// start vttablet process, should be in SERVING state as we already have a master
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err, "error should be Nil")
 
@@ -195,10 +194,10 @@ func verifyStreamHealth(t *testing.T, result string) {
 	UID := streamHealthResponse.GetTabletAlias().GetUid()
 	realTimeStats := streamHealthResponse.GetRealtimeStats()
 	secondsBehindMaster := realTimeStats.GetSecondsBehindMaster()
-	fmt.Println("**********", secondsBehindMaster)
 	assert.True(t, serving, "Tablet should be in serving state")
-	// assert.True(t, secondsBehindMaster < 30, "Slave should not be behind master")
 	assert.True(t, UID > 0, "Tablet should contain uid")
+	// secondsBehindMaster varies till 7200 so setting safe limit
+	assert.True(t, secondsBehindMaster < 10000, "Slave should not be behind master")
 }
 
 func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
@@ -304,7 +303,7 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
 
-	// start vttablet process
+	// Start vttablet process, should be in NOT_SERVING state as we already have a master
 	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err, "error should be Nil")
 	err = clusterInstance.StartVttablet(rTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
