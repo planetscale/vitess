@@ -78,12 +78,12 @@ type Shard struct {
 
 // Vttablet stores the properties needed to start a vttablet process
 type Vttablet struct {
-	Type        string
-	TabletUID   int
-	HTTPPort    int
-	GrpcPort    int
-	MySQLPort   int
-	TabletAlias string
+	Type      string
+	TabletUID int
+	HTTPPort  int
+	GrpcPort  int
+	MySQLPort int
+	Alias     string
 
 	// background executable processes
 	MysqlctlProcess MysqlctlProcess
@@ -161,11 +161,11 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			// instantiate vttable object with reserved ports
 			tabletUID := cluster.GetAndReserveTabletUID()
 			tablet := &Vttablet{
-				TabletUID:   tabletUID,
-				HTTPPort:    cluster.GetAndReservePort(),
-				GrpcPort:    cluster.GetAndReservePort(),
-				MySQLPort:   cluster.GetAndReservePort(),
-				TabletAlias: fmt.Sprintf("%s-%d", cluster.Cell, tabletUID),
+				TabletUID: tabletUID,
+				HTTPPort:  cluster.GetAndReservePort(),
+				GrpcPort:  cluster.GetAndReservePort(),
+				MySQLPort: cluster.GetAndReservePort(),
+				Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
 			}
 			if i == 0 { // Make the first one as master
 				tablet.Type = "master"
@@ -194,6 +194,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
 				cluster.EnableSemiSync)
+			// tablet.Alias = tablet.vttabletProcess.TabletPath //TODO ask Arindam
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 			if err = tablet.VttabletProcess.Setup(); err != nil {
@@ -333,12 +334,12 @@ func (cluster *LocalProcessCluster) GetVtTabletInstance(UID int) *Vttablet {
 		UID = cluster.GetAndReserveTabletUID()
 	}
 	return &Vttablet{
-		TabletUID:   UID,
-		HTTPPort:    cluster.GetAndReservePort(),
-		GrpcPort:    cluster.GetAndReservePort(),
-		MySQLPort:   cluster.GetAndReservePort(),
-		Type:        "replica",
-		TabletAlias: fmt.Sprintf("%s-%010d", cluster.Cell, UID),
+		TabletUID: UID,
+		HTTPPort:  cluster.GetAndReservePort(),
+		GrpcPort:  cluster.GetAndReservePort(),
+		MySQLPort: cluster.GetAndReservePort(),
+		Type:      "replica",
+		Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, UID),
 	}
 }
 

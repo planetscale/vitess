@@ -109,6 +109,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
+
 		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, true); err != nil {
 			return 1
 		}
