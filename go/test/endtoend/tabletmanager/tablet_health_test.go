@@ -87,6 +87,8 @@ func TestTabletReshuffle(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", rTablet.Alias)
 	assert.Error(t, err, "cannot perform backup without my.cnf")
 
+	// Reset the VtTabletExtraArgs
+	clusterInstance.VtTabletExtraArgs = []string{}
 	killTablets(t, rTablet)
 }
 
@@ -288,9 +290,10 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	exec(t, replicaConn, "RESET MASTER")
 	exec(t, replicaConn, "RESET SLAVE")
 	exec(t, replicaConn, fmt.Sprintf("SET GLOBAL gtid_purged='%s'", gtid))
-	exec(t, replicaConn, fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", hostname, masterTablet.MySQLPort))
+	exec(t, replicaConn, fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1", hostname, mTablet.MySQLPort))
 	exec(t, replicaConn, "START SLAVE")
 
+	fmt.Println("Stopping mysql ..")
 	// now shutdown all mysqld
 	rTablet.MysqlctlProcess.Stop()
 	mTablet.MysqlctlProcess.Stop()
@@ -301,9 +304,11 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 
 	//Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
+	assert.Nil(t, err, "error should be Nil")
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
+	assert.Nil(t, err, "error should be Nil")
 
-	// Start vttablet process, should be in NOT_SERVING state as we already have a master
+	// Start vttablet process, should be in NOT_SERVING state as mysqld is not running
 	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err, "error should be Nil")
 	err = clusterInstance.StartVttablet(rTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)

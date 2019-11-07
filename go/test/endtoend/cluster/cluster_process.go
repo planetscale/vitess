@@ -194,7 +194,6 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
 				cluster.EnableSemiSync)
-			// tablet.Alias = tablet.vttabletProcess.TabletPath //TODO ask Arindam
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 			if err = tablet.VttabletProcess.Setup(); err != nil {
