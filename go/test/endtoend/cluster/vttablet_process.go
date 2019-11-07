@@ -137,20 +137,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 // WaitForStatus function checks if vttablet process is up and running
 func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
-	resp, err := http.Get(vttablet.VerifyURL)
-	if err != nil {
-		return false
-	}
-	if resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
-		respByte, _ := ioutil.ReadAll(resp.Body)
-		err := json.Unmarshal(respByte, &resultMap)
-		if err != nil {
-			panic(err)
-		}
-		return resultMap["TabletStateName"] == status
-	}
-	return false
+	return vttablet.GetTabletStatus() == status
 }
 
 // GetTabletStatus function checks if vttablet process is up and running
@@ -173,7 +160,7 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 }
 
 // TearDown shuts down the running vttablet service
-func (vttablet *VttabletProcess) TearDown() error {
+func (vttablet *VttabletProcess) TearDown(cleanDir bool) error {
 	if vttablet.proc == nil {
 		fmt.Printf("No process found for vttablet %d", vttablet.TabletUID)
 	}
@@ -183,32 +170,11 @@ func (vttablet *VttabletProcess) TearDown() error {
 	// Attempt graceful shutdown with SIGTERM first
 	vttablet.proc.Process.Signal(syscall.SIGTERM)
 
-	os.RemoveAll(vttablet.Directory)
-
-	select {
-	case err := <-vttablet.exit:
-		vttablet.proc = nil
-		return err
-
-	case <-time.After(10 * time.Second):
-		vttablet.proc.Process.Kill()
-		vttablet.proc = nil
-		return <-vttablet.exit
+	if cleanDir {
+		os.RemoveAll(vttablet.Directory)
+	} else {
+		os.RemoveAll(vttablet.PidFile)
 	}
-}
-
-// Kill shuts down the running vttablet service
-func (vttablet *VttabletProcess) Kill() error {
-	if vttablet.proc == nil {
-		fmt.Printf("No process found for vttablet %d", vttablet.TabletUID)
-	}
-	if vttablet.proc == nil || vttablet.exit == nil {
-		return nil
-	}
-	// Attempt graceful shutdown with SIGTERM first
-	vttablet.proc.Process.Signal(syscall.SIGTERM)
-
-	os.RemoveAll(vttablet.PidFile)
 
 	select {
 	case err := <-vttablet.exit:

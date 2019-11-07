@@ -285,7 +285,7 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 					return
 				}
 
-				if err = tablet.VttabletProcess.TearDown(); err != nil {
+				if err = tablet.VttabletProcess.TearDown(true); err != nil {
 					log.Error(err.Error())
 					return
 				}
