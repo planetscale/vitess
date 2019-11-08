@@ -840,6 +840,15 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 				}
 			}
 		}
+	case sqlparser.KeywordString(sqlparser.COLUMNS):
+		if !show.Table.Qualifier.IsEmpty() {
+			// Explicit keyspace was passed.
+			destKeyspace = show.Table.Qualifier.String()
+		} else {
+			// Fall through to normal handleOther path.
+			break
+		}
+		sql = sqlparser.String(show) + " from " + show.Table.Name.String()
 	case sqlparser.KeywordString(sqlparser.TABLES):
 		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
 			if destKeyspace == "" {
