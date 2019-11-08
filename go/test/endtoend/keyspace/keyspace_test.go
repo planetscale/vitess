@@ -35,6 +35,7 @@ var (
 	keyspaceUnshardedName = "test_ks_unsharded"
 	cell                  = "zone1"
 	hostname              = "localhost"
+	servedTypes           = map[topodata.TabletType]bool{topodata.TabletType_MASTER: true, topodata.TabletType_REPLICA: true, topodata.TabletType_RDONLY: true}
 	sqlSchema             = `create table vt_insert_test (
 								id bigint auto_increment,
 								msg varchar(64),
@@ -134,4 +135,188 @@ func TestGetKeyspace(t *testing.T) {
 
 	assert.Equal(t, keyspace.ShardingColumnName, "keyspace_id")
 	assert.Equal(t, keyspace.ShardingColumnType, topodata.KeyspaceIdType(1))
+}
+
+func TestDeleteKeyspace(t *testing.T) {
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-keyspace=test_delete_keyspace", "-shard=0", "zone1-0000000100", "master")
+
+	// Can't delete keyspace if there are shards present.
+	err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "test_delete_keyspace")
+	assert.NotNil(t, err)
+
+	// Can't delete shard if there are tablets present.
+	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteShard", "-even_if_serving", "test_delete_keyspace/0")
+	assert.NotNil(t, err)
+
+	// Use recursive DeleteShard to remove tablets.
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteShard", "-even_if_serving", "-recursive", "test_delete_keyspace/0")
+	// Now non-recursive DeleteKeyspace should work.
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "test_delete_keyspace")
+
+	// Start over and this time use recursive DeleteKeyspace to do everything.
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace", "-shard=0", "zone1-0000000100", "master")
+
+	// Create the serving/replication entries and check that they exist,
+	//  so we can later check they're deleted.
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", cell, "test_delete_keyspace/0")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", cell, "test_delete_keyspace")
+
+	// Recursive DeleteKeyspace
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", "test_delete_keyspace")
+
+	// Check that everything is gone.
+	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetKeyspace", "test_delete_keyspace")
+	assert.NotNil(t, err)
+	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShard", "test_delete_keyspace/0")
+	assert.NotNil(t, err)
+	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone1-0000000100")
+	assert.NotNil(t, err)
+	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", cell, "test_delete_keyspace/0")
+	assert.NotNil(t, err)
+	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", cell, "test_delete_keyspace")
+	assert.NotNil(t, err)
+}
+
+func TestRemoveKeyspaceCell(t *testing.T) {
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/1")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace", "-shard=0", "zone1-0000000100", "master")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace", "-shard=1", "zone1-0000000101", "master")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace", "-shard=0", "zone2-0000000100", "replica")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace", "-shard=1", "zone2-0000000101", "replica")
+
+	// Create the serving/replication entries and check that they exist,  so we can later check they're deleted.
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace/0")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace/1")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", "zone2", "test_delete_keyspace")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", "zone1", "test_delete_keyspace")
+
+	// Just remove the shard from one cell (including tablets),
+	// but leaving the global records and other cells/shards alone.
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RemoveShardCell", "-recursive", "test_delete_keyspace/0", "zone2")
+
+	// TODO:@Arindam need to have multicell environment to test this
+	// Check that the shard is gone from zone2.
+	//srvKeyspaceZone2 := getSrvKeyspace(t, "zone2", "test_delete_keyspace")
+	//for _, partition := range srvKeyspaceZone2.Partitions {
+	//	assert.Equal(t, len(partition.ShardReferences), 1)
+	//}
+	//
+	srvKeyspaceZone1 := getSrvKeyspace(t, "zone1", "test_delete_keyspace")
+	for _, partition := range srvKeyspaceZone1.Partitions {
+		assert.Equal(t, len(partition.ShardReferences), 2)
+	}
+
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetKeyspace", "test_delete_keyspace")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShard", "test_delete_keyspace/0")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone1-0000000100")
+
+	err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone2-0000000100")
+	assert.NotNil(t, err)
+
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone2-0000000101")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone1", "test_delete_keyspace/0")
+
+	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace/0")
+	assert.NotNil(t, err)
+
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace/1")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", "zone2", "test_delete_keyspace")
+
+	// Add it back to do another test.
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace", "-shard=0", "zone2-0000000100", "replica")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace/0")
+
+	// Now use RemoveKeyspaceCell to remove all shards.
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RemoveKeyspaceCell", "-recursive", "test_delete_keyspace", "zone2")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone1", "test_delete_keyspace/0")
+
+	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace/0")
+	assert.NotNil(t, err)
+
+	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace/1")
+	assert.NotNil(t, err)
+
+	// Clean up
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", "test_delete_keyspace")
+}
+
+func TestShardCountForAllKeyspaces(t *testing.T) {
+	testShardCountForKeyspace(t, keyspaceUnshardedName, 1)
+	testShardCountForKeyspace(t, keyspaceShardedName, 2)
+}
+
+func testShardCountForKeyspace(t *testing.T, keyspace string, count int) {
+	srvKeyspace := getSrvKeyspace(t, cell, keyspace)
+
+	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
+	for _, partition := range srvKeyspace.Partitions {
+		if servedTypes[partition.ServedType] {
+			assert.Equal(t, len(partition.ShardReferences), count)
+		}
+	}
+}
+
+func TestShardNameForAllKeyspaces(t *testing.T) {
+	testShardNameForKeyspace(t, keyspaceUnshardedName, []string{"test_ks_unsharded"})
+	testShardNameForKeyspace(t, keyspaceShardedName, []string{"-80", "80-"})
+}
+
+func testShardNameForKeyspace(t *testing.T, keyspace string, shardNames []string) {
+	srvKeyspace := getSrvKeyspace(t, cell, keyspace)
+
+	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
+	for _, partition := range srvKeyspace.Partitions {
+		if servedTypes[partition.ServedType] {
+			for _, shardRef := range partition.ShardReferences {
+				assert.Contains(t, shardNames, shardRef.Name)
+			}
+		}
+	}
+}
+
+//func TestKeyspaceToShardName(t *testing.T) {
+//	keyByte := getHashByte(527875958493693904)
+//
+//	srvKeyspace := getSrvKeyspace(t, cell, keyspaceShardedName)
+//
+//	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
+//	for _, partition := range srvKeyspace.Partitions {
+//		if servedTypes[partition.ServedType] {
+//			for _, shardRef := range partition.ShardReferences {
+//
+//				if shardRef.Name == "-80" {
+//					assert.True(t,  bytes.Equal(keyByte, shardRef.KeyRange.End))
+//				}
+//			}
+//		}
+//	}
+//}
+//
+//func getHashByte(shardKey uint64) []byte {
+//	var keybytes, hashed [8]byte
+//	binary.BigEndian.PutUint64(keybytes[:], shardKey)
+//	var block3DES cipher.Block
+//	block3DES.Encrypt(hashed[:], keybytes[:])
+//	return []byte(hashed[:])
+//}
+
+func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodata.SrvKeyspace {
+	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
+	assert.Nil(t, err)
+	var srvKeyspace topodata.SrvKeyspace
+
+	err = json.Unmarshal([]byte(output), &srvKeyspace)
+	assert.Nil(t, err)
+	return &srvKeyspace
 }
