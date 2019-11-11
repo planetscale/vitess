@@ -17,6 +17,8 @@ limitations under the License.
 package sequence
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"os"
@@ -34,6 +36,7 @@ var (
 	keyspaceShardedName   = "test_ks_sharded"
 	keyspaceUnshardedName = "test_ks_unsharded"
 	cell                  = "zone1"
+	cell2                 = "zone2"
 	hostname              = "localhost"
 	servedTypes           = map[topodata.TabletType]bool{topodata.TabletType_MASTER: true, topodata.TabletType_REPLICA: true, topodata.TabletType_RDONLY: true}
 	sqlSchema             = `create table vt_insert_test (
@@ -48,11 +51,11 @@ var (
 			1842642426274125671, 1326307661227634652,
 			1761124146422844620, 1661669973250483744,
 			3361397649937244239, 2444880764308344533},
-		"80-": {9767889778372766922, 9742070682920810358,
-			10296850775085416642, 9537430901666854108,
-			10440455099304929791, 11454183276974683945,
-			11185910247776122031, 10460396697869122981,
-			13379616110062597001, 12826553979133932576},
+		//"80-": {9767889778372766922, 9742070682920810358,
+		//	10296850775085416642, 9537430901666854108,
+		//	10440455099304929791, 11454183276974683945,
+		//	11185910247776122031, 10460396697869122981,
+		//	13379616110062597001, 12826553979133932576},
 	}
 )
 
@@ -65,6 +68,10 @@ func TestMain(m *testing.M) {
 
 		// Start topo server
 		if err := clusterForKSTest.StartTopo(); err != nil {
+			return 1
+		}
+
+		if err := clusterForKSTest.VtctlProcess.AddCellInfo(cell2); err != nil {
 			return 1
 		}
 
@@ -202,13 +209,12 @@ func TestRemoveKeyspaceCell(t *testing.T) {
 	// but leaving the global records and other cells/shards alone.
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RemoveShardCell", "-recursive", "test_delete_keyspace/0", "zone2")
 
-	// TODO:@Arindam need to have multicell environment to test this
-	// Check that the shard is gone from zone2.
-	//srvKeyspaceZone2 := getSrvKeyspace(t, "zone2", "test_delete_keyspace")
-	//for _, partition := range srvKeyspaceZone2.Partitions {
-	//	assert.Equal(t, len(partition.ShardReferences), 1)
-	//}
-	//
+	//Check that the shard is gone from zone2.
+	srvKeyspaceZone2 := getSrvKeyspace(t, "zone2", "test_delete_keyspace")
+	for _, partition := range srvKeyspaceZone2.Partitions {
+		assert.Equal(t, len(partition.ShardReferences), 1)
+	}
+
 	srvKeyspaceZone1 := getSrvKeyspace(t, "zone1", "test_delete_keyspace")
 	for _, partition := range srvKeyspaceZone1.Partitions {
 		assert.Equal(t, len(partition.ShardReferences), 2)
@@ -285,31 +291,41 @@ func testShardNameForKeyspace(t *testing.T, keyspace string, shardNames []string
 	}
 }
 
-//func TestKeyspaceToShardName(t *testing.T) {
-//	keyByte := getHashByte(527875958493693904)
-//
-//	srvKeyspace := getSrvKeyspace(t, cell, keyspaceShardedName)
-//
-//	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
-//	for _, partition := range srvKeyspace.Partitions {
-//		if servedTypes[partition.ServedType] {
-//			for _, shardRef := range partition.ShardReferences {
-//
-//				if shardRef.Name == "-80" {
-//					assert.True(t,  bytes.Equal(keyByte, shardRef.KeyRange.End))
-//				}
-//			}
-//		}
-//	}
-//}
-//
-//func getHashByte(shardKey uint64) []byte {
-//	var keybytes, hashed [8]byte
-//	binary.BigEndian.PutUint64(keybytes[:], shardKey)
-//	var block3DES cipher.Block
-//	block3DES.Encrypt(hashed[:], keybytes[:])
-//	return []byte(hashed[:])
-//}
+func TestKeyspaceToShardName(t *testing.T) {
+	var id []byte
+	srvKeyspace := getSrvKeyspace(t, cell, keyspaceShardedName)
+
+	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
+	for _, partition := range srvKeyspace.Partitions {
+		if partition.ServedType == topodata.TabletType_MASTER {
+			for _, shardRef := range partition.ShardReferences {
+				shardKIDs := shardKIdMap[shardRef.Name]
+				for _, kid := range shardKIDs {
+					id = packKeyspaceID(kid)
+					assert.True(t, bytes.Compare(shardRef.KeyRange.Start, id) <= 0 &&
+						(len(shardRef.KeyRange.End) == 0 || bytes.Compare(id, shardRef.KeyRange.End) < 0))
+				}
+			}
+		}
+	}
+
+	srvKeyspace = getSrvKeyspace(t, cell, keyspaceUnshardedName)
+
+	for _, partition := range srvKeyspace.Partitions {
+		if partition.ServedType == topodata.TabletType_MASTER {
+			for _, shardRef := range partition.ShardReferences {
+				assert.Equal(t, shardRef.Name, keyspaceUnshardedName)
+			}
+		}
+	}
+}
+
+// packKeyspaceID packs this into big-endian and returns byte[] to do a byte-wise comparison.
+func packKeyspaceID(keyspaceID uint64) []byte {
+	var keybytes, hashed [8]byte
+	binary.BigEndian.PutUint64(keybytes[:], keyspaceID)
+	return (hashed[:])
+}
 
 func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodata.SrvKeyspace {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
