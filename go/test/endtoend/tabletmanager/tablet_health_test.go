@@ -56,7 +56,7 @@ func TestTabletReshuffle(t *testing.T) {
 
 	//Create new tablet
 	replicaUID := 62044
-	rTablet := clusterInstance.GetVtTabletInstance(replicaUID)
+	rTablet := clusterInstance.GetVttabletInstance(replicaUID)
 
 	//Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
@@ -97,7 +97,7 @@ func TestHealthCheck(t *testing.T) {
 	// (for the replica, we let vttablet do the InitTablet)
 	ctx := context.Background()
 
-	rTablet := clusterInstance.GetVtTabletInstance(replicaUID)
+	rTablet := clusterInstance.GetVttabletInstance(replicaUID)
 
 	// Start Mysql Processes and return connection
 	replicaConn, err := cluster.StartMySQL(ctx, rTablet, username, clusterInstance.TmpDirectory)
@@ -260,13 +260,12 @@ func waitForTabletStatus(tablet cluster.Vttablet, status string) {
 
 func TestNoMysqlHealthCheck(t *testing.T) {
 	// This test starts a vttablet with no mysql port, while mysql is down.
-
 	// It makes sure vttablet will start properly and be unhealthy.
 	// Then we start mysql, and make sure vttablet becomes healthy.
 	ctx := context.Background()
 
-	rTablet := clusterInstance.GetVtTabletInstance(replicaUID)
-	mTablet := clusterInstance.GetVtTabletInstance(masterUID)
+	rTablet := clusterInstance.GetVttabletInstance(replicaUID)
+	mTablet := clusterInstance.GetVttabletInstance(masterUID)
 
 	// Start Mysql Processes and return connection
 	masterConn, err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)

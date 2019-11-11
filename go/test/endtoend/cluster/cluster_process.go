@@ -158,7 +158,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		}
 		log.Info("Starting shard : " + shardName)
 		for i := 0; i < totalTabletsRequired; i++ {
-			// instantiate vttable object with reserved ports
+			// instantiate vttablet object with reserved ports
 			tabletUID := cluster.GetAndReserveTabletUID()
 			tablet := &Vttablet{
 				TabletUID: tabletUID,
@@ -327,8 +327,8 @@ func getRandomNumber(maxNumber int32, baseNumber int) int {
 	return int(rand.Int31n(maxNumber)) + baseNumber
 }
 
-// GetVtTabletInstance create a new vtTblet object
-func (cluster *LocalProcessCluster) GetVtTabletInstance(UID int) *Vttablet {
+// GetVttabletInstance create a new vttablet object
+func (cluster *LocalProcessCluster) GetVttabletInstance(UID int) *Vttablet {
 	if UID == 0 {
 		UID = cluster.GetAndReserveTabletUID()
 	}
