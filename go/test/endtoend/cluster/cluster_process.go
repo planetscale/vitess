@@ -123,10 +123,10 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		return
 	}
 
-	cluster.vtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.topoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
-	log.Info(fmt.Sprintf("Starting vtctld server on port : %d", cluster.vtctldProcess.Port))
-	cluster.VtctldHTTPPort = cluster.vtctldProcess.Port
-	if err = cluster.vtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
+	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
+	log.Info(fmt.Sprintf("Starting vtctld server on port : %d", cluster.VtctldProcess.Port))
+	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
+	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
 
 		log.Error(err.Error())
 		return
@@ -304,7 +304,7 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 					return
 				}
 
-				if err = tablet.VttabletProcess.TearDown(); err != nil {
+				if err = tablet.VttabletProcess.TearDown(true); err != nil {
 					log.Error(err.Error())
 					return
 				}
