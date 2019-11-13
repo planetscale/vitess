@@ -7,7 +7,7 @@
 	    "region_map": "/home/deepthi/go/src/vitess.io/vitess/examples/local/countries.json",
 	    "region_bytes": "1",
 	    "table":        "id_ks_map",
-	    "from":         "id,region",
+	    "from":         "id,country",
 	    "to":           "keyspace_id"
 	},
 	"owner": "customer"

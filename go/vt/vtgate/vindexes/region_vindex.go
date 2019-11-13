@@ -21,13 +21,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
@@ -118,15 +115,6 @@ func (rv *RegionVindex) MapMulti(vcursor VCursor, rowsColValues [][]sqltypes.Val
 		}
 		dest := append(r, h...)
 		destinations = append(destinations, key.DestinationKeyspaceID(dest))
-
-		// now replace country with region in row
-		rVal, err := sqltypes.NewValue(querypb.Type_UINT64, []byte(strconv.FormatUint(rn, 10)))
-		if err != nil {
-			log.Infof("Error from vindex: %v while converting region %v", err, rn)
-			destinations = append(destinations, key.DestinationNone{})
-			continue
-		}
-		row[1] = rVal
 	}
 	return destinations, nil
 }
