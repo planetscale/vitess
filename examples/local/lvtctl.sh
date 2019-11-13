@@ -15,5 +15,5 @@
 # limitations under the License.
 
 # This is a convenience script to run vtctlclient against the local example.
-
+source ./env.sh
 exec vtctlclient -server localhost:15999 "$@"

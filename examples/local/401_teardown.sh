@@ -22,19 +22,14 @@ set -e
 # shellcheck disable=SC2128
 script_root=$(dirname "${BASH_SOURCE}")
 
-./vtgate-down.sh
+./vtgate.sh stop
 
 for TABLET in 100 200 300 400; do
- ./lvtctl.sh GetTablet zone1-$TABLET >/dev/null 2>&1 && CELL=zone1 UID_BASE=$TABLET "$script_root/vttablet-down.sh"
+ ./lvtctl.sh GetTablet zone1-$TABLET >/dev/null 2>&1 && CELL=zone1 UID_BASE=$TABLET ./vttablet.sh stop
 done;
 
-./vtctld-down.sh
-
-if [ "${TOPO}" = "zk2" ]; then
-    CELL=zone1 "$script_root/zk-down.sh"
-else
-    CELL=zone1 "$script_root/etcd-down.sh"
-fi
+./vtctld.sh stop
+./etcd.sh stop
 
 # pedantic check: grep for any remaining processes
 

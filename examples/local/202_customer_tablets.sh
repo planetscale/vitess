@@ -19,15 +19,18 @@
 # old (commerce) and new (customer)
 
 set -e
+set -x
 
 # shellcheck disable=SC2128
 script_root=$(dirname "${BASH_SOURCE}")
 
-CELL=zone1 KEYSPACE=customer UID_BASE=200 "$script_root/vttablet-up.sh"
+for uid in 200 201 202; do
+ CELL=zone1 KEYSPACE=commerce uid=$uid ./mysqlctl.sh start
+ CELL=zone1 KEYSPACE=commerce uid=$uid ./vttablet.sh start
+done
 
 ./lvtctl.sh InitShardMaster -force customer/0 zone1-200
 ./lvtctl.sh CopySchemaShard -tables customer,corder commerce/0 customer/0
 ./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_vsplit.json commerce
 ./lvtctl.sh ApplyVSchema -vschema_file vschema_customer_vsplit.json customer
 
-disown -a

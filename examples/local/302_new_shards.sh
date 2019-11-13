@@ -22,8 +22,10 @@ set -e
 # shellcheck disable=SC2128
 script_root=$(dirname "${BASH_SOURCE}")
 
-SHARD=-80 CELL=zone1 KEYSPACE=customer UID_BASE=300 "$script_root/vttablet-up.sh"
-SHARD=80- CELL=zone1 KEYSPACE=customer UID_BASE=400 "$script_root/vttablet-up.sh"
+SHARD=-80 CELL=zone1 KEYSPACE=customer UID_BASE=300 ./vttablet.sh init
+SHARD=80- CELL=zone1 KEYSPACE=customer UID_BASE=400 ./vttablet.sh init
+SHARD=-80 CELL=zone1 KEYSPACE=customer UID_BASE=300 ./vttablet.sh start
+SHARD=80- CELL=zone1 KEYSPACE=customer UID_BASE=400 ./vttablet.sh start
 
 ./lvtctl.sh InitShardMaster -force customer/-80 zone1-300
 ./lvtctl.sh InitShardMaster -force customer/80- zone1-400

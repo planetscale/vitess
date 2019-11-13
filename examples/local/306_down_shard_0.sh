@@ -20,6 +20,4 @@ set -e
 # shellcheck disable=SC2128
 script_root=$(dirname "${BASH_SOURCE}")
 
-CELL=zone1 UID_BASE=200 "$script_root/vttablet-down.sh"
-
-disown -a
+CELL=zone1 UID_BASE=200 ./vttablet.sh stop

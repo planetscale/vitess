@@ -27,18 +27,25 @@ if [[ $EUID -eq 0 ]]; then
    exit 1
 fi
 
-# start topo server
-if [ "${TOPO}" = "zk2" ]; then
-    CELL=zone1 "$script_root/zk-up.sh"
-else
-    CELL=zone1 "$script_root/etcd-up.sh"
-fi
+# Initialize topo server and then start
+CELL=zone1 ./etcd.sh start
 
 # start vtctld
-CELL=zone1 "$script_root/vtctld-up.sh"
+CELL=zone1 ./vtctld.sh start
 
 # start vttablets for keyspace commerce
-CELL=zone1 KEYSPACE=commerce UID_BASE=100 "$script_root/vttablet-up.sh"
+# TODO: should we split this into init and start, and run init in parallel?
+# TODO: Split into mysqlctld and vttablet?
+
+for uid in 100 101 102; do
+ CELL=zone1 KEYSPACE=commerce uid=$uid ./mysqlctl.sh start
+ CELL=zone1 KEYSPACE=commerce uid=$uid ./vttablet.sh start
+done
+
+echo "Tablets are up!";
+
+# Todo: wait for tablets to be listening
+
 
 # set one of the replicas to master
 ./lvtctl.sh InitShardMaster -force commerce/0 zone1-100
@@ -50,6 +57,4 @@ CELL=zone1 KEYSPACE=commerce UID_BASE=100 "$script_root/vttablet-up.sh"
 ./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
 
 # start vtgate
-CELL=zone1 "$script_root/vtgate-up.sh"
-
-disown -a
+CELL=zone1 ./vtgate.sh start
