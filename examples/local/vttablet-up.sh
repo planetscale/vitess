@@ -113,7 +113,6 @@ for uid_index in $uids; do
     -init_shard $shard \
     -init_tablet_type $tablet_type \
     -health_check_interval 5s \
-    -enable_semi_sync \
     -enable_replication_reporter \
     -backup_storage_implementation file \
     -file_backup_storage_root $VTDATAROOT/backups \

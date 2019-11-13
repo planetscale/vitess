@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -495,6 +496,7 @@ func (ins *Insert) processPrimary(vcursor VCursor, vindexColumnsKeys [][]sqltype
 		case key.DestinationNone:
 			// No valid keyspace id, we may return an error.
 			if ins.Opcode != InsertShardedIgnore {
+				log.Infof("vindexColumnsKeys: %v, i: %v", vindexColumnsKeys, i)
 				return nil, fmt.Errorf("could not map %v to a keyspace id", vindexColumnsKeys[i])
 			}
 		default:

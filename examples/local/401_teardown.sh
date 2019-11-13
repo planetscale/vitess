@@ -24,8 +24,8 @@ script_root=$(dirname "${BASH_SOURCE}")
 
 ./vtgate-down.sh
 
-for TABLET in 100 200 300 400; do
- ./lvtctl.sh GetTablet zone1-$TABLET >/dev/null 2>&1 && CELL=zone1 UID_BASE=$TABLET "$script_root/vttablet-down.sh"
+for TABLET in 100 200 300 400 500; do
+ ./lvtctl.sh GetTablet zone1-$TABLET >/dev/null 2>&1 && CELL=zone1 UID_BASE=$TABLET "$script_root/vttablet-down.sh" 0
 done;
 
 ./vtctld-down.sh

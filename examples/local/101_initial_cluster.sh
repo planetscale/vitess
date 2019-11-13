@@ -38,16 +38,26 @@ fi
 CELL=zone1 "$script_root/vtctld-up.sh"
 
 # start vttablets for keyspace commerce
-CELL=zone1 KEYSPACE=commerce UID_BASE=100 "$script_root/vttablet-up.sh"
+TABLETS_UIDS=0 CELL=zone1 KEYSPACE=lookup UID_BASE=100 "$script_root/vttablet-up.sh"
+TABLETS_UIDS=0 SHARD=-40 CELL=zone1 KEYSPACE=main UID_BASE=200 "$script_root/vttablet-up.sh"
+TABLETS_UIDS=0 SHARD=40-80 CELL=zone1 KEYSPACE=main UID_BASE=300 "$script_root/vttablet-up.sh"
+TABLETS_UIDS=0 SHARD=80-c0 CELL=zone1 KEYSPACE=main UID_BASE=400 "$script_root/vttablet-up.sh"
+TABLETS_UIDS=0 SHARD=c0- CELL=zone1 KEYSPACE=main UID_BASE=500 "$script_root/vttablet-up.sh"
 
 # set one of the replicas to master
-./lvtctl.sh InitShardMaster -force commerce/0 zone1-100
+./lvtctl.sh InitShardMaster -force lookup/0 zone1-100
+./lvtctl.sh InitShardMaster -force main/-40 zone1-200
+./lvtctl.sh InitShardMaster -force main/40-80 zone1-300
+./lvtctl.sh InitShardMaster -force main/80-c0 zone1-400
+./lvtctl.sh InitShardMaster -force main/c0- zone1-500
 
 # create the schema
-./lvtctl.sh ApplySchema -sql-file create_commerce_schema.sql commerce
+./lvtctl.sh ApplySchema -sql-file create_lookup_schema.sql lookup
+./lvtctl.sh ApplySchema -sql-file create_customer_schema.sql main
 
 # create the vschema
-./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
+./lvtctl.sh ApplyVSchema -vschema_file lookup_vschema.json lookup
+./lvtctl.sh ApplyVSchema -vschema_file customer_vschema.json main
 
 # start vtgate
 CELL=zone1 "$script_root/vtgate-up.sh"

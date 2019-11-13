@@ -1,0 +1,10 @@
+{
+  "sharded": false,
+  "tables": {
+      "id_ks_map": {
+      },
+      "customer_seq": {
+	  "type": "sequence"
+      }
+    }
+}
