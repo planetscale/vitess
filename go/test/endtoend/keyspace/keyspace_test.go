@@ -45,6 +45,24 @@ var (
 								keyspace_id bigint(20) unsigned NOT NULL,
 								primary key (id)
 								) Engine=InnoDB`
+	vSchema = `{
+      "sharded": true,
+      "vindexes": {
+        "hash_index": {
+          "type": "hash"
+        }
+      },
+      "tables": {
+        "vt_insert_test": {
+           "column_vindexes": [
+            {
+              "column": "keyspace_id",
+              "name": "hash_index"
+            }
+          ] 
+        }
+      }
+	}`
 	shardKIdMap = map[string][]uint64{
 		"-80": {527875958493693904, 626750931627689502,
 			345387386794260318, 332484755310826578,
@@ -79,11 +97,9 @@ func TestMain(m *testing.M) {
 		keyspaceSharded := &cluster.Keyspace{
 			Name:      keyspaceShardedName,
 			SchemaSQL: sqlSchema,
+			VSchema:   vSchema,
 		}
 		if err := clusterForKSTest.StartKeyspace(*keyspaceSharded, []string{"-80", "80-"}, 1, false); err != nil {
-			return 1
-		}
-		if err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("SetKeyspaceShardingInfo", "-force", keyspaceShardedName, "keyspace_id", "uint64"); err != nil {
 			return 1
 		}
 		if err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceShardedName); err != nil {
