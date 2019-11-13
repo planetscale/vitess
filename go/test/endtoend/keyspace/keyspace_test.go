@@ -138,6 +138,34 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	assert.Contains(t, strings.Split(output, "\n"), keyspaceShardedName)
 }
 
+func TestGetSrvKeyspacePartitions(t *testing.T) {
+	shardedSrvKeyspace := getSrvKeyspace(t, cell, keyspaceShardedName)
+	otherShardRefFound := false
+	for _, partition := range shardedSrvKeyspace.Partitions {
+		if servedTypes[partition.ServedType] {
+			for _, shardRef := range partition.ShardReferences {
+				assert.True(t, shardRef.Name == "-80" || shardRef.Name == "80-")
+			}
+		} else {
+			otherShardRefFound = true
+		}
+	}
+	assert.True(t, !otherShardRefFound)
+
+	unShardedSrvKeyspace := getSrvKeyspace(t, cell, keyspaceUnshardedName)
+	otherShardRefFound = false
+	for _, partition := range unShardedSrvKeyspace.Partitions {
+		if servedTypes[partition.ServedType] {
+			for _, shardRef := range partition.ShardReferences {
+				assert.True(t, shardRef.Name == keyspaceUnshardedName)
+			}
+		} else {
+			otherShardRefFound = true
+		}
+	}
+	assert.True(t, !otherShardRefFound)
+}
+
 func TestShardNames(t *testing.T) {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, keyspaceShardedName)
 	assert.Nil(t, err)
