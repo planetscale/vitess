@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -54,6 +55,7 @@ const (
 //threadParams is set of params passed into read and write threads
 type threadParams struct {
 	name                       string
+	writable                   bool
 	quit                       bool
 	rpcs                       int        // Number of queries successfully executed.
 	errors                     int        // Number of failed queries.
@@ -63,12 +65,19 @@ type threadParams struct {
 	rpcsSoFar                  int        // Number of RPCs at the time a notification was requested
 	i                          int        //
 	commitErrors               int
-	executeFunction            func(t *testing.T, conn *mysql.Conn) error
+	executeFunction            func(c *threadParams, conn *mysql.Conn) error
 }
 
-func (c *threadParams) threadRun(t *testing.T, conn *mysql.Conn) {
+func (c *threadParams) threadRun() {
+	c.waitForNotification = make(chan bool)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		log.Error(err.Error())
+	}
+	defer conn.Close()
 	for !c.quit {
-		err := c.executeFunction(t, conn)
+		err = c.executeFunction(c, conn)
 		if err != nil {
 			c.errors++
 			log.Error(err.Error())
@@ -92,51 +101,58 @@ func (c *threadParams) setNotifyAfterNSuccessfulRpcs(n int) {
 	c.notifyLock.Lock()
 	c.notifyAfterNSuccessfulRpcs = n
 	c.rpcsSoFar = c.rpcs
-	c.notifyLock.Lock()
+	c.notifyLock.Unlock()
 }
 
 func (c *threadParams) stop() {
 	c.quit = true
 }
 
-func (c *threadParams) readExecute(t *testing.T, conn *mysql.Conn) error {
-	qr, error := exec(t, conn, fmt.Sprintf("SELECT * FROM buffer WHERE id = %d", criticalReadRowID))
-	t.Log("num of rows returned", len(qr.Rows))
-	return error
+func readExecute(c *threadParams, conn *mysql.Conn) error {
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM buffer WHERE id = %d", criticalReadRowID), 1000, true)
+	fmt.Println(qr)
+	return err
 }
 
-func (c *threadParams) updateExecute(t *testing.T, conn *mysql.Conn) error {
+func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	attempts := c.i
 	c.i++
 	commitStarted := false
-	exec(t, conn, "begin")
+	fmt.Printf("\nRPCS : %d,RPCS_SO_FAR : %d,NOTIFY : %d", c.rpcs, c.rpcsSoFar, c.notifyAfterNSuccessfulRpcs)
+	conn.ExecuteFetch("begin", 1000, true)
 	// Do not use a bind variable for "msg" to make sure that the value shows
 	// up in the logs.
-	qr, err := exec(t, conn, fmt.Sprintf("UPDATE buffer SET msg=\\'update %d\\' WHERE id = %d", attempts, updateRowID))
+	_, err := conn.ExecuteFetch(fmt.Sprintf("UPDATE buffer SET msg='update %d' WHERE id = %d", attempts, updateRowID), 1000, true)
 	// Sleep between [0, 1] seconds to prolong the time the transaction is in
 	// flight. This is more realistic because applications are going to keep
 	// their transactions open for longer as well.
 	time.Sleep(time.Duration(rand.Int31n(1000)) * time.Millisecond)
 
 	commitStarted = true
-	t.Logf("update %d affected %d rows", attempts, len(qr.Rows))
-	exec(t, conn, "commit")
+	fmt.Printf("update %d affected", attempts)
+	conn.ExecuteFetch("commit", 1000, true)
 	if err != nil {
-		_, errRollback := exec(t, conn, "rollback")
+		_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
 		if errRollback != nil {
-			t.Log("Error in rollback", errRollback.Error())
+			fmt.Print("Error in rollback", errRollback.Error())
 		}
-	}
-	if !commitStarted {
-		t.Logf("UPDATE %d failed before COMMIT. This should not happen.Re-raising exception.", attempts)
-		err = errors.New("UPDATE failed before COMMIT")
-		return err
-	}
-	c.commitErrors++
-	if c.commitErrors >= 1 {
-		return err
+
+		if !commitStarted {
+			fmt.Printf("UPDATE %d failed before COMMIT. This should not happen.Re-raising exception.", attempts)
+			err = errors.New("UPDATE failed before COMMIT")
+			return err
+		}
+		c.commitErrors++
+		if c.commitErrors > 1 {
+			return err
+		}
+		fmt.Printf("UPDATE %d failed during COMMIT. This is okay once because we do not support buffering it. err: %s", attempts, err.Error())
 	}
 	return err
+}
+
+func (c *threadParams) getCommitErrors() int {
+	return c.commitErrors
 }
 
 func TestMain(m *testing.M) {
@@ -196,7 +212,50 @@ func TestBuffer(t *testing.T) {
 	defer conn.Close()
 
 	// Insert two rows for the later threads (critical read, update).
-	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "critical read"))
-	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "update"))
+	_, err1 := exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
+	if err1 != nil {
+		t.Fatal("ERROR IN QUERY")
+	}
+	_, err2 := exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
+	if err2 != nil {
+		t.Fatal("ERROR IN QUERY")
+	}
+
+	//Start both threads.
+	var wg = &sync.WaitGroup{}
+	readThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: readExecute}
+	wg.Add(1)
+	go readThreadInstance.threadRun()
+	fmt.Println("IN MAIN FUNCTION AFTER READ THREAD")
+	updateThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: updateExecute, i: 1, commitErrors: 0}
+	wg.Add(1)
+	go updateThreadInstance.threadRun()
+	fmt.Println("IN MAIN FUNCTION AFTER UPDATE THREAD")
+
+	readThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
+	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
+
+	<-readThreadInstance.waitForNotification
+	<-updateThreadInstance.waitForNotification
+
+	// Execute the failover.
+	readThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
+	readThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
+
+	//reparent call
+	clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+		fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
+		"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
+
+	<-readThreadInstance.waitForNotification
+	<-updateThreadInstance.waitForNotification
+
+	readThreadInstance.stop()
+	updateThreadInstance.stop()
+
+	wg.Wait()
+
+	assert.Equal(t, 0, readThreadInstance.errors)
+	assert.Equal(t, 0, updateThreadInstance.errors)
 
 }
