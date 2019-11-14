@@ -286,76 +286,10 @@ func TestBuffer(t *testing.T) {
 		if err != nil {
 			panic(err)
 		}
-		object := reflect.ValueOf(resultMap["BufferLastRequestsInFlightMax"])
-		if object.Kind() == reflect.Map {
-			for _, key := range object.MapKeys() {
-				println("LABEL :", label)
-				if strings.Contains(key.String(), label) {
-					v := object.MapIndex(key)
-					switch v.Kind() {
-					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-						println("VAL IN INT :", v.Int())
-						inFlightMax = int(v.Int())
-					case reflect.String:
-						inFlightMax, err = strconv.Atoi(v.String())
-						if err != nil {
-							t.Fatal(err.Error())
-						}
-					}
-				}
-			}
-		}
-		objectHealthChkMasterPromoted := reflect.ValueOf(resultMap["HealthcheckMasterPromoted"])
-		if objectHealthChkMasterPromoted.Kind() == reflect.Map {
-			for _, key := range objectHealthChkMasterPromoted.MapKeys() {
-				if strings.Contains(key.String(), label) {
-					v := objectHealthChkMasterPromoted.MapIndex(key)
-					switch v.Kind() {
-					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-						masterPromotedCount = int(v.Int())
-					case reflect.String:
-						masterPromotedCount, err = strconv.Atoi(v.String())
-						if err != nil {
-							t.Fatal(err.Error())
-						}
-					}
-				}
-			}
-		}
-		objectBufferFailoverDurationMs := reflect.ValueOf(resultMap["BufferFailoverDurationSumMs"])
-		if objectBufferFailoverDurationMs.Kind() == reflect.Map {
-			for _, key := range objectBufferFailoverDurationMs.MapKeys() {
-				if strings.Contains(key.String(), label) {
-					v := objectBufferFailoverDurationMs.MapIndex(key)
-					switch v.Kind() {
-					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-						durationMs = int(v.Int())
-					case reflect.String:
-						durationMs, err = strconv.Atoi(v.String())
-						if err != nil {
-							t.Fatal(err.Error())
-						}
-					}
-				}
-			}
-		}
-		objectBufferStops := reflect.ValueOf(resultMap["BufferStops"])
-		if objectBufferStops.Kind() == reflect.Map {
-			for _, key := range objectBufferStops.MapKeys() {
-				if strings.Contains(key.String(), "NewMasterSeen") {
-					v := objectBufferStops.MapIndex(key)
-					switch v.Kind() {
-					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-						bufferingStops = int(v.Int())
-					case reflect.String:
-						bufferingStops, err = strconv.Atoi(v.String())
-						if err != nil {
-							t.Fatal(err.Error())
-						}
-					}
-				}
-			}
-		}
+		inFlightMax = getVarFromVtgate(t, label, "BufferLastRequestsInFlightMax", resultMap)
+		masterPromotedCount = getVarFromVtgate(t, label, "HealthcheckMasterPromoted", resultMap)
+		durationMs = getVarFromVtgate(t, label, "BufferFailoverDurationSumMs", resultMap)
+		bufferingStops = getVarFromVtgate(t, "NewMasterSeen", "BufferStops", resultMap)
 	}
 	if inFlightMax == 0 {
 		// Missed buffering is okay when we observed the failover during the
@@ -384,4 +318,27 @@ func TestBuffer(t *testing.T) {
 	println("buffering stops", bufferingStops)
 	wg.Wait()
 
+}
+
+func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[string]interface{}) int {
+	paramVal := 0
+	var err error
+	object := reflect.ValueOf(resultMap["\""+param+"\""])
+	if object.Kind() == reflect.Map {
+		for _, key := range object.MapKeys() {
+			if strings.Contains(key.String(), label) {
+				v := object.MapIndex(key)
+				switch v.Kind() {
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+					paramVal = int(v.Int())
+				case reflect.String:
+					paramVal, err = strconv.Atoi(v.String())
+					if err != nil {
+						t.Fatal(err.Error())
+					}
+				}
+			}
+		}
+	}
+	return paramVal
 }
