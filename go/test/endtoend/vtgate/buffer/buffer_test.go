@@ -18,11 +18,17 @@ package buffer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"os"
+	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -45,6 +51,7 @@ var (
 									msg VARCHAR(64) NOT NULL,
 									PRIMARY KEY (id)
 								) Engine=InnoDB`
+	wg = &sync.WaitGroup{}
 )
 
 const (
@@ -90,12 +97,12 @@ func (c *threadParams) threadRun() {
 		c.notifyLock.Lock()
 		if c.notifyAfterNSuccessfulRpcs != 0 && c.rpcs >= (c.notifyAfterNSuccessfulRpcs+c.rpcsSoFar) {
 			c.waitForNotification <- true
-			println("quit : " + fmt.Sprintf("%t", c.quit))
 			c.notifyAfterNSuccessfulRpcs = 0
 		}
 		c.notifyLock.Unlock()
 		time.Sleep(10 * time.Millisecond)
 	}
+	wg.Done()
 }
 
 func (c *threadParams) setNotifyAfterNSuccessfulRpcs(n int) {
@@ -107,13 +114,11 @@ func (c *threadParams) setNotifyAfterNSuccessfulRpcs(n int) {
 
 func (c *threadParams) stop() {
 	c.quit = true
+	println("quit : " + fmt.Sprintf("%t", c.quit))
 }
 
 func readExecute(c *threadParams, conn *mysql.Conn) error {
 	_, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM buffer WHERE id = %d", criticalReadRowID), 1000, true)
-
-	fmt.Printf("\n READ thread : RPCS : %d,RPCS_SO_FAR : %d,NOTIFY : %d\n", c.rpcs, c.rpcsSoFar, c.notifyAfterNSuccessfulRpcs)
-
 	return err
 }
 
@@ -121,9 +126,6 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	attempts := c.i
 	c.i++
 	commitStarted := false
-
-	fmt.Printf("\n UPDATE thread : RPCS : %d,RPCS_SO_FAR : %d,NOTIFY : %d\n", c.rpcs, c.rpcsSoFar, c.notifyAfterNSuccessfulRpcs)
-
 	conn.ExecuteFetch("begin", 1000, true)
 	// Do not use a bind variable for "msg" to make sure that the value shows
 	// up in the logs.
@@ -202,10 +204,13 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
+func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	return qr, err
+	if err != nil {
+		t.Fatal(err)
+	}
+	return qr
 }
 
 func TestBuffer(t *testing.T) {
@@ -217,43 +222,26 @@ func TestBuffer(t *testing.T) {
 	defer conn.Close()
 
 	// Insert two rows for the later threads (critical read, update).
-	_, err1 := exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
-	if err1 != nil {
-		t.Fatal("ERROR IN QUERY")
-	}
-	_, err2 := exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
-	if err2 != nil {
-		t.Fatal("ERROR IN QUERY")
-	}
+	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
+	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
 
 	//Start both threads.
-	var wg = &sync.WaitGroup{}
 	readThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: readExecute}
 	wg.Add(1)
 	go readThreadInstance.threadRun()
-	fmt.Println("IN MAIN FUNCTION AFTER READ THREAD")
 	updateThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: updateExecute, i: 1, commitErrors: 0}
 	wg.Add(1)
 	go updateThreadInstance.threadRun()
-	fmt.Println("IN MAIN FUNCTION AFTER UPDATE THREAD")
 
 	readThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
 
-	// b := <-readThreadInstance.waitForNotification
-	// if b {
-	// 	fmt.Println("READ NOTIFICATION COMPLETE")
-	// }
-	// b = <-updateThreadInstance.waitForNotification
-	// if b {
-	// 	fmt.Println("UPDATE NOTIFICATION COMPLETE")
-	// }
-	fmt.Println("READ NOTIFICATION STARTED 2")
-	fmt.Println("UPDATE NOTIFICATION STARTED 2")
+	println("before read thread 2")
+	println("before update thread 2")
 	<-readThreadInstance.waitForNotification
-	fmt.Println("READ NOTIFICATION COMPLETE 2")
+	println("after read thread 2")
 	<-updateThreadInstance.waitForNotification
-	fmt.Println("UPDATE NOTIFICATION COMPLETE 2")
+	println("after update thread 2")
 
 	// Execute the failover.
 	readThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
@@ -264,12 +252,12 @@ func TestBuffer(t *testing.T) {
 		fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
 		"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
 
-	fmt.Println("READ NOTIFICATION STARTED 10")
-	fmt.Println("UPDATE NOTIFICATION STARTED 10")
+	println("before read thread 10")
+	println("before update thread 10")
 	<-readThreadInstance.waitForNotification
-	fmt.Println("READ NOTIFICATION COMPLETE 10")
+	println("after read thread 10")
 	<-updateThreadInstance.waitForNotification
-	fmt.Println("UPDATE NOTIFICATION COMPLETE 10")
+	println("after update thread 10")
 
 	readThreadInstance.stop()
 	updateThreadInstance.stop()
@@ -277,6 +265,123 @@ func TestBuffer(t *testing.T) {
 	assert.Equal(t, 0, readThreadInstance.errors)
 	assert.Equal(t, 0, updateThreadInstance.errors)
 
+	println(clusterInstance.VtgateProcess.Port)
+	//time.Sleep(40 * time.Second)
+
+	//At least one thread should have been buffered.
+	//This may fail if a failover is too fast. Add retries then.
+	resp, err := http.Get(clusterInstance.VtgateProcess.VerifyURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := fmt.Sprintf("%s.%s", keyspaceUnshardedName, "0")
+	inFlightMax := 0
+	masterPromotedCount := 0
+	durationMs := 0
+	bufferingStops := 0
+	if resp.StatusCode == 200 {
+		resultMap := make(map[string]interface{})
+		respByte, _ := ioutil.ReadAll(resp.Body)
+		err := json.Unmarshal(respByte, &resultMap)
+		if err != nil {
+			panic(err)
+		}
+		object := reflect.ValueOf(resultMap["BufferLastRequestsInFlightMax"])
+		if object.Kind() == reflect.Map {
+			for _, key := range object.MapKeys() {
+				println("LABEL :", label)
+				if strings.Contains(key.String(), label) {
+					v := object.MapIndex(key)
+					switch v.Kind() {
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						println("VAL IN INT :", v.Int())
+						inFlightMax = int(v.Int())
+					case reflect.String:
+						inFlightMax, err = strconv.Atoi(v.String())
+						if err != nil {
+							t.Fatal(err.Error())
+						}
+					}
+				}
+			}
+		}
+		objectHealthChkMasterPromoted := reflect.ValueOf(resultMap["HealthcheckMasterPromoted"])
+		if objectHealthChkMasterPromoted.Kind() == reflect.Map {
+			for _, key := range objectHealthChkMasterPromoted.MapKeys() {
+				if strings.Contains(key.String(), label) {
+					v := objectHealthChkMasterPromoted.MapIndex(key)
+					switch v.Kind() {
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						masterPromotedCount = int(v.Int())
+					case reflect.String:
+						masterPromotedCount, err = strconv.Atoi(v.String())
+						if err != nil {
+							t.Fatal(err.Error())
+						}
+					}
+				}
+			}
+		}
+		objectBufferFailoverDurationMs := reflect.ValueOf(resultMap["BufferFailoverDurationSumMs"])
+		if objectBufferFailoverDurationMs.Kind() == reflect.Map {
+			for _, key := range objectBufferFailoverDurationMs.MapKeys() {
+				if strings.Contains(key.String(), label) {
+					v := objectBufferFailoverDurationMs.MapIndex(key)
+					switch v.Kind() {
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						durationMs = int(v.Int())
+					case reflect.String:
+						durationMs, err = strconv.Atoi(v.String())
+						if err != nil {
+							t.Fatal(err.Error())
+						}
+					}
+				}
+			}
+		}
+		objectBufferStops := reflect.ValueOf(resultMap["BufferStops"])
+		if objectBufferStops.Kind() == reflect.Map {
+			for _, key := range objectBufferStops.MapKeys() {
+				if strings.Contains(key.String(), "NewMasterSeen") {
+					v := objectBufferStops.MapIndex(key)
+					switch v.Kind() {
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						bufferingStops = int(v.Int())
+					case reflect.String:
+						bufferingStops, err = strconv.Atoi(v.String())
+						if err != nil {
+							t.Fatal(err.Error())
+						}
+					}
+				}
+			}
+		}
+	}
+	if inFlightMax == 0 {
+		// Missed buffering is okay when we observed the failover during the
+		// COMMIT (which cannot trigger the buffering).
+		assert.Greater(t, updateThreadInstance.commitErrors, 0, "No buffering took place and the update thread saw no error during COMMIT. But one of it must happen.")
+	} else {
+		assert.Greater(t, updateThreadInstance.commitErrors, 0)
+	}
+
+	// There was a failover and the HealthCheck module must have seen it.
+	if masterPromotedCount > 0 {
+		assert.Greater(t, masterPromotedCount, 0)
+	}
+
+	//
+	if durationMs > 0 {
+		// Buffering was actually started.
+		t.Logf("Failover was buffered for %d milliseconds.", durationMs)
+
+		// Number of buffering stops must be equal to the number of seen failovers.
+		assert.Equal(t, masterPromotedCount, bufferingStops)
+	}
+	println("in_flight_max", inFlightMax)
+	println("masterPromotedCount", masterPromotedCount)
+	println("duration Ms", durationMs)
+	println("buffering stops", bufferingStops)
 	wg.Wait()
 
 }
