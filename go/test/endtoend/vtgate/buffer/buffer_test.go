@@ -90,6 +90,7 @@ func (c *threadParams) threadRun() {
 		c.notifyLock.Lock()
 		if c.notifyAfterNSuccessfulRpcs != 0 && c.rpcs >= (c.notifyAfterNSuccessfulRpcs+c.rpcsSoFar) {
 			c.waitForNotification <- true
+			println("quit : " + fmt.Sprintf("%t", c.quit))
 			c.notifyAfterNSuccessfulRpcs = 0
 		}
 		c.notifyLock.Unlock()
@@ -109,8 +110,10 @@ func (c *threadParams) stop() {
 }
 
 func readExecute(c *threadParams, conn *mysql.Conn) error {
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM buffer WHERE id = %d", criticalReadRowID), 1000, true)
-	fmt.Println(qr)
+	_, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM buffer WHERE id = %d", criticalReadRowID), 1000, true)
+
+	fmt.Printf("\n READ thread : RPCS : %d,RPCS_SO_FAR : %d,NOTIFY : %d\n", c.rpcs, c.rpcsSoFar, c.notifyAfterNSuccessfulRpcs)
+
 	return err
 }
 
@@ -118,7 +121,9 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	attempts := c.i
 	c.i++
 	commitStarted := false
-	fmt.Printf("\nRPCS : %d,RPCS_SO_FAR : %d,NOTIFY : %d", c.rpcs, c.rpcsSoFar, c.notifyAfterNSuccessfulRpcs)
+
+	fmt.Printf("\n UPDATE thread : RPCS : %d,RPCS_SO_FAR : %d,NOTIFY : %d\n", c.rpcs, c.rpcsSoFar, c.notifyAfterNSuccessfulRpcs)
+
 	conn.ExecuteFetch("begin", 1000, true)
 	// Do not use a bind variable for "msg" to make sure that the value shows
 	// up in the logs.
@@ -235,27 +240,43 @@ func TestBuffer(t *testing.T) {
 	readThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
 
+	// b := <-readThreadInstance.waitForNotification
+	// if b {
+	// 	fmt.Println("READ NOTIFICATION COMPLETE")
+	// }
+	// b = <-updateThreadInstance.waitForNotification
+	// if b {
+	// 	fmt.Println("UPDATE NOTIFICATION COMPLETE")
+	// }
+	fmt.Println("READ NOTIFICATION STARTED 2")
+	fmt.Println("UPDATE NOTIFICATION STARTED 2")
 	<-readThreadInstance.waitForNotification
+	fmt.Println("READ NOTIFICATION COMPLETE 2")
 	<-updateThreadInstance.waitForNotification
+	fmt.Println("UPDATE NOTIFICATION COMPLETE 2")
 
 	// Execute the failover.
 	readThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
-	readThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
+	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
 
 	//reparent call
 	clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
 		fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
 		"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
 
+	fmt.Println("READ NOTIFICATION STARTED 10")
+	fmt.Println("UPDATE NOTIFICATION STARTED 10")
 	<-readThreadInstance.waitForNotification
+	fmt.Println("READ NOTIFICATION COMPLETE 10")
 	<-updateThreadInstance.waitForNotification
+	fmt.Println("UPDATE NOTIFICATION COMPLETE 10")
 
 	readThreadInstance.stop()
 	updateThreadInstance.stop()
 
-	wg.Wait()
-
 	assert.Equal(t, 0, readThreadInstance.errors)
 	assert.Equal(t, 0, updateThreadInstance.errors)
+
+	wg.Wait()
 
 }
