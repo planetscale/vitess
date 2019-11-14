@@ -37,26 +37,29 @@ type VtctlProcess struct {
 
 // AddCellInfo executes vtctl command to add cell info
 func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
-	return vtctl.ExecuteCommand("AddCellInfo", "-root", "/vitess/"+Cell,
+	tmpProcess := exec.Command(
+		vtctl.Binary,
+		"-topo_implementation", vtctl.TopoImplementation,
+		"-topo_global_server_address", vtctl.TopoGlobalAddress,
+		"-topo_global_root", vtctl.TopoGlobalRoot,
+		"AddCellInfo",
+		"-root", "/vitess/"+Cell,
 		"-server_address", vtctl.TopoServerAddress,
-		Cell)
+		Cell,
+	)
+	return tmpProcess.Run()
 }
 
 // CreateKeyspace executes vtctl command to create keyspace
 func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
-	return vtctl.ExecuteCommand("CreateKeyspace", keyspace)
-}
-
-// ExecuteCommand executes vtctl command to create keyspace
-func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
-	args = append([]string{"-topo_implementation", vtctl.TopoImplementation,
-		"-topo_global_server_address", vtctl.TopoGlobalAddress,
-		"-topo_global_root", vtctl.TopoGlobalRoot}, args...)
 	tmpProcess := exec.Command(
 		vtctl.Binary,
-		args...,
+		"-topo_implementation", vtctl.TopoImplementation,
+		"-topo_global_server_address", vtctl.TopoGlobalAddress,
+		"-topo_global_root", vtctl.TopoGlobalRoot,
+		"CreateKeyspace", keyspace,
 	)
-	log.Info(fmt.Sprintf("Starting ExecuteCommand with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Info(fmt.Sprintf("Starting CreateKeyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }
 
