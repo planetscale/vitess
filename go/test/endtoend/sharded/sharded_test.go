@@ -48,6 +48,26 @@ var (
 		primary key (id)
 		) Engine=InnoDB
 		`
+	vSchema = `
+		{
+		  "sharded": true,
+		  "vindexes": {
+			"hash_index": {
+			  "type": "hash"
+			}
+		  },
+		  "tables": {
+			"vt_select_test": {
+			   "column_vindexes": [
+				{
+				  "column": "id",
+				  "name": "hash_index"
+				}
+			  ] 
+			}
+		  }
+		}
+	`
 )
 
 func TestMain(m *testing.M) {
@@ -61,10 +81,9 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
 		}
-		_ = clusterInstance.VtctlProcess.ExecuteCommand("CreateKeyspace",
-			"--sharding_column_name", "keyspace_id",
-			"--sharding_column_type", "uint64",
-			keyspaceName)
+		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName); err != nil {
+			return 1, err
+		}
 
 		initCluster([]string{"-80", "80-"}, 2)
 
@@ -99,14 +118,21 @@ func TestSharded(t *testing.T) {
 	_, err = shard2.Vttablets[1].VttabletProcess.QueryTablet(sqlSchemaReverse, keyspaceName, true)
 	assert.Nil(t, err)
 
-	reloadAlias(t,
+	if err = clusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema); err != nil {
+		log.Error(err.Error())
+		return
+	}
+
+	reloadSchemas(t,
 		shard1Master.Alias,
 		shard1.Vttablets[1].Alias,
 		shard2Master.Alias,
 		shard2.Vttablets[1].Alias)
 
-	_ = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shard1.Name, cell, shard1Master.TabletUID)
-	_ = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shard2.Name, cell, shard2Master.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shard1.Name, cell, shard1Master.TabletUID)
+	assert.Nil(t, err)
+	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shard2.Name, cell, shard2Master.TabletUID)
+	assert.Nil(t, err)
 
 	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", shard1Master.Alias)
 	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", shard2Master.Alias)
@@ -150,7 +176,7 @@ func TestSharded(t *testing.T) {
 	assert.Equal(t, `[[INT64(10) VARCHAR("test 10")]]`, fmt.Sprintf("%v", rows.Rows))
 }
 
-func reloadAlias(t *testing.T, aliases ...string) {
+func reloadSchemas(t *testing.T, aliases ...string) {
 	for _, alias := range aliases {
 		if err := clusterInstance.VtctlclientProcess.ExecuteCommand("ReloadSchema", alias); err != nil {
 			assert.Fail(t, "Unable to reload schema")
