@@ -19,7 +19,6 @@ package buffer
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -37,7 +36,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -76,18 +74,18 @@ type threadParams struct {
 }
 
 func (c *threadParams) threadRun() {
-	c.waitForNotification = make(chan bool)
+	c.waitForNotification = make(chan bool, 1)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
-		log.Error(err.Error())
+		println(err.Error())
 	}
 	defer conn.Close()
 	for !c.quit {
 		err = c.executeFunction(c, conn)
 		if err != nil {
 			c.errors++
-			log.Error(err.Error())
+			println(err.Error())
 		}
 		c.rpcs++
 		// If notifications are requested, check if we already executed the
@@ -100,13 +98,15 @@ func (c *threadParams) threadRun() {
 			c.notifyAfterNSuccessfulRpcs = 0
 		}
 		c.notifyLock.Unlock()
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 	wg.Done()
 }
 
 func (c *threadParams) setNotifyAfterNSuccessfulRpcs(n int) {
+	println("before main thread lock")
 	c.notifyLock.Lock()
+	println("after main thread lock")
 	c.notifyAfterNSuccessfulRpcs = n
 	c.rpcsSoFar = c.rpcs
 	c.notifyLock.Unlock()
@@ -114,7 +114,6 @@ func (c *threadParams) setNotifyAfterNSuccessfulRpcs(n int) {
 
 func (c *threadParams) stop() {
 	c.quit = true
-	println("quit : " + fmt.Sprintf("%t", c.quit))
 }
 
 func readExecute(c *threadParams, conn *mysql.Conn) error {
@@ -125,7 +124,6 @@ func readExecute(c *threadParams, conn *mysql.Conn) error {
 func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	attempts := c.i
 	c.i++
-	commitStarted := false
 	conn.ExecuteFetch("begin", 1000, true)
 	// Do not use a bind variable for "msg" to make sure that the value shows
 	// up in the logs.
@@ -134,28 +132,38 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	// flight. This is more realistic because applications are going to keep
 	// their transactions open for longer as well.
 	time.Sleep(time.Duration(rand.Int31n(1000)) * time.Millisecond)
-
-	commitStarted = true
-	fmt.Printf("update %d affected", attempts)
-	conn.ExecuteFetch("commit", 1000, true)
+	if err == nil {
+		fmt.Printf("update %d affected", attempts)
+		_, err = conn.ExecuteFetch("commit", 1000, true)
+		if err != nil {
+			_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
+			if errRollback != nil {
+				fmt.Print("Error in rollback", errRollback.Error())
+			}
+			c.commitErrors++
+			if c.commitErrors > 1 {
+				return err
+			}
+			fmt.Printf("UPDATE %d failed during COMMIT. This is okay once because we do not support buffering it. err: %s", attempts, err.Error())
+		}
+	}
 	if err != nil {
 		_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
 		if errRollback != nil {
 			fmt.Print("Error in rollback", errRollback.Error())
 		}
-
-		if !commitStarted {
-			fmt.Printf("UPDATE %d failed before COMMIT. This should not happen.Re-raising exception.", attempts)
-			err = errors.New("UPDATE failed before COMMIT")
-			return err
-		}
+		// if !commitStarted {
+		// 	fmt.Printf("UPDATE %d failed before COMMIT. This should not happen.Re-raising exception.", attempts)
+		// 	err = errors.New("UPDATE failed before COMMIT")
+		// 	return err
+		// }
 		c.commitErrors++
 		if c.commitErrors > 1 {
 			return err
 		}
 		fmt.Printf("UPDATE %d failed during COMMIT. This is okay once because we do not support buffering it. err: %s", attempts, err.Error())
 	}
-	return err
+	return nil
 }
 
 func (c *threadParams) getCommitErrors() int {
@@ -198,7 +206,7 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
-
+		rand.Seed(time.Now().UnixNano())
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -214,6 +222,11 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 }
 
 func TestBuffer(t *testing.T) {
+	testBufferBase(t, false)
+	testBufferBase(t, true)
+}
+
+func testBufferBase(t *testing.T, isExternalParent bool) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -221,10 +234,11 @@ func TestBuffer(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Insert two rows for the later threads (critical read, update).
-	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
-	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
-
+	if !isExternalParent {
+		// Insert two rows for the later threads (critical read, update).
+		exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
+		exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
+	}
 	//Start both threads.
 	readThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: readExecute}
 	wg.Add(1)
@@ -236,28 +250,24 @@ func TestBuffer(t *testing.T) {
 	readThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
 
-	println("before read thread 2")
-	println("before update thread 2")
 	<-readThreadInstance.waitForNotification
-	println("after read thread 2")
 	<-updateThreadInstance.waitForNotification
-	println("after update thread 2")
 
 	// Execute the failover.
 	readThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
 
-	//reparent call
-	clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-		fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-		"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
+	if isExternalParent {
+		externalReparenting(t, clusterInstance)
+	} else {
+		//reparent call
+		clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+			fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
+			"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
+	}
 
-	println("before read thread 10")
-	println("before update thread 10")
 	<-readThreadInstance.waitForNotification
-	println("after read thread 10")
 	<-updateThreadInstance.waitForNotification
-	println("after update thread 10")
 
 	readThreadInstance.stop()
 	updateThreadInstance.stop()
@@ -266,7 +276,6 @@ func TestBuffer(t *testing.T) {
 	assert.Equal(t, 0, updateThreadInstance.errors)
 
 	println(clusterInstance.VtgateProcess.Port)
-	//time.Sleep(40 * time.Second)
 
 	//At least one thread should have been buffered.
 	//This may fail if a failover is too fast. Add retries then.
@@ -283,6 +292,7 @@ func TestBuffer(t *testing.T) {
 		resultMap := make(map[string]interface{})
 		respByte, _ := ioutil.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
+		println(string(respByte))
 		if err != nil {
 			panic(err)
 		}
@@ -296,7 +306,7 @@ func TestBuffer(t *testing.T) {
 		// COMMIT (which cannot trigger the buffering).
 		assert.Greater(t, updateThreadInstance.commitErrors, 0, "No buffering took place and the update thread saw no error during COMMIT. But one of it must happen.")
 	} else {
-		assert.Greater(t, updateThreadInstance.commitErrors, 0)
+		assert.Greater(t, inFlightMax, 0)
 	}
 
 	// There was a failover and the HealthCheck module must have seen it.
@@ -312,10 +322,6 @@ func TestBuffer(t *testing.T) {
 		// Number of buffering stops must be equal to the number of seen failovers.
 		assert.Equal(t, masterPromotedCount, bufferingStops)
 	}
-	println("in_flight_max", inFlightMax)
-	println("masterPromotedCount", masterPromotedCount)
-	println("duration Ms", durationMs)
-	println("buffering stops", bufferingStops)
 	wg.Wait()
 
 }
@@ -323,22 +329,119 @@ func TestBuffer(t *testing.T) {
 func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[string]interface{}) int {
 	paramVal := 0
 	var err error
-	object := reflect.ValueOf(resultMap["\""+param+"\""])
+	object := reflect.ValueOf(resultMap[param])
 	if object.Kind() == reflect.Map {
 		for _, key := range object.MapKeys() {
 			if strings.Contains(key.String(), label) {
 				v := object.MapIndex(key)
-				switch v.Kind() {
-				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-					paramVal = int(v.Int())
-				case reflect.String:
-					paramVal, err = strconv.Atoi(v.String())
-					if err != nil {
-						t.Fatal(err.Error())
-					}
+				s := fmt.Sprintf("%v", v.Interface())
+				paramVal, err = strconv.Atoi(s)
+				if err != nil {
+					t.Fatal(err.Error())
 				}
+
 			}
 		}
 	}
 	return paramVal
+}
+
+func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
+	start := time.Now()
+	// Demote master Query
+	query := "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
+	master := clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
+	replica := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+	master.VttabletProcess.QueryTablet(query, keyspaceUnshardedName, true)
+	disableSemiSyncMasterQuery := "SET GLOBAL rpl_semi_sync_master_enabled = 0"
+	if master.VttabletProcess.EnableSemiSync {
+		master.VttabletProcess.QueryTablet(disableSemiSyncMasterQuery, keyspaceUnshardedName, true)
+	}
+
+	// Wait for replica to catch up to master.
+	waitForReplicationPos(t, &master, &replica, 60.0)
+
+	duration := time.Since(start)
+	minUnavailabilityInS := 1.0
+	if duration.Seconds() < minUnavailabilityInS {
+		w := minUnavailabilityInS - duration.Seconds()
+		fmt.Printf("Waiting for %.1f seconds because the failover was too fast (took only %.3f seconds)", w, duration.Seconds())
+		time.Sleep(time.Duration(w) * time.Second)
+	}
+	// Promote replica to new master.
+	promoteSlaveQuery := "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
+	replica.VttabletProcess.QueryTablet(promoteSlaveQuery, keyspaceUnshardedName, true)
+
+	if replica.VttabletProcess.EnableSemiSync {
+		replica.VttabletProcess.QueryTablet("SET GLOBAL rpl_semi_sync_master_enabled = 1", keyspaceUnshardedName, true)
+	}
+	oldMaster := master
+	newMaster := replica
+
+	// Configure old master to use new master.
+	qr, err := newMaster.VttabletProcess.QueryTablet("SELECT @@GLOBAL.gtid_executed", keyspaceUnshardedName, true)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	val := qr.Rows[0][0]
+	gtID := val.String()
+	newPos := "MySQL56/" + gtID
+	fmt.Printf("New master position: %s", newPos)
+
+	// Use 'localhost' as hostname because Travis CI worker hostnames
+	// are too long for MySQL replication.
+	changeMasterCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newMaster.MySQLPort)
+	oldMaster.VttabletProcess.QueryTablet(changeMasterCommands, keyspaceUnshardedName, true)
+
+	// Notify the new vttablet master about the reparent.
+	clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias)
+}
+
+func waitForReplicationPos(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet, timeout float64) {
+	replicationPosA := getMasterPosition(t, tabletA)
+	for true {
+		replicationPosB := getMasterPosition(t, tabletB)
+		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
+			break
+		}
+		msg := fmt.Sprintf("%s's replication position to catch up %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
+		waitStep(t, msg, timeout, 0.01)
+	}
+}
+
+func getMasterPosition(t *testing.T, tablet *cluster.Vttablet) string {
+	masterPositionQuery := "SELECT @@GLOBAL.gtid_executed;"
+	qr, err := tablet.VttabletProcess.QueryTablet(masterPositionQuery, keyspaceUnshardedName, true)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	val := qr.Rows[0][0]
+	gtID := val.ToString()
+	println("Position :", gtID)
+	newPos := "MySQL56/" + gtID
+	return newPos
+}
+
+func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string) bool {
+	isAtleast := false
+	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
+	println("POSITION ATLEAST :", val)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if strings.Contains(val, "true") {
+		println("POSITION IS TRUE :: ", val)
+		isAtleast = true
+	}
+	return isAtleast
+}
+
+func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) float64 {
+	timeout = timeout - sleepTime
+	if timeout < 0.0 {
+		t.Fatalf("timeout waiting for condition '%s'", msg)
+	}
+	fmt.Printf("Sleeping for %f seconds waiting for condition '%s'", sleepTime, msg)
+	time.Sleep(time.Duration(sleepTime) * time.Second)
+	return timeout
 }
