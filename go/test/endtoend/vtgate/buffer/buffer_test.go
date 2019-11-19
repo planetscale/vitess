@@ -172,44 +172,47 @@ func (c *threadParams) getCommitErrors() int {
 
 func TestMain(m *testing.M) {
 	flag.Parse()
+	m.Run()
+}
 
-	exitCode := func() int {
-		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
-		defer clusterInstance.Teardown()
+func createCluster() (*cluster.LocalProcessCluster, int) {
+	clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
+	// Start topo server
+	if err := clusterInstance.StartTopo(); err != nil {
+		return nil, 1
+	}
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceUnshardedName,
-			SchemaSQL: sqlSchema,
-		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
-			return 1
-		}
+	// Start keyspace
+	keyspace := &cluster.Keyspace{
+		Name:      keyspaceUnshardedName,
+		SchemaSQL: sqlSchema,
+	}
+	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+		return nil, 1
+	}
 
-		clusterInstance.VtGateExtraArgs = []string{
-			"-enable_buffer",
-			// Long timeout in case failover is slow.
-			"-buffer_window", "10m",
-			"-buffer_max_failover_duration", "10m",
-			"-buffer_min_time_between_failovers", "20m"}
+	clusterInstance.VtGateExtraArgs = []string{
+		"-enable_buffer",
+		// Long timeout in case failover is slow.
+		"-buffer_window", "10m",
+		"-buffer_max_failover_duration", "10m",
+		"-buffer_min_time_between_failovers", "20m"}
 
-		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-		rand.Seed(time.Now().UnixNano())
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	// Start vtgate
+	if err := clusterInstance.StartVtgate(); err != nil {
+		return nil, 1
+	}
+	vtParams = mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	rand.Seed(time.Now().UnixNano())
+	return clusterInstance, 0
+}
+
+func clusterTeardown(clusterInstance *cluster.LocalProcessCluster) {
+	clusterInstance.Teardown()
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
@@ -221,12 +224,19 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	return qr
 }
 
-func TestBuffer(t *testing.T) {
+func TestBufferInternalReparenting(t *testing.T) {
 	testBufferBase(t, false)
+}
+
+func TestBufferExternalReparenting(t *testing.T) {
 	testBufferBase(t, true)
 }
 
 func testBufferBase(t *testing.T, isExternalParent bool) {
+	clusterInstance, exitCode := createCluster()
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -234,11 +244,10 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	}
 	defer conn.Close()
 
-	if !isExternalParent {
-		// Insert two rows for the later threads (critical read, update).
-		exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
-		exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
-	}
+	// Insert two rows for the later threads (critical read, update).
+	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
+	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
+
 	//Start both threads.
 	readThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: readExecute}
 	wg.Add(1)
@@ -323,7 +332,7 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 		assert.Equal(t, masterPromotedCount, bufferingStops)
 	}
 	wg.Wait()
-
+	clusterInstance.Teardown()
 }
 
 func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[string]interface{}) int {
@@ -350,8 +359,8 @@ func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	start := time.Now()
 	// Demote master Query
 	query := "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
-	master := clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
-	replica := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+	master := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+	replica := clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
 	master.VttabletProcess.QueryTablet(query, keyspaceUnshardedName, true)
 	disableSemiSyncMasterQuery := "SET GLOBAL rpl_semi_sync_master_enabled = 0"
 	if master.VttabletProcess.EnableSemiSync {
