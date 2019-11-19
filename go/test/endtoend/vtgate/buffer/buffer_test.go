@@ -74,7 +74,7 @@ type threadParams struct {
 }
 
 func (c *threadParams) threadRun() {
-	c.waitForNotification = make(chan bool, 1)
+	c.waitForNotification = make(chan bool)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -98,7 +98,7 @@ func (c *threadParams) threadRun() {
 			c.notifyAfterNSuccessfulRpcs = 0
 		}
 		c.notifyLock.Unlock()
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	wg.Done()
 }
@@ -259,8 +259,8 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	readThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
 
-	<-readThreadInstance.waitForNotification
-	<-updateThreadInstance.waitForNotification
+	println("read notified :", <-readThreadInstance.waitForNotification)
+	println("update notified :", <-updateThreadInstance.waitForNotification)
 	// Execute the failover.
 
 	readThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
@@ -275,8 +275,8 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 			"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
 	}
 
-	<-readThreadInstance.waitForNotification
-	<-updateThreadInstance.waitForNotification
+	println("read notified :", <-readThreadInstance.waitForNotification)
+	println("update notified :", <-updateThreadInstance.waitForNotification)
 
 	readThreadInstance.stop()
 	updateThreadInstance.stop()
