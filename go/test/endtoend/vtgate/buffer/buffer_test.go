@@ -133,7 +133,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	// their transactions open for longer as well.
 	time.Sleep(time.Duration(rand.Int31n(1000)) * time.Millisecond)
 	if err == nil {
-		fmt.Printf("update %d affected", attempts)
+		fmt.Printf("update %d affected and %d notification value", attempts, c.notifyAfterNSuccessfulRpcs)
 		_, err = conn.ExecuteFetch("commit", 1000, true)
 		if err != nil {
 			_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
@@ -261,8 +261,8 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 
 	<-readThreadInstance.waitForNotification
 	<-updateThreadInstance.waitForNotification
-
 	// Execute the failover.
+
 	readThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
 
@@ -426,7 +426,6 @@ func getMasterPosition(t *testing.T, tablet *cluster.Vttablet) string {
 	}
 	val := qr.Rows[0][0]
 	gtID := val.ToString()
-	println("Position :", gtID)
 	newPos := "MySQL56/" + gtID
 	return newPos
 }
@@ -434,12 +433,10 @@ func getMasterPosition(t *testing.T, tablet *cluster.Vttablet) string {
 func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string) bool {
 	isAtleast := false
 	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
-	println("POSITION ATLEAST :", val)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	if strings.Contains(val, "true") {
-		println("POSITION IS TRUE :: ", val)
 		isAtleast = true
 	}
 	return isAtleast
