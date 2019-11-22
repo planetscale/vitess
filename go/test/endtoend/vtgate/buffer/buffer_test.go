@@ -14,12 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Test the vtgate master buffer.
+
+During a master failover, vtgate should automatically buffer (stall) requests
+for a configured time and retry them after the failover is over.
+
+The test reproduces such a scenario as follows:
+- two threads constantly execute a critical read respectively a write (UPDATE)
+- vtctl PlannedReparentShard runs a master failover
+- both threads should not see any error during despite the failover
+*/
+
 package buffer
 
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -53,28 +64,32 @@ var (
 )
 
 const (
-	criticalReadRowID = 1
-	updateRowID       = 2
+	criticalReadRowID          = 1
+	updateRowID                = 2
+	demoteMasterQuery          = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
+	disableSemiSyncMasterQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
+	enableSemiSyncMasterQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
+	masterPositionQuery        = "SELECT @@GLOBAL.gtid_executed;"
+	promoteSlaveQuery          = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
 )
 
 //threadParams is set of params passed into read and write threads
 type threadParams struct {
-	name                       string
 	writable                   bool
 	quit                       bool
 	rpcs                       int        // Number of queries successfully executed.
 	errors                     int        // Number of failed queries.
 	waitForNotification        chan bool  // Channel used to notify the main thread that this thread executed
-	notifyLock                 sync.Mutex // notifyLock guards the two fields below.
+	notifyLock                 sync.Mutex // notifyLock guards the two fields notifyAfterNSuccessfulRpcs/rpcsSoFar.
 	notifyAfterNSuccessfulRpcs int        // If 0, notifications are disabled
 	rpcsSoFar                  int        // Number of RPCs at the time a notification was requested
 	i                          int        //
 	commitErrors               int
-	executeFunction            func(c *threadParams, conn *mysql.Conn) error
+	executeFunction            func(c *threadParams, conn *mysql.Conn) error // Implement the method for read/update.
 }
 
+// Thread which constantly executes a query on vtgate.
 func (c *threadParams) threadRun() {
-	c.waitForNotification = make(chan bool)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -98,15 +113,14 @@ func (c *threadParams) threadRun() {
 			c.notifyAfterNSuccessfulRpcs = 0
 		}
 		c.notifyLock.Unlock()
+		// Wait 10ms seconds between two attempts.
 		time.Sleep(10 * time.Millisecond)
 	}
 	wg.Done()
 }
 
 func (c *threadParams) setNotifyAfterNSuccessfulRpcs(n int) {
-	println("before main thread lock")
 	c.notifyLock.Lock()
-	println("after main thread lock")
 	c.notifyAfterNSuccessfulRpcs = n
 	c.rpcsSoFar = c.rpcs
 	c.notifyLock.Unlock()
@@ -123,17 +137,19 @@ func readExecute(c *threadParams, conn *mysql.Conn) error {
 
 func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	attempts := c.i
+	// Value used in next UPDATE query. Increased after every query.
 	c.i++
 	conn.ExecuteFetch("begin", 1000, true)
-	// Do not use a bind variable for "msg" to make sure that the value shows
-	// up in the logs.
+
 	_, err := conn.ExecuteFetch(fmt.Sprintf("UPDATE buffer SET msg='update %d' WHERE id = %d", attempts, updateRowID), 1000, true)
+
 	// Sleep between [0, 1] seconds to prolong the time the transaction is in
 	// flight. This is more realistic because applications are going to keep
 	// their transactions open for longer as well.
 	time.Sleep(time.Duration(rand.Int31n(1000)) * time.Millisecond)
+
 	if err == nil {
-		fmt.Printf("update %d affected and %d notification value", attempts, c.notifyAfterNSuccessfulRpcs)
+		fmt.Printf("update %d affected", attempts)
 		_, err = conn.ExecuteFetch("commit", 1000, true)
 		if err != nil {
 			_, errRollback := conn.ExecuteFetch("rollback", 1000, true)
@@ -152,11 +168,6 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 		if errRollback != nil {
 			fmt.Print("Error in rollback", errRollback.Error())
 		}
-		// if !commitStarted {
-		// 	fmt.Printf("UPDATE %d failed before COMMIT. This should not happen.Re-raising exception.", attempts)
-		// 	err = errors.New("UPDATE failed before COMMIT")
-		// 	return err
-		// }
 		c.commitErrors++
 		if c.commitErrors > 1 {
 			return err
@@ -164,15 +175,6 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 		fmt.Printf("UPDATE %d failed during COMMIT. This is okay once because we do not support buffering it. err: %s", attempts, err.Error())
 	}
 	return nil
-}
-
-func (c *threadParams) getCommitErrors() int {
-	return c.commitErrors
-}
-
-func TestMain(m *testing.M) {
-	flag.Parse()
-	m.Run()
 }
 
 func createCluster() (*cluster.LocalProcessCluster, int) {
@@ -211,10 +213,6 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 	return clusterInstance, 0
 }
 
-func clusterTeardown(clusterInstance *cluster.LocalProcessCluster) {
-	clusterInstance.Teardown()
-}
-
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
@@ -249,20 +247,21 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
 
 	//Start both threads.
-	readThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: readExecute}
+	readThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: readExecute, waitForNotification: make(chan bool)}
 	wg.Add(1)
 	go readThreadInstance.threadRun()
-	updateThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: updateExecute, i: 1, commitErrors: 0}
+	updateThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: updateExecute, i: 1, commitErrors: 0, waitForNotification: make(chan bool)}
 	wg.Add(1)
 	go updateThreadInstance.threadRun()
 
+	// Verify they got at least 2 RPCs through.
 	readThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
 
-	println("read notified :", <-readThreadInstance.waitForNotification)
-	println("update notified :", <-updateThreadInstance.waitForNotification)
-	// Execute the failover.
+	<-readThreadInstance.waitForNotification
+	<-updateThreadInstance.waitForNotification
 
+	// Execute the failover.
 	readThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
 
@@ -275,16 +274,16 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 			"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
 	}
 
-	println("read notified :", <-readThreadInstance.waitForNotification)
-	println("update notified :", <-updateThreadInstance.waitForNotification)
+	<-readThreadInstance.waitForNotification
+	<-updateThreadInstance.waitForNotification
 
+	// Stop threads
 	readThreadInstance.stop()
 	updateThreadInstance.stop()
 
+	// Both threads must not see any error
 	assert.Equal(t, 0, readThreadInstance.errors)
 	assert.Equal(t, 0, updateThreadInstance.errors)
-
-	println(clusterInstance.VtgateProcess.Port)
 
 	//At least one thread should have been buffered.
 	//This may fail if a failover is too fast. Add retries then.
@@ -301,7 +300,6 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 		resultMap := make(map[string]interface{})
 		respByte, _ := ioutil.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
-		println(string(respByte))
 		if err != nil {
 			panic(err)
 		}
@@ -323,11 +321,7 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 		assert.Greater(t, masterPromotedCount, 0)
 	}
 
-	//
 	if durationMs > 0 {
-		// Buffering was actually started.
-		t.Logf("Failover was buffered for %d milliseconds.", durationMs)
-
 		// Number of buffering stops must be equal to the number of seen failovers.
 		assert.Equal(t, masterPromotedCount, bufferingStops)
 	}
@@ -348,7 +342,6 @@ func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[st
 				if err != nil {
 					t.Fatal(err.Error())
 				}
-
 			}
 		}
 	}
@@ -357,12 +350,11 @@ func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[st
 
 func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
 	start := time.Now()
+
 	// Demote master Query
-	query := "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
 	master := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 	replica := clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
-	master.VttabletProcess.QueryTablet(query, keyspaceUnshardedName, true)
-	disableSemiSyncMasterQuery := "SET GLOBAL rpl_semi_sync_master_enabled = 0"
+	master.VttabletProcess.QueryTablet(demoteMasterQuery, keyspaceUnshardedName, true)
 	if master.VttabletProcess.EnableSemiSync {
 		master.VttabletProcess.QueryTablet(disableSemiSyncMasterQuery, keyspaceUnshardedName, true)
 	}
@@ -377,25 +369,18 @@ func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessClus
 		fmt.Printf("Waiting for %.1f seconds because the failover was too fast (took only %.3f seconds)", w, duration.Seconds())
 		time.Sleep(time.Duration(w) * time.Second)
 	}
+
 	// Promote replica to new master.
-	promoteSlaveQuery := "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
 	replica.VttabletProcess.QueryTablet(promoteSlaveQuery, keyspaceUnshardedName, true)
 
 	if replica.VttabletProcess.EnableSemiSync {
-		replica.VttabletProcess.QueryTablet("SET GLOBAL rpl_semi_sync_master_enabled = 1", keyspaceUnshardedName, true)
+		replica.VttabletProcess.QueryTablet(enableSemiSyncMasterQuery, keyspaceUnshardedName, true)
 	}
 	oldMaster := master
 	newMaster := replica
 
 	// Configure old master to use new master.
-	qr, err := newMaster.VttabletProcess.QueryTablet("SELECT @@GLOBAL.gtid_executed", keyspaceUnshardedName, true)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	val := qr.Rows[0][0]
-	gtID := val.String()
-	newPos := "MySQL56/" + gtID
-	fmt.Printf("New master position: %s", newPos)
+	_, gtID := getMasterPosition(t, &newMaster)
 
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
@@ -407,9 +392,9 @@ func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessClus
 }
 
 func waitForReplicationPos(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet, timeout float64) {
-	replicationPosA := getMasterPosition(t, tabletA)
-	for true {
-		replicationPosB := getMasterPosition(t, tabletB)
+	replicationPosA, _ := getMasterPosition(t, tabletA)
+	for {
+		replicationPosB, _ := getMasterPosition(t, tabletB)
 		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
 			break
 		}
@@ -418,8 +403,7 @@ func waitForReplicationPos(t *testing.T, tabletA *cluster.Vttablet, tabletB *clu
 	}
 }
 
-func getMasterPosition(t *testing.T, tablet *cluster.Vttablet) string {
-	masterPositionQuery := "SELECT @@GLOBAL.gtid_executed;"
+func getMasterPosition(t *testing.T, tablet *cluster.Vttablet) (string, string) {
 	qr, err := tablet.VttabletProcess.QueryTablet(masterPositionQuery, keyspaceUnshardedName, true)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -427,7 +411,7 @@ func getMasterPosition(t *testing.T, tablet *cluster.Vttablet) string {
 	val := qr.Rows[0][0]
 	gtID := val.ToString()
 	newPos := "MySQL56/" + gtID
-	return newPos
+	return newPos, gtID
 }
 
 func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string) bool {
@@ -447,7 +431,6 @@ func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) floa
 	if timeout < 0.0 {
 		t.Fatalf("timeout waiting for condition '%s'", msg)
 	}
-	fmt.Printf("Sleeping for %f seconds waiting for condition '%s'", sleepTime, msg)
 	time.Sleep(time.Duration(sleepTime) * time.Second)
 	return timeout
 }
