@@ -125,9 +125,7 @@ func TestHealthCheck(t *testing.T) {
 	checkHealth(t, replicaTablet.HTTPPort, false)
 
 	// Make sure the master is still master
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", masterTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
-	checkTabletType(t, result, "MASTER")
+	checkTabletType(t, masterTablet.Alias, "MASTER")
 	exec(t, masterConn, "stop slave")
 
 	// stop replication, make sure we don't go unhealthy.
@@ -137,7 +135,7 @@ func TestHealthCheck(t *testing.T) {
 	assert.Nil(t, err, "error should be Nil")
 
 	// make sure the health stream is updated
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
 	assert.Nil(t, err, "error should be Nil")
 	verifyStreamHealth(t, result)
 
@@ -163,7 +161,6 @@ func TestHealthCheck(t *testing.T) {
 func checkHealth(t *testing.T, port int, shouldError bool) {
 	url := fmt.Sprintf("http://localhost:%d/healthz", port)
 	resp, err := http.Get(url)
-	fmt.Println(resp)
 	assert.Nil(t, err, "error should be Nil")
 	if shouldError {
 		assert.True(t, resp.StatusCode > 400)
@@ -172,9 +169,12 @@ func checkHealth(t *testing.T, port int, shouldError bool) {
 	}
 }
 
-func checkTabletType(t *testing.T, jsonData string, typeWant string) {
+func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tabletAlias)
+	assert.Nil(t, err, "error should be Nil")
+
 	var tablet topodatapb.Tablet
-	err := json.Unmarshal([]byte(jsonData), &tablet)
+	err = json.Unmarshal([]byte(result), &tablet)
 	assert.Nil(t, err, "error should be Nil")
 
 	actualType := tablet.GetType()
@@ -231,9 +231,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rdonlyTablet.Alias)
 	assert.Nil(t, err, "error should be Nil")
 
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", rdonlyTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
-	checkTabletType(t, result, "DRAINED")
+	checkTabletType(t, rdonlyTablet.Alias, "DRAINED")
 
 	// Query service is still running.
 	waitForTabletStatus(rdonlyTablet, "SERVING")
@@ -385,6 +383,178 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 
 	// Tear down custom processes
 	killTablets(t, rTablet, mTablet)
+}
+
+func TestRepeatedInitShardMaster(t *testing.T) {
+	// Test that using InitShardMaster can go back and forth between 2 hosts.
+
+	// Check tablet health
+	checkHealth(t, masterTablet.HTTPPort, false)
+	checkHealth(t, replicaTablet.HTTPPort, false)
+
+	// Make replica tablet as master
+	err := clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, replicaTablet.TabletUID)
+	assert.Nil(t, err, "error should be Nil")
+
+	// Run health check on both, make sure they are both healthy.
+	// Also make sure the types are correct.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", masterTablet.Alias)
+	assert.Nil(t, err, "error should be Nil")
+	checkHealth(t, masterTablet.HTTPPort, false)
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", replicaTablet.Alias)
+	assert.Nil(t, err, "error should be Nil")
+	checkHealth(t, replicaTablet.HTTPPort, false)
+
+	checkTabletType(t, masterTablet.Alias, "REPLICA")
+	checkTabletType(t, replicaTablet.Alias, "MASTER")
+
+	// Come back to the original guy.
+	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
+	assert.Nil(t, err, "error should be Nil")
+
+	// Run health check on both, make sure they are both healthy.
+	// Also make sure the types are correct.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", masterTablet.Alias)
+	assert.Nil(t, err, "error should be Nil")
+	checkHealth(t, masterTablet.HTTPPort, false)
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", replicaTablet.Alias)
+	assert.Nil(t, err, "error should be Nil")
+	checkHealth(t, replicaTablet.HTTPPort, false)
+
+	checkTabletType(t, masterTablet.Alias, "MASTER")
+	checkTabletType(t, replicaTablet.Alias, "REPLICA")
+}
+
+func TestIgnoreHealthError(t *testing.T) {
+	ctx := context.Background()
+	mTablet := clusterInstance.GetVttabletInstance(masterUID)
+
+	//Init Tablets
+	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
+	assert.Nil(t, err, "error should be Nil")
+
+	// Start Mysql Processes
+	masterConn, err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
+	defer masterConn.Close()
+	assert.Nil(t, err, "error should be Nil")
+
+	mTablet.MysqlctlProcess.Stop()
+
+	// Start Vttablet, it should be NOT_SERVING state as mysql is stopped
+	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
+	assert.Nil(t, err, "error should be Nil")
+
+	// Force it healthy.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("IgnoreHealthError", mTablet.Alias, ".*no slave status.*")
+	assert.Nil(t, err, "error should be Nil")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", mTablet.Alias)
+	assert.Nil(t, err, "error should be Nil")
+	waitForTabletStatus(*mTablet, "SERVING")
+
+	// Turn off the force-healthy.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("IgnoreHealthError", mTablet.Alias, "")
+	assert.Nil(t, err, "error should be Nil")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", mTablet.Alias)
+	assert.Nil(t, err, "error should be Nil")
+	waitForTabletStatus(*mTablet, "NOT_SERVING")
+	checkHealth(t, mTablet.HTTPPort, true)
+
+	// Tear down custom processes
+	killTablets(t, mTablet)
+}
+
+func TestMasterRestartSetsTERTimestamp(t *testing.T) {
+	//Test that TER timestamp is set when we restart the MASTER vttablet.
+	// TER = TabletExternallyReparented.
+	// See StreamHealthResponse.tablet_externally_reparented_timestamp for details.
+
+	ctx := context.Background()
+	mTablet := clusterInstance.GetVttabletInstance(masterUID)
+
+	//Init Tablets
+	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
+	assert.Nil(t, err, "error should be Nil")
+
+	// Start Mysql Processes
+	masterConn, err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
+	defer masterConn.Close()
+	assert.Nil(t, err, "error should be Nil")
+
+	// Start Vttablet, it should be NOT_SERVING state as mysql is stopped
+	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	assert.Nil(t, err, "error should be Nil")
+
+	// Make this tablet as master
+	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, mTablet.TabletUID)
+	assert.Nil(t, err, "error should be Nil")
+	waitForTabletStatus(*mTablet, "SERVING")
+
+	// Capture the current TER.
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", mTablet.Alias)
+
+	var streamHealthRes1 querypb.StreamHealthResponse
+	err = json.Unmarshal([]byte(result), &streamHealthRes1)
+	assert.Nil(t, err, "error should be Nil")
+
+	actualType := streamHealthRes1.GetTarget().GetTabletType()
+	tabletType := topodatapb.TabletType_value["MASTER"]
+	got := fmt.Sprintf("%d", actualType)
+	want := fmt.Sprintf("%d", tabletType)
+	assert.Equal(t, want, got)
+
+	assert.NotNil(t, streamHealthRes1.GetTabletExternallyReparentedTimestamp())
+	assert.True(t, streamHealthRes1.GetTabletExternallyReparentedTimestamp() > 0, "TER on MASTER must be set after InitShardMaster")
+
+	// Restart the MASTER vttablet and test again
+
+	// switch to old master
+	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
+	assert.Nil(t, err, "error should be Nil")
+	// kill the newly created tablet
+	killTablets(t, mTablet)
+
+	// start the tablet again
+	mTablet = clusterInstance.GetVttabletInstance(masterUID)
+
+	//Init Tablets
+	err = clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
+	assert.Nil(t, err, "error should be Nil")
+
+	// Start Mysql Processes
+	masterConn, err = cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
+	defer masterConn.Close()
+	assert.Nil(t, err, "error should be Nil")
+
+	// Start Vttablet, it should be NOT_SERVING state as mysql is stopped
+	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	assert.Nil(t, err, "error should be Nil")
+
+	// Make this tablet as master
+	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, mTablet.TabletUID)
+	assert.Nil(t, err, "error should be Nil")
+	waitForTabletStatus(*mTablet, "SERVING")
+
+	// Make sure that the TER increased i.e. it was set to the current time.
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", mTablet.Alias)
+
+	var streamHealthRes2 querypb.StreamHealthResponse
+	err = json.Unmarshal([]byte(result), &streamHealthRes2)
+	assert.Nil(t, err, "error should be Nil")
+
+	actualType = streamHealthRes2.GetTarget().GetTabletType()
+	tabletType = topodatapb.TabletType_value["MASTER"]
+	got = fmt.Sprintf("%d", actualType)
+	want = fmt.Sprintf("%d", tabletType)
+	assert.Equal(t, want, got)
+
+	assert.NotNil(t, streamHealthRes2.GetTabletExternallyReparentedTimestamp())
+	assert.True(t, streamHealthRes2.GetTabletExternallyReparentedTimestamp() > streamHealthRes1.GetTabletExternallyReparentedTimestamp(),
+		"When the MASTER vttablet was restarted, the TER timestamp must be set to the current time.")
+
+	// Tear down custom processes
+	killTablets(t, mTablet)
 }
 
 func killTablets(t *testing.T, tablets ...*cluster.Vttablet) {
