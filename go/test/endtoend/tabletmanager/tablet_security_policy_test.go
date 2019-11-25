@@ -35,13 +35,12 @@ func TestFallbackSecurityPolicy(t *testing.T) {
 	assert.Nil(t, err, "error should be Nil")
 
 	// Start Mysql Processes
-	masterConn, err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
-	defer masterConn.Close()
+	err = cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
 	assert.Nil(t, err, "error should be Nil")
 
 	// Requesting an unregistered security_policy should fallback to deny-all.
 	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "bogus"}
-	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err, "error should be Nil")
 
 	// It should deny ADMIN role.
@@ -80,7 +79,6 @@ func assertAllowedURLTest(t *testing.T, url string) {
 	body, err := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
-	assert.True(t, resp.StatusCode < 400)
 	assert.NotContains(t, string(body), "Access denied: not allowed")
 }
 
@@ -93,13 +91,12 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 	assert.Nil(t, err, "error should be Nil")
 
 	// Start Mysql Processes
-	masterConn, err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
-	defer masterConn.Close()
+	err = cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
 	assert.Nil(t, err, "error should be Nil")
 
 	// Requesting a deny-all security_policy.
 	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "deny-all"}
-	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err, "error should be Nil")
 
 	// It should deny ADMIN role.
@@ -129,13 +126,12 @@ func TestReadOnlySecurityPolicy(t *testing.T) {
 	assert.Nil(t, err, "error should be Nil")
 
 	// Start Mysql Processes
-	masterConn, err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
-	defer masterConn.Close()
+	err = cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
 	assert.Nil(t, err, "error should be Nil")
 
 	// Requesting a read-only security_policy.
 	clusterInstance.VtTabletExtraArgs = []string{"-security_policy", "read-only"}
-	err = clusterInstance.StartVttablet(mTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err, "error should be Nil")
 
 	// It should deny ADMIN role.
