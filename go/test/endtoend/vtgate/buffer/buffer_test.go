@@ -21,9 +21,9 @@ During a master failover, vtgate should automatically buffer (stall) requests
 for a configured time and retry them after the failover is over.
 
 The test reproduces such a scenario as follows:
-- two threads constantly execute a critical read respectively a write (UPDATE)
+- run two threads, the first thread continuously executes a critical read and the second executes a write (UPDATE)
 - vtctl PlannedReparentShard runs a master failover
-- both threads should not see any error during despite the failover
+- both threads should not see any error during the failover
 */
 
 package buffer
@@ -47,6 +47,8 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
+	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
@@ -55,12 +57,14 @@ var (
 	keyspaceUnshardedName = "ks1"
 	cell                  = "zone1"
 	hostname              = "localhost"
-	sqlSchema             = `create table buffer(
-									id BIGINT NOT NULL,
-									msg VARCHAR(64) NOT NULL,
-									PRIMARY KEY (id)
-								) Engine=InnoDB`
-	wg = &sync.WaitGroup{}
+	sqlSchema             = `
+	create table buffer(
+		id BIGINT NOT NULL,
+		msg VARCHAR(64) NOT NULL,
+		PRIMARY KEY (id)
+	) Engine=InnoDB;`
+	wg       = &sync.WaitGroup{}
+	tmClient = tmc.NewClient()
 )
 
 const (
@@ -160,7 +164,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 			if c.commitErrors > 1 {
 				return err
 			}
-			fmt.Printf("UPDATE %d failed during COMMIT. This is okay once because we do not support buffering it. err: %s", attempts, err.Error())
+			fmt.Printf("UPDATE %d failed during ROLLBACK. This is okay once because we do not support buffering it. err: %s", attempts, err.Error())
 		}
 	}
 	if err != nil {
@@ -172,7 +176,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 		if c.commitErrors > 1 {
 			return err
 		}
-		fmt.Printf("UPDATE %d failed during COMMIT. This is okay once because we do not support buffering it. err: %s", attempts, err.Error())
+		fmt.Printf("UPDATE %d failed during COMMIT with err: %s.This is okay once because we do not support buffering it.", attempts, err.Error())
 	}
 	return nil
 }
@@ -266,7 +270,7 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
 
 	if isExternalParent {
-		externalReparenting(t, clusterInstance)
+		externalReparenting(ctx, t, clusterInstance)
 	} else {
 		//reparent call
 		clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
@@ -348,19 +352,21 @@ func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[st
 	return paramVal
 }
 
-func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
+func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
 	start := time.Now()
 
 	// Demote master Query
 	master := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 	replica := clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
+	oldMaster := master
+	newMaster := replica
 	master.VttabletProcess.QueryTablet(demoteMasterQuery, keyspaceUnshardedName, true)
 	if master.VttabletProcess.EnableSemiSync {
 		master.VttabletProcess.QueryTablet(disableSemiSyncMasterQuery, keyspaceUnshardedName, true)
 	}
 
 	// Wait for replica to catch up to master.
-	waitForReplicationPos(t, &master, &replica, 60.0)
+	waitForReplicationPos(ctx, t, &master, &replica, 60.0)
 
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0
@@ -376,11 +382,9 @@ func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	if replica.VttabletProcess.EnableSemiSync {
 		replica.VttabletProcess.QueryTablet(enableSemiSyncMasterQuery, keyspaceUnshardedName, true)
 	}
-	oldMaster := master
-	newMaster := replica
 
-	// Configure old master to use new master.
-	_, gtID := getMasterPosition(t, &newMaster)
+	// Configure old master to replicate from new master.
+	_, gtID := getMasterPosition(ctx, t, &newMaster)
 
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
@@ -391,26 +395,25 @@ func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias)
 }
 
-func waitForReplicationPos(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet, timeout float64) {
-	replicationPosA, _ := getMasterPosition(t, tabletA)
+func waitForReplicationPos(ctx context.Context, t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet, timeout float64) {
+	replicationPosA, _ := getMasterPosition(ctx, t, tabletA)
 	for {
-		replicationPosB, _ := getMasterPosition(t, tabletB)
+		replicationPosB, _ := getMasterPosition(ctx, t, tabletB)
 		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
 			break
 		}
-		msg := fmt.Sprintf("%s's replication position to catch up %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
+		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
 		waitStep(t, msg, timeout, 0.01)
 	}
 }
 
-func getMasterPosition(t *testing.T, tablet *cluster.Vttablet) (string, string) {
-	qr, err := tablet.VttabletProcess.QueryTablet(masterPositionQuery, keyspaceUnshardedName, true)
+func getMasterPosition(ctx context.Context, t *testing.T, tablet *cluster.Vttablet) (string, string) {
+	vtablet := getTablet(tablet.GrpcPort)
+	newPos, err := tmClient.MasterPosition(ctx, vtablet)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	val := qr.Rows[0][0]
-	gtID := val.ToString()
-	newPos := "MySQL56/" + gtID
+	gtID := strings.SplitAfter(newPos, "/")[1]
 	return newPos, gtID
 }
 
@@ -433,4 +436,10 @@ func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) floa
 	}
 	time.Sleep(time.Duration(sleepTime) * time.Second)
 	return timeout
+}
+
+func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
+	portMap := make(map[string]int32)
+	portMap["grpc"] = int32(tabletGrpcPort)
+	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
 }

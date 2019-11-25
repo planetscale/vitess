@@ -114,14 +114,14 @@ func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirec
 	return conn, err
 }
 
-// ExecuteCommandWithOutput executes any sqlctl command and returns output
+// ExecuteCommandWithOutput executes any mysqlctl command and returns output
 func (mysqlctl *MysqlctlProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		args...,
 	)
-	println(fmt.Sprintf("Executing sqlctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
-	log.Info(fmt.Sprintf("Executing sqlctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	println(fmt.Sprintf("Executing mysqlctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Info(fmt.Sprintf("Executing mysqlctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	resultByte, err := tmpProcess.CombinedOutput()
 	return string(resultByte), err
 }
