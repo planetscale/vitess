@@ -199,7 +199,7 @@ func TestRepeatedInitShardMaster(t *testing.T) {
 	checkTabletType(t, replicaTablet.Alias, "REPLICA")
 }
 
-// TestMasterRestartSetsTERTimestamp is flacky and may fail in few cases.
+// TestMasterRestartSetsTERTimestamp is flaky and may fail in few cases.
 func TestMasterRestartSetsTERTimestamp(t *testing.T) {
 	// Test that TER timestamp is set when we restart the MASTER vttablet.
 	// TER = TabletExternallyReparented.
