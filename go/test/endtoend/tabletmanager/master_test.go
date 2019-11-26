@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -123,6 +124,9 @@ func TestMasterRestartSetsTERTimestamp(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, rTablet.TabletUID)
 	assert.Nil(t, err, "error should be Nil")
 	waitForTabletStatus(*rTablet, "SERVING")
+
+	// Sleep 1 sec to make sure enough time has passed to compare ExternallyReparentedTimestamp
+	time.Sleep(1 * time.Second)
 
 	// Make sure that the TER increased i.e. it was set to the current time.
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
