@@ -28,7 +28,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestRepeatedInitShardMaster(t *testing.T) {
+func RepeatedInitShardMaster(t *testing.T) {
 	// Test that using InitShardMaster can go back and forth between 2 hosts.
 
 	// Check tablet health
