@@ -13,12 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package tabletmanager
+
+package master
 
 import (
-	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -28,12 +31,138 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func RepeatedInitShardMaster(t *testing.T) {
-	// Test that using InitShardMaster can go back and forth between 2 hosts.
+var (
+	clusterInstance *cluster.LocalProcessCluster
+	masterTablet    cluster.Vttablet
+	replicaTablet   cluster.Vttablet
+	hostname        = "localhost"
+	keyspaceName    = "ks"
+	shardName       = "0"
+	keyspaceShard   = "ks/" + shardName
+	dbName          = "vt_" + keyspaceName
+	username        = "vt_dba"
+	cell            = "zone1"
+	sqlSchema       = `
+	create table t1(
+		id bigint,
+		value varchar(16),
+		primary key(id)
+	) Engine=InnoDB;
+`
 
-	// Check tablet health
-	checkHealth(t, masterTablet.HTTPPort, false)
-	checkHealth(t, replicaTablet.HTTPPort, false)
+	vSchema = `
+	{
+    "sharded": true,
+    "vindexes": {
+      "hash": {
+        "type": "hash"
+      }
+    },
+    "tables": {
+      "t1": {
+        "column_vindexes": [
+          {
+            "column": "id",
+            "name": "hash"
+          }
+        ]
+      }
+    }
+  }`
+)
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+
+	exitCode := func() int {
+		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+		defer clusterInstance.Teardown()
+
+		// Start topo server
+		err := clusterInstance.StartTopo()
+		if err != nil {
+			return 1
+		}
+
+		// Start keyspace
+		keyspace := &cluster.Keyspace{
+			Name:      keyspaceName,
+			SchemaSQL: sqlSchema,
+			VSchema:   vSchema,
+		}
+
+		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+			return 1
+		}
+
+		// Collect table paths and ports
+		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+		for _, tablet := range tablets {
+			if tablet.Type == "master" {
+				masterTablet = tablet
+			} else if tablet.Type != "rdonly" {
+				replicaTablet = tablet
+			} else {
+				// rdOnlyTablet = tablet
+			}
+		}
+
+		return m.Run()
+	}()
+	os.Exit(exitCode)
+}
+
+func waitForTabletStatus(tablet cluster.Vttablet, status string) {
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		if tablet.VttabletProcess.WaitForStatus(status) {
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+func checkHealth(t *testing.T, port int, shouldError bool) {
+	url := fmt.Sprintf("http://localhost:%d/healthz", port)
+	resp, err := http.Get(url)
+	assert.Nil(t, err, "error should be Nil")
+	if shouldError {
+		assert.True(t, resp.StatusCode > 400)
+	} else {
+		assert.Equal(t, 200, resp.StatusCode)
+	}
+}
+
+func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tabletAlias)
+	assert.Nil(t, err, "error should be Nil")
+
+	var tablet topodatapb.Tablet
+	err = json.Unmarshal([]byte(result), &tablet)
+	assert.Nil(t, err, "error should be Nil")
+
+	actualType := tablet.GetType()
+	got := fmt.Sprintf("%d", actualType)
+
+	tabletType := topodatapb.TabletType_value[typeWant]
+	want := fmt.Sprintf("%d", tabletType)
+
+	assert.Equal(t, want, got)
+}
+
+func killTablets(t *testing.T, tablets ...*cluster.Vttablet) {
+	for _, tablet := range tablets {
+		//Stop Mysqld
+		tablet.MysqlctlProcess.Stop()
+
+		//Tear down Tablet
+		tablet.VttabletProcess.TearDown(true)
+
+	}
+}
+
+func TestRepeatedInitShardMaster(t *testing.T) {
+	// Test that using InitShardMaster can go back and forth between 2 hosts.
 
 	// Make replica tablet as master
 	err := clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, replicaTablet.TabletUID)
@@ -70,33 +199,19 @@ func RepeatedInitShardMaster(t *testing.T) {
 	checkTabletType(t, replicaTablet.Alias, "REPLICA")
 }
 
+// TestMasterRestartSetsTERTimestamp is flacky and may fail in few cases.
 func TestMasterRestartSetsTERTimestamp(t *testing.T) {
 	// Test that TER timestamp is set when we restart the MASTER vttablet.
 	// TER = TabletExternallyReparented.
 	// See StreamHealthResponse.tablet_externally_reparented_timestamp for details.
 
-	ctx := context.Background()
-	rTablet := clusterInstance.GetVttabletInstance(replicaUID)
-
-	// Init Tablets
-	err := clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err, "error should be Nil")
-
-	// Start Mysql Processes
-	err = cluster.StartMySQL(ctx, rTablet, username, clusterInstance.TmpDirectory)
-	assert.Nil(t, err, "error should be Nil")
-
-	// Start Vttablet
-	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err, "error should be Nil")
-
 	// Make this tablet as master
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, rTablet.TabletUID)
+	err := clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, replicaTablet.TabletUID)
 	assert.Nil(t, err, "error should be Nil")
-	waitForTabletStatus(*rTablet, "SERVING")
+	waitForTabletStatus(replicaTablet, "SERVING")
 
 	// Capture the current TER.
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", replicaTablet.Alias)
 
 	var streamHealthRes1 querypb.StreamHealthResponse
 	err = json.Unmarshal([]byte(result), &streamHealthRes1)
@@ -114,22 +229,22 @@ func TestMasterRestartSetsTERTimestamp(t *testing.T) {
 	// Restart the MASTER vttablet and test again
 
 	// kill the newly created tablet
-	rTablet.VttabletProcess.TearDown(false)
+	replicaTablet.VttabletProcess.TearDown(false)
 
 	// Start Vttablet
-	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
+	err = clusterInstance.StartVttablet(&replicaTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err, "error should be Nil")
 
 	// Make this tablet as master
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, rTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, replicaTablet.TabletUID)
 	assert.Nil(t, err, "error should be Nil")
-	waitForTabletStatus(*rTablet, "SERVING")
+	waitForTabletStatus(replicaTablet, "SERVING")
 
 	// Sleep 1 sec to make sure enough time has passed to compare ExternallyReparentedTimestamp
 	time.Sleep(1 * time.Second)
 
 	// Make sure that the TER increased i.e. it was set to the current time.
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", replicaTablet.Alias)
 
 	var streamHealthRes2 querypb.StreamHealthResponse
 	err = json.Unmarshal([]byte(result), &streamHealthRes2)
@@ -151,5 +266,5 @@ func TestMasterRestartSetsTERTimestamp(t *testing.T) {
 	waitForTabletStatus(masterTablet, "SERVING")
 
 	// Tear down custom processes
-	killTablets(t, rTablet)
+	killTablets(t, &replicaTablet)
 }
