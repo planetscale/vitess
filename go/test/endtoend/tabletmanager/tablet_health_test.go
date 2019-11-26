@@ -322,7 +322,7 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	assert.Error(t, err, "Fail as mysqld not running")
 
 	//The above notice to not fix replication should survive tablet restart.
-	err = rTablet.VttabletProcess.TearDown(false)
+	err = rTablet.VttabletProcess.TearDown()
 	assert.Nil(t, err, "error should be Nil")
 	err = rTablet.VttabletProcess.Setup()
 	assert.Nil(t, err, "error should be Nil")
@@ -431,7 +431,7 @@ func killTablets(t *testing.T, tablets ...*cluster.Vttablet) {
 		tablet.MysqlctlProcess.Stop()
 
 		//Tear down Tablet
-		tablet.VttabletProcess.TearDown(true)
+		tablet.VttabletProcess.TearDown()
 
 	}
 }

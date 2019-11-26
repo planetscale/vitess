@@ -156,7 +156,7 @@ func killTablets(t *testing.T, tablets ...*cluster.Vttablet) {
 		tablet.MysqlctlProcess.Stop()
 
 		//Tear down Tablet
-		tablet.VttabletProcess.TearDown(true)
+		tablet.VttabletProcess.TearDown()
 
 	}
 }
@@ -229,7 +229,7 @@ func TestMasterRestartSetsTERTimestamp(t *testing.T) {
 	// Restart the MASTER vttablet and test again
 
 	// kill the newly created tablet
-	replicaTablet.VttabletProcess.TearDown(false)
+	replicaTablet.VttabletProcess.TearDown()
 
 	// Start Vttablet
 	err = clusterInstance.StartVttablet(&replicaTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)

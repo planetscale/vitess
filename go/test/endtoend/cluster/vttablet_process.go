@@ -12,6 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
 */
 
 package cluster
@@ -164,7 +165,7 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 }
 
 // TearDown shuts down the running vttablet service
-func (vttablet *VttabletProcess) TearDown(cleanDir bool) error {
+func (vttablet *VttabletProcess) TearDown() error {
 	if vttablet.proc == nil {
 		fmt.Printf("No process found for vttablet %d", vttablet.TabletUID)
 	}
@@ -174,16 +175,10 @@ func (vttablet *VttabletProcess) TearDown(cleanDir bool) error {
 	// Attempt graceful shutdown with SIGTERM first
 	vttablet.proc.Process.Signal(syscall.SIGTERM)
 
-	if cleanDir {
-		os.RemoveAll(vttablet.Directory)
-	} else {
-		os.RemoveAll(vttablet.PidFile)
-	}
-
 	select {
-	case err := <-vttablet.exit:
+	case <-vttablet.exit:
 		vttablet.proc = nil
-		return err
+		return nil
 
 	case <-time.After(10 * time.Second):
 		vttablet.proc.Process.Kill()
@@ -218,7 +213,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
 		Binary:                      "vttablet",
-		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d/vttable.pid", tabletUID)),
+		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d/querylog.txt", tabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)),
 		TabletPath:                  fmt.Sprintf("%s-%010d", cell, tabletUID),
 		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream",
@@ -233,7 +228,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		Port:                        port,
 		GrpcPort:                    grpcPort,
-		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttable.pid", tabletUID)),
+		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttablet.pid", tabletUID)),
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
 		EnableSemiSync:              enableSemiSync,

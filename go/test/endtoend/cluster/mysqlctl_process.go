@@ -70,7 +70,7 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"shutdown",
 	)
-	return tmpProcess.Run()
+	return tmpProcess.Start()
 }
 
 // CleanupFiles clean the mysql files to make sure we can start the same process again
@@ -115,7 +115,7 @@ func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username 
 	}
 	params := mysql.ConnParams{
 		Uname:      username,
-		UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock")),
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock"),
 	}
 
 	conn, err := mysql.Connect(ctx, &params)
