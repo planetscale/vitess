@@ -134,7 +134,7 @@ func initClusterForInitialSharding(shardNames []string, totalTabletsRequired int
 			}
 
 			// start vttablet process
-			tablet.VttabletProcess = *cluster.VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				ClusterInstance.Cell,
