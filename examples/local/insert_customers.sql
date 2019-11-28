@@ -1,3 +1,11 @@
+insert into customer(fullname, nationalid, country) values ('Park Wan-suh', '405-678-912', 'Korea');
+insert into customer(fullname, nationalid, country) values ('Ko Un', '506-789-123', 'Korea');
+insert into customer(fullname, nationalid, country) values ('Cixin Liu', '789-123-456', 'China');
+insert into customer(fullname, nationalid, country) values ('Jian Ma', '891-234-567', 'China');
+insert into customer(fullname, nationalid, country) values ('Waltzing Matilda', '567-891-234', 'Australia');
+insert into customer(fullname, nationalid, country) values ('Donald Bradman', '678-912-345', 'Australia');
+insert into customer(fullname, nationalid, country) values ('Lorde', '607-891-234', 'New Zealand');
+insert into customer(fullname, nationalid, country) values ('Peter Jackson', '708-912-345', 'New Zealand');
 insert into customer(fullname, nationalid, country) values ('Philip Roth', '123-456-789', 'United States');
 insert into customer(fullname, nationalid, country) values ('Gary Shteyngart', '234-567-891', 'United States');
 insert into customer(fullname, nationalid, country) values ('Margaret Atwood', '345-678-912', 'Canada');
@@ -6,11 +14,3 @@ insert into customer(fullname, nationalid, country) values ('Albert Camus', '912
 insert into customer(fullname, nationalid, country) values ('Colette', '102-345-678', 'France');
 insert into customer(fullname, nationalid, country) values ('Hermann Hesse', '304-567-891', 'Germany');
 insert into customer(fullname, nationalid, country) values ('Cornelia Funke', '203-456-789', 'Germany');
-insert into customer(fullname, nationalid, country) values ('Cixin Liu', '789-123-456', 'China');
-insert into customer(fullname, nationalid, country) values ('Jian Ma', '891-234-567', 'China');
-insert into customer(fullname, nationalid, country) values ('Haruki Murakami', '405-678-912', 'Japan');
-insert into customer(fullname, nationalid, country) values ('Banana Yoshimoto', '506-789-123', 'Japan');
-insert into customer(fullname, nationalid, country) values ('Arundhati Roy', '567-891-234', 'India');
-insert into customer(fullname, nationalid, country) values ('Shashi Tharoor', '678-912-345', 'India');
-insert into customer(fullname, nationalid, country) values ('Andrea Hirata', '607-891-234', 'Indonesia');
-insert into customer(fullname, nationalid, country) values ('Ayu Utami', '708-912-345', 'Indonesia');
