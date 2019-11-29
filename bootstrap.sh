@@ -236,7 +236,7 @@ function install_etcd() {
   rm "$file"
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
 }
-which etcd || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
+command -v etcd || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
 
 # Download and install consul, link consul binary into our root.
@@ -260,7 +260,7 @@ function install_consul() {
   unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
-install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
+command -v consul || install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
 
 
 # Install py-mock.
