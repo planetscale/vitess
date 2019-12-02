@@ -64,6 +64,7 @@ type VttabletProcess struct {
 	EnableSemiSync              bool
 	SupportBackup               bool
 	ServingStatus               string
+	DbPwd                       string
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -251,8 +252,15 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	if useDb {
 		dbParams.DbName = "vt_" + keyspace
 	}
+	if vttablet.DbPwd != "" {
+		dbParams.Pass = vttablet.DbPwd
+	}
+	return executeFetch(&dbParams, query)
+}
+
+func executeFetch(params *mysql.ConnParams, query string) (*sqltypes.Result, error) {
 	ctx := context.Background()
-	dbConn, err := mysql.Connect(ctx, &dbParams)
+	dbConn, err := mysql.Connect(ctx, params)
 	if err != nil {
 		return nil, err
 	}

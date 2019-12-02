@@ -26,7 +26,7 @@ This test simulates the first time a database has to be split.
 
 */
 
-package v3
+package multi
 
 import (
 	"testing"
@@ -36,10 +36,13 @@ import (
 )
 
 func TestInitialSharding(t *testing.T) {
-	code, err := sharding.ClusterWrapper(false)
+	code, err := sharding.ClusterWrapper(true)
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}
-	sharding.TestInitialShardingWithVersion(t, &sharding.ClusterInstance.Keyspaces[0], 3, topodata.KeyspaceIdType_UINT64, false, false)
+	sharding.TestInitialShardingWithVersion(t, &sharding.ClusterInstance.Keyspaces[0], 2, topodata.KeyspaceIdType_UINT64, true, false)
+	sharding.TestInitialShardingWithVersion(t, &sharding.ClusterInstance.Keyspaces[1], 2, topodata.KeyspaceIdType_UINT64, true, true)
+	sharding.KillTabletsInKeyspace(&sharding.ClusterInstance.Keyspaces[0])
+	sharding.KillTabletsInKeyspace(&sharding.ClusterInstance.Keyspaces[1])
 	defer sharding.ClusterInstance.Teardown()
 }
