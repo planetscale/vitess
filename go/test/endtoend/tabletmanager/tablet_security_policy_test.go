@@ -119,7 +119,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 
 func TestReadOnlySecurityPolicy(t *testing.T) {
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance(masterUID)
+	mTablet := clusterInstance.GetVttabletInstance(0)
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)

@@ -75,7 +75,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -181,7 +181,7 @@ func TestRepeatedInitShardMaster(t *testing.T) {
 	checkTabletType(t, masterTablet.Alias, "REPLICA")
 	checkTabletType(t, replicaTablet.Alias, "MASTER")
 
-	// Come back to the original guy.
+	// Come back to the original tablet.
 	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
 	assert.Nil(t, err, "error should be Nil")
 
