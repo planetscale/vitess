@@ -19,7 +19,6 @@ package tabletmanager
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -27,6 +26,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -173,7 +173,7 @@ func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 	assert.Nil(t, err, "error should be Nil")
 
 	var tablet topodatapb.Tablet
-	err = json.Unmarshal([]byte(result), &tablet)
+	err = json2.Unmarshal([]byte(result), &tablet)
 	assert.Nil(t, err, "error should be Nil")
 
 	actualType := tablet.GetType()
@@ -187,7 +187,7 @@ func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 
 func verifyStreamHealth(t *testing.T, result string) {
 	var streamHealthResponse querypb.StreamHealthResponse
-	err := json.Unmarshal([]byte(result), &streamHealthResponse)
+	err := json2.Unmarshal([]byte(result), &streamHealthResponse)
 	if err != nil {
 		t.Fatal(err)
 	}
