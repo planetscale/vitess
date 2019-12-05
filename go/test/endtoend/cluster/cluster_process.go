@@ -373,7 +373,7 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 					mysqlctlProcessList = append(mysqlctlProcessList, proc)
 				}
 
-				if err = tablet.VttabletProcess.TearDown(true); err != nil {
+				if err = tablet.VttabletProcess.TearDown(); err != nil {
 					log.Error(err.Error())
 					return
 				}
