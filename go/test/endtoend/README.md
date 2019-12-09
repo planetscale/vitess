@@ -5,9 +5,7 @@ As Vitess developers, our goal is to have great end to end test coverage. In the
 
 ## End to End Tests
 
-These tests run a complicated setups, and take a lot of resources. They are meant to test end-to-end behaviors of the Vitess ecosystem, and complement the unit tests.
-
-For instance, we test each RPC interaction independently (client to vtgate, vtgate to vttablet, vttablet to MySQL, see previous sections). But is also good to have an end-to-end test that validates everything works together.
+These tests are meant to test end-to-end behaviors of the Vitess ecosystem, and complement the unit tests. For instance, we test each RPC interaction independently (client to vtgate, vtgate to vttablet, vttablet to MySQL, see previous sections). But is also good to have an end-to-end test that validates everything works together.
 
 These tests almost always launch a topology service, a few mysqld instances, a few vttablets, a vtctld process, a few vtgates, ... They use the real production processes, and real replication. This setup is mandatory for properly testing re-sharding, cluster operations, ... They all however run on the same machine, so they might be limited by the environment.
 
@@ -23,7 +21,7 @@ All the tests should be launching a real cluster just like the production setup 
 The cluster launch functions are provided under go/test/endtoend/cluster. This is still work in progress so feel free to add new function as required or update the existing ones.   
 
 In general the cluster is build in following order
-- Create KeySpace
+- Define Keyspace
 - Define Shards
 - Start topology service [default etcd]
 - Start vtctld client
