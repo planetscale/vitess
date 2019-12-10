@@ -100,7 +100,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
 
-  if vttablet.SupportsBackup {
+	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
 	}
 	if vttablet.EnableSemiSync {
@@ -217,11 +217,31 @@ func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) err
 	return fmt.Errorf("vttablet %s, expected status not reached", vttablet.TabletPath)
 }
 
-func (vttablet *VttabletProcess) getVReplStreamCount() string {
-	resultMap := vttablet.GetVars()
-	object := reflect.ValueOf(resultMap["VReplicationStreamCount"])
-	return fmt.Sprintf("%v", object)
+// WaitForBinlogServerState wait for the tablet's binlog server to be in the provided state.
+func (vttablet *VttabletProcess) WaitForBinlogServerState(expectedStatus string) error {
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		if vttablet.getVarValue("UpdateStreamState") == expectedStatus {
+			return nil
+		}
+		select {
+		case err := <-vttablet.exit:
+			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
+		default:
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("vttablet %s, expected status not reached", vttablet.TabletPath)
+}
 
+func (vttablet *VttabletProcess) getVReplStreamCount() string {
+	return vttablet.getVarValue("VReplicationStreamCount")
+}
+
+func (vttablet *VttabletProcess) getVarValue(keyname string) string {
+	resultMap := vttablet.GetVars()
+	object := reflect.ValueOf(resultMap[keyname])
+	return fmt.Sprintf("%v", object)
 }
 
 // TearDown shuts down the running vttablet service
@@ -243,7 +263,6 @@ func (vttablet *VttabletProcess) TearDown() error {
 		return <-vttablet.exit
 	}
 }
-
 
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {

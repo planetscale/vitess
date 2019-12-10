@@ -458,8 +458,13 @@ func getRandomNumber(maxNumber int32, baseNumber int) int {
 	return int(rand.Int31n(maxNumber)) + baseNumber
 }
 
-// GetVttabletInstance creates a new vttablet object
+// GetVttabletInstance create a new vttablet object
 func (cluster *LocalProcessCluster) GetVttabletInstance(UID int) *Vttablet {
+	return cluster.GetVttabletInstanceWithType(UID, "replica")
+}
+
+// GetVttabletInstanceWithType create a new vttablet object with required type
+func (cluster *LocalProcessCluster) GetVttabletInstanceWithType(UID int, tabletType string) *Vttablet {
 	if UID == 0 {
 		UID = cluster.GetAndReserveTabletUID()
 	}
@@ -468,7 +473,7 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(UID int) *Vttablet {
 		HTTPPort:  cluster.GetAndReservePort(),
 		GrpcPort:  cluster.GetAndReservePort(),
 		MySQLPort: cluster.GetAndReservePort(),
-		Type:      "replica",
+		Type:      tabletType,
 		Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, UID),
 	}
 }
