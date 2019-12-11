@@ -17,14 +17,21 @@ limitations under the License.
 package binlog
 
 import (
+	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 var (
@@ -40,9 +47,20 @@ var (
 					index by_msg (msg)
 					) Engine=InnoDB
 `
+	commonTabletArg = []string{
+		"-vreplication_healthcheck_topology_refresh", "1s",
+		"-vreplication_healthcheck_retry_delay", "1s",
+		"-vreplication_retry_delay", "1s",
+		"-degraded_threshold", "5s",
+		"-lock_tables_timeout", "5s",
+		"-watch_replication_stream",
+		"-enable_replication_reporter",
+		"-serving_state_grace_period", "1s",
+		"-binlog_player_protocol", "grpc",
+	}
 	vSchema = `
 		{
-		  "sharded": true,
+		  "sharded": false,
 		  "vindexes": {
 			"hash_index": {
 			  "type": "hash"
@@ -69,8 +87,57 @@ var (
 	destRdonly  *cluster.Vttablet
 )
 
-func TestSomething(t *testing.T) {
-	assert.True(t, true, "it is passing")
+func TestCharset(t *testing.T) {
+	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
+
+	insertSQL := `insert into test_table(id,msg) values(1, 'Šṛ́rỏé')`
+	_, err := queryTablet(t, *srcMaster, insertSQL, "latin1")
+	assert.Nil(t, err)
+
+	waitForReplicaEvent(t, position, insertSQL, *destReplica)
+	data, err := queryTablet(t, *destMaster, "select id, msg from test_table where id = 1", "")
+	assert.Nil(t, err)
+	assert.NotNil(t, data.Rows)
+	assert.Equal(t, len(data.Rows), 1)
+}
+
+func waitForReplicaEvent(t *testing.T, position string, sql string, vttablet cluster.Vttablet) {
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		println("fetching with position " + position)
+		output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletUpdateStream", "-position", position, "-count", "1", vttablet.Alias)
+		assert.Nil(t, err)
+		var binlogTxn binlogdata.BinlogTransaction
+
+		err = json.Unmarshal([]byte(output), &binlogTxn)
+		assert.Nil(t, err)
+		for _, statement := range binlogTxn.Statements {
+			if string(statement.Sql) == sql {
+				return
+			} else {
+				println(fmt.Sprintf("expected [ %s ], got [ %s ]", sql, string(statement.Sql)))
+				time.Sleep(300 * time.Millisecond)
+			}
+		}
+		position = binlogTxn.EventToken.Position
+	}
+}
+
+func queryTablet(t *testing.T, vttablet cluster.Vttablet, query string, charset string) (*sqltypes.Result, error) {
+	dbParams := mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(vttablet.VttabletProcess.Directory, "mysql.sock"),
+
+		DbName: fmt.Sprintf("vt_%s", keyspaceName),
+	}
+	if charset != "" {
+		dbParams.Charset = charset
+	}
+	ctx := context.Background()
+	dbConn, err := mysql.Connect(ctx, &dbParams)
+	assert.Nil(t, err)
+	defer dbConn.Close()
+	return dbConn.ExecuteFetch(query, 1000, true)
 }
 
 func TestMain(m *testing.M) {
@@ -79,7 +146,7 @@ func TestMain(m *testing.M) {
 	exitcode, err := func() (int, error) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
-
+		os.Setenv("EXTRA_MY_CNF", path.Join(os.Getenv("VTROOT"), "config", "mycnf", "default-fast.cnf"))
 		localCluster.Keyspaces = append(localCluster.Keyspaces, cluster.Keyspace{
 			Name: keyspaceName,
 		})
@@ -98,9 +165,23 @@ func TestMain(m *testing.M) {
 		destRdonly = localCluster.GetVttabletInstanceWithType(0, "rdonly")
 
 		var mysqlProcs []*exec.Cmd
-		println("tablets done")
 		for _, tablet := range []*cluster.Vttablet{srcMaster, srcReplica, srcRdonly, destMaster, destReplica, destRdonly} {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
+				tablet.GrpcPort,
+				tablet.TabletUID,
+				cell,
+				"",
+				keyspaceName,
+				localCluster.VtctldProcess.Port,
+				tablet.Type,
+				localCluster.TopoPort,
+				hostname,
+				localCluster.TmpDirectory,
+				commonTabletArg,
+				true,
+			)
+			tablet.VttabletProcess.SupportsBackup = true
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				return 1, err
@@ -121,18 +202,25 @@ func TestMain(m *testing.M) {
 			Name:      "0",
 			Vttablets: []cluster.Vttablet{*srcMaster, *srcReplica, *srcRdonly},
 		}
+		for idx := range shard1.Vttablets {
+			shard1.Vttablets[idx].VttabletProcess.Shard = shard1.Name
+		}
 		localCluster.Keyspaces[0].Shards = append(localCluster.Keyspaces[0].Shards, shard1)
 
 		shard2 := cluster.Shard{
-			Name:      "1",
+			Name:      "-",
 			Vttablets: []cluster.Vttablet{*destMaster, *destReplica, *destRdonly},
 		}
+		for idx := range shard2.Vttablets {
+			shard2.Vttablets[idx].VttabletProcess.Shard = shard2.Name
+		}
 		localCluster.Keyspaces[0].Shards = append(localCluster.Keyspaces[0].Shards, shard2)
+
 		for _, tablet := range shard1.Vttablets {
 			if err := localCluster.VtctlclientProcess.InitTablet(&tablet, cell, keyspaceName, hostname, shard1.Name); err != nil {
 				return 1, err
 			}
-			if err := localCluster.StartVttablet(&tablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shard1.Name); err != nil {
+			if err := tablet.VttabletProcess.Setup(); err != nil {
 				return 1, err
 			}
 		}
@@ -159,7 +247,7 @@ func TestMain(m *testing.M) {
 			if err := localCluster.VtctlclientProcess.InitTablet(&tablet, cell, keyspaceName, hostname, shard2.Name); err != nil {
 				return 1, err
 			}
-			if err := localCluster.StartVttablet(&tablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shard2.Name); err != nil {
+			if err := tablet.VttabletProcess.Setup(); err != nil {
 				return 1, err
 			}
 		}
@@ -167,15 +255,22 @@ func TestMain(m *testing.M) {
 		if err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard2.Name, cell, destMaster.TabletUID); err != nil {
 			return 1, err
 		}
+		_ = localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 		if err := localCluster.VtctlclientProcess.ExecuteCommand("CopySchemaShard", srcReplica.Alias, fmt.Sprintf("%s/%s", keyspaceName, shard2.Name)); err != nil {
 			return 1, err
 		}
-
-		if err := localCluster.VtworkerProcess.ExecuteCommand("--cell", cell,
-			"--use_v3_resharding_mode=true",
+		localCluster.VtworkerProcess = *cluster.VtworkerProcessInstance(localCluster.GetAndReservePort(),
+			localCluster.GetAndReservePort(),
+			localCluster.TopoPort,
+			localCluster.Hostname,
+			localCluster.TmpDirectory)
+		localCluster.VtworkerProcess.Cell = cell
+		if err := localCluster.VtworkerProcess.ExecuteVtworkerCommand(localCluster.VtworkerProcess.Port,
+			localCluster.VtworkerProcess.GrpcPort, "--use_v3_resharding_mode=true",
 			"SplitClone",
 			"--chunk_count", "10",
 			"--min_rows_per_chunk", "1",
+			"--exclude_tables", "unrelated",
 			"--min_healthy_rdonly_tablets", "1",
 			fmt.Sprintf("%s/%s", keyspaceName, shard1.Name)); err != nil {
 			return 1, err
@@ -186,7 +281,6 @@ func TestMain(m *testing.M) {
 		if err := destReplica.VttabletProcess.WaitForBinlogServerState("Enabled"); err != nil {
 			return 1, err
 		}
-
 		return m.Run(), nil
 	}()
 	if err != nil {
