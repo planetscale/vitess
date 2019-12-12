@@ -57,6 +57,7 @@ var (
 		"-enable_replication_reporter",
 		"-serving_state_grace_period", "1s",
 		"-binlog_player_protocol", "grpc",
+		"-enable-autocommit",
 	}
 	vSchema = `
 		{
@@ -87,66 +88,13 @@ var (
 	destRdonly  *cluster.Vttablet
 )
 
-func TestCharset(t *testing.T) {
-	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
-
-	insertSQL := `insert into test_table(id,msg) values(1, 'Šṛ́rỏé')`
-	_, err := queryTablet(t, *srcMaster, insertSQL, "latin1")
-	assert.Nil(t, err)
-
-	waitForReplicaEvent(t, position, insertSQL, *destReplica)
-	data, err := queryTablet(t, *destMaster, "select id, msg from test_table where id = 1", "")
-	assert.Nil(t, err)
-	assert.NotNil(t, data.Rows)
-	assert.Equal(t, len(data.Rows), 1)
-}
-
-func waitForReplicaEvent(t *testing.T, position string, sql string, vttablet cluster.Vttablet) {
-	timeout := time.Now().Add(10 * time.Second)
-	for time.Now().Before(timeout) {
-		println("fetching with position " + position)
-		output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletUpdateStream", "-position", position, "-count", "1", vttablet.Alias)
-		assert.Nil(t, err)
-		var binlogTxn binlogdata.BinlogTransaction
-
-		err = json.Unmarshal([]byte(output), &binlogTxn)
-		assert.Nil(t, err)
-		for _, statement := range binlogTxn.Statements {
-			if string(statement.Sql) == sql {
-				return
-			} else {
-				println(fmt.Sprintf("expected [ %s ], got [ %s ]", sql, string(statement.Sql)))
-				time.Sleep(300 * time.Millisecond)
-			}
-		}
-		position = binlogTxn.EventToken.Position
-	}
-}
-
-func queryTablet(t *testing.T, vttablet cluster.Vttablet, query string, charset string) (*sqltypes.Result, error) {
-	dbParams := mysql.ConnParams{
-		Uname:      "vt_dba",
-		UnixSocket: path.Join(vttablet.VttabletProcess.Directory, "mysql.sock"),
-
-		DbName: fmt.Sprintf("vt_%s", keyspaceName),
-	}
-	if charset != "" {
-		dbParams.Charset = charset
-	}
-	ctx := context.Background()
-	dbConn, err := mysql.Connect(ctx, &dbParams)
-	assert.Nil(t, err)
-	defer dbConn.Close()
-	return dbConn.ExecuteFetch(query, 1000, true)
-}
-
 func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
-		os.Setenv("EXTRA_MY_CNF", path.Join(os.Getenv("VTROOT"), "config", "mycnf", "default-fast.cnf"))
+		os.Setenv("EXTRA_MY_CNF", path.Join(os.Getenv("VTROOT"), "config", "mycnf", "rbr.cnf"))
 		localCluster.Keyspaces = append(localCluster.Keyspaces, cluster.Keyspace{
 			Name: keyspaceName,
 		})
@@ -289,4 +237,88 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
+}
+
+func TestCharset(t *testing.T) {
+
+	//position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
+	insertSQL := `insert into test_table(id,msg) values(1, 'Šṛ́rỏé')`
+	_, err := queryTablet(t, *srcMaster, insertSQL, "latin1")
+	assert.Nil(t, err)
+	//println("Waiting to get rows in dest master tablet")
+	//waitForReplicaEvent(t, position, insertSQL, *destReplica) // TODO: Still in sbr mode, the queries is not reported by updatestream
+
+	verifyData(t, 1, "latin1", `[UINT64(1) VARCHAR("Šṛ́rỏé")]`)
+}
+
+func TestChecksumEnabled(t *testing.T) {
+	// Enable checksum
+	_, err := queryTablet(t, *destReplica, "SET @@global.binlog_checksum=1", "")
+	assert.Nil(t, err)
+
+	//position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
+	insertSQL := `insert into test_table(id,msg) values(2, "value - 2")`
+	_, err = queryTablet(t, *srcMaster, insertSQL, "")
+	assert.Nil(t, err)
+
+	verifyData(t, 2, "", `[UINT64(2) VARCHAR("value - 2")]`)
+}
+
+func TestChecksumDisabled(t *testing.T) {
+	// Enable checksum
+	_, err := queryTablet(t, *destReplica, "SET @@global.binlog_checksum=0", "")
+	assert.Nil(t, err)
+
+	insertSQL := `insert into test_table(id,msg) values(3, "value - 3")`
+	_, err = queryTablet(t, *srcMaster, insertSQL, "")
+	assert.Nil(t, err)
+
+	verifyData(t, 3, "", `[UINT64(3) VARCHAR("value - 3")]`)
+}
+
+func waitForReplicaEvent(t *testing.T, position string, sql string, vttablet cluster.Vttablet) {
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		println("fetching with position " + position)
+		output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletUpdateStream", "-position", position, "-count", "1", vttablet.Alias)
+		assert.Nil(t, err)
+		var binlogTxn binlogdata.BinlogTransaction
+
+		err = json.Unmarshal([]byte(output), &binlogTxn)
+		assert.Nil(t, err)
+		for _, statement := range binlogTxn.Statements {
+			if string(statement.Sql) == sql {
+				return
+			}
+			println(fmt.Sprintf("expected [ %s ], got [ %s ]", sql, string(statement.Sql)))
+			time.Sleep(300 * time.Millisecond)
+		}
+		position = binlogTxn.EventToken.Position
+	}
+}
+
+func verifyData(t *testing.T, id uint64, charset string, expectedOutput string) {
+	data, err := queryTablet(t, *destMaster, fmt.Sprintf("select id, msg from test_table where id = %d", id), charset)
+	assert.Nil(t, err)
+	assert.NotNil(t, data.Rows)
+	assert.Equal(t, len(data.Rows), 1)
+	assert.Equal(t, len(data.Fields), 2)
+	assert.Equal(t, fmt.Sprintf("%v", data.Rows[0]), expectedOutput)
+}
+
+func queryTablet(t *testing.T, vttablet cluster.Vttablet, query string, charset string) (*sqltypes.Result, error) {
+	dbParams := mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(vttablet.VttabletProcess.Directory, "mysql.sock"),
+
+		DbName: fmt.Sprintf("vt_%s", keyspaceName),
+	}
+	if charset != "" {
+		dbParams.Charset = charset
+	}
+	ctx := context.Background()
+	dbConn, err := mysql.Connect(ctx, &dbParams)
+	assert.Nil(t, err)
+	defer dbConn.Close()
+	return dbConn.ExecuteFetch(query, 1000, true)
 }
