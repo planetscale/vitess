@@ -12,6 +12,10 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+ This file contains integration tests for the go/vt/binlog package.
+ It sets up filtered replication between two shards and checks how data flows
+ through binlog streamer.
 */
 
 package binlog
@@ -31,7 +35,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
@@ -39,14 +43,16 @@ var (
 	cell         = "zone1"
 	hostname     = "localhost"
 	keyspaceName = "ks"
+	tableName    = "test_table"
 	sqlSchema    = `
-					create table test_table(
+					create table %s(
 					id bigint(20) unsigned auto_increment,
 					msg varchar(64),
 					primary key (id),
 					index by_msg (msg)
 					) Engine=InnoDB
 `
+	insertSql       = `insert into %s(id,msg) values(%d, "%s")`
 	commonTabletArg = []string{
 		"-vreplication_healthcheck_topology_refresh", "1s",
 		"-vreplication_healthcheck_retry_delay", "1s",
@@ -68,7 +74,7 @@ var (
 			}
 		  },
 		  "tables": {
-			"test_table": {
+			"%s": {
 			   "column_vindexes": [
 				{
 				  "column": "id",
@@ -176,21 +182,22 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		if err := localCluster.VtctlclientProcess.ApplySchema(keyspaceName, sqlSchema); err != nil {
+		if err := localCluster.VtctlclientProcess.ApplySchema(keyspaceName, fmt.Sprintf(sqlSchema, tableName)); err != nil {
 			return 1, err
 		}
-		if err := localCluster.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema); err != nil {
-			return 1, err
-		}
-
-		if err := localCluster.VtctlclientProcess.ExecuteCommand("RunHealthCheck", srcReplica.Alias); err != nil {
+		if err := localCluster.VtctlclientProcess.ApplyVSchema(keyspaceName, fmt.Sprintf(vSchema, tableName)); err != nil {
 			return 1, err
 		}
 
-		if err := localCluster.VtctlclientProcess.ExecuteCommand("RunHealthCheck", srcRdonly.Alias); err != nil {
-			return 1, err
+		// run a health check on source replica so it responds to discovery
+		// (for binlog players) and on the source rdonlys (for workers)
+		for _, tablet := range []string{srcReplica.Alias, srcRdonly.Alias} {
+			if err := localCluster.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet); err != nil {
+				return 1, err
+			}
 		}
 
+		// Create destination shard (won't be serving as there is no DB)
 		for _, tablet := range shard2.Vttablets {
 			if err := localCluster.VtctlclientProcess.InitTablet(&tablet, cell, keyspaceName, hostname, shard2.Name); err != nil {
 				return 1, err
@@ -204,9 +211,13 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 		_ = localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
+		// Copy schema
 		if err := localCluster.VtctlclientProcess.ExecuteCommand("CopySchemaShard", srcReplica.Alias, fmt.Sprintf("%s/%s", keyspaceName, shard2.Name)); err != nil {
 			return 1, err
 		}
+
+		// run the clone worker (this is a degenerate case, source and destination
+		// both have the full keyrange. Happens to work correctly).
 		localCluster.VtworkerProcess = *cluster.VtworkerProcessInstance(localCluster.GetAndReservePort(),
 			localCluster.GetAndReservePort(),
 			localCluster.TopoPort,
@@ -226,6 +237,7 @@ func TestMain(m *testing.M) {
 		if err := destMaster.VttabletProcess.WaitForBinLogPlayerCount(1); err != nil {
 			return 1, err
 		}
+		// Wait for dst_replica to be ready.
 		if err := destReplica.VttabletProcess.WaitForBinlogServerState("Enabled"); err != nil {
 			return 1, err
 		}
@@ -239,71 +251,99 @@ func TestMain(m *testing.M) {
 	}
 }
 
-func TestCharset(t *testing.T) {
+//  Insert something that will replicate incorrectly if the charset is not
+//  propagated through binlog streamer to the destination.
 
-	//position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
-	insertSQL := `insert into test_table(id,msg) values(1, 'Šṛ́rỏé')`
-	_, err := queryTablet(t, *srcMaster, insertSQL, "latin1")
+//  Vitess tablets default to using utf8, so we insert something crazy and
+//  pretend it's latin1. If the binlog player doesn't also pretend it's
+//  latin1, it will be inserted as utf8, which will change its value.
+func TestCharset(t *testing.T) {
+	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
+
+	_, err := queryTablet(t, *srcMaster, fmt.Sprintf(insertSql, tableName, 1, "Šṛ́rỏé"), "latin1")
 	assert.Nil(t, err)
-	//println("Waiting to get rows in dest master tablet")
-	//waitForReplicaEvent(t, position, insertSQL, *destReplica) // TODO: Still in sbr mode, the queries is not reported by updatestream
+	println("Waiting to get rows in dest master tablet")
+	waitForReplicaEvent(t, position, "1", *destReplica)
 
 	verifyData(t, 1, "latin1", `[UINT64(1) VARCHAR("Šṛ́rỏé")]`)
 }
 
+// Enable binlog_checksum, which will also force a log rotation that should
+// cause binlog streamer to notice the new checksum setting.
 func TestChecksumEnabled(t *testing.T) {
-	// Enable checksum
+	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
 	_, err := queryTablet(t, *destReplica, "SET @@global.binlog_checksum=1", "")
 	assert.Nil(t, err)
 
-	//position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
-	insertSQL := `insert into test_table(id,msg) values(2, "value - 2")`
-	_, err = queryTablet(t, *srcMaster, insertSQL, "")
+	// Insert something and make sure it comes through intact.
+	_, err = queryTablet(t, *srcMaster, fmt.Sprintf(insertSql, tableName, 2, "value - 2"), "")
 	assert.Nil(t, err)
+
+	//  Look for it using update stream to see if binlog streamer can talk to
+	//  dest_replica, which now has binlog_checksum enabled.
+	waitForReplicaEvent(t, position, "2", *destReplica)
 
 	verifyData(t, 2, "", `[UINT64(2) VARCHAR("value - 2")]`)
 }
 
+// Disable binlog_checksum to make sure we can also talk to a server without
+// checksums enabled, in case they are enabled by default
 func TestChecksumDisabled(t *testing.T) {
-	// Enable checksum
+	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
+
 	_, err := queryTablet(t, *destReplica, "SET @@global.binlog_checksum=0", "")
 	assert.Nil(t, err)
 
-	insertSQL := `insert into test_table(id,msg) values(3, "value - 3")`
-	_, err = queryTablet(t, *srcMaster, insertSQL, "")
+	// Insert something and make sure it comes through intact.
+	_, err = queryTablet(t, *srcMaster, fmt.Sprintf(insertSql, tableName, 3, "value - 3"), "")
 	assert.Nil(t, err)
+
+	// Look for it using update stream to see if binlog streamer can talk to
+	// dest_replica, which now has binlog_checksum disabled.
+	waitForReplicaEvent(t, position, "3", *destReplica)
 
 	verifyData(t, 3, "", `[UINT64(3) VARCHAR("value - 3")]`)
 }
 
-func waitForReplicaEvent(t *testing.T, position string, sql string, vttablet cluster.Vttablet) {
+// Wait for a replica event with the given SQL string.
+func waitForReplicaEvent(t *testing.T, position string, pkKey string, vttablet cluster.Vttablet) {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		println("fetching with position " + position)
 		output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletUpdateStream", "-position", position, "-count", "1", vttablet.Alias)
 		assert.Nil(t, err)
-		var binlogTxn binlogdata.BinlogTransaction
 
-		err = json.Unmarshal([]byte(output), &binlogTxn)
+		var binlogStreamEvent query.StreamEvent
+		err = json.Unmarshal([]byte(output), &binlogStreamEvent)
 		assert.Nil(t, err)
-		for _, statement := range binlogTxn.Statements {
-			if string(statement.Sql) == sql {
+		for _, statement := range binlogStreamEvent.Statements {
+			if isCurrentRowPresent(*statement, pkKey) {
 				return
 			}
-			println(fmt.Sprintf("expected [ %s ], got [ %s ]", sql, string(statement.Sql)))
-			time.Sleep(300 * time.Millisecond)
 		}
-		position = binlogTxn.EventToken.Position
+		time.Sleep(300 * time.Millisecond)
+		position = binlogStreamEvent.EventToken.Position
 	}
 }
 
+func isCurrentRowPresent(statement query.StreamEvent_Statement, pkKey string) bool {
+	if statement.TableName == tableName &&
+		statement.PrimaryKeyFields[0].Name == "id" &&
+		fmt.Sprintf("%s", statement.PrimaryKeyValues[0].Values) == pkKey {
+		return true
+	}
+	return false
+}
+
 func verifyData(t *testing.T, id uint64, charset string, expectedOutput string) {
-	data, err := queryTablet(t, *destMaster, fmt.Sprintf("select id, msg from test_table where id = %d", id), charset)
+	data, err := queryTablet(t, *destMaster, fmt.Sprintf("select id, msg from %s where id = %d", tableName, id), charset)
 	assert.Nil(t, err)
 	assert.NotNil(t, data.Rows)
-	assert.Equal(t, len(data.Rows), 1)
+	rowFound := assert.Equal(t, len(data.Rows), 1)
 	assert.Equal(t, len(data.Fields), 2)
-	assert.Equal(t, fmt.Sprintf("%v", data.Rows[0]), expectedOutput)
+	if rowFound {
+		assert.Equal(t, fmt.Sprintf("%v", data.Rows[0]), expectedOutput)
+	}
 }
 
 func queryTablet(t *testing.T, vttablet cluster.Vttablet, query string, charset string) (*sqltypes.Result, error) {
