@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -35,7 +36,9 @@ func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string
 	ctx := context.Background()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	pos, err := tmClient.MasterPosition(ctx, vtablet)
-	require.NoError(t, err)
+	if t != nil {
+		require.NoError(t, err)
+	}
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID
 }
@@ -44,4 +47,18 @@ func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)
 	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
+}
+
+// WaitForProcs , waits for processes till all completes
+func WaitForProcs(processes []*exec.Cmd, ignoreError bool) []error {
+	var errors []error
+	for _, proc := range processes {
+		if err := proc.Wait(); err != nil {
+			errors = append(errors, proc.Wait())
+		}
+	}
+	if ignoreError {
+		return nil
+	}
+	return errors
 }
