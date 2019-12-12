@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -131,7 +132,7 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 }
 
 // GetStatusForTabletOfShard function gets status for a specific tablet of a shard in keyspace
-func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string) bool {
+func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, count int) bool {
 	resp, err := http.Get(vtgate.VerifyURL)
 	if err != nil {
 		return false
@@ -149,9 +150,9 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string) bool {
 			for _, key := range object.MapKeys() {
 				if key.String() == name {
 					value := fmt.Sprintf("%v", object.MapIndex(key))
-					return value == "1"
+					countStr := strconv.Itoa(count)
+					return value == countStr
 				}
-
 			}
 		}
 		return masterConnectionExist
@@ -160,10 +161,10 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string) bool {
 }
 
 // WaitForStatusOfTabletInShard function waits till status of a tablet in shard is 1
-func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string) error {
+func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, count int) error {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		if vtgate.GetStatusForTabletOfShard(name) {
+		if vtgate.GetStatusForTabletOfShard(name, count) {
 			return nil
 		}
 		select {
@@ -225,4 +226,22 @@ func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell str
 	vtgate.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
 
 	return vtgate
+}
+
+// GetVars returns map of vars
+func (vtgate *VtgateProcess) GetVars() map[string]interface{} {
+	resultMap := make(map[string]interface{})
+	resp, err := http.Get(vtgate.VerifyURL)
+	if err != nil {
+		return nil
+	}
+	if resp.StatusCode == 200 {
+		respByte, _ := ioutil.ReadAll(resp.Body)
+		err := json.Unmarshal(respByte, &resultMap)
+		if err != nil {
+			panic(err)
+		}
+		return resultMap
+	}
+	return nil
 }

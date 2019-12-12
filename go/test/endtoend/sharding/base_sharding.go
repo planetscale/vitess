@@ -43,7 +43,7 @@ var (
 
 // CheckSrvKeyspace verifies the schema with expectedPartition
 func CheckSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol string, colType topodata.KeyspaceIdType, expectedPartition map[topodata.TabletType][]string, ci cluster.LocalProcessCluster) {
-	srvKeyspace := getSrvKeyspace(t, cell, ksname, ci)
+	srvKeyspace := GetSrvKeyspace(t, cell, ksname, ci)
 	if shardingCol != "" {
 		assert.Equal(t, srvKeyspace.ShardingColumnName, shardingCol)
 	}
@@ -63,7 +63,8 @@ func CheckSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol stri
 	assert.True(t, reflect.DeepEqual(currentPartition, expectedPartition))
 }
 
-func getSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalProcessCluster) *topodata.SrvKeyspace {
+// GetSrvKeyspace gets the GetSrvKeyspace param
+func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalProcessCluster) *topodata.SrvKeyspace {
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
 	assert.Nil(t, err)
 	var srvKeyspace topodata.SrvKeyspace
@@ -229,18 +230,23 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 }
 
 // CheckBinlogServerVars checks the binlog server variables are correctly exported.
-func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement int, minTxn int) {
+func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement int, minTxn int, isVerticalSplit bool) {
 	resultMap := vttablet.VttabletProcess.GetVars()
-	assert.Contains(t, resultMap, "UpdateStreamKeyRangeStatements")
-	assert.Contains(t, resultMap, "UpdateStreamKeyRangeTransactions")
+	skey := "UpdateStreamKeyRangeStatements"
+	tkey := "UpdateStreamKeyRangeTransactions"
+	if isVerticalSplit {
+		skey = "UpdateStreamTablesStatements"
+		tkey = "UpdateStreamTablesTransactions"
+	}
+	assert.Contains(t, resultMap, skey)
+	assert.Contains(t, resultMap, tkey)
 	if minStatement > 0 {
-		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap["UpdateStreamKeyRangeStatements"]))
+		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap[skey]))
 		iValue, _ := strconv.Atoi(value)
 		assert.True(t, iValue >= minStatement)
 	}
-
 	if minTxn > 0 {
-		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap["UpdateStreamKeyRangeStatements"]))
+		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap[tkey]))
 		iValue, _ := strconv.Atoi(value)
 		assert.True(t, iValue >= minTxn)
 	}
