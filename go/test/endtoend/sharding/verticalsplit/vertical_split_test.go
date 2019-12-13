@@ -410,13 +410,6 @@ func TestVerticalSplit(t *testing.T) {
 	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
 	checkBlacklistedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
 
-	//creating new connection
-	conn2, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn2.Close()
-
 	grpcAddress := fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)
 	gconn, err := vtgateconn.Dial(ctx, grpcAddress)
 	if err != nil {
@@ -534,14 +527,14 @@ func checkStats(t *testing.T) {
 
 	//getting ['VttabletCall']['Histograms']['Execute.source_keyspace.0.replica']['Count']
 	resultMap := clusterInstance.VtgateProcess.GetVars()
-	//resultVtTabletCall := resultMap["VttabletCall"]
-	//resultVtTabletCallMap := resultVtTabletCall.(map[string]interface{})
-	//resultHistograms := resultVtTabletCallMap["Histograms"]
-	//resultHistogramsMap := resultHistograms.(map[string]interface{})
-	//resultTablet := resultHistogramsMap["Execute.source_keyspace.0.replica"]
-	//resultTableMap := resultTablet.(map[string]interface{})
-	//resultCountStr := fmt.Sprintf("%v", reflect.ValueOf(resultTableMap["Count"]))
-	//assert.Equal(t, "2", resultCountStr, fmt.Sprintf("unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s", resultCountStr))
+	resultVtTabletCall := resultMap["VttabletCall"]
+	resultVtTabletCallMap := resultVtTabletCall.(map[string]interface{})
+	resultHistograms := resultVtTabletCallMap["Histograms"]
+	resultHistogramsMap := resultHistograms.(map[string]interface{})
+	resultTablet := resultHistogramsMap["Execute.source_keyspace.0.replica"]
+	resultTableMap := resultTablet.(map[string]interface{})
+	resultCountStr := fmt.Sprintf("%v", reflect.ValueOf(resultTableMap["Count"]))
+	assert.Equal(t, "2", resultCountStr, fmt.Sprintf("unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s", resultCountStr))
 
 	// getting ['VtgateApi']['Histograms']['ExecuteKeyRanges.destination_keyspace.master']['Count']
 	// Verify master reads done by self._check_client_conn_redirection().
@@ -579,10 +572,15 @@ func insertInitialValues(t *testing.T, conn *mysql.Conn, sourceMasterTablet clus
 }
 
 func checkClientConnRedirectionExecuteKeyrange(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, keyspace string, servedFromDbTypes []topodata.TabletType, movedTables []string) {
+	var testKeyRange = &topodata.KeyRange{
+		Start: []byte{},
+		End:   []byte{},
+	}
+	keyRanges := []*topodata.KeyRange{testKeyRange}
 	// check that the ServedFrom indirection worked correctly.
 	for _, tableType := range servedFromDbTypes {
 		for _, table := range movedTables {
-			_, err := conn.ExecuteKeyRanges(ctx, fmt.Sprintf("select * from %s", table), keyspace, nil, nil, tableType, nil)
+			_, err := conn.ExecuteKeyRanges(ctx, fmt.Sprintf("select * from %s", table), keyspace, keyRanges, nil, tableType, nil)
 			assert.Nil(t, err)
 		}
 	}
