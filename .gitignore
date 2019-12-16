@@ -79,3 +79,7 @@ releases
 
 # Vagrant
 .vagrant
+
+# Others
+dist
+bin

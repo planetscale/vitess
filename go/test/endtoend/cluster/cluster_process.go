@@ -121,6 +121,7 @@ type Vttablet struct {
 	GrpcPort  int
 	MySQLPort int
 	Alias     string
+	Cell      string
 
 	// background executable processes
 	MysqlctlProcess MysqlctlProcess
@@ -460,13 +461,17 @@ func getRandomNumber(maxNumber int32, baseNumber int) int {
 
 // GetVttabletInstance create a new vttablet object
 func (cluster *LocalProcessCluster) GetVttabletInstance(UID int) *Vttablet {
-	return cluster.GetVttabletInstanceWithType(UID, "replica")
+	return cluster.GetVttabletInstanceWithType(UID, "replica", "")
 }
 
 // GetVttabletInstanceWithType create a new vttablet object with required type
-func (cluster *LocalProcessCluster) GetVttabletInstanceWithType(UID int, tabletType string) *Vttablet {
+func (cluster *LocalProcessCluster) GetVttabletInstanceWithType(UID int, tabletType string, cell string) *Vttablet {
 	if UID == 0 {
 		UID = cluster.GetAndReserveTabletUID()
+	}
+	cellToUse := cluster.Cell
+	if cell != "" {
+		cellToUse = cell
 	}
 	return &Vttablet{
 		TabletUID: UID,
@@ -474,7 +479,8 @@ func (cluster *LocalProcessCluster) GetVttabletInstanceWithType(UID int, tabletT
 		GrpcPort:  cluster.GetAndReservePort(),
 		MySQLPort: cluster.GetAndReservePort(),
 		Type:      tabletType,
-		Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, UID),
+		Alias:     fmt.Sprintf("%s-%010d", cellToUse, UID),
+		Cell:      cellToUse,
 	}
 }
 

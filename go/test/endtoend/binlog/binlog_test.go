@@ -110,13 +110,13 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		srcMaster = localCluster.GetVttabletInstanceWithType(0, "master")
-		srcReplica = localCluster.GetVttabletInstanceWithType(0, "replica")
-		srcRdonly = localCluster.GetVttabletInstanceWithType(0, "rdonly")
+		srcMaster = localCluster.GetVttabletInstanceWithType(0, "master", "")
+		srcReplica = localCluster.GetVttabletInstanceWithType(0, "replica", "")
+		srcRdonly = localCluster.GetVttabletInstanceWithType(0, "rdonly", "")
 
-		destMaster = localCluster.GetVttabletInstanceWithType(0, "master")
-		destReplica = localCluster.GetVttabletInstanceWithType(0, "replica")
-		destRdonly = localCluster.GetVttabletInstanceWithType(0, "rdonly")
+		destMaster = localCluster.GetVttabletInstanceWithType(0, "master", "")
+		destReplica = localCluster.GetVttabletInstanceWithType(0, "replica", "")
+		destRdonly = localCluster.GetVttabletInstanceWithType(0, "rdonly", "")
 
 		var mysqlProcs []*exec.Cmd
 		for _, tablet := range []*cluster.Vttablet{srcMaster, srcReplica, srcRdonly, destMaster, destReplica, destRdonly} {
