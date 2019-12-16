@@ -120,7 +120,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	if err != nil {
 		return
 	}
-
 	vttablet.exit = make(chan error)
 	go func() {
 		if vttablet.proc != nil {
@@ -130,7 +129,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	if vttablet.ServingStatus != "" {
 		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
-			return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
+			return fmt.Errorf("process '%s' timed out after 10s (err: %s)", vttablet.Name, err)
 		}
 	}
 	return nil
@@ -197,7 +196,7 @@ func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
-	return fmt.Errorf("Vttablet %s, expected status not reached", vttablet.TabletPath)
+	return fmt.Errorf("Vttablet %s, expected status %s not reached", vttablet.TabletPath, expectedType)
 }
 
 // WaitForBinLogPlayerCount waits till binlog player count var matches
@@ -245,6 +244,7 @@ func (vttablet *VttabletProcess) TearDown() error {
 
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
+	_, _ = vttablet.QueryTablet(fmt.Sprintf("drop database vt_%s", keyspace), keyspace, false)
 	_, err := vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace), keyspace, false)
 	return err
 }
