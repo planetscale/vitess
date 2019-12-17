@@ -18,10 +18,14 @@ package reparent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/mysql"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/json2"
@@ -63,7 +67,7 @@ func TestReparentDownMaster(t *testing.T) {
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
 		// Create Database
-		err := tablet62344.VttabletProcess.CreateDB(keyspaceName)
+		err := tablet.VttabletProcess.CreateDB(keyspaceName)
 		assert.Nil(t, err)
 
 		// Init Tablet
@@ -86,10 +90,10 @@ func TestReparentDownMaster(t *testing.T) {
 	}
 
 	// Validate topology
-	validateTopology(t, false)
+	validateTopology(t, true)
 
 	// create Tables
-	runSQL(t, sqlSchema, tablet62344, ctx)
+	runSQL(ctx, t, sqlSchema, tablet62344)
 
 	// Make the current master agent and database unavailable.
 	err = tablet62344.VttabletProcess.TearDown()
@@ -120,10 +124,10 @@ func TestReparentDownMaster(t *testing.T) {
 	// insert data into the new master, check the connected slaves work
 	index := 2
 	insertSQL := fmt.Sprintf(insertSQL, index, index)
-	runSQL(t, insertSQL, tablet62044, ctx)
-	err = checkInsertedValues(t, tablet41983, index, ctx)
+	runSQL(ctx, t, insertSQL, tablet62044)
+	err = checkInsertedValues(ctx, t, tablet41983, index)
 	assert.Nil(t, err)
-	err = checkInsertedValues(t, tablet31981, index, ctx)
+	err = checkInsertedValues(ctx, t, tablet31981, index)
 	assert.Nil(t, err)
 
 	// bring back the old master as a slave, check that it catches up
@@ -138,7 +142,7 @@ func TestReparentDownMaster(t *testing.T) {
 	err = tablet62344.VttabletProcess.Setup()
 	assert.Nil(t, err)
 
-	err = checkInsertedValues(t, tablet62344, index, ctx)
+	err = checkInsertedValues(ctx, t, tablet62344, index)
 	assert.Nil(t, err)
 
 	// Kill tablets
@@ -226,7 +230,7 @@ func reparentGraceful(t *testing.T, shardID string, confusedMaster bool) {
 	validateTopology(t, true)
 
 	// create Tables
-	runSQL(t, sqlSchema, tablet62344, ctx)
+	runSQL(ctx, t, sqlSchema, tablet62344)
 
 	checkMasterTablet(t, tablet62344)
 
@@ -235,6 +239,7 @@ func reparentGraceful(t *testing.T, shardID string, confusedMaster bool) {
 	// Run this to make sure it succeeds.
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"ShardReplicationPositions", fmt.Sprintf("%s/%s", keyspaceName, shardID))
+	assert.Nil(t, err)
 	strArray := strings.Split(output, "\n")
 	if strArray[len(strArray)-1] == "" {
 		strArray = strArray[:len(strArray)-1] // Truncate slice, remove empty line
@@ -278,10 +283,10 @@ func reparentGraceful(t *testing.T, shardID string, confusedMaster bool) {
 
 	// insert data into the new master, check the connected slaves work
 	insertSQL := fmt.Sprintf(insertSQL, 1, 1)
-	runSQL(t, insertSQL, tablet62044, ctx)
-	err = checkInsertedValues(t, tablet41983, 1, ctx)
+	runSQL(ctx, t, insertSQL, tablet62044)
+	err = checkInsertedValues(ctx, t, tablet41983, 1)
 	assert.Nil(t, err)
-	err = checkInsertedValues(t, tablet62344, 1, ctx)
+	err = checkInsertedValues(ctx, t, tablet62344, 1)
 	assert.Nil(t, err)
 
 	// Kill tablets
@@ -397,6 +402,418 @@ func TestReparentAvoid(t *testing.T) {
 	killTablets(t)
 }
 
+func TestReparentFromOutside2(t *testing.T) {
+	reparentFromOutside(t, false)
+}
+
+func TestReparentFromOutsideBrutal(t *testing.T) {
+	reparentFromOutside(t, true)
+}
+
+func reparentFromOutside(t *testing.T, brutal bool) {
+	//This test will start a master and 3 slaves.
+
+	//Then:
+	//- one slave will be the new master
+	//- one slave will be reparented to that new master
+	//- one slave will be busted and dead in the water
+	//and we'll call TabletExternallyReparented.
+
+	//Args:
+	//brutal: kills the old master first
+
+	ctx := context.Background()
+
+	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
+		// create database
+		err := tablet.VttabletProcess.CreateDB(keyspaceName)
+		assert.Nil(t, err)
+		// Init Tablet
+		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
+		assert.Nil(t, err)
+		// Start the tablet
+		err = tablet.VttabletProcess.Setup()
+		assert.Nil(t, err)
+	}
+
+	// Reparent as a starting point
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
+	assert.Nil(t, err)
+
+	// Validate topology
+	validateTopology(t, true)
+
+	checkMasterTablet(t, tablet62344)
+
+	// now manually reparent 1 out of 2 tablets
+	// 62044 will be the new master
+	// 31981 won't be re-parented, so it will be busted
+
+	if !brutal {
+		// commands to stop the current master
+		demoteMasterCommands := "SET GLOBAL read_only = ON; FLUSH TABLES WITH READ LOCK; UNLOCK TABLES"
+		runSQL(ctx, t, demoteMasterCommands, tablet62344)
+
+		//Get the position of the old master and wait for the new one to catch up.
+		err = waitForReplicationPosition(ctx, t, tablet62344, tablet62044)
+		assert.Nil(t, err)
+	}
+
+	// commands to convert a slave to a master
+	promoteSlaveCommands := "STOP SLAVE; RESET SLAVE ALL; SET GLOBAL read_only = OFF;"
+	runSQL(ctx, t, promoteSlaveCommands, tablet62044)
+
+	// Get master position
+	_, gtID := getMasterPosition(ctx, t, tablet62044)
+
+	// 62344 will now be a slave of 62044
+	changeMasterCommands := fmt.Sprintf("RESET MASTER; RESET SLAVE; SET GLOBAL gtid_purged = '%s';"+
+		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
+		"START SLAVE;", gtID, hostname, tablet62044.MySQLPort)
+	runSQL(ctx, t, changeMasterCommands, tablet62344)
+
+	// Seconds when we made tablet62044 master
+	baseTime := time.Now().UnixNano() / 1000000000
+
+	// 41983 will be a slave of 62044
+	changeMasterCommands = fmt.Sprintf("STOP SLAVE; RESET MASTER; SET GLOBAL gtid_purged = '%s';"+
+		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
+		"START SLAVE;", gtID, hostname, tablet62044.MySQLPort)
+	runSQL(ctx, t, changeMasterCommands, tablet62344)
+
+	// in brutal mode, we kill the old master first
+	// and delete its tablet record
+	if brutal {
+		err := tablet62344.VttabletProcess.TearDown()
+		assert.Nil(t, err)
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet",
+			"-allow_master", tablet62344.Alias)
+		assert.Nil(t, err)
+	}
+
+	// update topology with the new server
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented",
+		tablet62044.Alias)
+	assert.Nil(t, err)
+
+	checkReparentFromOutside(t, tablet62044, brutal, baseTime)
+
+	if !brutal {
+		err := tablet62344.VttabletProcess.TearDown()
+		assert.Nil(t, err)
+	}
+	killTablets(t)
+}
+
+//	Waits for tablet B to catch up to the replication position of tablet A.
+func waitForReplicationPosition(ctx context.Context, t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet) error {
+	posA, _ := getMasterPosition(ctx, t, tabletA)
+	timeout := time.Now().Add(5 * time.Second)
+	for time.Now().Before(timeout) {
+		posB, _ := getMasterPosition(ctx, t, tabletB)
+		if positionAtLeast(t, tabletB, posA, posB) {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("failed to catch up on replication position")
+}
+
+func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string) bool {
+	isAtleast := false
+	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
+	assert.Nil(t, err)
+	if strings.Contains(val, "true") {
+		isAtleast = true
+	}
+	return isAtleast
+}
+
+func checkReparentFromOutside(t *testing.T, tablet *cluster.Vttablet, brutal bool, baseTime int64) {
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, keyspaceShard)
+	assert.Nil(t, err, "error should be Nil")
+	if !brutal {
+		assertNodeCount(t, result, int(3))
+	} else {
+		assertNodeCount(t, result, int(2))
+	}
+
+	// make sure the master status page says it's the master
+	status := tablet.VttabletProcess.GetStatus()
+	assert.Contains(t, status, "Tablet Type: MASTER")
+
+	// make sure the master health stream says it's the master too
+	// (health check is disabled on these servers, force it first)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
+	assert.Nil(t, err)
+
+	streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+		"VtTabletStreamHealth",
+		"-count", "1", tablet.Alias)
+	assert.Nil(t, err)
+
+	var streamHealthResponse querypb.StreamHealthResponse
+	err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
+	assert.Nil(t, err)
+	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_MASTER)
+	assert.True(t, streamHealthResponse.TabletExternallyReparentedTimestamp >= baseTime)
+
+}
+
+func assertNodeCount(t *testing.T, result string, want int) {
+	resultMap := make(map[string]interface{})
+	err := json.Unmarshal([]byte(result), &resultMap)
+	assert.Nil(t, err)
+
+	nodes := reflect.ValueOf(resultMap["nodes"])
+	fmt.Println(nodes)
+	got := nodes.Len()
+	assert.Equal(t, want, got)
+}
+
+func TestReparentWithDownSlave(t *testing.T) {
+	ctx := context.Background()
+
+	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
+		// Create Database
+		err := tablet.VttabletProcess.CreateDB(keyspaceName)
+		assert.Nil(t, err)
+
+		// Init Tablet
+		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
+		assert.Nil(t, err)
+
+		// Start the tablet
+		err = tablet.VttabletProcess.Setup()
+		assert.Nil(t, err)
+	}
+
+	// Init Shard Master
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
+	assert.Nil(t, err)
+
+	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
+		err := tablet.VttabletProcess.WaitForTabletType("SERVING")
+		assert.Nil(t, err)
+	}
+
+	// Validate topology
+	validateTopology(t, true)
+
+	// create Tables
+	runSQL(ctx, t, sqlSchema, tablet62344)
+
+	// Stop Slave mysql Process
+	err = tablet41983.MysqlctlProcess.Stop()
+	assert.Nil(t, err)
+
+	// Perform a graceful reparent operation. It will fail as one tablet is down.
+	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		"-keyspace_shard", keyspaceShard,
+		"-new_master", tablet62044.Alias)
+	assert.NotNil(t, err)
+	assert.Contains(t, output, "TabletManager.SetMaster on zone1-0000041983 error")
+
+	// insert data into the new master, check the connected slaves work
+	insertSQL := fmt.Sprintf(insertSQL, 3, 3)
+	runSQL(ctx, t, insertSQL, tablet62044)
+	err = checkInsertedValues(ctx, t, tablet31981, 3)
+	assert.Nil(t, err)
+	err = checkInsertedValues(ctx, t, tablet62344, 3)
+	assert.Nil(t, err)
+
+	// restart mysql on the old slave, should still be connecting to the old master
+	tablet41983.MysqlctlProcess.InitMysql = false
+	err = tablet41983.MysqlctlProcess.Start()
+	assert.Nil(t, err)
+
+	// Use the same PlannedReparentShard command to fix up the tablet.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
+		"PlannedReparentShard",
+		"-keyspace_shard", keyspaceShard,
+		"-new_master", tablet62044.Alias)
+	assert.Nil(t, err)
+
+	// wait until it gets the data
+	err = checkInsertedValues(ctx, t, tablet41983, 3)
+	assert.Nil(t, err)
+
+	killTablets(t)
+}
+
+func TestChangeTypeSemiSync(t *testing.T) {
+	ctx := context.Background()
+
+	// Create new names for tablets, so this test is less confusing.
+	master := tablet62344
+	replica := tablet62044
+	rdonly1 := tablet41983
+	rdonly2 := tablet31981
+
+	for _, tablet := range []cluster.Vttablet{*master, *replica, *rdonly1, *rdonly2} {
+		// Create Database
+		err := tablet.VttabletProcess.CreateDB(keyspaceName)
+		assert.Nil(t, err)
+
+		// Init Tablet
+		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
+		assert.Nil(t, err)
+
+		// Start the tablet
+		err = tablet.VttabletProcess.Setup()
+		assert.Nil(t, err)
+	}
+
+	// Updated rdonly tablet ans set the right slave type
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "rdonly")
+	assert.Nil(t, err)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly2.Alias, "rdonly")
+	assert.Nil(t, err)
+
+	// Init Shard Master
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), master.Alias)
+	assert.Nil(t, err)
+
+	for _, tablet := range []cluster.Vttablet{*master, *replica, *rdonly1, *rdonly2} {
+		err := tablet.VttabletProcess.WaitForTabletType("SERVING")
+		assert.Nil(t, err)
+	}
+
+	// Validate topology
+	validateTopology(t, true)
+
+	checkMasterTablet(t, master)
+
+	// Stop replication on rdonly1, to make sure when we make it replica it doesn't start again.
+	// Note we do a similar test for replica -> rdonly below.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rdonly1.Alias)
+	assert.Nil(t, err)
+
+	// Check semi-sync on slaves.
+	// The flag is only an indication of the value to use next time
+	// we turn replication on, so also check the status.
+	// rdonly1 is not replicating, so its status is off.
+	checkDBvar(ctx, t, replica, "rpl_semi_sync_slave_enabled", "ON")
+	checkDBvar(ctx, t, rdonly1, "rpl_semi_sync_slave_enabled", "OFF")
+	checkDBvar(ctx, t, rdonly2, "rpl_semi_sync_slave_enabled", "OFF")
+	checkDBstatus(ctx, t, replica, "Rpl_semi_sync_slave_status", "ON")
+	checkDBstatus(ctx, t, rdonly1, "Rpl_semi_sync_slave_status", "OFF")
+	checkDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "OFF")
+
+	// Change replica to rdonly while replicating, should turn off semi-sync,
+	// and restart replication.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", replica.Alias, "rdonly")
+	assert.Nil(t, err)
+	checkDBvar(ctx, t, replica, "rpl_semi_sync_slave_enabled", "OFF")
+	checkDBstatus(ctx, t, replica, "Rpl_semi_sync_slave_status", "OFF")
+
+	// Change rdonly1 to replica, should turn on semi-sync, and not start rep.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "replica")
+	assert.Nil(t, err)
+	checkDBvar(ctx, t, rdonly1, "rpl_semi_sync_slave_enabled", "ON")
+	checkDBstatus(ctx, t, rdonly1, "Rpl_semi_sync_slave_status", "OFF")
+	checkSlaveStatus(ctx, t, rdonly1)
+
+	// Now change from replica back to rdonly, make sure replication is
+	// still not enabled.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "rdonly")
+	assert.Nil(t, err)
+	checkDBvar(ctx, t, rdonly1, "rpl_semi_sync_slave_enabled", "OFF")
+	checkDBstatus(ctx, t, rdonly1, "Rpl_semi_sync_slave_status", "OFF")
+	checkSlaveStatus(ctx, t, rdonly1)
+
+	// Change rdonly2 to replica, should turn on semi-sync, and restart rep.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly2.Alias, "replica")
+	assert.Nil(t, err)
+	checkDBvar(ctx, t, rdonly2, "rpl_semi_sync_slave_enabled", "ON")
+	checkDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "ON")
+
+	killTablets(t)
+}
+
+func TestReparentDoesntHangIfMasterFails(t *testing.T) {
+	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
+		// Create Database
+		err := tablet.VttabletProcess.CreateDB(keyspaceName)
+		assert.Nil(t, err)
+
+		// Init Tablet
+		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
+		assert.Nil(t, err)
+
+		// Start the tablet
+		err = tablet.VttabletProcess.Setup()
+		assert.Nil(t, err)
+	}
+
+	// Init Shard Master
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
+	assert.Nil(t, err)
+
+	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
+		err := tablet.VttabletProcess.WaitForTabletType("SERVING")
+		assert.Nil(t, err)
+	}
+
+	// Validate topology
+	validateTopology(t, true)
+
+	// Change the schema of the _vt.reparent_journal table, so that
+	// inserts into it will fail. That will make the master fail.
+	_, err = tablet62344.VttabletProcess.QueryTabletWithDB(
+		"ALTER TABLE reparent_journal DROP COLUMN replication_position", "_vt")
+	assert.Nil(t, err)
+
+	// Perform a planned reparent operation, the master will fail the
+	// insert.  The slaves should then abort right away.
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		"-keyspace_shard", keyspaceShard,
+		"-new_master", tablet62044.Alias)
+	assert.NotNil(t, err)
+	assert.Contains(t, out, "master failed to PopulateReparentJournal")
+
+	killTablets(t)
+
+}
+
+func checkDBvar(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, variable string, status string) {
+	tabletParams := getMysqlConnParam(tablet)
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	assert.Nil(t, err)
+	defer conn.Close()
+
+	qr := execute(t, conn, fmt.Sprintf("show variables like '%s'", variable))
+	got := fmt.Sprintf("%v", qr.Rows)
+	want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", variable, status)
+	assert.Equal(t, want, got)
+}
+
+func checkDBstatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, variable string, status string) {
+	tabletParams := getMysqlConnParam(tablet)
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	assert.Nil(t, err)
+	defer conn.Close()
+
+	qr := execute(t, conn, fmt.Sprintf("show status like '%s'", variable))
+	got := fmt.Sprintf("%v", qr.Rows)
+	want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", variable, status)
+	assert.Equal(t, want, got)
+}
+
+func checkSlaveStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet) {
+	qr := runSQL(ctx, t, "show slave status", tablet)
+	SlaveIORunning := fmt.Sprintf("%v", qr.Rows[0][10])  // Slave_IO_Running
+	SlaveSQLRunning := fmt.Sprintf("%v", qr.Rows[0][10]) // Slave_SQL_Running
+	assert.Equal(t, SlaveIORunning, "VARCHAR(\"No\")")
+	assert.Equal(t, SlaveSQLRunning, "VARCHAR(\"No\")")
+}
+
 // Makes sure the tablet type is master, and its health check agrees.
 func checkMasterTablet(t *testing.T, tablet *cluster.Vttablet) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
@@ -424,18 +841,18 @@ func checkMasterTablet(t *testing.T, tablet *cluster.Vttablet) {
 
 }
 
-func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int, ctx context.Context) error {
+func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, index int) error {
 	// wait until it gets the data
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
-		qr := runSQL(t, selectSQL, tablet, ctx)
+		qr := runSQL(ctx, t, selectSQL, tablet)
 		if len(qr.Rows) == 1 {
 			return nil
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	return fmt.Errorf("Data is not yet replicated!")
+	return fmt.Errorf("data is not yet replicated")
 }
 
 func killTablets(t *testing.T) {

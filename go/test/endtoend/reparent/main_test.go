@@ -23,17 +23,21 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
+	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
 	// ClusterInstance instance to be used for test with different params
 	clusterInstance *cluster.LocalProcessCluster
+	tmClient        *tmc.Client
 	keyspaceName    = "ks"
 	shardName       = "0"
 	keyspaceShard   = keyspaceName + "/" + shardName
@@ -50,25 +54,7 @@ var (
 	primary key (id)
 	) Engine=InnoDB
 	`
-	vSchema = `
-	{
-		"sharded": true,
-		"vindexes": {
-		  "hash": {
-			"type": "hash"
-		  }
-		},
-		"tables": {
-		  "vt_insert_test": {
-			"column_vindexes": [
-			  {
-				"column": "id",
-				"name": "hash"
-			  }
-			]
-		  }
-		}
-	}`
+
 	tablet62344 *cluster.Vttablet
 	tablet62044 *cluster.Vttablet
 	tablet41983 *cluster.Vttablet
@@ -111,8 +97,7 @@ func TestMain(m *testing.M) {
 
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-lock_tables_timeout", "5s",
-			"-watch_replication_stream",
-			"-enable_replication_reporter",
+			"-enable_semi_sync",
 		}
 
 		// Initialize Cluster
@@ -144,6 +129,9 @@ func TestMain(m *testing.M) {
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
 
+		// create tablet manager client
+		tmClient = tmc.NewClient()
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -158,7 +146,7 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	return connParams
 }
 
-func runSQL(t *testing.T, sql string, tablet *cluster.Vttablet, ctx context.Context) *sqltypes.Result {
+func runSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttablet) *sqltypes.Result {
 	// Get Connection
 	tabletParams := getMysqlConnParam(tablet)
 	conn, err := mysql.Connect(ctx, &tabletParams)
@@ -174,4 +162,18 @@ func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	assert.Nil(t, err)
 	return qr
+}
+
+func getMasterPosition(ctx context.Context, t *testing.T, tablet *cluster.Vttablet) (string, string) {
+	vtTablet := getTablet(tablet.GrpcPort)
+	newPos, err := tmClient.MasterPosition(ctx, vtTablet)
+	assert.Nil(t, err)
+	gtID := strings.SplitAfter(newPos, "/")[1]
+	return newPos, gtID
+}
+
+func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
+	portMap := make(map[string]int32)
+	portMap["grpc"] = int32(tabletGrpcPort)
+	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
 }
