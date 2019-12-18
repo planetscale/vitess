@@ -14,10 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-KUBECTL=${KUBECTL:-kubectl}
+source build.env
 
-$KUBECTL delete replicationcontroller keytar
-$KUBECTL delete service keytar
-$KUBECTL delete configmap config
-gcloud container clusters delete keytar -z us-central1-b -q
-gcloud compute firewall-rules delete keytar -q
+function fail() {
+  echo "ERROR: $1"
+  exit 1
+}
+
+# These binaries are required to 'make test'
+# mysqld might be in /usr/sbin which will not be in the default PATH
+PATH="/usr/sbin:$PATH"
+for binary in mysqld consul etcd etcdctl zksrv.sh javadoc mvn ant curl wget zip unzip; do
+  command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. See https://vitess.io/contributing/build-from-source for install instructions."
+done;

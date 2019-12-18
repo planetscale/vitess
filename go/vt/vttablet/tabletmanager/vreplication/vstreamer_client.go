@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -122,7 +121,7 @@ func (vsClient *TabletVStreamerClient) Close(ctx context.Context) (err error) {
 // VStream part of the VStreamerClient interface
 func (vsClient *TabletVStreamerClient) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	if !vsClient.isOpen {
-		return errors.New("Can't VStream without opening client")
+		return errors.New("can't VStream without opening client")
 	}
 	return vsClient.tsQueryService.VStream(ctx, vsClient.target, startPos, filter, send)
 }
@@ -130,7 +129,7 @@ func (vsClient *TabletVStreamerClient) VStream(ctx context.Context, startPos str
 // VStreamRows part of the VStreamerClient interface
 func (vsClient *TabletVStreamerClient) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	if !vsClient.isOpen {
-		return errors.New("Can't VStreamRows without opening client")
+		return errors.New("can't VStreamRows without opening client")
 	}
 	return vsClient.tsQueryService.VStreamRows(ctx, vsClient.target, query, lastpk, send)
 }
@@ -185,16 +184,16 @@ func (vsClient *MySQLVStreamerClient) Close(ctx context.Context) (err error) {
 // VStream part of the VStreamerClient interface
 func (vsClient *MySQLVStreamerClient) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	if !vsClient.isOpen {
-		return errors.New("Can't VStream without opening client")
+		return errors.New("can't VStream without opening client")
 	}
-	streamer := vstreamer.NewVStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, startPos, filter, &vindexes.KeyspaceSchema{}, send)
+	streamer := vstreamer.NewVStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, startPos, filter, nil, send)
 	return streamer.Stream()
 }
 
 // VStreamRows part of the VStreamerClient interface
 func (vsClient *MySQLVStreamerClient) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	if !vsClient.isOpen {
-		return errors.New("Can't VStreamRows without opening client")
+		return errors.New("can't VStreamRows without opening client")
 	}
 	var row []sqltypes.Value
 	if lastpk != nil {
@@ -204,7 +203,7 @@ func (vsClient *MySQLVStreamerClient) VStreamRows(ctx context.Context, query str
 		}
 		row = r.Rows[0]
 	}
-	streamer := vstreamer.NewRowStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, query, row, &vindexes.KeyspaceSchema{}, send)
+	streamer := vstreamer.NewRowStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, query, row, nil, send)
 	return streamer.Stream()
 }
 

@@ -50,7 +50,7 @@ type Update struct {
 	Query string
 
 	// Vindex specifies the vindex to be used.
-	Vindex vindexes.Vindex
+	Vindex vindexes.SingleColumn
 	// Values specifies the vindex values to use for routing.
 	// For now, only one value is specified.
 	Values []sqltypes.PlanValue
@@ -70,6 +70,9 @@ type Update struct {
 
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
+
+	// Update does not take inputs
+	noInputs
 }
 
 // MarshalJSON serializes the Update into a JSON representation.

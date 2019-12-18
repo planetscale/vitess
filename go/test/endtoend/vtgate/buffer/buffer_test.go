@@ -43,12 +43,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
@@ -359,8 +359,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	}
 
 	// Wait for replica to catch up to master.
-	waitForReplicationPos(ctx, t, &master, &replica, 60.0)
-
+	waitForReplicationPos(ctx, t, master, replica, 60.0)
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0
 	if duration.Seconds() < minUnavailabilityInS {
@@ -418,3 +417,4 @@ func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) floa
 	time.Sleep(time.Duration(sleepTime) * time.Second)
 	return timeout
 }
+

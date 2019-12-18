@@ -48,7 +48,7 @@ var (
 	mySqlPort      = flag.String("mySqlPort", "15306", "mySql port to be used")
 	cell           = flag.String("cell", "test", "Vitess Cell name")
 	keyspaceData   = flag.String("keyspaceData", "test_keyspace:2:1:create_messages.sql,create_tokens.sql;unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql", "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'")
-	externalDbData = flag.String("externalDbData", "", "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> seperated by ';'")
+	externalDbData = flag.String("externalDbData", "", "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'")
 )
 
 type keyspaceInfo struct {
@@ -466,8 +466,8 @@ func generateVtctld() string {
     command: ["sh", "-c", " $$VTROOT/bin/vtctld \
         %[3]s \
         -cell %[4]s \
-        -web_dir $$VTTOP/web/vtctld \
-        -web_dir2 $$VTTOP/web/vtctld2/app \
+        -web_dir $$VTROOT/web/vtctld \
+        -web_dir2 $$VTROOT/web/vtctld2/app \
         -workflow_manager_init \
         -workflow_manager_use_election \
         -service_map 'grpc-vtctl' \
