@@ -48,8 +48,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
@@ -64,8 +62,7 @@ var (
 		msg VARCHAR(64) NOT NULL,
 		PRIMARY KEY (id)
 	) Engine=InnoDB;`
-	wg       = &sync.WaitGroup{}
-	tmClient = tmc.NewClient()
+	wg = &sync.WaitGroup{}
 )
 
 const (
@@ -74,7 +71,6 @@ const (
 	demoteMasterQuery          = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
 	disableSemiSyncMasterQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
 	enableSemiSyncMasterQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
-	masterPositionQuery        = "SELECT @@GLOBAL.gtid_executed;"
 	promoteSlaveQuery          = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
 )
 
@@ -376,7 +372,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	}
 
 	// Configure old master to replicate from new master.
-	_, gtID := cluster.GetMasterPosition(t, newMaster, hostname)
+	_, gtID := cluster.GetMasterPosition(t, *newMaster, hostname)
 
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
@@ -417,4 +413,3 @@ func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) floa
 	time.Sleep(time.Duration(sleepTime) * time.Second)
 	return timeout
 }
-

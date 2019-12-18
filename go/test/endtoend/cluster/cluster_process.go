@@ -92,36 +92,11 @@ func (shard *Shard) MasterTablet() *Vttablet {
 	return shard.Vttablets[0]
 }
 
-// Rdonly gets first rdonly tablet
-func (shard *Shard) Rdonly() *Vttablet {
-	for idx, tablet := range shard.Vttablets {
-		if tablet.Type == "rdonly" {
-			return shard.Vttablets[idx]
-		}
-	}
-	return nil
-}
-
-// Replica gets the first replica tablet
-func (shard *Shard) Replica() *Vttablet {
-	for idx, tablet := range shard.Vttablets {
-		if tablet.Type == "replica" && idx > 0 {
-			return shard.Vttablets[idx]
-		}
-	}
-	return nil
-}
-
-// MasterTablet get the 1st tablet which is master
-func (shard *Shard) MasterTablet() *Vttablet {
-	return &shard.Vttablets[0]
-}
-
 // Rdonly get the last tablet which is rdonly
 func (shard *Shard) Rdonly() *Vttablet {
 	for idx, tablet := range shard.Vttablets {
 		if tablet.Type == "rdonly" {
-			return &shard.Vttablets[idx]
+			return shard.Vttablets[idx]
 		}
 	}
 	return nil
@@ -132,7 +107,7 @@ func (shard *Shard) Rdonly() *Vttablet {
 func (shard *Shard) Replica() *Vttablet {
 	for idx, tablet := range shard.Vttablets {
 		if tablet.Type == "replica" && idx > 0 {
-			return &shard.Vttablets[idx]
+			return shard.Vttablets[idx]
 		}
 	}
 	return nil
@@ -263,7 +238,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.VtTabletExtraArgs,
 				cluster.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
-			shard.Vttablets = append(shard.Vttablets, *tablet)
+			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 
 		// wait till all mysqlctl is instantiated
