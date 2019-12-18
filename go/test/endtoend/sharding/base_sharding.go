@@ -18,7 +18,6 @@ limitations under the License.
 package sharding
 
 import (
-
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -27,8 +26,6 @@ import (
 	"strconv"
 	"testing"
 	"time"
-
-
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -67,8 +64,6 @@ func CheckSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol stri
 	assert.True(t, reflect.DeepEqual(currentPartition, expectedPartition))
 }
 
-
-
 // GetSrvKeyspace return the Srv Keyspace structure
 func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalProcessCluster) *topodata.SrvKeyspace {
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
@@ -79,8 +74,6 @@ func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalPr
 	assert.Nil(t, err)
 	return &srvKeyspace
 }
-
-
 
 // VerifyTabletHealth checks that the tablet URL is reachable.
 func VerifyTabletHealth(t *testing.T, vttablet cluster.Vttablet, hostname string) {
@@ -288,7 +281,6 @@ func InsertToTablet(t *testing.T, query string, vttablet cluster.Vttablet, ks st
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }
 
-
 // InsertMultiValues inserts a multiple values to vttablet
 func InsertMultiValues(t *testing.T, tablet cluster.Vttablet, keyspaceName string, tableName string,
 	fixedParentID int, ids []int, msgs []string, ksIDs []uint64) {
@@ -312,7 +304,6 @@ func InsertMultiValues(t *testing.T, tablet cluster.Vttablet, keyspaceName strin
 	queryStr += fmt.Sprintf(" /* id:%s */", valueIds)
 	InsertToTablet(t, queryStr, tablet, keyspaceName, false)
 }
-
 
 // CheckLotsTimeout waits till all values are inserted
 func CheckLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, ks string, keyType querypb.Type, pctFound int) bool {
@@ -398,8 +389,6 @@ func CheckTabletQueryService(t *testing.T, vttablet cluster.Vttablet, expectedSt
 		assert.Equal(t, tabletStatus, expectedStatus)
 	}
 }
-
-
 
 // CheckShardQueryServices checks DisableQueryService for all shards
 func CheckShardQueryServices(t *testing.T, ci cluster.LocalProcessCluster, shards []cluster.Shard, cell string,

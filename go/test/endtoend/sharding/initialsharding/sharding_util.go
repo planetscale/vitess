@@ -416,7 +416,6 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name}
 	checkSrvKeyspaceForSharding(t, keyspaceName, expectedPartitions)
 
-
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard",
 		"--exclude_tables", "unrelated",
 		shard1.Rdonly().Alias, fmt.Sprintf("%s/%s", keyspaceName, shard21.Name))
@@ -528,7 +527,6 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 			fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 		assert.Nil(t, err)
 	}
-
 
 	for _, shard := range []string{shard21.Name, shard22.Name} {
 		err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),

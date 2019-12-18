@@ -113,32 +113,6 @@ func (shard *Shard) Replica() *Vttablet {
 	return nil
 }
 
-// MasterTablet get the 1st tablet which is master
-func (shard *Shard) MasterTablet() *Vttablet {
-	return &shard.Vttablets[0]
-}
-
-// Rdonly get the last tablet which is rdonly
-func (shard *Shard) Rdonly() *Vttablet {
-	for idx, tablet := range shard.Vttablets {
-		if tablet.Type == "rdonly" {
-			return &shard.Vttablets[idx]
-		}
-	}
-	return nil
-}
-
-// Replica get the last but one tablet which is replica
-// Mostly we have either 3 tablet setup [master, replica, rdonly]
-func (shard *Shard) Replica() *Vttablet {
-	for idx, tablet := range shard.Vttablets {
-		if tablet.Type == "replica" && idx > 0 {
-			return &shard.Vttablets[idx]
-		}
-	}
-	return nil
-}
-
 // Vttablet stores the properties needed to start a vttablet process
 type Vttablet struct {
 	Type      string

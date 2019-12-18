@@ -80,7 +80,6 @@ releases
 # Vagrant
 .vagrant
 
-
 /dist/
 /py-vtdb
 /vthook/

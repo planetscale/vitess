@@ -116,13 +116,13 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		shard1Master = localCluster.GetVttabletInstanceWithType(0, "master", "")
-		shard1Replica = localCluster.GetVttabletInstanceWithType(0, "replica", cell2)
-		shard1Rdonly = localCluster.GetVttabletInstanceWithType(0, "rdonly", cell2)
+		shard1Master = localCluster.GetVttabletInstance("master", 0, "")
+		shard1Replica = localCluster.GetVttabletInstance("replica", 0, cell2)
+		shard1Rdonly = localCluster.GetVttabletInstance("rdonly", 0, cell2)
 
-		shard2Master = localCluster.GetVttabletInstanceWithType(0, "master", "")
-		shard2Replica = localCluster.GetVttabletInstanceWithType(0, "replica", cell2)
-		shard2Rdonly = localCluster.GetVttabletInstanceWithType(0, "rdonly", cell2)
+		shard2Master = localCluster.GetVttabletInstance("master", 0, "")
+		shard2Replica = localCluster.GetVttabletInstance("replica", 0, cell2)
+		shard2Rdonly = localCluster.GetVttabletInstance("rdonly", 0, cell2)
 
 		var mysqlProcs []*exec.Cmd
 		for _, tablet := range []*cluster.Vttablet{shard1Master, shard1Replica, shard1Rdonly, shard2Master, shard2Replica, shard2Rdonly} {
@@ -160,7 +160,7 @@ func TestMain(m *testing.M) {
 
 		shard1 := cluster.Shard{
 			Name:      "-80",
-			Vttablets: []cluster.Vttablet{*shard1Master, *shard1Replica, *shard1Rdonly},
+			Vttablets: []*cluster.Vttablet{shard1Master, shard1Replica, shard1Rdonly},
 		}
 		for idx := range shard1.Vttablets {
 			shard1.Vttablets[idx].VttabletProcess.Shard = shard1.Name
@@ -169,7 +169,7 @@ func TestMain(m *testing.M) {
 
 		shard2 := cluster.Shard{
 			Name:      "80-",
-			Vttablets: []cluster.Vttablet{*shard2Master, *shard2Replica, *shard2Rdonly},
+			Vttablets: []*cluster.Vttablet{shard2Master, shard2Replica, shard2Rdonly},
 		}
 		for idx := range shard2.Vttablets {
 			shard2.Vttablets[idx].VttabletProcess.Shard = shard2.Name
@@ -177,7 +177,7 @@ func TestMain(m *testing.M) {
 		localCluster.Keyspaces[0].Shards = append(localCluster.Keyspaces[0].Shards, shard2)
 
 		for _, tablet := range shard1.Vttablets {
-			if err := localCluster.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shard1.Name); err != nil {
+			if err := localCluster.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspaceName, hostname, shard1.Name); err != nil {
 				return 1, err
 			}
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
@@ -200,7 +200,7 @@ func TestMain(m *testing.M) {
 		}
 
 		for _, tablet := range shard2.Vttablets {
-			if err := localCluster.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shard2.Name); err != nil {
+			if err := localCluster.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspaceName, hostname, shard2.Name); err != nil {
 				return 1, err
 			}
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {

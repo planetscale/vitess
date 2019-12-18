@@ -110,7 +110,6 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-
 		srcMaster = localCluster.GetVttabletInstance("master", 0, "")
 		srcReplica = localCluster.GetVttabletInstance("replica", 0, "")
 		srcRdonly = localCluster.GetVttabletInstance("rdonly", 0, "")
@@ -286,7 +285,6 @@ func TestChecksumEnabled(t *testing.T) {
 
 	verifyData(t, 2, "", `[UINT64(2) VARCHAR("value - 2")]`)
 }
-
 
 // Disable binlog_checksum to make sure we can also talk to a server without
 // checksums enabled, in case they are enabled by default

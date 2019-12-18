@@ -95,9 +95,8 @@ func TestHealthCheck(t *testing.T) {
 	// (for the replica, we let vttablet do the InitTablet)
 	ctx := context.Background()
 
-
 	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
-  
+
 	// Start Mysql Processes and return connection
 	replicaConn, err := cluster.StartMySQLAndGetConnection(ctx, rTablet, username, clusterInstance.TmpDirectory)
 	assert.Nil(t, err)

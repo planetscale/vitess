@@ -93,7 +93,6 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-
 		if err := clusterForKSTest.VtctlProcess.AddCellInfo(cell2); err != nil {
 			return 1
 		}
