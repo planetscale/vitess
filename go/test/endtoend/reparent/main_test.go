@@ -40,6 +40,7 @@ var (
 	tmClient        *tmc.Client
 	keyspaceName    = "ks"
 	shardName       = "0"
+	shard1Name      = "0000000000000000-ffffffffffffffff"
 	keyspaceShard   = keyspaceName + "/" + shardName
 	dbName          = "vt_" + keyspaceName
 	username        = "vt_dba"
@@ -54,11 +55,15 @@ var (
 	primary key (id)
 	) Engine=InnoDB
 	`
-
+	// Tablets for for shard0
 	tablet62344 *cluster.Vttablet
 	tablet62044 *cluster.Vttablet
 	tablet41983 *cluster.Vttablet
 	tablet31981 *cluster.Vttablet
+
+	// Tablets for for shard1
+	masterTablet  *cluster.Vttablet
+	replicaTablet *cluster.Vttablet
 )
 
 func TestMain(m *testing.M) {
@@ -95,13 +100,20 @@ func TestMain(m *testing.M) {
 		shard0 := &cluster.Shard{Name: shardName}
 		shard0.Vttablets = []*cluster.Vttablet{tablet62344, tablet62044, tablet41983, tablet31981}
 
+		// Initiate shard1 - required for ranged based reparenting
+		masterTablet = clusterInstance.GetVttabletInstance("replica", 0, "")
+		replicaTablet = clusterInstance.GetVttabletInstance("replica", 0, "")
+
+		shard1 := &cluster.Shard{Name: shard1Name}
+		shard1.Vttablets = []*cluster.Vttablet{masterTablet, replicaTablet}
+
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-lock_tables_timeout", "5s",
 			"-enable_semi_sync",
 		}
 
 		// Initialize Cluster
-		err = clusterInstance.LaunchCluster(keyspace, []cluster.Shard{*shard0})
+		err = clusterInstance.LaunchCluster(keyspace, []cluster.Shard{*shard0, *shard1})
 		if err != nil {
 			return 1
 		}

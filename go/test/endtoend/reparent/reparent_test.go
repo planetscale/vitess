@@ -81,7 +81,7 @@ func TestReparentDownMaster(t *testing.T) {
 	}
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.CheckForTabletStatus([]string{"SERVING", "NOT_SERVING"})
+		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
 		assert.Nil(t, err)
 	}
 
@@ -167,7 +167,7 @@ func TestReparentCrossCell(t *testing.T) {
 	}
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.CheckForTabletStatus([]string{"SERVING", "NOT_SERVING"})
+		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
 		assert.Nil(t, err)
 	}
 
@@ -197,24 +197,15 @@ func TestReparentCrossCell(t *testing.T) {
 
 }
 
-//func TestReparentGracefulRangeBased(t *testing.T){
-//	//err := clusterInstance.VtctlclientProcess.ExecuteCommand("CreateKeyspace",
-//	//	"--sharding_column_name", "keyspace_id",
-//	//	"--sharding_column_type", "uint64",
-//	//	keyspaceName)
-//	//assert.Nil(t, err)
-//	reparentGraceful(t, "0000000000000000-ffffffffffffffff", false)
-//}
-
 func TestReparentGraceful(t *testing.T) {
-	reparentGraceful(t, shardName, false)
+	reparentGraceful(t, false)
 }
 
 func TestReparentGracefulRecovery(t *testing.T) {
-	reparentGraceful(t, shardName, true)
+	reparentGraceful(t, true)
 }
 
-func reparentGraceful(t *testing.T, shardID string, confusedMaster bool) {
+func reparentGraceful(t *testing.T, confusedMaster bool) {
 	ctx := context.Background()
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
@@ -222,7 +213,7 @@ func reparentGraceful(t *testing.T, shardID string, confusedMaster bool) {
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
 		assert.Nil(t, err)
 		// Init Tablet
-		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardID)
+		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
 		assert.Nil(t, err)
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
@@ -230,19 +221,14 @@ func reparentGraceful(t *testing.T, shardID string, confusedMaster bool) {
 	}
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.CheckForTabletStatus([]string{"SERVING", "NOT_SERVING"})
+		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
 		assert.Nil(t, err)
 	}
 
 	// Force the slaves to reparent assuming that all the datasets are identical.
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardID), tablet62344.Alias)
+		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
 	assert.Nil(t, err)
-
-	//for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-	//	tablet.VttabletProcess.WaitForTabletType("SERVING")
-	//	//assert.Nil(t, err)
-	//}
 
 	// Validate topology
 	validateTopology(t, true)
@@ -256,7 +242,7 @@ func reparentGraceful(t *testing.T, shardID string, confusedMaster bool) {
 
 	// Run this to make sure it succeeds.
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"ShardReplicationPositions", fmt.Sprintf("%s/%s", keyspaceName, shardID))
+		"ShardReplicationPositions", fmt.Sprintf("%s/%s", keyspaceName, shardName))
 	assert.Nil(t, err)
 	strArray := strings.Split(output, "\n")
 	if strArray[len(strArray)-1] == "" {
@@ -268,29 +254,32 @@ func reparentGraceful(t *testing.T, shardID string, confusedMaster bool) {
 	// Perform a graceful reparent operation
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"PlannedReparentShard",
-		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardID),
+		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName),
 		"-new_master", tablet62044.Alias)
 	assert.Nil(t, err)
 
 	// Validate topology
 	validateTopology(t, false)
 
+	checkMasterTablet(t, tablet62044)
+
 	// Simulate a master that forgets it's master and becomes replica.
 	// PlannedReparentShard should be able to recover by reparenting to the same master again,
 	// as long as all tablets are available to check that it's safe.
 	if confusedMaster {
-		err = clusterInstance.VtctlclientProcess.InitTablet(tablet62044, tablet62044.Cell, keyspaceName, hostname, shardID)
+		tablet62044.Type = "replica"
+		err = clusterInstance.VtctlclientProcess.InitTablet(tablet62044, tablet62044.Cell, keyspaceName, hostname, shardName)
 		assert.Nil(t, err)
 
-		//err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", tablet62044.Alias)
-		//assert.Nil(t, err)
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", tablet62044.Alias)
+		assert.Nil(t, err)
 	}
 
 	// Perform a graceful reparent to the same master.
 	// It should be idempotent, and should fix any inconsistencies if necessary
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"PlannedReparentShard",
-		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardID),
+		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName),
 		"-new_master", tablet62044.Alias)
 	assert.Nil(t, err)
 
@@ -327,7 +316,7 @@ func TestReparentSlaveOffline(t *testing.T) {
 	}
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.CheckForTabletStatus([]string{"SERVING", "NOT_SERVING"})
+		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
 		assert.Nil(t, err)
 	}
 
@@ -335,11 +324,6 @@ func TestReparentSlaveOffline(t *testing.T) {
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", keyspaceShard, tablet62344.Alias)
 	assert.Nil(t, err)
-
-	//for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-	//	tablet.VttabletProcess.WaitForTabletType("SERVING")
-	//	//assert.Nil(t, err)
-	//}
 
 	// Validate topology
 	validateTopology(t, true)
@@ -365,6 +349,10 @@ func TestReparentSlaveOffline(t *testing.T) {
 
 func TestReparentAvoid(t *testing.T) {
 
+	// Remove tablet41983 from topology
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet41983.Alias)
+	assert.Nil(t, err)
+
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet31981} {
 		// create database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
@@ -377,23 +365,18 @@ func TestReparentAvoid(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.CheckForTabletStatus([]string{"SERVING", "NOT_SERVING"})
+	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet31981} {
+		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
 		assert.Nil(t, err)
 	}
 
-	// Force the slaves to reparent assuming that all the datasets are identical.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	// Force the slaves to reparent assuming that all the dataset's are identical.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", keyspaceShard, tablet62344.Alias)
 	assert.Nil(t, err)
 
-	//for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet31981} {
-	//	err := tablet.VttabletProcess.WaitForTabletType("SERVING")
-	//	assert.Nil(t, err)
-	//}
-
 	// Validate topology
-	validateTopology(t, false)
+	validateTopology(t, true)
 
 	checkMasterTablet(t, tablet62344)
 
@@ -485,7 +468,7 @@ func reparentFromOutside(t *testing.T, brutal bool) {
 	}
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.CheckForTabletStatus([]string{"SERVING", "NOT_SERVING"})
+		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
 		assert.Nil(t, err)
 	}
 
@@ -493,11 +476,6 @@ func reparentFromOutside(t *testing.T, brutal bool) {
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
 	assert.Nil(t, err)
-
-	//for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-	//	err := tablet.VttabletProcess.WaitForTabletType("SERVING")
-	//	assert.Nil(t, err)
-	//}
 
 	// Validate topology
 	validateTopology(t, true)
@@ -583,7 +561,7 @@ func TestReparentWithDownSlave(t *testing.T) {
 	}
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.CheckForTabletStatus([]string{"SERVING", "NOT_SERVING"})
+		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
 		assert.Nil(t, err)
 	}
 
@@ -591,11 +569,6 @@ func TestReparentWithDownSlave(t *testing.T) {
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
 	assert.Nil(t, err)
-
-	//for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-	//	err := tablet.VttabletProcess.WaitForTabletType("SERVING")
-	//	assert.Nil(t, err)
-	//}
 
 	// Validate topology
 	validateTopology(t, true)
@@ -841,7 +814,6 @@ func assertNodeCount(t *testing.T, result string, want int) {
 	assert.Nil(t, err)
 
 	nodes := reflect.ValueOf(resultMap["nodes"])
-	fmt.Println(nodes)
 	got := nodes.Len()
 	assert.Equal(t, want, got)
 }
@@ -886,10 +858,6 @@ func checkMasterTablet(t *testing.T, tablet *cluster.Vttablet) {
 	err = json2.Unmarshal([]byte(result), &tabletInfo)
 	assert.Nil(t, err)
 	assert.Equal(t, topodatapb.TabletType_MASTER, tabletInfo.GetType())
-
-	//if port {
-	//	assert.Equal(t, port, tabletInfo.GetPortMap()["vt"])
-	//}
 
 	// make sure the health stream is updated
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)

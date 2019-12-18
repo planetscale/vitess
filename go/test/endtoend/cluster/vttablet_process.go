@@ -183,24 +183,11 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 
 // WaitForTabletType waits till the tablet status reaches desired type
 func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
-	timeout := time.Now().Add(10 * time.Second)
-	for time.Now().Before(timeout) {
-		if vttablet.GetTabletStatus() == expectedType {
-			return nil
-		}
-		select {
-		case err := <-vttablet.exit:
-			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
-		default:
-			time.Sleep(300 * time.Millisecond)
-		}
-	}
-	return fmt.Errorf("Vttablet %s, current status = %s, expected status %s not reached ",
-		vttablet.TabletPath, vttablet.GetTabletStatus(), expectedType)
+	return vttablet.WaitForTabletTypes([]string{expectedType})
 }
 
-// CheckForTabletStatus waits till the tablet status reaches expected types
-func (vttablet *VttabletProcess) CheckForTabletStatus(expectedTypes []string) error {
+// WaitForTabletTypes waits till the tablet reaches to any of the provided status
+func (vttablet *VttabletProcess) WaitForTabletTypes(expectedTypes []string) error {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		if contains(expectedTypes, vttablet.GetTabletStatus()) {
