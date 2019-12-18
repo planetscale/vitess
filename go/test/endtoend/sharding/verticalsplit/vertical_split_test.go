@@ -83,9 +83,13 @@ func TestVerticalSplit(t *testing.T) {
 
 	// Adding another cell in the same cluster
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+"test_ca")
+	assert.Nil(t, err)
 	err = clusterInstance.VtctlProcess.AddCellInfo("test_ca")
+	assert.Nil(t, err)
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+"test_ny")
+	assert.Nil(t, err)
 	err = clusterInstance.VtctlProcess.AddCellInfo("test_ny")
+	assert.Nil(t, err)
 
 	assert.Nil(t, err, "error should be Nil")
 
@@ -105,11 +109,11 @@ func TestVerticalSplit(t *testing.T) {
 	_ = clusterInstance.VtctlclientProcess.InitTablet(&sourceReplicaTablet, cellj, sourceKeyspace, hostname, sourceShard.Name)
 	_ = sourceReplicaTablet.VttabletProcess.CreateDB(sourceKeyspace)
 
-	// rdOnly_1 tablet init
+	// rdOnly1 tablet init
 	_ = clusterInstance.VtctlclientProcess.InitTablet(&sourceRdOnlyTablet1, cellj, sourceKeyspace, hostname, sourceShard.Name)
 	_ = sourceRdOnlyTablet1.VttabletProcess.CreateDB(sourceKeyspace)
 
-	// rdOnly_2 tablet init
+	// rdOnly2 tablet init
 	_ = clusterInstance.VtctlclientProcess.InitTablet(&sourceRdOnlyTablet2, cellj, sourceKeyspace, hostname, sourceShard.Name)
 	_ = sourceRdOnlyTablet2.VttabletProcess.CreateDB(sourceKeyspace)
 
@@ -128,11 +132,11 @@ func TestVerticalSplit(t *testing.T) {
 	_ = clusterInstance.VtctlclientProcess.InitTablet(&destinationReplicaTablet, cellj, destinationKeyspace, hostname, destinationShard.Name)
 	_ = destinationReplicaTablet.VttabletProcess.CreateDB(destinationKeyspace)
 
-	// rdOnly_1 tablet init
+	// rdOnly1 tablet init
 	_ = clusterInstance.VtctlclientProcess.InitTablet(&destinationRdOnlyTablet1, cellj, destinationKeyspace, hostname, destinationShard.Name)
 	_ = destinationRdOnlyTablet1.VttabletProcess.CreateDB(destinationKeyspace)
 
-	// rdOnly_2 tablet init
+	// rdOnly2 tablet init
 	_ = clusterInstance.VtctlclientProcess.InitTablet(&destinationRdOnlyTablet2, cellj, destinationKeyspace, hostname, destinationShard.Name)
 	_ = destinationRdOnlyTablet2.VttabletProcess.CreateDB(destinationKeyspace)
 
@@ -470,11 +474,13 @@ func TestVerticalSplit(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ApplySchema", "-sql=drop view view1", "source_keyspace")
 	assert.Nil(t, err)
 
-	for _, t := range []string{"moving1", "moving2"} {
-		_ = clusterInstance.VtctlclientProcess.ExecuteCommand("ApplySchema", "--sql=drop table "+t, "source_keyspace")
+	for _, table := range []string{"moving1", "moving2"} {
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("ApplySchema", "--sql=drop table "+table, "source_keyspace")
+		assert.Nil(t, err)
 	}
-	for _, t := range []cluster.Vttablet{sourceMasterTablet, sourceReplicaTablet, sourceRdOnlyTablet1, sourceRdOnlyTablet2} {
-		_ = clusterInstance.VtctlclientProcess.ExecuteCommand("ReloadSchema", t.Alias)
+	for _, tablet := range []cluster.Vttablet{sourceMasterTablet, sourceReplicaTablet, sourceRdOnlyTablet1, sourceRdOnlyTablet2} {
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("ReloadSchema", tablet.Alias)
+		assert.Nil(t, err)
 	}
 	qr, _ = sourceMasterTablet.VttabletProcess.QueryTablet("select count(1) from staying1", sourceKeyspace, true)
 	assert.Equal(t, 1, len(qr.Rows), fmt.Sprintf("cannot read staying1: got %d", len(qr.Rows)))
@@ -525,8 +531,8 @@ func assertTabletControls(t *testing.T, clusterInstance *cluster.LocalProcessClu
 
 func checkStats(t *testing.T) {
 
-	//getting ['VttabletCall']['Histograms']['Execute.source_keyspace.0.replica']['Count']
-	resultMap := clusterInstance.VtgateProcess.GetVars()
+	resultMap, err := clusterInstance.VtgateProcess.GetVars()
+	assert.Nil(t, err)
 	resultVtTabletCall := resultMap["VttabletCall"]
 	resultVtTabletCallMap := resultVtTabletCall.(map[string]interface{})
 	resultHistograms := resultVtTabletCallMap["Histograms"]
@@ -536,7 +542,6 @@ func checkStats(t *testing.T) {
 	resultCountStr := fmt.Sprintf("%v", reflect.ValueOf(resultTableMap["Count"]))
 	assert.Equal(t, "2", resultCountStr, fmt.Sprintf("unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s", resultCountStr))
 
-	// getting ['VtgateApi']['Histograms']['ExecuteKeyRanges.destination_keyspace.master']['Count']
 	// Verify master reads done by self._check_client_conn_redirection().
 	resultVtgateAPI := resultMap["VtgateApi"]
 	resultVtgateAPIMap := resultVtgateAPI.(map[string]interface{})
@@ -714,13 +719,7 @@ func initializeCluster(t *testing.T) (int, error) {
 		for i := 0; i < 4; i++ {
 			// instantiate vttablet object with reserved ports
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
-			tablet := &cluster.Vttablet{
-				TabletUID: tabletUID,
-				HTTPPort:  clusterInstance.GetAndReservePort(),
-				GrpcPort:  clusterInstance.GetAndReservePort(),
-				MySQLPort: clusterInstance.GetAndReservePort(),
-				Alias:     fmt.Sprintf("%s-%010d", clusterInstance.Cell, tabletUID),
-			}
+			tablet := clusterInstance.GetVttabletInstance(tabletUID)
 			if i == 0 { // Make the first one as master
 				tablet.Type = "replica"
 			} else if i == 1 {
