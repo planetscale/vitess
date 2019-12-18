@@ -75,6 +75,7 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 	if len(mysqlctl.ExtraArgs) > 0 {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
 	}
+
 	if mysqlctl.InitMysql {
 		tmpProcess.Args = append(tmpProcess.Args, "init",
 			"-init_db_sql_file", mysqlctl.InitDBFile)
