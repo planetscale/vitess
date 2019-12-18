@@ -110,13 +110,14 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		srcMaster = localCluster.GetVttabletInstanceWithType(0, "master", "")
-		srcReplica = localCluster.GetVttabletInstanceWithType(0, "replica", "")
-		srcRdonly = localCluster.GetVttabletInstanceWithType(0, "rdonly", "")
 
-		destMaster = localCluster.GetVttabletInstanceWithType(0, "master", "")
-		destReplica = localCluster.GetVttabletInstanceWithType(0, "replica", "")
-		destRdonly = localCluster.GetVttabletInstanceWithType(0, "rdonly", "")
+		srcMaster = localCluster.GetVttabletInstance("master", 0, "")
+		srcReplica = localCluster.GetVttabletInstance("replica", 0, "")
+		srcRdonly = localCluster.GetVttabletInstance("rdonly", 0, "")
+
+		destMaster = localCluster.GetVttabletInstance("master", 0, "")
+		destReplica = localCluster.GetVttabletInstance("replica", 0, "")
+		destRdonly = localCluster.GetVttabletInstance("rdonly", 0, "")
 
 		var mysqlProcs []*exec.Cmd
 		for _, tablet := range []*cluster.Vttablet{srcMaster, srcReplica, srcRdonly, destMaster, destReplica, destRdonly} {
@@ -154,7 +155,7 @@ func TestMain(m *testing.M) {
 
 		shard1 := cluster.Shard{
 			Name:      "0",
-			Vttablets: []cluster.Vttablet{*srcMaster, *srcReplica, *srcRdonly},
+			Vttablets: []*cluster.Vttablet{srcMaster, srcReplica, srcRdonly},
 		}
 		for idx := range shard1.Vttablets {
 			shard1.Vttablets[idx].VttabletProcess.Shard = shard1.Name
@@ -163,7 +164,7 @@ func TestMain(m *testing.M) {
 
 		shard2 := cluster.Shard{
 			Name:      "-",
-			Vttablets: []cluster.Vttablet{*destMaster, *destReplica, *destRdonly},
+			Vttablets: []*cluster.Vttablet{destMaster, destReplica, destRdonly},
 		}
 		for idx := range shard2.Vttablets {
 			shard2.Vttablets[idx].VttabletProcess.Shard = shard2.Name
@@ -171,7 +172,7 @@ func TestMain(m *testing.M) {
 		localCluster.Keyspaces[0].Shards = append(localCluster.Keyspaces[0].Shards, shard2)
 
 		for _, tablet := range shard1.Vttablets {
-			if err := localCluster.VtctlclientProcess.InitTablet(&tablet, cell, keyspaceName, hostname, shard1.Name); err != nil {
+			if err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard1.Name); err != nil {
 				return 1, err
 			}
 			if err := tablet.VttabletProcess.Setup(); err != nil {
@@ -199,7 +200,7 @@ func TestMain(m *testing.M) {
 
 		// Create destination shard (won't be serving as there is no DB)
 		for _, tablet := range shard2.Vttablets {
-			if err := localCluster.VtctlclientProcess.InitTablet(&tablet, cell, keyspaceName, hostname, shard2.Name); err != nil {
+			if err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard2.Name); err != nil {
 				return 1, err
 			}
 			if err := tablet.VttabletProcess.Setup(); err != nil {
@@ -268,10 +269,10 @@ func TestCharset(t *testing.T) {
 	verifyData(t, 1, "latin1", `[UINT64(1) VARCHAR("Šṛ́rỏé")]`)
 }
 
+// Enable binlog_checksum, which will also force a log rotation that should
+// cause binlog streamer to notice the new checksum setting.
 func TestChecksumEnabled(t *testing.T) {
 	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
-	// Enable binlog_checksum, which will also force a log rotation that should
-	// cause binlog streamer to notice the new checksum setting.
 	_, err := queryTablet(t, *destReplica, "SET @@global.binlog_checksum=1", "")
 	assert.Nil(t, err)
 
@@ -286,10 +287,12 @@ func TestChecksumEnabled(t *testing.T) {
 	verifyData(t, 2, "", `[UINT64(2) VARCHAR("value - 2")]`)
 }
 
+
+// Disable binlog_checksum to make sure we can also talk to a server without
+// checksums enabled, in case they are enabled by default
 func TestChecksumDisabled(t *testing.T) {
 	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
-	// Disable binlog_checksum to make sure we can also talk to a server without
-	// checksums enabled, in case they are enabled by default
+
 	_, err := queryTablet(t, *destReplica, "SET @@global.binlog_checksum=0", "")
 	assert.Nil(t, err)
 

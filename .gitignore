@@ -80,6 +80,9 @@ releases
 # Vagrant
 .vagrant
 
-# Others
-dist
-bin
+
+/dist/
+/py-vtdb
+/vthook/
+/bin/
+/vtdataroot/

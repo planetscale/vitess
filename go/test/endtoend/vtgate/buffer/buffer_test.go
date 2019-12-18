@@ -43,13 +43,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
@@ -64,8 +62,7 @@ var (
 		msg VARCHAR(64) NOT NULL,
 		PRIMARY KEY (id)
 	) Engine=InnoDB;`
-	wg       = &sync.WaitGroup{}
-	tmClient = tmc.NewClient()
+	wg = &sync.WaitGroup{}
 )
 
 const (
@@ -74,7 +71,6 @@ const (
 	demoteMasterQuery          = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
 	disableSemiSyncMasterQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
 	enableSemiSyncMasterQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
-	masterPositionQuery        = "SELECT @@GLOBAL.gtid_executed;"
 	promoteSlaveQuery          = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
 )
 
@@ -359,9 +355,8 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	}
 
 	// Wait for replica to catch up to master.
-	waitForReplicationPos(ctx, t, &master, &replica, 60.0)
-
-	duration := time.Since(start)
+	waitForReplicationPos(ctx, t, master, replica, 60.0)
+  duration := time.Since(start)
 	minUnavailabilityInS := 1.0
 	if duration.Seconds() < minUnavailabilityInS {
 		w := minUnavailabilityInS - duration.Seconds()
@@ -377,9 +372,8 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	}
 
 	// Configure old master to replicate from new master.
-	_, gtID := cluster.GetMasterPosition(t, newMaster, hostname)
-
-	// Use 'localhost' as hostname because Travis CI worker hostnames
+	_, gtID := cluster.GetMasterPosition(t, *newMaster, hostname)
+  // Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
 	changeMasterCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newMaster.MySQLPort)
 	oldMaster.VttabletProcess.QueryTablet(changeMasterCommands, keyspaceUnshardedName, true)
