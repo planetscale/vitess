@@ -66,6 +66,7 @@ func CheckSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol stri
 
 // GetSrvKeyspace return the Srv Keyspace structure
 func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalProcessCluster) *topodata.SrvKeyspace {
+
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
 	assert.Nil(t, err)
 	var srvKeyspace topodata.SrvKeyspace
