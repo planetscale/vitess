@@ -84,7 +84,7 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 
 	checkMasterTablet(t, replicaTablet)
 
-	// insert data into the new master, check the connected slaves work
+	// insert data into the new master, check the connected slave work
 	insertSQL := fmt.Sprintf(insertSQL, 1, 1)
 	runSQL(ctx, t, insertSQL, replicaTablet)
 	err = checkInsertedValues(ctx, t, masterTablet, 1)

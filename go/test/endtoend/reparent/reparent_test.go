@@ -35,7 +35,7 @@ import (
 )
 
 func TestMasterToSpareStateChangeImpossible(t *testing.T) {
-	// Making tablet as master
+	// Setting tablet type as master
 	tablet62344.Type = "master"
 
 	// Init Tablet
@@ -53,11 +53,11 @@ func TestMasterToSpareStateChangeImpossible(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", tablet62344.Alias, "spare")
 	assert.NotNil(t, err)
 
-	//killTablet
+	//kill Tablet
 	err = tablet62344.VttabletProcess.TearDown()
 	assert.Nil(t, err)
 
-	// Reset status and type
+	// Reset type
 	tablet62344.Type = "replica"
 }
 
@@ -90,7 +90,6 @@ func TestReparentDownMaster(t *testing.T) {
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
 	assert.Nil(t, err)
 
-	// Validate topology
 	validateTopology(t, true)
 
 	// create Tables
@@ -123,12 +122,11 @@ func TestReparentDownMaster(t *testing.T) {
 	checkMasterTablet(t, tablet62044)
 
 	// insert data into the new master, check the connected slaves work
-	index := 2
-	insertSQL := fmt.Sprintf(insertSQL, index, index)
+	insertSQL := fmt.Sprintf(insertSQL, 2, 2)
 	runSQL(ctx, t, insertSQL, tablet62044)
-	err = checkInsertedValues(ctx, t, tablet41983, index)
+	err = checkInsertedValues(ctx, t, tablet41983, 2)
 	assert.Nil(t, err)
-	err = checkInsertedValues(ctx, t, tablet31981, index)
+	err = checkInsertedValues(ctx, t, tablet31981, 2)
 	assert.Nil(t, err)
 
 	// bring back the old master as a slave, check that it catches up
@@ -144,7 +142,7 @@ func TestReparentDownMaster(t *testing.T) {
 	err = tablet62344.VttabletProcess.Setup()
 	assert.Nil(t, err)
 
-	err = checkInsertedValues(ctx, t, tablet62344, index)
+	err = checkInsertedValues(ctx, t, tablet62344, 2)
 	assert.Nil(t, err)
 
 	// Kill tablets
@@ -152,7 +150,7 @@ func TestReparentDownMaster(t *testing.T) {
 }
 
 func TestReparentCrossCell(t *testing.T) {
-	// Create a few slaves for testing reparenting. Won't be healthy as replication is not running.
+
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
 		// create database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
@@ -161,6 +159,7 @@ func TestReparentCrossCell(t *testing.T) {
 		// Init Tablet
 		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
 		assert.Nil(t, err)
+
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
 		assert.Nil(t, err)
@@ -176,7 +175,6 @@ func TestReparentCrossCell(t *testing.T) {
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
 	assert.Nil(t, err)
 
-	// Validate topology
 	validateTopology(t, true)
 
 	checkMasterTablet(t, tablet62344)
@@ -212,9 +210,11 @@ func reparentGraceful(t *testing.T, confusedMaster bool) {
 		// create database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
 		assert.Nil(t, err)
+
 		// Init Tablet
 		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
 		assert.Nil(t, err)
+
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
 		assert.Nil(t, err)
@@ -230,7 +230,6 @@ func reparentGraceful(t *testing.T, confusedMaster bool) {
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
 	assert.Nil(t, err)
 
-	// Validate topology
 	validateTopology(t, true)
 
 	// create Tables
@@ -258,7 +257,6 @@ func reparentGraceful(t *testing.T, confusedMaster bool) {
 		"-new_master", tablet62044.Alias)
 	assert.Nil(t, err)
 
-	// Validate topology
 	validateTopology(t, false)
 
 	checkMasterTablet(t, tablet62044)
@@ -283,7 +281,6 @@ func reparentGraceful(t *testing.T, confusedMaster bool) {
 		"-new_master", tablet62044.Alias)
 	assert.Nil(t, err)
 
-	// Validate topology
 	validateTopology(t, false)
 
 	checkMasterTablet(t, tablet62044)
@@ -298,7 +295,6 @@ func reparentGraceful(t *testing.T, confusedMaster bool) {
 
 	// Kill tablets
 	killTablets(t)
-
 }
 
 func TestReparentSlaveOffline(t *testing.T) {
@@ -307,9 +303,11 @@ func TestReparentSlaveOffline(t *testing.T) {
 		// create database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
 		assert.Nil(t, err)
+
 		// Init Tablet
 		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
 		assert.Nil(t, err)
+
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
 		assert.Nil(t, err)
@@ -325,7 +323,6 @@ func TestReparentSlaveOffline(t *testing.T) {
 		"-force", keyspaceShard, tablet62344.Alias)
 	assert.Nil(t, err)
 
-	// Validate topology
 	validateTopology(t, true)
 
 	checkMasterTablet(t, tablet62344)
@@ -348,8 +345,7 @@ func TestReparentSlaveOffline(t *testing.T) {
 }
 
 func TestReparentAvoid(t *testing.T) {
-
-	// Remove tablet41983 from topology
+	// Remove tablet41983 from topology as that tablet is not required for this test
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet41983.Alias)
 	assert.Nil(t, err)
 
@@ -357,9 +353,11 @@ func TestReparentAvoid(t *testing.T) {
 		// create database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
 		assert.Nil(t, err)
+
 		// Init Tablet
 		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
 		assert.Nil(t, err)
+
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
 		assert.Nil(t, err)
@@ -375,7 +373,6 @@ func TestReparentAvoid(t *testing.T) {
 		"-force", keyspaceShard, tablet62344.Alias)
 	assert.Nil(t, err)
 
-	// Validate topology
 	validateTopology(t, true)
 
 	checkMasterTablet(t, tablet62344)
@@ -404,8 +401,7 @@ func TestReparentAvoid(t *testing.T) {
 	// 62044 is in the same cell and 31981 is in a different cell, so we must land on 62044
 	checkMasterTablet(t, tablet62044)
 
-	// If we kill the tablet in the same cell as master then reparent
-	// -avoid_master will fail.
+	// If we kill the tablet in the same cell as master then reparent -avoid_master will fail.
 	err = tablet62344.VttabletProcess.TearDown()
 	assert.Nil(t, err)
 
@@ -443,13 +439,10 @@ func TestReparentFromOutsideBrutal(t *testing.T) {
 
 func reparentFromOutside(t *testing.T, brutal bool) {
 	//This test will start a master and 3 slaves.
-
 	//Then:
 	//- one slave will be the new master
 	//- one slave will be reparented to that new master
-	//- one slave will be busted and dead in the water
-	//and we'll call TabletExternallyReparented.
-
+	//- one slave will be busted and dead in the water and we'll call TabletExternallyReparented.
 	//Args:
 	//brutal: kills the old master first
 
@@ -459,9 +452,11 @@ func reparentFromOutside(t *testing.T, brutal bool) {
 		// create database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
 		assert.Nil(t, err)
+
 		// Init Tablet
 		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
 		assert.Nil(t, err)
+
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
 		assert.Nil(t, err)
@@ -477,7 +472,6 @@ func reparentFromOutside(t *testing.T, brutal bool) {
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
 	assert.Nil(t, err)
 
-	// Validate topology
 	validateTopology(t, true)
 
 	checkMasterTablet(t, tablet62344)
@@ -509,7 +503,7 @@ func reparentFromOutside(t *testing.T, brutal bool) {
 		"START SLAVE;", gtID, hostname, tablet62044.MySQLPort)
 	runSQL(ctx, t, changeMasterCommands, tablet62344)
 
-	// Seconds when we made tablet62044 master
+	// Capture time when we made tablet62044 master
 	baseTime := time.Now().UnixNano() / 1000000000
 
 	// 41983 will be a slave of 62044
@@ -518,8 +512,7 @@ func reparentFromOutside(t *testing.T, brutal bool) {
 		"START SLAVE;", gtID, hostname, tablet62044.MySQLPort)
 	runSQL(ctx, t, changeMasterCommands, tablet41983)
 
-	// in brutal mode, we kill the old master first
-	// and delete its tablet record
+	// in brutal mode, we kill the old master first and delete its tablet record
 	if brutal {
 		err := tablet62344.VttabletProcess.TearDown()
 		assert.Nil(t, err)
@@ -570,7 +563,6 @@ func TestReparentWithDownSlave(t *testing.T) {
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
 	assert.Nil(t, err)
 
-	// Validate topology
 	validateTopology(t, true)
 
 	// create Tables
@@ -654,7 +646,6 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly2.Alias, "rdonly")
 	assert.Nil(t, err)
 
-	// Validate topology
 	validateTopology(t, true)
 
 	checkMasterTablet(t, master)
@@ -675,29 +666,27 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	checkDBstatus(ctx, t, rdonly1, "Rpl_semi_sync_slave_status", "OFF")
 	checkDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "OFF")
 
-	// Change replica to rdonly while replicating, should turn off semi-sync,
-	// and restart replication.
+	// Change replica to rdonly while replicating, should turn off semi-sync, and restart replication.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", replica.Alias, "rdonly")
 	assert.Nil(t, err)
 	checkDBvar(ctx, t, replica, "rpl_semi_sync_slave_enabled", "OFF")
 	checkDBstatus(ctx, t, replica, "Rpl_semi_sync_slave_status", "OFF")
 
-	// Change rdonly1 to replica, should turn on semi-sync, and not start rep.
+	// Change rdonly1 to replica, should turn on semi-sync, and not start replication.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "replica")
 	assert.Nil(t, err)
 	checkDBvar(ctx, t, rdonly1, "rpl_semi_sync_slave_enabled", "ON")
 	checkDBstatus(ctx, t, rdonly1, "Rpl_semi_sync_slave_status", "OFF")
 	checkSlaveStatus(ctx, t, rdonly1)
 
-	// Now change from replica back to rdonly, make sure replication is
-	// still not enabled.
+	// Now change from replica back to rdonly, make sure replication is still not enabled.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "rdonly")
 	assert.Nil(t, err)
 	checkDBvar(ctx, t, rdonly1, "rpl_semi_sync_slave_enabled", "OFF")
 	checkDBstatus(ctx, t, rdonly1, "Rpl_semi_sync_slave_status", "OFF")
 	checkSlaveStatus(ctx, t, rdonly1)
 
-	// Change rdonly2 to replica, should turn on semi-sync, and restart rep.
+	// Change rdonly2 to replica, should turn on semi-sync, and restart replication.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly2.Alias, "replica")
 	assert.Nil(t, err)
 	checkDBvar(ctx, t, rdonly2, "rpl_semi_sync_slave_enabled", "ON")
@@ -731,7 +720,6 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	// Validate topology
 	validateTopology(t, true)
 
 	// Change the schema of the _vt.reparent_journal table, so that
@@ -750,7 +738,6 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 	assert.Contains(t, out, "master failed to PopulateReparentJournal")
 
 	killTablets(t)
-
 }
 
 //	Waits for tablet B to catch up to the replication position of tablet A.
@@ -887,6 +874,16 @@ func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vtta
 	return fmt.Errorf("data is not yet replicated")
 }
 
+func validateTopology(t *testing.T, pingTablets bool) {
+	if pingTablets {
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "-ping-tablets=true")
+		assert.Nil(t, err)
+	} else {
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
+		assert.Nil(t, err)
+	}
+}
+
 func killTablets(t *testing.T) {
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
 		fmt.Println("Teardown tablet: ", tablet.Alias)
@@ -896,15 +893,5 @@ func killTablets(t *testing.T) {
 		// Reset status and type
 		tablet.VttabletProcess.ServingStatus = ""
 		tablet.Type = "replica"
-	}
-}
-
-func validateTopology(t *testing.T, pingTablets bool) {
-	if pingTablets {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "-ping-tablets=true")
-		assert.Nil(t, err)
-	} else {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-		assert.Nil(t, err)
 	}
 }
