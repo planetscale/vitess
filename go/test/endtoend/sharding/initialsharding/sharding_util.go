@@ -400,6 +400,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 
 	// Wait for the endpoints, either local or remote.
 	for _, shard := range []cluster.Shard{shard1, shard21, shard22} {
+
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard.Name))
 		assert.Nil(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard.Name))

@@ -126,6 +126,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 			vttablet.exit <- vttablet.proc.Wait()
 		}
 	}()
+
 	if vttablet.ServingStatus != "" {
 		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
 			return fmt.Errorf("process '%s' timed out after 10s (err: %s)", vttablet.Name, err)

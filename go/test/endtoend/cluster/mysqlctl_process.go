@@ -101,12 +101,10 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 		mysqlctl.Binary,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 	)
-
 	if len(mysqlctl.ExtraArgs) > 0 {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
 	}
 	tmpProcess.Args = append(tmpProcess.Args, "shutdown")
-
 	return tmpProcess, tmpProcess.Start()
 }
 
