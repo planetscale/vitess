@@ -188,6 +188,16 @@ func TestVerticalSplit(t *testing.T) {
 	err = clusterInstance.StartVtgate()
 	assert.Nil(t, err)
 
+	vtParams := mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	assert.Nil(t, err)
+	defer conn.Close()
+
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", sourceKeyspace, shardName), 1)
 	assert.Nil(t, err)
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", sourceKeyspace, shardName), 1)
@@ -200,16 +210,6 @@ func TestVerticalSplit(t *testing.T) {
 	assert.Nil(t, err)
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", destinationKeyspace, shardName), 2)
 	assert.Nil(t, err)
-
-	vtParams := mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	assert.Nil(t, err)
-	defer conn.Close()
 
 	// create the schema on the source keyspace, add some values
 	insertInitialValues(t, conn, sourceMasterTablet, destinationMasterTablet)

@@ -132,6 +132,7 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 }
 
 // GetStatusForTabletOfShard function gets status for a specific tablet of a shard in keyspace
+// endPointsCount : number of endpoints
 func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCount int) bool {
 	resp, err := http.Get(vtgate.VerifyURL)
 	if err != nil {
