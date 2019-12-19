@@ -554,6 +554,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	checkMultiShardValues(t, keyspaceName, shardingKeyType)
 	sharding.CheckBinlogPlayerVars(t, *shard2Master, []string{shard1Ks}, 30)
 	sharding.CheckBinlogPlayerVars(t, *shard3Master, []string{shard1Ks}, 30)
+
 	sharding.CheckBinlogServerVars(t, *shard1Replica1, 100, 100, false)
 
 	// use vtworker to compare the data (after health-checking the destination
@@ -613,6 +614,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	insertLots(100, 100, *shard1Master, tableName, fixedParentID, keyspaceName)
 	log.Debug("Checking 100 percent of data was sent quickly")
 	assert.True(t, checkLotsTimeout(t, 100, 100, tableName, keyspaceName, shardingKeyType))
+
 	sharding.CheckBinlogServerVars(t, *shard1Replica2, 80, 80, false)
 
 	// check we can't migrate the master just yet

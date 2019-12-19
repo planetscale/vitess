@@ -92,7 +92,7 @@ func (shard *Shard) MasterTablet() *Vttablet {
 	return shard.Vttablets[0]
 }
 
-// Rdonly gets first rdonly tablet
+// Rdonly get the last tablet which is rdonly
 func (shard *Shard) Rdonly() *Vttablet {
 	for idx, tablet := range shard.Vttablets {
 		if tablet.Type == "rdonly" {
@@ -102,7 +102,8 @@ func (shard *Shard) Rdonly() *Vttablet {
 	return nil
 }
 
-// Replica gets the first replica tablet
+// Replica get the last but one tablet which is replica
+// Mostly we have either 3 tablet setup [master, replica, rdonly]
 func (shard *Shard) Replica() *Vttablet {
 	for idx, tablet := range shard.Vttablets {
 		if tablet.Type == "replica" && idx > 0 {

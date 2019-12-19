@@ -164,4 +164,5 @@ func TestAutoDetect(t *testing.T) {
 
 	//Reset flavor
 	os.Setenv("MYSQL_FLAVOR", sqlFlavor)
+
 }

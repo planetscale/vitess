@@ -252,12 +252,12 @@ func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement
 	if minStatement > 0 {
 		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap[skey]))
 		iValue, _ := strconv.Atoi(value)
-		assert.True(t, iValue >= minStatement)
+		assert.True(t, iValue >= minStatement, fmt.Sprintf("only got %d < %d statements", iValue, minStatement))
 	}
 	if minTxn > 0 {
 		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap[tkey]))
 		iValue, _ := strconv.Atoi(value)
-		assert.True(t, iValue >= minTxn)
+		assert.True(t, iValue >= minTxn, fmt.Sprintf("only got %d < %d transactions", iValue, minTxn))
 	}
 }
 
