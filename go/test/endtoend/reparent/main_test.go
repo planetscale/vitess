@@ -23,14 +23,12 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
@@ -174,18 +172,4 @@ func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	assert.Nil(t, err)
 	return qr
-}
-
-func getMasterPosition(ctx context.Context, t *testing.T, tablet *cluster.Vttablet) (string, string) {
-	vtTablet := getTablet(tablet.GrpcPort)
-	newPos, err := tmClient.MasterPosition(ctx, vtTablet)
-	assert.Nil(t, err)
-	gtID := strings.SplitAfter(newPos, "/")[1]
-	return newPos, gtID
-}
-
-func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
-	portMap := make(map[string]int32)
-	portMap["grpc"] = int32(tabletGrpcPort)
-	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
 }

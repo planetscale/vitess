@@ -495,7 +495,7 @@ func reparentFromOutside(t *testing.T, brutal bool) {
 	runSQL(ctx, t, promoteSlaveCommands, tablet62044)
 
 	// Get master position
-	_, gtID := getMasterPosition(ctx, t, tablet62044)
+	_, gtID := cluster.GetMasterPosition(t, *tablet62044, hostname)
 
 	// 62344 will now be a slave of 62044
 	changeMasterCommands := fmt.Sprintf("RESET MASTER; RESET SLAVE; SET GLOBAL gtid_purged = '%s';"+
@@ -742,10 +742,10 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 
 //	Waits for tablet B to catch up to the replication position of tablet A.
 func waitForReplicationPosition(ctx context.Context, t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet) error {
-	posA, _ := getMasterPosition(ctx, t, tabletA)
+	posA, _ := cluster.GetMasterPosition(t, *tabletA, hostname)
 	timeout := time.Now().Add(5 * time.Second)
 	for time.Now().Before(timeout) {
-		posB, _ := getMasterPosition(ctx, t, tabletB)
+		posB, _ := cluster.GetMasterPosition(t, *tabletB, hostname)
 		if positionAtLeast(t, tabletB, posA, posB) {
 			return nil
 		}
