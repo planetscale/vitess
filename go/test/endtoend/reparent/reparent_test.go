@@ -35,11 +35,15 @@ import (
 )
 
 func TestMasterToSpareStateChangeImpossible(t *testing.T) {
-	// Setting tablet type as master
-	tablet62344.Type = "master"
 
-	// Init Tablet
-	err := clusterInstance.VtctlclientProcess.InitTablet(tablet62344, tablet62344.Cell, keyspaceName, hostname, shardName)
+	args := []string{"InitTablet", "-hostname", hostname,
+		"-port", fmt.Sprintf("%d", tablet62344.HTTPPort), "-allow_update", "-parent",
+		"-keyspace", keyspaceName,
+		"-shard", shardName,
+		"-mysql_port", fmt.Sprintf("%d", tablet62344.MySQLPort),
+		"-grpc_port", fmt.Sprintf("%d", tablet62344.GrpcPort)}
+	args = append(args, fmt.Sprintf("%s-%010d", tablet62344.Cell, tablet62344.TabletUID), "master")
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand(args...)
 	assert.Nil(t, err)
 
 	// Start the tablet
@@ -50,15 +54,13 @@ func TestMasterToSpareStateChangeImpossible(t *testing.T) {
 	err = tablet62344.VttabletProcess.CreateDB(keyspaceName)
 	assert.Nil(t, err)
 
+	// We cannot change a master to spare
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", tablet62344.Alias, "spare")
 	assert.NotNil(t, err)
 
 	//kill Tablet
 	err = tablet62344.VttabletProcess.TearDown()
 	assert.Nil(t, err)
-
-	// Reset type
-	tablet62344.Type = "replica"
 }
 
 func TestReparentDownMaster(t *testing.T) {
