@@ -153,6 +153,8 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 			var tablet *cluster.Vttablet
 			if i == totalTabletsRequired-1 && rdonly {
 				tablet = ClusterInstance.GetVttabletInstance("rdonly", 0, "")
+			} else if i == 0 {
+				tablet = ClusterInstance.GetVttabletInstance("master", 0, "")
 			} else {
 				tablet = ClusterInstance.GetVttabletInstance("replica", 0, "")
 			}
