@@ -31,4 +31,4 @@ jobs:
 
     - name: cluster_endtoend
       run: |
-        go run test.go -docker -use_docker_cache -timeout=30m -print-log -shard 5
+        go run test.go -docker -use_docker_cache -timeout=30m -print-log -shard 10
