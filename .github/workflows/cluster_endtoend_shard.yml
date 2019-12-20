@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
 
   build:
-    name: Cluster End-to-End Test
+    name: Cluster End-to-End Test for Shard
     runs-on: ubuntu-latest
     steps:
 
@@ -29,6 +29,6 @@ jobs:
       run: |
         make minimaltools
 
-    - name: cluster_endtoend
+    - name: cluster_endtoend_shard
       run: |
         go run test.go -docker -use_docker_cache -print-log -shard 11
