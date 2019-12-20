@@ -462,7 +462,7 @@
 				"go test -v ../go/test/endtoend/cellalias"
 			],
 			"Manual": false,
-			"Shard": 10,
+			"Shard": 11,
 			"RetryMax": 0,
 			"Tags": []
 		},
