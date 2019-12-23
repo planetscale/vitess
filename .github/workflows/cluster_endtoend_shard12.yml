@@ -33,4 +33,4 @@ jobs:
       run: |
         source build.env
         echo $VTDATAROOT
-        run test.go -docker=false -print-log -shard 12
+        go run test.go -docker=false -print-log -shard 12
