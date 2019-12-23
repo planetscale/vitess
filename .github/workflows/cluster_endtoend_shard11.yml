@@ -29,6 +29,10 @@ jobs:
       run: |
         make minimaltools
 
+    - name: Source env
+        run: |
+          source build.env
+
     - name: cluster_endtoend_shard_11
       run: |
         go run test.go -docker=false -print-log -shard 11
