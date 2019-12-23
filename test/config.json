@@ -442,73 +442,55 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"binlog.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/binlog"
-			],
+		"binlog": {
+			"File": "binlog.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/binlog"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 11,
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"cellalias.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/cellalias"
-			],
+		"cellalias": {
+			"File": "cellalias.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/cellalias"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 11,
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"initial_sharding.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/sharding/initialsharding/v3"
-			],
+		"initial_sharding": {
+			"File": "initial_sharding.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/v3"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 12,
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"initial_sharding_bytes.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/sharding/initialsharding/byte"
-			],
+		"initial_sharding_bytes": {
+			"File": "initial_sharding_bytes.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/bytes"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 12,
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"initial_sharding_multi.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/sharding/initialsharding/multi"
-			],
+		"initial_sharding_multi": {
+			"File": "initial_sharding_multi.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/multi"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 12,
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"keyspace.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/keyspace"
-			],
+		"keyspace": {
+			"File": "keyspace.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/keyspace"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 11,
 			"RetryMax": 0,
@@ -516,13 +498,10 @@
 				"site_test"
 			]
 		},
-		"mysqlctl.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/mysqlctl"
-			],
+		"mysqlctl": {
+			"File": "mysqlctl.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctl"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 11,
 			"RetryMax": 0,
@@ -530,25 +509,19 @@
 				"site_test"
 			]
 		},
-		"reparent.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/reparent"
-			],
+		"reparent": {
+			"File": "reparent.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 13,
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"resharding.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/sharding/resharding/v3"
-			],
+		"resharding": {
+			"File": "resharding.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/resharding/v3"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 13,
 			"RetryMax": 0,
@@ -556,13 +529,10 @@
 				"worker_test"
 			]
 		},
-		"resharding_bytes.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/sharding/resharding/string"
-			],
+		"resharding_bytes": {
+			"File": "resharding_bytes.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/resharding/string"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 13,
 			"RetryMax": 0,
@@ -570,25 +540,19 @@
 				"worker_test"
 			]
 		},
-		"sharded.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/sharded"
-			],
+		"sharded": {
+			"File": "sharded.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharded"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 11,
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"tabletmanager.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/tabletmanager"
-			],
+		"tabletmanager": {
+			"File": "tabletmanager.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 11,
 			"RetryMax": 0,
@@ -596,13 +560,10 @@
 				"site_test"
 			]
 		},
-		"vertical_split.go": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"pwd",
-				"go test -v vitess.io/vitess/go/test/endtoend/sharding/verticalsplit"
-			],
+		"vertical_split": {
+			"File": "vertical_split.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/verticalsplit"],
+			"Command": [],
 			"Manual": false,
 			"Shard": 11,
 			"RetryMax": 0,
