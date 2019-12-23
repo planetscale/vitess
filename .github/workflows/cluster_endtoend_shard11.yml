@@ -31,4 +31,4 @@ jobs:
 
     - name: cluster_endtoend_shard_11
       run: |
-        go run test.go -docker -use_docker_cache -print-log -shard 11
+        go run test.go -docker=false -print-log -shard 11
