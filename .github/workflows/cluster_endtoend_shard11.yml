@@ -29,11 +29,8 @@ jobs:
       run: |
         make minimaltools
 
-    - name: Source env
+    - name: cluster_endtoend_shard_11
       run: |
         source build.env
         echo $VTDATAROOT
-
-    - name: cluster_endtoend_shard_11
-      run: |
         go run test.go -docker=false -print-log -shard 11
