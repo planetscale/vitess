@@ -32,6 +32,7 @@ jobs:
     - name: Source env
       run: |
         source build.env
+        echo $VTDATAROOT
 
     - name: cluster_endtoend_shard_11
       run: |
