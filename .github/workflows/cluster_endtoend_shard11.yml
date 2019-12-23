@@ -30,8 +30,8 @@ jobs:
         make minimaltools
 
     - name: Source env
-        run: |
-          source build.env
+      run: |
+        source build.env
 
     - name: cluster_endtoend_shard_11
       run: |
