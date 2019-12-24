@@ -18,8 +18,13 @@ package cluster
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
@@ -38,6 +43,60 @@ func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string
 	require.NoError(t, err)
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID
+}
+
+// Verify total number of rows in a tablet
+func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int) {
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", ksName, true)
+		assert.Nil(t, err)
+		if len(qr.Rows) != expectedRows {
+			time.Sleep(300 * time.Millisecond)
+		} else {
+			return
+		}
+	}
+	assert.Fail(t, "expected rows not found.")
+}
+
+// Verify Local Metadata of a tablet
+func VerifyLocalMetadata(t *testing.T, tablet *Vttablet, ksName string, shardName string, cell string) {
+	qr, err := tablet.VttabletProcess.QueryTablet("select * from _vt.local_metadata", ksName, false)
+	assert.Nil(t, err)
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0]), fmt.Sprintf(`[VARCHAR("Alias") BLOB("%s") VARBINARY("vt_%s")]`, tablet.Alias, ksName))
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1]), fmt.Sprintf(`[VARCHAR("ClusterAlias") BLOB("%s.%s") VARBINARY("vt_%s")]`, ksName, shardName, ksName))
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2]), fmt.Sprintf(`[VARCHAR("DataCenter") BLOB("%s") VARBINARY("vt_%s")]`, cell, ksName))
+	if tablet.Type == "replica" {
+		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3]), fmt.Sprintf(`[VARCHAR("PromotionRule") BLOB("neutral") VARBINARY("vt_%s")]`, ksName))
+	} else if tablet.Type == "rdonly" {
+		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3]), fmt.Sprintf(`[VARCHAR("PromotionRule") BLOB("must_not") VARBINARY("vt_%s")]`, ksName))
+	}
+}
+
+//Lists back preset in shard
+func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, error) {
+	output, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("ListBackups", shardKsName)
+	if err != nil {
+		return nil, err
+	}
+	result := strings.Split(output, "\n")
+	var returnResult []string
+	for _, str := range result {
+		if str != "" {
+			returnResult = append(returnResult, str)
+		}
+	}
+	return returnResult, nil
+}
+
+// ResetTabletDirectory transitions back to tablet state (i.e. mysql process restarts with cleaned directory and tablet is off)
+func ResetTabletDirectory(tablet Vttablet) error {
+	tablet.MysqlctlProcess.Stop()
+	tablet.VttabletProcess.TearDown()
+	os.RemoveAll(tablet.VttabletProcess.Directory)
+
+	return tablet.MysqlctlProcess.Start()
 }
 
 func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
