@@ -25,10 +25,6 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
-    - name: Run make minimaltools
-      run: |
-        make minimaltools
-
     - name: cluster_endtoend_shard_13
       run: |
         source build.env
