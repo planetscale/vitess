@@ -327,7 +327,6 @@ func testBackup(t *testing.T, tabletType string) {
 
 	err = replica2.VttabletProcess.WaitForTabletTypeForTimeout("SERVING", 15*time.Second)
 	assert.Nil(t, err)
-
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
