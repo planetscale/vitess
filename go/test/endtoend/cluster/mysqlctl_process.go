@@ -45,6 +45,7 @@ type MysqlctlProcess struct {
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
+		"-test.coverprofile=/tmp/mysql-initdb.out", "-test.v",
 		"-log_dir", mysqlctl.LogDirectory,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
@@ -67,6 +68,7 @@ func (mysqlctl *MysqlctlProcess) Start() (err error) {
 func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
+		"-test.coverprofile=/tmp/mysql-start.out", "-test.v",
 		"-log_dir", mysqlctl.LogDirectory,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
@@ -97,6 +99,7 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
+		"-test.coverprofile=/tmp/mysql-stop.out", "-test.v",
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 	)
 	if len(mysqlctl.ExtraArgs) > 0 {

@@ -32,7 +32,8 @@ import (
 const DefaultCell = "zone1"
 
 var (
-	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	isCoverage = flag.Bool("is-coverage", false, "whether coverage is required")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -157,20 +158,21 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 	if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
 		log.Error(err)
-		return
+		//time.Sleep(10 * time.Minute)
+		//return
 	}
 
 	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Info(fmt.Sprintf("Starting vtctld server on port : %d", cluster.VtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
 	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
-
+		println(err.Error())
 		log.Error(err.Error())
-		return
+		//return
 	}
 
 	cluster.VtctlclientProcess = *VtctlClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
-	return
+	return nil
 }
 
 // StartUnshardedKeyspace starts unshared keyspace with shard name as "0"
@@ -191,6 +193,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 
 	log.Info("Starting keyspace : " + keyspace.Name)
 	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	println("starting keyspace")
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
@@ -245,7 +248,9 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		for _, proc := range mysqlctlProcessList {
 			if err = proc.Wait(); err != nil {
 				log.Errorf("Unable to start mysql , error %v", err.Error())
-				return err
+				fmt.Printf("%v", proc.Args)
+				time.Sleep(10 * time.Minute)
+				//return err
 			}
 		}
 		for _, tablet := range shard.Vttablets {

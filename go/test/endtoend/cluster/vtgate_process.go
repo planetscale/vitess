@@ -66,6 +66,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 
 	vtgate.proc = exec.Command(
 		vtgate.Binary,
+		"-test.coverprofile=/tmp/vtgate-start.out", "-test.v",
 		"-topo_implementation", vtgate.CommonArg.TopoImplementation,
 		"-topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
 		"-topo_global_root", vtgate.CommonArg.TopoGlobalRoot,

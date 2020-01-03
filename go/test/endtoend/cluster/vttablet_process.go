@@ -79,6 +79,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
+		"-test.coverprofile=/tmp/vttablet-start.out", "-test.v",
 		"-topo_implementation", vttablet.CommonArg.TopoImplementation,
 		"-topo_global_server_address", vttablet.CommonArg.TopoGlobalAddress,
 		"-topo_global_root", vttablet.CommonArg.TopoGlobalRoot,

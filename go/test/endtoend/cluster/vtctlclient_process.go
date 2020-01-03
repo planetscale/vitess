@@ -62,7 +62,8 @@ func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string
 
 // ExecuteCommand executes any vtctlclient command
 func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error) {
-	args = append([]string{"-server", vtctlclient.Server}, args...)
+	args = append([]string{"-server", vtctlclient.Server,
+		fmt.Sprintf("-test.coverprofile=/tmp/vtctlclient-%d.out", getRandomNumber(1000000, 0)), "-test.v"}, args...)
 	tmpProcess := exec.Command(
 		vtctlclient.Binary,
 		args...,
@@ -74,7 +75,8 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error
 
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output
 func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
-	args = append([]string{"-server", vtctlclient.Server}, args...)
+	args = append([]string{"-server", vtctlclient.Server,
+		fmt.Sprintf("-test.coverprofile=/tmp/vtctlclient-%d.out", getRandomNumber(1000000, 0)), "-test.v"}, args...)
 	tmpProcess := exec.Command(
 		vtctlclient.Binary,
 		args...,

@@ -68,9 +68,9 @@ func TestMain(m *testing.M) {
 
 		// Start topo server
 		err := clusterInstance.StartTopo()
-		if err != nil {
-			return 1
-		}
+		//if err != nil {
+		//	return 1
+		//}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{

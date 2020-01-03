@@ -57,6 +57,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
+		"-test.coverprofile=/tmp/vtctld-start.out", "-test.v",
 		"-enable_queries",
 		"-topo_implementation", vtctld.CommonArg.TopoImplementation,
 		"-topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
@@ -81,6 +82,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 
 	vtctld.proc.Env = append(vtctld.proc.Env, os.Environ()...)
 
+	fmt.Printf("%v", vtctld.proc.Args)
 	log.Infof("%v %v", strings.Join(vtctld.proc.Args, " "))
 
 	err = vtctld.proc.Start()
