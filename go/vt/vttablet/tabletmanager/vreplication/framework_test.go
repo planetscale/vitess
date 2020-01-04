@@ -398,9 +398,8 @@ func expectDeleteQueries(t *testing.T) {
 	})
 }
 
-func listenToLogs() <-chan interface{} {
+func listenToLogs() {
 	globalLogs = vrLogStatsLogger.Subscribe("vrlogstats")
-	return globalLogs
 }
 
 func expectLogs(t *testing.T, logs []LogExpectation) {

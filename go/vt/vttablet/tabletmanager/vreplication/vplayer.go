@@ -193,7 +193,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
 			stats := NewVrLogStats(ctx, "ROWCHANGE")
 			result, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
-			stats.Record(sql)
+			stats.Send(sql)
 			return result, err
 		})
 		if err != nil {
@@ -353,7 +353,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
-		stats.Record(fmt.Sprintf("%v", event.FieldEvent))
+		stats.Send(fmt.Sprintf("%v", event.FieldEvent))
 
 	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
 		// This is a player using stament based replication
@@ -364,7 +364,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err := vp.applyStmtEvent(ctx, event); err != nil {
 			return err
 		}
-		stats.Record(fmt.Sprintf(event.Dml))
+		stats.Send(fmt.Sprintf(event.Dml))
 	case binlogdatapb.VEventType_ROW:
 		// This player is configured for row based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {
@@ -373,7 +373,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
 			return err
 		}
-		stats.Record(fmt.Sprintf("%v", event.RowEvent))
+		stats.Send(fmt.Sprintf("%v", event.RowEvent))
 	case binlogdatapb.VEventType_OTHER:
 		// Just update the position.
 		posReached, err := vp.updatePos(event.Timestamp)
@@ -415,7 +415,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Ddl); err != nil {
 				return err
 			}
-			stats.Record(fmt.Sprintf("%v", event.Ddl))
+			stats.Send(fmt.Sprintf("%v", event.Ddl))
 			posReached, err := vp.updatePos(event.Timestamp)
 			if err != nil {
 				return err
@@ -427,7 +427,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Ddl); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Ddl)
 			}
-			stats.Record(fmt.Sprintf("%v", event.Ddl))
+			stats.Send(fmt.Sprintf("%v", event.Ddl))
 			posReached, err := vp.updatePos(event.Timestamp)
 			if err != nil {
 				return err
@@ -476,7 +476,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			return io.EOF
 		}
-		stats.Record(fmt.Sprintf("%v", event.Journal))
+		stats.Send(fmt.Sprintf("%v", event.Journal))
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		// No-op: heartbeat timings are calculated in outer loop.
