@@ -53,7 +53,6 @@ var (
 	globalFBC       = &fakeBinlogClient{}
 	vrepldb         = "vrepl"
 	globalDBQueries = make(chan string, 1000)
-	globalLogs      = make(chan interface{}, 1000)
 )
 
 type LogExpectation struct {
@@ -398,11 +397,8 @@ func expectDeleteQueries(t *testing.T) {
 	})
 }
 
-func listenToLogs() {
-	globalLogs = vrLogStatsLogger.Subscribe("vrlogstats")
-}
-
-func expectLogs(t *testing.T, logs []LogExpectation) {
+func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan interface{}) {
+	defer vrLogStatsLogger.Unsubscribe(logCh)
 	t.Helper()
 	failed := false
 	for i, log := range logs {
@@ -411,7 +407,7 @@ func expectLogs(t *testing.T, logs []LogExpectation) {
 			continue
 		}
 		select {
-		case data := <-globalLogs:
+		case data := <-logCh:
 			got, ok := data.(*VrLogStats)
 			if !ok {
 				t.Errorf("got not ok casting to VrLogStats: %v", data)
