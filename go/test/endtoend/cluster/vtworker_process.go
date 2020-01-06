@@ -67,7 +67,22 @@ func (vtworker *VtworkerProcess) Setup(cell string) (err error) {
 		"-grpc_port", fmt.Sprintf("%d", vtworker.GrpcPort),
 		"-cell", cell,
 		"-command_display_interval", "10ms",
+		"-log_dir", vtworker.LogDir,
+		"-port", fmt.Sprintf("%d", vtworker.Port),
+		"-executefetch_retry_time", vtworker.ExecuteRetryTime,
+		"-tablet_manager_protocol", "grpc",
+		"-tablet_protocol", "grpc",
+		"-topo_implementation", vtworker.CommonArg.TopoImplementation,
+		"-topo_global_server_address", vtworker.CommonArg.TopoGlobalAddress,
+		"-topo_global_root", vtworker.CommonArg.TopoGlobalRoot,
+		"-service_map", vtworker.ServiceMap,
+		"-grpc_port", fmt.Sprintf("%d", vtworker.GrpcPort),
+		"-cell", cell,
+		"-command_display_interval", "10ms",
 	)
+	if *isCoverage {
+		vtworker.proc.Args = append(vtworker.proc.Args, "-test.coverprofile=vtworker.out", "-test.v")
+	}
 	vtworker.proc.Args = append(vtworker.proc.Args, vtworker.ExtraArgs...)
 
 	vtworker.proc.Stderr = os.Stderr

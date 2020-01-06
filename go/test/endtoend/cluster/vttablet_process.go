@@ -79,7 +79,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
-		"-test.coverprofile=/tmp/vttablet-start.out", "-test.v",
 		"-topo_implementation", vttablet.CommonArg.TopoImplementation,
 		"-topo_global_server_address", vttablet.CommonArg.TopoGlobalAddress,
 		"-topo_global_root", vttablet.CommonArg.TopoGlobalRoot,
@@ -100,6 +99,9 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-service_map", vttablet.ServiceMap,
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
+	if *isCoverage {
+		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile=vttablet.out", "-test.v")
+	}
 
 	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")

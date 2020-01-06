@@ -57,7 +57,6 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
-		"-test.coverprofile=/tmp/vtctld-start.out", "-test.v",
 		"-enable_queries",
 		"-topo_implementation", vtctld.CommonArg.TopoImplementation,
 		"-topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
@@ -75,6 +74,9 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"-grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
 		"-pid_file", vtctld.PidFile,
 	)
+	if *isCoverage {
+		vtctld.proc.Args = append(vtctld.proc.Args, "-test.coverprofile=vtctld.out", "-test.v")
+	}
 	vtctld.proc.Args = append(vtctld.proc.Args, extraArgs...)
 
 	errFile, _ := os.Create(path.Join(vtctld.LogDir, "vtctld-stderr.txt"))

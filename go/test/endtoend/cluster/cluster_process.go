@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -579,4 +580,19 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus
 	return tablet.VttabletProcess.Setup()
+}
+
+func getCoveragePath(fileName string, isDynamic bool) string {
+	covDir := os.Getenv("COV_DIR")
+	if covDir == "" {
+		covDir = os.TempDir()
+	}
+	filePath := path.Join(covDir, fileName)
+	if isDynamic {
+		filePath = path.Join(covDir, fmt.Sprintf("%s-%d.%s",
+			strings.Split(fileName, ".")[0],
+			getRandomNumber(1000000, 0),
+			strings.Split(fileName, ".")[1]))
+	}
+	return filePath
 }

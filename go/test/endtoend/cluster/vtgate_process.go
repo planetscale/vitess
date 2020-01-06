@@ -66,7 +66,6 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 
 	vtgate.proc = exec.Command(
 		vtgate.Binary,
-		"-test.coverprofile=/tmp/vtgate-start.out", "-test.v",
 		"-topo_implementation", vtgate.CommonArg.TopoImplementation,
 		"-topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
 		"-topo_global_root", vtgate.CommonArg.TopoGlobalRoot,
@@ -84,6 +83,10 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 		"-pid_file", vtgate.PidFile,
 	)
+	if *isCoverage {
+		vtgate.proc.Args = append(vtgate.proc.Args, "-test.coverprofile=vtgate.out", "-test.v")
+	}
+
 	vtgate.proc.Args = append(vtgate.proc.Args, vtgate.ExtraArgs...)
 
 	errFile, _ := os.Create(path.Join(vtgate.LogDir, "vtgate-stderr.txt"))

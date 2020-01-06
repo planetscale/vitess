@@ -62,11 +62,15 @@ func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string
 
 // ExecuteCommand executes any vtctlclient command
 func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error) {
-	args = append([]string{"-server", vtctlclient.Server,
-		fmt.Sprintf("-test.coverprofile=/tmp/vtctlclient-%d.out", getRandomNumber(1000000, 0)), "-test.v"}, args...)
+	pArgs := []string{"-server", vtctlclient.Server}
+
+	if *isCoverage {
+		pArgs = append(pArgs, "-test.coverprofile="+getCoveragePath("vtctlclient-exec-cmd.out", true), "-test.v")
+	}
+	pArgs = append(pArgs, args...)
 	tmpProcess := exec.Command(
 		vtctlclient.Binary,
-		args...,
+		pArgs...,
 	)
 	println(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
@@ -75,16 +79,37 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error
 
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output
 func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
-	args = append([]string{"-server", vtctlclient.Server,
-		fmt.Sprintf("-test.coverprofile=/tmp/vtctlclient-%d.out", getRandomNumber(1000000, 0)), "-test.v"}, args...)
+	pArgs := []string{"-server", vtctlclient.Server}
+	if *isCoverage {
+		pArgs = append(pArgs, "-test.coverprofile="+getCoveragePath("vtctlclient-exec-cmd-output.out", true), "-test.v")
+	}
+	pArgs = append(pArgs, args...)
 	tmpProcess := exec.Command(
 		vtctlclient.Binary,
-		args...,
+		pArgs...,
 	)
 	println(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	resultByte, err := tmpProcess.CombinedOutput()
-	return string(resultByte), err
+	return filterResultWhenRunsForCoverage(string(resultByte)), err
+}
+
+func filterResultWhenRunsForCoverage(input string) string {
+	if !*isCoverage {
+		return input
+	}
+	lines := strings.Split(input, "\n")
+	var result string
+	for _, line := range lines {
+		if strings.Contains(line, "=== RUN") {
+			continue
+		}
+		if strings.Contains(line, "--- PASS:") {
+			break
+		}
+		result = result + line + "\n"
+	}
+	return result
 }
 
 // VtctlClientProcessInstance returns a VtctlProcess handle for vtctlclient process

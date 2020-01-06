@@ -43,15 +43,17 @@ type MysqlctlProcess struct {
 
 // InitDb executes mysqlctl command to add cell info
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
-	tmpProcess := exec.Command(
-		mysqlctl.Binary,
-		"-test.coverprofile=/tmp/mysql-initdb.out", "-test.v",
-		"-log_dir", mysqlctl.LogDirectory,
+	args := []string{"-log_dir", mysqlctl.LogDirectory,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 		"init",
-		"-init_db_sql_file", mysqlctl.InitDBFile,
-	)
+		"-init_db_sql_file", mysqlctl.InitDBFile}
+	if *isCoverage {
+		args = append([]string{"-test.coverprofile=" + getCoveragePath("mysql-initdb.out", false), "-test.v"}, args...)
+	}
+	tmpProcess := exec.Command(
+		mysqlctl.Binary,
+		args...)
 	return tmpProcess.Run()
 }
 
@@ -68,11 +70,13 @@ func (mysqlctl *MysqlctlProcess) Start() (err error) {
 func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
-		"-test.coverprofile=/tmp/mysql-start.out", "-test.v",
 		"-log_dir", mysqlctl.LogDirectory,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 	)
+	if *isCoverage {
+		tmpProcess.Args = append(tmpProcess.Args, []string{"-test.coverprofile=" + getCoveragePath("mysql-start.out", false)}...)
+	}
 
 	if len(mysqlctl.ExtraArgs) > 0 {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
@@ -99,9 +103,11 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
-		"-test.coverprofile=/tmp/mysql-stop.out", "-test.v",
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 	)
+	if *isCoverage {
+		tmpProcess.Args = append(tmpProcess.Args, []string{"-test.coverprofile=" + getCoveragePath("mysql-stop.out", false)}...)
+	}
 	if len(mysqlctl.ExtraArgs) > 0 {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
 	}
