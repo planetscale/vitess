@@ -39,18 +39,18 @@ type VtctlProcess struct {
 func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 	tmpProcess := exec.Command(
 		vtctl.Binary,
+		"-topo_implementation", vtctl.TopoImplementation,
+		"-topo_global_server_address", vtctl.TopoGlobalAddress,
+		"-topo_global_root", vtctl.TopoGlobalRoot,
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, "-test.coverprofile="+getCoveragePath("vtctl-addcell.out", false))
 	}
-	tmpProcess.Args = append(tmpProcess.Args, "-topo_implementation", vtctl.TopoImplementation,
-		"-topo_global_server_address", vtctl.TopoGlobalAddress,
-		"-topo_global_root", vtctl.TopoGlobalRoot,
+	tmpProcess.Args = append(tmpProcess.Args,
 		"AddCellInfo",
 		"-root", "/vitess/"+Cell,
 		"-server_address", vtctl.TopoServerAddress,
 		Cell)
-	fmt.Printf("%v", tmpProcess.Args)
 	log.Info(fmt.Sprintf("Adding Cell into Keyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }
@@ -59,14 +59,14 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
 	tmpProcess := exec.Command(
 		vtctl.Binary,
-		"-test.coverprofile=/tmp/cr-keysp.out", "-test.v",
+		"-topo_implementation", vtctl.TopoImplementation,
+		"-topo_global_server_address", vtctl.TopoGlobalAddress,
+		"-topo_global_root", vtctl.TopoGlobalRoot,
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, "-test.coverprofile="+getCoveragePath("vtctl-create-ks.out", false))
 	}
-	tmpProcess.Args = append(tmpProcess.Args, "-topo_implementation", vtctl.TopoImplementation,
-		"-topo_global_server_address", vtctl.TopoGlobalAddress,
-		"-topo_global_root", vtctl.TopoGlobalRoot,
+	tmpProcess.Args = append(tmpProcess.Args,
 		"CreateKeyspace", keyspace)
 	log.Info(fmt.Sprintf("Starting CreateKeyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
@@ -88,7 +88,7 @@ func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result stri
 	)
 	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	resultByte, err := tmpProcess.CombinedOutput()
-	return string(resultByte), err
+	return filterResultWhenRunsForCoverage(string(resultByte)), err
 }
 
 // VtctlProcessInstance returns a VtctlProcess handle for vtctl process

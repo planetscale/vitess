@@ -94,24 +94,6 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) 
 	return filterResultWhenRunsForCoverage(string(resultByte)), err
 }
 
-func filterResultWhenRunsForCoverage(input string) string {
-	if !*isCoverage {
-		return input
-	}
-	lines := strings.Split(input, "\n")
-	var result string
-	for _, line := range lines {
-		if strings.Contains(line, "=== RUN") {
-			continue
-		}
-		if strings.Contains(line, "--- PASS:") {
-			break
-		}
-		result = result + line + "\n"
-	}
-	return result
-}
-
 // VtctlClientProcessInstance returns a VtctlProcess handle for vtctlclient process
 // configured with the given Config.
 func VtctlClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctlClientProcess {

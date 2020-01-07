@@ -1,0 +1,75 @@
+name: sonar_analysis
+on: [push]
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.13
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Build instrumented binaries
+        run: |
+          source build.env
+          make build
+          cp ./tools/coverage-go/vtctl_test.go ./go/cmd/vtctl/vtctl_test.go
+          cp ./tools/coverage-go/vtctld_test.go ./go/cmd/vtctld/vtctld_test.go
+          cp ./tools/coverage-go/mysqlctl_test.go ./go/cmd/mysqlctl/mysqlctl_test.go
+          cp ./tools/coverage-go/vtctlclient_test.go ./go/cmd/vtctlclient/vtctlclient_test.go
+          cp ./tools/coverage-go/vttablet_test.go ./go/cmd/vttablet/vttablet_test.go
+          cp ./tools/coverage-go/vtgate_test.go ./go/cmd/vtgate/vtgate_test.go
+          cp ./tools/coverage-go/vtworker_test.go ./go/cmd/vtworker/vtworker_test.go
+          cp ./tools/coverage-go/vtworkerclient_test.go ./go/cmd/vtworkerclient/vtworkerclient_test.go
+
+          go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtctl -o ./bin/vtctl
+          go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtctld -o ./bin/vtctld
+          go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/mysqlctl -o ./bin/mysqlctl
+          go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtctlclient -o ./bin/vtctlclient
+          go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vttablet -o ./bin/vttablet
+          go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtgate -o ./bin/vtgate
+          go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtworker -o ./bin/vtworker
+          go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtworkerclient -o ./bin/vtworkerclient
+
+      - name: Get dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+          sudo service mysql stop
+          sudo service etcd stop
+          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          go mod download
+
+      - name: Execute cluster endtoend test
+        run: |
+          eatmydata -- ./tools/e2e_test_cluster.sh
+          mkdir report
+          cp /tmp/*.out ./report/.
+          ls -ll report/
+
+      - name: Analyse sonar
+        run: |
+          export SONAR_SCANNER_VERSION=4.2.0.1873
+          export SONAR_SCANNER_HOME=$HOME/.sonar/sonar-scanner-$SONAR_SCANNER_VERSION-linux
+          rm -rf $SONAR_SCANNER_HOME
+          mkdir -p $SONAR_SCANNER_HOME
+          curl -sSLo $HOME/.sonar/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION-linux.zip
+          unzip $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
+          rm $HOME/.sonar/sonar-scanner.zip
+          export PATH=$SONAR_SCANNER_HOME/bin:$PATH
+          export SONAR_SCANNER_OPTS="-server"
+          sonar-scanner \
+            -Dsonar.projectKey=vitessio \
+            -Dsonar.organization=vitess \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login=039a500815b1daaa839c9622d9f724ec6be58334 \
+            -Dsonar.go.coverage.reportPaths=report/*.out
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -159,21 +159,20 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 	if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
 		log.Error(err)
-		//time.Sleep(10 * time.Minute)
-		//return
+		return
 	}
 
 	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Info(fmt.Sprintf("Starting vtctld server on port : %d", cluster.VtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
 	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
-		println(err.Error())
+
 		log.Error(err.Error())
-		//return
+		return
 	}
 
 	cluster.VtctlclientProcess = *VtctlClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
-	return nil
+	return
 }
 
 // StartUnshardedKeyspace starts unshared keyspace with shard name as "0"
@@ -249,9 +248,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		for _, proc := range mysqlctlProcessList {
 			if err = proc.Wait(); err != nil {
 				log.Errorf("Unable to start mysql , error %v", err.Error())
-				fmt.Printf("%v", proc.Args)
-				time.Sleep(10 * time.Minute)
-				//return err
+				return err
 			}
 		}
 		for _, tablet := range shard.Vttablets {

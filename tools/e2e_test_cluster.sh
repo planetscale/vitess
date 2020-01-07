@@ -27,12 +27,9 @@ packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join 
 cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend" | cut -d" " -f1)
 
 # Run cluster test sequentially
-echo "running cluster tests $cluster_tests"
-echo "$cluster_tests" | xargs go test -v -p=1
-if [ $? -ne 0 ]; then
-  echo "ERROR: Go cluster tests failed. See above for errors."
-  echo
-  echo "This should NOT happen. Did you introduce a flaky unit test?"
-  echo "If so, please rename it to the suffix _flaky_test.go."
-  exit 1
-fi
+
+for i in "${cluster_tests[@]}"
+do
+   echo "starting test for $i"
+   go test  $i -v -p=1 -is-coverage=true
+done

@@ -100,7 +100,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
 	if *isCoverage {
-		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile=vttablet.out", "-test.v")
+		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile="+getCoveragePath("vttablet.out", false))
 	}
 
 	if vttablet.SupportsBackup {
