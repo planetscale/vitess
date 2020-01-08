@@ -24,12 +24,12 @@ source build.env
 
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/.../endtoend/... | sort)
 
-cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend" | cut -d" " -f1)
+cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend/sharding/initialsharding/multi" | cut -d" " -f1)
 
 # Run cluster test sequentially
 
 for i in "${cluster_tests[@]}"
 do
    echo "starting test for $i"
-   go test  $i -v -p=1 -is-coverage=true
+   go test  $i -v -p=1 -is-coverage=true || :
 done
