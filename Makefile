@@ -104,8 +104,6 @@ unit_test_race: build dependency_check
 e2e_test_race: build
 	tools/e2e_test_race.sh
 
-e2e_test_cluster: build
-	tools/e2e_test_cluster.sh
 
 .ONESHELL:
 SHELL = /bin/bash

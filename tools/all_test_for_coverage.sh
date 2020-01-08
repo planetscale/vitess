@@ -20,16 +20,30 @@
 # All Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
 
+
+### Execute go/test/endtoend testcase ###
 source build.env
 
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/.../endtoend/... | sort)
 
-cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend/sharding/initialsharding/multi" | cut -d" " -f1)
+cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend" | cut -d" " -f1)
 
 # Run cluster test sequentially
 
-for i in "${cluster_tests[@]}"
+for i in $cluster_tests
 do
    echo "starting test for $i"
    go test  $i -v -p=1 -is-coverage=true || :
+done
+
+### Execute unit testcase ###
+
+packages_with_all_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/... | sort)
+all_except_endtoend_tests=$(echo "$packages_with_all_tests" | grep -v "endtoend" | cut -d" " -f1 )
+
+counter=0
+for pkg in $all_except_endtoend_tests
+do
+   go test -coverpkg=vitess.io/vitess/go/... -coverprofile "/tmp/unit_$counter.out" $pkg -v -p=1 || :
+   counter=$((counter+1))
 done

@@ -48,7 +48,7 @@ jobs:
 
       - name: Execute cluster endtoend test
         run: |
-          eatmydata -- ./tools/e2e_test_cluster.sh
+          eatmydata -- ./tools/all_test_for_coverage.sh
           mkdir report
           cp /tmp/*.out ./report/.
           ls -ll report/
