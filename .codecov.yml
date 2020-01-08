@@ -15,3 +15,6 @@ ignore:
   - "**/java/**"
   - "go/test/endtoend/**"
   - "**/*.pb.go"
+  - "go/vt/proto/**"
+codecov:
+  max_report_age: off

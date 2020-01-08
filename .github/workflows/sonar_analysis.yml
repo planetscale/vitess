@@ -30,6 +30,13 @@ jobs:
           mkdir report
           cp /tmp/*.out ./report/.
 
+      - name: Publish coverage to codecov.com
+        run: |
+          find report -type f -name '*.out' -exec cat {} + >> coverage.txt
+          bash <(curl -s https://codecov.io/bash) -t ${CODECOV_TOKEN}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
       - name: Analyse sonar
         run: |
           export SONAR_SCANNER_VERSION=4.2.0.1873
