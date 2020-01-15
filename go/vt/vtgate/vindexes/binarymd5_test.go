@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -20,28 +20,23 @@ import (
 	"reflect"
 	"testing"
 
-	"strings"
-
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
 
-var binVindex Vindex
+var binVindex SingleColumn
 
 func init() {
-	binVindex, _ = CreateVindex("binary_md5", "binary_md5_varchar", nil)
+	vindex, _ := CreateVindex("binary_md5", "binary_md5_varchar", nil)
+	binVindex = vindex.(SingleColumn)
 }
 
-func TestBinaryMD5Cost(t *testing.T) {
-	if binVindex.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", binVindex.Cost())
-	}
-}
-
-func TestBinaryMD5String(t *testing.T) {
-	if strings.Compare("binary_md5_varchar", binVindex.String()) != 0 {
-		t.Errorf("String(): %s, want binary_md5_varchar", binVindex.String())
-	}
+func TestBinaryMD5Info(t *testing.T) {
+	assert.Equal(t, 1, binVindex.Cost())
+	assert.Equal(t, "binary_md5_varchar", binVindex.String())
+	assert.True(t, binVindex.IsUnique())
+	assert.False(t, binVindex.NeedsVCursor())
 }
 
 func TestBinaryMD5Map(t *testing.T) {

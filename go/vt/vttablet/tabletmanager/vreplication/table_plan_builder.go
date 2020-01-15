@@ -23,9 +23,13 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+// ExcludeStr is the filter value for excluding tables that match a rule.
+const ExcludeStr = "exclude"
 
 type tablePlanBuilder struct {
 	name       sqlparser.TableIdent
@@ -45,7 +49,9 @@ type colExpr struct {
 	// operation==opCount: nothing is set.
 	// operation==opSum: for 'sum(a)', expr is set to 'a'.
 	operation operation
-	expr      sqlparser.Expr
+	// expr stores the expected field name from vstreamer and dictates
+	// the generated bindvar names, like a_col or b_col.
+	expr sqlparser.Expr
 	// references contains all the column names referenced in the expression.
 	references map[string]bool
 
@@ -83,75 +89,76 @@ const (
 // buildExecutionPlan is the function that builds the full plan.
 func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string, copyState map[string]*sqltypes.Result) (*ReplicatorPlan, error) {
 	plan := &ReplicatorPlan{
-		VStreamFilter: &binlogdatapb.Filter{},
+		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
 		TargetTables:  make(map[string]*TablePlan),
 		TablePlans:    make(map[string]*TablePlan),
 		tableKeys:     tableKeys,
 	}
-nextTable:
 	for tableName := range tableKeys {
 		lastpk, ok := copyState[tableName]
 		if ok && lastpk == nil {
 			// Don't replicate uncopied tables.
 			continue
 		}
-		for _, rule := range filter.Rules {
-			switch {
-			case strings.HasPrefix(rule.Match, "/"):
-				expr := strings.Trim(rule.Match, "/")
-				result, err := regexp.MatchString(expr, tableName)
-				if err != nil {
-					return nil, err
-				}
-				if !result {
-					continue
-				}
-				sendRule := &binlogdatapb.Rule{
-					Match:  tableName,
-					Filter: buildQuery(tableName, rule.Filter),
-				}
-				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, sendRule)
-				tablePlan := &TablePlan{
-					TargetName: tableName,
-					SendRule:   sendRule,
-					Lastpk:     lastpk,
-				}
-				plan.TargetTables[tableName] = tablePlan
-				plan.TablePlans[tableName] = tablePlan
-				continue nextTable
-			case rule.Match == tableName:
-				tablePlan, err := buildTablePlan(rule, tableKeys, lastpk)
-				if err != nil {
-					return nil, err
-				}
-				if _, ok := plan.TablePlans[tablePlan.SendRule.Match]; ok {
-					continue
-				}
-				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, tablePlan.SendRule)
-				plan.TargetTables[tableName] = tablePlan
-				plan.TablePlans[tablePlan.SendRule.Match] = tablePlan
-				continue nextTable
-			}
+		rule, err := MatchTable(tableName, filter)
+		if err != nil {
+			return nil, err
 		}
+		if rule == nil {
+			continue
+		}
+		tablePlan, err := buildTablePlan(tableName, rule.Filter, tableKeys, lastpk)
+		if err != nil {
+			return nil, err
+		}
+		if tablePlan == nil {
+			// Table was excluded.
+			continue
+		}
+		if dup, ok := plan.TablePlans[tablePlan.SendRule.Match]; ok {
+			return nil, fmt.Errorf("more than one target for source table %s: %s and %s", tablePlan.SendRule.Match, dup.TargetName, tableName)
+		}
+		plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, tablePlan.SendRule)
+		plan.TargetTables[tableName] = tablePlan
+		plan.TablePlans[tablePlan.SendRule.Match] = tablePlan
 	}
 	return plan, nil
 }
 
-func buildQuery(tableName, filter string) string {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("select * from %v", sqlparser.NewTableIdent(tableName))
-	if filter != "" {
-		buf.Myprintf(" where in_keyrange(%v)", sqlparser.NewStrVal([]byte(filter)))
+// MatchTable is similar to tableMatches defined in vstreamer.
+func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Rule, error) {
+	for _, rule := range filter.Rules {
+		switch {
+		case strings.HasPrefix(rule.Match, "/"):
+			expr := strings.Trim(rule.Match, "/")
+			result, err := regexp.MatchString(expr, tableName)
+			if err != nil {
+				return nil, err
+			}
+			if !result {
+				continue
+			}
+			return rule, nil
+		case tableName == rule.Match:
+			return rule, nil
+		}
 	}
-	return buf.String()
+	return nil, nil
 }
 
-func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string, lastpk *sqltypes.Result) (*TablePlan, error) {
-	query := rule.Filter
-	if query == "" {
+func buildTablePlan(tableName, filter string, tableKeys map[string][]string, lastpk *sqltypes.Result) (*TablePlan, error) {
+	query := filter
+	switch {
+	case filter == "":
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(rule.Match))
+		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(tableName))
 		query = buf.String()
+	case key.IsKeyRange(filter):
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrVal([]byte(filter)))
+		query = buf.String()
+	case filter == ExcludeStr:
+		return nil, nil
 	}
 	sel, fromTable, err := analyzeSelectFrom(query)
 	if err != nil {
@@ -170,7 +177,7 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string, last
 		}
 		sendRule.Filter = query
 		tablePlan := &TablePlan{
-			TargetName: rule.Match,
+			TargetName: tableName,
 			SendRule:   sendRule,
 			Lastpk:     lastpk,
 		}
@@ -178,7 +185,7 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string, last
 	}
 
 	tpb := &tablePlanBuilder{
-		name: sqlparser.NewTableIdent(rule.Match),
+		name: sqlparser.NewTableIdent(tableName),
 		sendSelect: &sqlparser.Select{
 			From:  sel.From,
 			Where: sel.Where,
@@ -326,6 +333,14 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			cexpr.expr = innerCol
 			tpb.addCol(innerCol.Name)
 			cexpr.references[innerCol.Name.Lowered()] = true
+			return cexpr, nil
+		case "keyspace_id":
+			if len(expr.Exprs) != 0 {
+				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: aliased.Expr})
+			// The vstreamer responds with "keyspace_id" as the field name for this request.
+			cexpr.expr = &sqlparser.ColName{Name: sqlparser.NewColIdent("keyspace_id")}
 			return cexpr, nil
 		}
 	}

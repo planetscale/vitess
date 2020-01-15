@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -214,31 +214,6 @@ func TestTrailingComment(t *testing.T) {
 		if v2 != v1+1 {
 			t.Errorf("QueryCacheLength(%s): %d, want %d", query, v2, v1+1)
 		}
-	}
-}
-
-func TestUpsertNonPKHit(t *testing.T) {
-	client := framework.NewClient()
-	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer client.Rollback()
-
-	_, err = client.Execute("insert into upsert_test(id1, id2) values (1, 1)", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	_, err = client.Execute(
-		"insert into upsert_test(id1, id2) values "+
-			"(2, 1) on duplicate key update id2 = 2",
-		nil,
-	)
-	want := "Duplicate entry '1' for key 'id2_idx'"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Execute: %v, must start with %s", err, want)
 	}
 }
 

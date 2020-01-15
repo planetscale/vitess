@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,33 +18,28 @@ package vindexes
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
 
-var null Vindex
+var null SingleColumn
 
 func init() {
 	hv, err := CreateVindex("null", "nn", map[string]string{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
-	null = hv
+	null = hv.(SingleColumn)
 }
 
-func TestNullCost(t *testing.T) {
-	if null.Cost() != 0 {
-		t.Errorf("Cost(): %d, want 0", null.Cost())
-	}
-}
-
-func TestNullString(t *testing.T) {
-	if strings.Compare("nn", null.String()) != 0 {
-		t.Errorf("String(): %s, want null", null.String())
-	}
+func TestNullInfo(t *testing.T) {
+	assert.Equal(t, 100, null.Cost())
+	assert.Equal(t, "nn", null.String())
+	assert.True(t, null.IsUnique())
+	assert.False(t, null.NeedsVCursor())
 }
 
 func TestNullMap(t *testing.T) {

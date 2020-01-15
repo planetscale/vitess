@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"golang.org/x/net/context"
 
@@ -654,7 +656,7 @@ func TestInsertShardedKeyrange(t *testing.T) {
 
 	// If a unique vindex returns a keyrange, we fail the insert
 	_, err := executorExec(executor, "insert into keyrange_table(krcol_unique, krcol) values(1, 1)", nil)
-	want := "execInsertSharded: getInsertShardedRoute: could not map INT64(1) to a unique keyspace id: DestinationKeyRange(-10)"
+	want := "execInsertSharded: getInsertShardedRoute: could not map [INT64(1)] to a unique keyspace id: DestinationKeyRange(-10)"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec error: %v, want %s", err, want)
 	}
@@ -786,13 +788,9 @@ func TestInsertShardedIgnore(t *testing.T) {
 		Sql: "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv0, :_owned0, :_verify0),(:_pv4, :_owned4, :_verify4) /* vtgate:: keyspace_id:166b40b44aba4bd6,166b40b44aba4bd6 */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_pv0":     sqltypes.Int64BindVariable(1),
-			"_pv2":     sqltypes.Int64BindVariable(3),
-			"_pv3":     sqltypes.Int64BindVariable(4),
 			"_pv4":     sqltypes.Int64BindVariable(5),
 			"_pv5":     sqltypes.Int64BindVariable(6),
 			"_owned0":  sqltypes.Int64BindVariable(1),
-			"_owned2":  sqltypes.Int64BindVariable(3),
-			"_owned3":  sqltypes.Int64BindVariable(4),
 			"_owned4":  sqltypes.Int64BindVariable(5),
 			"_owned5":  sqltypes.Int64BindVariable(6),
 			"_verify0": sqltypes.Int64BindVariable(1),
@@ -807,13 +805,9 @@ func TestInsertShardedIgnore(t *testing.T) {
 		Sql: "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv5, :_owned5, :_verify5) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_pv0":     sqltypes.Int64BindVariable(1),
-			"_pv2":     sqltypes.Int64BindVariable(3),
-			"_pv3":     sqltypes.Int64BindVariable(4),
 			"_pv4":     sqltypes.Int64BindVariable(5),
 			"_pv5":     sqltypes.Int64BindVariable(6),
 			"_owned0":  sqltypes.Int64BindVariable(1),
-			"_owned2":  sqltypes.Int64BindVariable(3),
-			"_owned3":  sqltypes.Int64BindVariable(4),
 			"_owned4":  sqltypes.Int64BindVariable(5),
 			"_owned5":  sqltypes.Int64BindVariable(6),
 			"_verify0": sqltypes.Int64BindVariable(1),
@@ -1553,6 +1547,41 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	}
 }
 
+func TestInsertBadAutoInc(t *testing.T) {
+	vschema := `
+{
+	"sharded": true,
+	"vindexes": {
+		"hash_index": {
+			"type": "hash"
+		}
+	},
+	"tables": {
+		"bad_auto": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "hash_index"
+				}
+			],
+			"auto_increment": {
+				"column": "id",
+				"sequence": "absent"
+			}
+		}
+	}
+}
+`
+	executor, _, _, _ := createCustomExecutor(vschema)
+
+	// If auto inc table cannot be found, the table should not be added to vschema.
+	_, err := executorExec(executor, "insert into bad_auto(v, name) values (1, 'myname')", nil)
+	want := "table bad_auto not found"
+	if err == nil || err.Error() != want {
+		t.Errorf("bad auto inc err: %v, want %v", err, want)
+	}
+}
+
 func TestKeyDestRangeQuery(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	// it works in a single shard key range
@@ -1771,8 +1800,7 @@ func TestUpdateEqualWithPrepare(t *testing.T) {
 		t.Error(err)
 	}
 
-	wantQueries := []*querypb.BoundQuery{}
-	wantQueries = nil
+	var wantQueries []*querypb.BoundQuery
 
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
@@ -1799,8 +1827,7 @@ func TestInsertShardedWithPrepare(t *testing.T) {
 		t.Error(err)
 	}
 
-	wantQueries := []*querypb.BoundQuery{}
-	wantQueries = nil
+	var wantQueries []*querypb.BoundQuery
 
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
@@ -1822,8 +1849,8 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []*querypb.BoundQuery{}
-	wantQueries = nil
+
+	var wantQueries []*querypb.BoundQuery
 
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
@@ -1832,4 +1859,19 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries:\n%+v, want\n%+v\n", sbclookup.Queries, wantQueries)
 	}
+}
+
+func TestUpdateLastInsertID(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+
+	sql := "update user set a = last_insert_id() where id = 1"
+	masterSession.LastInsertId = 43
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "update user set a = :__lastInsertId where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(43)},
+	}}
+
+	require.Equal(t, wantQueries, sbc1.Queries)
 }

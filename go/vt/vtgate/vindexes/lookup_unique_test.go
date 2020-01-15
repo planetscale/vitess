@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -18,9 +18,9 @@ package vindexes
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -33,12 +33,13 @@ func TestLookupUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	l, _ = CreateVindex("lookup_unique", "lookup_unique", map[string]string{
+	vindex, _ := CreateVindex("lookup_unique", "lookup_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "true",
 	})
+	l = vindex.(SingleColumn)
 	if want, got := l.(*LookupUnique).writeOnly, true; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
@@ -55,18 +56,11 @@ func TestLookupUniqueNew(t *testing.T) {
 	}
 }
 
-func TestLookupUniqueCost(t *testing.T) {
+func TestLookupUniqueInfo(t *testing.T) {
 	lookupUnique := createLookup(t, "lookup_unique", false)
-	if lookupUnique.Cost() != 10 {
-		t.Errorf("Cost(): %d, want 10", lookupUnique.Cost())
-	}
-}
-
-func TestLookupUniqueString(t *testing.T) {
-	lookupUnique := createLookup(t, "lookup_unique", false)
-	if strings.Compare("lookup_unique", lookupUnique.String()) != 0 {
-		t.Errorf("String(): %s, want lookup_unique", lookupUnique.String())
-	}
+	assert.Equal(t, 10, lookupUnique.Cost())
+	assert.Equal(t, "lookup_unique", lookupUnique.String())
+	assert.True(t, lookupUnique.IsUnique())
 }
 
 func TestLookupUniqueMap(t *testing.T) {

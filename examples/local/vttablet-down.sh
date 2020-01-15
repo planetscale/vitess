@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ for uid_index in $uids; do
   wait_pids="$wait_pids $pid"
 
   echo "Stopping MySQL for tablet $alias..."
-  $VTROOT/bin/mysqlctl \
+  mysqlctl \
     -tablet_uid $uid \
     shutdown &
 done

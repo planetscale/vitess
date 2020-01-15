@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ script_root=$(dirname "${BASH_SOURCE}")
 source "$script_root/env.sh"
 
 # shellcheck disable=SC2086
-"$VTROOT"/bin/vtworker \
+vtworker \
     $TOPOLOGY_FLAGS \
     -cell zone1 \
     -log_dir "$VTDATAROOT"/tmp \

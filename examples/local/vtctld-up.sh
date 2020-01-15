@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,11 +33,9 @@ fi
 
 echo "Starting vtctld..."
 # shellcheck disable=SC2086
-$VTROOT/bin/vtctld \
+vtctld \
   $TOPOLOGY_FLAGS \
   -cell $cell \
-  -web_dir $VTTOP/web/vtctld \
-  -web_dir2 $VTTOP/web/vtctld2/app \
   -workflow_manager_init \
   -workflow_manager_use_election \
   -service_map 'grpc-vtctl' \

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,38 +20,31 @@ import (
 	"reflect"
 	"testing"
 
-	"strings"
-
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
 
 // createVindex creates the "numeric_static_map" vindex object which is used by
 // each test.
-func createVindex() (Vindex, error) {
+func createVindex() (SingleColumn, error) {
 	m := make(map[string]string)
 	m["json_path"] = "testdata/numeric_static_map_test.json"
-	return CreateVindex("numeric_static_map", "numericStaticMap", m)
+	vindex, err := CreateVindex("numeric_static_map", "numericStaticMap", m)
+	if err != nil {
+		panic(err)
+	}
+	return vindex.(SingleColumn), nil
 }
 
-func TestNumericStaticMapCost(t *testing.T) {
+func TestNumericStaticMapInfo(t *testing.T) {
 	numericStaticMap, err := createVindex()
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
-	if numericStaticMap.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", numericStaticMap.Cost())
-	}
-}
-
-func TestNumericStaticMapString(t *testing.T) {
-	numericStaticMap, err := createVindex()
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
-	if strings.Compare("numericStaticMap", numericStaticMap.String()) != 0 {
-		t.Errorf("String(): %s, want num", numericStaticMap.String())
-	}
+	require.NoError(t, err)
+	assert.Equal(t, 1, numericStaticMap.Cost())
+	assert.Equal(t, "numericStaticMap", numericStaticMap.String())
+	assert.True(t, numericStaticMap.IsUnique())
+	assert.False(t, numericStaticMap.NeedsVCursor())
 }
 
 func TestNumericStaticMapMap(t *testing.T) {

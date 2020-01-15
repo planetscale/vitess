@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ for zkid in $zkids; do
     echo "    $VTDATAROOT/$zkdir"
     action='start'
   fi
-  $VTROOT/bin/zkctl -zk.myid $zkid -zk.cfg $zkcfg -log_dir $VTDATAROOT/tmp $action \
+  zkctl -zk.myid $zkid -zk.cfg $zkcfg -log_dir $VTDATAROOT/tmp $action \
     > $VTDATAROOT/tmp/zkctl_$zkid.out 2>&1 &
   pids[$zkid]=$!
 done
@@ -56,7 +56,7 @@ echo "Started zk servers."
 # If the node already exists, it's fine, means we used existing data.
 set +e
 # shellcheck disable=SC2086
-$VTROOT/bin/vtctl $TOPOLOGY_FLAGS AddCellInfo \
+vtctl $TOPOLOGY_FLAGS AddCellInfo \
   -root /vitess/$cell \
   -server_address $ZK_SERVER \
   $cell
