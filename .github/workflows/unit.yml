@@ -39,6 +39,7 @@ jobs:
             sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
             sudo apt-get update
             sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client || sudo cat /var/log/mysql/error.log
+            exit 1
           elif [ ${{matrix.name}} = "mariadb101" ]; then
             sudo apt install -y mariadb-server mariadb-client
           elif [ ${{matrix.name}} = "mariadb102" ]; then
