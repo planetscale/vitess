@@ -19,6 +19,7 @@ jobs:
 
     - name: Get dependencies
       run: |
+        export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
 
         if [ ${{matrix.name}} = "mysql57" ]; then
