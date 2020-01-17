@@ -26,8 +26,6 @@ jobs:
         else
           # Uninstall likely installed MySQL first
           sudo apt purge -y mysql-server mysql-client
-          sudo rm -rf /etc/{my.cnf,mysql}
-          sudo rm -rf /etc/apparmor.d/usr.sbin.mysqld
           
           if [ ${{matrix.name}} = "percona56" ]; then
             sudo rm -rf /var/lib/mysql
@@ -36,6 +34,9 @@ jobs:
             sudo apt update
             sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y percona-server-server-5.6 percona-server-client-5.6  
           elif [ ${{matrix.name}} = "mysql80" ]; then
+            sudo rm -rf /etc/{my.cnf,mysql}
+            sudo rm -rf /etc/apparmor.d/usr.sbin.mysqld
+            sudo rm -rf /var/lib/mysql
             wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
             echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections 
             sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
