@@ -34,10 +34,10 @@ jobs:
             sudo apt update
             sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y percona-server-server-5.6 percona-server-client-5.6  
           elif [ ${{matrix.name}} = "mysql80" ]; then
-            sudo rm -rf /var/run/mysqld
-            sudo mkdir -p /var/run/mysqld
-            sudo chown mysql:mysql /var/run/mysqld
-            sudo chmod 755 /var/run/mysqld
+            sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld"
+            sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+            sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
+
             wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
             echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections 
             sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
