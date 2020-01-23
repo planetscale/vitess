@@ -312,6 +312,8 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			opcode = engine.AggregateCountDistinct
 		case engine.AggregateSum:
 			opcode = engine.AggregateSumDistinct
+		case engine.AggregateAvg:
+			opcode = engine.AggregateAvgDistinct
 		}
 		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
 			Opcode: opcode,
@@ -340,7 +342,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	if !funcExpr.Distinct {
 		return false, nil, nil
 	}
-	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
+	if opcode != engine.AggregateCount && opcode != engine.AggregateSum && opcode != engine.AggregateAvg {
 		return false, nil, nil
 	}
 	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)

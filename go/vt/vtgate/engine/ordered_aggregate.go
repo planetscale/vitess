@@ -76,14 +76,17 @@ const (
 	AggregateSum
 	AggregateMin
 	AggregateMax
+	AggregateAvg
 	AggregateCountDistinct
 	AggregateSumDistinct
+	AggregateAvgDistinct
 )
 
 var (
 	opcodeType = map[AggregateOpcode]querypb.Type{
 		AggregateCountDistinct: sqltypes.Int64,
 		AggregateSumDistinct:   sqltypes.Decimal,
+		AggregateAvgDistinct:   sqltypes.Decimal,
 	}
 	// Some predefined values
 	countZero = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
@@ -98,10 +101,12 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"sum":   AggregateSum,
 	"min":   AggregateMin,
 	"max":   AggregateMax,
+	"avg":   AggregateAvg,
 	// These functions don't exist in mysql, but are used
 	// to display the plan.
 	"count_distinct": AggregateCountDistinct,
 	"sum_distinct":   AggregateSumDistinct,
+	"avg_distinct":   AggregateAvgDistinct,
 }
 
 func (code AggregateOpcode) String() string {
@@ -287,7 +292,7 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 			} else {
 				newRow[aggr.Col] = countOne
 			}
-		case AggregateSumDistinct:
+		case AggregateSumDistinct, AggregateAvgDistinct:
 			curDistinct = row[aggr.Col]
 			var err error
 			newRow[aggr.Col], err = sqltypes.Cast(row[aggr.Col], opcodeType[aggr.Opcode])
@@ -345,7 +350,7 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 		}
 		var err error
 		switch aggr.Opcode {
-		case AggregateCount, AggregateSum:
+		case AggregateCount, AggregateSum, AggregateAvg:
 			result[aggr.Col] = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
 		case AggregateMin:
 			result[aggr.Col], err = sqltypes.Min(row1[aggr.Col], row2[aggr.Col])
@@ -354,6 +359,8 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 		case AggregateCountDistinct:
 			result[aggr.Col] = sqltypes.NullsafeAdd(row1[aggr.Col], countOne, opcodeType[aggr.Opcode])
 		case AggregateSumDistinct:
+			result[aggr.Col] = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], opcodeType[aggr.Opcode])
+		case AggregateAvgDistinct:
 			result[aggr.Col] = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], opcodeType[aggr.Opcode])
 		default:
 			return nil, sqltypes.NULL, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
@@ -386,9 +393,11 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 		return countZero, nil
 	case
 		AggregateSumDistinct,
+		AggregateAvgDistinct,
 		AggregateSum,
 		AggregateMin,
-		AggregateMax:
+		AggregateMax,
+		AggregateAvg:
 		return sqltypes.NULL, nil
 
 	}
