@@ -56,11 +56,11 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 
 // Start executes mysqlctl command to start mysql instance
 func (mysqlctl *MysqlctlProcess) Start() (err error) {
-	if tmpProcess, err := mysqlctl.StartProcess(); err != nil {
+	tmpProcess, err := mysqlctl.StartProcess()
+	if err != nil {
 		return err
-	} else {
-		return tmpProcess.Wait()
 	}
+	return tmpProcess.Wait()
 }
 
 // StartProcess starts the mysqlctl and returns the process reference
@@ -78,19 +78,19 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 	if mysqlctl.InitMysql {
 		tmpProcess.Args = append(tmpProcess.Args, "init",
 			"-init_db_sql_file", mysqlctl.InitDBFile)
-	} else {
-		tmpProcess.Args = append(tmpProcess.Args, "start")
 	}
+	tmpProcess.Args = append(tmpProcess.Args, "start")
+
 	return tmpProcess, tmpProcess.Start()
 }
 
 // Stop executes mysqlctl command to stop mysql instance
 func (mysqlctl *MysqlctlProcess) Stop() (err error) {
-	if tmpProcess, err := mysqlctl.StopProcess(); err != nil {
+	tmpProcess, err := mysqlctl.StopProcess()
+	if err != nil {
 		return err
-	} else {
-		return tmpProcess.Wait()
 	}
+	return tmpProcess.Wait()
 }
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
@@ -133,11 +133,7 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 // StartMySQL starts mysqlctl process
 func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
 	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
-	err := tablet.MysqlctlProcess.Start()
-	if err != nil {
-		return err
-	}
-	return nil
+	return tablet.MysqlctlProcess.Start()
 }
 
 // StartMySQLAndGetConnection create a connection to tablet mysql
@@ -152,8 +148,7 @@ func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username 
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock"),
 	}
 
-	conn, err := mysql.Connect(ctx, &params)
-	return conn, err
+	return mysql.Connect(ctx, &params)
 }
 
 // ExecuteCommandWithOutput executes any mysqlctl command and returns output
