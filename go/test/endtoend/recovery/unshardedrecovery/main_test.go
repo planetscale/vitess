@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package backup
+package unshardedrecovery
 
 import (
 	"flag"
@@ -34,6 +34,7 @@ var (
 	master           *cluster.Vttablet
 	replica1         *cluster.Vttablet
 	replica2         *cluster.Vttablet
+	replica3         *cluster.Vttablet
 	localCluster     *cluster.LocalProcessCluster
 	newInitDBFile    string
 	cell             = cluster.DefaultCell
@@ -50,7 +51,6 @@ var (
 		"-degraded_threshold", "5s",
 		"-lock_tables_timeout", "5s",
 		"-watch_replication_stream",
-		"-enable_replication_reporter",
 		"-serving_state_grace_period", "1s"}
 )
 
@@ -88,7 +88,7 @@ func TestMain(m *testing.M) {
 		}
 
 		var mysqlProcs []*exec.Cmd
-		for i := 0; i < 3; i++ {
+		for i := 0; i < 4; i++ {
 			tabletType := "replica"
 			if i == 0 {
 				tabletType = "master"
@@ -118,6 +118,7 @@ func TestMain(m *testing.M) {
 		master = shard.Vttablets[0]
 		replica1 = shard.Vttablets[1]
 		replica2 = shard.Vttablets[2]
+		replica3 = shard.Vttablets[3]
 
 		if err := localCluster.VtctlclientProcess.InitTablet(master, cell, keyspaceName, hostname, shard.Name); err != nil {
 			return 1, err

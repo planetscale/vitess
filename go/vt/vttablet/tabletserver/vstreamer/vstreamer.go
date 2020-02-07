@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -124,11 +125,22 @@ func (vs *vstreamer) Cancel() {
 func (vs *vstreamer) Stream() error {
 	defer vs.cancel()
 
-	pos, err := mysql.DecodePosition(vs.startPos)
+	curPos, err := vs.currentPosition()
 	if err != nil {
-		return err
+		return vterrors.Wrap(err, "could not obtain current position")
 	}
-	vs.pos = pos
+	if vs.startPos == "current" {
+		vs.pos = curPos
+	} else {
+		pos, err := mysql.DecodePosition(vs.startPos)
+		if err != nil {
+			return vterrors.Wrap(err, "could not decode position")
+		}
+		if !curPos.AtLeast(pos) {
+			return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
+		}
+		vs.pos = pos
+	}
 
 	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
@@ -148,6 +160,15 @@ func (vs *vstreamer) Stream() error {
 	}
 	err = vs.parseEvents(vs.ctx, events)
 	return wrapError(err, vs.pos)
+}
+
+func (vs *vstreamer) currentPosition() (mysql.Position, error) {
+	conn, err := mysql.Connect(vs.ctx, vs.cp)
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	defer conn.Close()
+	return conn.MasterPosition()
 }
 
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {
@@ -391,8 +412,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			// If the DDL adds a column, comparing with an older snapshot of the
 			// schema will make us think that a column was dropped and error out.
 			vs.se.Reload(vs.ctx)
-		case sqlparser.StmtOther:
-			// These are DBA statements like REPAIR that can be ignored.
+		case sqlparser.StmtOther, sqlparser.StmtPriv:
+			// These are either:
+			// 1) DBA statements like REPAIR that can be ignored.
+			// 2) Privilege-altering statements like GRANT/REVOKE
+			//    that we want to keep out of the stream for now.
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_GTID,
 				Gtid: mysql.EncodePosition(vs.pos),

@@ -426,6 +426,9 @@ var (
 	}, {
 		input: "select /* function with distinct */ count(distinct a) from t",
 	}, {
+		input:  "select count(distinctrow(1)) from (select (1) from dual union all select 1 from dual) a",
+		output: "select count(distinct (1)) from (select (1) from dual union all select 1 from dual) as a",
+	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
 		input: "select /* current_timestamp */ current_timestamp() from t",
@@ -959,6 +962,30 @@ var (
 		input:  "alter table a drop id",
 		output: "alter table a",
 	}, {
+		input:  "alter database d default character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter database d character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter database d default collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter database d collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d default character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d default collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d collate = collation",
+		output: "alter database d",
+	}, {
 		input: "create table a",
 	}, {
 		input:  "create table a (\n\t`a` int\n)",
@@ -1111,13 +1138,19 @@ var (
 		output: "show charset",
 	}, {
 		input:  "show character set like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
 	}, {
 		input:  "show charset",
 		output: "show charset",
 	}, {
 		input:  "show charset like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
+	}, {
+		input:  "show charset where 'charset' = 'utf8'",
+		output: "show charset where 'charset' = 'utf8'",
+	}, {
+		input:  "show charset where 'charset' = '%foo'",
+		output: "show charset where 'charset' = '%foo'",
 	}, {
 		input:  "show collation",
 		output: "show collation",
@@ -1471,6 +1504,9 @@ var (
 	}, {
 		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
+	}, {
+		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
+		output: "select distinct a.* from (select (1) from dual union all select 1 from dual) as a",
 	}}
 )
 
@@ -1499,7 +1535,7 @@ func TestValid(t *testing.T) {
 }
 
 // Ensure there is no corruption from using a pooled yyParserImpl in Parse.
-func TestValidParallel(t *testing.T) {
+func TestParallelValid(t *testing.T) {
 	parallelism := 100
 	numIters := 1000
 
@@ -1850,6 +1886,45 @@ func TestConvert(t *testing.T) {
 		_, err := Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
+		}
+	}
+}
+
+func TestPositionedErr(t *testing.T) {
+	invalidSQL := []struct {
+		input  string
+		output PositionedErr
+	}{{
+		input:  "select convert('abc' as date) from t",
+		output: PositionedErr{"syntax error", 24, []byte("as")},
+	}, {
+		input:  "select convert from t",
+		output: PositionedErr{"syntax error", 20, []byte("from")},
+	}, {
+		input:  "select cast('foo', decimal) from t",
+		output: PositionedErr{"syntax error", 19, nil},
+	}, {
+		input:  "select convert('abc', datetime(4+9)) from t",
+		output: PositionedErr{"syntax error", 34, nil},
+	}, {
+		input:  "select convert('abc', decimal(4+9)) from t",
+		output: PositionedErr{"syntax error", 33, nil},
+	}, {
+		input:  "set transaction isolation level 12345",
+		output: PositionedErr{"syntax error", 38, []byte("12345")},
+	}, {
+		input:  "select * from a left join b",
+		output: PositionedErr{"syntax error", 28, nil},
+	}}
+
+	for _, tcase := range invalidSQL {
+		tkn := NewStringTokenizer(tcase.input)
+		_, err := ParseNext(tkn)
+
+		if posErr, ok := err.(PositionedErr); !ok {
+			t.Errorf("%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
+		} else if posErr.Pos != tcase.output.Pos || !bytes.Equal(posErr.Near, tcase.output.Near) || err.Error() != tcase.output.Error() {
+			t.Errorf("%s: %v, want: %v", tcase.input, err, tcase.output)
 		}
 	}
 }
@@ -2550,10 +2625,10 @@ func TestSkipToEnd(t *testing.T) {
 func TestParseDjangoQueries(t *testing.T) {
 
 	file, err := os.Open("./test_queries/django_queries.txt")
-	defer file.Close()
 	if err != nil {
 		t.Errorf(" Error: %v", err)
 	}
+	defer file.Close()
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
