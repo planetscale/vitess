@@ -114,7 +114,7 @@ func TestWebInterface(t *testing.T) {
 	require.Nil(t, err)
 	defer localCluster.Teardown()
 	err = localCluster.StartVtworker(cell, "--use_v3_resharding_mode=true")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	baseURL := fmt.Sprintf("http://localhost:%d", localCluster.VtworkerProcess.Port)
 
 	// Wait for /status to become available.
@@ -138,14 +138,14 @@ func TestWebInterface(t *testing.T) {
 			return http.ErrUseLastResponse
 		}
 		resp, err := http.Post(baseURL+"/Debugging/Ping", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, 307, resp.StatusCode)
 
 		// Wait for the Ping command to finish.
 		pollForVars(t, "done")
 		// Verify that the command logged something and it's available at /status.
 		resp, err = http.Get(baseURL + "/status")
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		if resp.StatusCode == 200 {
 			respByte, _ := ioutil.ReadAll(resp.Body)
 			respStr := string(respByte)
@@ -154,9 +154,9 @@ func TestWebInterface(t *testing.T) {
 
 		// Reset the job.
 		_, err = http.Get(baseURL + "/reset")
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		resp, err = http.Get(baseURL + "/status")
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		if resp.StatusCode == 200 {
 			respByte, _ := ioutil.ReadAll(resp.Body)
 			statusAfterReset := string(respByte)
@@ -166,7 +166,7 @@ func TestWebInterface(t *testing.T) {
 	}
 
 	err = localCluster.VtworkerProcess.TearDown()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 }
 
@@ -202,7 +202,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	// 6. Verify that the data was copied successfully to both new shards
 
 	err := localCluster.StartVtworker(cell, "--use_v3_resharding_mode=true")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// --max_tps is only specified to enable the throttler and ensure that the
 	// code is executed. But the intent here is not to throttle the test, hence
@@ -227,7 +227,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		"test_keyspace/0")
 
 	proc, err := localCluster.VtworkerProcess.ExecuteCommandInBg(args...)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	if isMysqlDown {
 		// vtworker is blocked at this point. This is a good time to test that its
@@ -243,7 +243,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		for _, tablet := range []*cluster.Vttablet{shard0Master, shard1Master} {
 			tablet.MysqlctlProcess.InitMysql = false
 			sqlProc, err := tablet.MysqlctlProcess.StopProcess()
-			assert.Nil(t, err)
+			require.NoError(t, err)
 			mysqlCtlProcessList = append(mysqlCtlProcessList, sqlProc)
 		}
 
@@ -271,7 +271,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		for _, tablet := range []*cluster.Vttablet{shard0Master, shard1Master} {
 			tablet.MysqlctlProcess.InitMysql = false
 			sqlProc, err := tablet.MysqlctlProcess.StartProcess()
-			assert.Nil(t, err)
+			require.NoError(t, err)
 			mysqlCtlProcessStartList = append(mysqlCtlProcessStartList, sqlProc)
 		}
 
@@ -312,7 +312,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	pollForVarsWorkerRetryCount(t, 1)
 
 	err = localCluster.VtworkerProcess.TearDown()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	cluster.WaitForReplicationPos(t, shard0Replica, shard0RdOnly1, "localhost", 60)
 	cluster.WaitForReplicationPos(t, shard1Replica, shard1RdOnly1, "localhost", 60)
@@ -323,7 +323,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		"--online=false",
 		"--min_healthy_rdonly_tablets", "1",
 		"test_keyspace/0")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Make sure that everything is caught up to the same replication point
 	runSplitDiff(t, "test_keyspace/-80")
@@ -336,11 +336,11 @@ func assertShardDataEqual(t *testing.T, shardNum string, sourceTablet *cluster.V
 	messageStr := fmt.Sprintf("shard-%s", shardNum)
 	selectQuery := "select id,sid,msg from worker_test where msg = '" + messageStr + "' order by id asc"
 	qrSource, err := sourceTablet.VttabletProcess.QueryTablet(selectQuery, keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Make sure all the right rows made it from the source to the destination
 	qrDestination, err := destinationTablet.VttabletProcess.QueryTablet(selectQuery, keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, len(qrSource.Rows), len(qrDestination.Rows))
 
 	assert.Equal(t, fmt.Sprint(qrSource.Rows), fmt.Sprint(qrDestination.Rows))
@@ -348,7 +348,7 @@ func assertShardDataEqual(t *testing.T, shardNum string, sourceTablet *cluster.V
 	// Make sure that there are no extra rows on the destination
 	countQuery := "select count(*) from worker_test"
 	qrDestinationCount, err := destinationTablet.VttabletProcess.QueryTablet(countQuery, keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, fmt.Sprintf("%d", len(qrDestination.Rows)), fmt.Sprintf("%s", qrDestinationCount.Rows[0][0].ToBytes()))
 
 }
@@ -363,7 +363,7 @@ func runSplitDiff(t *testing.T, keyspaceShard string) {
 		"SplitDiff",
 		"--min_healthy_rdonly_tablets", "1",
 		keyspaceShard)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 }
 
@@ -374,7 +374,7 @@ func pollForVars(t *testing.T, mssg string) {
 	var workerState string
 	for {
 		resultMap, err = localCluster.VtworkerProcess.GetVars()
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		workerState = fmt.Sprintf("%v", reflect.ValueOf(resultMap["WorkerState"]))
 		if strings.Contains(workerState, mssg) || (time.Now().After(startTime.Add(60 * time.Second))) {
 			break
@@ -396,7 +396,7 @@ func pollForVarsWorkerRetryCount(t *testing.T, count int) {
 		}
 		workerRetryCount := fmt.Sprintf("%v", reflect.ValueOf(resultMap["WorkerRetryCount"]))
 		workerRetryCountInt, err = strconv.Atoi(workerRetryCount)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		if workerRetryCountInt > count || (time.Now().After(startTime.Add(60 * time.Second))) {
 			break
 		}
@@ -476,11 +476,11 @@ func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttabl
 
 	for {
 		result, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", fmt.Sprintf("test_keyspace/%s", shardName))
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
 		var shardInfo topodatapb.Shard
 		err = json2.Unmarshal([]byte(result), &shardInfo)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
 		if int(shardInfo.MasterAlias.Uid) == tabletArr[0].TabletUID {
 			break
@@ -490,13 +490,13 @@ func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttabl
 	}
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_keyspace")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Enforce a health check instead of waiting for the next periodic one.
 	// (saves up to 1 second execution time on average)
 	for _, tablet := range []*cluster.Vttablet{tabletArr[1], tabletArr[2]} {
 		err = localCluster.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	// Wait for tablet state to change after starting all tablets. This allows
@@ -511,10 +511,10 @@ func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttabl
 
 	if createTable {
 		err = localCluster.VtctlclientProcess.ApplySchema(keyspaceName, vtWorkerTest)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
 		err = localCluster.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	return err
@@ -523,7 +523,7 @@ func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttabl
 func copySchemaToDestinationShard(t *testing.T) {
 	for _, keyspaceShard := range []string{"test_keyspace/-80", "test_keyspace/80-"} {
 		err := localCluster.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "--exclude_tables", "unrelated", "test_keyspace/0", keyspaceShard)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 }
 
@@ -574,7 +574,7 @@ func initializeCluster(t *testing.T, onlyTopo bool) (int, error) {
 	localCluster.VtTabletExtraArgs = append(localCluster.VtTabletExtraArgs, commonTabletArg...)
 
 	err = localCluster.LaunchCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd

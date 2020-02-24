@@ -195,15 +195,15 @@ func TestBackupTransformImpl(t *testing.T) {
 		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err := replica1.VttabletProcess.Setup()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// take backup, it should not give any error
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// insert data in master
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// validate backup_list, expecting 1 backup available
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
@@ -234,7 +234,7 @@ func TestBackupTransformImpl(t *testing.T) {
 	}
 
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	replica2.VttabletProcess.CreateDB(keyspaceName)
 	replica2.VttabletProcess.ExtraArgs = []string{
 		"-db-credentials-file", dbCredentialFile,
@@ -278,7 +278,7 @@ func TestBackupTransformErrorImpl(t *testing.T) {
 		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err = replica1.VttabletProcess.Setup()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// create backup, it should fail
 	out, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", replica1.Alias)
@@ -327,18 +327,18 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 // verifyReplicationStatus validates the replication status in tablet.
 func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
 	status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedStatus, status)
 	status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_slave_status", keyspaceName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedStatus, status)
 }
 
 // verifyInitialReplication creates schema in master, insert some data to master and verify the same data in replica
 func verifyInitialReplication(t *testing.T) {
 	_, err := master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 }

@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -137,10 +138,10 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 
 func TestRestart(t *testing.T) {
 	err := masterTablet.MysqlctldProcess.Stop()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	masterTablet.MysqlctldProcess.CleanupFiles(masterTablet.TabletUID)
 	err = masterTablet.MysqlctldProcess.Start()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestAutoDetect(t *testing.T) {
