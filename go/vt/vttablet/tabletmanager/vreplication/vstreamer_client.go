@@ -148,6 +148,17 @@ func NewMySQLVStreamerClient() *MySQLVStreamerClient {
 	return vsClient
 }
 
+func NewMySQLVStreamerClientWithConn(hostName string, user string, port int) *MySQLVStreamerClient {
+	vsClient := &MySQLVStreamerClient{
+		sourceConnParams: &mysql.ConnParams{
+			Host:  hostName,
+			Uname: user,
+			Port:  port,
+		},
+	}
+	return vsClient
+}
+
 // Open part of the VStreamerClient interface
 func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 	vsClient.mu.Lock()
@@ -162,9 +173,9 @@ func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 	vsClient.sourceSe = schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
 	vsClient.sourceSe.InitDBConfig(vsClient.sourceConnParams)
 	err = vsClient.sourceSe.Open()
-	if err != nil {
-		return err
-	}
+	//if err != nil {
+	//	return err
+	//}
 	return nil
 }
 

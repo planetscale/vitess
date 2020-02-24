@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -16,13 +18,11 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/binlog"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	_ "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	planbuilder "vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
@@ -31,7 +31,7 @@ var HeartbeatTime = 900 * time.Millisecond
 var vschemaUpdateCount sync2.AtomicInt64
 
 var (
-	ctx    context.Context
+	ctx    = context.Background()
 	cancel func()
 
 	cp             *mysql.ConnParams
@@ -58,18 +58,32 @@ func TestVstreamReplication(t *testing.T) {
 		Port:  11000,
 		Uname: "ripple",
 	}
-	conn, err := binlog.NewSlaveConnection(&vtParams)
+	pos, err := mysql.DecodePosition("MySQL56/75e11b14-524e-11ea-bbc4-40234316aeb5:1")
 	require.NoError(t, err)
-	defer conn.Close()
-
-	pos, err := mysql.DecodePosition("MySQL56/af78ec6e-4f29-11ea-b57f-40234316aeb5:1")
+	//conn, err := binlog.NewSlaveConnection(&vtParams)
+	//require.NoError(t, err)
+	//defer conn.Close()
+	vsClient := vreplication.NewMySQLVStreamerClientWithConn(vtParams.Host, vtParams.Host, vtParams.Port)
+	err = vsClient.Open(ctx)
 	require.NoError(t, err)
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
 
-	events, err := conn.StartBinlogDumpFromPosition(context.Background(), pos)
-	require.NoError(t, err)
+	_ = vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
+		println("%v", events)
+		return nil
+	})
 
-	assert.NotNil(t, events)
-	vstreamEvents(context.Background(), events)
+	//
+	//
+	//events, err := conn.StartBinlogDumpFromPosition(context.Background(), pos)
+	//require.NoError(t, err)
+	//
+	//assert.NotNil(t, events)
+	//vstreamEvents(context.Background(), events)
 }
 
 func vstreamEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {

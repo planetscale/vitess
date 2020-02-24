@@ -130,7 +130,8 @@ func (se *Engine) Open() error {
 
 	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
 	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table list: %v", err)
+		return nil
+		//return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table list: %v", err)
 	}
 
 	tables := make(map[string]*Table, len(tableData.Rows)+1)
@@ -324,7 +325,7 @@ func (se *Engine) LoadTableBasic(ctx context.Context, tableName string) (*Table,
 }
 
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
-	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
+	tm, err := conn.Exec(ctx, "SELECT UNIX_TIMESTAMP()", 1, false)
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get MySQL time: %v", err)
 	}
