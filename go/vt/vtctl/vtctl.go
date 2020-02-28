@@ -460,6 +460,9 @@ var commands = []commandGroup{
 				"Outputs a JSON structure that contains information about the ShardReplication."},
 		},
 	},
+	{
+		"Migrasion", []command{},
+	},
 }
 
 func init() {
