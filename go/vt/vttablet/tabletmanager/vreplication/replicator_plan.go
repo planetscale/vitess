@@ -213,6 +213,15 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	}
 	switch {
 	case !before && after:
+		// Ensure there is one and only one value in lastpk and pkrefs.
+		if tp.Lastpk != nil && len(tp.Lastpk.Fields) == 1 && len(tp.Lastpk.Rows) == 1 && len(tp.Lastpk.Rows[0]) == 1 && len(tp.PKReferences) == 1 {
+			rowVal, _ := sqltypes.BindVariableToValue(bindvars["a_"+tp.PKReferences[0]])
+			result, err := sqltypes.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0])
+			// If rowVal is > last pk, no need to send the insert.
+			if err == nil && result > 0 {
+				return nil, nil
+			}
+		}
 		return execParsedQuery(tp.Insert, bindvars, executor)
 	case before && !after:
 		if tp.Delete == nil {
