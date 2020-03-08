@@ -135,7 +135,7 @@ func (vtworker *VtworkerProcess) TearDown() error {
 		return err
 
 	case <-time.After(10 * time.Second):
-		vtworker.proc.Process.Kill()
+		vtworker.proc.Process.Signal(syscall.SIGABRT)
 		vtworker.proc = nil
 		return <-vtworker.exit
 	}

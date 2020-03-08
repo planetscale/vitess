@@ -31,6 +31,7 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -44,6 +45,7 @@ var (
 	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
 	topoFlavor = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
 	isCoverage = flag.Bool("is-coverage", false, "whether coverage is required")
+	abortMode  sync2.AtomicBool
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -156,6 +158,7 @@ func (cluster *LocalProcessCluster) CtrlCHandler() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	select {
 	case <-c:
+		abortMode.Set(true)
 		cluster.Teardown()
 		os.Exit(0)
 	case <-cluster.Done():

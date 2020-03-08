@@ -273,6 +273,13 @@ func (vttablet *VttabletProcess) TearDown() error {
 	if vttablet.proc == nil || vttablet.exit == nil {
 		return nil
 	}
+
+	if abortMode.Get() {
+		vttablet.proc.Process.Signal(syscall.SIGABRT)
+		vttablet.proc = nil
+		return <-vttablet.exit
+	}
+
 	// Attempt graceful shutdown with SIGTERM first
 	vttablet.proc.Process.Signal(syscall.SIGTERM)
 
@@ -282,7 +289,9 @@ func (vttablet *VttabletProcess) TearDown() error {
 		return nil
 
 	case <-time.After(10 * time.Second):
-		vttablet.proc.Process.Kill()
+		println("vttablet terminate is hung, aborting all processes.")
+		abortMode.Set(true)
+		vttablet.proc.Process.Signal(syscall.SIGABRT)
 		vttablet.proc = nil
 		return <-vttablet.exit
 	}

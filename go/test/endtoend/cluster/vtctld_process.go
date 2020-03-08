@@ -133,6 +133,12 @@ func (vtctld *VtctldProcess) TearDown() error {
 		return nil
 	}
 
+	if abortMode.Get() {
+		vtctld.proc.Process.Signal(syscall.SIGABRT)
+		vtctld.proc = nil
+		return <-vtctld.exit
+	}
+
 	// Attempt graceful shutdown with SIGTERM first
 	vtctld.proc.Process.Signal(syscall.SIGTERM)
 
@@ -142,7 +148,9 @@ func (vtctld *VtctldProcess) TearDown() error {
 		return err
 
 	case <-time.After(10 * time.Second):
-		vtctld.proc.Process.Kill()
+		println("vtctld terminate is hung, aborting all processes.")
+		abortMode.Set(true)
+		vtctld.proc.Process.Signal(syscall.SIGABRT)
 		vtctld.proc = nil
 		return <-vtctld.exit
 	}

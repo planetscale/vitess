@@ -104,6 +104,12 @@ func (vtbackup *VtbackupProcess) TearDown() error {
 		return nil
 	}
 
+	if abortMode.Get() {
+		vtbackup.proc.Process.Signal(syscall.SIGABRT)
+		vtbackup.proc = nil
+		return <-vtbackup.exit
+	}
+
 	// Attempt graceful shutdown with SIGTERM first
 	vtbackup.proc.Process.Signal(syscall.SIGTERM)
 
@@ -113,7 +119,9 @@ func (vtbackup *VtbackupProcess) TearDown() error {
 		return err
 
 	case <-time.After(10 * time.Second):
-		vtbackup.proc.Process.Kill()
+		println("vtbackup terminate is hung, aborting all processes.")
+		abortMode.Set(true)
+		vtbackup.proc.Process.Signal(syscall.SIGABRT)
 		vtbackup.proc = nil
 		return <-vtbackup.exit
 	}

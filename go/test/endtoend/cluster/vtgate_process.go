@@ -188,6 +188,12 @@ func (vtgate *VtgateProcess) TearDown() error {
 	if vtgate.proc == nil || vtgate.exit == nil {
 		return nil
 	}
+
+	if abortMode.Get() {
+		vtgate.proc.Process.Signal(syscall.SIGABRT)
+		vtgate.proc = nil
+		return <-vtgate.exit
+	}
 	// Attempt graceful shutdown with SIGTERM first
 	vtgate.proc.Process.Signal(syscall.SIGTERM)
 
@@ -197,7 +203,9 @@ func (vtgate *VtgateProcess) TearDown() error {
 		return err
 
 	case <-time.After(10 * time.Second):
-		vtgate.proc.Process.Kill()
+		println("vtgate terminate is hung, aborting all processes.")
+		abortMode.Set(true)
+		vtgate.proc.Process.Signal(syscall.SIGABRT)
 		vtgate.proc = nil
 		return <-vtgate.exit
 	}

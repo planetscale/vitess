@@ -218,6 +218,12 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 			return nil
 		}
 
+		if abortMode.Get() {
+			topo.proc.Process.Signal(syscall.SIGABRT)
+			topo.proc = nil
+			return <-topo.exit
+		}
+
 		topo.removeTopoDirectories(Cell)
 
 		// Attempt graceful shutdown with SIGTERM first
@@ -235,7 +241,9 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 			return nil
 
 		case <-time.After(10 * time.Second):
-			topo.proc.Process.Kill()
+			println("topo terminate is hung, aborting all processes.")
+			abortMode.Set(true)
+			topo.proc.Process.Signal(syscall.SIGABRT)
 			topo.proc = nil
 			return <-topo.exit
 		}
