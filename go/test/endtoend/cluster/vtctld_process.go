@@ -105,7 +105,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		}
 	}
 
-	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtctld.Name, <-vtctld.exit)
+	return fmt.Errorf("process '%s' timed out after 60s", vtctld.Name)
 }
 
 func createDirectory(dirName string, mode os.FileMode) error {

@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -75,7 +76,9 @@ func (vtworker *VtworkerProcess) Setup(cell string) (err error) {
 	}
 	vtworker.proc.Args = append(vtworker.proc.Args, vtworker.ExtraArgs...)
 
-	vtworker.proc.Stderr = os.Stderr
+	errFile, _ := os.Create(path.Join(vtworker.LogDir, "vtworker-stderr.txt"))
+	vtworker.proc.Stderr = errFile
+
 	vtworker.proc.Stdout = os.Stdout
 
 	vtworker.proc.Env = append(vtworker.proc.Env, os.Environ()...)

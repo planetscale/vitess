@@ -90,12 +90,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	log.Infof("%v", strings.Join(vtbackup.proc.Args, " "))
 	fmt.Println(vtbackup.proc.Args)
 
-	err = vtbackup.proc.Run()
-	if err != nil {
-		return
-	}
-
-	return nil
+	return vtbackup.proc.Run()
 }
 
 // TearDown shutdowns the running vtbackup process

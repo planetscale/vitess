@@ -120,7 +120,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		}
 	}
 
-	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtgate.Name, <-vtgate.exit)
+	return fmt.Errorf("process '%s' timed out after 60s", vtgate.Name)
 }
 
 // WaitForStatus function checks if vtgate process is up and running
