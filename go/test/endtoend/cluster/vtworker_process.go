@@ -129,6 +129,12 @@ func (vtworker *VtworkerProcess) TearDown() error {
 		return nil
 	}
 
+	if abortMode.Get() {
+		vtworker.proc.Process.Signal(syscall.SIGABRT)
+		vtworker.proc = nil
+		return <-vtworker.exit
+	}
+
 	// Attempt graceful shutdown with SIGTERM first
 	vtworker.proc.Process.Signal(syscall.SIGTERM)
 
