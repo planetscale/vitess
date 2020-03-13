@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	_ "vitess.io/vitess/go/vt/proto/binlogdata"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	_ "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	planbuilder "vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
@@ -54,16 +55,17 @@ type streamerPlan struct {
 
 func TestVstreamReplication(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host:  "127.0.0.1",
-		Port:  11000,
-		Uname: "ripple",
+		Host:   "127.0.0.1",
+		Port:   14200,
+		Uname:  "vt_dba",
+		DbName: "vt_ks",
 	}
-	pos, err := mysql.DecodePosition("MySQL56/75e11b14-524e-11ea-bbc4-40234316aeb5:1")
+	pos, err := mysql.DecodePosition("MySQL56/cb6a7266-6525-11ea-b181-40234316aeb5:1")
 	require.NoError(t, err)
 	//conn, err := binlog.NewSlaveConnection(&vtParams)
 	//require.NoError(t, err)
 	//defer conn.Close()
-	vsClient := vreplication.NewMySQLVStreamerClientWithConn(vtParams.Host, vtParams.Host, vtParams.Port)
+	vsClient := vreplication.NewMySQLVStreamerClientWithConn(vtParams.Host, vtParams.Uname, vtParams.Port, vtParams.DbName)
 	err = vsClient.Open(ctx)
 	require.NoError(t, err)
 	filter := &binlogdatapb.Filter{
@@ -73,7 +75,22 @@ func TestVstreamReplication(t *testing.T) {
 	}
 
 	_ = vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
-		println("%v", events)
+		for _, event := range events {
+			if event.Type == binlogdatapb.VEventType_DDL || event.Type == binlogdatapb.VEventType_INSERT ||
+				event.Type == binlogdatapb.VEventType_UPDATE || event.Type == binlogdatapb.VEventType_REPLACE ||
+				event.Type == binlogdatapb.VEventType_ROW {
+				println("----------------")
+				println(event.Gtid)
+				println(event.Dml)
+				println(event.Ddl)
+				if event.RowEvent != nil {
+					fmt.Printf("%v", event.RowEvent.RowChanges)
+				}
+
+				println("------------------")
+			}
+
+		}
 		return nil
 	})
 

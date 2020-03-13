@@ -148,12 +148,13 @@ func NewMySQLVStreamerClient() *MySQLVStreamerClient {
 	return vsClient
 }
 
-func NewMySQLVStreamerClientWithConn(hostName string, user string, port int) *MySQLVStreamerClient {
+func NewMySQLVStreamerClientWithConn(hostName string, user string, port int, dbName string) *MySQLVStreamerClient {
 	vsClient := &MySQLVStreamerClient{
 		sourceConnParams: &mysql.ConnParams{
-			Host:  hostName,
-			Uname: user,
-			Port:  port,
+			Host:   hostName,
+			Uname:  user,
+			Port:   port,
+			DbName: dbName,
 		},
 	}
 	return vsClient
