@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -61,6 +62,8 @@ func TestVstreamReplication(t *testing.T) {
 		DbName: "vt_ks",
 	}
 	pos, err := mysql.DecodePosition("MySQL56/cb6a7266-6525-11ea-b181-40234316aeb5:1")
+	stop_pos := "cb6a7266-6525-11ea-b181-40234316aeb5:1-8"
+	//stop_pos, err := mysql.DecodePosition("MySQL56/cb6a7266-6525-11ea-b181-40234316aeb5:1-8")
 	require.NoError(t, err)
 	//conn, err := binlog.NewSlaveConnection(&vtParams)
 	//require.NoError(t, err)
@@ -76,6 +79,10 @@ func TestVstreamReplication(t *testing.T) {
 
 	_ = vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 		for _, event := range events {
+			if strings.Contains(event.Gtid, stop_pos) {
+				println("Caught up till this position " + stop_pos)
+				os.Exit(0)
+			}
 			if event.Type == binlogdatapb.VEventType_DDL || event.Type == binlogdatapb.VEventType_INSERT ||
 				event.Type == binlogdatapb.VEventType_UPDATE || event.Type == binlogdatapb.VEventType_REPLACE ||
 				event.Type == binlogdatapb.VEventType_ROW {
