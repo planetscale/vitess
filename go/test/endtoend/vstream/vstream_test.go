@@ -47,6 +47,10 @@ var (
 	// format and pos are updated by parseEvent.
 	format mysql.BinlogFormat
 	pos    mysql.Position
+
+	binLogPosPrefix = "4c1446e6-676d-11ea-abbc-40234316aeb5"
+	startBinlogPos  = ":1"
+	stopBinlogPos   = ":1-8"
 )
 
 type streamerPlan struct {
@@ -61,13 +65,12 @@ func TestVstreamReplication(t *testing.T) {
 		Uname:  "vt_dba",
 		DbName: "vt_ks",
 	}
-	pos, err := mysql.DecodePosition("MySQL56/cb6a7266-6525-11ea-b181-40234316aeb5:1")
-	stop_pos := "cb6a7266-6525-11ea-b181-40234316aeb5:1-8"
-	//stop_pos, err := mysql.DecodePosition("MySQL56/cb6a7266-6525-11ea-b181-40234316aeb5:1-8")
+
+	pos, err := mysql.DecodePosition("MySQL56/" + binLogPosPrefix + startBinlogPos)
+	stop_pos := binLogPosPrefix + stopBinlogPos
+
 	require.NoError(t, err)
-	//conn, err := binlog.NewSlaveConnection(&vtParams)
-	//require.NoError(t, err)
-	//defer conn.Close()
+
 	vsClient := vreplication.NewMySQLVStreamerClientWithConn(vtParams.Host, vtParams.Uname, vtParams.Port, vtParams.DbName)
 	err = vsClient.Open(ctx)
 	require.NoError(t, err)
@@ -86,15 +89,20 @@ func TestVstreamReplication(t *testing.T) {
 			if event.Type == binlogdatapb.VEventType_DDL || event.Type == binlogdatapb.VEventType_INSERT ||
 				event.Type == binlogdatapb.VEventType_UPDATE || event.Type == binlogdatapb.VEventType_REPLACE ||
 				event.Type == binlogdatapb.VEventType_ROW {
-				println("----------------")
-				println(event.Gtid)
-				println(event.Dml)
-				println(event.Ddl)
+
+				if event.Ddl != "" {
+					println(event.Ddl)
+				}
 				if event.RowEvent != nil {
-					fmt.Printf("%v", event.RowEvent.RowChanges)
+					println("----------------")
+					println(event.Gtid)
+					fmt.Printf("Table %s: Before: %v, After: %v",
+						event.RowEvent.TableName,
+						event.RowEvent.RowChanges[0].Before,
+						event.RowEvent.RowChanges[0].After)
+					println("------------------")
 				}
 
-				println("------------------")
 			}
 
 		}
