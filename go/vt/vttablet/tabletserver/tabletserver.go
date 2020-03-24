@@ -1735,6 +1735,10 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 		RealtimeStats:                       stats,
 	}
 
+	if tabletenv.TabletLabel != nil {
+		println("tablet label is " + *tabletenv.TabletLabel)
+		shr.Label = *tabletenv.TabletLabel
+	}
 	tsv.streamHealthMutex.Lock()
 	defer tsv.streamHealthMutex.Unlock()
 	for _, c := range tsv.streamHealthMap {

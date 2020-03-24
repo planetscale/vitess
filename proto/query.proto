@@ -36,6 +36,7 @@ message Target {
   // cell is used for routing queries between vtgate and vttablets. It
   // is not used when Target is part of the Session sent by the client.
   string cell = 4;
+  string label = 5;
 }
 
 // VTGateCallerID is sent by VTGate to VTTablet to describe the
@@ -797,6 +798,10 @@ message StreamHealthResponse {
   // hasn't changed in the meantime e.g. due to tablet restarts where ports or
   // ips have been reused but assigned differently.
   topodata.TabletAlias tablet_alias = 5;
+
+  // label tags a tablet with a value
+  // that can be used while querying from vtgate
+  string Label = 7;
 }
 
 // TransactionState represents the state of a distributed transaction.

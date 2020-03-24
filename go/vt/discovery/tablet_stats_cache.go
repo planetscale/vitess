@@ -50,6 +50,9 @@ type TabletStatsCache struct {
 	mu sync.RWMutex
 	// entries maps from keyspace/shard/tabletType to our cache.
 	entries map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry
+
+	// entries maps from keyspace/shard/label to our cache.
+	entriesWithLabel map[string]map[string]map[string]*tabletStatsCacheEntry
 	// tsm is a helper to broadcast aggregate stats.
 	tsm srvtopo.TargetStatsMultiplexer
 	// cellAliases is a cache of cell aliases
@@ -125,11 +128,12 @@ func NewTabletStatsCacheDoNotSetListener(ts *topo.Server, cell string) *TabletSt
 
 func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListener bool) *TabletStatsCache {
 	tc := &TabletStatsCache{
-		cell:        cell,
-		ts:          ts,
-		entries:     make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
-		tsm:         srvtopo.NewTargetStatsMultiplexer(),
-		cellAliases: make(map[string]string),
+		cell:             cell,
+		ts:               ts,
+		entries:          make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
+		entriesWithLabel: make(map[string]map[string]map[string]*tabletStatsCacheEntry),
+		tsm:              srvtopo.NewTargetStatsMultiplexer(),
+		cellAliases:      make(map[string]string),
 	}
 
 	if setListener {
@@ -142,13 +146,23 @@ func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListen
 
 // getEntry returns an existing tabletStatsCacheEntry in the cache, or nil
 // if the entry does not exist. It only takes a Read lock on mu.
-func (tc *TabletStatsCache) getEntry(keyspace, shard string, tabletType topodatapb.TabletType) *tabletStatsCacheEntry {
+func (tc *TabletStatsCache) getEntry(target *querypb.Target) *tabletStatsCacheEntry {
 	tc.mu.RLock()
 	defer tc.mu.RUnlock()
 
-	if s, ok := tc.entries[keyspace]; ok {
-		if t, ok := s[shard]; ok {
-			if e, ok := t[tabletType]; ok {
+	if target.Label != "" {
+		log.Errorf("fetching tablet with label %s", target.Label)
+		if s, ok := tc.entriesWithLabel[target.Keyspace]; ok {
+			if t, ok := s[target.Shard]; ok {
+				if e, ok := t[target.Label]; ok {
+					return e
+				}
+			}
+		}
+	}
+	if s, ok := tc.entries[target.Keyspace]; ok {
+		if t, ok := s[target.Shard]; ok {
+			if e, ok := t[target.TabletType]; ok {
 				return e
 			}
 		}
@@ -160,23 +174,34 @@ func (tc *TabletStatsCache) getEntry(keyspace, shard string, tabletType topodata
 // or creates it if it doesn't exist.
 func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStatsCacheEntry {
 	// Fast path (most common path too): Read-lock, return the entry.
-	if e := tc.getEntry(target.Keyspace, target.Shard, target.TabletType); e != nil {
+	if e := tc.getEntry(target); e != nil {
 		return e
 	}
 
 	// Slow path: Lock, will probably have to add the entry at some level.
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
+	var s1 map[string]map[string]*tabletStatsCacheEntry
+	var t1 map[string]*tabletStatsCacheEntry
 
 	s, ok := tc.entries[target.Keyspace]
 	if !ok {
 		s = make(map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry)
 		tc.entries[target.Keyspace] = s
+		if target.Label != "" {
+			s1 = make(map[string]map[string]*tabletStatsCacheEntry)
+			log.Errorf("Create entry for label %s", target.Label)
+			tc.entriesWithLabel[target.Keyspace] = s1
+		}
 	}
 	t, ok := s[target.Shard]
 	if !ok {
 		t = make(map[topodatapb.TabletType]*tabletStatsCacheEntry)
 		s[target.Shard] = t
+		if target.Label != "" {
+			t1 = make(map[string]*tabletStatsCacheEntry)
+			s1[target.Shard] = t1
+		}
 	}
 	e, ok := t[target.TabletType]
 	if !ok {
@@ -184,6 +209,9 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 			all: make(map[string]*TabletStats),
 		}
 		t[target.TabletType] = e
+		if target.Label != "" {
+			t1[target.Label] = e
+		}
 	}
 	return e
 }
@@ -270,7 +298,7 @@ func (tc *TabletStatsCache) StatsUpdate(ts *TabletStats) {
 // GetTabletStats returns the full list of available targets.
 // The returned array is owned by the caller.
 func (tc *TabletStatsCache) GetTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []TabletStats {
-	e := tc.getEntry(keyspace, shard, tabletType)
+	e := tc.getEntry(&querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: tabletType})
 	if e == nil {
 		return nil
 	}
@@ -288,8 +316,8 @@ func (tc *TabletStatsCache) GetTabletStats(keyspace, shard string, tabletType to
 // The returned array is owned by the caller.
 // For TabletType_MASTER, this will only return at most one entry,
 // the most recent tablet of type master.
-func (tc *TabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tabletType topodatapb.TabletType) []TabletStats {
-	e := tc.getEntry(keyspace, shard, tabletType)
+func (tc *TabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tabletType topodatapb.TabletType, label string) []TabletStats {
+	e := tc.getEntry(&querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: tabletType, Label: label})
 	if e == nil {
 		return nil
 	}

@@ -147,7 +147,7 @@ func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 }
 
 func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}}, "")
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateUnsharded")
 	}
@@ -241,7 +241,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 }
 
 func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
+	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest}, "")
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateByDestination")
 	}

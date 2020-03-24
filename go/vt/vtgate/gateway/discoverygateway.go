@@ -232,7 +232,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	invalidTablets := make(map[string]bool)
-
+	log.Errorf("Tablet label passed as %s", target.Label)
 	if len(allowedTabletTypes) > 0 {
 		var match bool
 		for _, allowed := range allowedTabletTypes {
@@ -274,7 +274,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 			}
 		}
 
-		tablets := dg.tsc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType)
+		tablets := dg.tsc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType, target.Label)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
 			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")
@@ -300,6 +300,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 
 		// execute
 		tabletLastUsed = ts.Tablet
+		log.Errorf("Currently used tablet: Key: %s, Alias: %s", ts.Key, ts.Tablet.Alias)
 		conn := dg.hc.GetConnection(ts.Key)
 		if conn == nil {
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for key %v tablet %+v", ts.Key, ts.Tablet)

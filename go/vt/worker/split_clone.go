@@ -849,7 +849,7 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 		if err != nil {
 			return vterrors.Wrapf(err, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v)", si.Keyspace(), si.ShardName(), scw.cell)
 		}
-		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
+		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER, "")
 		if len(masters) == 0 {
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
 		}
@@ -900,7 +900,7 @@ func (scw *SplitCloneWorker) findFirstSourceTablet(ctx context.Context, state St
 
 	// Pick any healthy serving source tablet.
 	si := scw.sourceShards[0]
-	tablets := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), scw.tabletType)
+	tablets := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), scw.tabletType, "")
 	if len(tablets) == 0 {
 		// We fail fast on this problem and don't retry because at the start all tablets should be healthy.
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no healthy %v tablet in source shard (%v) available (required to find out the schema)", topodatapb.TabletType_name[int32(scw.tabletType)], topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))

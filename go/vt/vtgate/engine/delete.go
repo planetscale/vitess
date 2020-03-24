@@ -139,7 +139,7 @@ func (del *Delete) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 }
 
 func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}}, "")
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteUnsharded")
 	}
@@ -214,7 +214,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 }
 
 func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
+	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest}, "")
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteScatter")
 	}

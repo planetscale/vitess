@@ -83,8 +83,9 @@ func (res *Resolver) Execute(
 	options *querypb.ExecuteOptions,
 	logStats *LogStats,
 	canAutocommit bool,
+	label string,
 ) (*sqltypes.Result, error) {
-	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
+	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination, label)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +108,7 @@ func (res *Resolver) Execute(
 			autocommit,
 		)
 		if isRetryableError(err) {
-			newRss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
+			newRss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination, label)
 			if err != nil {
 				return nil, err
 			}
@@ -155,7 +156,7 @@ func (res *Resolver) ExecuteEntityIds(
 		keyspace,
 		tabletType,
 		ids,
-		destinations)
+		destinations, "")
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +177,7 @@ func (res *Resolver) ExecuteEntityIds(
 				keyspace,
 				tabletType,
 				ids,
-				destinations)
+				destinations, "")
 			if err != nil {
 				return nil, err
 			}
@@ -254,7 +255,7 @@ func (res *Resolver) StreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) error {
-	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
+	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination, "")
 	if err != nil {
 		return err
 	}
@@ -282,7 +283,7 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 		// the message streams.
 		destination = key.DestinationExactKeyRange{KeyRange: keyRange}
 	}
-	rss, err := res.resolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, destination)
+	rss, err := res.resolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, destination, "")
 	if err != nil {
 		return err
 	}
@@ -298,7 +299,7 @@ func (res *Resolver) MessageAckKeyspaceIds(ctx context.Context, keyspace, name s
 		ksids[i] = key.DestinationKeyspaceID(iki.KeyspaceId)
 	}
 
-	rss, values, err := res.resolver.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_MASTER, ids, ksids)
+	rss, values, err := res.resolver.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_MASTER, ids, ksids, "")
 	if err != nil {
 		return 0, err
 	}

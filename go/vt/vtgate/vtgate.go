@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"golang.org/x/net/context"
@@ -259,7 +260,9 @@ func (vtg *VTGate) Gateway() gateway.Gateway {
 // Execute executes a non-streaming query. This is a V3 function.
 func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	// In this context, we don't care if we can't fully parse destination
-	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+	destKeyspace, destTabletType, _, label, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+
+	log.Errorf("vtgate.go: label : %v, target : %v", label, session.TargetString)
 	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
@@ -281,13 +284,14 @@ handleError:
 		"Session":       session,
 	}
 	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
+	log.Error(string(debug.Stack()))
 	return session, nil, err
 }
 
 // ExecuteBatch executes a batch of queries. This is a V3 function.
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	// In this context, we don't care if we can't fully parse destination
-	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"ExecuteBatch", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
@@ -316,7 +320,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 // by multiple go routines.
 func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	// In this context, we don't care if we can't fully parse destination
-	destKeyspace, destTabletType, dest, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+	destKeyspace, destTabletType, dest, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 
 	defer vtg.timings.Record(statsKey, time.Now())
@@ -401,6 +405,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		options,
 		nil,
 		false, /* autocommit */
+		"",
 	)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
@@ -443,7 +448,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 		goto handleError
 	}
 
-	qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, keyspace, tabletType, key.DestinationKeyspaceIDs(keyspaceIds), NewSafeSession(session), notInTransaction, options, nil /* LogStats */, false /* autocommit */)
+	qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, keyspace, tabletType, key.DestinationKeyspaceIDs(keyspaceIds), NewSafeSession(session), notInTransaction, options, nil /* LogStats */, false /* autocommit */, "")
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return qr, nil
@@ -481,7 +486,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 
 	sql = sqlannotation.AnnotateIfDML(sql, nil)
 
-	qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, keyspace, tabletType, key.DestinationKeyRanges(keyRanges), NewSafeSession(session), notInTransaction, options, nil /* LogStats */, false /* autocommit */)
+	qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, keyspace, tabletType, key.DestinationKeyRanges(keyRanges), NewSafeSession(session), notInTransaction, options, nil /* LogStats */, false /* autocommit */, "")
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return qr, nil
@@ -819,7 +824,7 @@ func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
 // Prepare supports non-streaming prepare statement query with multi shards
 func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
 	// In this context, we don't care if we can't fully parse destination
-	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 

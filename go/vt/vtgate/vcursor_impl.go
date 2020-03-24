@@ -48,10 +48,15 @@ type vcursorImpl struct {
 	marginComments sqlparser.MarginComments
 	executor       *Executor
 	logStats       *LogStats
+	label          string
 	// hasPartialDML is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
 	hasPartialDML bool
+}
+
+func (vc *vcursorImpl) GetLabel() string {
+	return vc.label
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -95,7 +100,7 @@ func (vc *vcursorImpl) RecordWarning(warning *querypb.QueryWarning) {
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
 func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, dest, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, "", destTabletType, nil, err
 	}
@@ -111,7 +116,7 @@ func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 
 // FindTablesOrVindex finds the specified table or vindex.
 func (vc *vcursorImpl) FindTablesOrVindex(name sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, dest, _, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
@@ -202,7 +207,7 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedS
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, 1)
-	rss, _, err := vc.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationKeyspaceID(ksid)})
+	rss, _, err := vc.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationKeyspaceID(ksid)}, "")
 	if err != nil {
 		return nil, err
 	}
@@ -221,8 +226,8 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 	return nil, errs[0]
 }
 
-func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
-	return vc.executor.resolver.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations)
+func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination, label string) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	return vc.executor.resolver.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations, label)
 }
 
 func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {

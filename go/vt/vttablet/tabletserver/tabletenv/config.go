@@ -33,7 +33,7 @@ import (
 var (
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
-
+	TabletLabel     = flag.String("label", "", "tablet label")
 	// TxLogger can be used to enable logging of transactions.
 	// Call TxLogger.ServeLogs in your main program to enable logging.
 	// The log format can be inferred by looking at TxConnection.Format.

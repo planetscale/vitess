@@ -328,7 +328,7 @@ func boundShardQueriesToScatterBatchRequest(ctx context.Context, resolver *srvto
 		requests: make(map[string]*shardBatchRequest),
 	}
 	for i, boundQuery := range boundQueries {
-		rss, err := resolver.ResolveDestination(ctx, boundQuery.Keyspace, tabletType, key.DestinationShards(boundQuery.Shards))
+		rss, err := resolver.ResolveDestination(ctx, boundQuery.Keyspace, tabletType, key.DestinationShards(boundQuery.Shards), "")
 		if err != nil {
 			return nil, err
 		}
@@ -355,7 +355,7 @@ func boundKeyspaceIDQueriesToScatterBatchRequest(ctx context.Context, resolver *
 		requests: make(map[string]*shardBatchRequest),
 	}
 	for i, boundQuery := range boundQueries {
-		rss, err := resolver.ResolveDestination(ctx, boundQuery.Keyspace, tabletType, key.DestinationKeyspaceIDs(boundQuery.KeyspaceIds))
+		rss, err := resolver.ResolveDestination(ctx, boundQuery.Keyspace, tabletType, key.DestinationKeyspaceIDs(boundQuery.KeyspaceIds), "")
 		if err != nil {
 			return nil, err
 		}

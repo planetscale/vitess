@@ -29,8 +29,10 @@ tablet_hostname=''
 printf -v tablet_logfile 'vttablet_%010d_querylog.txt' $uid
 
 tablet_type=replica
+tablet_label="L1"
 if [[ "${uid: -1}" -gt 1 ]]; then
  tablet_type=rdonly
+ tablet_label="L2"
 fi
 
 echo "Starting vttablet for $alias..."
@@ -51,6 +53,7 @@ vttablet \
  -file_backup_storage_root $VTDATAROOT/backups \
  -restore_from_backup \
  -port $port \
+ -label $tablet_label \
  -grpc_port $grpc_port \
  -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
  -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \

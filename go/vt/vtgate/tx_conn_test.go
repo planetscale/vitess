@@ -940,15 +940,15 @@ func newTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *s
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_MASTER, true, 1, nil)
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	var err error
-	rss0, err = res.ResolveDestination(context.Background(), name, topodatapb.TabletType_MASTER, key.DestinationShard("0"))
+	rss0, err = res.ResolveDestination(context.Background(), name, topodatapb.TabletType_MASTER, key.DestinationShard("0"), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(0) failed: %v", err)
 	}
-	rss1, err = res.ResolveDestination(context.Background(), name, topodatapb.TabletType_MASTER, key.DestinationShard("1"))
+	rss1, err = res.ResolveDestination(context.Background(), name, topodatapb.TabletType_MASTER, key.DestinationShard("1"), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(1) failed: %v", err)
 	}
-	rss01, err = res.ResolveDestination(context.Background(), name, topodatapb.TabletType_MASTER, key.DestinationShards([]string{"0", "1"}))
+	rss01, err = res.ResolveDestination(context.Background(), name, topodatapb.TabletType_MASTER, key.DestinationShards([]string{"0", "1"}), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(0, 1) failed: %v", err)
 	}

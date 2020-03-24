@@ -188,7 +188,7 @@ func TestResolveDestinations(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		ctx := context.Background()
-		rss, values, err := resolver.ResolveDestinations(ctx, testCase.keyspace, topodatapb.TabletType_REPLICA, testCase.ids, testCase.destinations)
+		rss, values, err := resolver.ResolveDestinations(ctx, testCase.keyspace, topodatapb.TabletType_REPLICA, testCase.ids, testCase.destinations, "")
 		if err != nil {
 			if testCase.errString == "" {
 				t.Errorf("%v: expected success but got error: %v", testCase.name, err)

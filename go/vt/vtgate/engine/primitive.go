@@ -70,7 +70,9 @@ type VCursor interface {
 
 	// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
 	// Will replace all of the Topo functions.
-	ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
+	ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination, label string) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
+
+	GetLabel() string
 }
 
 // Plan represents the execution strategy for a given query.

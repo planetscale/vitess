@@ -354,7 +354,7 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 
 // GetFields fetches the field info.
 func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}}, "")
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +370,7 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}}, "")
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsAllShards")
 	}
@@ -382,7 +382,7 @@ func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*queryp
 }
 
 func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}}, vcursor.GetLabel())
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsAnyShard")
 	}
@@ -435,7 +435,7 @@ func resolveShards(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vind
 	}
 
 	// And use the Resolver to map to ResolvedShards.
-	return vcursor.ResolveDestinations(keyspace.Name, ids, destinations)
+	return vcursor.ResolveDestinations(keyspace.Name, ids, destinations, "")
 }
 
 func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
@@ -493,7 +493,7 @@ func resolveSingleShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace 
 	default:
 		return nil, nil, fmt.Errorf("cannot map vindex to unique keyspace id: %v", destinations[0])
 	}
-	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, destinations)
+	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, destinations, "")
 	if err != nil {
 		return nil, nil, err
 	}

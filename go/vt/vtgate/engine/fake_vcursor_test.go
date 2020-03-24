@@ -43,6 +43,10 @@ var testMaxMemoryRows = 100
 type noopVCursor struct {
 }
 
+func (t noopVCursor) GetLabel() string {
+	panic("implement me")
+}
+
 func (t noopVCursor) Context() context.Context {
 	return context.Background()
 }
@@ -82,7 +86,7 @@ func (t noopVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query strin
 	panic("unimplemented")
 }
 
-func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination, label string) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	panic("unimplemented")
 }
 
@@ -107,6 +111,10 @@ type loggingVCursor struct {
 	multiShardErrs []error
 
 	log []string
+}
+
+func (f *loggingVCursor) GetLabel() string {
+	return ""
 }
 
 func (f *loggingVCursor) Context() context.Context {
@@ -165,7 +173,7 @@ func (f *loggingVCursor) StreamExecuteMulti(query string, rss []*srvtopo.Resolve
 	return callback(r)
 }
 
-func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination, label string) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	f.log = append(f.log, fmt.Sprintf("ResolveDestinations %v %v %v", keyspace, ids, key.DestinationsString(destinations)))
 	if f.shardErr != nil {
 		return nil, nil, f.shardErr

@@ -170,7 +170,8 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		}
 	}
 
-	destKeyspace, destTabletType, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
+	destKeyspace, destTabletType, dest, label, err := e.ParseDestinationTarget(safeSession.TargetString)
+	log.Infof("routing query to label %s, target string %s", label, safeSession.TargetString)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +199,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 
 	switch stmtType {
 	case sqlparser.StmtSelect:
-		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType)
+		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType, label)
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		safeSession := safeSession
 
@@ -223,7 +224,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		// at the beginning, but never after.
 		safeSession.SetAutocommittable(mustCommit)
 
-		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType)
+		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType, label)
 		if err != nil {
 			return nil, err
 		}
@@ -258,7 +259,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats, stmtType sqlparser.StatementType) (*sqltypes.Result, error) {
+func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats, stmtType sqlparser.StatementType, label string) (*sqltypes.Result, error) {
 	if dest != nil {
 		if destKeyspace == "" {
 			return nil, errNoKeyspace
@@ -288,7 +289,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 			normalized := sqlparser.String(rewriteResult.AST)
 			sql = comments.Leading + normalized + comments.Trailing
 			if rewriteResult.NeedDatabase {
-				keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
+				keyspace, _, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
 				if keyspace == "" {
 					bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
 				} else {
@@ -302,7 +303,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		logStats.PlanTime = execStart.Sub(logStats.StartTime)
 		logStats.SQL = sql
 		logStats.BindVariables = bindVars
-		result, err := e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, false /* notInTransaction */, safeSession.Options, logStats, true /* canAutocommit */)
+		result, err := e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, false /* notInTransaction */, safeSession.Options, logStats, true /* canAutocommit */, label)
 		logStats.ExecuteTime = time.Since(execStart)
 		e.updateQueryCounts("ShardDirect", "", "", int64(logStats.ShardQueries))
 		return result, err
@@ -311,6 +312,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor := newVCursorImpl(ctx, safeSession, destKeyspace, destTabletType, comments, e, logStats)
+	vcursor.label = label
 	plan, err := e.getPlan(
 		vcursor,
 		query,
@@ -332,7 +334,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
 	}
 	if bindVarNeeds.NeedDatabase {
-		keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
+		keyspace, _, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
 		if keyspace == "" {
 			bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
 		} else {
@@ -342,7 +344,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	if bindVarNeeds.NeedFoundRows {
 		bindVars[sqlparser.FoundRowsName] = sqltypes.Uint64BindVariable(safeSession.FoundRows)
 	}
-
+	log.Errorf("In vtgate/executer.go, going for route.go, label %s", label)
 	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
 	logStats.ExecuteTime = time.Since(execStart)
 
@@ -371,7 +373,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 }
 
 func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
-	return e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, false /* notInTransaction */, safeSession.Options, logStats, false /* canAutocommit */)
+	return e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, false /* notInTransaction */, safeSession.Options, logStats, false /* canAutocommit */, "")
 }
 
 func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
@@ -1117,7 +1119,7 @@ func (e *Executor) handleUse(ctx context.Context, safeSession *SafeSession, sql 
 		// This code is unreachable.
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized USE statement: %v", sql)
 	}
-	destKeyspace, destTabletType, _, err := e.ParseDestinationTarget(use.DBName.String())
+	destKeyspace, destTabletType, _, _, err := e.ParseDestinationTarget(use.DBName.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1138,7 +1140,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	}
 	if dest == nil {
 		// shardExec will re-resolve this a bit later.
-		rss, err := e.resolver.resolver.ResolveDestination(ctx, destKeyspace, destTabletType, key.DestinationAnyShard{})
+		rss, err := e.resolver.resolver.ResolveDestination(ctx, destKeyspace, destTabletType, key.DestinationAnyShard{}, "")
 		if err != nil {
 			return nil, err
 		}
@@ -1334,14 +1336,14 @@ func (e *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []
 		if err != nil {
 			return 0, err
 		}
-		rss, rssValues, err = e.resolver.resolver.ResolveDestinations(ctx, table.Keyspace.Name, topodatapb.TabletType_MASTER, ids, destinations)
+		rss, rssValues, err = e.resolver.resolver.ResolveDestinations(ctx, table.Keyspace.Name, topodatapb.TabletType_MASTER, ids, destinations, "")
 		if err != nil {
 			return 0, err
 		}
 	} else {
 		// All ids go into the first shard, so we only resolve
 		// one destination, and put all IDs in there.
-		rss, err = e.resolver.resolver.ResolveDestination(ctx, table.Keyspace.Name, topodatapb.TabletType_MASTER, key.DestinationAnyShard{})
+		rss, err = e.resolver.resolver.ResolveDestination(ctx, table.Keyspace.Name, topodatapb.TabletType_MASTER, key.DestinationAnyShard{}, "")
 		if err != nil {
 			return 0, err
 		}
@@ -1386,15 +1388,15 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := topoproto.ParseDestination(targetString, defaultTabletType)
+func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, string, error) {
+	destKeyspace, destTabletType, dest, label, err := topoproto.ParseDestination(targetString, defaultTabletType)
 	// Set default keyspace
 	if destKeyspace == "" && len(e.VSchema().Keyspaces) == 1 {
 		for k := range e.VSchema().Keyspaces {
 			destKeyspace = k
 		}
 	}
-	return destKeyspace, destTabletType, dest, err
+	return destKeyspace, destTabletType, dest, label, err
 }
 
 // getPlan computes the plan for the given query. If one is in
@@ -1654,7 +1656,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 		}
 	}
 
-	destKeyspace, destTabletType, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
+	destKeyspace, destTabletType, dest, _, err := e.ParseDestinationTarget(safeSession.TargetString)
 	if err != nil {
 		return nil, err
 	}

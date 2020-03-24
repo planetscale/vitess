@@ -29,16 +29,18 @@ import (
 
 // ParseDestination parses the string representation of a Destination
 // of the form keyspace:shard@tablet_type. You can use a / instead of a :.
-func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (string, topodatapb.TabletType, key.Destination, error) {
+func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (string, topodatapb.TabletType, key.Destination, string, error) {
 	var dest key.Destination
 	var keyspace string
+	var label string
 	tabletType := defaultTabletType
 
 	last := strings.LastIndexAny(targetString, "@")
 	if last != -1 {
 		// No need to check the error. UNKNOWN will be returned on
 		// error and it will fail downstream.
-		tabletType, _ = ParseTabletType(targetString[last+1:])
+		label = targetString[last+1:]
+		tabletType, _ = ParseTabletType(label)
 		targetString = targetString[:last]
 	}
 	last = strings.LastIndexAny(targetString, "/:")
@@ -51,29 +53,29 @@ func ParseDestination(targetString string, defaultTabletType topodatapb.TabletTy
 	if last != -1 {
 		rangeEnd := strings.LastIndexAny(targetString, "]")
 		if rangeEnd == -1 {
-			return keyspace, tabletType, dest, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid key range provided. Couldn't find range end ']'")
+			return keyspace, tabletType, dest, label, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid key range provided. Couldn't find range end ']'")
 		}
 		rangeString := targetString[last+1 : rangeEnd]
 		if strings.Contains(rangeString, "-") {
 			// Parse as range
 			keyRange, err := key.ParseShardingSpec(rangeString)
 			if err != nil {
-				return keyspace, tabletType, dest, err
+				return keyspace, tabletType, dest, label, err
 			}
 			if len(keyRange) != 1 {
-				return keyspace, tabletType, dest, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "single keyrange expected in %s", rangeString)
+				return keyspace, tabletType, dest, label, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "single keyrange expected in %s", rangeString)
 			}
 			dest = key.DestinationExactKeyRange{KeyRange: keyRange[0]}
 		} else {
 			// Parse as keyspace id
 			destBytes, err := hex.DecodeString(rangeString)
 			if err != nil {
-				return keyspace, tabletType, dest, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected valid hex in keyspace id %s", rangeString)
+				return keyspace, tabletType, dest, label, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected valid hex in keyspace id %s", rangeString)
 			}
 			dest = key.DestinationKeyspaceID(destBytes)
 		}
 		targetString = targetString[:last]
 	}
 	keyspace = targetString
-	return keyspace, tabletType, dest, nil
+	return keyspace, tabletType, dest, label, nil
 }

@@ -19,6 +19,8 @@ package srvtopo
 import (
 	"sort"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/key"
@@ -112,36 +114,6 @@ func (r *Resolver) GetKeyspaceShards(ctx context.Context, keyspace string, table
 	return keyspace, srvKeyspace, partition.ShardReferences, nil
 }
 
-// GetAllShards returns the list of ResolvedShards associated with all
-// the shards in a keyspace.
-// FIXME(alainjobart) callers should convert to ResolveDestination(),
-// and GetSrvKeyspace.
-func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) ([]*ResolvedShard, *topodatapb.SrvKeyspace, error) {
-	keyspace, srvKeyspace, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	res := make([]*ResolvedShard, len(allShards))
-	for i, shard := range allShards {
-		target := &querypb.Target{
-			Keyspace:   keyspace,
-			Shard:      shard.Name,
-			TabletType: tabletType,
-			Cell:       r.localCell,
-		}
-		// Right now we always set the Cell to ""
-		// Later we can fallback to another cell if needed.
-		// We would then need to read the SrvKeyspace there too.
-		target.Cell = ""
-		res[i] = &ResolvedShard{
-			Target:       target,
-			QueryService: r.queryService,
-		}
-	}
-	return res, srvKeyspace, nil
-}
-
 // GetAllKeyspaces returns all the known keyspaces in the local cell.
 func (r *Resolver) GetAllKeyspaces(ctx context.Context) ([]string, error) {
 	keyspaces, err := r.topoServ.GetSrvKeyspaceNames(ctx, r.localCell)
@@ -169,7 +141,12 @@ func (r *Resolver) GetAllKeyspaces(ctx context.Context) ([]string, error) {
 // If dst1 is in shard1, and dst2 and dst3 are in shard2, the output will be:
 // - []*ResolvedShard:   shard1, shard2
 // - [][]*querypb.Value: [id1],  [id2, id3]
-func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids []*querypb.Value, destinations []key.Destination) ([]*ResolvedShard, [][]*querypb.Value, error) {
+func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids []*querypb.Value, destinations []key.Destination, label string) ([]*ResolvedShard, [][]*querypb.Value, error) {
+	log.Errorf("Resolved invoked with label %s, and tablet type %v", label, tabletType)
+	if label != "" {
+		log.Error("setting the tablet type")
+		tabletType = topodatapb.TabletType_MASTER
+	}
 	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
 	if err != nil {
 		return nil, nil, err
@@ -187,6 +164,7 @@ func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tab
 					Shard:      shard,
 					TabletType: tabletType,
 					Cell:       r.localCell,
+					Label:      label,
 				}
 				// Right now we always set the Cell to ""
 				// Later we can fallback to another cell if needed.
@@ -215,8 +193,8 @@ func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tab
 
 // ResolveDestination is a shortcut to ResolveDestinations with only
 // one Destination, and no ids.
-func (r *Resolver) ResolveDestination(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, destination key.Destination) ([]*ResolvedShard, error) {
-	rss, _, err := r.ResolveDestinations(ctx, keyspace, tabletType, nil, []key.Destination{destination})
+func (r *Resolver) ResolveDestination(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, destination key.Destination, label string) ([]*ResolvedShard, error) {
+	rss, _, err := r.ResolveDestinations(ctx, keyspace, tabletType, nil, []key.Destination{destination}, label)
 	return rss, err
 }
 

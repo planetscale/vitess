@@ -64,7 +64,7 @@ func (tc *TabletStatsCache) waitForTablets(ctx context.Context, targets []*query
 
 			var stats []TabletStats
 			if requireServing {
-				stats = tc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType)
+				stats = tc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType, target.Label)
 			} else {
 				stats = tc.GetTabletStats(target.Keyspace, target.Shard, target.TabletType)
 			}

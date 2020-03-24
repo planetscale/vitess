@@ -80,7 +80,7 @@ func TestTabletStatsCache(t *testing.T) {
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA, "")
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
@@ -101,7 +101,7 @@ func TestTabletStatsCache(t *testing.T) {
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA, "")
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
@@ -122,7 +122,7 @@ func TestTabletStatsCache(t *testing.T) {
 	if len(a) != 1 || !notHealthyTs1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA, "")
 	if len(a) != 1 || !notHealthyTs1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
@@ -151,7 +151,7 @@ func TestTabletStatsCache(t *testing.T) {
 			t.Errorf("unexpected result: %v", a)
 		}
 	}
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA, "")
 	if len(a) != 2 {
 		t.Errorf("unexpected result: %v", a)
 	} else {
@@ -179,7 +179,7 @@ func TestTabletStatsCache(t *testing.T) {
 			t.Errorf("unexpected result: %v", a)
 		}
 	}
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA, "")
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
@@ -218,14 +218,14 @@ func TestTabletStatsCache(t *testing.T) {
 	if len(a) != 0 {
 		t.Errorf("unexpected result: %v", a)
 	}
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER, "")
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
 	// old master sending an old ping should be ignored
 	tsc.StatsUpdate(ts2)
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER, "")
 	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
@@ -246,7 +246,7 @@ func TestTabletStatsCache(t *testing.T) {
 	if len(a) != 1 {
 		t.Errorf("unexpected result: %v", a)
 	}
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA, "")
 	if len(a) != 1 {
 		t.Errorf("unexpected result: %v", a)
 	}
@@ -267,7 +267,7 @@ func TestTabletStatsCache(t *testing.T) {
 	if len(a) != 1 {
 		t.Errorf("unexpected result: %v", a)
 	}
-	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
+	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA, "")
 	if len(a) != 1 {
 		t.Errorf("unexpected result: %v", a)
 	}

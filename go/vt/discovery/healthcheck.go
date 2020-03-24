@@ -181,6 +181,9 @@ type TabletStats struct {
 	// LastError is the error we last saw when trying to get the
 	// tablet's healthcheck.
 	LastError error
+
+	// Label is for managing tablet label
+	Label string
 }
 
 // String is defined because we want to print a []*TabletStats array nicely.
@@ -668,6 +671,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.St
 	// realtimeStats change.
 	hcc.lastResponseTimestamp = time.Now()
 	hcc.tabletStats.Target = shr.Target
+	hcc.tabletStats.Label = shr.Label
 	hcc.tabletStats.TabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 	hcc.tabletStats.Stats = shr.RealtimeStats
 	hcc.tabletStats.LastError = healthErr

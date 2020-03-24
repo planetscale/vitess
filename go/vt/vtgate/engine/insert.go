@@ -245,7 +245,7 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
 	}
 
-	rss, _, err := vcursor.ResolveDestinations(ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+	rss, _, err := vcursor.ResolveDestinations(ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}}, "")
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
 	}
@@ -312,7 +312,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 
 	// If generation is needed, generate the requested number of values (as one call).
 	if count != 0 {
-		rss, _, err := vcursor.ResolveDestinations(ins.Generate.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+		rss, _, err := vcursor.ResolveDestinations(ins.Generate.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}}, "")
 		if err != nil {
 			return 0, vterrors.Wrap(err, "processGenerate")
 		}
@@ -446,7 +446,7 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 		return nil, nil, nil
 	}
 
-	rss, indexesPerRss, err := vcursor.ResolveDestinations(ins.Keyspace.Name, indexes, destinations)
+	rss, indexesPerRss, err := vcursor.ResolveDestinations(ins.Keyspace.Name, indexes, destinations, "")
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "getInsertShardedRoute")
 	}

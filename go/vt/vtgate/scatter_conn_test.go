@@ -44,7 +44,7 @@ import (
 func TestScatterConnExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnExecute", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
+		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnExecute", topodatapb.TabletType_REPLICA, key.DestinationShards(shards), "")
 		if err != nil {
 			return nil, err
 		}
@@ -56,7 +56,7 @@ func TestScatterConnExecute(t *testing.T) {
 func TestScatterConnExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecuteMultiShard", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnExecuteMultiShard", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
+		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnExecuteMultiShard", topodatapb.TabletType_REPLICA, key.DestinationShards(shards), "")
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +100,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 func TestScatterConnStreamExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnStreamExecute", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
+		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnStreamExecute", topodatapb.TabletType_REPLICA, key.DestinationShards(shards), "")
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +117,7 @@ func TestScatterConnStreamExecute(t *testing.T) {
 func TestScatterConnStreamExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnStreamExecuteMulti", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
+		rss, err := res.ResolveDestination(context.Background(), "TestScatterConnStreamExecuteMulti", topodatapb.TabletType_REPLICA, key.DestinationShards(shards), "")
 		if err != nil {
 			return nil, err
 		}
@@ -274,7 +274,7 @@ func TestMaxMemoryRows(t *testing.T) {
 
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	rss, _, err := res.ResolveDestinations(context.Background(), "TestMaxMemoryRows", topodatapb.TabletType_REPLICA, nil,
-		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
+		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")}, "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(0) failed: %v", err)
 	}
@@ -398,7 +398,7 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	hc.AddTestTablet("aa", "0", 1, "TestScatterConnStreamExecuteSendError", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss, err := res.ResolveDestination(context.Background(), "TestScatterConnStreamExecuteSendError", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
+	rss, err := res.ResolveDestination(context.Background(), "TestScatterConnStreamExecuteSendError", topodatapb.TabletType_REPLICA, key.DestinationShard("0"), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination failed: %v", err)
 	}
@@ -423,11 +423,11 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestScatterConnQueryNotInTransaction", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss0, err := res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
+	rss0, err := res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(0) failed: %v", err)
 	}
-	rss1, err := res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("1"))
+	rss1, err := res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("1"), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(1) failed: %v", err)
 	}
@@ -474,11 +474,11 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
 
 	res = srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss0, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
+	rss0, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(0) failed: %v", err)
 	}
-	rss1, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("1"))
+	rss1, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("1"), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(1) failed: %v", err)
 	}
@@ -524,11 +524,11 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
 
 	res = srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss0, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
+	rss0, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShard("0"), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(0) failed: %v", err)
 	}
-	rss1, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShards([]string{"0", "1"}))
+	rss1, err = res.ResolveDestination(context.Background(), "TestScatterConnQueryNotInTransaction", topodatapb.TabletType_REPLICA, key.DestinationShards([]string{"0", "1"}), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(1) failed: %v", err)
 	}
@@ -576,11 +576,11 @@ func TestScatterConnSingleDB(t *testing.T) {
 	hc.AddTestTablet("aa", "1", 1, "TestScatterConnSingleDB", "1", topodatapb.TabletType_MASTER, true, 1, nil)
 
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss0, err := res.ResolveDestination(context.Background(), "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("0"))
+	rss0, err := res.ResolveDestination(context.Background(), "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("0"), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(0) failed: %v", err)
 	}
-	rss1, err := res.ResolveDestination(context.Background(), "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("1"))
+	rss1, err := res.ResolveDestination(context.Background(), "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("1"), "")
 	if err != nil {
 		t.Fatalf("ResolveDestination(1) failed: %v", err)
 	}

@@ -191,7 +191,7 @@ type vschemaWrapper struct {
 }
 
 func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+	destKeyspace, destTabletType, destTarget, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, destKeyspace, destTabletType, destTarget, err
 	}
@@ -203,7 +203,7 @@ func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, s
 }
 
 func (vw *vschemaWrapper) FindTablesOrVindex(tab sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
+	destKeyspace, destTabletType, destTarget, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
