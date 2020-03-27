@@ -275,6 +275,10 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		}
 
 		tablets := dg.tsc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType, target.Label)
+		log.Error("---- Got the tablets as -----")
+		for _, tablet := range tablets {
+			log.Errorf("Tablet :%v, type: %v", tablet.Tablet.Alias, tablet.Tablet.Type)
+		}
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
 			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")

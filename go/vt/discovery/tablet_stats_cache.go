@@ -50,9 +50,6 @@ type TabletStatsCache struct {
 	mu sync.RWMutex
 	// entries maps from keyspace/shard/tabletType to our cache.
 	entries map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry
-
-	// entries maps from keyspace/shard/label to our cache.
-	entriesWithLabel map[string]map[string]map[string]*tabletStatsCacheEntry
 	// tsm is a helper to broadcast aggregate stats.
 	tsm srvtopo.TargetStatsMultiplexer
 	// cellAliases is a cache of cell aliases
@@ -128,12 +125,11 @@ func NewTabletStatsCacheDoNotSetListener(ts *topo.Server, cell string) *TabletSt
 
 func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListener bool) *TabletStatsCache {
 	tc := &TabletStatsCache{
-		cell:             cell,
-		ts:               ts,
-		entries:          make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
-		entriesWithLabel: make(map[string]map[string]map[string]*tabletStatsCacheEntry),
-		tsm:              srvtopo.NewTargetStatsMultiplexer(),
-		cellAliases:      make(map[string]string),
+		cell:        cell,
+		ts:          ts,
+		entries:     make(map[string]map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry),
+		tsm:         srvtopo.NewTargetStatsMultiplexer(),
+		cellAliases: make(map[string]string),
 	}
 
 	if setListener {
@@ -149,19 +145,28 @@ func newTabletStatsCache(hc HealthCheck, ts *topo.Server, cell string, setListen
 func (tc *TabletStatsCache) getEntry(target *querypb.Target) *tabletStatsCacheEntry {
 	tc.mu.RLock()
 	defer tc.mu.RUnlock()
-
-	if target.Label != "" {
-		log.Errorf("fetching tablet with label %s", target.Label)
-		if s, ok := tc.entriesWithLabel[target.Keyspace]; ok {
-			if t, ok := s[target.Shard]; ok {
-				if e, ok := t[target.Label]; ok {
-					return e
-				}
-			}
-		}
-	}
+	tsc := &tabletStatsCacheEntry{}
+	tsc.mu.Lock()
+	defer tsc.mu.Unlock()
+	tsc.all = make(map[string]*TabletStats)
 	if s, ok := tc.entries[target.Keyspace]; ok {
 		if t, ok := s[target.Shard]; ok {
+			if target.Label != "" {
+				for _, tabs := range t {
+					for _, tab := range tabs.healthy {
+						if tab.Label == target.Label {
+							log.Errorf("Found a healthy tablet, alias %v", tab.Tablet.Alias)
+							tsc.healthy = append(tsc.healthy, tab)
+						}
+					}
+					for _, tab := range tabs.all {
+						if tab.Label == target.Label {
+							tsc.all[tab.Key] = tab
+						}
+					}
+				}
+				return tsc
+			}
 			if e, ok := t[target.TabletType]; ok {
 				return e
 			}
@@ -181,27 +186,16 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 	// Slow path: Lock, will probably have to add the entry at some level.
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
-	var s1 map[string]map[string]*tabletStatsCacheEntry
-	var t1 map[string]*tabletStatsCacheEntry
 
 	s, ok := tc.entries[target.Keyspace]
 	if !ok {
 		s = make(map[string]map[topodatapb.TabletType]*tabletStatsCacheEntry)
 		tc.entries[target.Keyspace] = s
-		if target.Label != "" {
-			s1 = make(map[string]map[string]*tabletStatsCacheEntry)
-			log.Errorf("Create entry for label %s", target.Label)
-			tc.entriesWithLabel[target.Keyspace] = s1
-		}
 	}
 	t, ok := s[target.Shard]
 	if !ok {
 		t = make(map[topodatapb.TabletType]*tabletStatsCacheEntry)
 		s[target.Shard] = t
-		if target.Label != "" {
-			t1 = make(map[string]*tabletStatsCacheEntry)
-			s1[target.Shard] = t1
-		}
 	}
 	e, ok := t[target.TabletType]
 	if !ok {
@@ -209,9 +203,6 @@ func (tc *TabletStatsCache) getOrCreateEntry(target *querypb.Target) *tabletStat
 			all: make(map[string]*TabletStats),
 		}
 		t[target.TabletType] = e
-		if target.Label != "" {
-			t1[target.Label] = e
-		}
 	}
 	return e
 }

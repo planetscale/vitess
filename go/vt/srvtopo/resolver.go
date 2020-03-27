@@ -108,6 +108,9 @@ func (r *Resolver) GetKeyspaceShards(ctx context.Context, keyspace string, table
 	}
 
 	partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)
+	if tabletType == topodatapb.TabletType_UNKNOWN {
+		partition = srvKeyspace.Partitions[0]
+	}
 	if partition == nil {
 		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No partition found for tabletType %v in keyspace %v", topoproto.TabletTypeLString(tabletType), keyspace)
 	}
@@ -143,10 +146,6 @@ func (r *Resolver) GetAllKeyspaces(ctx context.Context) ([]string, error) {
 // - [][]*querypb.Value: [id1],  [id2, id3]
 func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids []*querypb.Value, destinations []key.Destination, label string) ([]*ResolvedShard, [][]*querypb.Value, error) {
 	log.Errorf("Resolved invoked with label %s, and tablet type %v", label, tabletType)
-	if label != "" {
-		log.Error("setting the tablet type")
-		tabletType = topodatapb.TabletType_MASTER
-	}
 	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
 	if err != nil {
 		return nil, nil, err
