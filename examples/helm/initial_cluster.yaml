@@ -29,10 +29,10 @@ topology:
                     replicas: 1
                     enableSemisync: false
                     enableReplReporter: false
-                    initDBName: "employee"
+                    initDBName: "abc2"
                     uid: 1000
                     extraFlags:
-                      db_host: "172.19.4.121"
+                      db_host: "192.168.0.8"
                       db_port: "3306"
                       db_dba_user: "root"
                       db_dba_password: "root"
