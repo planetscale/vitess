@@ -36,6 +36,9 @@ message Target {
   // cell is used for routing queries between vtgate and vttablets. It
   // is not used when Target is part of the Session sent by the client.
   string cell = 4;
+
+  // labelInfo contains the tablet label information
+  TabletLabelInfo labelInfo = 5;
 }
 
 // VTGateCallerID is sent by VTGate to VTTablet to describe the
@@ -797,4 +800,9 @@ message TransactionMetadata {
   TransactionState state = 2;
   int64 time_created = 3;
   repeated Target participants = 4;
+}
+
+message TabletLabelInfo {
+  string name = 1;
+  string value = 2;
 }

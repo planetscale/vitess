@@ -45,6 +45,8 @@ var (
 	initTags           flagutil.StringMapValue
 	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
 	initTimeout        = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
+	labelName          = flag.String("label_name", "", "(init parameter) the label name for this tablet")
+	labelValue         = flag.String("label_value", "", "(init parameter) the label value for this tablet")
 )
 
 func init() {

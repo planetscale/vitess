@@ -716,6 +716,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 		Keyspace:   agent.initialTablet.Keyspace,
 		Shard:      agent.initialTablet.Shard,
 		TabletType: agent.initialTablet.Type,
+		LabelInfo:  &querypb.TabletLabelInfo{Name: *labelName, Value: *labelValue},
 	}, agent.DBConfigs); err != nil {
 		return vterrors.Wrap(err, "failed to InitDBConfig")
 	}
