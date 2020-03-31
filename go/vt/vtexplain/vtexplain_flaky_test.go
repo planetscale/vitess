@@ -19,12 +19,13 @@ package vtexplain
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"path"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 )
 
 var testOutputTempDir string
@@ -137,12 +138,12 @@ func TestErrors(t *testing.T) {
 	}{
 		{
 			SQL: "INVALID SQL",
-			Err: "vtexplain execute error in 'INVALID SQL': unrecognized statement: INVALID SQL",
+			Err: "vtexplain execute error in 'INVALID SQL': syntax error at position 8 near 'INVALID'",
 		},
 
 		{
 			SQL: "SELECT * FROM THIS IS NOT SQL",
-			Err: "vtexplain execute error in 'SELECT * FROM THIS IS NOT SQL': syntax error at position 22 near 'is'",
+			Err: "vtexplain execute error in 'SELECT * FROM THIS IS NOT SQL': syntax error at position 22 near 'IS'",
 		},
 
 		{
@@ -152,7 +153,7 @@ func TestErrors(t *testing.T) {
 
 		{
 			SQL: "SELECT * FROM table_not_in_schema",
-			Err: "target: ks_unsharded.-.master, used tablet: explainCell-0 (ks_unsharded/-): table table_not_in_schema not found in schema",
+			Err: "target: ks_unsharded.-.master, used tablet: explainCell-0 (ks_unsharded/-): unknown error: unable to resolve table name table_not_in_schema",
 		},
 	}
 

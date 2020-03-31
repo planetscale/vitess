@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -55,16 +57,16 @@ type VCursor interface {
 	RecordWarning(warning *querypb.QueryWarning)
 
 	// V3 functions.
-	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
+	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 	AutocommitApproval() bool
 
 	// Shard-level functions.
-	ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, []error)
+	ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
 	ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
 	StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error
 
 	// Keyspace ID level functions.
-	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error)
+	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 
 	// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
 	// Will replace all of the Topo functions.
@@ -94,10 +96,8 @@ type Plan struct {
 	Rows uint64 `json:",omitempty"`
 	// Total number of errors
 	Errors uint64 `json:",omitempty"`
-	// NeedsLastInsertID signals whether this plan will need to be provided with last_insert_id
-	NeedsLastInsertID bool `json:"-"` // don't include in the json representation
-	// NeedsDatabaseName signals whether this plan will need to be provided with the database name
-	NeedsDatabaseName bool `json:"-"` // don't include in the json representation
+	// Stores BindVars needed to be provided as part of expression rewriting
+	sqlparser.BindVarNeeds `json:"-"`
 }
 
 // AddStats updates the plan execution statistics
