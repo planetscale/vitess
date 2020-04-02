@@ -32,7 +32,7 @@ import (
 // StreamExecutor is a subset of Primitive that MergeSort
 // requires its inputs to satisfy.
 type StreamExecutor interface {
-	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
+	StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
 }
 
 var _ Primitive = (*MergeSort)(nil)
@@ -63,7 +63,7 @@ func (ms *MergeSort) GetKeyspaceName() string { return "" }
 func (ms *MergeSort) GetTableName() string { return "" }
 
 // Execute is not supported.
-func (ms *MergeSort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ms *MergeSort) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Execute is not supported")
 }
 
@@ -73,7 +73,7 @@ func (ms *MergeSort) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 }
 
 // StreamExecute performs a streaming exec.
-func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ms *MergeSort) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	ctx, cancel := context.WithCancel(vcursor.Context())
 	defer cancel()
 
@@ -182,6 +182,7 @@ func runOneStream(vcursor VCursor, input StreamExecutor, bindVars map[string]*qu
 		defer close(handle.row)
 
 		handle.err = input.StreamExecute(
+			ctx,
 			vcursor,
 			bindVars,
 			wantfields,

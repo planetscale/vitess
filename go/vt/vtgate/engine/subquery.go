@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	context "golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -51,8 +52,8 @@ func (sq *Subquery) GetTableName() string {
 }
 
 // Execute performs a non-streaming exec.
-func (sq *Subquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	inner, err := sq.Subquery.Execute(vcursor, bindVars, wantfields)
+func (sq *Subquery) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	inner, err := sq.Subquery.Execute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -60,8 +61,8 @@ func (sq *Subquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 }
 
 // StreamExecute performs a streaming exec.
-func (sq *Subquery) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return sq.Subquery.StreamExecute(vcursor, bindVars, wantfields, func(inner *sqltypes.Result) error {
+func (sq *Subquery) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return sq.Subquery.StreamExecute(ctx, vcursor, bindVars, wantfields, func(inner *sqltypes.Result) error {
 		return callback(sq.buildResult(inner))
 	})
 }

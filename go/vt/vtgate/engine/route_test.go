@@ -49,7 +49,7 @@ func TestSelectUnsharded(t *testing.T) {
 		shards:  []string{"0"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestSelectScatter(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestSelectEqualUnique(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestSelectEqual(t *testing.T) {
 			defaultSelectResult,
 		},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +317,7 @@ func TestSelectINUnique(t *testing.T) {
 		shardForKsid: []string{"-20", "-20", "20-"},
 		results:      []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +394,7 @@ func TestSelectINNonUnique(t *testing.T) {
 			defaultSelectResult,
 		},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +440,7 @@ func TestSelectNext(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,7 +474,7 @@ func TestSelectDBA(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -508,7 +508,7 @@ func TestSelectReference(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -546,7 +546,7 @@ func TestRouteGetFields(t *testing.T) {
 	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, true)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -601,7 +601,7 @@ func TestRouteSort(t *testing.T) {
 			),
 		},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -623,7 +623,7 @@ func TestRouteSort(t *testing.T) {
 
 	sel.OrderBy[0].Desc = true
 	vc.Rewind()
-	result, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err = sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -653,7 +653,7 @@ func TestRouteSort(t *testing.T) {
 			),
 		},
 	}
-	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "sel.Execute", err, "types are not comparable: VARCHAR vs VARCHAR")
 }
 
@@ -687,7 +687,7 @@ func TestRouteSortTruncate(t *testing.T) {
 			),
 		},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -733,7 +733,7 @@ func TestRouteStreamTruncate(t *testing.T) {
 			),
 		},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -815,7 +815,7 @@ func TestParamsFail(t *testing.T) {
 	)
 
 	vc := &loggingVCursor{shardErr: errors.New("shard error")}
-	_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "sel.Execute err", err, "paramsAnyShard: shard error")
 
 	vc.Rewind()
@@ -836,7 +836,7 @@ func TestExecFail(t *testing.T) {
 	)
 
 	vc := &loggingVCursor{shards: []string{"0"}, resultErr: mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout")}
-	_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "sel.Execute err", err, "query timeout (errno 1317) (sqlstate HY000)")
 	vc.ExpectWarnings(t, nil)
 
@@ -862,7 +862,7 @@ func TestExecFail(t *testing.T) {
 			errors.New("result error -20"),
 		},
 	}
-	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "sel.Execute err", err, "result error -20")
 	vc.ExpectWarnings(t, nil)
 	vc.ExpectLog(t, []string{
@@ -892,7 +892,7 @@ func TestExecFail(t *testing.T) {
 			errors.New("not a sql error 20-"),
 		},
 	}
-	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Errorf("unexpected ScatterErrorsAsWarnings error %v", err)
 	}
@@ -930,7 +930,7 @@ func TestExecFail(t *testing.T) {
 			nil,
 		},
 	}
-	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Errorf("unexpected ScatterErrorsAsWarnings error %v", err)
 	}

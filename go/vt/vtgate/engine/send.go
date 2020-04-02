@@ -3,6 +3,8 @@ package engine
 import (
 	"encoding/json"
 
+	context "golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -78,7 +80,7 @@ func (s *Send) GetTableName() string {
 }
 
 // Execute implements Primitive interface
-func (s *Send) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (s *Send) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "sendExecute")
@@ -111,7 +113,7 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable,
 }
 
 // StreamExecute implements Primitive interface
-func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+func (s *Send) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: systay - this should work
 }
 

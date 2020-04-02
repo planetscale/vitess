@@ -42,7 +42,7 @@ func TestUpdateUnsharded(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -51,11 +51,11 @@ func TestUpdateUnsharded(t *testing.T) {
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execUpdateUnsharded: shard_error")
 
 	vc = &loggingVCursor{}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "Keyspace does not have exactly one shard: []")
 }
 
@@ -75,7 +75,7 @@ func TestUpdateEqual(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
@@ -84,7 +84,7 @@ func TestUpdateEqual(t *testing.T) {
 
 	// Failure case
 	upd.Values = []sqltypes.PlanValue{{Key: "aa"}}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execUpdateEqual: missing bind var aa")
 }
 
@@ -104,7 +104,7 @@ func TestUpdateScatter(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
@@ -128,7 +128,7 @@ func TestUpdateScatter(t *testing.T) {
 	}
 
 	vc = &loggingVCursor{shards: []string{"-20", "20-"}}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
@@ -157,7 +157,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
@@ -186,7 +186,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execUpdateEqual: cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
 
@@ -226,7 +226,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		results: results,
 	}
 
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
@@ -248,7 +248,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	vc = &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
@@ -272,7 +272,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: results,
 	}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
@@ -331,7 +331,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		results: results,
 	}
 
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -351,7 +351,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	vc = &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +377,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: results,
 	}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -406,7 +406,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 
 func TestUpdateNoStream(t *testing.T) {
 	upd := &Update{}
-	err := upd.StreamExecute(nil, nil, false, nil)
+	err := upd.StreamExecute(ctx, nil, nil, false, nil)
 	expectError(t, "StreamExecute", err, `query "" cannot be used for streaming`)
 }
 

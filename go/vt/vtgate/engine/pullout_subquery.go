@@ -19,6 +19,8 @@ package engine
 import (
 	"fmt"
 
+	context "golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -59,21 +61,21 @@ func (ps *PulloutSubquery) GetTableName() string {
 }
 
 // Execute satisfies the Primitive interface.
-func (ps *PulloutSubquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	combinedVars, err := ps.execSubquery(vcursor, bindVars)
+func (ps *PulloutSubquery) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	return ps.Underlying.Execute(vcursor, combinedVars, wantfields)
+	return ps.Underlying.Execute(ctx, vcursor, combinedVars, wantfields)
 }
 
 // StreamExecute performs a streaming exec.
-func (ps *PulloutSubquery) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	combinedVars, err := ps.execSubquery(vcursor, bindVars)
+func (ps *PulloutSubquery) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
 	}
-	return ps.Underlying.StreamExecute(vcursor, combinedVars, wantfields, callback)
+	return ps.Underlying.StreamExecute(ctx, vcursor, combinedVars, wantfields, callback)
 }
 
 // GetFields fetches the field info.
@@ -101,8 +103,8 @@ func (ps *PulloutSubquery) NeedsTransaction() bool {
 	return ps.Subquery.NeedsTransaction() || ps.Underlying.NeedsTransaction()
 }
 
-func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
-	result, err := ps.Subquery.Execute(vcursor, bindVars, false)
+func (ps *PulloutSubquery) execSubquery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
+	result, err := ps.Subquery.Execute(ctx, vcursor, bindVars, false)
 	if err != nil {
 		return nil, err
 	}

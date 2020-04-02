@@ -19,6 +19,8 @@ package engine
 import (
 	"fmt"
 
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -49,9 +51,9 @@ type Join struct {
 }
 
 // Execute performs a non-streaming exec.
-func (jn *Join) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (jn *Join) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
-	lresult, err := jn.Left.Execute(vcursor, bindVars, wantfields)
+	lresult, err := jn.Left.Execute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +73,7 @@ func (jn *Join) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 		for k, col := range jn.Vars {
 			joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 		}
-		rresult, err := jn.Right.Execute(vcursor, combineVars(bindVars, joinVars), wantfields)
+		rresult, err := jn.Right.Execute(ctx, vcursor, combineVars(bindVars, joinVars), wantfields)
 		if err != nil {
 			return nil, err
 		}
@@ -96,15 +98,15 @@ func (jn *Join) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 }
 
 // StreamExecute performs a streaming exec.
-func (jn *Join) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (jn *Join) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	joinVars := make(map[string]*querypb.BindVariable)
-	err := jn.Left.StreamExecute(vcursor, bindVars, wantfields, func(lresult *sqltypes.Result) error {
+	err := jn.Left.StreamExecute(ctx, vcursor, bindVars, wantfields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 			}
 			rowSent := false
-			err := jn.Right.StreamExecute(vcursor, combineVars(bindVars, joinVars), wantfields, func(rresult *sqltypes.Result) error {
+			err := jn.Right.StreamExecute(ctx, vcursor, combineVars(bindVars, joinVars), wantfields, func(rresult *sqltypes.Result) error {
 				result := &sqltypes.Result{}
 				if wantfields {
 					// This code is currently unreachable because the first result

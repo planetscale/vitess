@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	context "golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -63,7 +65,7 @@ func (f *fakePrimitive) GetTableName() string {
 	return "fakeTable"
 }
 
-func (f *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (f *fakePrimitive) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {
 		return nil, f.sendErr
@@ -77,7 +79,7 @@ func (f *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.Bi
 	return r, nil
 }
 
-func (f *fakePrimitive) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (f *fakePrimitive) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {
 		return f.sendErr
@@ -112,7 +114,7 @@ func (f *fakePrimitive) StreamExecute(vcursor VCursor, bindVars map[string]*quer
 
 func (f *fakePrimitive) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("GetFields %v", printBindVars(bindVars)))
-	return f.Execute(vcursor, bindVars, true /* wantfields */)
+	return f.Execute(ctx, vcursor, bindVars, true)
 }
 
 func (f *fakePrimitive) ExpectLog(t *testing.T, want []string) {
@@ -128,7 +130,7 @@ func (f *fakePrimitive) NeedsTransaction() bool {
 
 func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	var result *sqltypes.Result
-	err := prim.StreamExecute(vcursor, bindVars, wantfields, func(r *sqltypes.Result) error {
+	err := prim.StreamExecute(ctx, vcursor, bindVars, wantfields, func(r *sqltypes.Result) error {
 		if result == nil {
 			result = r
 		} else {

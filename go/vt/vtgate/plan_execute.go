@@ -145,7 +145,7 @@ type currFunc func(*LogStats, *SafeSession) (*sqltypes.Result, error)
 func (e *planExecute) executePlan(ctx context.Context, plan *engine.Plan, vcursor *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) currFunc {
 	return func(logStats *LogStats, safeSession *SafeSession) (*sqltypes.Result, error) {
 		// 4: Execute!
-		qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
+		qr, err := plan.Instructions.Execute(ctx, vcursor, bindVars, true)
 		if err != nil && qr != nil && qr.InsertID > 0 {
 			safeSession.LastInsertId = qr.InsertID
 		}

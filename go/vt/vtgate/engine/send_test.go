@@ -93,18 +93,18 @@ func TestSendTable(t *testing.T) {
 				IsDML:             tc.isDML,
 			}
 			vc := &loggingVCursor{shards: tc.shards}
-			_, err := send.Execute(vc, map[string]*querypb.BindVariable{}, false)
+			_, err := send.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 			require.NoError(t, err)
 			vc.ExpectLog(t, tc.expectedQueryLog)
 
 			// Failure cases
 			vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-			_, err = send.Execute(vc, map[string]*querypb.BindVariable{}, false)
+			_, err = send.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 			require.EqualError(t, err, "sendExecute: shard_error")
 
 			if !tc.sharded {
 				vc = &loggingVCursor{}
-				_, err = send.Execute(vc, map[string]*querypb.BindVariable{}, false)
+				_, err = send.Execute(ctx, vc, map[string]*querypb.BindVariable{}, false)
 				require.EqualError(t, err, "Keyspace does not have exactly one shard: []")
 			}
 		})

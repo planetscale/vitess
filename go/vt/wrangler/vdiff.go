@@ -677,7 +677,7 @@ func newPrimitiveExecutor(ctx context.Context, prim engine.Primitive) *primitive
 	vcursor := &contextVCursor{ctx: ctx}
 	go func() {
 		defer close(pe.resultch)
-		pe.err = pe.prim.StreamExecute(vcursor, make(map[string]*querypb.BindVariable), false, func(qr *sqltypes.Result) error {
+		pe.err = pe.prim.StreamExecute(ctx, vcursor, make(map[string]*querypb.BindVariable), false, func(qr *sqltypes.Result) error {
 			select {
 			case pe.resultch <- qr:
 			case <-ctx.Done():
@@ -720,7 +720,7 @@ func (pe *primitiveExecutor) drain(ctx context.Context) (int, error) {
 //-----------------------------------------------------------------
 // shardStreamer
 
-func (sm *shardStreamer) StreamExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sm *shardStreamer) StreamExecute(ctx context.Context, vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	for result := range sm.result {
 		if err := callback(result); err != nil {
 			return err
