@@ -19,10 +19,8 @@ limitations under the License.
 package queryservice
 
 import (
-	context2 "context"
+	"context"
 	"io"
-
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -118,7 +116,7 @@ type resultStreamer struct {
 	err  error
 }
 
-func (rs *resultStreamer) Recv(context2.Context) (*sqltypes.Result, error) {
+func (rs *resultStreamer) Recv(context.Context) (*sqltypes.Result, error) {
 	select {
 	case <-rs.done:
 		return nil, rs.err

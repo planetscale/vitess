@@ -17,14 +17,13 @@ limitations under the License.
 package worker
 
 import (
-	context2 "context"
+	"context"
 	"fmt"
 	"io"
 	"reflect"
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -119,7 +118,7 @@ func (f *fakeResultReader) Close(ctx context.Context) {
 }
 
 // Next returns the next fake result. It is part of the ResultReader interface.
-func (f *fakeResultReader) Next(context2.Context) (*sqltypes.Result, error) {
+func (f *fakeResultReader) Next(context.Context) (*sqltypes.Result, error) {
 	if f.rowsReturned == f.rowsTotal {
 		return nil, io.EOF
 	}
@@ -396,7 +395,7 @@ func (m *memoryResultReader) Fields() []*querypb.Field {
 	return m.fields
 }
 
-func (m *memoryResultReader) Next(context2.Context) (*sqltypes.Result, error) {
+func (m *memoryResultReader) Next(context.Context) (*sqltypes.Result, error) {
 	if m.currentIndex == len(m.results) {
 		return nil, io.EOF
 	}
