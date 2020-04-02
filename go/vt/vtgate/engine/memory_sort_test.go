@@ -49,7 +49,7 @@ func TestMemorySortExecute(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.Execute(nil, nil, nil, false)
+	result, err := ms.Execute(ctx, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestMemorySortExecute(t *testing.T) {
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.Execute(nil, nil, bv, false)
+	result, err = ms.Execute(ctx, nil, bv, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestMemorySortExecuteTruncate(t *testing.T) {
 		TruncateColumnCount: 2,
 	}
 
-	result, err := ms.Execute(nil, nil, nil, false)
+	result, err := ms.Execute(ctx, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.Execute(nil, nil, nil, false)
+	result, err := ms.Execute(ctx, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.Execute(nil, nil, bv, false)
+	result, err = ms.Execute(ctx, nil, bv, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 		Input: fp,
 	}
 
-	_, err := ms.Execute(nil, nil, nil, false)
+	_, err := ms.Execute(ctx, nil, nil, false)
 	want := "types are not comparable: VARCHAR vs VARCHAR"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute err: %v, want %v", err, want)

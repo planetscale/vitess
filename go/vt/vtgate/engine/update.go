@@ -118,7 +118,8 @@ func (upd *Update) GetTableName() string {
 // Execute performs a non-streaming exec.
 func (upd *Update) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {
-		cancel := vcursor.SetContextTimeout(time.Duration(upd.QueryTimeout) * time.Millisecond)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(upd.QueryTimeout)*time.Millisecond)
 		defer cancel()
 	}
 

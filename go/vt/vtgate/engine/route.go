@@ -232,7 +232,8 @@ func (route *Route) SetTruncateColumnCount(count int) {
 // Execute performs a non-streaming exec.
 func (route *Route) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if route.QueryTimeout != 0 {
-		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(route.QueryTimeout)*time.Millisecond)
 		defer cancel()
 	}
 	qr, err := route.execute(vcursor, bindVars, wantfields)
@@ -302,7 +303,8 @@ func (route *Route) StreamExecute(ctx context.Context, vcursor VCursor, bindVars
 	var bvs []map[string]*querypb.BindVariable
 	var err error
 	if route.QueryTimeout != 0 {
-		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(route.QueryTimeout)*time.Millisecond)
 		defer cancel()
 	}
 	switch route.Opcode {

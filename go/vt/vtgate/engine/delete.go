@@ -109,8 +109,10 @@ func (del *Delete) GetTableName() string {
 
 // Execute performs a non-streaming exec.
 func (del *Delete) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+
 	if del.QueryTimeout != 0 {
-		cancel := vcursor.SetContextTimeout(time.Duration(del.QueryTimeout) * time.Millisecond)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(del.QueryTimeout)*time.Millisecond)
 		defer cancel()
 	}
 

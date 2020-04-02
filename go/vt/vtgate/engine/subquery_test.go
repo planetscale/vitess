@@ -49,7 +49,7 @@ func TestSubqueryExecute(t *testing.T) {
 		"a": sqltypes.Int64BindVariable(1),
 	}
 
-	r, err := sq.Execute(nil, nil, bv, true)
+	r, err := sq.Execute(ctx, nil, bv, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestSubqueryExecute(t *testing.T) {
 	sq.Subquery = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	_, err = sq.Execute(nil, nil, bv, true)
+	_, err = sq.Execute(ctx, nil, bv, true)
 	expectError(t, "sq.Execute", err, "err")
 }
 

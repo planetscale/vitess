@@ -52,7 +52,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := oa.Execute(nil, nil, nil, false)
+	result, err := oa.Execute(ctx, nil, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -90,7 +90,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 		Input:               fp,
 	}
 
-	result, err := oa.Execute(nil, nil, nil, false)
+	result, err := oa.Execute(ctx, nil, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -245,7 +245,7 @@ func TestOrderedAggregateInputFail(t *testing.T) {
 	oa := &OrderedAggregate{Input: fp}
 
 	want := "input fail"
-	if _, err := oa.Execute(nil, nil, nil, false); err == nil || err.Error() != want {
+	if _, err := oa.Execute(ctx, nil, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
 
@@ -315,7 +315,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := oa.Execute(nil, nil, nil, false)
+	result, err := oa.Execute(ctx, nil, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -479,7 +479,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := oa.Execute(nil, nil, nil, false)
+	result, err := oa.Execute(ctx, nil, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -525,7 +525,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := oa.Execute(nil, nil, nil, false)
+	result, err := oa.Execute(ctx, nil, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -561,7 +561,7 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 	}
 
 	want := "types are not comparable: VARCHAR vs VARCHAR"
-	if _, err := oa.Execute(nil, nil, nil, false); err == nil || err.Error() != want {
+	if _, err := oa.Execute(ctx, nil, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
 
@@ -613,7 +613,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 		RowsAffected: 1,
 	}
 
-	res, err := oa.Execute(nil, nil, nil, false)
+	res, err := oa.Execute(ctx, nil, nil, false)
 	if err != nil {
 		t.Errorf("oa.Execute() failed: %v", err)
 	}
@@ -728,7 +728,7 @@ func TestNoInputAndNoGroupingKeys(outer *testing.T) {
 				Input: fp,
 			}
 
-			result, err := oa.Execute(nil, nil, nil, false)
+			result, err := oa.Execute(ctx, nil, nil, false)
 			assert.NoError(err)
 
 			wantResult := sqltypes.MakeTestResult(
