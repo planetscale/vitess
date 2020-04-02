@@ -387,7 +387,7 @@ func testStreamExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	}
 	var qr sqltypes.Result
 	for {
-		packet, err := stream.Recv()
+		packet, err := stream.Recv(ctx)
 		if err != nil {
 			if err != io.EOF {
 				t.Error(err)
@@ -412,7 +412,7 @@ func testStreamExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = stream.Recv()
+	_, err = stream.Recv(ctx)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -426,7 +426,7 @@ func testStreamExecuteError(t *testing.T, session *vtgateconn.VTGateSession, fak
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
-	qr, err := stream.Recv()
+	qr, err := stream.Recv(ctx)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
 	}
@@ -437,7 +437,7 @@ func testStreamExecuteError(t *testing.T, session *vtgateconn.VTGateSession, fak
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).
-	_, err = stream.Recv()
+	_, err = stream.Recv(ctx)
 	if err == nil {
 		t.Fatalf("StreamExecute channel wasn't closed")
 	}
@@ -451,7 +451,7 @@ func testStreamExecutePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = stream.Recv()
+	_, err = stream.Recv(ctx)
 	if err == nil {
 		t.Fatalf("Received packets instead of panic?")
 	}

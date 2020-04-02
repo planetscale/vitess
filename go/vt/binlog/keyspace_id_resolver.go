@@ -41,7 +41,7 @@ type keyspaceIDResolver interface {
 	// keyspaceID takes a table row, and returns the keyspace id as bytes.
 	// It will return an error if no sharding key can be found.
 	// The bitmap describes which columns are present in the row.
-	keyspaceID(value sqltypes.Value) ([]byte, error)
+	keyspaceID(ctx context.Context, value sqltypes.Value) ([]byte, error)
 }
 
 // keyspaceIDResolverFactory creates a keyspaceIDResolver for a table
@@ -98,7 +98,7 @@ type keyspaceIDResolverFactoryV2 struct {
 	shardingColumnType topodatapb.KeyspaceIdType
 }
 
-func (r *keyspaceIDResolverFactoryV2) keyspaceID(v sqltypes.Value) ([]byte, error) {
+func (r *keyspaceIDResolverFactoryV2) keyspaceID(ctx context.Context, v sqltypes.Value) ([]byte, error) {
 	switch r.shardingColumnType {
 	case topodatapb.KeyspaceIdType_BYTES:
 		return v.ToBytes(), nil
@@ -163,8 +163,8 @@ type keyspaceIDResolverFactoryV3 struct {
 	vindex vindexes.SingleColumn
 }
 
-func (r *keyspaceIDResolverFactoryV3) keyspaceID(v sqltypes.Value) ([]byte, error) {
-	destinations, err := r.vindex.Map(nil, []sqltypes.Value{v})
+func (r *keyspaceIDResolverFactoryV3) keyspaceID(ctx context.Context, v sqltypes.Value) ([]byte, error) {
+	destinations, err := r.vindex.Map(ctx, nil, []sqltypes.Value{v})
 	if err != nil {
 		return nil, err
 	}

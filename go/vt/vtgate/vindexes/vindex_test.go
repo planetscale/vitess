@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,11 +25,13 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
+var ctx = context.Background()
+
 func TestVindexMap(t *testing.T) {
 	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 
-	got, err := Map(ge, nil, [][]sqltypes.Value{{
+	got, err := Map(ctx, ge, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}})
 	assert.NoError(t, err)
@@ -40,7 +43,7 @@ func TestVindexMap(t *testing.T) {
 
 	hash, err := CreateVindex("hash", "hash", nil)
 	assert.NoError(t, err)
-	got, err = Map(hash, nil, [][]sqltypes.Value{{
+	got, err = Map(ctx, hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
 	}})
 	assert.NoError(t, err)
@@ -54,7 +57,7 @@ func TestVindexVerify(t *testing.T) {
 	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 
-	got, err := Verify(ge, nil, [][]sqltypes.Value{{
+	got, err := Verify(ctx, ge, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}},
 		[][]byte{
@@ -68,7 +71,7 @@ func TestVindexVerify(t *testing.T) {
 
 	hash, err := CreateVindex("hash", "hash", nil)
 	assert.NoError(t, err)
-	got, err = Verify(hash, nil, [][]sqltypes.Value{{
+	got, err = Verify(ctx, hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
 	}},
 		[][]byte{

@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sync"
 	"unicode/utf8"
@@ -68,7 +69,7 @@ func (vind *UnicodeLooseMD5) NeedsVCursor() bool {
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (vind *UnicodeLooseMD5) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
 		data, err := unicodeHash(ids[i])
@@ -81,7 +82,7 @@ func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]b
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *UnicodeLooseMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *UnicodeLooseMD5) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
 		data, err := unicodeHash(id)

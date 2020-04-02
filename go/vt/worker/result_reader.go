@@ -40,6 +40,6 @@ type ResultReader interface {
 	// Next is identical to sqltypes.ResultStream.Recv().
 	// It returns the next result on the stream.
 	// It will return io.EOF if the stream ended.
-	Next() (*sqltypes.Result, error)
+	Next(ctx context.Context) (*sqltypes.Result, error)
 	Close(ctx context.Context)
 }

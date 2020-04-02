@@ -18,6 +18,7 @@ limitations under the License.
 package grpcvtgateconn
 
 import (
+	context2 "context"
 	"flag"
 
 	"google.golang.org/grpc"
@@ -127,7 +128,7 @@ type streamExecuteAdapter struct {
 	fields []*querypb.Field
 }
 
-func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
+func (a *streamExecuteAdapter) Recv(context2.Context) (*sqltypes.Result, error) {
 	qr, err := a.recv()
 	if err != nil {
 		return nil, vterrors.FromGRPC(err)

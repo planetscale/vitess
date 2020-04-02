@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -29,8 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
-
-	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/sqlescape"
@@ -82,7 +81,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts *topo.Server, tabletA
 	}, sql, make(map[string]*querypb.BindVariable), nil)
 
 	// read the columns, or grab the error
-	cols, err := stream.Recv()
+	cols, err := stream.Recv(ctx)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "Cannot read Fields for query '%v'", sql)
 	}
@@ -116,7 +115,7 @@ func NewTransactionalQueryResultReaderForTablet(ctx context.Context, ts *topo.Se
 	}, sql, make(map[string]*querypb.BindVariable), txID, nil)
 
 	// read the columns, or grab the error
-	cols, err := stream.Recv()
+	cols, err := stream.Recv(ctx)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot read Fields for query '%v'", sql)
 	}
@@ -150,8 +149,8 @@ func RollbackTransaction(ctx context.Context, ts *topo.Server, tabletAlias *topo
 }
 
 // Next returns the next result on the stream. It implements ResultReader.
-func (qrr *QueryResultReader) Next() (*sqltypes.Result, error) {
-	return qrr.output.Recv()
+func (qrr *QueryResultReader) Next(ctx context.Context) (*sqltypes.Result, error) {
+	return qrr.output.Recv(ctx)
 }
 
 // Fields returns the field data. It implements ResultReader.
@@ -173,15 +172,15 @@ type v3KeyRangeFilter struct {
 }
 
 // Recv is part of sqltypes.ResultStream interface.
-func (f *v3KeyRangeFilter) Recv() (*sqltypes.Result, error) {
-	r, err := f.input.Recv()
+func (f *v3KeyRangeFilter) Recv(ctx context.Context) (*sqltypes.Result, error) {
+	r, err := f.input.Recv(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	rows := make([][]sqltypes.Value, 0, len(r.Rows))
 	for _, row := range r.Rows {
-		ksid, err := f.resolver.keyspaceID(row)
+		ksid, err := f.resolver.keyspaceID(ctx, row)
 		if err != nil {
 			return nil, err
 		}
@@ -377,14 +376,14 @@ func NewRowReader(resultReader ResultReader) *RowReader {
 // (row, nil) for the next row
 // (nil, nil) for EOF
 // (nil, error) if an error occurred
-func (rr *RowReader) Next() ([]sqltypes.Value, error) {
+func (rr *RowReader) Next(ctx context.Context) ([]sqltypes.Value, error) {
 	for rr.currentResult == nil || rr.currentIndex == len(rr.currentResult.Rows) {
 		if rr.stopAfterCurrentResult {
 			return nil, ErrStoppedRowReader
 		}
 
 		var err error
-		rr.currentResult, err = rr.resultReader.Next()
+		rr.currentResult, err = rr.resultReader.Next(ctx)
 		if err != nil {
 			if err != io.EOF {
 				return nil, err
@@ -404,10 +403,10 @@ func (rr *RowReader) Fields() []*querypb.Field {
 }
 
 // Drain will empty the RowReader and return how many rows we got
-func (rr *RowReader) Drain() (int, error) {
+func (rr *RowReader) Drain(ctx context.Context) (int, error) {
 	count := 0
 	for {
-		row, err := rr.Next()
+		row, err := rr.Next(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -544,7 +543,7 @@ func NewRowDiffer(left, right ResultReader, tableDefinition *tabletmanagerdatapb
 
 // Go runs the diff. If there is no error, it will drain both sides.
 // If an error occurs, it will just return it and stop.
-func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
+func (rd *RowDiffer) Go(ctx context.Context, log logutil.Logger) (dr DiffReport, err error) {
 
 	dr.startingTime = time.Now()
 	defer dr.ComputeQPS()
@@ -555,14 +554,14 @@ func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 	advanceRight := true
 	for {
 		if advanceLeft {
-			left, err = rd.left.Next()
+			left, err = rd.left.Next(ctx)
 			if err != nil {
 				return
 			}
 			advanceLeft = false
 		}
 		if advanceRight {
-			right, err = rd.right.Next()
+			right, err = rd.right.Next(ctx)
 			if err != nil {
 				return
 			}
@@ -578,7 +577,7 @@ func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 
 			// drain right, update count
 			log.Errorf("Draining extra row(s) found on the right starting with: %v", right)
-			if count, err := rd.right.Drain(); err != nil {
+			if count, err := rd.right.Drain(ctx); err != nil {
 				return dr, err
 			} else {
 				dr.extraRowsRight += 1 + count
@@ -589,7 +588,7 @@ func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 			// no more rows from the right
 			// we know we have rows from left, drain, update count
 			log.Errorf("Draining extra row(s) found on the left starting with: %v", left)
-			if count, err := rd.left.Drain(); err != nil {
+			if count, err := rd.left.Drain(ctx); err != nil {
 				return dr, err
 			} else {
 				dr.extraRowsLeft += 1 + count

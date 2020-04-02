@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"io/ioutil"
@@ -88,7 +89,7 @@ func (rv *RegionJson) IsUnique() bool {
 }
 
 // Map satisfies MultiColumn.
-func (rv *RegionJson) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (rv *RegionJson) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	destinations := make([]key.Destination, 0, len(rowsColValues))
 	for _, row := range rowsColValues {
 		if len(row) != 2 {
@@ -122,15 +123,15 @@ func (rv *RegionJson) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]
 }
 
 // Verify satisfies MultiColumn
-func (rv *RegionJson) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (rv *RegionJson) Verify(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	result := make([]bool, len(rowsColValues))
-	destinations, _ := rv.Map(vcursor, rowsColValues)
+	destinations, _ := rv.Map(ctx, vcursor, rowsColValues)
 	for i, dest := range destinations {
 		destksid, ok := dest.(key.DestinationKeyspaceID)
 		if !ok {
 			continue
 		}
-		result[i] = bytes.Equal([]byte(destksid), ksids[i])
+		result[i] = bytes.Equal(destksid, ksids[i])
 	}
 	return result, nil
 }

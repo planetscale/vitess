@@ -140,7 +140,7 @@ func compareFields(left, right []*querypb.Field) error {
 
 // Diff runs the diff and reconcile.
 // If an error occurs, it will return and stop.
-func (rd *RowDiffer2) Diff() (DiffReport, error) {
+func (rd *RowDiffer2) Diff(ctx context.Context) (DiffReport, error) {
 	var dr DiffReport
 	var err error
 
@@ -154,13 +154,13 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 	advanceRight := true
 	for {
 		if advanceLeft {
-			if left, err = rd.left.Next(); err != nil {
+			if left, err = rd.left.Next(ctx); err != nil {
 				return dr, err
 			}
 			advanceLeft = false
 		}
 		if advanceRight {
-			if right, err = rd.right.Next(); err != nil {
+			if right, err = rd.right.Next(ctx); err != nil {
 				return dr, err
 			}
 			advanceRight = false
@@ -174,7 +174,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			// No more rows on the left side.
 			// We know we have at least one row on the right side left.
 			// Delete the row from the destination.
-			if err := rd.reconcileRow(right, DiffExtraneous); err != nil {
+			if err := rd.reconcileRow(ctx, right, DiffExtraneous); err != nil {
 				return dr, err
 			}
 			dr.extraRowsRight++
@@ -185,7 +185,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			// No more rows on the right side.
 			// We know we have at least one row on the left side left.
 			// Add the row on the destination.
-			if err := rd.reconcileRow(left, DiffMissing); err != nil {
+			if err := rd.reconcileRow(ctx, left, DiffMissing); err != nil {
 				return dr, err
 			}
 			dr.extraRowsLeft++
@@ -210,7 +210,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			advanceLeft = true
 			advanceRight = true
 			// Update the row on the destination.
-			if err := rd.updateRow(left, right, DiffNotEqual); err != nil {
+			if err := rd.updateRow(ctx, left, right, DiffNotEqual); err != nil {
 				return dr, err
 			}
 			continue
@@ -225,7 +225,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			dr.extraRowsLeft++
 			advanceLeft = true
 			// Add the row on the destination.
-			if err := rd.reconcileRow(left, DiffMissing); err != nil {
+			if err := rd.reconcileRow(ctx, left, DiffMissing); err != nil {
 				return dr, err
 			}
 			continue
@@ -233,7 +233,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			dr.extraRowsRight++
 			advanceRight = true
 			// Delete the row from the destination.
-			if err := rd.reconcileRow(right, DiffExtraneous); err != nil {
+			if err := rd.reconcileRow(ctx, right, DiffExtraneous); err != nil {
 				return dr, err
 			}
 			continue
@@ -249,7 +249,7 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 		advanceLeft = true
 		advanceRight = true
 		// Update the row on the destination.
-		if err := rd.updateRow(left, right, DiffNotEqual); err != nil {
+		if err := rd.updateRow(ctx, left, right, DiffNotEqual); err != nil {
 			return dr, err
 		}
 	}
@@ -275,11 +275,11 @@ func (rd *RowDiffer2) skipRow() {
 }
 
 // reconcileRow is used for the DiffType DiffMissing and DiffExtraneous.
-func (rd *RowDiffer2) reconcileRow(row []sqltypes.Value, typ DiffType) error {
+func (rd *RowDiffer2) reconcileRow(ctx context.Context, row []sqltypes.Value, typ DiffType) error {
 	if typ == DiffNotEqual {
 		panic(fmt.Sprintf("reconcileRow() called with wrong type: %v", typ))
 	}
-	destShardIndex, err := rd.router.Route(row)
+	destShardIndex, err := rd.router.Route(ctx, row)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to route row (%v) to correct shard", row)
 	}
@@ -297,15 +297,15 @@ func (rd *RowDiffer2) reconcileRow(row []sqltypes.Value, typ DiffType) error {
 // to detect if the keyspace_id has changed in the meantime.
 // If that's the case, we cannot UPDATE the row. Instead, we must DELETE
 // the old row and INSERT the new row to the respective destination shards.
-func (rd *RowDiffer2) updateRow(newRow, oldRow []sqltypes.Value, typ DiffType) error {
+func (rd *RowDiffer2) updateRow(ctx context.Context, newRow, oldRow []sqltypes.Value, typ DiffType) error {
 	if typ != DiffNotEqual {
 		panic(fmt.Sprintf("updateRow() called with wrong type: %v", typ))
 	}
-	destShardIndexOld, err := rd.router.Route(oldRow)
+	destShardIndexOld, err := rd.router.Route(ctx, oldRow)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to route old row (%v) to correct shard", oldRow)
 	}
-	destShardIndexNew, err := rd.router.Route(newRow)
+	destShardIndexNew, err := rd.router.Route(ctx, newRow)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to route new row (%v) to correct shard", newRow)
 	}
@@ -350,13 +350,13 @@ func NewRowRouter(shardInfos []*topo.ShardInfo, keyResolver keyspaceIDResolver) 
 
 // Route returns which shard (specified by the index of the list of shards
 // passed in NewRowRouter) contains the given row.
-func (rr *RowRouter) Route(row []sqltypes.Value) (int, error) {
+func (rr *RowRouter) Route(ctx context.Context, row []sqltypes.Value) (int, error) {
 	if len(rr.keyRanges) == 1 {
 		// Fast path when there is only one destination shard.
 		return 0, nil
 	}
 
-	k, err := rr.keyResolver.keyspaceID(row)
+	k, err := rr.keyResolver.keyspaceID(ctx, row)
 	if err != nil {
 		return -1, err
 	}

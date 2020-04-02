@@ -529,7 +529,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				return pos, err
 			}
 
-			statements = bls.appendInserts(statements, tce, &rows)
+			statements = bls.appendInserts(ctx, statements, tce, &rows)
 
 			if autocommit {
 				if err = commit(ev.Timestamp()); err != nil {
@@ -559,7 +559,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				return pos, err
 			}
 
-			statements = bls.appendUpdates(statements, tce, &rows)
+			statements = bls.appendUpdates(ctx, statements, tce, &rows)
 
 			if autocommit {
 				if err = commit(ev.Timestamp()); err != nil {
@@ -589,7 +589,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				return pos, err
 			}
 
-			statements = bls.appendDeletes(statements, tce, &rows)
+			statements = bls.appendDeletes(ctx, statements, tce, &rows)
 
 			if autocommit {
 				if err = commit(ev.Timestamp()); err != nil {
@@ -600,7 +600,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 }
 
-func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
+func (bls *Streamer) appendInserts(ctx context.Context, statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		sql := sqlparser.NewTrackedBuffer(nil)
 		sql.Myprintf("INSERT INTO %v SET ", sqlparser.NewTableIdent(tce.tm.Name))
@@ -615,7 +615,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 		var ksid []byte
 		if tce.resolver != nil {
 			var err error
-			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
+			ksid, err = tce.resolver.keyspaceID(ctx, keyspaceIDCell)
 			if err != nil {
 				log.Warningf("resolver(%v) failed: %v", err)
 			}
@@ -636,7 +636,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 	return statements
 }
 
-func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
+func (bls *Streamer) appendUpdates(ctx context.Context, statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		sql := sqlparser.NewTrackedBuffer(nil)
 		sql.Myprintf("UPDATE %v SET ", sqlparser.NewTableIdent(tce.tm.Name))
@@ -658,7 +658,7 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 		var ksid []byte
 		if tce.resolver != nil {
 			var err error
-			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
+			ksid, err = tce.resolver.keyspaceID(ctx, keyspaceIDCell)
 			if err != nil {
 				log.Warningf("resolver(%v) failed: %v", err)
 			}
@@ -679,7 +679,7 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 	return statements
 }
 
-func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
+func (bls *Streamer) appendDeletes(ctx context.Context, statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		sql := sqlparser.NewTrackedBuffer(nil)
 		sql.Myprintf("DELETE FROM %v WHERE ", sqlparser.NewTableIdent(tce.tm.Name))
@@ -694,7 +694,7 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 		var ksid []byte
 		if tce.resolver != nil {
 			var err error
-			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
+			ksid, err = tce.resolver.keyspaceID(ctx, keyspaceIDCell)
 			if err != nil {
 				log.Warningf("resolver(%v) failed: %v", err)
 			}

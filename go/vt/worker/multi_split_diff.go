@@ -702,7 +702,7 @@ func (msdw *MultiSplitDiffWorker) diffSingleTable(ctx context.Context, wg *sync.
 		defer destinationQueryResultReader.Close(ctx)
 		destinationQueryResultReaders[i] = destinationQueryResultReader
 	}
-	mergedResultReader, err := NewResultMerger(destinationQueryResultReaders, len(tableDefinition.PrimaryKeyColumns))
+	mergedResultReader, err := NewResultMerger(ctx, destinationQueryResultReaders, len(tableDefinition.PrimaryKeyColumns))
 	if err != nil {
 		return err
 	}
@@ -714,7 +714,7 @@ func (msdw *MultiSplitDiffWorker) diffSingleTable(ctx context.Context, wg *sync.
 	}
 
 	// And run the diff.
-	report, err := differ.Go(msdw.wr.Logger())
+	report, err := differ.Go(ctx, msdw.wr.Logger())
 	if err != nil {
 		return err
 	}

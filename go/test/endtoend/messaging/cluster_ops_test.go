@@ -255,13 +255,13 @@ func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodata.K
 	if err != nil {
 		return nil, err
 	}
-	qr, err := resultStream.Recv()
+	qr, err := resultStream.Recv(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	go func() {
 		for {
-			qr, err := resultStream.Recv()
+			qr, err := resultStream.Recv(context.Background())
 			if err != nil {
 				log.Infof("Message stream ended: %v", err)
 				return

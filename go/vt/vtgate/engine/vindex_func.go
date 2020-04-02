@@ -105,12 +105,12 @@ func (vf *VindexFunc) GetTableName() string {
 
 // Execute performs a non-streaming exec.
 func (vf *VindexFunc) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return vf.mapVindex(vcursor, bindVars)
+	return vf.mapVindex(ctx, vcursor, bindVars)
 }
 
 // StreamExecute performs a streaming exec.
 func (vf *VindexFunc) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	r, err := vf.mapVindex(vcursor, bindVars)
+	r, err := vf.mapVindex(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 	return &sqltypes.Result{Fields: vf.Fields}, nil
 }
 
-func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	k, err := vf.Value.ResolveValue(bindVars)
 	if err != nil {
 		return nil, err
@@ -138,7 +138,7 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 		Fields: vf.Fields,
 	}
 
-	destinations, err := vf.Vindex.Map(vcursor, []sqltypes.Value{k})
+	destinations, err := vf.Vindex.Map(ctx, vcursor, []sqltypes.Value{k})
 	if err != nil {
 		return nil, err
 	}

@@ -298,7 +298,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 				return fmt.Errorf("unexpected server EOF")
 			}
-			vevents, err := vs.parseEvent(ev)
+			vevents, err := vs.parseEvent(ctx, ev)
 			if err != nil {
 				return err
 			}
@@ -335,7 +335,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 }
 
 // parseEvent parses an event from the binlog and converts it to a list of VEvents.
-func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
+func (vs *vstreamer) parseEvent(ctx context.Context, ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
 	if !ev.IsValid() {
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
 	}
@@ -525,9 +525,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, err
 		}
 		if id == vs.journalTableID {
-			vevents, err = vs.processJounalEvent(vevents, plan, rows)
+			vevents, err = vs.processJounalEvent(ctx, vevents, plan, rows)
 		} else {
-			vevents, err = vs.processRowEvent(vevents, plan, rows)
+			vevents, err = vs.processRowEvent(ctx, vevents, plan, rows)
 		}
 		if err != nil {
 			return nil, err
@@ -644,7 +644,7 @@ func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]*queryp
 	return fields, nil
 }
 
-func (vs *vstreamer) processJounalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
+func (vs *vstreamer) processJounalEvent(ctx context.Context, vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
 	// Get DbName
 	params, err := vs.cp.MysqlParams()
 	if err != nil {
@@ -652,7 +652,7 @@ func (vs *vstreamer) processJounalEvent(vevents []*binlogdatapb.VEvent, plan *st
 	}
 nextrow:
 	for _, row := range rows.Rows {
-		afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+		afterOK, afterValues, err := vs.extractRowAndFilter(ctx, plan, row.Data, rows.DataColumns, row.NullColumns)
 		if err != nil {
 			return nil, err
 		}
@@ -683,14 +683,14 @@ nextrow:
 	return vevents, nil
 }
 
-func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
+func (vs *vstreamer) processRowEvent(ctx context.Context, vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
 	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
 	for _, row := range rows.Rows {
-		beforeOK, beforeValues, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
+		beforeOK, beforeValues, err := vs.extractRowAndFilter(ctx, plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
 		if err != nil {
 			return nil, err
 		}
-		afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+		afterOK, afterValues, err := vs.extractRowAndFilter(ctx, plan, row.Data, rows.DataColumns, row.NullColumns)
 		if err != nil {
 			return nil, err
 		}
@@ -737,7 +737,7 @@ func (vs *vstreamer) rebuildPlans() error {
 	return nil
 }
 
-func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataColumns, nullColumns mysql.Bitmap) (bool, []sqltypes.Value, error) {
+func (vs *vstreamer) extractRowAndFilter(ctx context.Context, plan *streamerPlan, data []byte, dataColumns, nullColumns mysql.Bitmap) (bool, []sqltypes.Value, error) {
 	if len(data) == 0 {
 		return false, nil, nil
 	}
@@ -760,7 +760,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		values[colNum] = value
 		valueIndex++
 	}
-	return plan.filter(values)
+	return plan.filter(ctx, values)
 }
 
 func wrapError(err error, stopPos mysql.Position) error {

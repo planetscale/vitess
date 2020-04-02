@@ -203,7 +203,7 @@ func (vsClient *MySQLVStreamerClient) VStreamRows(ctx context.Context, query str
 		row = r.Rows[0]
 	}
 	streamer := vstreamer.NewRowStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, query, row, send)
-	return streamer.Stream()
+	return streamer.Stream(ctx)
 }
 
 // InitVStreamerClient initializes config for vstreamer client

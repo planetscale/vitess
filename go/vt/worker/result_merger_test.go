@@ -17,6 +17,7 @@ limitations under the License.
 package worker
 
 import (
+	context2 "context"
 	"fmt"
 	"io"
 	"reflect"
@@ -118,7 +119,7 @@ func (f *fakeResultReader) Close(ctx context.Context) {
 }
 
 // Next returns the next fake result. It is part of the ResultReader interface.
-func (f *fakeResultReader) Next() (*sqltypes.Result, error) {
+func (f *fakeResultReader) Next(context2.Context) (*sqltypes.Result, error) {
 	if f.rowsReturned == f.rowsTotal {
 		return nil, io.EOF
 	}
@@ -310,7 +311,7 @@ func TestResultMerger(t *testing.T) {
 			if tc.multiPk {
 				pkFieldCount = 2
 			}
-			rm, err := NewResultMerger(tc.inputs, pkFieldCount)
+			rm, err := NewResultMerger(ctx, tc.inputs, pkFieldCount)
 			if err != nil {
 				inner.Fatal(err)
 			}
@@ -318,7 +319,7 @@ func TestResultMerger(t *testing.T) {
 			// Consume all merged Results.
 			var got []*sqltypes.Result
 			for {
-				result, err := rm.Next()
+				result, err := rm.Next(ctx)
 				if err != nil {
 					if err == io.EOF {
 						break
@@ -380,7 +381,7 @@ func newMemoryResultReader(input ResultReader) *memoryResultReader {
 		fields: input.Fields(),
 	}
 	for {
-		result, err := input.Next()
+		result, err := input.Next(ctx)
 		if err != nil {
 			if err == io.EOF {
 				return m
@@ -395,7 +396,7 @@ func (m *memoryResultReader) Fields() []*querypb.Field {
 	return m.fields
 }
 
-func (m *memoryResultReader) Next() (*sqltypes.Result, error) {
+func (m *memoryResultReader) Next(context2.Context) (*sqltypes.Result, error) {
 	if m.currentIndex == len(m.results) {
 		return nil, io.EOF
 	}
@@ -463,7 +464,7 @@ func benchmarkResultMerger(b *testing.B, distribution []int) {
 		inputs[i] = newMemoryResultReader(
 			newFakeResultReader(singlePk, i, distribution, iterations))
 	}
-	rm, err := NewResultMerger(inputs, 1 /* pkFieldCount */)
+	rm, err := NewResultMerger(ctx, inputs, 1 /* pkFieldCount */)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -474,7 +475,7 @@ func benchmarkResultMerger(b *testing.B, distribution []int) {
 	// Merge all rows.
 	var lastResult *sqltypes.Result
 	for {
-		result, err := rm.Next()
+		result, err := rm.Next(ctx)
 		if err != nil {
 			if err == io.EOF {
 				break

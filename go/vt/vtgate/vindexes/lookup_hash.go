@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -99,7 +100,7 @@ func (lh *LookupHash) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (lh *LookupHash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	if lh.writeOnly {
 		for range ids {
@@ -133,7 +134,7 @@ func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destinat
 }
 
 // Verify returns true if ids maps to ksids.
-func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (lh *LookupHash) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	if lh.writeOnly {
 		out := make([]bool, len(ids))
 		for i := range ids {
@@ -150,30 +151,30 @@ func (lh *LookupHash) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]by
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lh *LookupHash) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+func (lh *LookupHash) Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
+	return lh.lkp.Create(ctx, vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Update updates the entry in the vindex table.
-func (lh *LookupHash) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+func (lh *LookupHash) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Update.vunhash: %v", err)
 	}
-	return lh.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
+	return lh.lkp.Update(ctx, vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
 }
 
 // Delete deletes the entry from the vindex table.
-func (lh *LookupHash) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
+func (lh *LookupHash) Delete(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	return lh.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
+	return lh.lkp.Delete(ctx, vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
@@ -255,7 +256,7 @@ func (lhu *LookupHashUnique) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (lhu *LookupHashUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	if lhu.writeOnly {
 		for range ids {
@@ -287,7 +288,7 @@ func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.D
 }
 
 // Verify returns true if ids maps to ksids.
-func (lhu *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (lhu *LookupHashUnique) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	if lhu.writeOnly {
 		out := make([]bool, len(ids))
 		for i := range ids {
@@ -304,30 +305,30 @@ func (lhu *LookupHashUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lhu *LookupHashUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+func (lhu *LookupHashUnique) Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
 	values, err := unhashList(ksids)
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lhu.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
+	return lhu.lkp.Create(ctx, vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
-func (lhu *LookupHashUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
+func (lhu *LookupHashUnique) Delete(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Delete.vunhash: %v", err)
 	}
-	return lhu.lkp.Delete(vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
+	return lhu.lkp.Delete(ctx, vcursor, rowsColValues, sqltypes.NewUint64(v), vtgatepb.CommitOrder_NORMAL)
 }
 
 // Update updates the entry in the vindex table.
-func (lhu *LookupHashUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+func (lhu *LookupHashUnique) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	v, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Update.vunhash: %v", err)
 	}
-	return lhu.lkp.Update(vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
+	return lhu.lkp.Update(ctx, vcursor, oldValues, ksid, sqltypes.NewUint64(v), newValues)
 }
 
 // MarshalJSON returns a JSON representation of LookupHashUnique.

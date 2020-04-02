@@ -440,7 +440,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 				return
 			}
 
-			report, err := differ.Go(vsdw.wr.Logger())
+			report, err := differ.Go(ctx, vsdw.wr.Logger())
 			if err != nil {
 				vsdw.wr.Logger().Errorf2(err, "Differ.Go failed")
 			} else {

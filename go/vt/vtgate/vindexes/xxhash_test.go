@@ -80,7 +80,7 @@ func TestXXHashMap(t *testing.T) {
 	}}
 
 	for _, tcase := range tcases {
-		got, err := xxHash.Map(nil, []sqltypes.Value{tcase.in})
+		got, err := xxHash.Map(ctx, nil, []sqltypes.Value{tcase.in})
 		if err != nil {
 			t.Error(err)
 		}
@@ -94,7 +94,7 @@ func TestXXHashMap(t *testing.T) {
 func TestXXHashVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewUint64(1), sqltypes.NewUint64(2)}
 	ksids := [][]byte{{0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}, {0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}}
-	got, err := xxHash.Verify(nil, ids, ksids)
+	got, err := xxHash.Verify(ctx, nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}

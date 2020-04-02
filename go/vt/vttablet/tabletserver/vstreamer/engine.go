@@ -228,7 +228,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 	}()
 
 	// No lock is held while streaming, but wg is incremented.
-	return rowStreamer.Stream()
+	return rowStreamer.Stream(ctx)
 }
 
 // StreamResults streams results of the query with the gtid.

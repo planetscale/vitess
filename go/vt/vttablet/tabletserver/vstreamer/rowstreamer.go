@@ -33,7 +33,7 @@ import (
 
 // RowStreamer exposes an externally usable interface to rowStreamer.
 type RowStreamer interface {
-	Stream() error
+	Stream(ctx context.Context) error
 	Cancel()
 }
 
@@ -84,7 +84,7 @@ func (rs *rowStreamer) Cancel() {
 	rs.cancel()
 }
 
-func (rs *rowStreamer) Stream() error {
+func (rs *rowStreamer) Stream(ctx context.Context) error {
 	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	if err := rs.se.Open(); err != nil {
@@ -103,7 +103,7 @@ func (rs *rowStreamer) Stream() error {
 	if _, err := conn.ExecuteFetch("set names binary", 1, false); err != nil {
 		return err
 	}
-	return rs.streamQuery(conn, rs.send)
+	return rs.streamQuery(ctx, conn, rs.send)
 }
 
 func (rs *rowStreamer) buildPlan() error {
@@ -199,7 +199,7 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	return buf.String(), nil
 }
 
-func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (rs *rowStreamer) streamQuery(ctx context.Context, conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
 	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 	if err != nil {
@@ -251,7 +251,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			lastpk[i] = row[pk]
 		}
 		// Reuse the vstreamer's filter.
-		ok, filtered, err := rs.plan.filter(row)
+		ok, filtered, err := rs.plan.filter(ctx, row)
 		if err != nil {
 			return err
 		}

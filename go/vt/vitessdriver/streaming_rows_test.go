@@ -17,6 +17,7 @@ limitations under the License.
 package vitessdriver
 
 import (
+	"context"
 	"database/sql/driver"
 	"errors"
 	"io"
@@ -71,7 +72,7 @@ type adapter struct {
 	err error
 }
 
-func (a *adapter) Recv() (*sqltypes.Result, error) {
+func (a *adapter) Recv(context.Context) (*sqltypes.Result, error) {
 	r, ok := <-a.c
 	if !ok {
 		return nil, a.err
@@ -85,7 +86,7 @@ func TestStreamingRows(t *testing.T) {
 	c <- &packet2
 	c <- &packet3
 	close(c)
-	ri := newStreamingRows(&adapter{c: c, err: io.EOF}, &converter{})
+	ri := newStreamingRows(ctx, &adapter{c: c, err: io.EOF}, &converter{})
 	wantCols := []string{
 		"field1",
 		"field2",
@@ -133,7 +134,7 @@ func TestStreamingRowsReversed(t *testing.T) {
 	c <- &packet2
 	c <- &packet3
 	close(c)
-	ri := newStreamingRows(&adapter{c: c, err: io.EOF}, &converter{})
+	ri := newStreamingRows(ctx, &adapter{c: c, err: io.EOF}, &converter{})
 	defer ri.Close()
 
 	wantRow := []driver.Value{
@@ -164,7 +165,7 @@ func TestStreamingRowsReversed(t *testing.T) {
 func TestStreamingRowsError(t *testing.T) {
 	c := make(chan *sqltypes.Result)
 	close(c)
-	ri := newStreamingRows(&adapter{c: c, err: errors.New("error before fields")}, &converter{})
+	ri := newStreamingRows(ctx, &adapter{c: c, err: errors.New("error before fields")}, &converter{})
 
 	gotCols := ri.Columns()
 	if gotCols != nil {
@@ -181,7 +182,7 @@ func TestStreamingRowsError(t *testing.T) {
 	c = make(chan *sqltypes.Result, 1)
 	c <- &packet1
 	close(c)
-	ri = newStreamingRows(&adapter{c: c, err: errors.New("error after fields")}, &converter{})
+	ri = newStreamingRows(ctx, &adapter{c: c, err: errors.New("error after fields")}, &converter{})
 	wantCols := []string{
 		"field1",
 		"field2",
@@ -208,7 +209,7 @@ func TestStreamingRowsError(t *testing.T) {
 	c <- &packet1
 	c <- &packet2
 	close(c)
-	ri = newStreamingRows(&adapter{c: c, err: errors.New("error after rows")}, &converter{})
+	ri = newStreamingRows(ctx, &adapter{c: c, err: errors.New("error after rows")}, &converter{})
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
 	require.NoError(t, err)
@@ -222,7 +223,7 @@ func TestStreamingRowsError(t *testing.T) {
 	c = make(chan *sqltypes.Result, 1)
 	c <- &packet2
 	close(c)
-	ri = newStreamingRows(&adapter{c: c, err: io.EOF}, &converter{})
+	ri = newStreamingRows(ctx, &adapter{c: c, err: io.EOF}, &converter{})
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
 	wantErr = "first packet did not return fields"
@@ -231,3 +232,5 @@ func TestStreamingRowsError(t *testing.T) {
 	}
 	_ = ri.Close()
 }
+
+var ctx = context.Background()

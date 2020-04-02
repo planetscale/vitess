@@ -667,7 +667,7 @@ func (scw *LegacySplitCloneWorker) processData(ctx context.Context, dbNames []st
 
 	fields := rr.Fields()
 	for {
-		r, err := rr.Next()
+		r, err := rr.Next(ctx)
 		if err != nil {
 			// we are done, see if there was an error
 			if err != io.EOF {
@@ -684,7 +684,7 @@ func (scw *LegacySplitCloneWorker) processData(ctx context.Context, dbNames []st
 		}
 
 		// Split the rows by keyspace ID, and insert each chunk into each destination
-		if err := rowSplitter.Split(sr, r.Rows); err != nil {
+		if err := rowSplitter.Split(ctx, sr, r.Rows); err != nil {
 			return vterrors.Wrapf(err, "RowSplitter failed for table %v", td.Name)
 		}
 		scw.tableStatusList.addCopiedRows(tableIndex, len(r.Rows))

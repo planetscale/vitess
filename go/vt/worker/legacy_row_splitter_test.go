@@ -20,6 +20,7 @@ package worker
 // primary key columns based on the MySQL collation.
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"reflect"
@@ -78,7 +79,7 @@ func TestRowSplitterUint64(t *testing.T) {
 	// basic split
 	rows := [][]sqltypes.Value{row0, row1, row2, row2, row1, row2, row0}
 	result := rs.StartSplit()
-	if err := rs.Split(result, rows); err != nil {
+	if err := rs.Split(ctx, result, rows); err != nil {
 		t.Fatalf("Split failed: %v", err)
 	}
 	if len(result) != 3 {
@@ -134,7 +135,7 @@ func TestRowSplitterString(t *testing.T) {
 	// basic split
 	rows := [][]sqltypes.Value{row0, row1, row2, row2, row1, row2, row0}
 	result := rs.StartSplit()
-	if err := rs.Split(result, rows); err != nil {
+	if err := rs.Split(ctx, result, rows); err != nil {
 		t.Fatalf("Split failed: %v", err)
 	}
 	if len(result) != 3 {
@@ -150,3 +151,5 @@ func TestRowSplitterString(t *testing.T) {
 		t.Fatalf("Bad result[2]: %v", result[2])
 	}
 }
+
+var ctx = context.Background()

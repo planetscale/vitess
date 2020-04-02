@@ -125,13 +125,13 @@ func (upd *Update) Execute(ctx context.Context, vcursor VCursor, bindVars map[st
 
 	switch upd.Opcode {
 	case Unsharded:
-		return upd.execUpdateUnsharded(vcursor, bindVars)
+		return upd.execUpdateUnsharded(ctx, vcursor, bindVars)
 	case Equal:
-		return upd.execUpdateEqual(vcursor, bindVars)
+		return upd.execUpdateEqual(ctx, vcursor, bindVars)
 	case Scatter:
-		return upd.execUpdateByDestination(vcursor, bindVars, key.DestinationAllShards{})
+		return upd.execUpdateByDestination(ctx, vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
-		return upd.execUpdateByDestination(vcursor, bindVars, upd.TargetDestination)
+		return upd.execUpdateByDestination(ctx, vcursor, bindVars, upd.TargetDestination)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", upd)
@@ -148,7 +148,7 @@ func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
 }
 
-func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (upd *Update) execUpdateUnsharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateUnsharded")
@@ -159,12 +159,12 @@ func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*que
 	return execShard(vcursor, upd.Query, bindVars, rss[0], true, true /* canAutocommit */)
 }
 
-func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (upd *Update) execUpdateEqual(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	key, err := upd.Values[0].ResolveValue(bindVars)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
-	rs, ksid, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, key)
+	rs, ksid, err := resolveSingleShard(ctx, vcursor, upd.Vindex, upd.Keyspace, key)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateEqual")
 	}
@@ -172,7 +172,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs}); err != nil {
+		if err := upd.updateVindexEntries(ctx, vcursor, bindVars, []*srvtopo.ResolvedShard{rs}); err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
 	}
@@ -185,7 +185,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 // for DMLs to reuse existing transactions.
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
-func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: upd.OwnedVindexQuery, BindVariables: bindVars}
@@ -207,7 +207,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	}
 
 	for _, row := range subQueryResult.Rows {
-		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0])
+		ksid, err := resolveKeyspaceID(ctx, vcursor, upd.KsidVindex, row[0])
 		if err != nil {
 			return err
 		}
@@ -232,7 +232,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 					}
 				}
 
-				if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
+				if err := colVindex.Vindex.(vindexes.Lookup).Update(ctx, vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
 					return err
 				}
 			}
@@ -241,7 +241,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	return nil
 }
 
-func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
+func (upd *Update) execUpdateByDestination(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execUpdateByDestination")
@@ -257,7 +257,7 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 
 	// update any owned vindexes
 	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
+		if err := upd.updateVindexEntries(ctx, vcursor, bindVars, rss); err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateByDestination")
 		}
 	}

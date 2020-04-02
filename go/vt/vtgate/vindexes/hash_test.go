@@ -44,7 +44,7 @@ func TestHashInfo(t *testing.T) {
 }
 
 func TestHashMap(t *testing.T) {
-	got, err := hash.Map(nil, []sqltypes.Value{
+	got, err := hash.Map(ctx, nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -87,7 +87,7 @@ func TestHashMap(t *testing.T) {
 func TestHashVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
 	ksids := [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x16k@\xb4J\xbaK\xd6")}
-	got, err := hash.Verify(nil, ids, ksids)
+	got, err := hash.Verify(ctx, nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestHashVerify(t *testing.T) {
 	}
 
 	// Failure test
-	_, err = hash.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = hash.Verify(ctx, nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
 	wantErr := "hash.Verify: could not parse value: 'aa'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)

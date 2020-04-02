@@ -17,6 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/golang/protobuf/proto"
@@ -36,7 +37,7 @@ type Result struct {
 type ResultStream interface {
 	// Recv returns the next result on the stream.
 	// It will return io.EOF if the stream ended.
-	Recv() (*Result, error)
+	Recv(ctx context.Context) (*Result, error)
 }
 
 // Repair fixes the type info in the rows

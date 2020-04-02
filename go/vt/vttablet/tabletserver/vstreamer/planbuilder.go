@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamer
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -111,7 +112,7 @@ func (plan *Plan) fields() []*querypb.Field {
 
 // filter filters the row against the plan. It returns false if the row did not match.
 // If the row matched, it returns the columns to be sent.
-func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error) {
+func (plan *Plan) filter(ctx context.Context, values []sqltypes.Value) (bool, []sqltypes.Value, error) {
 	for _, filter := range plan.Filters {
 		switch filter.Opcode {
 		case Equal:
@@ -123,7 +124,7 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 				return false, nil, nil
 			}
 		case VindexMatch:
-			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns)
+			ksid, err := getKeyspaceID(ctx, values, filter.Vindex, filter.VindexColumns)
 			if err != nil {
 				return false, nil, err
 			}
@@ -141,22 +142,22 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 		if colExpr.Vindex == nil {
 			result[i] = values[colExpr.ColNum]
 		} else {
-			ksid, err := getKeyspaceID(values, colExpr.Vindex, colExpr.VindexColumns)
+			ksid, err := getKeyspaceID(ctx, values, colExpr.Vindex, colExpr.VindexColumns)
 			if err != nil {
 				return false, nil, err
 			}
-			result[i] = sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(ksid))
+			result[i] = sqltypes.MakeTrusted(sqltypes.VarBinary, ksid)
 		}
 	}
 	return true, result, nil
 }
 
-func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int) (key.DestinationKeyspaceID, error) {
+func getKeyspaceID(ctx context.Context, values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int) (key.DestinationKeyspaceID, error) {
 	vindexValues := make([]sqltypes.Value, 0, len(vindexColumns))
 	for _, col := range vindexColumns {
 		vindexValues = append(vindexValues, values[col])
 	}
-	destinations, err := vindexes.Map(vindex, nil, [][]sqltypes.Value{vindexValues})
+	destinations, err := vindexes.Map(ctx, vindex, nil, [][]sqltypes.Value{vindexValues})
 	if err != nil {
 		return nil, err
 	}

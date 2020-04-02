@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 
@@ -63,7 +64,7 @@ func (*Numeric) NeedsVCursor() bool {
 }
 
 // Verify returns true if ids and ksids match.
-func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (*Numeric) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
 		var keybytes [8]byte
@@ -78,7 +79,7 @@ func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool,
 }
 
 // Map can map ids to key.Destination objects.
-func (*Numeric) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*Numeric) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
 		num, err := sqltypes.ToUint64(id)

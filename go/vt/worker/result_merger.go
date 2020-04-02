@@ -18,11 +18,11 @@ package worker
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 	"io"
 
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -60,7 +60,7 @@ type ResultMerger struct {
 }
 
 // NewResultMerger returns a new ResultMerger.
-func NewResultMerger(inputs []ResultReader, pkFieldCount int) (*ResultMerger, error) {
+func NewResultMerger(ctx context.Context, inputs []ResultReader, pkFieldCount int) (*ResultMerger, error) {
 	if len(inputs) < 2 {
 		panic("ResultMerger requires at least two ResultReaders as input")
 	}
@@ -82,7 +82,7 @@ func NewResultMerger(inputs []ResultReader, pkFieldCount int) (*ResultMerger, er
 	nextRowHeap := newNextRowHeap(fields, pkFieldCount)
 	for i, input := range inputs {
 		nextRow := newNextRow(input)
-		if err := nextRow.next(); err != nil {
+		if err := nextRow.next(ctx); err != nil {
 			if err == io.EOF {
 				continue
 			}
@@ -121,14 +121,14 @@ func (rm *ResultMerger) Fields() []*querypb.Field {
 
 // Next returns the next Result in the sorted, merged stream.
 // It is part of the ResultReader interface.
-func (rm *ResultMerger) Next() (*sqltypes.Result, error) {
+func (rm *ResultMerger) Next(ctx context.Context) (*sqltypes.Result, error) {
 	// All input readers were consumed during a merge. Return end of stream.
 	if len(rm.inputs) == 0 {
 		return nil, io.EOF
 	}
 	// Endgame mode if there is exactly one input left.
 	if len(rm.inputs) == 1 && rm.lastRowReaderDrained {
-		return rm.inputs[0].Next()
+		return rm.inputs[0].Next(ctx)
 	}
 
 	// Current output buffer is not full and there is more than one input left.
@@ -139,7 +139,7 @@ func (rm *ResultMerger) Next() (*sqltypes.Result, error) {
 		// Add it to the output.
 		rm.output = append(rm.output, next.row)
 		// Check if the input we just popped has more rows.
-		if err := next.next(); err != nil {
+		if err := next.next(ctx); err != nil {
 			if err == io.EOF {
 				// No more rows. Delete this input ResultReader from "inputs".
 				rm.deleteInput(next.input)
@@ -244,9 +244,9 @@ func newNextRow(input ResultReader) *nextRow {
 
 // next reads the next row from the input. It returns io.EOF if the input stream
 // has ended.
-func (n *nextRow) next() error {
+func (n *nextRow) next(ctx context.Context) error {
 	var err error
-	n.row, err = n.rowReader.Next()
+	n.row, err = n.rowReader.Next(ctx)
 	if err != nil {
 		return err
 	}

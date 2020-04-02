@@ -283,7 +283,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 		if err != nil {
 			return nil, err
 		}
-		return newStreamingRows(stream, c.convert), nil
+		return newStreamingRows(ctx, stream, c.convert), nil
 	}
 
 	qr, err := c.session.Execute(ctx, query, bindVars)
@@ -304,7 +304,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		if err != nil {
 			return nil, err
 		}
-		return newStreamingRows(stream, c.convert), nil
+		return newStreamingRows(ctx, stream, c.convert), nil
 	}
 
 	qr, err := c.session.Execute(ctx, query, bv)

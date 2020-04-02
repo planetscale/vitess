@@ -20,6 +20,8 @@ package worker
 // primary key columns based on the MySQL collation.
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
@@ -53,9 +55,9 @@ func (rs *RowSplitter) StartSplit() [][][]sqltypes.Value {
 }
 
 // Split will split the rows into subset for each distribution
-func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Value) error {
+func (rs *RowSplitter) Split(ctx context.Context, result [][][]sqltypes.Value, rows [][]sqltypes.Value) error {
 	for _, row := range rows {
-		k, err := rs.KeyResolver.keyspaceID(row)
+		k, err := rs.KeyResolver.keyspaceID(ctx, row)
 		if err != nil {
 			return err
 		}

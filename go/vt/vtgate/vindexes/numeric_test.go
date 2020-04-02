@@ -41,7 +41,7 @@ func TestNumericInfo(t *testing.T) {
 }
 
 func TestNumericMap(t *testing.T) {
-	got, err := numeric.Map(nil, []sqltypes.Value{
+	got, err := numeric.Map(ctx, nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -70,9 +70,7 @@ func TestNumericMap(t *testing.T) {
 }
 
 func TestNumericVerify(t *testing.T) {
-	got, err := numeric.Verify(nil,
-		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
-		[][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
+	got, err := numeric.Verify(ctx, nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	require.NoError(t, err)
 	want := []bool{true, false}
 	if !reflect.DeepEqual(got, want) {
@@ -80,7 +78,7 @@ func TestNumericVerify(t *testing.T) {
 	}
 
 	// Failure test
-	_, err = numeric.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = numeric.Verify(ctx, nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
 	wantErr := "Numeric.Verify: could not parse value: 'aa'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)

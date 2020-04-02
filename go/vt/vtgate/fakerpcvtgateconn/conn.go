@@ -20,12 +20,12 @@ limitations under the License.
 package fakerpcvtgateconn
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
 	"reflect"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -149,7 +149,7 @@ type streamExecuteAdapter struct {
 	c chan *sqltypes.Result
 }
 
-func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
+func (a *streamExecuteAdapter) Recv(_ context.Context) (*sqltypes.Result, error) {
 	r, ok := <-a.c
 	if !ok {
 		return nil, io.EOF

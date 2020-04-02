@@ -120,11 +120,11 @@ func (del *Delete) Execute(ctx context.Context, vcursor VCursor, bindVars map[st
 	case Unsharded:
 		return del.execDeleteUnsharded(vcursor, bindVars)
 	case Equal:
-		return del.execDeleteEqual(vcursor, bindVars)
+		return del.execDeleteEqual(ctx, vcursor, bindVars)
 	case Scatter:
-		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
+		return del.execDeleteByDestination(ctx, vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
-		return del.execDeleteByDestination(vcursor, bindVars, del.TargetDestination)
+		return del.execDeleteByDestination(ctx, vcursor, bindVars, del.TargetDestination)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", del)
@@ -152,12 +152,12 @@ func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*que
 	return execShard(vcursor, del.Query, bindVars, rss[0], true, true /* canAutocommit */)
 }
 
-func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (del *Delete) execDeleteEqual(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	key, err := del.Values[0].ResolveValue(bindVars)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
 	}
-	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key)
+	rs, ksid, err := resolveSingleShard(ctx, vcursor, del.Vindex, del.Keyspace, key)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
 	}
@@ -165,7 +165,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if del.OwnedVindexQuery != "" {
-		err = del.deleteVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs})
+		err = del.deleteVindexEntries(ctx, vcursor, bindVars, []*srvtopo.ResolvedShard{rs})
 		if err != nil {
 			return nil, vterrors.Wrap(err, "execDeleteEqual")
 		}
@@ -176,7 +176,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 // deleteVindexEntries performs an delete if table owns vindex.
 // Note: the commit order may be different from the DML order because it's possible
 // for DMLs to reuse existing transactions.
-func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+func (del *Delete) deleteVindexEntries(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: del.OwnedVindexQuery, BindVariables: bindVars}
@@ -194,7 +194,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 
 	for _, row := range subQueryResults.Rows {
 		colnum := 1
-		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex, row[0])
+		ksid, err := resolveKeyspaceID(ctx, vcursor, del.KsidVindex, row[0])
 		if err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 				fromIds = append(fromIds, row[colnum])
 				colnum++
 			}
-			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, [][]sqltypes.Value{fromIds}, ksid); err != nil {
+			if err := colVindex.Vindex.(vindexes.Lookup).Delete(ctx, vcursor, [][]sqltypes.Value{fromIds}, ksid); err != nil {
 				return err
 			}
 		}
@@ -215,7 +215,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	return nil
 }
 
-func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
+func (del *Delete) execDeleteByDestination(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteScatter")
@@ -229,7 +229,7 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 		}
 	}
 	if len(del.Table.Owned) > 0 {
-		err = del.deleteVindexEntries(vcursor, bindVars, rss)
+		err = del.deleteVindexEntries(ctx, vcursor, bindVars, rss)
 		if err != nil {
 			return nil, err
 		}

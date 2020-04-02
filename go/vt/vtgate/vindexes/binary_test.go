@@ -53,7 +53,7 @@ func TestBinaryMap(t *testing.T) {
 		out: []byte("test2"),
 	}}
 	for _, tcase := range tcases {
-		got, err := binOnlyVindex.Map(nil, []sqltypes.Value{tcase.in})
+		got, err := binOnlyVindex.Map(ctx, nil, []sqltypes.Value{tcase.in})
 		if err != nil {
 			t.Error(err)
 		}
@@ -67,7 +67,7 @@ func TestBinaryMap(t *testing.T) {
 func TestBinaryVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("2")}
 	ksids := [][]byte{[]byte("1"), []byte("1")}
-	got, err := binOnlyVindex.Verify(nil, ids, ksids)
+	got, err := binOnlyVindex.Verify(ctx, nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}

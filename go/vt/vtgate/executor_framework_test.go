@@ -18,13 +18,13 @@ package vtgate
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
@@ -287,10 +287,10 @@ func (v *keyRangeLookuper) String() string   { return "keyrange_lookuper" }
 func (*keyRangeLookuper) Cost() int          { return 0 }
 func (*keyRangeLookuper) IsUnique() bool     { return false }
 func (*keyRangeLookuper) NeedsVCursor() bool { return false }
-func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*keyRangeLookuper) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuper) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*keyRangeLookuper) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{
@@ -312,10 +312,10 @@ func (v *keyRangeLookuperUnique) String() string   { return "keyrange_lookuper" 
 func (*keyRangeLookuperUnique) Cost() int          { return 0 }
 func (*keyRangeLookuperUnique) IsUnique() bool     { return true }
 func (*keyRangeLookuperUnique) NeedsVCursor() bool { return false }
-func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*keyRangeLookuperUnique) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuperUnique) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*keyRangeLookuperUnique) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{

@@ -535,7 +535,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			}
 
 			// And run the diff.
-			report, err := differ.Go(sdw.wr.Logger())
+			report, err := differ.Go(ctx, sdw.wr.Logger())
 			if err != nil {
 				newErr := vterrors.Wrapf(err, "Differ.Go failed")
 				sdw.markAsWillFail(rec, newErr)

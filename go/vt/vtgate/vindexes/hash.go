@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"crypto/cipher"
 	"crypto/des"
 	"encoding/binary"
@@ -70,7 +71,7 @@ func (vind *Hash) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *Hash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *Hash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
 		var num uint64
@@ -96,7 +97,7 @@ func (vind *Hash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, 
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *Hash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (vind *Hash) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
 		num, err := sqltypes.ToUint64(ids[i])

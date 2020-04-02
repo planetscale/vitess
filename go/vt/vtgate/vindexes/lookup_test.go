@@ -126,7 +126,7 @@ func TestLookupNonUniqueInfo(t *testing.T) {
 func TestLookupNilVCursor(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 
-	_, err := lookupNonUnique.Map(nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	_, err := lookupNonUnique.Map(ctx, nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	want := "cannot perform lookup: no vcursor provided"
 	if err == nil || err.Error() != want {
 		t.Errorf("Map(nil vcursor) err: %v, want %v", err, want)
@@ -137,7 +137,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{numRows: 2}
 
-	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupNonUnique.Map(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceIDs([][]byte{
@@ -170,7 +170,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	_, err = lookupNonUnique.Map(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	wantErr := "lookup.Map: execute failed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, wantErr)
@@ -191,7 +191,7 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 2}
 
-	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupNonUnique.Map(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceIDs([][]byte{
@@ -231,7 +231,7 @@ func TestLookupNonUniqueMapWriteOnly(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", true)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupNonUnique.Map(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyRange{
@@ -250,7 +250,7 @@ func TestLookupNonUniqueMapAbsent(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookupNonUnique.Map(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationNone{},
@@ -265,7 +265,7 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{numRows: 1}
 
-	_, err := lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
+	_, err := lookupNonUnique.Verify(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
@@ -287,7 +287,7 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	_, err = lookupNonUnique.Verify(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	want := "lookup.Verify: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -298,7 +298,7 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 	lookupNonUnique = createLookup(t, "lookup", true)
 	vc.queries = nil
 
-	got, err := lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte(""), []byte("")})
+	got, err := lookupNonUnique.Verify(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte(""), []byte("")})
 	require.NoError(t, err)
 	if vc.queries != nil {
 		t.Errorf("lookup.Verify(writeOnly), queries: %v, want nil", vc.queries)
@@ -322,7 +322,7 @@ func TestLookupNonUniqueVerifyAutocommit(t *testing.T) {
 	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
-	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
+	_, err = lookupNonUnique.Verify(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
@@ -351,7 +351,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{}
 
-	err := lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, [][]byte{[]byte("test1"), []byte("test2")}, false /* ignoreMode */)
+	err := lookupNonUnique.(Lookup).Create(ctx, vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, [][]byte{[]byte("test1"), []byte("test2")}, false)
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
@@ -369,7 +369,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 	// With ignore.
 	vc.queries = nil
-	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NewInt64(1)}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
+	err = lookupNonUnique.(Lookup).Create(ctx, vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NewInt64(1)}}, [][]byte{[]byte("test2"), []byte("test1")}, true)
 	require.NoError(t, err)
 
 	wantqueries[0].Sql = "insert ignore into t(fromc, toc) values(:fromc0, :toc0), (:fromc1, :toc1)"
@@ -379,7 +379,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
+	err = lookupNonUnique.(Lookup).Create(ctx, vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false)
 	want := "lookup.Create: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -387,7 +387,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	vc.mustFail = false
 
 	// Test column mismatch.
-	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
+	err = lookupNonUnique.(Lookup).Create(ctx, vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false)
 	want = "lookup.Create: column vindex count does not match the columns in the lookup: 2 vs [fromc]"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -406,15 +406,11 @@ func TestLookupNonUniqueCreateAutocommit(t *testing.T) {
 	}
 	vc := &vcursor{}
 
-	err = lookupNonUnique.(Lookup).Create(
-		vc,
-		[][]sqltypes.Value{{
-			sqltypes.NewInt64(1), sqltypes.NewInt64(2),
-		}, {
-			sqltypes.NewInt64(3), sqltypes.NewInt64(4),
-		}},
-		[][]byte{[]byte("test1"), []byte("test2")},
-		false /* ignoreMode */)
+	err = lookupNonUnique.(Lookup).Create(ctx, vc, [][]sqltypes.Value{{
+		sqltypes.NewInt64(1), sqltypes.NewInt64(2),
+	}, {
+		sqltypes.NewInt64(3), sqltypes.NewInt64(4),
+	}}, [][]byte{[]byte("test1"), []byte("test2")}, false)
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
@@ -441,7 +437,7 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{}
 
-	err := lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
+	err := lookupNonUnique.(Lookup).Delete(ctx, vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
@@ -463,7 +459,7 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	err = lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err = lookupNonUnique.(Lookup).Delete(ctx, vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	want := "lookup.Delete: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -471,7 +467,7 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 	vc.mustFail = false
 
 	// Test column count fail.
-	err = lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err = lookupNonUnique.(Lookup).Delete(ctx, vc, [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	want = "lookup.Delete: column vindex count does not match the columns in the lookup: 2 vs [fromc]"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -487,7 +483,7 @@ func TestLookupNonUniqueDeleteAutocommit(t *testing.T) {
 	})
 	vc := &vcursor{}
 
-	err := lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
+	err := lookupNonUnique.(Lookup).Delete(ctx, vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery(nil)
@@ -500,7 +496,7 @@ func TestLookupNonUniqueUpdate(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{}
 
-	err := lookupNonUnique.(Lookup).Update(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("test"), []sqltypes.Value{sqltypes.NewInt64(2)})
+	err := lookupNonUnique.(Lookup).Update(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("test"), []sqltypes.Value{sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{

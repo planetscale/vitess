@@ -225,9 +225,9 @@ func (ins *Insert) Execute(ctx context.Context, vcursor VCursor, bindVars map[st
 
 	switch ins.Opcode {
 	case InsertUnsharded:
-		return ins.execInsertUnsharded(vcursor, bindVars)
+		return ins.execInsertUnsharded(ctx, vcursor, bindVars)
 	case InsertSharded, InsertShardedIgnore:
-		return ins.execInsertSharded(vcursor, bindVars)
+		return ins.execInsertSharded(ctx, vcursor, bindVars)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported query route: %v", ins)
@@ -244,7 +244,7 @@ func (ins *Insert) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unreachable code for %q", ins.Query)
 }
 
-func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) execInsertUnsharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	insertID, err := ins.processGenerate(vcursor, bindVars)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertUnsharded")
@@ -272,12 +272,12 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 	return result, nil
 }
 
-func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) execInsertSharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	insertID, err := ins.processGenerate(vcursor, bindVars)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
-	rss, queries, err := ins.getInsertShardedRoute(vcursor, bindVars)
+	rss, queries, err := ins.getInsertShardedRoute(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execInsertSharded")
 	}
@@ -357,7 +357,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 // For unowned vindexes with no input values, it reverse maps.
 // For unowned vindexes with values, it validates.
 // If it's an IGNORE or ON DUPLICATE key insert, it drops unroutable rows.
-func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
+func (ins *Insert) getInsertShardedRoute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
 	// vindexRowsValues builds the values of all vindex columns.
 	// the 3-d structure indexes are colVindex, row, col. Note that
 	// ins.Values indexes are colVindex, col, row. So, the conversion
@@ -399,7 +399,7 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// keyspace ids. For regular inserts, a failure to find a route
 	// results in an error. For 'ignore' type inserts, the keyspace
 	// id is returned as nil, which is used later to drop the corresponding rows.
-	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], ins.Table.ColumnVindexes[0])
+	keyspaceIDs, err := ins.processPrimary(ctx, vcursor, vindexRowsValues[0], ins.Table.ColumnVindexes[0])
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "getInsertShardedRoute")
 	}
@@ -408,9 +408,9 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 		colVindex := ins.Table.ColumnVindexes[vIdx]
 		var err error
 		if colVindex.Owned {
-			err = ins.processOwned(vcursor, vindexRowsValues[vIdx], colVindex, keyspaceIDs)
+			err = ins.processOwned(ctx, vcursor, vindexRowsValues[vIdx], colVindex, keyspaceIDs)
 		} else {
-			err = ins.processUnowned(vcursor, vindexRowsValues[vIdx], colVindex, keyspaceIDs)
+			err = ins.processUnowned(ctx, vcursor, vindexRowsValues[vIdx], colVindex, keyspaceIDs)
 		}
 		if err != nil {
 			return nil, nil, vterrors.Wrap(err, "getInsertShardedRoute")
@@ -476,8 +476,8 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 }
 
 // processPrimary maps the primary vindex values to the keyspace ids.
-func (ins *Insert) processPrimary(vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex) ([][]byte, error) {
-	destinations, err := vindexes.Map(colVindex.Vindex, vcursor, vindexColumnsKeys)
+func (ins *Insert) processPrimary(ctx context.Context, vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex) ([][]byte, error) {
+	destinations, err := vindexes.Map(ctx, colVindex.Vindex, vcursor, vindexColumnsKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -502,9 +502,9 @@ func (ins *Insert) processPrimary(vcursor VCursor, vindexColumnsKeys [][]sqltype
 }
 
 // processOwned creates vindex entries for the values of an owned column.
-func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, ksids [][]byte) error {
+func (ins *Insert) processOwned(ctx context.Context, vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, ksids [][]byte) error {
 	if ins.Opcode == InsertSharded {
-		return colVindex.Vindex.(vindexes.Lookup).Create(vcursor, vindexColumnsKeys, ksids, false /* ignoreMode */)
+		return colVindex.Vindex.(vindexes.Lookup).Create(ctx, vcursor, vindexColumnsKeys, ksids, false)
 	}
 
 	// InsertShardedIgnore
@@ -524,13 +524,13 @@ func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.
 		return nil
 	}
 
-	err := colVindex.Vindex.(vindexes.Lookup).Create(vcursor, createKeys, createKsids, true /* ignoreMode */)
+	err := colVindex.Vindex.(vindexes.Lookup).Create(ctx, vcursor, createKeys, createKsids, true)
 	if err != nil {
 		return err
 	}
 	// After creation, verify that the keys map to the keyspace ids. If not, remove
 	// those that don't map.
-	verified, err := vindexes.Verify(colVindex.Vindex, vcursor, createKeys, createKsids)
+	verified, err := vindexes.Verify(ctx, colVindex.Vindex, vcursor, createKeys, createKsids)
 	if err != nil {
 		return err
 	}
@@ -543,7 +543,7 @@ func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.
 }
 
 // processUnowned either reverse maps or validates the values for an unowned column.
-func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, ksids [][]byte) error {
+func (ins *Insert) processUnowned(ctx context.Context, vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, ksids [][]byte) error {
 	var reverseIndexes []int
 	var reverseKsids [][]byte
 	var verifyIndexes []int
@@ -586,7 +586,7 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 
 	if verifyKsids != nil {
 		// If values were supplied, we validate against keyspace id.
-		verified, err := vindexes.Verify(colVindex.Vindex, vcursor, verifyKeys, verifyKsids)
+		verified, err := vindexes.Verify(ctx, colVindex.Vindex, vcursor, verifyKeys, verifyKsids)
 		if err != nil {
 			return err
 		}

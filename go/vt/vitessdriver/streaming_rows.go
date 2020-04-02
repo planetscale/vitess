@@ -17,6 +17,7 @@ limitations under the License.
 package vitessdriver
 
 import (
+	"context"
 	"database/sql/driver"
 	"errors"
 
@@ -34,13 +35,15 @@ type streamingRows struct {
 	qr      *sqltypes.Result
 	index   int
 	convert *converter
+	ctx     context.Context
 }
 
 // newStreamingRows creates a new streamingRows from stream.
-func newStreamingRows(stream sqltypes.ResultStream, conv *converter) driver.Rows {
+func newStreamingRows(ctx context.Context, stream sqltypes.ResultStream, conv *converter) driver.Rows {
 	return &streamingRows{
 		stream:  stream,
 		convert: conv,
+		ctx:     ctx,
 	}
 }
 
@@ -73,7 +76,7 @@ func (ri *streamingRows) Next(dest []driver.Value) error {
 	// If no results were fetched or rows exhausted,
 	// loop until we get a non-zero number of rows.
 	for ri.qr == nil || ri.index >= len(ri.qr.Rows) {
-		qr, err := ri.stream.Recv()
+		qr, err := ri.stream.Recv(ri.ctx)
 		if err != nil {
 			return ri.setErr(err)
 		}
@@ -93,7 +96,7 @@ func (ri *streamingRows) checkFields() error {
 	if ri.fields != nil {
 		return nil
 	}
-	qr, err := ri.stream.Recv()
+	qr, err := ri.stream.Recv(ri.ctx)
 	if err != nil {
 		return err
 	}

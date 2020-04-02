@@ -932,12 +932,12 @@ func (scw *SplitCloneWorker) startExecutor(ctx context.Context, wg *sync.WaitGro
 	}
 }
 
-func mergeOrSingle(readers []ResultReader, td *tabletmanagerdatapb.TableDefinition) (ResultReader, error) {
+func mergeOrSingle(ctx context.Context, readers []ResultReader, td *tabletmanagerdatapb.TableDefinition) (ResultReader, error) {
 	if len(readers) == 1 {
 		return readers[0], nil
 	}
 
-	sourceReader, err := NewResultMerger(readers, len(td.PrimaryKeyColumns))
+	sourceReader, err := NewResultMerger(ctx, readers, len(td.PrimaryKeyColumns))
 	if err != nil {
 		return nil, err
 	}
@@ -992,7 +992,7 @@ func (scw *SplitCloneWorker) getSourceResultReader(ctx context.Context, td *tabl
 		}
 		sourceReaders[shardIndex] = sourceResultReader
 	}
-	resultReader, err := mergeOrSingle(sourceReaders, td)
+	resultReader, err := mergeOrSingle(ctx, sourceReaders, td)
 	if err != nil {
 		closeReaders(ctx, sourceReaders)
 		return nil, err
@@ -1012,7 +1012,7 @@ func (scw *SplitCloneWorker) getDestinationResultReader(ctx context.Context, td 
 		}
 		destReaders[shardIndex] = destResultReader
 	}
-	resultReader, err := mergeOrSingle(destReaders, td)
+	resultReader, err := mergeOrSingle(ctx, destReaders, td)
 	if err != nil {
 		closeReaders(ctx, destReaders)
 		return nil, err
@@ -1070,7 +1070,7 @@ func (scw *SplitCloneWorker) cloneAChunk(ctx context.Context, td *tabletmanagerd
 		return
 	}
 	// Ignore the diff report because all diffs should get reconciled.
-	_ /* DiffReport */, err = differ.Diff()
+	_ /* DiffReport */, err = differ.Diff(ctx)
 	if err != nil {
 		processError("%v: RowDiffer2 failed: %v", errPrefix, err)
 		return

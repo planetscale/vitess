@@ -17,6 +17,8 @@ limitations under the License.
 package worker
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -38,7 +40,7 @@ import (
 type keyspaceIDResolver interface {
 	// keyspaceID takes a table row, and returns the keyspace id as bytes.
 	// It will return an error if no sharding key can be found.
-	keyspaceID(row []sqltypes.Value) ([]byte, error)
+	keyspaceID(ctx context.Context, row []sqltypes.Value) ([]byte, error)
 }
 
 // v2Resolver is the keyspace id resolver that is used by VTGate V2 deployments.
@@ -72,7 +74,7 @@ func newV2Resolver(keyspaceInfo *topo.KeyspaceInfo, td *tabletmanagerdatapb.Tabl
 }
 
 // keyspaceID implements the keyspaceIDResolver interface.
-func (r *v2Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
+func (r *v2Resolver) keyspaceID(ctx context.Context, row []sqltypes.Value) ([]byte, error) {
 	v := row[r.shardingColumnIndex]
 	switch r.keyspaceInfo.ShardingColumnType {
 	case topodatapb.KeyspaceIdType_BYTES:
@@ -156,9 +158,9 @@ func newV3ResolverFromColumnList(keyspaceSchema *vindexes.KeyspaceSchema, name s
 }
 
 // keyspaceID implements the keyspaceIDResolver interface.
-func (r *v3Resolver) keyspaceID(row []sqltypes.Value) ([]byte, error) {
+func (r *v3Resolver) keyspaceID(ctx context.Context, row []sqltypes.Value) ([]byte, error) {
 	v := row[r.shardingColumnIndex]
-	destinations, err := r.vindex.Map(nil, []sqltypes.Value{v})
+	destinations, err := r.vindex.Map(ctx, nil, []sqltypes.Value{v})
 	if err != nil {
 		return nil, err
 	}

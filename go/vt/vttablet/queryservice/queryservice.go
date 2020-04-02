@@ -19,6 +19,7 @@ limitations under the License.
 package queryservice
 
 import (
+	context2 "context"
 	"io"
 
 	"golang.org/x/net/context"
@@ -117,7 +118,7 @@ type resultStreamer struct {
 	err  error
 }
 
-func (rs *resultStreamer) Recv() (*sqltypes.Result, error) {
+func (rs *resultStreamer) Recv(context2.Context) (*sqltypes.Result, error) {
 	select {
 	case <-rs.done:
 		return nil, rs.err
