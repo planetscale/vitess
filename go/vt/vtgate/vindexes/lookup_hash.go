@@ -109,7 +109,7 @@ func (lh *LookupHash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.V
 		return out, nil
 	}
 
-	results, err := lh.lkp.Lookup(vcursor, ids)
+	results, err := lh.lkp.Lookup(ctx, vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func (lh *LookupHash) Verify(ctx context.Context, vcursor VCursor, ids []sqltype
 	if err != nil {
 		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
 	}
-	return lh.lkp.Verify(vcursor, ids, values)
+	return lh.lkp.Verify(ctx, vcursor, ids, values)
 }
 
 // Create reserves the id by inserting it into the vindex table.
@@ -265,7 +265,7 @@ func (lhu *LookupHashUnique) Map(ctx context.Context, vcursor VCursor, ids []sql
 		return out, nil
 	}
 
-	results, err := lhu.lkp.Lookup(vcursor, ids)
+	results, err := lhu.lkp.Lookup(ctx, vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func (lhu *LookupHashUnique) Verify(ctx context.Context, vcursor VCursor, ids []
 	if err != nil {
 		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
 	}
-	return lhu.lkp.Verify(vcursor, ids, values)
+	return lhu.lkp.Verify(ctx, vcursor, ids, values)
 }
 
 // Create reserves the id by inserting it into the vindex table.

@@ -49,7 +49,7 @@ type VCursor interface { // MaxMemoryRows returns the maxMemoryRows flag value.
 	// RecordWarning stores the given warning in the current session
 	RecordWarning(warning *querypb.QueryWarning)
 
-	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
+	Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 	AutocommitApproval() bool
 
 	// Shard-level functions.

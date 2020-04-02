@@ -62,7 +62,7 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 }
 
 // Lookup performs a lookup for the ids.
-func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
+func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
 	if vcursor == nil {
 		return nil, fmt.Errorf("cannot perform lookup: no vcursor provided")
 	}
@@ -77,7 +77,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 		if lkp.Autocommit {
 			co = vtgatepb.CommitOrder_AUTOCOMMIT
 		}
-		result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* rollbackOnError */, co)
+		result, err = vcursor.Execute(ctx, "VindexLookup", lkp.sel, bindVars, false, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -87,22 +87,22 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 }
 
 // Verify returns true if ids map to values.
-func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value) ([]bool, error) {
+func (lkp *lookupInternal) Verify(ctx context.Context, vcursor VCursor, ids, values []sqltypes.Value) ([]bool, error) {
 	co := vtgatepb.CommitOrder_NORMAL
 	if lkp.Autocommit {
 		co = vtgatepb.CommitOrder_AUTOCOMMIT
 	}
-	return lkp.VerifyCustom(vcursor, ids, values, co)
+	return lkp.VerifyCustom(ctx, vcursor, ids, values, co)
 }
 
-func (lkp *lookupInternal) VerifyCustom(vcursor VCursor, ids, values []sqltypes.Value, co vtgatepb.CommitOrder) ([]bool, error) {
+func (lkp *lookupInternal) VerifyCustom(ctx context.Context, vcursor VCursor, ids, values []sqltypes.Value, co vtgatepb.CommitOrder) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i, id := range ids {
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
 			lkp.To:             sqltypes.ValueBindVariable(values[i]),
 		}
-		result, err := vcursor.Execute("VindexVerify", lkp.ver, bindVars, false /* rollbackOnError */, co)
+		result, err := vcursor.Execute(ctx, "VindexVerify", lkp.ver, bindVars, false, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}
@@ -207,7 +207,7 @@ func (lkp *lookupInternal) createCustom(ctx context.Context, vcursor VCursor, ro
 		fmt.Fprintf(buf, "%s=values(%s)", lkp.To, lkp.To)
 	}
 
-	if _, err := vcursor.Execute("VindexCreate", buf.String(), bindVars, true /* rollbackOnError */, co); err != nil {
+	if _, err := vcursor.Execute(ctx, "VindexCreate", buf.String(), bindVars, true, co); err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil
@@ -248,7 +248,7 @@ func (lkp *lookupInternal) Delete(ctx context.Context, vcursor VCursor, rowsColV
 			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}
 		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
-		_, err := vcursor.Execute("VindexDelete", lkp.del, bindVars, true /* rollbackOnError */, co)
+		_, err := vcursor.Execute(ctx, "VindexDelete", lkp.del, bindVars, true, co)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}

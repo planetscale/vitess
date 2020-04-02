@@ -77,7 +77,7 @@ func (ln *LookupNonUnique) Map(ctx context.Context, vcursor VCursor, ids []sqlty
 		return out, nil
 	}
 
-	results, err := ln.lkp.Lookup(vcursor, ids)
+	results, err := ln.lkp.Lookup(ctx, vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (ln *LookupNonUnique) Verify(ctx context.Context, vcursor VCursor, ids []sq
 		}
 		return out, nil
 	}
-	return ln.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
+	return ln.lkp.Verify(ctx, vcursor, ids, ksidsToValues(ksids))
 }
 
 // Create reserves the id by inserting it into the vindex table.
@@ -231,7 +231,7 @@ func (lu *LookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes
 		}
 		return out, nil
 	}
-	results, err := lu.lkp.Lookup(vcursor, ids)
+	results, err := lu.lkp.Lookup(ctx, vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +257,7 @@ func (lu *LookupUnique) Verify(ctx context.Context, vcursor VCursor, ids []sqlty
 		}
 		return out, nil
 	}
-	return lu.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
+	return lu.lkp.Verify(ctx, vcursor, ids, ksidsToValues(ksids))
 }
 
 // Create reserves the id by inserting it into the vindex table.

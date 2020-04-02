@@ -92,7 +92,7 @@ func (lu *ConsistentLookup) Map(ctx context.Context, vcursor VCursor, ids []sqlt
 		return out, nil
 	}
 
-	results, err := lu.lkp.Lookup(vcursor, ids)
+	results, err := lu.lkp.Lookup(ctx, vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +157,7 @@ func (lu *ConsistentLookupUnique) Map(ctx context.Context, vcursor VCursor, ids 
 		return out, nil
 	}
 
-	results, err := lu.lkp.Lookup(vcursor, ids)
+	results, err := lu.lkp.Lookup(ctx, vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +239,7 @@ func (lu *clCommon) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.
 		}
 		return out, nil
 	}
-	return lu.lkp.VerifyCustom(vcursor, ids, ksidsToValues(ksids), vtgate.CommitOrder_PRE)
+	return lu.lkp.VerifyCustom(ctx, vcursor, ids, ksidsToValues(ksids), vtgate.CommitOrder_PRE)
 }
 
 // Create reserves the id by inserting it into the vindex table.
@@ -252,14 +252,14 @@ func (lu *clCommon) Create(ctx context.Context, vcursor VCursor, rowsColValues [
 		return err
 	}
 	for i, row := range rowsColValues {
-		if err := lu.handleDup(vcursor, row, ksids[i]); err != nil {
+		if err := lu.handleDup(ctx, vcursor, row, ksids[i]); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []byte) error {
+func (lu *clCommon) handleDup(ctx context.Context, vcursor VCursor, values []sqltypes.Value, ksid []byte) error {
 	bindVars := make(map[string]*querypb.BindVariable, len(values))
 	for colnum, val := range values {
 		bindVars[lu.lkp.FromColumns[colnum]] = sqltypes.ValueBindVariable(val)
@@ -267,13 +267,13 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 	bindVars[lu.lkp.To] = sqltypes.BytesBindVariable(ksid)
 
 	// Lock the lookup row using pre priority.
-	qr, err := vcursor.Execute("VindexCreate", lu.lockLookupQuery, bindVars, false /* rollbackOnError */, vtgatepb.CommitOrder_PRE)
+	qr, err := vcursor.Execute(ctx, "VindexCreate", lu.lockLookupQuery, bindVars, false, vtgatepb.CommitOrder_PRE)
 	if err != nil {
 		return err
 	}
 	switch len(qr.Rows) {
 	case 0:
-		if _, err := vcursor.Execute("VindexCreate", lu.insertLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute(ctx, "VindexCreate", lu.insertLookupQuery, bindVars, true, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	case 1:
@@ -289,7 +289,7 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 		if bytes.Equal(existingksid, ksid) {
 			return nil
 		}
-		if _, err := vcursor.Execute("VindexCreate", lu.updateLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute(ctx, "VindexCreate", lu.updateLookupQuery, bindVars, true, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	default:

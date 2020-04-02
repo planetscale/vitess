@@ -177,7 +177,7 @@ func (vc *vcursorImpl) TargetString() string {
 }
 
 // Execute is part of the engine.VCursor interface.
-func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (vc *vcursorImpl) Execute(ctx context.Context, method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	session := vc.safeSession
 	if co == vtgatepb.CommitOrder_AUTOCOMMIT {
 		// For autocommit, we have to create an independent session.
@@ -187,7 +187,7 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 		defer session.SetCommitOrder(vtgatepb.CommitOrder_NORMAL)
 	}
 
-	qr, err := vc.executor.Execute(vc.ctx, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
+	qr, err := vc.executor.Execute(ctx, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
 	if err == nil && rollbackOnError {
 		vc.rollbackOnPartialExec = true
 	}

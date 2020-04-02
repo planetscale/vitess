@@ -114,7 +114,7 @@ func (lh *LookupUnicodeLooseMD5Hash) Map(ctx context.Context, vcursor VCursor, i
 	if err != nil {
 		return nil, err
 	}
-	results, err := lh.lkp.Lookup(vcursor, ids)
+	results, err := lh.lkp.Lookup(ctx, vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (lh *LookupUnicodeLooseMD5Hash) Verify(ctx context.Context, vcursor VCursor
 	if err != nil {
 		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
 	}
-	return lh.lkp.Verify(vcursor, ids, values)
+	return lh.lkp.Verify(ctx, vcursor, ids, values)
 }
 
 // Create reserves the id by inserting it into the vindex table.
@@ -281,7 +281,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Map(ctx context.Context, vcursor VCu
 	if err != nil {
 		return nil, err
 	}
-	results, err := lhu.lkp.Lookup(vcursor, ids)
+	results, err := lhu.lkp.Lookup(ctx, vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +321,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Verify(ctx context.Context, vcursor 
 	if err != nil {
 		return nil, fmt.Errorf("lookup.Verify.vunhash: %v", err)
 	}
-	return lhu.lkp.Verify(vcursor, ids, values)
+	return lhu.lkp.Verify(ctx, vcursor, ids, values)
 }
 
 // Create reserves the id by inserting it into the vindex table.

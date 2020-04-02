@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	context2 "context"
 	"errors"
 	"reflect"
 	"testing"
@@ -45,7 +46,7 @@ type vcursor struct {
 	pre, post   int
 }
 
-func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (vc *vcursor) Execute(ctx context2.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	switch co {
 	case vtgatepb.CommitOrder_PRE:
 		vc.pre++
