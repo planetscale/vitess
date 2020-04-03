@@ -95,6 +95,7 @@ type Executor struct {
 	vschemaStats *VSchemaStats
 
 	vm VSchemaManager
+	gw *tabletGateway
 }
 
 var executorOnce sync.Once
@@ -169,7 +170,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		}
 	}
 
-	destKeyspace, destTabletType, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
+	destKeyspace, destTabletType, label, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +208,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 
 	switch specStmt := stmt.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
-		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType)
+		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType, label)
 	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
 		safeSession := safeSession
 
@@ -232,7 +233,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		// at the beginning, but never after.
 		safeSession.SetAutocommittable(mustCommit)
 
-		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType)
+		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType, label)
 		if err != nil {
 			return nil, err
 		}
@@ -265,7 +266,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats, stmtType sqlparser.StatementType) (*sqltypes.Result, error) {
+func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats, stmtType sqlparser.StatementType, label *querypb.TabletLabelInfo) (*sqltypes.Result, error) {
 	if dest != nil {
 		if destKeyspace == "" {
 			return nil, errNoKeyspace
@@ -313,6 +314,11 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor := newVCursorImpl(ctx, safeSession, destKeyspace, destTabletType, comments, e, logStats, e.VSchema(), e.resolver.resolver)
+	if label != nil {
+		vcursor.tabletTypesFromLabel = e.gw.tsc.GetHealthyTabletTypesByLabel(destKeyspace, label)
+		log.Errorf("Got the tablet types as: %v", vcursor.tabletTypesFromLabel)
+		vcursor.label = label
+	}
 	plan, err := e.getPlan(
 		vcursor,
 		query,
@@ -370,7 +376,7 @@ func (e *Executor) createNeededBindVariables(bindVarNeeds sqlparser.BindVarNeeds
 	bindVars := make(map[string]*querypb.BindVariable)
 
 	if bindVarNeeds.NeedDatabase {
-		keyspace, _, _, _ := e.ParseDestinationTarget(session.TargetString)
+		keyspace, _, _, _, _ := e.ParseDestinationTarget(session.TargetString)
 		if keyspace == "" {
 			bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
 		} else {
@@ -972,7 +978,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 		var rows [][]sqltypes.Value
 		for _, keyspace := range keyspaces {
-			_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, destTabletType)
+			_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, []topodatapb.TabletType{destTabletType})
 			if err != nil {
 				// There might be a misconfigured keyspace or no shards in the keyspace.
 				// Skip any errors and move on.
@@ -1161,7 +1167,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 }
 
 func (e *Executor) handleUse(safeSession *SafeSession, use *sqlparser.Use) (*sqltypes.Result, error) {
-	destKeyspace, destTabletType, _, err := e.ParseDestinationTarget(use.DBName.String())
+	destKeyspace, destTabletType, _, _, err := e.ParseDestinationTarget(use.DBName.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1354,15 +1360,15 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := topoproto.ParseDestination(targetString, defaultTabletType)
+func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, *querypb.TabletLabelInfo, key.Destination, error) {
+	destKeyspace, destTabletType, label, dest, err := topoproto.ParseDestination(targetString, defaultTabletType)
 	// Set default keyspace
 	if destKeyspace == "" && len(e.VSchema().Keyspaces) == 1 {
 		for k := range e.VSchema().Keyspaces {
 			destKeyspace = k
 		}
 	}
-	return destKeyspace, destTabletType, dest, err
+	return destKeyspace, destTabletType, label, dest, err
 }
 
 // getPlan computes the plan for the given query. If one is in
@@ -1622,7 +1628,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 		}
 	}
 
-	destKeyspace, destTabletType, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
+	destKeyspace, destTabletType, _, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
 	if err != nil {
 		return nil, err
 	}

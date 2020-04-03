@@ -303,6 +303,55 @@ func (tc *TabletStatsCache) GetHealthyTabletStats(keyspace, shard string, tablet
 	return result
 }
 
+// GetHealthyTabletsByLabel gets the healthy tablets by label
+func (tc *TabletStatsCache) GetHealthyTabletsByLabel(keyspace, shard string, info *querypb.TabletLabelInfo) []TabletStats {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	result := []TabletStats{}
+	if s, ok := tc.entries[keyspace]; ok {
+		if shard == "" {
+			for _, v := range s {
+				for _, tabs := range v {
+					for _, tab := range tabs.healthy {
+						if tab.Target.LabelInfo.Name == info.Name && tab.Target.LabelInfo.Value == info.Value {
+							result = append(result, *tab)
+						}
+					}
+				}
+			}
+		} else {
+			if t, ok := s[shard]; ok {
+				for _, tabs := range t {
+					for _, tab := range tabs.healthy {
+						if tab.Target.LabelInfo.Name == info.Name && tab.Target.LabelInfo.Value == info.Value {
+							result = append(result, *tab)
+						}
+					}
+				}
+			}
+		}
+	}
+	return result
+}
+
+// GetHealthyTabletTypesByLabel gets the tablet type for label
+func (tc *TabletStatsCache) GetHealthyTabletTypesByLabel(keyspace string, info *querypb.TabletLabelInfo) []topodatapb.TabletType {
+	tabletStats := tc.GetHealthyTabletsByLabel(keyspace, "", info)
+	tabletMap := make(map[topodatapb.TabletType]int)
+	for _, tabletStat := range tabletStats {
+		if _, ok := tabletMap[tabletStat.Tablet.Type]; !ok {
+			tabletMap[tabletStat.Tablet.Type] = 1
+		}
+	}
+
+	result := []topodatapb.TabletType{}
+	for k := range tabletMap {
+		result = append(result, k)
+	}
+	return result
+}
+
 // ResetForTesting is for use in tests only.
 func (tc *TabletStatsCache) ResetForTesting() {
 	tc.mu.Lock()

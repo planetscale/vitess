@@ -278,6 +278,11 @@ func NewActionAgent(
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 		orc:                 orc,
 	}
+	if *labelName != "" && *labelValue != "" {
+		log.Infof("Setting tablet label as name - %s, value - %s", *labelName, *labelValue)
+		agent.QueryServiceControl.SetTabletLabels(*labelName, *labelValue)
+	}
+
 	// Sanity check for inconsistent flags
 	if agent.Cnf == nil && *restoreFromBackup {
 		return nil, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
@@ -728,6 +733,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 		statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
 		statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
 		statsAlias := stats.NewString("TabletAlias")
+		statsLabel := stats.NewString("TabletLabel")
 
 		statsKeyspace.Set(agent.initialTablet.Keyspace)
 		statsShard.Set(agent.initialTablet.Shard)
@@ -736,6 +742,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 			statsKeyRangeEnd.Set(hex.EncodeToString(agent.initialTablet.KeyRange.End))
 		}
 		statsAlias.Set(topoproto.TabletAliasString(agent.initialTablet.Alias))
+		statsLabel.Set(fmt.Sprintf("%s:%s", *labelName, *labelValue))
 	}
 
 	// Initialize the current tablet to match our current running

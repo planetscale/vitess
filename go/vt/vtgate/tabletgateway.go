@@ -19,12 +19,13 @@ package vtgate
 import (
 	"flag"
 	"fmt"
-	"golang.org/x/net/context"
 	"math/rand"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/topotools"
 
 	"vitess.io/vitess/go/flagutil"
@@ -301,7 +302,7 @@ func (dg *tabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			}
 			break
 		}
-
+		log.Errorf("Tablet chosen :%v", ts.Tablet.Alias)
 		// execute
 		tabletLastUsed = ts.Tablet
 		conn := dg.hc.GetConnection(ts.Key)

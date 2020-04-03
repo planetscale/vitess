@@ -104,6 +104,11 @@ func NewController() *Controller {
 func (tqsc *Controller) Register() {
 }
 
+// SetTabletLabels sets the tablet label passed cmd args
+func (tqsc *Controller) SetTabletLabels(name string, value string) {
+
+}
+
 // AddStatusPart is part of the tabletserver.Controller interface
 func (tqsc *Controller) AddStatusPart() {
 }

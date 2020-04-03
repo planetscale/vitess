@@ -28,6 +28,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -36,6 +37,8 @@ import (
 const (
 	// VtDbPrefix + keyspace is the default name for databases.
 	VtDbPrefix = "vt_"
+	// LabelAppender is the default char for associating label name with value
+	LabelAppender = "="
 )
 
 // cache the conversion from tablet type enum to lower case string.
@@ -153,6 +156,18 @@ func ParseTabletType(param string) (topodatapb.TabletType, error) {
 		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("unknown TabletType %v", param)
 	}
 	return topodatapb.TabletType(value), nil
+}
+
+// ParseLabel parses the tablet type into the enum.
+func ParseLabel(param string) (*querypb.TabletLabelInfo, error) {
+	keyValues := strings.Split(param, LabelAppender)
+	if len(keyValues) == 2 {
+		return &querypb.TabletLabelInfo{
+			Name:  keyValues[0],
+			Value: keyValues[1],
+		}, nil
+	}
+	return nil, fmt.Errorf("unable to parse labels in query")
 }
 
 // ParseTabletTypes parses a comma separated list of tablet types and returns a slice with the respective enums.

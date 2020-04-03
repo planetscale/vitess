@@ -46,20 +46,22 @@ type iExecute interface {
 	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
 
 	// TODO: remove when resolver is gone
-	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
+	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, *querypb.TabletLabelInfo, key.Destination, error)
 }
 
 // vcursorImpl implements the VCursor functionality used by dependent
 // packages to call back into VTGate.
 type vcursorImpl struct {
-	ctx            context.Context
-	safeSession    *SafeSession
-	keyspace       string
-	tabletType     topodatapb.TabletType
-	marginComments sqlparser.MarginComments
-	executor       iExecute
-	resolver       *srvtopo.Resolver
-	logStats       *LogStats
+	ctx                  context.Context
+	safeSession          *SafeSession
+	keyspace             string
+	tabletType           topodatapb.TabletType
+	marginComments       sqlparser.MarginComments
+	executor             iExecute
+	resolver             *srvtopo.Resolver
+	logStats             *LogStats
+	tabletTypesFromLabel []topodatapb.TabletType
+	label                *querypb.TabletLabelInfo
 	// hasPartialDML is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
@@ -110,7 +112,7 @@ func (vc *vcursorImpl) RecordWarning(warning *querypb.QueryWarning) {
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
 func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, _, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, "", destTabletType, nil, err
 	}
@@ -126,7 +128,7 @@ func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 
 // FindTablesOrVindex finds the specified table or vindex.
 func (vc *vcursorImpl) FindTablesOrVindex(name sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, _, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
@@ -237,7 +239,18 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 }
 
 func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
-	return vc.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations)
+	tabletTypes := []topodatapb.TabletType{vc.tabletType}
+	if len(vc.tabletTypesFromLabel) > 0 {
+		tabletTypes = vc.tabletTypesFromLabel
+	}
+	rss, result, err := vc.resolver.ResolveDestinations(vc.ctx, keyspace, tabletTypes, ids, destinations)
+	// Fill in the label info here
+	for _, rs := range rss {
+		if vc.label != nil {
+			rs.Target.LabelInfo = vc.label
+		}
+	}
+	return rss, result, err
 }
 
 func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {

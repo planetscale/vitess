@@ -50,9 +50,15 @@ func (sra ShardReferenceArray) Sort() { sort.Sort(sra) }
 
 // SrvKeyspaceGetPartition returns a Partition for the given tablet type,
 // or nil if it's not there.
-func SrvKeyspaceGetPartition(sk *topodatapb.SrvKeyspace, tabletType topodatapb.TabletType) *topodatapb.SrvKeyspace_KeyspacePartition {
+func SrvKeyspaceGetPartition(sk *topodatapb.SrvKeyspace, tabletTypes []topodatapb.TabletType) *topodatapb.SrvKeyspace_KeyspacePartition {
+
+	tabletMap := make(map[topodatapb.TabletType]int)
+	for _, tabletType := range tabletTypes {
+		tabletMap[tabletType] = 1
+	}
+
 	for _, p := range sk.Partitions {
-		if p.ServedType == tabletType {
+		if _, ok := tabletMap[p.ServedType]; ok {
 			return p
 		}
 	}

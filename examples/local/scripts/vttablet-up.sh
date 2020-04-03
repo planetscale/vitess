@@ -29,8 +29,10 @@ tablet_hostname=''
 printf -v tablet_logfile 'vttablet_%010d_querylog.txt' $uid
 
 tablet_type=replica
+label=L1
 if [[ "${uid: -1}" -gt 1 ]]; then
  tablet_type=rdonly
+ label=L2
 fi
 
 echo "Starting vttablet for $alias..."
@@ -46,6 +48,8 @@ vttablet \
  -init_tablet_type $tablet_type \
  -health_check_interval 5s \
  -enable_semi_sync \
+ -label_name 'x' \
+ -label_value $label \
  -enable_replication_reporter \
  -backup_storage_implementation file \
  -file_backup_storage_root $VTDATAROOT/backups \

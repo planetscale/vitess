@@ -84,6 +84,8 @@ type Controller interface {
 
 	// TopoServer returns the topo server.
 	TopoServer() *topo.Server
+
+	SetTabletLabels(labelName string, labelValue string)
 }
 
 // Ensure TabletServer satisfies Controller interface.

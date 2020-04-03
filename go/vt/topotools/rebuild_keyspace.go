@@ -118,7 +118,7 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 			// for each type this shard is supposed to serve,
 			// add it to srvKeyspace.Partitions
 			for _, tabletType := range servedTypes {
-				partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)
+				partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, []topodatapb.TabletType{tabletType})
 				if partition == nil {
 					partition = &topodatapb.SrvKeyspace_KeyspacePartition{
 						ServedType: tabletType,

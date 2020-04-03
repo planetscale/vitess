@@ -248,7 +248,7 @@ func TestMaxMemoryRows(t *testing.T) {
 	sbc1.SetResults([]*sqltypes.Result{tworows, tworows})
 
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss, _, err := res.ResolveDestinations(context.Background(), "TestMaxMemoryRows", topodatapb.TabletType_REPLICA, nil,
+	rss, _, err := res.ResolveDestinations(context.Background(), "TestMaxMemoryRows", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}, nil,
 		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
 	if err != nil {
 		t.Fatalf("ResolveDestination(0) failed: %v", err)

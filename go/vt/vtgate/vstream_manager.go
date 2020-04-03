@@ -135,7 +135,7 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 				return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current': %v", vgtid)
 			}
 			// TODO(sougou): this should work with the new Migrate workflow
-			_, _, allShards, err := vsm.resolver.GetKeyspaceShards(ctx, sgtid.Keyspace, tabletType)
+			_, _, allShards, err := vsm.resolver.GetKeyspaceShards(ctx, sgtid.Keyspace, []topodatapb.TabletType{tabletType})
 			if err != nil {
 				return nil, nil, err
 			}

@@ -1656,6 +1656,14 @@ func (tsv *TabletServer) streamHealthUnregister(id int) {
 	delete(tsv.streamHealthMap, id)
 }
 
+// SetTabletLabels sets the tablet label info in the target of tablet server
+func (tsv *TabletServer) SetTabletLabels(name string, value string) {
+	tsv.target.LabelInfo = &querypb.TabletLabelInfo{
+		Name:  name,
+		Value: value,
+	}
+}
+
 // BroadcastHealth will broadcast the current health to all listeners
 func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration) {
 	tsv.mu.Lock()
@@ -1668,6 +1676,8 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}
+
+	log.Infof("Sending tablet labels info as %v", target.LabelInfo)
 
 	tsv.streamHealthMutex.Lock()
 	defer tsv.streamHealthMutex.Unlock()

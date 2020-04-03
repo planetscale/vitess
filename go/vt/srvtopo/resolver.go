@@ -88,15 +88,19 @@ func ResolvedShardsEqual(rss1, rss2 []*ResolvedShard) bool {
 // GetKeyspaceShards return all the shards in a keyspace. It follows
 // redirection if ServedFrom is set. It is only valid for the local cell.
 // Do not use it to further resolve shards, instead use the Resolve* methods.
-func (r *Resolver) GetKeyspaceShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
+func (r *Resolver) GetKeyspaceShards(ctx context.Context, keyspace string, tabletTypes []topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
 	srvKeyspace, err := r.topoServ.GetSrvKeyspace(ctx, r.localCell, keyspace)
 	if err != nil {
 		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace %v fetch error: %v", keyspace, err)
 	}
 
+	tabletMap := make(map[topodatapb.TabletType]int)
+	for _, tabletType := range tabletTypes {
+		tabletMap[tabletType] = 1
+	}
 	// check if the keyspace has been redirected for this tabletType.
 	for _, sf := range srvKeyspace.ServedFrom {
-		if sf.TabletType == tabletType {
+		if _, ok := tabletMap[sf.TabletType]; ok {
 			keyspace = sf.Keyspace
 			srvKeyspace, err = r.topoServ.GetSrvKeyspace(ctx, r.localCell, keyspace)
 			if err != nil {
@@ -105,9 +109,9 @@ func (r *Resolver) GetKeyspaceShards(ctx context.Context, keyspace string, table
 		}
 	}
 
-	partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)
+	partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletTypes)
 	if partition == nil {
-		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No partition found for tabletType %v in keyspace %v", topoproto.TabletTypeLString(tabletType), keyspace)
+		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No partition found for tabletType %v in keyspace %v", topoproto.TabletTypeLString(tabletTypes[0]), keyspace)
 	}
 	return keyspace, srvKeyspace, partition.ShardReferences, nil
 }
@@ -117,7 +121,7 @@ func (r *Resolver) GetKeyspaceShards(ctx context.Context, keyspace string, table
 // FIXME(alainjobart) callers should convert to ResolveDestination(),
 // and GetSrvKeyspace.
 func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) ([]*ResolvedShard, *topodatapb.SrvKeyspace, error) {
-	keyspace, srvKeyspace, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
+	keyspace, srvKeyspace, allShards, err := r.GetKeyspaceShards(ctx, keyspace, []topodatapb.TabletType{tabletType})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -169,8 +173,8 @@ func (r *Resolver) GetAllKeyspaces(ctx context.Context) ([]string, error) {
 // If dst1 is in shard1, and dst2 and dst3 are in shard2, the output will be:
 // - []*ResolvedShard:   shard1, shard2
 // - [][]*querypb.Value: [id1],  [id2, id3]
-func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids []*querypb.Value, destinations []key.Destination) ([]*ResolvedShard, [][]*querypb.Value, error) {
-	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
+func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tabletTypes []topodatapb.TabletType, ids []*querypb.Value, destinations []key.Destination) ([]*ResolvedShard, [][]*querypb.Value, error) {
+	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletTypes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -183,20 +187,23 @@ func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tab
 			s, ok := resolved[shard]
 			if !ok {
 				target := &querypb.Target{
-					Keyspace:   keyspace,
-					Shard:      shard,
-					TabletType: tabletType,
-					Cell:       r.localCell,
+					Keyspace: keyspace,
+					Shard:    shard,
+					Cell:     r.localCell,
 				}
 				// Right now we always set the Cell to ""
 				// Later we can fallback to another cell if needed.
 				// We would then need to read the SrvKeyspace there too.
 				target.Cell = ""
 				s = len(result)
-				result = append(result, &ResolvedShard{
-					Target:       target,
-					QueryService: r.queryService,
-				})
+				for _, tabletType := range tabletTypes {
+					target.TabletType = tabletType
+					result = append(result, &ResolvedShard{
+						Target:       target,
+						QueryService: r.queryService,
+					})
+				}
+
 				if ids != nil {
 					values = append(values, nil)
 				}
@@ -216,7 +223,7 @@ func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tab
 // ResolveDestination is a shortcut to ResolveDestinations with only
 // one Destination, and no ids.
 func (r *Resolver) ResolveDestination(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, destination key.Destination) ([]*ResolvedShard, error) {
-	rss, _, err := r.ResolveDestinations(ctx, keyspace, tabletType, nil, []key.Destination{destination})
+	rss, _, err := r.ResolveDestinations(ctx, keyspace, []topodatapb.TabletType{tabletType}, nil, []key.Destination{destination})
 	return rss, err
 }
 
