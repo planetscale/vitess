@@ -3,10 +3,17 @@ package redis
 import (
 	"context"
 	"fmt"
-
+	"time"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/vtgate"
 )
 
@@ -32,8 +39,35 @@ type redisListener struct {
 	//executor *vtgate.Executor
 }
 
-func newRedisListener() *redisListener {
-	vtg := vtgate.Init(context.Background(), nil, nil, "", 1, nil)
+func NewRedisListener(clusterInstance *cluster.LocalProcessCluster) *redisListener {
+	ts, err := topo.OpenServer(clusterInstance.VtgateProcess.CommonArg.TopoImplementation,
+		clusterInstance.VtgateProcess.CommonArg.TopoGlobalAddress,
+		clusterInstance.VtgateProcess.CommonArg.TopoGlobalRoot)
+	if err != nil {
+		log.Exitf("Failed to open topo server: %v", err)
+	}
+	defer ts.Close()
+
+	resilientServer := srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
+
+	healthCheck := discovery.NewHealthCheck(2*time.Millisecond, time.Minute)
+	healthCheck.RegisterStats()
+
+	tabletTypes := make([]topodatapb.TabletType, 0, 1)
+	//if len(*tabletTypesToWait) != 0 {
+	//	for _, ttStr := range strings.Split(*tabletTypesToWait, ",") {
+	//		tt, err := topoproto.ParseTabletType(ttStr)
+	//		if err != nil {
+	//			log.Errorf("unknown tablet type: %v", ttStr)
+	//			continue
+	//		}
+	//		tabletTypes = append(tabletTypes, tt)
+	//	}
+	//}
+
+	vtg := vtgate.Init(context.Background(), healthCheck, resilientServer, clusterInstance.VtgateProcess.Cell, 1, tabletTypes)
+
+	//vtg := vtgate.Init(context.Background(), nil, nil, "", 1, nil)
 	return &redisListener{
 		vtg: vtg,
 	}
