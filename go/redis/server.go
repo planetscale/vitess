@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"vitess.io/vitess/go/redis/resp"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -44,11 +45,13 @@ func (r redisListener) Get(rKey []byte) []byte {
 	_, qr, err := r.vtg.Execute(context.Background(), &vtgatepb.Session{}, "select rvalue from redis_store where rkey = :rkey", bindVar)
 	if err != nil {
 		fmt.Println(err)
+		return resp.BulkNull
 	}
 	if len(qr.Rows) < 1 {
-		return nil
+		return resp.BulkNull
 	}
-	return qr.Rows[0][0].ToBytes()
+
+	return BulkString(qr.Rows[0][0].ToBytes())
 }
 
 func (r redisListener) Set(rKey []byte, rValue []byte) []byte {
@@ -59,7 +62,9 @@ func (r redisListener) Set(rKey []byte, rValue []byte) []byte {
 	_, qr, err := r.vtg.Execute(context.Background(), &vtgatepb.Session{}, "insert into redis_store(rkey, rvalue) values(:rkey, :rvalue) on duplicate key update rvalue = :rvalue", bindVar)
 	if err != nil {
 		fmt.Println(err)
+		return resp.BulkNull
 	}
+
 	fmt.Printf("Rows Affected : %d", qr.RowsAffected)
-	return nil
+	return resp.SimpleOK
 }
