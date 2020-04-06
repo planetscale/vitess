@@ -68,6 +68,8 @@ type Gateway interface {
 
 	// CacheStatus returns a list of TabletCacheStatus per shard / tablet type.
 	CacheStatus() TabletCacheStatusList
+
+	TSC() *discovery.TabletStatsCache
 }
 
 // Creator is the factory method which can create the actual gateway object.

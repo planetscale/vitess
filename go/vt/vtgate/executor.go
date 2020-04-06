@@ -209,7 +209,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 
 	switch specStmt := stmt.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
-		return e.handleExec(ctx, safeSession, sql, bindVars, logStats, stmtType, label)
+		return e.handleExec(ctx, safeSession, sql, bindVars, logStats, stmtType, destKeyspace, label)
 	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
 		safeSession := safeSession
 
@@ -233,7 +233,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		// The control flow is such that autocommitable can only be turned on
 		// at the beginning, but never after.
 		safeSession.SetAutocommittable(mustCommit)
-		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, logStats, stmtType, label)
+		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, logStats, stmtType, destKeyspace, label)
 		if err != nil {
 			return nil, err
 		}
@@ -266,9 +266,14 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats, stmtType sqlparser.StatementType, label *querypb.TabletLabelInfo) (*sqltypes.Result, error) {
+func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats, stmtType sqlparser.StatementType, destKeyspace string, label *querypb.TabletLabelInfo) (*sqltypes.Result, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
+	if label != nil {
+		vcursor.tabletTypesFromLabel = e.gw.TSC().GetHealthyTabletTypesByLabel(destKeyspace, label)
+		log.Errorf("Got the tablet types as: %v", vcursor.tabletTypesFromLabel)
+		vcursor.label = label
+	}
 	plan, err := e.getPlan(
 		vcursor,
 		query,

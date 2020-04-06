@@ -159,6 +159,10 @@ func (dg *discoveryGateway) RegisterStats() {
 	)
 }
 
+func (dg *discoveryGateway) TSC() *discovery.TabletStatsCache {
+	return dg.tsc
+}
+
 // topologyWatcherMaxRefreshLag returns the maximum lag since the watched
 // cells were refreshed from the topo server
 func (dg *discoveryGateway) topologyWatcherMaxRefreshLag() time.Duration {
