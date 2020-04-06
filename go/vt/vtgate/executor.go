@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/topotools"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/trace"
 
@@ -42,7 +44,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
@@ -95,7 +96,7 @@ type Executor struct {
 	vschemaStats *VSchemaStats
 
 	vm VSchemaManager
-	gw *tabletGateway
+	gw Gateway
 }
 
 var executorOnce sync.Once
@@ -174,7 +175,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	if err != nil {
 		return nil, err
 	}
-
+	// ks@replica , :-80-> ks:-80, -80@replica, ks:-80@replica
 	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
 	}
@@ -208,7 +209,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 
 	switch specStmt := stmt.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
-		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType, label)
+		return e.handleExec(ctx, safeSession, sql, bindVars, logStats, stmtType, label)
 	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
 		safeSession := safeSession
 
@@ -232,8 +233,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		// The control flow is such that autocommitable can only be turned on
 		// at the beginning, but never after.
 		safeSession.SetAutocommittable(mustCommit)
-
-		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType, label)
+		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, logStats, stmtType, label)
 		if err != nil {
 			return nil, err
 		}
@@ -266,59 +266,9 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats, stmtType sqlparser.StatementType, label *querypb.TabletLabelInfo) (*sqltypes.Result, error) {
-	if dest != nil {
-		if destKeyspace == "" {
-			return nil, errNoKeyspace
-		}
-
-		switch dest.(type) {
-		case key.DestinationExactKeyRange:
-			stmtType := sqlparser.Preview(sql)
-			if stmtType == sqlparser.StmtInsert {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "range queries not supported for inserts: %s", safeSession.TargetString)
-			}
-
-		}
-
-		execStart := time.Now()
-		if e.normalize {
-			query, comments := sqlparser.SplitMarginComments(sql)
-			stmt, err := sqlparser.Parse(query)
-			if err != nil {
-				return nil, err
-			}
-			rewriteResult, err := sqlparser.PrepareAST(stmt, bindVars, "vtg")
-			if err != nil {
-				return nil, err
-			}
-			normalized := sqlparser.String(rewriteResult.AST)
-			sql = comments.Leading + normalized + comments.Trailing
-			neededBindVariables, err := e.createNeededBindVariables(rewriteResult.BindVarNeeds, safeSession)
-			if err != nil {
-				return nil, err
-			}
-			for k, v := range neededBindVariables {
-				bindVars[k] = v
-			}
-		}
-		logStats.PlanTime = execStart.Sub(logStats.StartTime)
-		logStats.SQL = sql
-		logStats.BindVariables = bindVars
-		result, err := e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, false /* notInTransaction */, safeSession.Options, logStats, true /* canAutocommit */)
-		logStats.ExecuteTime = time.Since(execStart)
-		e.updateQueryCounts("ShardDirect", "", "", int64(logStats.ShardQueries))
-		return result, err
-	}
-
-	// V3 mode.
+func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats, stmtType sqlparser.StatementType, label *querypb.TabletLabelInfo) (*sqltypes.Result, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor := newVCursorImpl(ctx, safeSession, destKeyspace, destTabletType, comments, e, logStats, e.VSchema(), e.resolver.resolver)
-	if label != nil {
-		vcursor.tabletTypesFromLabel = e.gw.tsc.GetHealthyTabletTypesByLabel(destKeyspace, label)
-		log.Errorf("Got the tablet types as: %v", vcursor.tabletTypesFromLabel)
-		vcursor.label = label
-	}
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
 	plan, err := e.getPlan(
 		vcursor,
 		query,
@@ -361,7 +311,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	// Check if there was partial DML execution. If so, rollback the transaction.
-	if err != nil && safeSession.InTransaction() && vcursor.hasPartialDML {
+	if err != nil && safeSession.InTransaction() && vcursor.rollbackOnPartialExec {
 		_ = e.txConn.Rollback(ctx, safeSession)
 		err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
 	}
@@ -1223,7 +1173,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor := newVCursorImpl(ctx, safeSession, target.Keyspace, target.TabletType, comments, e, logStats, e.VSchema(), e.resolver.resolver)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
 
 	// check if this is a stream statement for messaging
 	// TODO: support keyRange syntax
@@ -1382,8 +1332,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if e.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
-	keyspace := vcursor.keyspace
-	planKey := keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + sql
+	planKey := vcursor.planPrefixKey() + ":" + sql
 	if plan, ok := e.plans.Get(planKey); ok {
 		return plan.(*engine.Plan), nil
 	}
@@ -1415,7 +1364,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		logStats.BindVariables = bindVars
 	}
 
-	planKey = keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + normalized
+	planKey = vcursor.planPrefixKey() + ":" + normalized
 	if plan, ok := e.plans.Get(planKey); ok {
 		return plan.(*engine.Plan), nil
 	}
@@ -1673,7 +1622,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor := newVCursorImpl(ctx, safeSession, destKeyspace, destTabletType, comments, e, logStats, e.VSchema(), e.resolver.resolver)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
 	plan, err := e.getPlan(
 		vcursor,
 		query,
