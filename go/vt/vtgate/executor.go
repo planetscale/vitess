@@ -271,6 +271,10 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.VSchema(), e.resolver.resolver)
 	if label != nil {
 		vcursor.tabletTypesFromLabel = e.gw.TSC().GetHealthyTabletTypesByLabel(destKeyspace, label)
+		// If not a select statement, then use the default Tablet Type
+		if stmtType != sqlparser.StmtSelect {
+			vcursor.tabletTypesFromLabel = []topodatapb.TabletType{defaultTabletType}
+		}
 		log.Errorf("Got the tablet types as: %v", vcursor.tabletTypesFromLabel)
 		vcursor.label = label
 	}
