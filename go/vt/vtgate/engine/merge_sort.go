@@ -20,6 +20,8 @@ import (
 	"container/heap"
 	"io"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -50,6 +52,7 @@ type MergeSort struct {
 	Primitives []StreamExecutor
 	OrderBy    []OrderbyParams
 	noInputs
+	noTxNeeded
 }
 
 // RouteType satisfies Primitive.
@@ -155,6 +158,17 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 	return nil
 }
 
+func (ms *MergeSort) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"OrderBy": ms.OrderBy,
+	}
+	return PrimitiveDescription{
+		OperatorType: "Sort",
+		Variant:      "Merge",
+		Other:        other,
+	}
+}
+
 // streamHandle is the rendez-vous point between each stream and the merge-sorter.
 // The fields channel is used by the stream to transmit the field info, which
 // is the first packet. Following this, the stream sends each row to the row
@@ -238,7 +252,7 @@ func (sh *scatterHeap) Less(i, j int) bool {
 		if sh.err != nil {
 			return true
 		}
-		cmp, err := sqltypes.NullsafeCompare(sh.rows[i].row[order.Col], sh.rows[j].row[order.Col])
+		cmp, err := evalengine.NullsafeCompare(sh.rows[i].row[order.Col], sh.rows[j].row[order.Col])
 		if err != nil {
 			sh.err = err
 			return true

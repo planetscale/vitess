@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -38,7 +38,7 @@ type RowStreamer interface {
 }
 
 // NewRowStreamer returns a RowStreamer
-func NewRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
+func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
 	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send)
 }
 
@@ -54,7 +54,7 @@ type rowStreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp      *mysql.ConnParams
+	cp      dbconfigs.Connector
 	se      *schema.Engine
 	query   string
 	lastpk  []sqltypes.Value
@@ -66,7 +66,7 @@ type rowStreamer struct {
 	sendQuery string
 }
 
-func newRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
+func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
 		ctx:     ctx,
@@ -118,8 +118,8 @@ func (rs *rowStreamer) buildPlan() error {
 		return fmt.Errorf("unknown table %v in schema", fromTable)
 	}
 	ti := &Table{
-		Name:    st.Name.String(),
-		Columns: st.Columns,
+		Name:   st.Name.String(),
+		Fields: st.Fields,
 	}
 	// The plan we build is identical to the one for vstreamer.
 	// This is because the row format of a read is identical
@@ -142,14 +142,14 @@ func (rs *rowStreamer) buildPlan() error {
 
 func buildPKColumns(st *schema.Table) ([]int, error) {
 	if len(st.PKColumns) == 0 {
-		pkColumns := make([]int, len(st.Columns))
-		for i := range st.Columns {
+		pkColumns := make([]int, len(st.Fields))
+		for i := range st.Fields {
 			pkColumns[i] = i
 		}
 		return pkColumns, nil
 	}
 	for _, pk := range st.PKColumns {
-		if pk >= len(st.Columns) {
+		if pk >= len(st.Fields) {
 			return nil, fmt.Errorf("primary key %d refers to non-existent column", pk)
 		}
 	}
@@ -161,8 +161,8 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	// We could have used select *, but being explicit is more predictable.
 	buf.Myprintf("select ")
 	prefix := ""
-	for _, col := range rs.plan.Table.Columns {
-		buf.Myprintf("%s%v", prefix, col.Name)
+	for _, col := range rs.plan.Table.Fields {
+		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
 		prefix = ", "
 	}
 	buf.Myprintf(" from %v", sqlparser.NewTableIdent(rs.plan.Table.Name))
@@ -181,11 +181,11 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 			buf.Myprintf("%s(", prefix)
 			prefix = " or "
 			for i, pk := range rs.pkColumns[:lastcol] {
-				buf.Myprintf("%v = ", rs.plan.Table.Columns[pk].Name)
+				buf.Myprintf("%v = ", sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
 				rs.lastpk[i].EncodeSQL(buf)
 				buf.Myprintf(" and ")
 			}
-			buf.Myprintf("%v > ", rs.plan.Table.Columns[rs.pkColumns[lastcol]].Name)
+			buf.Myprintf("%v > ", sqlparser.NewColIdent(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
 			rs.lastpk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}
@@ -193,7 +193,7 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	buf.Myprintf(" order by ", sqlparser.NewTableIdent(rs.plan.Table.Name))
 	prefix = ""
 	for _, pk := range rs.pkColumns {
-		buf.Myprintf("%s%v", prefix, rs.plan.Table.Columns[pk].Name)
+		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
 		prefix = ", "
 	}
 	return buf.String(), nil

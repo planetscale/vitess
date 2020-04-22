@@ -20,7 +20,6 @@ package sqlparser
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"unicode"
 
@@ -54,6 +53,56 @@ const (
 	StmtComment
 	StmtPriv
 )
+
+//ASTToStatementType returns a StatementType from an AST stmt
+func ASTToStatementType(stmt Statement) StatementType {
+	switch stmt.(type) {
+	case *Select, *Union:
+		return StmtSelect
+	case *Insert:
+		return StmtInsert
+	case *Update:
+		return StmtUpdate
+	case *Delete:
+		return StmtDelete
+	case *Set:
+		return StmtSet
+	case *Show:
+		return StmtShow
+	case *DDL, *DBDDL:
+		return StmtDDL
+	case *Use:
+		return StmtUse
+	case *OtherRead, *OtherAdmin:
+		return StmtOther
+	case *Begin:
+		return StmtBegin
+	case *Commit:
+		return StmtCommit
+	case *Rollback:
+		return StmtRollback
+	default:
+		return StmtUnknown
+	}
+}
+
+//CanNormalize takes Statement and returns if the statement can be normalized.
+func CanNormalize(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Select, *Union, *Insert, *Update, *Delete, *Set:
+		return true
+	}
+	return false
+}
+
+//IsSetStatement takes Statement and returns if the statement is set statement.
+func IsSetStatement(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Set:
+		return true
+	}
+	return false
+}
 
 // Preview analyzes the beginning of the query using a simpler and faster
 // textual comparison to identify the statement type.
@@ -163,6 +212,25 @@ func IsDML(sql string) bool {
 	return false
 }
 
+//IsDMLStatement returns true if the query is an INSERT, UPDATE or DELETE statement.
+func IsDMLStatement(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Insert, *Update, *Delete:
+		return true
+	}
+
+	return false
+}
+
+//IsVschemaDDL returns true if the query is an Vschema alter ddl.
+func IsVschemaDDL(ddl *DDL) bool {
+	switch ddl.Action {
+	case CreateVindexStr, AddVschemaTableStr, DropVschemaTableStr, AddColVindexStr, DropColVindexStr, AddSequenceStr, AddAutoIncStr:
+		return true
+	}
+	return false
+}
+
 // SplitAndExpression breaks up the Expr into AND-separated conditions
 // and appends them to filters. Outer parenthesis are removed. Precedence
 // should be taken into account if expressions are recombined.
@@ -174,8 +242,6 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	case *AndExpr:
 		filters = SplitAndExpression(filters, node.Left)
 		return SplitAndExpression(filters, node.Right)
-	case *ParenExpr:
-		return SplitAndExpression(filters, node.Expr)
 	}
 	return append(filters, node)
 }
@@ -274,6 +340,8 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 				return sqltypes.PlanValue{}, err
 			}
 			return sqltypes.PlanValue{Value: n}, nil
+		case FloatVal:
+			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Float64, node.Val)}, nil
 		case StrVal:
 			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val)}, nil
 		case HexVal:
@@ -304,87 +372,4 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		return sqltypes.PlanValue{}, nil
 	}
 	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
-}
-
-// SetKey is the extracted key from one SetExpr
-type SetKey struct {
-	Key   string
-	Scope string
-}
-
-// ExtractSetValues returns a map of key-value pairs
-// if the query is a SET statement. Values can be bool, int64 or string.
-// Since set variable names are case insensitive, all keys are returned
-// as lower case.
-func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope string, err error) {
-	stmt, err := Parse(sql)
-	if err != nil {
-		return nil, "", err
-	}
-	setStmt, ok := stmt.(*Set)
-	if !ok {
-		return nil, "", fmt.Errorf("ast did not yield *sqlparser.Set: %T", stmt)
-	}
-	result := make(map[SetKey]interface{})
-	for _, expr := range setStmt.Exprs {
-		scope := ImplicitStr
-		key := expr.Name.Lowered()
-		switch {
-		case strings.HasPrefix(key, "@@global."):
-			scope = GlobalStr
-			key = strings.TrimPrefix(key, "@@global.")
-		case strings.HasPrefix(key, "@@session."):
-			scope = SessionStr
-			key = strings.TrimPrefix(key, "@@session.")
-		case strings.HasPrefix(key, "@@vitess_metadata."):
-			scope = VitessMetadataStr
-			key = strings.TrimPrefix(key, "@@vitess_metadata.")
-		case strings.HasPrefix(key, "@@"):
-			key = strings.TrimPrefix(key, "@@")
-		}
-
-		if strings.HasPrefix(expr.Name.Lowered(), "@@") {
-			if setStmt.Scope != "" && scope != "" {
-				return nil, "", fmt.Errorf("unsupported in set: mixed using of variable scope")
-			}
-			_, out := NewStringTokenizer(key).Scan()
-			key = string(out)
-		}
-
-		setKey := SetKey{
-			Key:   key,
-			Scope: scope,
-		}
-
-		switch expr := expr.Expr.(type) {
-		case *SQLVal:
-			switch expr.Type {
-			case StrVal:
-				result[setKey] = strings.ToLower(string(expr.Val))
-			case IntVal:
-				num, err := strconv.ParseInt(string(expr.Val), 0, 64)
-				if err != nil {
-					return nil, "", err
-				}
-				result[setKey] = num
-			default:
-				return nil, "", fmt.Errorf("invalid value type: %v", String(expr))
-			}
-		case BoolVal:
-			var val int64
-			if expr {
-				val = 1
-			}
-			result[setKey] = val
-		case *ColName:
-			result[setKey] = expr.Name.String()
-		case *NullVal:
-			result[setKey] = nil
-		case *Default:
-			result[setKey] = "default"
-		default:
-			return nil, "", fmt.Errorf("invalid syntax: %s", String(expr))
-		}
-	}
-	return result, strings.ToLower(setStmt.Scope), nil
 }

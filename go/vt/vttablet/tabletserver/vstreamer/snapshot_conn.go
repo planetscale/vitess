@@ -30,10 +30,10 @@ import (
 // reading a table along with a gtid snapshot.
 type snapshotConn struct {
 	*mysql.Conn
-	cp *mysql.ConnParams
+	cp dbconfigs.Connector
 }
 
-func snapshotConnect(ctx context.Context, cp *mysql.ConnParams) (*snapshotConn, error) {
+func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn, error) {
 	mconn, err := mysqlConnect(ctx, cp)
 	if err != nil {
 		return nil, err
@@ -90,11 +90,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
 		return "", err
 	}
-	if _, err := conn.ExecuteFetch("start transaction read only", 1, false); err != nil {
-		return "", err
-	}
-	// For the transaction to really start, we have to perform a read.
-	if _, err := conn.ExecuteFetch(fmt.Sprintf("select 1 from %s limit 1", tableIdent), 1, false); err != nil {
+	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
 		return "", err
 	}
 	return mysql.EncodePosition(mpos), nil
@@ -106,10 +102,6 @@ func (conn *snapshotConn) Close() {
 	conn.Conn.Close()
 }
 
-func mysqlConnect(ctx context.Context, cp *mysql.ConnParams) (*mysql.Conn, error) {
-	cp, err := dbconfigs.WithCredentials(cp)
-	if err != nil {
-		return nil, err
-	}
-	return mysql.Connect(ctx, cp)
+func mysqlConnect(ctx context.Context, cp dbconfigs.Connector) (*mysql.Conn, error) {
+	return cp.Connect(ctx)
 }

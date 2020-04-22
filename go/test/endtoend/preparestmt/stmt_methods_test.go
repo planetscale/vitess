@@ -43,23 +43,31 @@ func TestInsertUpdateDelete(t *testing.T) {
 	dbo := Connect(t)
 	defer dbo.Close()
 	// prepare insert statement
-	insertStmt := `insert into ` + tableName + ` values( ?,  ?,  ?,  ?,  ?,  ?,  ?,  
-		?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?, ?,  ?,  ?,  ?,  ?,  ?, ?, ?, ?);`
+	insertStmt := `insert into ` + tableName + ` values( ?,  ?,  ?,  ?,  ?,  ?,  ?, ?,
+		?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?, ?, ?, ?,
+		?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?, ?, ?, ?);`
 
 	textValue := fake.FullName()
 	largeComment := fake.Paragraph()
 
+	location, _ := time.LoadLocation("Local")
 	// inserting multiple rows into test table
 	for i := 1; i <= 100; i++ {
 		// preparing value for the insert testing
 		insertValue := []interface{}{
 			i, fmt.Sprint(i) + "21", i * 100,
 			127, 1, 32767, 8388607, 2147483647, 2.55, 64.9, 55.5,
-			time.Date(2009, 5, 5, 0, 0, 0, 0, time.UTC),
-			time.Date(2009, 5, 5, 0, 0, 0, 0, time.UTC),
+			time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
+			time.Date(2009, 5, 5, 0, 0, 0, 50000, location),
+			time.Date(2009, 5, 5, 0, 0, 0, 50000, location),
 			time.Now(),
-			time.Date(2009, 5, 5, 0, 0, 0, 0, time.UTC),
+			time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
 			1, 1, 1, 1, 1, 1, 1, 1, 1, jsonExample, textValue, largeComment,
+			-128, 127, 1, -1,
+			-32768, 32767, 1, -1,
+			-8388608, 8388607, 1, -1,
+			-2147483648, 2147483647, 1, -1,
+			-(1 << 63), (1 << 63) - 1, 1, -1,
 		}
 		exec(t, dbo, insertStmt, insertValue...)
 
@@ -74,6 +82,13 @@ func TestInsertUpdateDelete(t *testing.T) {
 
 	// validate value of msg column in data
 	assert.Equal(t, fmt.Sprintf("%d21", testingID), data[0].Msg)
+
+	// Validate a datetime field (without micros)
+	//   The 50 microsecs we inserted should have been truncated
+	assert.Equal(t, time.Date(2009, 5, 5, 0, 0, 0, 0, location), data[0].DateTime)
+
+	// Validate a datetime field (with micros)
+	assert.Equal(t, time.Date(2009, 5, 5, 0, 0, 0, 50000, location), data[0].DateTimeMicros)
 
 	// testing record update
 	updateRecord(t, dbo)
@@ -108,17 +123,30 @@ func TestAutoIncColumns(t *testing.T) {
 	insertStmt := "INSERT INTO " + tableName + ` (
 		msg,keyspace_id,tinyint_unsigned,bool_signed,smallint_unsigned,
 		mediumint_unsigned,int_unsigned,float_unsigned,double_unsigned,
-		decimal_unsigned,t_date,t_datetime,t_time,t_timestamp,c8,c16,c24,
-		c32,c40,c48,c56,c63,c64,json_col,text_col,data) VALUES (?,  ?,  ?,  ?,  ?, ?,
-		  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?, ?,  ?,  ?,  ?,  ?,  ?, ?, ?, ?);`
+		decimal_unsigned,t_date,t_datetime,t_datetime_micros,t_time,t_timestamp,c8,c16,c24,
+		c32,c40,c48,c56,c63,c64,json_col,text_col,data,
+		tinyint_min,tinyint_max,tinyint_pos,tinyint_neg,
+		smallint_min,smallint_max,smallint_pos,smallint_neg,
+		medint_min,medint_max,medint_pos,medint_neg,
+		int_min,int_max,int_pos,int_neg,
+		bigint_min,bigint_max,bigint_pos,bigint_neg
+) VALUES (?,  ?,  ?,  ?,  ?, ?,
+		  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?, ?, ?, ?,
+		  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?, ?, ?, ?);`
 	insertValue := []interface{}{
 		"21", 0,
 		127, 1, 32767, 8388607, 2147483647, 2.55, 64.9, 55.5,
-		time.Date(2009, 5, 5, 0, 0, 0, 0, time.UTC),
-		time.Date(2009, 5, 5, 0, 0, 0, 0, time.UTC),
+		time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
+		time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
+		time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
 		time.Now(),
-		time.Date(2009, 5, 5, 0, 0, 0, 0, time.UTC),
+		time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
 		1, 1, 1, 1, 1, 1, 1, 1, 1, jsonExample, fake.DomainName(), fake.Paragraph(),
+		-(1 << 7), (1 << 7) - 1, 1, -1,
+		-(1 << 15), (1 << 15) - 1, 1, -1,
+		-(1 << 23), (1 << 23) - 1, 1, -1,
+		-(1 << 31), (1 << 31) - 1, 1, -1,
+		-(1 << 63), (1 << 63) - 1, 1, -1,
 	}
 
 	exec(t, dbo, insertStmt, insertValue...)
@@ -170,5 +198,5 @@ func TestWrongTableName(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	dbo := Connect(t)
 	defer dbo.Close()
-	execWithError(t, dbo, []uint16{1105}, "select * from teseting_table;")
+	execWithError(t, dbo, []uint16{1146}, "select * from teseting_table;")
 }

@@ -4,28 +4,19 @@
 
 # SET
 "set a=1"
-"unsupported construct: set"
+"plan building not supported"
+
+# set multi user defined variable with complex expression
+"set @foo = 42, @bar = @foo + 1"
+"expression is too complex ':__vtudvfoo + 1'"
+
+# set user defined and system variable
+"set @foo = 42, @bar = @foo, @@wait_timeout = 28800"
+"plan building not supported"
 
 # SHOW
 "show create database"
-"unsupported construct: show"
-
-# DDL
-"create table a(id int)"
-"unsupported construct: ddl"
-
-"create table a.b(id int)"
-"unsupported construct: ddl"
-
-"alter table a ADD id int"
-"unsupported construct: ddl"
-
-"alter table a.b ADD id int"
-"unsupported construct: ddl"
-
-# DBA statements
-"explain select * from user"
-"unsupported construct: other read"
+"plan building not supported"
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
@@ -258,10 +249,6 @@
 # update by primary keyspace id, changing one vindex column, limit without order clause
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1 limit 10"
 "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: email_user_map"
-
-# update multi column vindex, without values for all the vindex columns
-"update multicolvin set column_c = 2 where kid = 1"
-"unsupported: update does not have values for all the columns in vindex (colb_colc_map)"
 
 # cross-shard update tables
 "update (select id from user) as u set id = 4"

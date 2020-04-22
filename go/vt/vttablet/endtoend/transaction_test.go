@@ -28,14 +28,12 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestCommit(t *testing.T) {
@@ -119,13 +117,13 @@ func TestCommit(t *testing.T) {
 		tag:  "Queries/Histograms/COMMIT/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/INSERT_PK/Count",
+		tag:  "Queries/Histograms/Insert/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/DML_PK/Count",
+		tag:  "Queries/Histograms/DeleteLimit/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/PASS_SELECT/Count",
+		tag:  "Queries/Histograms/Select/Count",
 		diff: 2,
 	}}
 	vend := framework.DebugVars()
@@ -164,7 +162,7 @@ func TestRollback(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null)"}
+	want := []string{"insert into vitess_test values (4, null, null, null)"}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
 	}
@@ -197,7 +195,7 @@ func TestRollback(t *testing.T) {
 		tag:  "Queries/Histograms/ROLLBACK/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/INSERT_PK/Count",
+		tag:  "Queries/Histograms/Insert/Count",
 		diff: 1,
 	}}
 	vend := framework.DebugVars()
@@ -282,13 +280,13 @@ func TestAutoCommit(t *testing.T) {
 		tag:  "Queries/Histograms/COMMIT/Count",
 		diff: 0,
 	}, {
-		tag:  "Queries/Histograms/INSERT_PK/Count",
+		tag:  "Queries/Histograms/Insert/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/DML_PK/Count",
+		tag:  "Queries/Histograms/DeleteLimit/Count",
 		diff: 1,
 	}, {
-		tag:  "Queries/Histograms/PASS_SELECT/Count",
+		tag:  "Queries/Histograms/Select/Count",
 		diff: 2,
 	}}
 	vend := framework.DebugVars()
@@ -303,17 +301,6 @@ func TestAutoCommit(t *testing.T) {
 	}
 }
 
-func TestAutoCommitOff(t *testing.T) {
-	framework.Server.SetAutoCommit(false)
-	defer framework.Server.SetAutoCommit(true)
-
-	_, err := framework.NewClient().Execute("insert into vitess_test values(4, null, null, null)", nil)
-	want := "INSERT_PK disallowed outside transaction"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("%v, must start with %s", err, want)
-	}
-}
-
 func TestTxPoolSize(t *testing.T) {
 	vstart := framework.DebugVars()
 
@@ -324,7 +311,7 @@ func TestTxPoolSize(t *testing.T) {
 		return
 	}
 	defer client1.Rollback()
-	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolAvailable", tabletenv.Config.TransactionCap-1); err != nil {
+	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1); err != nil {
 		t.Error(err)
 	}
 
@@ -349,56 +336,12 @@ func TestTxPoolSize(t *testing.T) {
 	}
 }
 
-func TestTxTimeout(t *testing.T) {
-	vstart := framework.DebugVars()
-
-	defer framework.Server.SetTxTimeout(framework.Server.TxTimeout())
-	txTimeout := 1 * time.Millisecond
-	framework.Server.SetTxTimeout(txTimeout)
-	if err := verifyIntValue(framework.DebugVars(), "TransactionTimeout", int(txTimeout)); err != nil {
-		t.Error(err)
-	}
-
-	defer framework.Server.SetTxPoolTimeout(framework.Server.TxPoolTimeout())
-	txPoolTimeout := 2 * time.Millisecond
-	framework.Server.SetTxPoolTimeout(txPoolTimeout)
-	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolTimeout", int(txPoolTimeout)); err != nil {
-		t.Error(err)
-	}
-
-	catcher := framework.NewTxCatcher()
-	defer catcher.Close()
-	client := framework.NewClient()
-	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	tx, err := catcher.Next()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if tx.Conclusion != "kill" {
-		t.Errorf("Conclusion: %s, want kill", tx.Conclusion)
-	}
-	if err := compareIntDiff(framework.DebugVars(), "Kills/Transactions", vstart, 1); err != nil {
-		t.Error(err)
-	}
-
-	// Ensure commit fails.
-	err = client.Commit()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_ABORTED {
-		t.Errorf("Commit code: %v, want %v", code, vtrpcpb.Code_ABORTED)
-	}
-}
-
 func TestForUpdate(t *testing.T) {
 	for _, mode := range []string{"for update", "lock in share mode"} {
 		client := framework.NewClient()
 		query := fmt.Sprintf("select * from vitess_test where intval=2 %s", mode)
 		_, err := client.Execute(query, nil)
-		want := "SELECT_LOCK disallowed outside transaction"
+		want := "SelectLock disallowed outside transaction"
 		if err == nil || !strings.HasPrefix(err.Error(), want) {
 			t.Errorf("%v, must have prefix %s", err, want)
 		}

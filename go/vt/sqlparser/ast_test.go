@@ -25,7 +25,6 @@ import (
 	"unsafe"
 
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestAppend(t *testing.T) {
@@ -83,7 +82,6 @@ func TestSelect(t *testing.T) {
 		t.Errorf("having: %q, want %s", buf.String(), want)
 	}
 
-	// OR clauses must be parenthesized.
 	tree, err = Parse("select * from t where a = 1 or b = 1")
 	require.NoError(t, err)
 	expr = tree.(*Select).Where.Expr
@@ -91,7 +89,7 @@ func TestSelect(t *testing.T) {
 	sel.AddWhere(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Where.Format(buf)
-	want = " where (a = 1 or b = 1)"
+	want = " where a = 1 or b = 1"
 	if buf.String() != want {
 		t.Errorf("where: %q, want %s", buf.String(), want)
 	}
@@ -99,7 +97,7 @@ func TestSelect(t *testing.T) {
 	sel.AddHaving(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Having.Format(buf)
-	want = " having (a = 1 or b = 1)"
+	want = " having a = 1 or b = 1"
 	if buf.String() != want {
 		t.Errorf("having: %q, want %s", buf.String(), want)
 	}
@@ -439,7 +437,7 @@ func TestReplaceExpr(t *testing.T) {
 		out: "not :a",
 	}, {
 		in:  "select * from t where ((select a from b))",
-		out: "(:a)",
+		out: ":a",
 	}, {
 		in:  "select * from t where (select a from b) = 1",
 		out: ":a = 1",
@@ -563,47 +561,6 @@ func TestReplaceExpr(t *testing.T) {
 	}
 }
 
-func TestExprFromValue(t *testing.T) {
-	tcases := []struct {
-		in  sqltypes.Value
-		out SQLNode
-		err string
-	}{{
-		in:  sqltypes.NULL,
-		out: &NullVal{},
-	}, {
-		in:  sqltypes.NewInt64(1),
-		out: NewIntVal([]byte("1")),
-	}, {
-		in:  sqltypes.NewFloat64(1.1),
-		out: NewFloatVal([]byte("1.1")),
-	}, {
-		in:  sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1.1")),
-		out: NewFloatVal([]byte("1.1")),
-	}, {
-		in:  sqltypes.NewVarChar("aa"),
-		out: NewStrVal([]byte("aa")),
-	}, {
-		in:  sqltypes.MakeTrusted(sqltypes.Expression, []byte("rand()")),
-		err: "cannot convert value EXPRESSION(rand()) to AST",
-	}}
-	for _, tcase := range tcases {
-		got, err := ExprFromValue(tcase.in)
-		if tcase.err != "" {
-			if err == nil || err.Error() != tcase.err {
-				t.Errorf("ExprFromValue(%v) err: %v, want %s", tcase.in, err, tcase.err)
-			}
-			continue
-		}
-		if err != nil {
-			t.Error(err)
-		}
-		if got, want := got, tcase.out; !reflect.DeepEqual(got, want) {
-			t.Errorf("ExprFromValue(%v): %v, want %s", tcase.in, got, want)
-		}
-	}
-}
-
 func TestColNameEqual(t *testing.T) {
 	var c1, c2 *ColName
 	if c1.Equal(c2) {
@@ -669,7 +626,7 @@ func TestColIdentMarshal(t *testing.T) {
 
 func TestColIdentSize(t *testing.T) {
 	size := unsafe.Sizeof(NewColIdent(""))
-	want := 2 * unsafe.Sizeof("")
+	want := 2*unsafe.Sizeof("") + 8
 	if size != want {
 		t.Errorf("Size of ColIdent: %d, want 32", want)
 	}
