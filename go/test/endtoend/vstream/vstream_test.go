@@ -48,9 +48,10 @@ var (
 	format mysql.BinlogFormat
 	pos    mysql.Position
 
-	binLogPosPrefix = "4c1446e6-676d-11ea-abbc-40234316aeb5"
-	startBinlogPos  = ":1"
-	stopBinlogPos   = ":1-8"
+	binLogPosPrefix       = "b8013635-849f-11ea-8f26-40234316aeb5"
+	startBinlogPos        = ":1"
+	stopBinlogPos         = ":1-11"
+	tmToRecover     int64 = 1587563405
 )
 
 type streamerPlan struct {
@@ -82,21 +83,29 @@ func TestVstreamReplication(t *testing.T) {
 
 	_ = vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 		for _, event := range events {
+			// GTID Based repl
+			t := time.Unix(event.Timestamp, 0)
+
 			if strings.Contains(event.Gtid, stop_pos) {
 				println("Caught up till this position " + stop_pos)
 				os.Exit(0)
 			}
+
 			if event.Type == binlogdatapb.VEventType_DDL || event.Type == binlogdatapb.VEventType_INSERT ||
 				event.Type == binlogdatapb.VEventType_UPDATE || event.Type == binlogdatapb.VEventType_REPLACE ||
 				event.Type == binlogdatapb.VEventType_ROW {
-
 				if event.Ddl != "" {
 					println(event.Ddl)
 				}
 				if event.RowEvent != nil {
 					println("----------------")
-					println(event.Gtid)
-					fmt.Printf("Table %s: Before: %v, After: %v",
+					if event.Timestamp > tmToRecover {
+						println("Caught up till this time ")
+						os.Exit(0)
+					}
+					fmt.Println(fmt.Sprintf("Timestamp: %v, time: %v", t, event.Timestamp))
+
+					fmt.Printf("Table %s: Before: %v, After: %v\n",
 						event.RowEvent.TableName,
 						event.RowEvent.RowChanges[0].Before,
 						event.RowEvent.RowChanges[0].After)
