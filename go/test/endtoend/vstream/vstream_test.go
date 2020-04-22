@@ -48,10 +48,13 @@ var (
 	format mysql.BinlogFormat
 	pos    mysql.Position
 
-	binLogPosPrefix       = "b8013635-849f-11ea-8f26-40234316aeb5"
-	startBinlogPos        = ":1"
-	stopBinlogPos         = ":1-11"
-	tmToRecover     int64 = 1587563405
+	binLogPosPrefix = "11a8f408-84a4-11ea-9b34-40234316aeb5"
+	// use the last GTID to which recovery data is there
+	// and after that we started applying the binlogs
+	startBinlogPos = ":1-9"
+
+	stopBinlogPos       = ":1-14"
+	tmToRecover   int64 = 1587565403
 )
 
 type streamerPlan struct {
@@ -80,16 +83,16 @@ func TestVstreamReplication(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-
+	println("Stop position is " + stop_pos)
 	_ = vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
 		for _, event := range events {
 			// GTID Based repl
 			t := time.Unix(event.Timestamp, 0)
 
-			if strings.Contains(event.Gtid, stop_pos) {
-				println("Caught up till this position " + stop_pos)
-				os.Exit(0)
-			}
+			//if strings.Contains(event.Gtid, stop_pos) {
+			//	println("Caught up till this position " + stop_pos)
+			//	os.Exit(0)
+			//}
 
 			if event.Type == binlogdatapb.VEventType_DDL || event.Type == binlogdatapb.VEventType_INSERT ||
 				event.Type == binlogdatapb.VEventType_UPDATE || event.Type == binlogdatapb.VEventType_REPLACE ||
