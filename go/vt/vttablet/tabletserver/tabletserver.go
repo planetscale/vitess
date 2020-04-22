@@ -75,7 +75,7 @@ const (
 	// StateServing is where queries are allowed.
 	StateServing
 	// StateTransitioning is a transient state indicating that
-	// the tabletserver is tranisitioning to a new state.
+	// the tabletserver is transitioning to a new state.
 	// In order to achieve clean transitions, no requests are
 	// allowed during this state.
 	StateTransitioning

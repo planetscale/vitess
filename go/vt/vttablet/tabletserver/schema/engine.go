@@ -63,6 +63,8 @@ type Engine struct {
 	// and do not require locking mu.
 	conns *connpool.Pool
 	ticks *timer.Timer
+
+	st *Tracker
 }
 
 // NewEngine creates a new Engine.
@@ -93,6 +95,14 @@ func NewEngine(env tabletenv.Env) *Engine {
 
 		schemazHandler(se.GetSchema(), w, r)
 	})
+
+	var st *Tracker
+	var err error
+	if st, err = NewTracker(se); err != nil {
+		panic("Could not create Schema Tracker ")
+	}
+	se.st = st
+
 	return se
 }
 
@@ -126,6 +136,9 @@ func (se *Engine) Open() error {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
+	if err := se.st.open(ctx); err != nil {
+		return err
+	}
 	se.isOpen = true
 	return nil
 }
@@ -167,6 +180,12 @@ func (se *Engine) MakeNonMaster() {
 			t.SequenceInfo.Unlock()
 		}
 	}
+}
+
+// Reload for pos loads the schema for a given GTID position
+// Note: races might occur when multiple DDLs happen soon after each other
+func (se *Engine) ReloadForPos(ctx context.Context, pos mysql.Position, ddl string) (bool, error) {
+	return se.st.ReloadForPos(ctx, pos, ddl)
 }
 
 // Reload reloads the schema info from the db.

@@ -502,6 +502,20 @@ func (db *DB) DeleteQuery(query string) {
 	delete(db.queryCalled, key)
 }
 
+// DeleteQueryPattern deletes query from the fake DB. Useful if another RE is needed for a subsequent test
+func (db *DB) DeleteQueryPattern(queryPattern string) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	var idx int
+	for i, pat := range db.patternData {
+		if pat.expr.MatchString(queryPattern) {
+			idx = i
+		}
+	}
+	db.patternData[idx] = db.patternData[len(db.patternData)-1]
+	db.patternData = db.patternData[:len(db.patternData)-1]
+}
+
 // AddRejectedQuery adds a query which will be rejected at execution time.
 func (db *DB) AddRejectedQuery(query string, err error) {
 	db.mu.Lock()

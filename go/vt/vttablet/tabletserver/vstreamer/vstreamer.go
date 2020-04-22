@@ -464,7 +464,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			// Proactively reload schema.
 			// If the DDL adds a column, comparing with an older snapshot of the
 			// schema will make us think that a column was dropped and error out.
-			vs.se.Reload(vs.ctx)
+			vs.se.ReloadForPos(vs.ctx, vs.pos, q.SQL)
 		case sqlparser.StmtOther, sqlparser.StmtPriv:
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.

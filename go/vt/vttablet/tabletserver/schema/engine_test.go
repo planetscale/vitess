@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"encoding/json"
 	"expvar"
 	"fmt"
 	"net/http"
@@ -53,7 +54,7 @@ func TestOpenAndReload(t *testing.T) {
 		"int64"),
 		"1427325876",
 	))
-	se := newEngine(10, 10*time.Second, 10*time.Second, true, db)
+	se := newEngine(10, 10*time.Second, 10*time.Second, true, db, false)
 	se.Open()
 	defer se.Close()
 
@@ -160,6 +161,143 @@ func TestOpenAndReload(t *testing.T) {
 	}
 	delete(want, "msg")
 	assert.Equal(t, want, se.GetSchema())
+
+}
+
+func TestSchemaTrackingCached(t *testing.T) {
+	// test schema tracker in caching mode
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+
+	se := newEngine(10, 10*time.Second, 10*time.Second, true, db, false)
+	se.Open()
+	defer se.Close()
+	CachedSchema = TrackedSchema{}
+	want := initialSchema()
+	assert.Equal(t, want, se.GetSchema())
+	var err error
+	var gtid_t1 mysql.Position
+	if gtid_t1, err = mysql.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"); err != nil {
+		t.Fatal("Could not decode gtid")
+	}
+	var cached bool
+	cached, err = se.ReloadForPos(context.Background(), gtid_t1, "ddl1")
+	require.NoError(t, err)
+	require.False(t, cached)
+	assert.Equal(t, want, se.GetSchema())
+	cached, err = se.ReloadForPos(context.Background(), gtid_t1, "ddl1")
+	require.NoError(t, err)
+	require.True(t, cached)
+	assert.Equal(t, want, se.GetSchema())
+}
+
+const (
+	GetTrackedVersionRE    = "select id, pos, ddl, schema, time_updated from _vt.schema_tracking where pos = .*"
+	GetTrackedVersionRE10  = "select id, pos, ddl, schema, time_updated from _vt.schema_tracking where pos = .*1-10.*"
+	InsertTrackedVersionRE = "insert ignore into _vt.schema_tracking .*"
+)
+
+func mockTrackedSchemaResult10(t *testing.T, se *Engine) *sqltypes.Result {
+	jsonSchema, _ := json.Marshal(se.GetSchema())
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Type: sqltypes.Uint64,
+		}, {
+			Type: sqltypes.VarBinary,
+		}, {
+			Type: sqltypes.VarBinary,
+		}, {
+			Type: sqltypes.VarBinary,
+		}, {
+			Type: sqltypes.Uint64,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),                                                     //id
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10")), //pos
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("ddl1")),                                              //ddl
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(jsonSchema)),                                          //schema
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")),                                            //time_updated
+		}},
+	}
+	return result
+}
+
+func TestSchemaTrackingStored(t *testing.T) {
+	// test schema tracker in caching mode
+	CachedSchema = TrackedSchema{}
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(GetAllTrackedVersions, &sqltypes.Result{})
+	db.AddQuery(createSchemaTrackingTable(), &sqltypes.Result{})
+	db.AddQueryPattern(InsertTrackedVersionRE, &sqltypes.Result{})
+	db.AddQueryPattern(GetTrackedVersionRE, &sqltypes.Result{})
+
+	se := newEngine(10, 10*time.Second, 10*time.Second, true, db, true)
+	se.Open()
+	defer se.Close()
+
+	want := initialSchema()
+	assert.Equal(t, want, se.GetSchema())
+
+	var err error
+	var gtid_t1 mysql.Position
+	if gtid_t1, err = mysql.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"); err != nil {
+		t.Fatal("Could not decode gtid")
+	}
+
+	var cached bool
+	cached, err = se.ReloadForPos(context.Background(), gtid_t1, "ddl1")
+	require.NoError(t, err)
+	require.False(t, cached)
+	assert.Equal(t, want, se.GetSchema())
+	cached, err = se.ReloadForPos(context.Background(), gtid_t1, "ddl1")
+	require.NoError(t, err)
+	require.True(t, cached)
+	assert.Equal(t, want, se.GetSchema())
+
+	var gtid_t2, gtid_t3 mysql.Position
+	if gtid_t2, err = mysql.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-20"); err != nil {
+		t.Fatal("Could not decode gtid")
+	}
+	if gtid_t3, err = mysql.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-30"); err != nil {
+		t.Fatal("Could not decode gtid")
+	}
+
+	cached, err = se.ReloadForPos(context.Background(), gtid_t2, "ddl2")
+	require.NoError(t, err)
+	require.False(t, cached)
+
+	cached, err = se.ReloadForPos(context.Background(), gtid_t1, "ddl1")
+	require.NoError(t, err)
+	require.True(t, cached)
+
+	cached, err = se.ReloadForPos(context.Background(), gtid_t3, "ddl3")
+	require.NoError(t, err)
+	require.False(t, cached)
+
+	cached, err = se.ReloadForPos(context.Background(), gtid_t1, "ddl1")
+	require.NoError(t, err)
+	require.True(t, cached)
+
+	cached, err = se.ReloadForPos(context.Background(), gtid_t2, "ddl2")
+	require.NoError(t, err)
+	require.True(t, cached)
+
+	db.DeleteQueryPattern(GetTrackedVersionRE)
+	db.AddQueryPattern(GetTrackedVersionRE10, mockTrackedSchemaResult10(t, se))
+
+	se.st.schemas = make([]*TrackedSchema, 0)
+
+	cached, err = se.ReloadForPos(context.Background(), gtid_t1, "ddl1")
+	require.NoError(t, err)
+	require.True(t, cached)
+
 }
 
 func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
@@ -175,7 +313,7 @@ func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
 			{sqltypes.NewVarBinary("1427325875")},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db, false)
 	err := se.Open()
 	want := "could not get MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -195,7 +333,7 @@ func TestOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 			{sqltypes.NULL},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db, false)
 	err := se.Open()
 	want := "unexpected result for MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -215,7 +353,7 @@ func TestOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 			{sqltypes.NewVarBinary("invalid_time")},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db, false)
 	err := se.Open()
 	want := "could not parse time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -230,7 +368,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf("injected error"))
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db, false)
 	err := se.Open()
 	want := "injected error"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -261,7 +399,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 			{sqltypes.NewVarBinary("")},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false, db, false)
 	err := se.Open()
 	want := "Row count exceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -275,7 +413,7 @@ func TestExportVars(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	se := newEngine(10, 1*time.Second, 1*time.Second, true, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, true, db, false)
 	se.Open()
 	defer se.Close()
 	expvar.Do(func(kv expvar.KeyValue) {
@@ -289,7 +427,7 @@ func TestStatsURL(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	se := newEngine(10, 1*time.Second, 1*time.Second, true, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, true, db, false)
 	se.Open()
 	defer se.Close()
 
@@ -298,13 +436,16 @@ func TestStatsURL(t *testing.T) {
 	se.handleDebugSchema(response, request)
 }
 
-func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool, db *fakesqldb.DB) *Engine {
+func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool, db *fakesqldb.DB, trackSchema bool) *Engine {
 	config := tabletenv.NewDefaultConfig()
 	config.QueryCacheSize = queryCacheSize
 	config.SchemaReloadIntervalSeconds = int(reloadTime) / 1e9
 	config.OltpReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
 	config.OlapReadPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
 	config.TxPool.IdleTimeoutSeconds = int(idleTimeout / 1e9)
+	if trackSchema {
+		config.TrackSchemaVersions = true
+	}
 	se := NewEngine(tabletenv.NewTestEnv(config, nil, "SchemaTest"))
 	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
