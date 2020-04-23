@@ -1,74 +1,73 @@
+---
+orchestrator:
+  enabled: false
+pmm:
+  enabled: false
 topology:
   cells:
-    - name: "zone1"
-      etcd:
-        replicas: 1
+    -
+      keyspaces:
+        -
+          name: example
+          shards:
+            -
+              name: "0"
+              tablets:
+                -
+                  type: replica
+                  vttablet:
+                    enableReplReporter: true
+                    enableSemisync: false
+                    replicas: 2
+        -
+          name: sourceks
+          shards:
+            -
+              name: "0"
+              tablets:
+                -
+                  type: replica
+                  vttablet:
+                    enableReplReporter: false
+                    enableSemisync: false
+                    extraFlags:
+                      db_allprivs_password: root
+                      db_allprivs_user: root
+                      db_app_password: root
+                      db_app_user: root
+                      db_dba_password: root
+                      db_dba_user: root
+                      db_filtered_password: root
+                      db_filtered_user: root
+                      db_host: "192.168.0.8"
+                      db_port: "3306"
+                      db_repl_password: root
+                      db_repl_user: root
+                      init_db_name_override: example
+                    replicas: 1
+                    uid: 1000
+      mysqlProtocol:
+        authType: none
+        enabled: true
+      name: zone1
       vtctld:
         replicas: 1
       vtgate:
         replicas: 1
-      mysqlProtocol:
-        enabled: true
-        authType: "none"
-      keyspaces:
-        - name: "ks"
-          shards:
-            - name: "0"
-              tablets:
-                - type: "replica"
-                  vttablet:
-                    replicas: 2
-                    enableSemisync: false
-                    enableReplReporter: true
-              copySchema:
-                source: "recoveryks/0"
-                tables:
-                  - "employee"
-        - name: "recoveryks"
-          shards:
-            - name: "0"
-              tablets:
-                - type: "replica"
-                  vttablet:
-                    replicas: 1
-                    enableSemisync: false
-                    enableReplReporter: false
-                    initDBName: "employee"
-                    extraFlags:
-                      db_host: "172.19.4.121"
-                      db_port: "3306"
-                      db_dba_user: "root"
-                      db_dba_password: "root"
-                      db_app_user: "root"
-                      db_app_password: "root"
-                      db_filtered_user: "root"
-                      db_filtered_password: "root"
-                      db_allprivs_user: "root"
-                      db_allprivs_password: "root"
-                      db_repl_user: "root"
-                      db_repl_password: "root"
-etcd:
-  replicas: 1
-  resources:
-
+jobs:
+  - name: "copy-schema"
+    kind: "vtctlclient"
+    command: "CopySchemaShard sourceks/0 example/0"
 vtctld:
-  serviceType: "NodePort"
-  resources:
-
+  resources: ~
+  serviceType: NodePort
 vtgate:
-  serviceType: "NodePort"
-  resources:
-
+  resources: ~
+  serviceType: NodePort
 vttablet:
-  mysqlSize: "prod"
-  resources:
-  mysqlResources:
-
+  mysqlResources: ~
+  mysqlSize: prod
+  resources: ~
+  terminationGracePeriodSeconds: 1
 vtworker:
-  resources:
-
-pmm:
-  enabled: false
-
-orchestrator:
-  enabled: false
+  resources: ~
