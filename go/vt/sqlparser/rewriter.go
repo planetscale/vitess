@@ -2,7 +2,7 @@
 
 package sqlparser
 
-//go:generate make visitor
+//go:generate go run ./visitorgen/main -input=ast.go -output=rewriter.go
 
 import (
 	"reflect"
@@ -318,6 +318,10 @@ func replaceGroupConcatExprExprs(newNode, parent SQLNode) {
 	parent.(*GroupConcatExpr).Exprs = newNode.(SelectExprs)
 }
 
+func replaceGroupConcatExprLimit(newNode, parent SQLNode) {
+	parent.(*GroupConcatExpr).Limit = newNode.(*Limit)
+}
+
 func replaceGroupConcatExprOrderBy(newNode, parent SQLNode) {
 	parent.(*GroupConcatExpr).OrderBy = newNode.(OrderBy)
 }
@@ -455,10 +459,6 @@ func (r *replaceOrderByItems) inc() {
 	*r++
 }
 
-func replaceParenExprExpr(newNode, parent SQLNode) {
-	parent.(*ParenExpr).Expr = newNode.(Expr)
-}
-
 func replaceParenSelectSelect(newNode, parent SQLNode) {
 	parent.(*ParenSelect).Select = newNode.(SelectStatement)
 }
@@ -577,6 +577,20 @@ func (r *replaceSetExprsItems) replace(newNode, container SQLNode) {
 
 func (r *replaceSetExprsItems) inc() {
 	*r++
+}
+
+type replaceSetTransactionCharacteristics int
+
+func (r *replaceSetTransactionCharacteristics) replace(newNode, container SQLNode) {
+	container.(*SetTransaction).Characteristics[int(*r)] = newNode.(Characteristic)
+}
+
+func (r *replaceSetTransactionCharacteristics) inc() {
+	*r++
+}
+
+func replaceSetTransactionComments(newNode, parent SQLNode) {
+	parent.(*SetTransaction).Comments = newNode.(Comments)
 }
 
 func replaceShowOnTable(newNode, parent SQLNode) {
@@ -842,6 +856,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	// (the order of the cases is alphabetical)
 	switch n := node.(type) {
 	case nil:
+	case *AccessMode:
+
 	case *AliasedExpr:
 		a.apply(node, n.As, replaceAliasedExprAs)
 		a.apply(node, n.Expr, replaceAliasedExprExpr)
@@ -998,6 +1014,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *GroupConcatExpr:
 		a.apply(node, n.Exprs, replaceGroupConcatExprExprs)
+		a.apply(node, n.Limit, replaceGroupConcatExprLimit)
 		a.apply(node, n.OrderBy, replaceGroupConcatExprOrderBy)
 
 	case *IndexDefinition:
@@ -1027,6 +1044,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *IsExpr:
 		a.apply(node, n.Expr, replaceIsExprExpr)
+
+	case *IsolationLevel:
 
 	case JoinCondition:
 		a.apply(node, n.On, replaceJoinConditionOn)
@@ -1084,9 +1103,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *OtherAdmin:
 
 	case *OtherRead:
-
-	case *ParenExpr:
-		a.apply(node, n.Expr, replaceParenExprExpr)
 
 	case *ParenSelect:
 		a.apply(node, n.Select, replaceParenSelectSelect)
@@ -1159,6 +1175,15 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerRef.replace)
 			replacerRef.inc()
 		}
+
+	case *SetTransaction:
+		replacerCharacteristics := replaceSetTransactionCharacteristics(0)
+		replacerCharacteristicsB := &replacerCharacteristics
+		for _, item := range n.Characteristics {
+			a.apply(node, item, replacerCharacteristicsB.replace)
+			replacerCharacteristicsB.inc()
+		}
+		a.apply(node, n.Comments, replaceSetTransactionComments)
 
 	case *Show:
 		a.apply(node, n.OnTable, replaceShowOnTable)

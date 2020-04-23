@@ -23,10 +23,12 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/jsonutil"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -83,6 +85,9 @@ type Insert struct {
 
 	// Insert does not take inputs
 	noInputs
+
+	// Insert needs tx handling
+	txNeeded
 }
 
 // NewQueryInsert creates an Insert with a query string.
@@ -114,41 +119,6 @@ func NewInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, vindexValues []
 		Mid:          mid,
 		Suffix:       suffix,
 	}
-}
-
-// MarshalJSON serializes the Insert into a JSON representation.
-// It's used for testing and diagnostics.
-func (ins *Insert) MarshalJSON() ([]byte, error) {
-	var tname string
-	if ins.Table != nil {
-		tname = ins.Table.Name.String()
-	}
-	marshalInsert := struct {
-		Opcode               InsertOpcode
-		Keyspace             *vindexes.Keyspace   `json:",omitempty"`
-		Query                string               `json:",omitempty"`
-		Values               []sqltypes.PlanValue `json:",omitempty"`
-		Table                string               `json:",omitempty"`
-		Generate             *Generate            `json:",omitempty"`
-		Prefix               string               `json:",omitempty"`
-		Mid                  []string             `json:",omitempty"`
-		Suffix               string               `json:",omitempty"`
-		MultiShardAutocommit bool                 `json:",omitempty"`
-		QueryTimeout         int                  `json:",omitempty"`
-	}{
-		Opcode:               ins.Opcode,
-		Keyspace:             ins.Keyspace,
-		Query:                ins.Query,
-		Values:               ins.VindexValues,
-		Table:                tname,
-		Generate:             ins.Generate,
-		Prefix:               ins.Prefix,
-		Mid:                  ins.Mid,
-		Suffix:               ins.Suffix,
-		MultiShardAutocommit: ins.MultiShardAutocommit,
-		QueryTimeout:         ins.QueryTimeout,
-	}
-	return jsonutil.MarshalNoEscape(marshalInsert)
 }
 
 // Generate represents the instruction to generate
@@ -185,6 +155,11 @@ var insName = map[InsertOpcode]string{
 	InsertUnsharded:     "InsertUnsharded",
 	InsertSharded:       "InsertSharded",
 	InsertShardedIgnore: "InsertShardedIgnore",
+}
+
+// String returns the opcode
+func (code InsertOpcode) String() string {
+	return strings.ReplaceAll(insName[code], "Insert", "")
 }
 
 // MarshalJSON serializes the InsertOpcode as a JSON string.
@@ -278,7 +253,7 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 	}
 
 	autocommit := (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	if errs != nil {
 		return nil, vterrors.Wrap(vterrors.Aggregate(errs), "execInsertSharded")
 	}
@@ -326,7 +301,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 		}
 		// If no rows are returned, it's an internal error, and the code
 		// must panic, which will be caught and reported.
-		insertID, err = sqltypes.ToInt64(qr.Rows[0][0])
+		insertID, err = evalengine.ToInt64(qr.Rows[0][0])
 		if err != nil {
 			return 0, err
 		}
@@ -453,17 +428,14 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
-		var ksids [][]byte
 		var mids []string
 		for _, indexValue := range indexesPerRss[i] {
 			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
 			if keyspaceIDs[index] != nil {
-				ksids = append(ksids, keyspaceIDs[index])
 				mids = append(mids, ins.Mid[index])
 			}
 		}
 		rewritten := ins.Prefix + strings.Join(mids, ",") + ins.Suffix
-		rewritten = sqlannotation.AddKeyspaceIDs(rewritten, ksids, "")
 		queries[i] = &querypb.BoundQuery{
 			Sql:           rewritten,
 			BindVariables: bindVars,
@@ -588,15 +560,21 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 		if err != nil {
 			return err
 		}
+
+		var mismatchVindexKeys [][]sqltypes.Value
 		for i, v := range verified {
+			rowNum := verifyIndexes[i]
 			if !v {
 				if ins.Opcode != InsertShardedIgnore {
-					return fmt.Errorf("values %v for column %v does not map to keyspace ids", vindexColumnsKeys, colVindex.Columns)
+					mismatchVindexKeys = append(mismatchVindexKeys, vindexColumnsKeys[rowNum])
+					continue
 				}
 				// InsertShardedIgnore: skip the row.
 				ksids[verifyIndexes[i]] = nil
-				continue
 			}
+		}
+		if len(mismatchVindexKeys) > 0 {
+			return fmt.Errorf("values %v for column %v does not map to keyspace ids", mismatchVindexKeys, colVindex.Columns)
 		}
 	}
 	return nil
@@ -604,4 +582,20 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 
 func insertVarName(col sqlparser.ColIdent, rowNum int) string {
 	return "_" + col.CompliantName() + strconv.Itoa(rowNum)
+}
+
+func (ins *Insert) description() PrimitiveDescription {
+	other := map[string]interface{}{
+		"Query":                ins.Query,
+		"TableName":            ins.GetTableName(),
+		"MultiShardAutocommit": ins.MultiShardAutocommit,
+		"QueryTimeout":         ins.QueryTimeout,
+	}
+	return PrimitiveDescription{
+		OperatorType:     "Insert",
+		Keyspace:         ins.Keyspace,
+		Variant:          ins.Opcode.String(),
+		TargetTabletType: topodatapb.TabletType_MASTER,
+		Other:            other,
+	}
 }

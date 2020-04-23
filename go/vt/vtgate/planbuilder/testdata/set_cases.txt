@@ -1,0 +1,40 @@
+# set single user defined variable
+"set @foo = 42"
+{
+  "QueryType": "SET",
+  "Original": "set @foo = 42",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Variant": "",
+    "Ops": [
+      {
+        "Type": "UserDefinedVariable",
+        "Name": "foo",
+        "PlanValue": 42
+      }
+    ]
+  }
+}
+
+# set multi user defined variable
+"set @foo = 42, @bar = @foo"
+{
+  "QueryType": "SET",
+  "Original": "set @foo = 42, @bar = @foo",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Variant": "",
+    "Ops": [
+      {
+        "Type": "UserDefinedVariable",
+        "Name": "foo",
+        "PlanValue": 42
+      },
+      {
+        "Type": "UserDefinedVariable",
+        "Name": "bar",
+        "PlanValue": ":__vtudvfoo"
+      }
+    ]
+  }
+}
