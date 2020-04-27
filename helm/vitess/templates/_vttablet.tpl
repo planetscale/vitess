@@ -467,20 +467,13 @@ spec:
         -init_tablet_type {{ $tablet.type | quote }}
         -health_check_interval "5s"
         -mysqlctl_socket "/vtdataroot/mysqlctl.sock"
+        -enable_replication_reporter
 
-{{ if .initDBName }}
-        -init_db_name_override {{ .initDBName | quote }}
-{{ else if $defaultVttablet.useKeyspaceNameAsDbName }}
+{{ if $defaultVttablet.useKeyspaceNameAsDbName }}
         -init_db_name_override {{ $keyspace.name | quote }}
 {{ end }}
 {{ if $defaultVttablet.enableSemisync }}
         -enable_semi_sync
-{{ end }}
-{{ if .enableSemisync }}
-        -enable_semi_sync
-{{ end }}
-{{ if .enableReplReporter }}
-        -enable_replication_reporter
 {{ end }}
 {{ if $defaultVttablet.enableHeartbeat }}
         -heartbeat_enable

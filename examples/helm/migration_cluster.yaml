@@ -44,6 +44,7 @@ topology:
                       db_repl_password: root
                       db_repl_user: root
                       init_db_name_override: example
+                      enable_semi_sync: true
                     replicas: 1
                     uid: 1000
       mysqlProtocol:
