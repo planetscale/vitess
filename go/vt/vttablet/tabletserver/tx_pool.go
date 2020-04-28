@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -49,11 +48,10 @@ const (
 	TxClose    = "close"
 	TxCommit   = "commit"
 	TxRollback = "rollback"
-	TxPrepare  = "prepare"
 	TxKill     = "kill"
 )
 
-const txLogInterval = time.Duration(1 * time.Minute)
+const txLogInterval = 1 * time.Minute
 
 type queries struct {
 	setIsolationLevel string
@@ -135,7 +133,7 @@ func (tp *TxPool) Close() {
 	tp.ticks.Stop()
 	for _, v := range tp.activePool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
-		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
+		log.Warningf("killing transaction for shutdown: %s", conn.Format())
 		tp.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.conclude(TxClose, "pool closed")
@@ -165,9 +163,9 @@ func (tp *TxPool) RollbackNonBusy(ctx context.Context) {
 
 func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
-	for _, v := range tp.activePool.GetOutdated(time.Duration(tp.Timeout()), "for tx killer rollback") {
+	for _, v := range tp.activePool.GetOutdated(tp.Timeout(), "for tx killer rollback") {
 		conn := v.(*TxConnection)
-		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.Format(nil))
+		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.Format())
 		tp.env.Stats().KillCounters.Add("Transactions", 1)
 		conn.Close()
 		conn.conclude(TxKill, fmt.Sprintf("exceeded timeout: %v", tp.Timeout()))
@@ -493,7 +491,7 @@ func (txc *TxConnection) log(conclusion string) {
 	txc.pool.env.Stats().UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
 	txc.pool.txStats.Add(conclusion, duration)
 	if txc.LogToFile.Get() != 0 {
-		log.Infof("Logged transaction: %s", txc.Format(nil))
+		log.Infof("Logged transaction: %s", txc.Format())
 	}
 	tabletenv.TxLogger.Send(txc)
 }
@@ -504,7 +502,7 @@ func (txc *TxConnection) EventTime() time.Time {
 }
 
 // Format returns a printable version of the connection info.
-func (txc *TxConnection) Format(params url.Values) string {
+func (txc *TxConnection) Format() string {
 	return fmt.Sprintf(
 		"%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%v\t\n",
 		txc.TransactionID,
