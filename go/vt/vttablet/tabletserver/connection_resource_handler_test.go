@@ -210,7 +210,7 @@ func TestTxPoolTransactionKillerEnforceTimeoutEnabled(t *testing.T) {
 	}
 
 }
-func addQuery(ctx context.Context, sql string, txPool *TxPool, workload querypb.ExecuteOptions_Workload) (int64, error) {
+func addQuery(ctx context.Context, sql string, txPool *ConnectionResourceHandler, workload querypb.ExecuteOptions_Workload) (int64, error) {
 	transactionID, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{Workload: workload})
 	if err != nil {
 		return 0, err
@@ -430,7 +430,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2013(t *testing.T) {
 
 // primeTxPoolWithConnection is a helper function. It reconstructs the
 // scenario where future transactions are going to reuse an open db connection.
-func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool, error) {
+func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *ConnectionResourceHandler, error) {
 	db := fakesqldb.New(t)
 	txPool := newTxPool()
 	// Set the capacity to 1 to ensure that the db connection is reused.
@@ -697,7 +697,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 	}
 }
 
-func newTxPool() *TxPool {
+func newTxPool() *ConnectionResourceHandler {
 	config := tabletenv.NewDefaultConfig()
 	config.TxPool.Size = 300
 	config.Oltp.TxTimeoutSeconds = 30

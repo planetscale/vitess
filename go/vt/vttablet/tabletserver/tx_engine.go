@@ -90,7 +90,7 @@ type TxEngine struct {
 	abandonAge          time.Duration
 	ticks               *timer.Timer
 
-	txPool       *TxPool
+	txPool       *ConnectionResourceHandler
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
 }
@@ -563,4 +563,18 @@ func (te *TxEngine) startWatchdog() {
 // stopWatchdog stops the watchdog goroutine.
 func (te *TxEngine) stopWatchdog() {
 	te.ticks.Stop()
+}
+
+// BeginAgain commits the existing transaction and begins a new one
+func (te *TxEngine) BeginAgain(ctx context.Context, exc *ExclusiveConn) error {
+	if exc.dbConn == nil || exc.Autocommit {
+		return nil
+	}
+	if _, err := exc.dbConn.Exec(ctx, "commit", 1, false); err != nil {
+		return err
+	}
+	if _, err := exc.dbConn.Exec(ctx, "begin", 1, false); err != nil {
+		return err
+	}
+	return nil
 }

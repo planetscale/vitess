@@ -145,7 +145,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
 
-func (qre *QueryExecutor) execAutocommit(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
+func (qre *QueryExecutor) execAutocommit(f func(conn *ExclusiveConn) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
 	if qre.options == nil {
 		qre.options = &querypb.ExecuteOptions{}
 	}
@@ -159,7 +159,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *TxConnection) (*sqltypes.R
 	return f(conn)
 }
 
-func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
+func (qre *QueryExecutor) execAsTransaction(f func(conn *ExclusiveConn) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
 	conn, beginSQL, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
@@ -188,7 +188,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 	return reply, nil
 }
 
-func (qre *QueryExecutor) txConnExec(conn *TxConnection) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) txConnExec(conn *ExclusiveConn) (*sqltypes.Result, error) {
 	switch qre.plan.PlanID {
 	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete:
 		return qre.txFetch(conn, true)
@@ -361,7 +361,7 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 	return nil
 }
 
-func (qre *QueryExecutor) execDDL(conn *TxConnection) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) execDDL(conn *ExclusiveConn) (*sqltypes.Result, error) {
 	defer func() {
 		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
 			log.Errorf("failed to reload schema %v", err)
@@ -372,7 +372,7 @@ func (qre *QueryExecutor) execDDL(conn *TxConnection) (*sqltypes.Result, error) 
 	if err != nil {
 		return nil, err
 	}
-	err = conn.BeginAgain(qre.ctx)
+	err = qre.tsv.te.BeginAgain(qre.ctx, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +393,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	t.SequenceInfo.Lock()
 	defer t.SequenceInfo.Unlock()
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
-		_, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
+		_, err := qre.execAsTransaction(func(conn *ExclusiveConn) (*sqltypes.Result, error) {
 			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(tableName))
 			qr, err := qre.execSQL(conn, query, false)
 			if err != nil {
@@ -473,7 +473,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 	return qre.dbConnFetch(conn, qre.plan.FullQuery, qre.bindVars)
 }
 
-func (qre *QueryExecutor) execDMLLimit(conn *TxConnection) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) execDMLLimit(conn *ExclusiveConn) (*sqltypes.Result, error) {
 	maxrows := qre.tsv.qe.maxResultSize.Get()
 	qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 	result, err := qre.txFetch(conn, true)
@@ -584,8 +584,8 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 	return res, nil
 }
 
-// txFetch fetches from a TxConnection.
-func (qre *QueryExecutor) txFetch(conn *TxConnection, record bool) (*sqltypes.Result, error) {
+// txFetch fetches from a ExclusiveConn.
+func (qre *QueryExecutor) txFetch(conn *ExclusiveConn, record bool) (*sqltypes.Result, error) {
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
 		return nil, err

@@ -51,7 +51,7 @@ func testHandler(req *http.Request, t *testing.T) {
 	if !strings.Contains(response.Body.String(), "error") {
 		t.Fatalf("should show an error page since transaction log format is invalid.")
 	}
-	txConn := &TxConnection{
+	txConn := &ExclusiveConn{
 		TransactionID:     123456,
 		StartTime:         time.Now(),
 		Queries:           []string{"select * from test"},

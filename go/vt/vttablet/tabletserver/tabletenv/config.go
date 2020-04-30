@@ -49,7 +49,7 @@ var (
 
 	// TxLogger can be used to enable logging of transactions.
 	// Call TxLogger.ServeLogs in your main program to enable logging.
-	// The log format can be inferred by looking at TxConnection.Format.
+	// The log format can be inferred by looking at ExclusiveConn.Format.
 	TxLogger = streamlog.New("TxLog", 10)
 
 	// StatsLogger is the main stream logger object

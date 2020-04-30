@@ -61,7 +61,7 @@ func TestPrepPut(t *testing.T) {
 
 func TestPrepFetchForRollback(t *testing.T) {
 	pp := NewTxPreparedPool(2)
-	conn := &TxConnection{}
+	conn := &ExclusiveConn{}
 	pp.Put(conn, "aa")
 	got := pp.FetchForRollback("bb")
 	if got != nil {
@@ -79,7 +79,7 @@ func TestPrepFetchForRollback(t *testing.T) {
 
 func TestPrepFetchForCommit(t *testing.T) {
 	pp := NewTxPreparedPool(2)
-	conn := &TxConnection{}
+	conn := &ExclusiveConn{}
 	got, err := pp.FetchForCommit("aa")
 	require.NoError(t, err)
 	if got != nil {
@@ -118,8 +118,8 @@ func TestPrepFetchForCommit(t *testing.T) {
 
 func TestPrepFetchAll(t *testing.T) {
 	pp := NewTxPreparedPool(2)
-	conn1 := &TxConnection{}
-	conn2 := &TxConnection{}
+	conn1 := &ExclusiveConn{}
+	conn2 := &ExclusiveConn{}
 	pp.Put(conn1, "aa")
 	pp.Put(conn2, "bb")
 	got := pp.FetchAll()
