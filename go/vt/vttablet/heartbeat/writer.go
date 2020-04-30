@@ -106,7 +106,7 @@ func (w *Writer) Init(target querypb.Target) error {
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 
 	if target.TabletType == topodatapb.TabletType_MASTER {
-		err := w.initializeTables(w.env.DBConfigs().AppWithDB())
+		err := w.initializeTables(w.dbconfigs.AppWithDB())
 		if err != nil {
 			w.recordError(err)
 			return err
