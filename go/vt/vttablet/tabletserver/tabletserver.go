@@ -110,6 +110,11 @@ var stateDetail = []string{
 	"Shutting Down",
 }
 
+// ConnectionHolder is what the tabletserver needs to be able to get active connections
+type ConnectionHolder interface {
+	Get(transactionID int64, reason string) (*ExclusiveConn, error)
+}
+
 // stateInfo returns a string representation of the state and optional detail
 // about the reason for the state transition
 func stateInfo(state int64) string {
@@ -166,6 +171,7 @@ type TabletServer struct {
 	se        *schema.Engine
 	qe        *QueryEngine
 	te        *TxEngine
+	ch        ConnectionHolder
 	hw        *heartbeat.Writer
 	hr        *heartbeat.Reader
 	watcher   *ReplicationWatcher
@@ -745,8 +751,10 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 }
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
-func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, err error) {
-	err = tsv.execRequest(
+func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
+	var transactionID int64
+
+	err := tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Begin", "begin", nil,
 		target, options, false, /* allowOnShutdown */
@@ -755,8 +763,12 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 			if tsv.txThrottler.Throttle() {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
-			var beginSQL string
-			transactionID, beginSQL, err = tsv.te.Begin(ctx, options)
+
+			conn, beginSQL, err := tsv.te.Begin(ctx, options)
+			if err != nil {
+				return err
+			}
+			transactionID = conn.ConnectionID
 			logStats.TransactionID = transactionID
 
 			// Record the actual statements that were executed in the logStats.
@@ -772,7 +784,10 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 			return err
 		},
 	)
-	return transactionID, err
+	if err != nil {
+		return 0, err
+	}
+	return transactionID, nil
 }
 
 // Commit commits the specified transaction.
@@ -786,7 +801,11 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 			logStats.TransactionID = transactionID
 
 			var commitSQL string
-			commitSQL, err = tsv.te.Commit(ctx, transactionID)
+			conn, err := tsv.ch.Get(transactionID, "to commit")
+			if err != nil {
+				return err
+			}
+			commitSQL, err = tsv.te.Commit(ctx, conn)
 
 			// If nothing was actually executed, don't count the operation in
 			// the tablet metrics, and clear out the logStats Method so that
@@ -802,7 +821,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 }
 
 // Rollback rollsback the specified transaction.
-func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (err error) {
+func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Rollback", "rollback", nil,
@@ -810,7 +829,11 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("ROLLBACK", time.Now())
 			logStats.TransactionID = transactionID
-			return tsv.te.Rollback(ctx, transactionID)
+			conn, err := tsv.ch.Get(transactionID, "for rollback")
+			if err != nil {
+				return err
+			}
+			return tsv.te.Rollback(ctx, conn)
 		},
 	)
 }
@@ -962,7 +985,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
 
-	allowOnShutdown := (transactionID != 0)
+	allowOnShutdown := transactionID != 0
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Execute", sql, bindVariables,
@@ -1062,7 +1085,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	allowOnShutdown := (transactionID != 0)
+	allowOnShutdown := transactionID != 0
 	// TODO(sougou): Convert startRequest/endRequest pattern to use wrapper
 	// function tsv.execRequest() instead.
 	// Note that below we always return "err" right away and do not call
@@ -1737,7 +1760,7 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 }
 
 // Close is a no-op.
-func (tsv *TabletServer) Close(ctx context.Context) error {
+func (tsv *TabletServer) Close(context.Context) error {
 	return nil
 }
 
@@ -1865,12 +1888,12 @@ func (tsv *TabletServer) TxPoolSize() int {
 // SetTxTimeout changes the transaction timeout to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
-	tsv.te.txPool.SetTimeout(val)
+	tsv.te.SetTimeout(val)
 }
 
 // TxTimeout returns the transaction timeout.
 func (tsv *TabletServer) TxTimeout() time.Duration {
-	return tsv.te.txPool.Timeout()
+	return tsv.te.Timeout()
 }
 
 // SetQueryPlanCacheCap changes the pool size to the specified value.
@@ -1881,7 +1904,7 @@ func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
 
 // QueryPlanCacheCap returns the pool size.
 func (tsv *TabletServer) QueryPlanCacheCap() int {
-	return int(tsv.qe.QueryPlanCacheCap())
+	return tsv.qe.QueryPlanCacheCap()
 }
 
 // SetMaxResultSize changes the max result size to the specified value.

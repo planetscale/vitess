@@ -21,6 +21,10 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/timer"
@@ -36,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type txEngineState int
@@ -60,6 +65,17 @@ func (state txEngineState) String() string {
 	}
 
 	return names[state]
+}
+
+// IConnectionResourceHandler is what the tx engine needs to do it's work
+type IConnectionResourceHandler interface {
+	ClaimExclusiveConnection(ctx context.Context, options *querypb.ExecuteOptions) (*ExclusiveConn, error)
+
+	// Open allows new connections to be available
+	Open(appParams, dbaParams, appDebugParams dbconfigs.Connector)
+	Close()
+	GetOutdated(age time.Duration, purpose string) []*ExclusiveConn
+	WaitForEmpty()
 }
 
 // TxEngine is responsible for handling the tx-pool and keeping read-write, read-only or not-serving
@@ -88,12 +104,41 @@ type TxEngine struct {
 	shutdownGracePeriod time.Duration
 	coordinatorAddress  string
 	abandonAge          time.Duration
-	ticks               *timer.Timer
+	twoPCticks          *timer.Timer
 
 	txPool       *ConnectionResourceHandler
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
+
+	limiter            txlimiter.TxLimiter
+	connHandler        IConnectionResourceHandler
+	transactionTimeout sync2.AtomicDuration
+	txTicks            *timer.Timer
 }
+
+type queries struct {
+	setIsolationLevel string
+	openTransaction   string
+}
+
+var txIsolations = map[querypb.ExecuteOptions_TransactionIsolation]queries{
+	querypb.ExecuteOptions_DEFAULT:                       {setIsolationLevel: "", openTransaction: "begin"},
+	querypb.ExecuteOptions_REPEATABLE_READ:               {setIsolationLevel: "REPEATABLE READ", openTransaction: "begin"},
+	querypb.ExecuteOptions_READ_COMMITTED:                {setIsolationLevel: "READ COMMITTED", openTransaction: "begin"},
+	querypb.ExecuteOptions_READ_UNCOMMITTED:              {setIsolationLevel: "READ UNCOMMITTED", openTransaction: "begin"},
+	querypb.ExecuteOptions_SERIALIZABLE:                  {setIsolationLevel: "SERIALIZABLE", openTransaction: "begin"},
+	querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY: {setIsolationLevel: "REPEATABLE READ", openTransaction: "start transaction with consistent snapshot, read only"},
+}
+
+// These consts identify how a transaction was resolved.
+const (
+	TxClose    = "close"
+	TxCommit   = "commit"
+	TxRollback = "rollback"
+	TxKill     = "kill"
+)
+
+const txLogInterval = 1 * time.Minute
 
 // NewTxEngine creates a new TxEngine.
 func NewTxEngine(env tabletenv.Env) *TxEngine {
@@ -103,6 +148,14 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 		shutdownGracePeriod: time.Duration(config.ShutdownGracePeriodSeconds * 1e9),
 	}
 	limiter := txlimiter.New(env)
+	transactionTimeout := time.Duration(config.Oltp.TxTimeoutSeconds * 1e9)
+	te.transactionTimeout = sync2.NewAtomicDuration(transactionTimeout)
+	te.txTicks = timer.NewTimer(transactionTimeout / 10)
+
+	// Careful: conns also exports name+"xxx" vars,
+	// but we know it doesn't export Timeout.
+	env.Exporter().NewGaugeDurationFunc("TransactionTimeout", "Transaction timeout", te.transactionTimeout.Get)
+
 	te.txPool = NewTxPool(env, limiter)
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
@@ -117,7 +170,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	}
 	te.coordinatorAddress = config.TwoPCCoordinatorAddress
 	te.abandonAge = time.Duration(config.TwoPCAbandonAge * 1e9)
-	te.ticks = timer.NewTimer(te.abandonAge / 2)
+	te.twoPCticks = timer.NewTimer(te.abandonAge / 2)
 
 	// Set the prepared pool capacity to something lower than
 	// tx pool capacity. Those spare connections are needed to
@@ -244,50 +297,83 @@ func (te *TxEngine) AcceptReadOnly() error {
 	}
 }
 
-// Begin begins a transaction, and returns the associated transaction id and the
-// statement(s) used to execute the begin (if any).
+// Begin begins a transaction, and returns the associated transaction id and
+// the statements (if any) executed to initiate the transaction. In autocommit
+// mode the statement will be "".
 //
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, string, error) {
+func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (*ExclusiveConn, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
 	defer span.Finish()
-	te.stateLock.Lock()
+	var conn *ExclusiveConn
+	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
+	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
 
-	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
-	if !canOpenTransactions {
-		// We are not in a state where we can start new transactions. Abort.
-		te.stateLock.Unlock()
-		return 0, "", vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new transactions in state %v", te.state)
+	if !te.limiter.Get(immediateCaller, effectiveCaller) {
+		return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 	}
 
-	isWriteTransaction := options == nil || options.TransactionIsolation != querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
-	if te.state == AcceptingReadOnly && isWriteTransaction {
-		te.stateLock.Unlock()
-		return 0, "", vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can only accept read-only transactions in current state")
+	var beginSucceeded bool
+	defer func() {
+		if beginSucceeded {
+			return
+		}
+
+		if conn != nil {
+			conn.Recycle()
+		}
+		te.limiter.Release(immediateCaller, effectiveCaller)
+	}()
+
+	conn, err := te.connHandler.ClaimExclusiveConnection(ctx, options)
+	if err != nil {
+		return nil, "", err
+	}
+	conn.EffectiveCallerID = effectiveCaller
+	conn.ImmediateCallerID = immediateCaller
+
+	autocommitTransaction := false
+	beginQueries := ""
+	if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
+		if queries.setIsolationLevel != "" {
+			if _, err := conn.Exec(ctx, "set transaction isolation level "+queries.setIsolationLevel, 1, false); err != nil {
+				return nil, "", err
+			}
+
+			beginQueries = queries.setIsolationLevel + "; "
+		}
+
+		if _, err := conn.Exec(ctx, queries.openTransaction, 1, false); err != nil {
+			return nil, "", err
+		}
+		beginQueries = beginQueries + queries.openTransaction
+	} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
+		autocommitTransaction = true
+	} else {
+		return nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
 
-	// By Add() to beginRequests, we block others from initiating state
-	// changes until we have finished adding this transaction
-	te.beginRequests.Add(1)
-	te.stateLock.Unlock()
+	conn.Autocommit = autocommitTransaction
+	beginSucceeded = true
 
-	defer te.beginRequests.Done()
-	return te.txPool.Begin(ctx, options)
+	return conn, beginQueries, nil
 }
 
 // Commit commits the specified transaction.
-func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (string, error) {
+func (te *TxEngine) Commit(ctx context.Context, conn *ExclusiveConn) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
-	return te.txPool.Commit(ctx, transactionID)
-}
+	defer conn.release(TxCommit, "transaction committed")
 
-// Rollback rolls back the specified transaction.
-func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) error {
-	span, ctx := trace.NewSpan(ctx, "TxEngine.Rollback")
-	defer span.Finish()
+	if conn.Autocommit {
+		return "", nil
+	}
 
-	return te.txPool.Rollback(ctx, transactionID)
+	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
+		conn.Close()
+		return "", err
+	}
+	return "commit", nil
 }
 
 func (te *TxEngine) unknownStateError() error {
@@ -349,7 +435,8 @@ func (te *TxEngine) Init() error {
 // all previously prepared transactions from the redo log.
 // this should only be called when the state is already locked
 func (te *TxEngine) open() {
-	te.txPool.Open(te.env.DBConfigs().AppWithDB(), te.env.DBConfigs().DbaWithDB(), te.env.DBConfigs().AppDebugWithDB())
+	te.connHandler.Open(te.env.DBConfigs().AppWithDB(), te.env.DBConfigs().DbaWithDB(), te.env.DBConfigs().AppDebugWithDB())
+	te.txTicks.Start(func() { te.transactionKiller() })
 
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
 		te.twoPC.Open(te.env.DBConfigs())
@@ -418,13 +505,14 @@ func (te *TxEngine) close(immediate bool) {
 			log.Info("Transactions completed before grace period: shutting down.")
 		}
 	}()
-	te.txPool.WaitForEmpty()
+	te.connHandler.WaitForEmpty()
 	// If the goroutine is still running, signal that it can exit.
 	close(poolEmpty)
 	// Make sure the goroutine has returned.
 	<-rollbackDone
 
-	te.txPool.Close()
+	te.txTicks.Stop()
+	te.connHandler.Close()
 	te.twoPC.Close()
 }
 
@@ -450,7 +538,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, _, err := te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+		conn, _, err := te.Begin(ctx, &querypb.ExecuteOptions{})
 		if err != nil {
 			allErr.RecordError(err)
 			continue
@@ -460,7 +548,7 @@ outer:
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
 				allErr.RecordError(err)
-				te.txPool.LocalConclude(ctx, conn)
+				te.Rollback(ctx, conn)
 				continue outer
 			}
 		}
@@ -494,26 +582,26 @@ outer:
 func (te *TxEngine) rollbackTransactions() {
 	ctx := tabletenv.LocalContext()
 	for _, c := range te.preparedPool.FetchAll() {
-		te.txPool.LocalConclude(ctx, c)
+		te.Rollback(ctx, c)
 	}
 	// The order of rollbacks is currently not material because
 	// we don't allow new statements or commits during
 	// this function. In case of any such change, this will
 	// have to be revisited.
-	te.txPool.RollbackNonBusy(ctx)
+	te.RollbackNonBusy(ctx)
 }
 
 func (te *TxEngine) rollbackPrepared() {
 	ctx := tabletenv.LocalContext()
 	for _, c := range te.preparedPool.FetchAll() {
-		te.txPool.LocalConclude(ctx, c)
+		te.Rollback(ctx, c)
 	}
 }
 
 // startWatchdog starts the watchdog goroutine, which looks for abandoned
 // transactions and calls the notifier on them.
 func (te *TxEngine) startWatchdog() {
-	te.ticks.Start(func() {
+	te.twoPCticks.Start(func() {
 		ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), te.abandonAge/4)
 		defer cancel()
 
@@ -562,7 +650,7 @@ func (te *TxEngine) startWatchdog() {
 
 // stopWatchdog stops the watchdog goroutine.
 func (te *TxEngine) stopWatchdog() {
-	te.ticks.Stop()
+	te.twoPCticks.Stop()
 }
 
 // BeginAgain commits the existing transaction and begins a new one
@@ -577,4 +665,53 @@ func (te *TxEngine) BeginAgain(ctx context.Context, exc *ExclusiveConn) error {
 		return err
 	}
 	return nil
+}
+
+// Rollback does a rollback on the connection
+func (te *TxEngine) Rollback(ctx context.Context, conn *ExclusiveConn) error {
+	if conn.dbConn == nil {
+		return nil
+	}
+	span, ctx := trace.NewSpan(ctx, "TxEngine.LocalRollback")
+	defer span.Finish()
+	if conn.Autocommit {
+		conn.release(TxCommit, "returned to pool")
+		return nil
+	}
+	defer conn.release(TxRollback, "transaction rolled back")
+	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
+		conn.Close()
+		return err
+	}
+	return nil
+}
+
+// RollbackNonBusy rolls back all transactions that are not in use.
+// Transactions can be in use for situations like executing statements
+// or in prepared state.
+func (te *TxEngine) RollbackNonBusy(ctx context.Context) {
+	for _, conn := range te.connHandler.GetOutdated(time.Duration(0), "for transition") {
+		te.Rollback(ctx, conn)
+	}
+}
+
+func (te *TxEngine) transactionKiller() {
+	defer te.env.LogError()
+	for _, conn := range te.connHandler.GetOutdated(te.Timeout(), "for tx killer rollback") {
+		log.Warningf("killing transaction (exceeded timeout: %v): %s", te.Timeout(), conn.String())
+		te.env.Stats().KillCounters.Add("Transactions", 1)
+		conn.Close()
+		conn.release(TxKill, fmt.Sprintf("exceeded timeout: %v", te.Timeout()))
+	}
+}
+
+// Timeout returns the transaction timeout.
+func (te *TxEngine) Timeout() time.Duration {
+	return te.transactionTimeout.Get()
+}
+
+// SetTimeout sets the transaction timeout.
+func (te *TxEngine) SetTimeout(timeout time.Duration) {
+	te.transactionTimeout.Set(timeout)
+	te.twoPCticks.SetInterval(timeout / 10)
 }
