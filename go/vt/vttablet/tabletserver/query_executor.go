@@ -150,21 +150,21 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *ExclusiveConn) (*sqltypes.
 		qre.options = &querypb.ExecuteOptions{}
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
-	conn, _, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
+	conn, _, err := qre.tsv.te.Begin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
 	}
-	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+	defer qre.tsv.te.Rollback(qre.ctx, conn)
 
 	return f(conn)
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *ExclusiveConn) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	conn, beginSQL, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
+	conn, beginSQL, err := qre.tsv.te.Begin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
 	}
-	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+	defer qre.tsv.te.Rollback(qre.ctx, conn)
 	qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
 
 	reply, err = f(conn)
@@ -176,13 +176,13 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *ExclusiveConn) (*sqltyp
 		// a separate refactor because it impacts lot of code.
 		if conn.dbConn != nil {
 			defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
-			qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+			qre.tsv.te.Rollback(qre.ctx, conn)
 		}
 		return nil, err
 	}
 
 	defer qre.logStats.AddRewrittenSQL("commit", time.Now())
-	if _, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn); err != nil {
+	if _, err := qre.tsv.te.Commit(qre.ctx, conn); err != nil {
 		return nil, err
 	}
 	return reply, nil
@@ -482,7 +482,7 @@ func (qre *QueryExecutor) execDMLLimit(conn *ExclusiveConn) (*sqltypes.Result, e
 	}
 	if err := qre.verifyRowCount(int64(result.RowsAffected), maxrows); err != nil {
 		defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
-		qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+		qre.tsv.te.Rollback(qre.ctx, conn)
 		return nil, err
 	}
 	return result, nil
@@ -550,7 +550,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 	}
 	// Check tablet type.
 	if qre.tsv.qe.consolidatorMode == tabletenv.Enable || (qre.tsv.qe.consolidatorMode == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER) {
-		q, original := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
+		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
 		if original {
 			defer q.Broadcast()
 			conn, err := qre.getConn()
@@ -681,7 +681,7 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	}
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
-	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, int64(duration))
+	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
 }
 
 // resolveNumber extracts a number from a bind variable or sql value.

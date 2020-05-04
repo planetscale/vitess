@@ -27,6 +27,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -191,6 +193,9 @@ func (c Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 
 // MysqlParams returns the connections params
 func (c Connector) MysqlParams() (*mysql.ConnParams, error) {
+	if c.connParams == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "connection not configured")
+	}
 	params, err := withCredentials(c.connParams)
 	if err != nil {
 		return nil, err

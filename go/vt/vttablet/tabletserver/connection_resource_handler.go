@@ -115,7 +115,7 @@ func (crh *ConnectionResourceHandler) AdjustLastID(id int64) {
 	}
 }
 
-// WaitForEmpty waits until all active transactions are completed.
+// WaitForEmpty waits until all active connections are recycled.
 func (crh *ConnectionResourceHandler) WaitForEmpty() {
 	crh.activePool.WaitForEmpty()
 }
@@ -210,7 +210,7 @@ func (exc *ExclusiveConn) Close() {
 // Exec executes the statement for the current transaction.
 func (exc *ExclusiveConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if exc.dbConn == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", exc.Conclusion)
+		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "connection was closed: %v", exc.Conclusion)
 	}
 	r, err := exc.dbConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {

@@ -36,6 +36,7 @@ type TxExecutor struct {
 	ctx      context.Context
 	logStats *tabletenv.LogStats
 	te       *TxEngine
+	ch       ConnectionHolder
 }
 
 // Prepare performs a prepare on a connection including the redo log work.
@@ -56,28 +57,28 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 
 	// If no queries were executed, we just rollback.
 	if len(conn.Queries) == 0 {
-		txe.te.txPool.LocalConclude(txe.ctx, conn)
+		txe.te.Rollback(txe.ctx, conn)
 		return nil
 	}
 
 	err = txe.te.preparedPool.Put(conn, dtid)
 	if err != nil {
-		txe.te.txPool.localRollback(txe.ctx, conn)
+		txe.te.Rollback(txe.ctx, conn)
 		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "prepare failed for transaction %d: %v", transactionID, err)
 	}
 
-	localConn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
+	localConn, _, err := txe.te.Begin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		return err
 	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, localConn)
+	defer txe.te.Rollback(txe.ctx, localConn)
 
 	err = txe.te.twoPC.SaveRedo(txe.ctx, localConn, dtid, conn.Queries)
 	if err != nil {
 		return err
 	}
 
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, localConn)
+	_, err = txe.te.Commit(txe.ctx, localConn)
 	if err != nil {
 		return err
 	}
@@ -103,13 +104,13 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 	// We have to use a context that will never give up,
 	// even if the original context expires.
 	ctx := trace.CopySpan(context.Background(), txe.ctx)
-	defer txe.te.txPool.LocalConclude(ctx, conn)
+	defer txe.te.Rollback(ctx, conn)
 	err = txe.te.twoPC.DeleteRedo(ctx, conn, dtid)
 	if err != nil {
 		txe.markFailed(ctx, dtid)
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(ctx, conn)
+	_, err = txe.te.Commit(ctx, conn)
 	if err != nil {
 		txe.markFailed(ctx, dtid)
 		return err
@@ -128,19 +129,19 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
 	txe.te.env.Stats().InternalErrors.Add("TwopcCommit", 1)
 	txe.te.preparedPool.SetFailed(dtid)
-	conn, _, err := txe.te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	conn, _, err := txe.te.Begin(ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
 		return
 	}
-	defer txe.te.txPool.LocalConclude(ctx, conn)
+	defer txe.te.Rollback(ctx, conn)
 
 	if err = txe.te.twoPC.UpdateRedo(ctx, conn, dtid, RedoStateFailed); err != nil {
 		log.Errorf("markFailed: UpdateRedo failed for dtid %s: %v", dtid, err)
 		return
 	}
 
-	if _, err = txe.te.txPool.LocalCommit(ctx, conn); err != nil {
+	if _, err = txe.te.Commit(ctx, conn); err != nil {
 		log.Errorf("markFailed: Commit failed for dtid %s: %v", dtid, err)
 	}
 }
@@ -168,28 +169,39 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer txe.te.env.Stats().QueryTimings.Record("ROLLBACK_PREPARED", time.Now())
-	conn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		goto returnConn
-	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
 
-	err = txe.te.twoPC.DeleteRedo(txe.ctx, conn, dtid)
-	if err != nil {
-		goto returnConn
-	}
+	// we store the error, but still continue down so
+	// the transaction that must be rolled back is rolled back
+	err := txe.persistDelete(dtid)
 
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
-
-returnConn:
 	if preparedConn := txe.te.preparedPool.FetchForRollback(dtid); preparedConn != nil {
-		txe.te.txPool.LocalConclude(txe.ctx, preparedConn)
+		txe.te.Rollback(txe.ctx, preparedConn)
 	}
 	if originalID != 0 {
-		txe.te.txPool.Rollback(txe.ctx, originalID)
+		conn, err := txe.ch.Get(originalID, "for rollback")
+		if err != nil {
+			return err
+		}
+		txe.te.Rollback(txe.ctx, conn)
 	}
 
 	return err
+}
+
+func (txe *TxExecutor) persistDelete(dtid string) error {
+	conn, _, err := txe.te.Begin(txe.ctx, &querypb.ExecuteOptions{})
+	if err != nil {
+		return err
+	}
+	defer txe.te.Rollback(txe.ctx, conn)
+
+	err = txe.te.twoPC.DeleteRedo(txe.ctx, conn, dtid)
+	if err != nil {
+		return err
+	}
+
+	_, err = txe.te.Commit(txe.ctx, conn)
+	return nil
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
@@ -198,17 +210,17 @@ func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Ta
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer txe.te.env.Stats().QueryTimings.Record("CREATE_TRANSACTION", time.Now())
-	conn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
+	conn, _, err := txe.te.Begin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		return err
 	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
+	defer txe.te.Rollback(txe.ctx, conn)
 
 	err = txe.te.twoPC.CreateTransaction(txe.ctx, conn, dtid, participants)
 	if err != nil {
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
+	_, err = txe.te.Commit(txe.ctx, conn)
 	return err
 }
 
@@ -225,13 +237,13 @@ func (txe *TxExecutor) StartCommit(transactionID int64, dtid string) error {
 	if err != nil {
 		return err
 	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
+	defer txe.te.Rollback(txe.ctx, conn)
 
 	err = txe.te.twoPC.Transition(txe.ctx, conn, dtid, querypb.TransactionState_COMMIT)
 	if err != nil {
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
+	_, err = txe.te.Commit(txe.ctx, conn)
 	return err
 }
 
@@ -245,21 +257,26 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 	txe.logStats.TransactionID = transactionID
 
 	if transactionID != 0 {
-		txe.te.txPool.Rollback(txe.ctx, transactionID)
+		conn, err := txe.ch.Get(transactionID, "for rollback")
+		if err != nil {
+			return err
+		}
+		err = txe.te.Rollback(txe.ctx, conn)
+		panic(err) // TODO: THIS IS WRONG!
 	}
 
-	conn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
+	conn, _, err := txe.te.Begin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		return err
 	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
+	defer txe.te.Rollback(txe.ctx, conn)
 
 	err = txe.te.twoPC.Transition(txe.ctx, conn, dtid, querypb.TransactionState_ROLLBACK)
 	if err != nil {
 		return err
 	}
 
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
+	_, err = txe.te.Commit(txe.ctx, conn)
 	if err != nil {
 		return err
 	}
@@ -275,17 +292,17 @@ func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	}
 	defer txe.te.env.Stats().QueryTimings.Record("RESOLVE", time.Now())
 
-	conn, _, err := txe.te.txPool.LocalBegin(txe.ctx, &querypb.ExecuteOptions{})
+	conn, _, err := txe.te.Begin(txe.ctx, &querypb.ExecuteOptions{})
 	if err != nil {
 		return err
 	}
-	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
+	defer txe.te.Rollback(txe.ctx, conn)
 
 	err = txe.te.twoPC.DeleteTransaction(txe.ctx, conn, dtid)
 	if err != nil {
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
+	_, err = txe.te.Commit(txe.ctx, conn)
 	return err
 }
 
