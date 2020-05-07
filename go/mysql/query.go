@@ -52,6 +52,28 @@ func (c *Conn) WriteComQuery(query string) error {
 	return nil
 }
 
+//WriteComInitDB does ComInitDB and reads the response
+func (c *Conn) InitDB(db string) error {
+	err := c.writeComInitDB(db)
+	if err != nil {
+		return err
+	}
+
+	response, err := c.readPacket()
+	if err != nil {
+		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+	}
+	switch response[0] {
+	case OKPacket:
+		// OK packet, we are authenticated.
+		return nil
+	case ErrPacket:
+		return ParseErrorPacket(response)
+	default:
+		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response is asking for more information, not implemented yet: %v", response)
+	}
+}
+
 // writeComInitDB changes the default database to use.
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.

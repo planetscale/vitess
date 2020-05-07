@@ -531,6 +531,34 @@ func TestSelectNull(t *testing.T) {
 	exec(t, conn, "delete from t5_null_vindex")
 }
 
+func TestComInitDB(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "insert into t5_null_vindex(id, idx) values (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')")
+	qr := exec(t, conn, "select id from t5_null_vindex order by id")
+	utils.MustMatch(t, fmt.Sprintf("%v", qr.Rows), "[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]", "")
+
+	exec(t, conn, "use ks")
+	qr = exec(t, conn, "select id, idx from t5_null_vindex")
+	useResult := fmt.Sprintf("%v", qr.Rows)
+	fmt.Println(useResult)
+
+	exec(t, conn, "use ks") // Reset so we dont have a specific shard target
+
+	err = conn.InitDB("ks")
+	require.NoError(t, err)
+	
+	qr = exec(t, conn, "select id, idx from t5_null_vindex")
+	comInitDbResult := fmt.Sprintf("%v", qr.Rows)
+
+	utils.MustMatch(t, useResult, comInitDbResult, "USE and ComInitDB disagree!")
+
+	exec(t, conn, "delete from t5_null_vindex")
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
