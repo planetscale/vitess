@@ -1,0 +1,38 @@
+# This is for running the app in kubernetes.
+# Still need to figure out the Dockerfile for the app.
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+spec:
+  selector:
+    matchLabels:
+      run: app
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        run: app
+    spec:
+      containers:
+      - name: app
+        image: sougou/app:latest
+        ports:
+        - containerPort: 8000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+  labels:
+    run: app
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 8000
+  selector:
+    run: app
+  type: LoadBalancer
