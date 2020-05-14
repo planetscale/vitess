@@ -23,46 +23,42 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"golang.org/x/net/context"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // StatefulConnection is used in the situations where we need a dedicated connection for a vtgate session.
 // This is used for transactions and reserved connections.
 // NOTE: After use, if must be returned either by doing a Unlock() or a Release().
 type StatefulConnection struct {
-	pool   *StatefulConnectionPool
-	dbConn *connpool.DBConn
+	realConn *RealSFConn
 	ConnID tx.ConnID
-	env    tabletenv.Env
-
-	tainted bool
-	TxProps *TxProperties
 }
 
 // Close closes the underlying connection. When the connection is Unblocked, it will be Released
 func (sc *StatefulConnection) Close() {
-	if sc.dbConn != nil {
-		sc.dbConn.Close()
+	if sc.realConn.dbConn != nil {
+		sc.realConn.dbConn.Close()
 	}
 }
 
 // Exec executes the statement in the dedicated connection
 func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	if sc.dbConn == nil {
-		if sc.TxProps != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", sc.TxProps.Conclusion)
+	if err := sc.checkValid(); err != nil {
+		return nil, err
+	}
+	conn := sc.realConn
+	if conn.dbConn == nil {
+		if conn.TxProps != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", conn.TxProps.Conclusion)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_ABORTED, "connection was aborted")
 	}
-	r, err := sc.dbConn.ExecOnce(ctx, query, maxrows, wantfields)
+	r, err := conn.dbConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
 		if mysql.IsConnErr(err) {
 			select {
@@ -70,7 +66,7 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 				// If the context is done, the query was killed.
 				// So, don't trigger a mysql check.
 			default:
-				sc.env.CheckMySQL()
+				conn.env.CheckMySQL()
 			}
 		}
 		return nil, err
@@ -78,11 +74,24 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 	return r, nil
 }
 
+func (sc *StatefulConnection) checkValid() error {
+	if sc.realConn == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "already unlocked")
+	}
+
+	return nil
+}
+
 func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) error {
-	if sc.dbConn == nil {
+	if err := sc.checkValid(); err != nil {
+		return err
+	}
+
+	conn := sc.realConn
+	if conn.dbConn == nil {
 		return nil
 	}
-	if _, err := sc.dbConn.Exec(ctx, query, maxrows, wantfields); err != nil {
+	if _, err := conn.dbConn.Exec(ctx, query, maxrows, wantfields); err != nil {
 		return err
 	}
 	return nil
@@ -91,42 +100,53 @@ func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, m
 // Unlock returns the connection to the pool. The connection remains active.
 // This method is idempotent and can be called multiple times
 func (sc *StatefulConnection) Unlock() {
-	if sc.dbConn == nil {
+	conn := sc.realConn
+	if conn == nil {
+		// already unlocked
 		return
 	}
-	if sc.dbConn.IsClosed() {
+	if conn.dbConn == nil {
+		return
+	}
+	if conn.dbConn.IsClosed() {
 		sc.Release(tx.TxClose)
 	} else {
-		sc.pool.markAsNotInUse(sc.ConnID)
+		conn.pool.markAsNotInUse(sc.ConnID)
 	}
 }
 
 //Release implements the tx.TrustedConnection interface
 func (sc *StatefulConnection) Release(reason tx.ReleaseReason) {
-	sc.conclude(reason.String())
+	sc.release(reason.String())
 }
 
-func (sc *StatefulConnection) conclude(reason string) {
-	if sc.dbConn == nil {
+func (sc *StatefulConnection) release(reason string) {
+	conn := sc.realConn
+	if conn == nil || conn.dbConn == nil {
 		return
 	}
-	sc.pool.unregister(sc.ConnID, reason)
-	sc.dbConn.Recycle()
-	sc.dbConn = nil
+	conn.pool.unregister(sc.ConnID, reason)
+	conn.dbConn.Recycle()
+	conn.dbConn = nil
 }
 
 // String returns a printable version of the connection info.
 func (sc *StatefulConnection) String() string {
+	if sc.realConn == nil {
+		return fmt.Sprintf("unlocked id %d", sc.ConnID)
+	}
+
+	txProps := sc.realConn.TxProps
 	return fmt.Sprintf(
 		"%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%v\t\n",
 		sc.ConnID,
-		sc.TxProps.EffectiveCaller,
-		sc.TxProps.ImmediateCaller,
-		sc.TxProps.StartTime.Format(time.StampMicro),
-		sc.TxProps.EndTime.Format(time.StampMicro),
-		sc.TxProps.EndTime.Sub(sc.TxProps.StartTime).Seconds(),
-		sc.TxProps.Conclusion,
-		strings.Join(sc.TxProps.Queries, ";"),
+		txProps.EffectiveCaller,
+		txProps.ImmediateCaller,
+		txProps.StartTime.Format(time.StampMicro),
+		txProps.EndTime.Format(time.StampMicro),
+		txProps.EndTime.Sub(txProps.StartTime).Seconds(),
+		txProps.Conclusion,
+		strings.Join(txProps.Queries, ";"),
 	)
 }
 
@@ -135,7 +155,11 @@ func (sc *StatefulConnection) renewConnection() {
 }
 
 func (sc *StatefulConnection) txClean() {
-	sc.TxProps = nil
+	if sc.realConn == nil {
+		return
+	}
+
+	sc.realConn.TxProps = nil
 }
 
 var _ tx.TrustedConnection = (*StatefulConnection)(nil)

@@ -50,6 +50,15 @@ type StatefulConnectionPool struct {
 	env           tabletenv.Env
 }
 
+type RealSFConn struct {
+	pool   *StatefulConnectionPool
+	dbConn *connpool.DBConn
+	env    tabletenv.Env
+
+	tainted bool
+	TxProps *TxProperties
+}
+
 //NewStatefulConnPool creates an ActivePool
 func NewStatefulConnPool(env tabletenv.Env) *StatefulConnectionPool {
 	config := env.Config()
@@ -81,7 +90,7 @@ func (sf *StatefulConnectionPool) Close() {
 		log.Warningf("killing transaction for shutdown: %s", conn.String())
 		sf.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
-		conn.conclude("pool closed")
+		conn.release("pool closed")
 	}
 	sf.conns.Close()
 	sf.foundRowsPool.Close()

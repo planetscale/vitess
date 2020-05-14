@@ -137,7 +137,7 @@ func (tp *TxPool) transactionKiller() {
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String())
 		tp.env.Stats().KillCounters.Add("Transactions", 1)
 		conn.Close()
-		conn.conclude(fmt.Sprintf("exceeded timeout: %v", tp.Timeout()))
+		conn.release(fmt.Sprintf("exceeded timeout: %v", tp.Timeout()))
 	}
 }
 
