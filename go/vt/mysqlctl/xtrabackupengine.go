@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"bufio"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"flag"
@@ -31,7 +32,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/klauspost/pgzip"
+	"golang.org/x/build/pargzip"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -269,7 +270,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 
 	destWriters := []io.Writer{}
 	destBuffers := []*bufio.Writer{}
-	destCompressors := []*pgzip.Writer{}
+	destCompressors := []*pargzip.Writer{}
 	for _, file := range destFiles {
 		buffer := bufio.NewWriterSize(file, writerBufferSize)
 		destBuffers = append(destBuffers, buffer)
@@ -277,11 +278,9 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 
 		// Create the gzip compression pipe, if necessary.
 		if *backupStorageCompress {
-			compressor, err := pgzip.NewWriterLevel(writer, pgzip.BestSpeed)
-			if err != nil {
-				return replicationPosition, vterrors.Wrap(err, "cannot create gzip compressor")
-			}
-			compressor.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
+			compressor := pargzip.NewWriter(writer)
+			compressor.ChunkSize = *backupCompressBlockSize
+			compressor.Parallel = *backupCompressBlocks
 			writer = compressor
 			destCompressors = append(destCompressors, compressor)
 		}
@@ -519,13 +518,13 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	}()
 
 	srcReaders := []io.Reader{}
-	srcDecompressors := []*pgzip.Reader{}
+	srcDecompressors := []*gzip.Reader{}
 	for _, file := range srcFiles {
 		reader := io.Reader(file)
 
 		// Create the decompressor if needed.
 		if compressed {
-			decompressor, err := pgzip.NewReader(reader)
+			decompressor, err := gzip.NewReader(reader)
 			if err != nil {
 				return vterrors.Wrap(err, "can't create gzip decompressor")
 			}
