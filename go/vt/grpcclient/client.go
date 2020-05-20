@@ -20,6 +20,7 @@ package grpcclient
 
 import (
 	"flag"
+	"fmt"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -97,7 +98,20 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 
 	newopts = append(newopts, interceptors()...)
 
-	return grpc.Dial(target, newopts...)
+	newopts = append(newopts, grpc.WithBalancer(grpc.RoundRobin(NewPseudoResolver([]string{
+		target,
+		target,
+		target,
+		target,
+		target,
+		target,
+		target,
+		target,
+		target,
+		target,
+	}))))
+	fmt.Printf("target: %v\n", target)
+	return grpc.Dial("", newopts...)
 }
 
 func interceptors() []grpc.DialOption {
