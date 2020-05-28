@@ -168,12 +168,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 		warnings.Add("ResultsExceeded", 1)
 	}
 
-	// The mysql plugin runs an implicit rollback whenever a connection closes.
-	// To avoid spamming the log with no-op rollback records, ignore it if
-	// it was a no-op record (i.e. didn't issue any queries)
-	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
-		logStats.Send()
-	}
+	logStats.Send()
 	return result, err
 }
 
@@ -308,9 +303,15 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
 	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
-	err := e.txConn.Rollback(ctx, safeSession)
+	err := e.CloseSession(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
+}
+
+// CloseSession closes the current transaction, if any. It is called both for explicit "rollback"
+// statements and implicitly when the mysql server closes the connection.
+func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) error {
+	return e.txConn.Rollback(ctx, safeSession)
 }
 
 func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
@@ -841,28 +842,56 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}, nil
 	case "vitess_tablets":
 		var rows [][]sqltypes.Value
-		stats := e.scatterConn.healthCheck.CacheStatus()
-		for _, s := range stats {
-			for _, ts := range s.TabletsStats {
-				state := "SERVING"
-				if !ts.Serving {
-					state = "NOT_SERVING"
+		if *GatewayImplementation == GatewayImplementationDiscovery {
+			status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
+			for _, s := range status {
+				for _, ts := range s.TabletsStats {
+					state := "SERVING"
+					if !ts.Serving {
+						state = "NOT_SERVING"
+					}
+					mtst := ts.Tablet.MasterTermStartTime
+					mtstStr := ""
+					if mtst != nil && mtst.Seconds > 0 {
+						mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+					}
+					rows = append(rows, buildVarCharRow(
+						s.Cell,
+						s.Target.Keyspace,
+						s.Target.Shard,
+						ts.Target.TabletType.String(),
+						state,
+						topoproto.TabletAliasString(ts.Tablet.Alias),
+						ts.Tablet.Hostname,
+						mtstStr,
+					))
 				}
-				mtst := ts.Tablet.MasterTermStartTime
-				mtstStr := ""
-				if mtst != nil && mtst.Seconds > 0 {
-					mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+			}
+		}
+		if *GatewayImplementation == tabletGatewayImplementation {
+			status := e.scatterConn.GetHealthCheckCacheStatus()
+			for _, s := range status {
+				for _, ts := range s.TabletsStats {
+					state := "SERVING"
+					if !ts.Serving {
+						state = "NOT_SERVING"
+					}
+					mtst := ts.Tablet.MasterTermStartTime
+					mtstStr := ""
+					if mtst != nil && mtst.Seconds > 0 {
+						mtstStr = logutil.ProtoToTime(ts.Tablet.MasterTermStartTime).Format(time.RFC3339)
+					}
+					rows = append(rows, buildVarCharRow(
+						s.Cell,
+						s.Target.Keyspace,
+						s.Target.Shard,
+						ts.Target.TabletType.String(),
+						state,
+						topoproto.TabletAliasString(ts.Tablet.Alias),
+						ts.Tablet.Hostname,
+						mtstStr,
+					))
 				}
-				rows = append(rows, buildVarCharRow(
-					s.Cell,
-					s.Target.Keyspace,
-					s.Target.Shard,
-					ts.Target.TabletType.String(),
-					state,
-					topoproto.TabletAliasString(ts.Tablet.Alias),
-					ts.Tablet.Hostname,
-					mtstStr,
-				))
 			}
 		}
 		return &sqltypes.Result{
