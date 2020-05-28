@@ -594,11 +594,13 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 
 		hasTargetTable := map[string]bool{}
 		{
+			log.Infof("getting table schemas from target master %v...", target.MasterAlias)
 			targetSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, allTables, nil, false)
 			if err != nil {
 				return err
 			}
 
+			log.Infof("got table schemas from target master %v.", target.MasterAlias)
 			for _, td := range targetSchema.TableDefinitions {
 				hasTargetTable[td.Name] = true
 			}
@@ -611,18 +613,26 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				return fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
 			}
 
-			log.Infof("getting table schemas from source master...")
+			log.Infof("getting table schemas from source master %v...", sourceMaster)
 			var err error
 			sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, allTables, nil, false)
 			if err != nil {
 				return err
 			}
+			log.Infof("got table schemas from source master %v.", sourceMaster)
 
 			for _, td := range sourceSchema.TableDefinitions {
 				sourceDDL[td.Name] = td.Schema
 			}
 		}
 
+		log.Infof("finding target tablet %v.", target.MasterAlias)
+		targetTablet, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("applying schema to target tablet %v.", target.MasterAlias)
 		for _, ts := range mz.ms.TableSettings {
 			if hasTargetTable[ts.TargetTable] {
 				// Table already exists.
@@ -653,7 +663,6 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				createDDL = ddl
 			}
 
-			targetTablet, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
 			if err != nil {
 				return err
 			}
