@@ -69,7 +69,7 @@ func (agent *ActionAgent) PreflightSchema(ctx context.Context, changes []string)
 	dbName := topoproto.TabletDbName(agent.Tablet())
 
 	// and preflight the change
-	return agent.MysqlDaemon.PreflightSchemaChange(dbName, changes)
+	return agent.MysqlDaemon.PreflightSchemaChange(ctx, dbName, changes)
 }
 
 // ApplySchema will apply a schema change
@@ -83,7 +83,7 @@ func (agent *ActionAgent) ApplySchema(ctx context.Context, change *tmutils.Schem
 	dbName := topoproto.TabletDbName(agent.Tablet())
 
 	// apply the change
-	scr, err := agent.MysqlDaemon.ApplySchemaChange(dbName, change)
+	scr, err := agent.MysqlDaemon.ApplySchemaChange(ctx, dbName, change)
 	if err != nil {
 		return nil, err
 	}

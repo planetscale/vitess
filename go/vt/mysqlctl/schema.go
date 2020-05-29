@@ -143,12 +143,12 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		td.Schema = norm
 
 		log.Infof("mysqld GetSchema: GetColumns: tableName: %s, tabletType: %s", tableName, tableType)
-		td.Fields, td.Columns, err = mysqld.getColumns(ctx, dbName, tableName)
+		td.Fields, td.Columns, err = mysqld.GetColumns(ctx, dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
 		log.Infof("mysqld GetSchema: GetPrimaryKeyColumns: tableName: %s, tabletType: %s", tableName, tableType)
-		td.PrimaryKeyColumns, err = mysqld.getPrimaryKeyColumns(ctx, dbName, tableName)
+		td.PrimaryKeyColumns, err = mysqld.GetPrimaryKeyColumns(ctx, dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -170,8 +170,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 
 // ResolveTables returns a list of actual tables+views matching a list
 // of regexps
-func ResolveTables(mysqld MysqlDaemon, dbName string, tables []string) ([]string, error) {
-	ctx := context.TODO()
+func ResolveTables(ctx context.Context, mysqld MysqlDaemon, dbName string, tables []string) ([]string, error) {
 	sd, err := mysqld.GetSchema(ctx, dbName, tables, nil, true)
 	if err != nil {
 		return nil, err
@@ -184,14 +183,8 @@ func ResolveTables(mysqld MysqlDaemon, dbName string, tables []string) ([]string
 }
 
 // GetColumns returns the columns of table.
-func (mysqld *Mysqld) GetColumns(dbName, table string) ([]*querypb.Field, []string, error) {
-	return mysqld.getColumns(context.TODO(), dbName, table)
-}
-
-// TODO: Remove once GetColumns accepts context.
-func (mysqld *Mysqld) getColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error) {
-
-	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
+func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -213,12 +206,7 @@ func (mysqld *Mysqld) getColumns(ctx context.Context, dbName, table string) ([]*
 }
 
 // GetPrimaryKeyColumns returns the primary key columns of table.
-func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, error) {
-	return mysqld.getPrimaryKeyColumns(context.TODO(), dbName, table)
-}
-
-// TODO: Remove once GetPrimaryKeyColumns accepts context.
-func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error) {
+func (mysqld *Mysqld) GetPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return nil, err
@@ -272,8 +260,7 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName, table st
 
 // PreflightSchemaChange checks the schema changes in "changes" by applying them
 // to an intermediate database that has the same schema as the target database.
-func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
-	ctx := context.TODO()
+func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
 	results := make([]*tabletmanagerdatapb.SchemaChangeResult, len(changes))
 
 	// Get current schema from the real database.
@@ -342,9 +329,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 }
 
 // ApplySchemaChange will apply the schema change to the given database.
-func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
-	ctx := context.TODO()
-
+func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	// check current schema matches
 	beforeSchema, err := mysqld.GetSchema(ctx, dbName, nil, nil, true)
 	if err != nil {
