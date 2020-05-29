@@ -433,22 +433,36 @@ func TestTableFilter(t *testing.T) {
 
 			included: false,
 		},
+		{
+			desc:   "bad table regexp",
+			tables: []string{"/*/"},
+
+			hasErr: true,
+		},
+		{
+			desc:          "bad exclude table regexp",
+			excludeTables: []string{"/*/"},
+
+			hasErr: true,
+		},
 	}
 
 	for _, tc := range tcs {
-		f, err := NewTableFilter(tc.tables, tc.excludeTables, tc.includeViews)
-		if tc.hasErr != (err != nil) {
-			t.Fatalf("hasErr not right: %v, tc: %+v", err, tc)
-		}
+		t.Run(tc.desc, func(t *testing.T) {
+			f, err := NewTableFilter(tc.tables, tc.excludeTables, tc.includeViews)
+			if tc.hasErr != (err != nil) {
+				t.Fatalf("hasErr not right: %v, tc: %+v", err, tc)
+			}
 
-		if tc.hasErr {
-			continue
-		}
+			if tc.hasErr {
+				return
+			}
 
-		included := f.Includes(tc.tableName, tc.tableType)
-		if tc.included != included {
-			t.Fatalf("included is not right: %v\nfilter: %+v\ntc: %+v", included, f, tc)
-		}
+			included := f.Includes(tc.tableName, tc.tableType)
+			if tc.included != included {
+				t.Fatalf("included is not right: %v\nfilter: %+v\ntc: %+v", included, f, tc)
+			}
+		})
 	}
 }
 
