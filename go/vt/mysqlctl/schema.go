@@ -51,7 +51,12 @@ func tableListSql(tables []string) string {
 		return "()"
 	}
 
-	return "'" + strings.Join(tables, "', '") + "'"
+	escapedTables := make([]string, len(tables))
+	for i, table := range tables {
+		escapedTables[i] = sqlescape.EscapeID(table)
+	}
+
+	return "(" + strings.Join(escapedTables, ", ") + ")"
 }
 
 // GetSchema returns the schema for database for tables listed in
@@ -211,48 +216,25 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(ctx context.Context, dbName, table st
 		return nil, err
 	}
 	defer conn.Recycle()
-	log.Infof("mysqld GetPrimaryKeyColumns fetch: %s.%s", dbName, table)
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("SHOW INDEX FROM %s.%s", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 100, true)
+
+	sql := fmt.Sprintf(`
+		SELECT table_name, ordinal_position, column_name
+		FROM information_schema.key_column_usage
+		WHERE table_schema = '%s'
+			AND table_name IN %s
+			AND constraint_name='PRIMARY'
+		ORDER BY table_name, ordinal_position`, sqlescape.EscapeID(dbName), tableListSql([]string{table}))
+	log.Infof("mysqld GetPrimaryKeyColumns fetch: %s.%s\nsql: %s", dbName, table, sql)
+	// FIXME: Increase maxrows
+	qr, err := conn.ExecuteFetch(sql, 100, true)
 	if err != nil {
 		return nil, err
 	}
 	log.Infof("mysqld GetPrimaryKeyColumns fetch done: %s.%s", dbName, table)
-	keyNameIndex := -1
-	seqInIndexIndex := -1
-	columnNameIndex := -1
-	for i, field := range qr.Fields {
-		switch field.Name {
-		case "Key_name":
-			keyNameIndex = i
-		case "Seq_in_index":
-			seqInIndexIndex = i
-		case "Column_name":
-			columnNameIndex = i
-		}
-	}
-	if keyNameIndex == -1 || seqInIndexIndex == -1 || columnNameIndex == -1 {
-		return nil, fmt.Errorf("unknown columns in 'show index' result: %v", qr.Fields)
-	}
 
 	columns := make([]string, 0, 5)
-	var expectedIndex int64 = 1
 	for _, row := range qr.Rows {
-		// skip non-primary keys
-		if row[keyNameIndex].ToString() != "PRIMARY" {
-			continue
-		}
-
-		// check the Seq_in_index is always increasing
-		seqInIndex, err := evalengine.ToInt64(row[seqInIndexIndex])
-		if err != nil {
-			return nil, err
-		}
-		if seqInIndex != expectedIndex {
-			return nil, fmt.Errorf("unexpected index: %v != %v", seqInIndex, expectedIndex)
-		}
-		expectedIndex++
-
-		columns = append(columns, row[columnNameIndex].ToString())
+		columns = append(columns, row[2].ToString())
 	}
 	return columns, err
 }
