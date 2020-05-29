@@ -46,6 +46,14 @@ func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
 	return mysqld.executeMysqlScript(params, strings.NewReader(sql))
 }
 
+func tableListSql(tables []string) string {
+	if len(tables) == 0 {
+		return "()"
+	}
+
+	return "'" + strings.Join(tables, "', '") + "'"
+}
+
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
 func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
@@ -68,6 +76,12 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 	sql := "SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
 	if !includeViews {
 		sql += " AND table_type = '" + tmutils.TableBaseTable + "'"
+	}
+	if len(tables) > 0 {
+		sql += " AND table_name IN " + tableListSql(tables)
+	}
+	if len(excludeTables) > 0 {
+		sql += " AND table_name NOT IN " + tableListSql(tables)
 	}
 	log.Infof("mysqld GetSchema: information_schema sql: %s", sql)
 	qr, err := mysqld.FetchSuperQuery(ctx, sql)
