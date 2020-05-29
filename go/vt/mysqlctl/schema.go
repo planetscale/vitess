@@ -77,12 +77,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 	if !includeViews {
 		sql += " AND table_type = '" + tmutils.TableBaseTable + "'"
 	}
-	if len(tables) > 0 {
-		sql += " AND table_name IN " + tableListSql(tables)
-	}
-	if len(excludeTables) > 0 {
-		sql += " AND table_name NOT IN " + tableListSql(tables)
-	}
 	log.Infof("mysqld GetSchema: information_schema sql: %s", sql)
 	qr, err := mysqld.FetchSuperQuery(ctx, sql)
 	if err != nil {
@@ -93,10 +87,20 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 	}
 	log.Infof("mysqld GetSchema: information_schema done sql: %s", sql)
 
+	filter, err := tmutils.NewTableFilter(tables, excludeTables, includeViews)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("mysqld GetSchema: created table filter: %+v", filter)
+
 	sd.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
 		tableType := row[1].ToString()
+
+		if !filter.Includes(tableName, tableType) {
+			continue
+		}
 
 		log.Infof("mysqld GetSchema: information_schema result: tableName: %s, tabletType: %s", tableName, tableType)
 
@@ -158,11 +162,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		sd.TableDefinitions = append(sd.TableDefinitions, td)
 	}
 
-	log.Infof("mysqld GetSchema: FilterTables")
-	sd, err = tmutils.FilterTables(sd, tables, excludeTables, includeViews)
-	if err != nil {
-		return nil, err
-	}
 	log.Infof("mysqld GetSchema: GenerateSchemaVersion")
 	tmutils.GenerateSchemaVersion(sd)
 	return sd, nil
