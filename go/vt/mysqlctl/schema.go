@@ -53,7 +53,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	sd := &tabletmanagerdatapb.SchemaDefinition{}
 	backtickDBName := sqlescape.EscapeID(dbName)
 
-	log.Infof("mysqld GetSchema")
+	log.Infof("mysqld GetSchema: show create db %s", backtickDBName)
 
 	// get the database creation command
 	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE DATABASE IF NOT EXISTS %s", backtickDBName))
@@ -70,6 +70,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	if !includeViews {
 		sql += " AND table_type = '" + tmutils.TableBaseTable + "'"
 	}
+	log.Infof("mysqld GetSchema: information_schema sql: %s", sql)
 	qr, err := mysqld.FetchSuperQuery(ctx, sql)
 	if err != nil {
 		return nil, err
@@ -77,11 +78,14 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	if len(qr.Rows) == 0 {
 		return sd, nil
 	}
+	log.Infof("mysqld GetSchema: information_schema done sql: %s", sql)
 
 	sd.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
 		tableType := row[1].ToString()
+
+		log.Infof("mysqld GetSchema: information_schema result: tableName: %s, tabletType: %s", tableName, tableType)
 
 		// compute dataLength
 		var dataLength uint64
@@ -125,10 +129,12 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		td.Name = tableName
 		td.Schema = norm
 
+		log.Infof("mysqld GetSchema: GetColumns: tableName: %s, tabletType: %s", tableName, tableType)
 		td.Fields, td.Columns, err = mysqld.GetColumns(dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
+		log.Infof("mysqld GetSchema: GetPrimaryKeyColumns: tableName: %s, tabletType: %s", tableName, tableType)
 		td.PrimaryKeyColumns, err = mysqld.GetPrimaryKeyColumns(dbName, tableName)
 		if err != nil {
 			return nil, err
@@ -139,10 +145,12 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		sd.TableDefinitions = append(sd.TableDefinitions, td)
 	}
 
+	log.Infof("mysqld GetSchema: FilterTables")
 	sd, err = tmutils.FilterTables(sd, tables, excludeTables, includeViews)
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("mysqld GetSchema: GenerateSchemaVersion")
 	tmutils.GenerateSchemaVersion(sd)
 	return sd, nil
 }
@@ -163,15 +171,20 @@ func ResolveTables(mysqld MysqlDaemon, dbName string, tables []string) ([]string
 
 // GetColumns returns the columns of table.
 func (mysqld *Mysqld) GetColumns(dbName, table string) ([]*querypb.Field, []string, error) {
+
 	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer conn.Recycle()
+	log.Infof("mysqld GetColumns fetch: %s.%s", dbName, table)
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 0, true)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	log.Infof("mysqld GetColumns fetch done: %s.%s", dbName, table)
+
 	columns := make([]string, len(qr.Fields))
 	for i, field := range qr.Fields {
 		columns[i] = field.Name
@@ -187,10 +200,12 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 		return nil, err
 	}
 	defer conn.Recycle()
+	log.Infof("mysqld GetPrimaryKeyColumns fetch: %s.%s", dbName, table)
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("SHOW INDEX FROM %s.%s", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 100, true)
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("mysqld GetPrimaryKeyColumns fetch done: %s.%s", dbName, table)
 	keyNameIndex := -1
 	seqInIndexIndex := -1
 	columnNameIndex := -1
