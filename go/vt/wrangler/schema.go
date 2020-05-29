@@ -50,6 +50,8 @@ func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *topodatapb.Table
 		return nil, fmt.Errorf("GetTablet(%v) failed: %v", tabletAlias, err)
 	}
 
+	log.Infof("GetSchema for %v", ti)
+
 	return wr.tmc.GetSchema(ctx, ti.Tablet, tables, excludeTables, includeViews)
 }
 
