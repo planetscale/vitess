@@ -435,7 +435,7 @@ func (fmd *FakeMysqlDaemon) CheckSuperQueryList() error {
 }
 
 // GetSchema is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (fmd *FakeMysqlDaemon) GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fmd.SchemaFunc != nil {
 		return fmd.SchemaFunc()
 	}

@@ -69,7 +69,7 @@ type MysqlDaemon interface {
 	// the read_only state of the server.
 	Promote(map[string]string) (mysql.Position, error)
 	// Schema related methods
-	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
+	GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
 	GetColumns(dbName, table string) ([]*querypb.Field, []string, error)
 	GetPrimaryKeyColumns(dbName, table string) ([]string, error)
 	PreflightSchemaChange(dbName string, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)

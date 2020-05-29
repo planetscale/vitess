@@ -31,7 +31,7 @@ import (
 
 // GetSchema returns the schema.
 func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	return agent.MysqlDaemon.GetSchema(topoproto.TabletDbName(agent.Tablet()), tables, excludeTables, includeViews)
+	return agent.MysqlDaemon.GetSchema(ctx, topoproto.TabletDbName(agent.Tablet()), tables, excludeTables, includeViews)
 }
 
 // ReloadSchema will reload the schema
