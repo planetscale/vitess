@@ -23,6 +23,7 @@ import (
 	"text/template"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/gogo/protobuf/proto"
@@ -633,6 +634,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		}
 
 		log.Infof("applying schema to target tablet %v.", target.MasterAlias)
+		applyDDLs := []string{}
 		for _, ts := range mz.ms.TableSettings {
 			if hasTargetTable[ts.TargetTable] {
 				// Table already exists.
@@ -663,14 +665,22 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				createDDL = ddl
 			}
 
-			if err != nil {
-				return err
-			}
-
-			if _, err := mz.wr.tmc.ExecuteFetchAsDba(ctx, targetTablet.Tablet, false, []byte(createDDL), 0, false, true); err != nil {
-				return err
-			}
+			applyDDLs = append(applyDDLs, createDDL)
 		}
+
+		sql := strings.Join(applyDDLs, ";\n")
+
+		log.Infof("applying schema to target tablet %v, sql: %s", target.MasterAlias, sql)
+		_, err = mz.wr.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
+			SQL:              sql,
+			Force:            false,
+			AllowReplication: false,
+		})
+		if err != nil {
+			return err
+		}
+		log.Infof("DONE: applying schema to target tablet %v, sql: %s", target.MasterAlias, sql)
+
 		return nil
 	})
 }
