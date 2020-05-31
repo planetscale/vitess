@@ -148,50 +148,21 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		td.PrimaryKeyColumns = colMap[tableName]
 	}
 
-	type colsResult struct {
-		tableName string
-		fields    []*querypb.Field
-		columns   []string
-		schema    string
-		err       error
-	}
-
-	resChan := make(chan *colsResult, 100)
+	resChan := make(chan *schemaResult, 100)
 	defer close(resChan)
 
 	ctx, cancel := context.WithCancel(ctx)
 	for tableName := range tdMap {
 		go func(tableName, tableType string) {
-			log.Infof("mysqld GetSchema: GetColumns: tableName: %s", tableName)
-			fields, columns, err := mysqld.GetColumns(ctx, dbName, tableName)
-
-			if err != nil {
-				resChan <- &colsResult{
-					tableName: tableName,
-					fields:    fields,
-					columns:   columns,
-					err:       err,
-				}
-				return
-			}
-
-			log.Infof("mysqld GetSchema: normalizedSchema: tableName: %s, tableType: %s", tableName, tableType)
-			schema, err := mysqld.normalizedSchema(ctx, backtickDBName, tableName, tableType)
-
-			resChan <- &colsResult{
-				tableName: tableName,
-				fields:    fields,
-				columns:   columns,
-				schema:    schema,
-				err:       err,
-			}
+			res := mysqld.collectSchema(ctx, dbName, tableName, tableType)
+			resChan <- res
 		}(tableName, tdMap[tableName].Type)
 	}
 
 	for i := 0; i < len(tdMap); i++ {
 		res := <-resChan
 
-		log.Infof("mysqld GetSchema: GetColumns done: %+v", res)
+		log.Infof("DONE mysqld GetSchema: collectSchema done: %+v", res)
 		if res.err != nil {
 			cancel()
 			return nil, res.err
@@ -208,8 +179,46 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 	return sd, nil
 }
 
-func (mysqld *Mysqld) normalizedSchema(ctx context.Context, backtickDBName, tableName, tableType string) (string, error) {
-	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", backtickDBName, sqlescape.EscapeID(tableName)))
+type schemaResult struct {
+	tableName string
+	fields    []*querypb.Field
+	columns   []string
+	schema    string
+	err       error
+}
+
+func (mysqld *Mysqld) collectSchema(ctx context.Context, dbName, tableName, tableType string) *schemaResult {
+	log.Infof("mysqld GetSchema: GetColumns: tableName: %s", tableName)
+	fields, columns, err := mysqld.GetColumns(ctx, dbName, tableName)
+
+	if err != nil {
+		return &schemaResult{
+			tableName: tableName,
+			err:       err,
+		}
+	}
+
+	log.Infof("mysqld GetSchema: normalizedSchema: tableName: %s, tableType: %s", tableName, tableType)
+	schema, err := mysqld.normalizedSchema(ctx, dbName, tableName, tableType)
+	if err != nil {
+		return &schemaResult{
+			tableName: tableName,
+			err:       err,
+		}
+	}
+
+	return &schemaResult{
+		tableName: tableName,
+		fields:    fields,
+		columns:   columns,
+		schema:    schema,
+		err:       err,
+	}
+}
+
+func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, tableType string) (string, error) {
+	backtickDBName := sqlescape.EscapeID(dbName)
+	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", dbName, sqlescape.EscapeID(tableName)))
 	if fetchErr != nil {
 		return "", fetchErr
 	}
