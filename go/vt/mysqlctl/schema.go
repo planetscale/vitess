@@ -389,7 +389,9 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 // ApplySchemaChange will apply the schema change to the given database.
 func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	// check current schema matches
+	log.Infof("ApplySchemaChange: get beforeSchema")
 	beforeSchema, err := mysqld.GetSchema(ctx, dbName, nil, nil, true)
+	log.Infof("DONE ApplySchemaChange: get beforeSchema")
 	if err != nil {
 		return nil, err
 	}
@@ -429,14 +431,19 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 	// add a 'use XXX' in front of the SQL
 	sql = fmt.Sprintf("USE %s;\n%s", sqlescape.EscapeID(dbName), sql)
 
+	log.Infof("ApplySchemaChange: exec schema")
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)
 	if err = mysqld.executeSchemaCommands(sql); err != nil {
+		log.Infof("ERR ApplySchemaChange: exec schema err: %v", err)
 		return nil, err
 	}
+	log.Infof("DONE ApplySchemaChange: exec schema")
 
+	log.Infof("ApplySchemaChange: get afterSchema")
 	// get AfterSchema
 	afterSchema, err := mysqld.GetSchema(ctx, dbName, nil, nil, true)
+	log.Infof("DONE ApplySchemaChange: get afterSchema")
 	if err != nil {
 		return nil, err
 	}

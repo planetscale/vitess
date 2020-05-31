@@ -677,6 +677,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			AllowReplication: false,
 		})
 		if err != nil {
+			log.Infof("ERROR: applying schema to target tablet %v, err: %+v", target.MasterAlias, err)
 			return err
 		}
 		log.Infof("DONE: applying schema to target tablet %v, sql: %s", target.MasterAlias, sql)
