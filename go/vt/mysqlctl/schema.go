@@ -313,14 +313,7 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 	colMap := map[string][]string{}
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
-
-		columns, ok := colMap[tableName]
-		if !ok {
-			columns = make([]string, 0, 5)
-			colMap[tableName] = columns
-		}
-
-		columns = append(columns, row[2].ToString())
+		colMap[tableName] = append(colMap[tableName], row[2].ToString())
 	}
 	return colMap, err
 }
