@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -46,6 +47,7 @@ func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
 	return mysqld.executeMysqlScript(params, strings.NewReader(sql))
 }
 
+// tableList returns an IN clause "('t1', 't2'...) for a list of tables."
 func tableListSql(tables []string) string {
 	if len(tables) == 0 {
 		return "()"
@@ -93,8 +95,21 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 	}
 	log.Infof("mysqld GetSchema: created table filter: %+v", filter)
 
-	sd.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(qr.Rows))
-	tdMap := map[string]*tabletmanagerdatapb.TableDefinition{}
+	type schemaResult struct {
+		idx int
+		err error
+
+		td *tabletmanagerdatapb.TableDefinition
+	}
+
+	resChan := make(chan *schemaResult, 100)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	tableNames := make([]string, 0, len(qr.Rows))
+	i := 0
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
 		tableType := row[1].ToString()
@@ -103,7 +118,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 			continue
 		}
 
-		log.Infof("mysqld GetSchema: information_schema result: tableName: %s, tabletType: %s", tableName, tableType)
+		tableNames = append(tableNames, tableName)
 
 		// compute dataLength
 		var dataLength uint64
@@ -124,96 +139,85 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 			}
 		}
 
-		td := &tabletmanagerdatapb.TableDefinition{
-			Name:       tableName,
-			Type:       tableType,
-			DataLength: dataLength,
-			RowCount:   rowCount,
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+
+			fields, columns, schema, err := mysqld.collectSchema(ctx, dbName, tableName, tableType)
+			if err != nil {
+				resChan <- &schemaResult{
+					idx: idx,
+					err: err,
+				}
+				return
+			}
+
+			resChan <- &schemaResult{
+				idx: idx,
+				td: &tabletmanagerdatapb.TableDefinition{
+					Name:       tableName,
+					Type:       tableType,
+					DataLength: dataLength,
+					RowCount:   rowCount,
+					Fields:     fields,
+					Columns:    columns,
+					Schema:     schema,
+				},
+			}
+		}(i)
+
+		i++
+	}
+
+	go func() {
+		wg.Wait()
+		close(resChan)
+	}()
+
+	colMap := map[string][]string{}
+	if len(tableNames) > 0 {
+		log.Infof("mysqld GetSchema: GetPrimaryKeyColumns")
+		var err error
+		colMap, err = mysqld.getPrimaryKeyColumns(ctx, dbName, tableNames...)
+		if err != nil {
+			return nil, err
 		}
-		sd.TableDefinitions = append(sd.TableDefinitions, td)
-		tdMap[tableName] = td
+		log.Infof("mysqld GetSchema: GetPrimaryKeyColumns done")
 	}
 
-	tableNames := make([]string, 0, len(tdMap))
-	for tableName := range tdMap {
-		tableNames = append(tableNames, tableName)
-	}
-	log.Infof("mysqld GetSchema: GetPrimaryKeyColumns: tableNames %v", tableNames)
-	colMap, err := mysqld.getPrimaryKeyColumns(ctx, dbName, tableNames...)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("mysqld GetSchema: GetPrimaryKeyColumns done: tableNames %v", tableNames)
-	for tableName, td := range tdMap {
-		td.PrimaryKeyColumns = colMap[tableName]
-	}
-
-	resChan := make(chan *schemaResult, 100)
-	defer close(resChan)
-
-	ctx, cancel := context.WithCancel(ctx)
-	for tableName := range tdMap {
-		go func(tableName, tableType string) {
-			res := mysqld.collectSchema(ctx, dbName, tableName, tableType)
-			resChan <- res
-		}(tableName, tdMap[tableName].Type)
-	}
-
-	for i := 0; i < len(tdMap); i++ {
-		res := <-resChan
-
-		log.Infof("DONE mysqld GetSchema: collectSchema done: %+v", res)
+	log.Infof("mysqld GetSchema: Collecting all table schemas")
+	tds := make([]*tabletmanagerdatapb.TableDefinition, i)
+	for res := range resChan {
 		if res.err != nil {
 			cancel()
 			return nil, res.err
 		}
 
-		td := tdMap[res.tableName]
-		td.Fields = res.fields
-		td.Columns = res.columns
-		td.Schema = res.schema
-	}
+		td := res.td
+		td.PrimaryKeyColumns = colMap[td.Name]
 
-	log.Infof("mysqld GetSchema: GenerateSchemaVersion")
+		tds[res.idx] = res.td
+	}
+	log.Infof("mysqld GetSchema: Collecting all table schemas done")
+
+	sd.TableDefinitions = tds
+
 	tmutils.GenerateSchemaVersion(sd)
 	return sd, nil
 }
 
-type schemaResult struct {
-	tableName string
-	fields    []*querypb.Field
-	columns   []string
-	schema    string
-	err       error
-}
-
-func (mysqld *Mysqld) collectSchema(ctx context.Context, dbName, tableName, tableType string) *schemaResult {
-	log.Infof("mysqld GetSchema: GetColumns: tableName: %s", tableName)
+func (mysqld *Mysqld) collectSchema(ctx context.Context, dbName, tableName, tableType string) ([]*querypb.Field, []string, string, error) {
 	fields, columns, err := mysqld.GetColumns(ctx, dbName, tableName)
-
 	if err != nil {
-		return &schemaResult{
-			tableName: tableName,
-			err:       err,
-		}
+		return nil, nil, "", err
 	}
 
-	log.Infof("mysqld GetSchema: normalizedSchema: tableName: %s, tableType: %s", tableName, tableType)
 	schema, err := mysqld.normalizedSchema(ctx, dbName, tableName, tableType)
 	if err != nil {
-		return &schemaResult{
-			tableName: tableName,
-			err:       err,
-		}
+		return nil, nil, "", err
 	}
 
-	return &schemaResult{
-		tableName: tableName,
-		fields:    fields,
-		columns:   columns,
-		schema:    schema,
-		err:       err,
-	}
+	return fields, columns, schema, nil
 }
 
 func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, tableType string) (string, error) {
@@ -261,13 +265,10 @@ func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*
 		return nil, nil, err
 	}
 	defer conn.Recycle()
-	log.Infof("mysqld GetColumns fetch: %s.%s", dbName, table)
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 0, true)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	log.Infof("mysqld GetColumns fetch done: %s.%s", dbName, table)
 
 	columns := make([]string, len(qr.Fields))
 	for i, field := range qr.Fields {
@@ -284,7 +285,6 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(ctx context.Context, dbName, table st
 		return nil, err
 	}
 
-	// FIXME
 	return cs[dbName], nil
 }
 
@@ -303,12 +303,10 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 			AND table_name IN %s
 			AND constraint_name='PRIMARY'
 		ORDER BY table_name, ordinal_position`, dbName, tableList)
-	log.Infof("mysqld GetPrimaryKeyColumns fetch: %s.%s\nsql: %s", dbName, tableList, sql)
 	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("mysqld GetPrimaryKeyColumns fetch done: %s.%s", dbName, tableList)
 
 	colMap := map[string][]string{}
 	for _, row := range qr.Rows {

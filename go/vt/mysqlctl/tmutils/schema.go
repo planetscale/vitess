@@ -63,6 +63,7 @@ func (tds TableDefinitions) Swap(i, j int) {
 	tds[i], tds[j] = tds[j], tds[i]
 }
 
+// TableFilter is a filter for table names and types.
 type TableFilter struct {
 	includeViews bool
 
@@ -75,7 +76,7 @@ type TableFilter struct {
 	excludeTableREs     []*regexp.Regexp
 }
 
-// NewTableFilter creates a filter for whitelisted tables
+// NewTableFilter creates a TableFilter for whitelisted tables
 // (tables), no blacklisted tables (excludeTables) and optionally
 // views (includeViews).
 func NewTableFilter(tables, excludeTables []string, includeViews bool) (*TableFilter, error) {
