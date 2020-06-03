@@ -662,7 +662,17 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				if !ok {
 					return fmt.Errorf("source table %v does not exist", ts.TargetTable)
 				}
-				createDDL = ddl
+
+				newDDL, err := stripTableConstraints(ddl)
+				if err != nil {
+					return err
+				}
+
+				if ddl != newDDL {
+					log.Infof("rewrote constraint ddl:\n\nold: %s\n\nnew: %s", ddl, newDDL)
+				}
+
+				createDDL = newDDL
 			}
 
 			applyDDLs = append(applyDDLs, createDDL)
@@ -684,6 +694,28 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 
 		return nil
 	})
+}
+
+func stripTableConstraints(ddl string) (string, error) {
+	ast, err := sqlparser.ParseStrictDDL(ddl)
+	if err != nil {
+		return "", err
+	}
+
+	stripConstraints := func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.DDL:
+			if node.TableSpec != nil {
+				node.TableSpec.Constraints = nil
+			}
+		}
+		return true
+	}
+
+	noConstraintAST := sqlparser.Rewrite(ast, stripConstraints, nil)
+	newDDL := sqlparser.String(noConstraintAST)
+
+	return newDDL, nil
 }
 
 func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
