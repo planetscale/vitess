@@ -185,6 +185,12 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	}
 	defer dbClient.Close()
 
+	// FIXME: Allow invalid dates, and maybe many more loose modes here.
+	log.Info("SET SQL_MODE='ALLOW_INVALID_DATES'")
+	if _, err := dbClient.ExecuteFetch("SET SQL_MODE='ALLOW_INVALID_DATES'", 0); err != nil {
+		return err
+	}
+
 	var tablet *topodatapb.Tablet
 	if ct.source.GetExternalMysql() == "" {
 		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
