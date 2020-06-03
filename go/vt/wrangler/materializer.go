@@ -678,19 +678,21 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			applyDDLs = append(applyDDLs, createDDL)
 		}
 
-		sql := strings.Join(applyDDLs, ";\n")
+		if len(applyDDLs) > 0 {
+			sql := strings.Join(applyDDLs, ";\n")
 
-		log.Infof("applying schema to target tablet %v, sql: %s", target.MasterAlias, sql)
-		_, err = mz.wr.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
-			SQL:              sql,
-			Force:            false,
-			AllowReplication: true,
-		})
-		if err != nil {
-			log.Infof("ERROR: applying schema to target tablet %v, err: %+v", target.MasterAlias, err)
-			return err
+			log.Infof("applying schema to target tablet %v, sql: %s", target.MasterAlias, sql)
+			_, err = mz.wr.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
+				SQL:              sql,
+				Force:            false,
+				AllowReplication: true,
+			})
+			if err != nil {
+				log.Infof("ERROR: applying schema to target tablet %v, err: %+v", target.MasterAlias, err)
+				return err
+			}
+			log.Infof("DONE: applying schema to target tablet %v, sql: %s", target.MasterAlias, sql)
 		}
-		log.Infof("DONE: applying schema to target tablet %v, sql: %s", target.MasterAlias, sql)
 
 		return nil
 	})
