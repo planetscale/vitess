@@ -499,7 +499,7 @@ func CreateVReplicationTable() []string {
 		`CREATE TABLE IF NOT EXISTS _vt.vreplication (
   id INT AUTO_INCREMENT,
   workflow VARBINARY(1000),
-  source VARBINARY(10000) NOT NULL,
+  source BLOB NOT NULL,
   pos VARBINARY(10000) NOT NULL,
   stop_pos VARBINARY(10000) DEFAULT NULL,
   max_tps BIGINT(20) NOT NULL,
