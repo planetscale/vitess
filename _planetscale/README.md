@@ -28,6 +28,20 @@ git remote add upstream https://github.com/vitessio/vitess
 git remote set-url upstream --push "I'm sorry, Dave. I'm afraid I can't do that."
 ```
 
+## Pulling Upstream
+
+You shouldn't normally need to manually pull upstream, since we do that automatically
+on a regular period, or whenever a change is pushed to our fork's master branch.
+
+However, if you do find you need to pull manually, please make sure to update the
+`_planetscale/version/upstream_commit.txt` file with the upstream commit that you
+merged.
+
+The `_planetscale/tools/pull-upstream-master.sh` script shows how to do this.
+You can just directly run that script if you don't expect to hit any merge conflicts.
+If you do hit merge conflicts, the script will fail and you'll need to fix the conflicts
+and manually finish the remaining steps.
+
 ## Fork Guidelines
 
 We intend to merge upstream Vitess into this fork continuously and automatically.
