@@ -7,6 +7,10 @@ once the continuous builds are configured and tested. This will allow us to depl
 builds with either temporary or permanent changes relative to upstream Vitess,
 such as embargoed security fixes or extra, proprietary features.
 
+Since images built from this fork contain proprietary bits that must be licensed,
+we publish them to the access-controlled us.gcr.io/planetscale-operator/vitess registry
+instead of the publicly-accessible us.gcr.io/planetscale-vitess registry.
+
 You should _not_ use this fork if you're working on a pull request that will be sent
 to the upstream, open-source [Vitess](https://github.com/vitessio/vitess) repository.
 This fork is only for code that we intend to remain proprietary, either temporarily

@@ -1,0 +1,107 @@
+name: Nightly Build
+
+# This depends on the following GitHub secrets
+# https://help.github.com/en/actions/configuring-and-managing-workflows/creating-and-storing-encrypted-secrets
+#
+# To access GCR:
+#   - GCP_SA_EMAIL
+#   - GCP_SA_KEY
+
+on:
+  schedule:
+    # Every day at 5am UTC (9pm PST / 10pm PDT)
+    - cron: '0 5 * * *'
+
+env:
+  REGISTRY: us.gcr.io/planetscale-operator/vitess
+
+jobs:
+  build-tag-push-lite:
+    name: vitess/lite
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        image:
+          - alpine
+          - mariadb
+          - mariadb103
+          - mysql56
+          - mysql57
+          - mysql80
+          - percona
+          - percona57
+          - percona80
+        include:
+          # Default image is tagged as 'latest'
+          - image: mysql57
+            default: 'true'
+
+    steps:
+      - name: Checkout planetscale/vitess-private
+        uses: actions/checkout@v2
+        with:
+          repository: planetscale/vitess-private
+          fetch-depth: 0
+          ref: master
+
+      - name: Setup gcloud SDK
+        uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+        with:
+          service_account_email: ${{ secrets.GCP_SA_EMAIL }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+
+      - name: Configure docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Determine build info
+        id: check-vitess-head
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          UPSTREAM_SHA=$(git rev-parse --short "$(cat _planetscale/version/upstream_commit.txt)")
+          IMAGE_TAG_SUFFIX=$(date +%F).$SHORT_SHA.$UPSTREAM_SHA
+          echo "::set-output name=short_sha::$SHORT_SHA"
+          echo "::set-output name=image_tag_suffix::$IMAGE_TAG_SUFFIX"
+
+      - name: Cache last built vitess/lite:${{ matrix.image }}
+        id: last-built-image
+        uses: actions/cache@v1
+        with:
+          path: ${{ runner.temp }}/vitess-lite
+          key: vitess-lite-${{ matrix.image }}-${{ steps.check-vitess-head.outputs.short_sha }}
+
+      - name: Build vitess/lite:${{ matrix.image }}
+        if: steps.last-built-image.outputs.cache-hit != 'true'
+        run: docker build -f docker/lite/Dockerfile.${{ matrix.image }} -t vitess/lite:${{ matrix.image }} .
+
+      - name: Tag vitess/lite:${{ matrix.image }}
+        if: steps.last-built-image.outputs.cache-hit != 'true'
+        run: docker tag vitess/lite:${{ matrix.image }} ${{ env.REGISTRY }}/lite:${{ matrix.image }}-${{ steps.check-vitess-head.outputs.image_tag_suffix }}
+
+      - name: Tag vitess/lite:latest
+        if: steps.last-built-image.outputs.cache-hit != 'true' && matrix.default == 'true'
+        run: |
+          docker tag vitess/lite:${{ matrix.image }} ${{ env.REGISTRY }}/lite:latest
+          docker tag vitess/lite:${{ matrix.image }} ${{ env.REGISTRY }}/lite:${{ steps.check-vitess-head.outputs.image_tag_suffix }}
+
+      - name: Push vitess/lite:${{ matrix.image }}
+        if: steps.last-built-image.outputs.cache-hit != 'true'
+        run: docker push ${{ env.REGISTRY }}/lite:${{ matrix.image }}-${{ steps.check-vitess-head.outputs.image_tag_suffix }}
+
+      - name: Push vitess/lite:latest
+        if: steps.last-built-image.outputs.cache-hit != 'true' && matrix.default == 'true'
+        run: |
+          docker push ${{ env.REGISTRY }}/lite:latest
+          docker push ${{ env.REGISTRY }}/lite:${{ steps.check-vitess-head.outputs.image_tag_suffix }}
+
+      - name: Mark vitess/lite:${{ matrix.image }} pushed
+        if: steps.last-built-image.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p  ${{ runner.temp }}/vitess-lite
+          docker image inspect vitess/lite:${{ matrix.image }} | tee ${{ runner.temp }}/vitess-lite/${{ matrix.image }}
+
+      - name: Output last pushed vitess/lite:${{ matrix.image }}
+        if: steps.last-built-image.outputs.cache-hit == 'true'
+        run: cat ${{ runner.temp }}/vitess-lite/${{ matrix.image }}
