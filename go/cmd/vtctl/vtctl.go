@@ -26,6 +26,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/manifoldco/promptui"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/cmd"
 
 	"golang.org/x/net/context"
@@ -69,31 +73,73 @@ func installSignalHandlers(cancel func()) {
 	}()
 }
 
-func main() {
-	defer exit.RecoverAll()
-	defer logutil.Flush()
+var rootCmd *cobra.Command
 
-	if *detachedMode {
-		// this method will call os.Exit and kill this process
-		cmd.DetachFromTerminalAndExit()
+var cobraCommands = []string{"version", "bash", "vexec", "workflow"}
+
+func addCobraCommands() {
+	addUtilCommands()
+	addCommands()
+}
+
+func addUtilCommands() {
+	servenv.ParseFlagsWithArgs("vtctld")
+	rootCmd = &cobra.Command{
+		Use:   "vtctld",
+		Short: "Vitess Control Plane CLI",
+		Long:  `vtctld is a cli providing access to various vitess functionality to manage vitess processes and objects`,
 	}
+	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
+	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		rootCmd.PersistentFlags().MarkHidden(f.Name)
+	})
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print the version number of vtctld",
+		Run: func(cmd *cobra.Command, args []string) {
+			prompt := promptui.Prompt{
+				Label:     "Are you sure you want to run this?",
+				Default:   "n",
+				IsConfirm: true,
+			}
+			result, err := prompt.Run()
+			if err != nil {
+				log.Infof("Unable to throw prompt %s", "version")
+			}
+			if result == "y" {
+				fmt.Println("vtctld v6a")
+			}
+		},
+	}
+	rootCmd.AddCommand(versionCmd)
 
-	args := servenv.ParseFlagsWithArgs("vtctl")
+	bashCompletionCmd := &cobra.Command{
+		Use:   "bash [--output output_file]",
+		Short: "Generate bash completion for vtctld",
+		Run: func(cmd *cobra.Command, args []string) {
+			var fp *os.File
+			var err error
+			fname, _ := cmd.PersistentFlags().GetString("output")
+			if fname != "" {
+				if fp, err = os.OpenFile(fname, os.O_CREATE | os.O_RDWR, 0666); err != nil {
+					fmt.Errorf("unable to open file", fname)
+					return
+				}
+			}
+			if fp == nil {
+				fp = os.Stdout
+			}
+			fmt.Printf("Writing bash completions to file: %s\n", fp.Name())
+			rootCmd.GenBashCompletion(fp)
+		},
+	}
+	bashCompletionCmd.PersistentFlags().StringP("output", "o", "", "output file to store bash completion commands")
+
+	rootCmd.AddCommand(bashCompletionCmd)
+}
+
+func runLegacyCommand(args []string) {
 	action := args[0]
-
-	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
-
-	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
-		syslogger.Info(startMsg)
-	} else {
-		log.Warningf("cannot connect to syslog: %v", err)
-	}
-
-	closer := trace.StartTracing("vtctl")
-	defer trace.LogErrorsWhenClosing(closer)
-
-	servenv.FireRunHooks()
-
 	ts := topo.Open()
 	defer ts.Close()
 
@@ -114,5 +160,82 @@ func main() {
 	default:
 		log.Errorf("action failed: %v %v", action, err)
 		exit.Return(255)
+	}
+}
+
+func addLegacyCommands() {
+	for _, group := range vtctl.Commands() {
+		for _, cmd := range group.Commands {
+			action := cmd.Name
+			use := fmt.Sprintf("%s %s", action, strings.ReplaceAll(cmd.Params, "[-", "[--"))
+			method := cmd.Method
+			cobraCmd := &cobra.Command{
+				Use:     use,
+				Short:   cmd.Help,
+				Long:    cmd.Help,
+
+				Run: func(cobraCmd *cobra.Command, args []string) {
+					ts := topo.Open()
+					defer ts.Close()
+
+					vtctl.WorkflowManager = workflow.NewManager(ts)
+					ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+					wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+					subFlags := flag.NewFlagSet(action, flag.ContinueOnError)
+					subFlags.SetOutput(logutil.NewLoggerWriter(wr.Logger()))
+					installSignalHandlers(cancel)
+					if err := method(ctx, wr, subFlags, args[:1]); err != nil {
+						log.Errorf(err.Error())
+					}
+				},
+			}
+			if strings.Contains(use, "DEPRECATED") {
+				cobraCmd.Deprecated = " please look at the documentation for new ways to do this"
+				cobraCmd.Use = strings.ReplaceAll(use, "DEPRECATED ", "")
+				cobraCmd.Run = func(cobraCmd *cobra.Command, args []string) {}
+			}
+			rootCmd.AddCommand(cobraCmd)
+		}
+	}
+}
+
+func main() {
+
+	defer exit.RecoverAll()
+	defer logutil.Flush()
+
+	if *detachedMode {
+		// this method will call os.Exit and kill this process
+		cmd.DetachFromTerminalAndExit()
+	}
+
+	addCobraCommands()
+	addLegacyCommands()
+
+	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
+
+	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
+		syslogger.Info(startMsg)
+	} else {
+		log.Warningf("cannot connect to syslog: %v", err)
+	}
+
+	closer := trace.StartTracing("vtctl")
+	defer trace.LogErrorsWhenClosing(closer)
+
+	servenv.FireRunHooks()
+	args := servenv.ParseFlagsWithArgs("vtctl")
+	action := args[0]
+	isCobraCommand := false
+	for _, cmd := range cobraCommands {
+		if cmd == action {
+			isCobraCommand = true
+			break
+		}
+	}
+	if isCobraCommand {
+		rootCmd.Execute()
+	} else {
+		runLegacyCommand(args)
 	}
 }

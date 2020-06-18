@@ -8,6 +8,7 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.8.1 // indirect
 	github.com/GeertJohan/go.rice v1.0.0
 	github.com/PuerkitoBio/goquery v1.5.1
+	github.com/TylerBrock/colorjson v0.0.0-20180527164720-95ec53f28296
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v1.28.8
 	github.com/buger/jsonparser v0.0.0-20200322175846-f7e751efca13
@@ -18,6 +19,7 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
 	github.com/corpix/uarand v0.1.1 // indirect
+	github.com/davecgh/go-spew v1.1.1
 	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gogo/protobuf v1.3.1
@@ -37,8 +39,10 @@ require (
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/hashicorp/memberlist v0.1.4 // indirect
 	github.com/hashicorp/serf v0.8.5 // indirect
+	github.com/hokaccha/go-prettyjson v0.0.0-20190818114111-108c894c2c0e // indirect
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
 	github.com/imdario/mergo v0.3.6 // indirect
+	github.com/iotdog/json2table v0.0.0-20170917130055-a02b9756f9ab
 	github.com/klauspost/compress v1.4.1 // indirect
 	github.com/klauspost/cpuid v1.2.0 // indirect
 	github.com/klauspost/crc32 v1.2.0 // indirect
@@ -46,6 +50,7 @@ require (
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/krishicks/yaml-patch v0.0.10
 	github.com/magiconair/properties v1.8.1
+	github.com/manifoldco/promptui v0.7.0
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.0 // indirect
@@ -62,6 +67,8 @@ require (
 	github.com/prometheus/common v0.9.1
 	github.com/satori/go.uuid v0.0.0-20160713180306-0aa62d5ddceb // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
+	github.com/spf13/cobra v0.0.5
+	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
 	github.com/tchap/go-patricia v0.0.0-20160729071656-dd168db6051b
 	github.com/tebeka/selenium v0.9.9

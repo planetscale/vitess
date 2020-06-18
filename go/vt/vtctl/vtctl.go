@@ -144,15 +144,15 @@ var (
 )
 
 type command struct {
-	name   string
-	method func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error
-	params string
-	help   string // if help is empty, won't list the command
+	Name    string
+	Method  func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error
+	Params  string
+	Help    string // if help is empty, won't list the command
 }
 
 type commandGroup struct {
-	name     string
-	commands []command
+	Name     string
+	Commands []command
 }
 
 // commandsMutex protects commands at init time. We use servenv, which calls
@@ -313,7 +313,8 @@ var commands = []commandGroup{
 				"Start a Resharding process. Example: Reshard ks.workflow001 '0' '-80,80-'"},
 			{"MoveTables", commandMoveTables,
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
-				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
+				"" +
+				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: MoveTables {"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
 			{"DropSources", commandDropSources,
 				"[-dry_run] <keyspace.workflow>",
 				"After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and blacklists"},
@@ -324,8 +325,8 @@ var commands = []commandGroup{
 				"<keyspace>.<vindex>",
 				`Externalize a backfilled vindex.`},
 			{"Materialize", commandMaterialize,
-				`<json_spec>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
-				"Performs materialization based on the json spec."},
+				`<json_spec>`,
+				"Performs materialization based on the json spec. Example Materialize \"/*'{\"workflow\": \"aaa\", \"source_keyspace\": \"source\", \"target_keyspace\": \"target\", \"table_settings\": [{\"target_table\": \"customer\", \"source_expression\": \"select * from customer\", \"create_ddl\": \"copy\"}]}'"},
 			{"SplitClone", commandSplitClone,
 				"<keyspace> <from_shards> <to_shards>",
 				"Start the SplitClone process to perform horizontal resharding. Example: SplitClone ks '0' '-80,80-'"},
@@ -465,7 +466,11 @@ var commands = []commandGroup{
 	},
 }
 
+func Commands() []commandGroup {
+	return commands
+}
 func init() {
+	return
 	// This cannot be in the static 'commands ' array, as commands
 	// would reference commandHelp that references commands
 	// (circular reference)
@@ -478,8 +483,8 @@ func addCommand(groupName string, c command) {
 	commandsMutex.Lock()
 	defer commandsMutex.Unlock()
 	for i, group := range commands {
-		if group.name == groupName {
-			commands[i].commands = append(commands[i].commands, c)
+		if group.Name == groupName {
+			commands[i].Commands = append(commands[i].Commands, c)
 			return
 		}
 	}
@@ -490,7 +495,7 @@ func addCommandGroup(groupName string) {
 	commandsMutex.Lock()
 	defer commandsMutex.Unlock()
 	commands = append(commands, commandGroup{
-		name: groupName,
+		Name: groupName,
 	})
 }
 
@@ -2935,16 +2940,17 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 	action := args[0]
 	actionLowerCase := strings.ToLower(action)
 	for _, group := range commands {
-		for _, cmd := range group.commands {
-			if strings.ToLower(cmd.name) == actionLowerCase {
+		for _, cmd := range group.Commands {
+			if strings.ToLower(cmd.Name) == actionLowerCase {
 				subFlags := flag.NewFlagSet(action, flag.ContinueOnError)
+				//fmt.Printf("cmd: %s, flags %v", action, subFlags)
 				subFlags.SetOutput(logutil.NewLoggerWriter(wr.Logger()))
 				subFlags.Usage = func() {
-					wr.Logger().Printf("Usage: %s %s\n\n", action, cmd.params)
-					wr.Logger().Printf("%s\n\n", cmd.help)
+					wr.Logger().Printf("Usage: %s %s\n\n", action, cmd.Params)
+					wr.Logger().Printf("%s\n\n", cmd.Help)
 					subFlags.PrintDefaults()
 				}
-				return cmd.method(ctx, wr, subFlags, args[1:])
+				return cmd.Method(ctx, wr, subFlags, args[1:])
 			}
 		}
 	}
@@ -2956,12 +2962,12 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 // PrintAllCommands will print the list of commands to the logger
 func PrintAllCommands(logger logutil.Logger) {
 	for _, group := range commands {
-		logger.Printf("%s:\n", group.name)
-		for _, cmd := range group.commands {
-			if strings.HasPrefix(cmd.help, "HIDDEN") {
+		logger.Printf("%s:\n", group.Name)
+		for _, cmd := range group.Commands {
+			if strings.HasPrefix(cmd.Help, "HIDDEN") {
 				continue
 			}
-			logger.Printf("  %s %s\n", cmd.name, cmd.params)
+			logger.Printf("  %s %s\n", cmd.Name, cmd.Params)
 		}
 		logger.Printf("\n")
 	}
