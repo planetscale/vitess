@@ -43,6 +43,9 @@ var (
 		input:  "select * from information_schema.columns",
 		output: "select * from information_schema.`columns`",
 	}, {
+		input:  "select * from information_schema.processlist",
+		output: "select * from information_schema.`processlist`",
+	}, {
 		input: "select .1 from t",
 	}, {
 		input: "select 1.2e1 from t",
@@ -57,6 +60,10 @@ var (
 	}, {
 		input:  "select - -1 from t",
 		output: "select 1 from t",
+	}, {
+		input: "select a from t",
+	}, {
+		input: "select $ from t",
 	}, {
 		input:  "select 1 from t // aa\n",
 		output: "select 1 from t",
@@ -693,6 +700,8 @@ var (
 		input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(a.b), c = d",
 	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
+	}, {
+		input: "insert into user(username, `status`) values ('Chuck', default(`status`))",
 	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
@@ -1373,14 +1382,41 @@ var (
 		input:  "use ks@replica",
 		output: "use `ks@replica`",
 	}, {
-		input:  "describe foobar",
-		output: "otherread",
+		input:  "describe select * from t",
+		output: "explain select * from t",
+	}, {
+		input:  "desc select * from t",
+		output: "explain select * from t",
 	}, {
 		input:  "desc foobar",
 		output: "otherread",
 	}, {
-		input:  "explain foobar",
+		input:  "explain t1",
 		output: "otherread",
+	}, {
+		input:  "explain t1 col",
+		output: "otherread",
+	}, {
+		input: "explain select * from t",
+	}, {
+		input: "explain format = traditional select * from t",
+	}, {
+		input: "explain analyze select * from t",
+	}, {
+		input: "explain format = tree select * from t",
+	}, {
+		input: "explain format = json select * from t",
+	}, {
+		input: "explain format = vitess select * from t",
+	}, {
+		input:  "describe format = vitess select * from t",
+		output: "explain format = vitess select * from t",
+	}, {
+		input: "explain delete from t",
+	}, {
+		input: "explain insert into t(col1, col2) values (1, 2)",
+	}, {
+		input: "explain update t set col = 2",
 	}, {
 		input:  "truncate table foo",
 		output: "truncate table foo",
@@ -1468,6 +1504,8 @@ var (
 		input: "select binary 'a' = 'A' from t",
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
+	}, {
+		input: "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
 	}, {
 		input:  "select 1 from t where foo = _binary'bar'",
 		output: "select 1 from t where foo = _binary 'bar'",
@@ -1597,6 +1635,12 @@ var (
 	}, {
 		input:  "SHOW EXTENDED INDEXES IN `AO_E8B6CC_PROJECT_MAPPING` IN `jiradb`",
 		output: "show extended indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+	}, {
+		input:  "do 1",
+		output: "otheradmin",
+	}, {
+		input:  "do funcCall(), 2 = 1, 3 + 1",
+		output: "otheradmin",
 	}}
 )
 
@@ -1607,7 +1651,7 @@ func TestValid(t *testing.T) {
 				tcase.output = tcase.input
 			}
 			tree, err := Parse(tcase.input)
-			require.NoError(t, err)
+			require.NoError(t, err, tcase.input)
 			out := String(tree)
 			if diff := cmp.Diff(tcase.output, out); diff != "" {
 				t.Errorf("Parse(%q):\n%s", tcase.input, diff)
@@ -1663,6 +1707,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select a, b from (select * from tbl) sort by a",
 		err:   "syntax error",
+	}, {
+		input: "/*!*/",
+		err:   "empty statement",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -2558,9 +2605,6 @@ var (
 		output       string
 		excludeMulti bool // Don't use in the ParseNext multi-statement parsing tests.
 	}{{
-		input:  "select $ from t",
-		output: "syntax error at position 9 near '$'",
-	}, {
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
 	}, {

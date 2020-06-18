@@ -122,7 +122,7 @@ func skipToEnd(yylex interface{}) {
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
 %token <bytes> DISTINCTROW
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
@@ -151,7 +151,7 @@ func skipToEnd(yylex interface{}) {
 %left <bytes> '^'
 %right <bytes> '~' UNARY
 %left <bytes> COLLATE
-%right <bytes> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4
+%right <bytes> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8 UNDERSCORE_LATIN1
 %right <bytes> INTERVAL
 %nonassoc <bytes> '.'
 
@@ -213,15 +213,20 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
 %token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
 
+// Explain tokens
+%token <bytes> FORMAT TREE VITESS TRADITIONAL
+
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
+%type <statement> explain_statement explainable_statement
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
-%type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
+%type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
-%type <str> union_op insert_or_replace
+%type <str> union_op insert_or_replace explain_format_opt wild_opt
+%type <bytes> explain_synonyms
 %type <str> distinct_opt cache_opt match_option separator_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
@@ -358,8 +363,10 @@ command:
 | begin_statement
 | commit_statement
 | rollback_statement
+| explain_statement
 | other_statement
 | flush_statement
+| do_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -377,6 +384,12 @@ id_or_var:
 | AT_AT_ID
   {
     $$ = NewColIdentWithAt(string($1), DoubleAt)
+  }
+
+do_statement:
+  DO expression_list
+  {
+    $$ = &OtherAdmin{}
   }
 
 select_statement:
@@ -1598,7 +1611,6 @@ show_statement:
     showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
     $$ = &Show{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
   }
-
 | SHOW PLUGINS
   {
     $$ = &Show{Type: string($2)}
@@ -1640,9 +1652,7 @@ show_statement:
   }
 | SHOW COLLATION WHERE expression
   {
-    // Cannot dereference $4 directly, or else the parser stackcannot be pooled. See yyParsePooled
-    showCollationFilterOpt := $4
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
+    $$ = &Show{Type: string($2), ShowCollationFilterOpt: $4}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
@@ -1690,15 +1700,15 @@ tables_or_processlist:
     $$ = string($1)
   }
 
-  extended_opt:
-    /* empty */
-    {
-      $$ = ""
-    }
+extended_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
   | EXTENDED
-    {
-      $$ = "extended "
-    }
+  {
+    $$ = "extended "
+  }
 
 full_opt:
   /* empty */
@@ -1804,20 +1814,88 @@ rollback_statement:
     $$ = &Rollback{}
   }
 
+explain_format_opt:
+  {
+    $$ = ""
+  }
+| FORMAT '=' JSON
+  {
+    $$ = JSONStr
+  }
+| FORMAT '=' TREE
+  {
+    $$ = TreeStr
+  }
+| FORMAT '=' VITESS
+  {
+    $$ = VitessStr
+  }
+| FORMAT '=' TRADITIONAL
+  {
+    $$ = TraditionalStr
+  }
+| ANALYZE
+  {
+    $$ = AnalyzeStr
+  }
+
+explain_synonyms:
+  EXPLAIN
+  {
+    $$ = $1
+  }
+| DESCRIBE
+  {
+    $$ = $1  
+  }
+| DESC
+  {
+    $$ = $1  
+  }
+
+explainable_statement:
+  select_statement
+  {
+    $$ = $1
+  }
+| update_statement  
+  {
+    $$ = $1
+  }
+| insert_statement  
+  {
+    $$ = $1
+  }
+| delete_statement  
+  {
+    $$ = $1
+  }
+
+wild_opt:
+  {
+    $$ = ""
+  }
+| sql_id
+  {
+    $$ = "" 
+  }
+| STRING
+  {
+    $$ = "" 
+  }
+  
+explain_statement:
+  explain_synonyms table_name wild_opt
+  {
+    $$ = &OtherRead{}
+  }
+| explain_synonyms explain_format_opt explainable_statement
+  {
+    $$ = &Explain{Type: $2, Statement: $3}
+  }
+
 other_statement:
-  DESC skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| DESCRIBE skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| EXPLAIN skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| REPAIR skip_to_end
+  REPAIR skip_to_end
   {
     $$ = &OtherAdmin{}
   }
@@ -2527,9 +2605,17 @@ value_expression:
   {
     $$ = &UnaryExpr{Operator: UBinaryStr, Expr: $2}
   }
+| UNDERSCORE_UTF8 value_expression %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: Utf8Str, Expr: $2}
+  }
 | UNDERSCORE_UTF8MB4 value_expression %prec UNARY
   {
     $$ = &UnaryExpr{Operator: Utf8mb4Str, Expr: $2}
+  }
+| UNDERSCORE_LATIN1 value_expression %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: Latin1Str, Expr: $2}
   }
 | '+'  value_expression %prec UNARY
   {
@@ -3574,6 +3660,7 @@ non_reserved_keyword:
 | POLYGON
 | PRIMARY
 | PROCEDURE
+| PROCESSLIST
 | QUERY
 | RANDOM
 | READ

@@ -16,7 +16,6 @@ MAKEFLAGS = -s
 
 export GOBIN=$(PWD)/bin
 export GO111MODULE=on
-export GODEBUG=tls13=0
 export REWRITER=go/vt/sqlparser/rewriter.go
 
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
@@ -74,6 +73,18 @@ install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+
+# install copies the files needed to run test Vitess using vtcombo into the given directory tree.
+# Usage: make install PREFIX=/path/to/install/root
+install-testing: build
+	# binaries
+	mkdir -p "$${PREFIX}/bin"
+	cp "$${VTROOT}/bin/"{mysqlctld,mysqlctl,vtcombo,vttestserver} "$${PREFIX}/bin/"
+	# config files
+	cp -R config "$${PREFIX}/"
+	# vtctld web UI files
+	mkdir -p "$${PREFIX}/web/vtctld2"
+	cp -R web/vtctld2/app "$${PREFIX}/web/vtctld2"
 
 parser:
 	make -C go/vt/sqlparser
@@ -228,9 +239,17 @@ docker_lite_mysql57:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.mysql57 -t vitess/lite:mysql57 .
 
+docker_lite_ubi7.mysql57:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.ubi7.mysql57 -t vitess/lite:ubi7.mysql57 .
+
 docker_lite_mysql80:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.mysql80 -t vitess/lite:mysql80 .
+
+docker_lite_ubi7.mysql80:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.ubi7.mysql80 -t vitess/lite:ubi7.mysql80 .
 
 docker_lite_mariadb:
 	chmod -R o=g *
@@ -248,13 +267,25 @@ docker_lite_percona57:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.percona57 -t vitess/lite:percona57 .
 
+docker_lite_ubi7.percona57:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.ubi7.percona57 -t vitess/lite:ubi7.percona57 .
+
 docker_lite_percona80:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.percona80 -t vitess/lite:percona80 .
 
+docker_lite_ubi7.percona80:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.ubi7.percona80 -t vitess/lite:ubi7.percona80 .
+
 docker_lite_alpine:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.alpine -t vitess/lite:alpine .
+
+docker_lite_testing:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.testing -t vitess/lite:testing .
 
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.

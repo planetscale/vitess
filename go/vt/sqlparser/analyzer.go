@@ -52,6 +52,7 @@ const (
 	StmtUnknown
 	StmtComment
 	StmtPriv
+	StmtExplain
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -75,6 +76,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUse
 	case *OtherRead, *OtherAdmin:
 		return StmtOther
+	case *Explain:
+		return StmtExplain
 	case *Begin:
 		return StmtBegin
 	case *Commit:
@@ -158,7 +161,9 @@ func Preview(sql string) StatementType {
 		return StmtShow
 	case "use":
 		return StmtUse
-	case "analyze", "describe", "desc", "explain", "repair", "optimize":
+	case "describe", "desc", "explain":
+		return StmtExplain
+	case "analyze", "repair", "optimize":
 		return StmtOther
 	case "grant", "revoke":
 		return StmtPriv
@@ -198,6 +203,8 @@ func (s StatementType) String() string {
 		return "OTHER"
 	case StmtPriv:
 		return "PRIV"
+	case StmtExplain:
+		return "EXPLAIN"
 	default:
 		return "UNKNOWN"
 	}
@@ -225,7 +232,7 @@ func IsDMLStatement(stmt Statement) bool {
 //IsVschemaDDL returns true if the query is an Vschema alter ddl.
 func IsVschemaDDL(ddl *DDL) bool {
 	switch ddl.Action {
-	case CreateVindexStr, AddVschemaTableStr, DropVschemaTableStr, AddColVindexStr, DropColVindexStr, AddSequenceStr, AddAutoIncStr:
+	case CreateVindexStr, DropVindexStr, AddVschemaTableStr, DropVschemaTableStr, AddColVindexStr, DropColVindexStr, AddSequenceStr, AddAutoIncStr:
 		return true
 	}
 	return false
@@ -370,6 +377,11 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		return pv, nil
 	case *NullVal:
 		return sqltypes.PlanValue{}, nil
+	case *UnaryExpr:
+		switch node.Operator {
+		case UBinaryStr, Utf8mb4Str, Utf8Str, Latin1Str: // for some charset introducers, we can just ignore them
+			return NewPlanValue(node.Expr)
+		}
 	}
 	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
 }

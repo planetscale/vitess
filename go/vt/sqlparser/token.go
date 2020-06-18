@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strings"
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/sqltypes"
@@ -102,6 +103,8 @@ var keywords = map[string]int{
 	"binary":              BINARY,
 	"_binary":             UNDERSCORE_BINARY,
 	"_utf8mb4":            UNDERSCORE_UTF8MB4,
+	"_utf8":               UNDERSCORE_UTF8,
+	"_latin1":             UNDERSCORE_LATIN1,
 	"bit":                 BIT,
 	"blob":                BLOB,
 	"bool":                BOOL,
@@ -158,6 +161,7 @@ var keywords = map[string]int{
 	"distinctrow":         DISTINCTROW,
 	"div":                 DIV,
 	"double":              DOUBLE,
+	"do":                  DO,
 	"drop":                DROP,
 	"duplicate":           DUPLICATE,
 	"each":                UNUSED,
@@ -184,6 +188,7 @@ var keywords = map[string]int{
 	"for":                 FOR,
 	"force":               FORCE,
 	"foreign":             FOREIGN,
+	"format":              FORMAT,
 	"from":                FROM,
 	"full":                FULL,
 	"fulltext":            FULLTEXT,
@@ -366,6 +371,8 @@ var keywords = map[string]int{
 	"to":                  TO,
 	"trailing":            UNUSED,
 	"transaction":         TRANSACTION,
+	"tree":                TREE,
+	"traditional":         TRADITIONAL,
 	"trigger":             TRIGGER,
 	"true":                TRUE,
 	"truncate":            TRUNCATE,
@@ -392,6 +399,7 @@ var keywords = map[string]int{
 	"vindex":              VINDEX,
 	"vindexes":            VINDEXES,
 	"view":                VIEW,
+	"vitess":              VITESS,
 	"vitess_metadata":     VITESS_METADATA,
 	"vschema":             VSCHEMA,
 	"warnings":            WARNINGS,
@@ -414,7 +422,7 @@ func init() {
 		if id == UNUSED {
 			continue
 		}
-		keywordStrings[id] = str
+		keywordStrings[id] = strings.ToLower(str)
 	}
 }
 
@@ -976,7 +984,7 @@ func (tkn *Tokenizer) reset() {
 }
 
 func isLetter(ch uint16) bool {
-	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
+	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_' || ch == '$'
 }
 
 func isCarat(ch uint16) bool {

@@ -100,12 +100,12 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 
 func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	config := tabletenv.NewDefaultConfig()
-	config.HeartbeatIntervalMilliseconds = 1000
+	config.HeartbeatIntervalSeconds = 1
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	tr := NewReader(tabletenv.NewTestEnv(config, nil, "ReaderTest"))
+	tr := NewReader(tabletenv.NewEnv(config, "ReaderTest"))
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
 	tr.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())

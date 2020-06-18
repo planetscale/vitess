@@ -44,6 +44,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -54,7 +55,6 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/key"
@@ -67,6 +67,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -120,10 +121,6 @@ type ActionAgent struct {
 	// any background tasks spawned by the agent.
 	batchCtx context.Context
 
-	// finalizeReparentCtx represents the background finalize step of a
-	// TabletExternallyReparented call.
-	finalizeReparentCtx context.Context
-
 	// History of the health checks, public so status
 	// pages can display it
 	History *history.History
@@ -159,10 +156,6 @@ type ActionAgent struct {
 	// instead of asking mysqld what port it's serving on.
 	mysqlAdvertisePort int32
 
-	// initReplication remembers whether an action has initialized
-	// replication.  It is protected by actionMutex.
-	initReplication bool
-
 	// initialTablet remembers the state of the tablet record at startup.
 	// It can be used to notice, for example, if another tablet has taken
 	// over the record.
@@ -190,9 +183,6 @@ type ActionAgent struct {
 
 	// _shardSyncCancel is the function to stop the background shard sync goroutine.
 	_shardSyncCancel context.CancelFunc
-
-	// _tablet has the Tablet record we last read from the topology server.
-	_tablet *topodatapb.Tablet
 
 	// _disallowQueryService is set to the reason we should be
 	// disallowing queries from being served. It is set from changeCallback,
@@ -237,6 +227,11 @@ type ActionAgent struct {
 	_lockTablesTimer      *time.Timer
 	// _isBackupRunning tells us whether there is a backup that is currently running
 	_isBackupRunning bool
+
+	pubMu sync.Mutex
+	// tablet has the Tablet record we last read from the topology server.
+	tablet       *topodatapb.Tablet
+	isPublishing bool
 }
 
 // NewActionAgent creates a new ActionAgent and registers all the
@@ -250,7 +245,7 @@ func NewActionAgent(
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.Controller,
 	tabletAlias *topodatapb.TabletAlias,
-	dbcfgs *dbconfigs.DBConfigs,
+	config *tabletenv.TabletConfig,
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
 ) (agent *ActionAgent, err error) {
@@ -297,7 +292,7 @@ func NewActionAgent(
 
 	var mysqlHost string
 	var mysqlPort int32
-	if appConfig, _ := dbcfgs.AppWithDB().MysqlParams(); appConfig.Host != "" {
+	if appConfig, _ := config.DB.AppWithDB().MysqlParams(); appConfig.Host != "" {
 		mysqlHost = appConfig.Host
 		mysqlPort = int32(appConfig.Port)
 
@@ -316,19 +311,12 @@ func NewActionAgent(
 	}
 
 	// Start will get the tablet info, and update our state from it
-	if err := agent.Start(batchCtx, dbcfgs, mysqlHost, int32(mysqlPort), port, gRPCPort, true); err != nil {
+	if err := agent.Start(batchCtx, config.DB, mysqlHost, int32(mysqlPort), port, gRPCPort, true); err != nil {
 		return nil, err
 	}
 
-	vreplication.InitVStreamerClient(agent.DBConfigs)
-
 	// The db name is set by the Start function called above
-	filteredWithDBParams, _ := agent.DBConfigs.FilteredWithDB().MysqlParams()
-	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
-	},
-		filteredWithDBParams.DbName,
-	)
+	agent.VREngine = vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld)
 	servenv.OnTerm(agent.VREngine.Close)
 
 	// Run a background task to rebuild the SrvKeyspace in our cell/keyspace
@@ -339,6 +327,33 @@ func NewActionAgent(
 	servenv.OnRun(func() {
 		agent.registerQueryService()
 	})
+
+	// optionally populate metadata records
+	if !*restoreFromBackup && *initPopulateMetadata {
+		// we use initialTablet here because it has the intended tabletType.
+		// the tablet returned by agent.Tablet() will have type UNKNOWN until
+		// we call updateState.
+		localMetadata := agent.getLocalMetadataValues(agent.initialTablet.Type)
+		if agent.Cnf != nil { // we are managing mysqld
+			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
+			if err := agent.MysqlDaemon.Wait(batchCtx, agent.Cnf); err != nil {
+				return nil, err
+			}
+		}
+		err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(agent.initialTablet))
+		if err != nil {
+			return nil, vterrors.Wrap(err, "failed to -init_populate_metadata")
+		}
+	}
+
+	// Update our state (need the action lock).
+	// We do this upfront to prevent this from racing with restoreFromBackup
+	// in case it gets launched.
+	if err := agent.lock(batchCtx); err != nil {
+		return nil, err
+	}
+	agent.updateState(batchCtx, agent.initialTablet, "Start")
+	agent.unlock()
 
 	// two cases then:
 	// - restoreFromBackup is set: we restore, then initHealthCheck, all
@@ -356,34 +371,6 @@ func NewActionAgent(
 			agent.initHealthCheck()
 		}()
 	} else {
-		// optionally populate metadata records
-		if *initPopulateMetadata {
-			// we use initialTablet here because it has the intended tabletType.
-			// the tablet returned by agent.Tablet() will have type UNKNOWN until we call
-			// refreshTablet
-			localMetadata := agent.getLocalMetadataValues(agent.initialTablet.Type)
-			if agent.Cnf != nil { // we are managing mysqld
-				// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
-				if err := agent.MysqlDaemon.Wait(batchCtx, agent.Cnf); err != nil {
-					return nil, err
-				}
-			}
-			err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(agent.initialTablet))
-			if err != nil {
-				return nil, vterrors.Wrap(err, "failed to -init_populate_metadata")
-			}
-		}
-
-		// Update our state (need the action lock).
-		if err := agent.lock(batchCtx); err != nil {
-			return nil, err
-		}
-		if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
-			agent.unlock()
-			return nil, err
-		}
-		agent.unlock()
-
 		// synchronously start health check if needed
 		agent.initHealthCheck()
 	}
@@ -418,7 +405,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
-		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
+		VREngine:            vreplication.NewTestEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName(), nil),
 		History:             history.New(historyLength),
 		DemoteMasterType:    demoteMasterTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
@@ -437,9 +424,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		panic(vterrors.Wrap(err, "agent.lock() failed"))
 	}
 	defer agent.unlock()
-	if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
-		panic(vterrors.Wrapf(err, "agent.refreshTablet(%v) failed", tabletAlias))
-	}
+	agent.updateState(batchCtx, agent.initialTablet, "Start")
 
 	return agent
 }
@@ -462,7 +447,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		TabletAlias:         tabletAlias,
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
-		VREngine:            vreplication.NewEngine(nil, "", nil, nil, ""),
+		VREngine:            vreplication.NewTestEngine(nil, "", nil, nil, "", nil),
 		gotMysqlPort:        true,
 		History:             history.New(historyLength),
 		DemoteMasterType:    demoteMasterType,
@@ -489,9 +474,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		panic(vterrors.Wrap(err, "agent.lock() failed"))
 	}
 	defer agent.unlock()
-	if err := agent.refreshTablet(batchCtx, "Start"); err != nil {
-		panic(vterrors.Wrapf(err, "agent.refreshTablet(%v) failed", tabletAlias))
-	}
+	agent.updateState(batchCtx, agent.initialTablet, "Start")
 
 	return agent
 }
@@ -502,19 +485,19 @@ func (agent *ActionAgent) registerQueryRuleSources() {
 }
 
 func (agent *ActionAgent) setTablet(tablet *topodatapb.Tablet) {
-	agent.mutex.Lock()
-	agent._tablet = proto.Clone(tablet).(*topodatapb.Tablet)
-	agent.mutex.Unlock()
+	agent.pubMu.Lock()
+	agent.tablet = proto.Clone(tablet).(*topodatapb.Tablet)
+	agent.pubMu.Unlock()
 
 	// Notify the shard sync loop that the tablet state changed.
 	agent.notifyShardSync()
 }
 
-// Tablet reads the stored Tablet from the agent, protected by mutex.
+// Tablet reads the stored Tablet from the agent.
 func (agent *ActionAgent) Tablet() *topodatapb.Tablet {
-	agent.mutex.Lock()
-	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)
-	agent.mutex.Unlock()
+	agent.pubMu.Lock()
+	tablet := proto.Clone(agent.tablet).(*topodatapb.Tablet)
+	agent.pubMu.Unlock()
 	return tablet
 }
 
@@ -680,11 +663,14 @@ func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs
 		return err
 	}
 
+	// Initialize masterTermStartTime
+	agent.setMasterTermStartTime(logutil.ProtoToTime(agent.initialTablet.MasterTermStartTime))
+
 	// Verify the topology is correct.
 	agent.verifyTopology(ctx)
 
-	dbname := topoproto.TabletDbName(agent.initialTablet)
-	agent.DBConfigs = dbcfgs.WithDBName(dbname)
+	dbcfgs.DBName = topoproto.TabletDbName(agent.initialTablet)
+	agent.DBConfigs = dbcfgs
 
 	// Create and register the RPC services from UpdateStream.
 	// (it needs the dbname, so it has to be delayed up to here,
@@ -733,8 +719,7 @@ func (agent *ActionAgent) Start(ctx context.Context, dbcfgs *dbconfigs.DBConfigs
 
 	// Initialize the current tablet to match our current running
 	// state: Has most field filled in, but type is UNKNOWN.
-	// Subsequents calls to updateState or refreshTablet
-	// will then work as expected.
+	// Subsequents calls to updateState will then work as expected.
 	startingTablet := proto.Clone(agent.initialTablet).(*topodatapb.Tablet)
 	startingTablet.Type = topodatapb.TabletType_UNKNOWN
 	agent.setTablet(startingTablet)

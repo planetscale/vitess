@@ -98,6 +98,8 @@ type DB struct {
 	patternData []exprResult
 	// queryCalled keeps track of how many times a query was called.
 	queryCalled map[string]int
+	// querylog keeps track of all called queries
+	querylog []string
 
 	// This next set of fields is used when ordering of the queries matters.
 
@@ -312,10 +314,6 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 	delete(db.connections, c.ConnectionID)
 }
 
-// ComInitDB is part of the mysql.Handler interface.
-func (db *DB) ComInitDB(c *mysql.Conn, schemaName string) {
-}
-
 // ComQuery is part of the mysql.Handler interface.
 func (db *DB) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	return db.Handler.HandleQuery(c, query, callback)
@@ -344,6 +342,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.queryCalled[key]++
+	db.querylog = append(db.querylog, key)
 
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose {
@@ -431,7 +430,7 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 }
 
 // ComPrepare is part of the mysql.Handler interface.
-func (db *DB) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) {
+func (db *DB) ComPrepare(c *mysql.Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	return nil, nil
 }
 
@@ -525,6 +524,16 @@ func (db *DB) GetQueryCalledNum(query string) int {
 		return 0
 	}
 	return num
+}
+
+//QueryLog returns the query log in a semicomma separated string
+func (db *DB) QueryLog() string {
+	return strings.Join(db.querylog, ";")
+}
+
+//ResetQueryLog resets the query log
+func (db *DB) ResetQueryLog() {
+	db.querylog = nil
 }
 
 // EnableConnFail makes connection to this fake DB fail.

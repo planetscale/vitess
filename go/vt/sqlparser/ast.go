@@ -210,7 +210,7 @@ type (
 		Table                  TableName
 		ShowTablesOpt          *ShowTablesOpt
 		Scope                  string
-		ShowCollationFilterOpt *Expr // TODO: this should not be a pointer
+		ShowCollationFilterOpt Expr
 	}
 
 	// Use represents a use statement.
@@ -226,6 +226,12 @@ type (
 
 	// Rollback represents a Rollback statement.
 	Rollback struct{}
+
+	// Explain represents an EXPLAIN statement
+	Explain struct {
+		Type      string
+		Statement Statement
+	}
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -254,6 +260,7 @@ func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
 func (*Commit) iStatement()            {}
 func (*Rollback) iStatement()          {}
+func (*Explain) iStatement()           {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
@@ -1249,7 +1256,7 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " on %v", node.OnTable)
 	}
 	if nodeType == "collation" && node.ShowCollationFilterOpt != nil {
-		buf.astPrintf(node, " where %v", *node.ShowCollationFilterOpt)
+		buf.astPrintf(node, " where %v", node.ShowCollationFilterOpt)
 	}
 	if nodeType == "charset" && node.ShowTablesOpt != nil {
 		buf.astPrintf(node, "%v", node.ShowTablesOpt.Filter)
@@ -1293,6 +1300,19 @@ func (node *Begin) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Rollback) Format(buf *TrackedBuffer) {
 	buf.WriteString("rollback")
+}
+
+// Format formats the node.
+func (node *Explain) Format(buf *TrackedBuffer) {
+	format := ""
+	switch node.Type {
+	case "": // do nothing
+	case AnalyzeStr:
+		format = AnalyzeStr + " "
+	default:
+		format = "format = " + node.Type + " "
+	}
+	buf.astPrintf(node, "explain %s%v", format, node.Statement)
 }
 
 // Format formats the node.
@@ -1685,7 +1705,9 @@ func (node *CaseExpr) Format(buf *TrackedBuffer) {
 func (node *Default) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "default")
 	if node.ColName != "" {
-		buf.astPrintf(node, "(%s)", node.ColName)
+		buf.WriteString("(")
+		formatID(buf, node.ColName, strings.ToLower(node.ColName), NoAt)
+		buf.WriteString(")")
 	}
 }
 

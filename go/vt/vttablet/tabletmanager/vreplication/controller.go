@@ -199,7 +199,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	switch {
 	case len(ct.source.Tables) > 0:
 		// Table names can have search patterns. Resolve them against the schema.
-		tables, err := mysqlctl.ResolveTables(ct.mysqld, dbClient.DBName(), ct.source.Tables)
+		tables, err := mysqlctl.ResolveTables(ctx, ct.mysqld, dbClient.DBName(), ct.source.Tables)
 		if err != nil {
 			return vterrors.Wrap(err, "failed to resolve table names")
 		}
@@ -222,11 +222,19 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 
 		var vsClient VStreamerClient
-		if ct.source.GetExternalMysql() == "" {
-			vsClient = NewTabletVStreamerClient(tablet)
+		var err error
+		if name := ct.source.GetExternalMysql(); name != "" {
+			vsClient, err = ct.vre.ec.Get(name)
+			if err != nil {
+				return err
+			}
 		} else {
-			vsClient = NewMySQLVStreamerClient()
+			vsClient = newTabletConnector(tablet)
 		}
+		if err := vsClient.Open(ctx); err != nil {
+			return err
+		}
+		defer vsClient.Close(ctx)
 
 		vr := newVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
 		return vr.Replicate(ctx)

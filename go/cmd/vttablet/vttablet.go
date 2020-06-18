@@ -39,7 +39,7 @@ import (
 var (
 	enforceTableACLConfig        = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
 	tableACLConfig               = flag.String("table-acl-config", "", "path to table access checker config file; send SIGHUP to reload this file")
-	tableACLConfigReloadInterval = flag.Duration("table-acl-config-reload-interval", 0, "Ticker to reload ACLs")
+	tableACLConfigReloadInterval = flag.Duration("table-acl-config-reload-interval", 0, "Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload")
 	tabletPath                   = flag.String("tablet-path", "", "tablet alias")
 	tabletConfig                 = flag.String("tablet_config", "", "YAML file config for tablet")
 
@@ -56,12 +56,13 @@ func main() {
 
 	servenv.ParseFlags("vttablet")
 
+	tabletenv.Init()
+	// Load current config after tabletenv.Init, because it changes it.
 	config := tabletenv.NewCurrentConfig()
 	if err := config.Verify(); err != nil {
 		log.Exitf("invalid config: %v", err)
 	}
 
-	tabletenv.Init()
 	if *tabletConfig != "" {
 		bytes, err := ioutil.ReadFile(*tabletConfig)
 		if err != nil {
@@ -103,7 +104,10 @@ func main() {
 	// If connection parameters were specified, socketFile will be empty.
 	// Otherwise, the socketFile (read from mycnf) will be used to initialize
 	// dbconfigs.
-	config.DB = config.DB.Init(socketFile)
+	config.DB.InitWithSocket(socketFile)
+	for _, cfg := range config.ExternalConnections {
+		cfg.InitWithSocket("")
+	}
 
 	if *tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
@@ -138,7 +142,7 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, config.DB, mycnf, int32(*servenv.Port), gRPCPort)
+	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, config, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
 		log.Exitf("NewActionAgent() failed: %v", err)
 	}

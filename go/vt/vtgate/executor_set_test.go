@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -29,7 +31,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
@@ -183,6 +184,18 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set character_set_results=null",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
+		in:  "set character_set_results='binary'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results='utf8'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results='utf8mb4'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results='latin1'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
 		in:  "set character_set_results='abcd'",
 		err: "disallowed value for character_set_results: abcd",
 	}, {
@@ -206,13 +219,6 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set net_write_timeout = 600",
 		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in: "set sql_mode = 'STRICT_ALL_TABLES'",
-		out: &vtgatepb.Session{Autocommit: true,
-			Warnings: []*querypb.QueryWarning{{
-				Code:    mysql.ERNotSupportedYet,
-				Message: "Ignored inapplicable SET sql_mode = 'STRICT_ALL_TABLES'",
-			}}},
 	}, {
 		in:  "set net_read_timeout = 600",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -246,9 +252,6 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set tx_isolation = 'invalid'",
 		err: "unexpected value for tx_isolation: invalid",
-	}, {
-		in:  "set sql_safe_updates = 2",
-		err: "unexpected value for sql_safe_updates: 2",
 	}, {
 		in:  "set @foo = 'bar'",
 		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"}), Autocommit: true},
@@ -292,6 +295,41 @@ func TestExecutorSet(t *testing.T) {
 			} else {
 				utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
 			}
+		})
+	}
+}
+
+func TestExecutorSetOp(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+
+	testcases := []struct {
+		in      string
+		warning []*querypb.QueryWarning
+		sysVars map[string]string
+	}{{
+		in: "set sql_mode = 'STRICT_ALL_TABLES'",
+		warning: []*querypb.QueryWarning{{
+			Code:    mysql.ERNotSupportedYet,
+			Message: "Ignored inapplicable SET sql_mode = 'STRICT_ALL_TABLES'",
+		}},
+	}, {
+		in:      "set sql_safe_updates = 2",
+		sysVars: map[string]string{"sql_safe_updates": "2"},
+	}}
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			sbc1.SetResults([]*sqltypes.Result{{}})
+			session := NewAutocommitSession(masterSession)
+			session.TargetString = KsTestUnsharded
+			_, err := executor.Execute(
+				context.Background(),
+				"TestExecute",
+				session,
+				tcase.in,
+				nil)
+			require.NoError(t, err)
+			utils.MustMatch(t, tcase.warning, session.Warnings, "")
+			utils.MustMatch(t, tcase.sysVars, session.SystemVariables, "")
 		})
 	}
 }
@@ -351,4 +389,68 @@ func TestExecutorSetMetadata(t *testing.T) {
 
 	assert.Equal(t, wantqr.Fields, gotqr.Fields)
 	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+}
+
+func TestPlanExecutorSetUDV(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+
+	testcases := []struct {
+		in  string
+		out *vtgatepb.Session
+		err string
+	}{{
+		in:  "set @FOO = 'bar'",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"}), Autocommit: true},
+	}, {
+		in:  "set @foo = 2",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{2}), Autocommit: true},
+	}, {
+		in:  "set @foo = 2.1, @bar = 'baz'",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{2.1, "baz"}), Autocommit: true},
+	}}
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
+			_, err := executor.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
+			if err != nil {
+				require.EqualError(t, err, tcase.err)
+			} else {
+				utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
+			}
+		})
+	}
+}
+
+func TestSetUDVFromTabletInput(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+
+	fields := sqltypes.MakeTestFields("some", "VARBINARY")
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			fields,
+			"abc",
+		),
+	})
+
+	masterSession.TargetString = "TestExecutor"
+	defer func() {
+		masterSession.TargetString = ""
+	}()
+	_, err := executorExec(executor, "set @foo = concat('a','b','c')", nil)
+	require.NoError(t, err)
+
+	want := map[string]*querypb.BindVariable{"foo": sqltypes.StringBindVariable("abc")}
+	utils.MustMatch(t, want, masterSession.UserDefinedVariables, "")
+}
+
+func createMap(keys []string, values []interface{}) map[string]*querypb.BindVariable {
+	result := make(map[string]*querypb.BindVariable)
+	for i, key := range keys {
+		variable, err := sqltypes.BuildBindVariable(values[i])
+		if err != nil {
+			panic(err)
+		}
+		result[key] = variable
+	}
+	return result
 }

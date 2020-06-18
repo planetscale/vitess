@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/require"
@@ -42,6 +44,7 @@ import (
 var testMaxMemoryRows = 100
 
 var _ VCursor = (*noopVCursor)(nil)
+var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
@@ -49,6 +52,10 @@ type noopVCursor struct {
 
 func (t noopVCursor) SetUDV(key string, value interface{}) error {
 	panic("implement me")
+}
+
+func (t noopVCursor) SetSysVar(name string, expr string) {
+	//panic("implement me")
 }
 
 func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
@@ -105,6 +112,7 @@ func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, 
 }
 
 var _ VCursor = (*loggingVCursor)(nil)
+var _ SessionActions = (*loggingVCursor)(nil)
 
 // loggingVCursor logs requests and allows you to verify
 // that the correct requests were made.
@@ -127,11 +135,17 @@ type loggingVCursor struct {
 	multiShardErrs []error
 
 	log []string
+
+	resolvedTargetTabletType topodatapb.TabletType
 }
 
 func (f *loggingVCursor) SetUDV(key string, value interface{}) error {
 	f.log = append(f.log, fmt.Sprintf("UDV set with (%s,%v)", key, value))
 	return nil
+}
+
+func (f *loggingVCursor) SetSysVar(name string, expr string) {
+	f.log = append(f.log, fmt.Sprintf("SysVar set with (%s,%v)", name, expr))
 }
 
 func (f *loggingVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
@@ -253,8 +267,9 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 				visited[shard] = vi
 				rss = append(rss, &srvtopo.ResolvedShard{
 					Target: &querypb.Target{
-						Keyspace: keyspace,
-						Shard:    shard,
+						Keyspace:   keyspace,
+						Shard:      shard,
+						TabletType: f.resolvedTargetTabletType,
 					},
 				})
 				if ids != nil {

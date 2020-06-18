@@ -55,7 +55,7 @@ COMMAND ARGUMENT DEFINITIONS
             of decimal numbers, each with optional fraction and a unit
             suffix, such as "300ms" or "1h45m". See the definition of the
             Go language's <a
-            href="http://golang.org/pkg/time/#ParseDuration">ParseDuration</a>
+            href="https://golang.org/pkg/time/#ParseDuration">ParseDuration</a>
             function for more details. Note that, in practice, the value
             should be a positively signed value.
 
@@ -164,12 +164,12 @@ var commands = []commandGroup{
 	{
 		"Tablets", []command{
 			{"InitTablet", commandInitTablet,
-				"[-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] [-tags=tag1:value1,tag2:value2] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
+				"DEPRECATED [-allow_update] [-allow_different_shard] [-allow_master_override] [-parent] [-db_name_override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] [-tags=tag1:value1,tag2:value2] -keyspace=<keyspace> -shard=<shard> <tablet alias> <tablet type>",
 				"Initializes a tablet in the topology.\n"},
 			{"GetTablet", commandGetTablet,
 				"<tablet alias>",
 				"Outputs a JSON structure that contains information about the Tablet."},
-			{"UpdateTabletAddrs", commandUpdateTabletAddrs,
+			{"DEPRECATED UpdateTabletAddrs", commandUpdateTabletAddrs,
 				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-grpc-port <grpc port>] <tablet alias> ",
 				"Updates the IP address and port numbers of a tablet."},
 			{"DeleteTablet", commandDeleteTablet,
@@ -336,16 +336,16 @@ var commands = []commandGroup{
 				"[-source_cell=<cell>] [-target_cell=<cell>] [-tablet_types=replica] [-filtered_replication_wait_time=30s] <keyspace.workflow>",
 				"Perform a diff of all tables in the workflow"},
 			{"MigrateServedTypes", commandMigrateServedTypes,
-				"[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] <keyspace/shard> <served tablet type>",
+				"[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] [-filtered_replication_wait_time=30s] [-reverse_replication=false] <keyspace/shard> <served tablet type>",
 				"Migrates a serving type from the source shard to the shards that it replicates to. This command also rebuilds the serving graph. The <keyspace/shard> argument can specify any of the shards involved in the migration."},
 			{"MigrateServedFrom", commandMigrateServedFrom,
-				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard> <served tablet type>",
+				"[-cells=c1,c2,...] [-reverse] [-filtered_replication_wait_time=30s] <destination keyspace/shard> <served tablet type>",
 				"Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph."},
 			{"SwitchReads", commandSwitchReads,
 				"[-cells=c1,c2,...] [-reverse] -tablet_type={replica|rdonly} [-dry-run] <keyspace.workflow>",
 				"Switch read traffic for the specified workflow."},
 			{"SwitchWrites", commandSwitchWrites,
-				"[-filtered_replication_wait_time=30s] [-cancel] [-reverse_replication=false] [-dry-run] <keyspace.workflow>",
+				"[-filtered_replication_wait_time=30s] [-cancel] [-reverse_replication=true] [-dry-run] <keyspace.workflow>",
 				"Switch write traffic for the specified workflow."},
 			{"CancelResharding", commandCancelResharding,
 				"<keyspace/shard>",
@@ -397,7 +397,7 @@ var commands = []commandGroup{
 				"[-exclude_tables=''] [-include-views] <keyspace/shard>",
 				"Validates that the master schema matches all of the slaves."},
 			{"ValidateSchemaKeyspace", commandValidateSchemaKeyspace,
-				"[-exclude_tables=''] [-include-views] <keyspace name>",
+				"[-exclude_tables=''] [-include-views] [-skip-no-master] <keyspace name>",
 				"Validates that the master schema from shard 0 matches the schema on all of the other tablets in the keyspace."},
 			{"ApplySchema", commandApplySchema,
 				"[-allow_long_unavailability] [-wait_slave_timeout=10s] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
@@ -514,15 +514,36 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	if shard == "" {
 		shard = "<null>"
 	}
-	return fmt.Sprintf("%v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, topoproto.TabletTypeLString(ti.Type), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags))
+	mtst := "<null>"
+	// special case for old master that hasn't updated topo yet
+	if ti.MasterTermStartTime != nil && ti.MasterTermStartTime.Seconds > 0 {
+		mtst = logutil.ProtoToTime(ti.MasterTermStartTime).Format(time.RFC3339)
+	}
+	return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, topoproto.TabletTypeLString(ti.Type), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags), mtst)
 }
 
 func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) error {
-	tabletAliases, err := wr.TopoServer().FindAllTabletAliasesInShard(ctx, keyspace, shard)
+	tabletMap, err := wr.TopoServer().GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
-	return dumpTablets(ctx, wr, tabletAliases)
+	var trueMasterTimestamp time.Time
+	for _, ti := range tabletMap {
+		if ti.Type == topodatapb.TabletType_MASTER {
+			masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+			if masterTimestamp.After(trueMasterTimestamp) {
+				trueMasterTimestamp = masterTimestamp
+			}
+		}
+	}
+	for _, ti := range tabletMap {
+		masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamp) {
+			ti.Type = topodatapb.TabletType_UNKNOWN
+		}
+		wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
+	}
+	return nil
 }
 
 func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, cell string) error {
@@ -530,10 +551,34 @@ func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, cell string) err
 	if err != nil {
 		return err
 	}
+	// It is possible that an old master has not yet updated it's type in the topo
+	// In that case, report its type as UNKNOWN
+	// It used to be MASTER, and it is supposed to be REPLICA/SPARE eventually
+	trueMasterTimestamps := findTrueMasterTimestamps(tablets)
 	for _, ti := range tablets {
+		key := ti.Keyspace + "." + ti.Shard
+		masterTimestamp := logutil.ProtoToTime(ti.MasterTermStartTime)
+		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamps[key]) {
+			ti.Type = topodatapb.TabletType_UNKNOWN
+		}
 		wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
 	}
 	return nil
+}
+
+func findTrueMasterTimestamps(tablets []*topo.TabletInfo) map[string]time.Time {
+	result := make(map[string]time.Time)
+	for _, ti := range tablets {
+		key := ti.Keyspace + "." + ti.Shard
+		if v, ok := result[key]; !ok {
+			result[key] = logutil.ProtoToTime(ti.MasterTermStartTime)
+		} else {
+			if logutil.ProtoToTime(ti.MasterTermStartTime).After(v) {
+				result[key] = logutil.ProtoToTime(ti.MasterTermStartTime)
+			}
+		}
+	}
+	return result
 }
 
 func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*topodatapb.TabletAlias) error {
@@ -1621,18 +1666,14 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		wr.Logger().Infof("keyspace %v already exists (ignoring error with -force)", keyspace)
 		err = nil
 	}
-
-	if !*allowEmptyVSchema {
-		cells, err := wr.TopoServer().GetKnownCells(ctx)
-		if err != nil {
-			return fmt.Errorf("GetKnownCells failed: %v", err)
-		}
-
-		err = wr.TopoServer().EnsureVSchema(ctx, keyspace, cells)
-	}
-
 	if err != nil {
 		return err
+	}
+
+	if !*allowEmptyVSchema {
+		if err := wr.TopoServer().EnsureVSchema(ctx, keyspace); err != nil {
+			return err
+		}
 	}
 
 	if ktype == topodatapb.KeyspaceType_SNAPSHOT {
@@ -1658,9 +1699,9 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			wr.Logger().Infof("error from SaveVSchema %v:%v", vs, err)
 			return err
 		}
-		return wr.TopoServer().RebuildSrvVSchema(ctx, []string{} /* cells */)
 	}
-	return nil
+
+	return wr.TopoServer().RebuildSrvVSchema(ctx, []string{} /* cells */)
 }
 
 func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2305,6 +2346,7 @@ func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subF
 func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", false, "Includes views in the validation")
+	skipNoMaster := subFlags.Bool("skip-no-master", false, "Skip shards that don't have master when performing validation")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2317,7 +2359,7 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return wr.ValidateSchemaKeyspace(ctx, keyspace, excludeTableArray, *includeViews)
+	return wr.ValidateSchemaKeyspace(ctx, keyspace, excludeTableArray, *includeViews, *skipNoMaster)
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

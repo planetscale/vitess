@@ -355,12 +355,12 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "insert into t(fromc, toc) values(:fromc0, :toc0), (:fromc1, :toc1)",
+		Sql: "insert into t(fromc, toc) values(:fromc_0, :toc_0), (:fromc_1, :toc_1)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc0": sqltypes.Int64BindVariable(1),
-			"toc0":   sqltypes.BytesBindVariable([]byte("test1")),
-			"fromc1": sqltypes.Int64BindVariable(2),
-			"toc1":   sqltypes.BytesBindVariable([]byte("test2")),
+			"fromc_0": sqltypes.Int64BindVariable(1),
+			"toc_0":   sqltypes.BytesBindVariable([]byte("test1")),
+			"fromc_1": sqltypes.Int64BindVariable(2),
+			"toc_1":   sqltypes.BytesBindVariable([]byte("test2")),
 		},
 	}}
 	if !reflect.DeepEqual(vc.queries, wantqueries) {
@@ -371,8 +371,30 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	vc.queries = nil
 	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NewInt64(1)}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
 	require.NoError(t, err)
+	wantqueries[0].Sql = "insert ignore into t(fromc, toc) values(:fromc_0, :toc_0), (:fromc_1, :toc_1)"
+	if !reflect.DeepEqual(vc.queries, wantqueries) {
+		t.Errorf("lookup.Create queries:\n%v, want\n%v", vc.queries, wantqueries)
+	}
 
-	wantqueries[0].Sql = "insert ignore into t(fromc, toc) values(:fromc0, :toc0), (:fromc1, :toc1)"
+	// With ignore_nulls off
+	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NULL}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
+	want := "lookup.Create: input has null values: row: 1, col: 0"
+	if err == nil || err.Error() != want {
+		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
+	}
+
+	// With ignore_nulls on
+	vc.queries = nil
+	lookupNonUnique.(*LookupNonUnique).lkp.IgnoreNulls = true
+	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NULL}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
+	require.NoError(t, err)
+	wantqueries = []*querypb.BoundQuery{{
+		Sql: "insert ignore into t(fromc, toc) values(:fromc_0, :toc_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc_0": sqltypes.Int64BindVariable(2),
+			"toc_0":   sqltypes.BytesBindVariable([]byte("test2")),
+		},
+	}}
 	if !reflect.DeepEqual(vc.queries, wantqueries) {
 		t.Errorf("lookup.Create queries:\n%v, want\n%v", vc.queries, wantqueries)
 	}
@@ -380,7 +402,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	// Test query fail.
 	vc.mustFail = true
 	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
-	want := "lookup.Create: execute failed"
+	want = "lookup.Create: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
 	}
@@ -418,14 +440,14 @@ func TestLookupNonUniqueCreateAutocommit(t *testing.T) {
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "insert into t(from1, from2, toc) values(:from10, :from20, :toc0), (:from11, :from21, :toc1) on duplicate key update from1=values(from1), from2=values(from2), toc=values(toc)",
+		Sql: "insert into t(from1, from2, toc) values(:from1_0, :from2_0, :toc_0), (:from1_1, :from2_1, :toc_1) on duplicate key update from1=values(from1), from2=values(from2), toc=values(toc)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"from10": sqltypes.Int64BindVariable(1),
-			"from20": sqltypes.Int64BindVariable(2),
-			"toc0":   sqltypes.BytesBindVariable([]byte("test1")),
-			"from11": sqltypes.Int64BindVariable(3),
-			"from21": sqltypes.Int64BindVariable(4),
-			"toc1":   sqltypes.BytesBindVariable([]byte("test2")),
+			"from1_0": sqltypes.Int64BindVariable(1),
+			"from2_0": sqltypes.Int64BindVariable(2),
+			"toc_0":   sqltypes.BytesBindVariable([]byte("test1")),
+			"from1_1": sqltypes.Int64BindVariable(3),
+			"from2_1": sqltypes.Int64BindVariable(4),
+			"toc_1":   sqltypes.BytesBindVariable([]byte("test2")),
 		},
 	}}
 	if !reflect.DeepEqual(vc.queries, wantqueries) {
@@ -510,10 +532,10 @@ func TestLookupNonUniqueUpdate(t *testing.T) {
 			"toc":   sqltypes.BytesBindVariable([]byte("test")),
 		},
 	}, {
-		Sql: "insert into t(fromc, toc) values(:fromc0, :toc0)",
+		Sql: "insert into t(fromc, toc) values(:fromc_0, :toc_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc0": sqltypes.Int64BindVariable(2),
-			"toc0":   sqltypes.BytesBindVariable([]byte("test")),
+			"fromc_0": sqltypes.Int64BindVariable(2),
+			"toc_0":   sqltypes.BytesBindVariable([]byte("test")),
 		},
 	}}
 	if !reflect.DeepEqual(vc.queries, wantqueries) {

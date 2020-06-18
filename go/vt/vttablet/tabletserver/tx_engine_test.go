@@ -23,6 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 
@@ -35,13 +39,13 @@ import (
 func TestTxEngineClose(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	dbcfgs := newDBConfigs(db)
 	ctx := context.Background()
 	config := tabletenv.NewDefaultConfig()
+	config.DB = newDBConfigs(db)
 	config.TxPool.Size = 10
 	config.Oltp.TxTimeoutSeconds = 1
 	config.ShutdownGracePeriodSeconds = 0
-	te := NewTxEngine(tabletenv.NewTestEnv(config, dbcfgs, "TabletServerTest"))
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 
 	// Normal close.
 	te.open()
@@ -53,14 +57,10 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with timeout wait.
 	te.open()
-	c, beginSQL, err := te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if beginSQL != "begin" {
-		t.Errorf("beginSQL: %q, want 'begin'", beginSQL)
-	}
-	c.Recycle()
+	c, beginSQL, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
+	require.NoError(t, err)
+	require.Equal(t, "begin", beginSQL)
+	c.Unlock()
 	start = time.Now()
 	te.close(false)
 	if diff := time.Since(start); diff < 500*time.Millisecond {
@@ -69,11 +69,11 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close.
 	te.open()
-	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Recycle()
+	c.Unlock()
 	start = time.Now()
 	te.close(true)
 	if diff := time.Since(start); diff > 500*time.Millisecond {
@@ -83,11 +83,11 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.open()
-	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Recycle()
+	c.Unlock()
 	start = time.Now()
 	te.close(false)
 	if diff := time.Since(start); diff > 500*time.Millisecond {
@@ -100,18 +100,16 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 250 * time.Millisecond
 	te.open()
-	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Recycle()
+	c.Unlock()
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		_, err := te.txPool.Get(c.TransactionID, "return")
-		if err != nil {
-			t.Error(err)
-		}
-		te.txPool.LocalConclude(ctx, c)
+		_, err := te.txPool.GetAndLock(c.ID(), "return")
+		assert.NoError(t, err)
+		te.txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
 	te.close(false)
@@ -124,13 +122,11 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close, but connection is in use.
 	te.open()
-	c, _, err = te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false)
+	require.NoError(t, err)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		te.txPool.LocalConclude(ctx, c)
+		te.txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
 	te.close(true)
@@ -140,6 +136,30 @@ func TestTxEngineClose(t *testing.T) {
 	if diff := time.Since(start); diff < 100*time.Millisecond {
 		t.Errorf("Close time: %v, must be over 0.1", diff)
 	}
+}
+
+func TestTxEngineBegin(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	config := tabletenv.NewDefaultConfig()
+	config.DB = newDBConfigs(db)
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
+	te.AcceptReadOnly()
+	tx1, _, err := te.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	_, err = te.Commit(ctx, tx1)
+	require.NoError(t, err)
+	require.Equal(t, "start transaction read only;commit", db.QueryLog())
+	db.ResetQueryLog()
+
+	te.AcceptReadWrite()
+	tx2, _, err := te.Begin(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	_, err = te.Commit(ctx, tx2)
+	require.NoError(t, err)
+	require.Equal(t, "begin;commit", db.QueryLog())
+
 }
 
 type TxType int
@@ -197,7 +217,8 @@ func changeState(te *TxEngine, state txEngineState) error {
 	case AcceptingReadOnly:
 		return te.AcceptReadOnly()
 	case NotServing:
-		return te.Stop()
+		te.StopGently()
+		return nil
 	default:
 		return fmt.Errorf("don't know how to do that: %v", state)
 	}
@@ -409,28 +430,24 @@ func TestWithInnerTests(outerT *testing.T) {
 			defer db.Close()
 			te := setupTxEngine(db)
 
-			failIfError(t,
+			require.NoError(t,
 				changeState(te, test.startState))
 
 			switch test.tx {
 			case NoTx:
 				// nothing to do
 			case WriteAccepted:
-				failIfError(t,
+				require.NoError(t,
 					startTransaction(te, true))
 			case ReadOnlyAccepted:
-				failIfError(t,
+				require.NoError(t,
 					startTransaction(te, false))
 			case WriteRejected:
 				err := startTransaction(te, true)
-				if err == nil {
-					t.Fatalf("expected an error to be returned when opening write transaction, but got nil")
-				}
+				require.Error(t, err)
 			case ReadOnlyRejected:
 				err := startTransaction(te, false)
-				if err == nil {
-					t.Fatalf("expected an error to be returned when opening read transaction, but got nil")
-				}
+				require.Error(t, err)
 			default:
 				t.Fatalf("don't know how to [%v]", test.tx)
 			}
@@ -441,7 +458,7 @@ func TestWithInnerTests(outerT *testing.T) {
 				go func(s txEngineState) {
 					defer wg.Done()
 
-					failIfError(t,
+					require.NoError(t,
 						changeState(te, s))
 				}(newState)
 
@@ -452,27 +469,20 @@ func TestWithInnerTests(outerT *testing.T) {
 			// Let's wait for all transitions to wrap up
 			wg.Wait()
 
-			failIfError(t,
+			require.NoError(t,
 				test.stateAssertion(te.state))
 		})
 	}
 }
 
 func setupTxEngine(db *fakesqldb.DB) *TxEngine {
-	dbcfgs := newDBConfigs(db)
 	config := tabletenv.NewDefaultConfig()
+	config.DB = newDBConfigs(db)
 	config.TxPool.Size = 10
 	config.Oltp.TxTimeoutSeconds = 1
 	config.ShutdownGracePeriodSeconds = 0
-	te := NewTxEngine(tabletenv.NewTestEnv(config, dbcfgs, "TabletServerTest"))
+	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 	return te
-}
-
-func failIfError(t *testing.T, err error) {
-	if err != nil {
-		t.Logf("%+v", err)
-		t.FailNow()
-	}
 }
 
 func assertEndStateIs(expected txEngineState) func(actual txEngineState) error {

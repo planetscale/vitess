@@ -27,7 +27,6 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/hook"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topotools"
 
@@ -64,7 +63,11 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 		return err
 	}
 	defer agent.unlock()
+	return agent.changeTypeLocked(ctx, tabletType)
+}
 
+// ChangeType changes the tablet type
+func (agent *ActionAgent) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType) error {
 	// We don't want to allow multiple callers to claim a tablet as drained. There is a race that could happen during
 	// horizontal resharding where two vtworkers will try to DRAIN the same tablet. This check prevents that race from
 	// causing errors.
@@ -72,35 +75,34 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 		return fmt.Errorf("Tablet: %v, is already drained", agent.TabletAlias)
 	}
 
-	agentMasterTermStartTime := time.Time{}
+	tablet := agent.Tablet()
+	tablet.Type = tabletType
 	// If we have been told we're master, set master term start time to Now
+	// and save it topo immediately.
 	if tabletType == topodatapb.TabletType_MASTER {
-		agentMasterTermStartTime = time.Now()
-	}
-	// change our type in the topology, and set masterTermStartTime on tablet record if applicable
-	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, logutil.TimeToProto(agentMasterTermStartTime))
-	if err != nil {
-		return err
-	}
-	// We only update agent's masterTermStartTime if we were able to update the topo.
-	// This ensures that in case of a failure, we are never in a situation where the
-	// tablet's timestamp is ahead of the topo's timestamp.
-	if tabletType == topodatapb.TabletType_MASTER {
+		agentMasterTermStartTime := time.Now()
+		tablet.MasterTermStartTime = logutil.TimeToProto(agentMasterTermStartTime)
+
+		// change our type in the topology, and set masterTermStartTime on tablet record if applicable
+		_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, tablet.MasterTermStartTime)
+		if err != nil {
+			return err
+		}
+		// We only update agent's masterTermStartTime if we were able to update the topo.
+		// This ensures that in case of a failure, we are never in a situation where the
+		// tablet's timestamp is ahead of the topo's timestamp.
 		agent.setMasterTermStartTime(agentMasterTermStartTime)
+	} else {
+		agent.setMasterTermStartTime(time.Time{})
 	}
 
-	// let's update our internal state (stop query service and other things)
-	if err := agent.refreshTablet(ctx, "ChangeType"); err != nil {
-		return err
-	}
+	// updateState will invoke broadcastHealth if needed.
+	agent.updateState(ctx, tablet, "ChangeType")
 
 	// Let's see if we need to fix semi-sync acking.
 	if err := agent.fixSemiSyncAndReplication(agent.Tablet().Type); err != nil {
 		return vterrors.Wrap(err, "fixSemiSyncAndReplication failed, may not ack correctly")
 	}
-
-	// and re-run health check
-	agent.runHealthCheckLocked()
 	return nil
 }
 
@@ -125,14 +127,7 @@ func (agent *ActionAgent) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.
 
 	// Execute the hooks
 	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
-	hr := hk.Execute()
-
-	// We never know what the hook did, so let's refresh our state.
-	if err := agent.refreshTablet(ctx, "ExecuteHook"); err != nil {
-		log.Errorf("refreshTablet after ExecuteHook failed: %v", err)
-	}
-
-	return hr
+	return hk.Execute()
 }
 
 // RefreshState reload the tablet record from the topo server.

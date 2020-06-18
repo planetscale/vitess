@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -229,8 +231,10 @@ func TestQueryExecutorPlans(t *testing.T) {
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
 			// Test inside a transaction.
-			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			txid, alias, err := tsv.Begin(ctx, &tsv.target, nil)
 			require.NoError(t, err)
+			require.NotNil(t, alias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, *alias, "Wrong alias returned by Begin")
 			defer tsv.Commit(ctx, &tsv.target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
@@ -293,8 +297,10 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 			assert.Equal(t, tcase.resultWant, got, tcase.input)
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
-			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			txid, alias, err := tsv.Begin(ctx, &tsv.target, nil)
 			require.NoError(t, err)
+			require.NotNil(t, alias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
 			defer tsv.Commit(ctx, &tsv.target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
@@ -377,8 +383,8 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 		logWant:     "begin; delete from test_table limit 3; rollback",
 		inTxWant:    "delete from test_table limit 3",
 	}}
-	for _, tcase := range testcases {
-		func() {
+	for i, tcase := range testcases {
+		t.Run(fmt.Sprintf("%d - %s", i, tcase.input), func(t *testing.T) {
 			db := setUpQueryExecutorTest(t)
 			defer db.Close()
 			for _, dbr := range tcase.dbResponses {
@@ -393,21 +399,22 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 			// Test outside a transaction.
 			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
 			_, err := qre.Execute()
-			if err == nil || !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("Execute(%v): %v, must contain %v", tcase.input, err, tcase.err)
-			}
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tcase.err)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
 			// Test inside a transaction.
-			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			txid, alias, err := tsv.Begin(ctx, &tsv.target, nil)
 			require.NoError(t, err)
+			require.NotNil(t, alias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
 			defer tsv.Commit(ctx, &tsv.target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
 			_, err = qre.Execute()
-			if err == nil || !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("Execute(%v): %v, must contain %v", tcase.input, err, tcase.err)
-			}
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tcase.err)
+
 			want := tcase.logWant
 			if tcase.inTxWant != "" {
 				want = tcase.inTxWant
@@ -418,13 +425,12 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 				return
 			}
 			// Ensure transaction was rolled back.
-			qre = newTestQueryExecutor(ctx, tsv, "update test_table set a=1", txid)
-			_, err = qre.Execute()
-			notxError := "ended at"
-			if err == nil || !strings.Contains(err.Error(), notxError) {
-				t.Errorf("Execute(%v): %v, must contain %v", tcase.input, err, notxError)
-			}
-		}()
+			conn, err := tsv.te.txPool.GetAndLock(txid, "")
+			require.NoError(t, err)
+			defer conn.Release(tx.TxClose)
+
+			require.False(t, conn.IsInTransaction(), "connection is still in a transaction")
+		})
 	}
 }
 
@@ -599,7 +605,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 
-	tsv := newTestTabletServer(context.Background(), enableStrictTableACL, db)
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
 	defer tsv.StopService()
 
 	plan, err := tsv.qe.GetMessageStreamPlan("msg")
@@ -1074,7 +1080,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 }
 
 func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
-	transactionID, err := tsv.Begin(context.Background(), &tsv.target, options)
+	transactionID, _, err := tsv.Begin(context.Background(), &tsv.target, options)
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed to start a transaction"))
 	}

@@ -262,6 +262,10 @@ func replaceExistsExprSubquery(newNode, parent SQLNode) {
 	parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
 }
 
+func replaceExplainStatement(newNode, parent SQLNode) {
+	parent.(*Explain).Statement = newNode.(Statement)
+}
+
 type replaceExprsItems int
 
 func (r *replaceExprsItems) replace(newNode, container SQLNode) {
@@ -595,6 +599,10 @@ func replaceSetTransactionComments(newNode, parent SQLNode) {
 
 func replaceShowOnTable(newNode, parent SQLNode) {
 	parent.(*Show).OnTable = newNode.(TableName)
+}
+
+func replaceShowShowCollationFilterOpt(newNode, parent SQLNode) {
+	parent.(*Show).ShowCollationFilterOpt = newNode.(Expr)
 }
 
 func replaceShowTable(newNode, parent SQLNode) {
@@ -984,6 +992,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *ExistsExpr:
 		a.apply(node, n.Subquery, replaceExistsExprSubquery)
 
+	case *Explain:
+		a.apply(node, n.Statement, replaceExplainStatement)
+
 	case Exprs:
 		replacer := replaceExprsItems(0)
 		replacerRef := &replacer
@@ -1187,6 +1198,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Show:
 		a.apply(node, n.OnTable, replaceShowOnTable)
+		a.apply(node, n.ShowCollationFilterOpt, replaceShowShowCollationFilterOpt)
 		a.apply(node, n.Table, replaceShowTable)
 
 	case *ShowFilter:

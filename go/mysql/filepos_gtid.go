@@ -109,9 +109,12 @@ func (gtid filePosGTID) ContainsGTID(other GTID) bool {
 // Contains implements GTIDSet.Contains().
 func (gtid filePosGTID) Contains(other GTIDSet) bool {
 	if other == nil {
-		return true
+		return false
 	}
-	filePosOther, _ := other.(filePosGTID)
+	filePosOther, ok := other.(filePosGTID)
+	if !ok {
+		return false
+	}
 	return gtid.ContainsGTID(filePosOther)
 }
 
@@ -130,6 +133,16 @@ func (gtid filePosGTID) AddGTID(other GTID) GTIDSet {
 	if !ok {
 		return gtid
 	}
+	return filePosOther
+}
+
+// Union implements GTIDSet.Union().
+func (gtid filePosGTID) Union(other GTIDSet) GTIDSet {
+	filePosOther, ok := other.(filePosGTID)
+	if !ok || gtid.Contains(other) {
+		return gtid
+	}
+
 	return filePosOther
 }
 

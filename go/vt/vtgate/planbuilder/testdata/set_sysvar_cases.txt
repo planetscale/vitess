@@ -5,12 +5,16 @@
   "Original": "set @@default_storage_engine = 'DONOTCHANGEME'",
   "Instructions": {
     "OperatorType": "Set",
-    "Variant": "",
     "Ops": [
       {
         "Type": "SysVarIgnore",
         "Name": "default_storage_engine",
         "Expr": "'DONOTCHANGEME'"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
       }
     ]
   }
@@ -23,7 +27,6 @@
   "Original": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
   "Instructions": {
     "OperatorType": "Set",
-    "Variant": "",
     "Ops": [
       {
         "Type": "SysVarCheckAndIgnore",
@@ -34,6 +37,38 @@
         },
         "TargetDestination": {},
         "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set check and ignore plan
+"set @@sql_safe_updates = 1"
+{
+  "QueryType": "SET",
+  "Original": "set @@sql_safe_updates = 1",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarSet",
+        "Name": "sql_safe_updates",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": {},
+        "Expr": "1"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
       }
     ]
   }

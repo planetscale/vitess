@@ -17,13 +17,16 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
+	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -38,6 +41,12 @@ func TestSetTable(t *testing.T) {
 		expectedError    string
 	}
 
+	intExpr := func(i int) evalengine.Expr {
+		s := strconv.FormatInt(int64(i), 10)
+		e, _ := evalengine.NewLiteralInt([]byte(s))
+		return e
+	}
+
 	tests := []testCase{
 		{
 			testName:         "nil set ops",
@@ -48,9 +57,7 @@ func TestSetTable(t *testing.T) {
 			setOps: []SetOp{
 				&UserDefinedVariable{
 					Name: "x",
-					PlanValue: sqltypes.PlanValue{
-						Value: sqltypes.NewInt64(42),
-					},
+					Expr: intExpr(42),
 				},
 			},
 			expectedQueryLog: []string{
@@ -141,9 +148,7 @@ func TestSetTable(t *testing.T) {
 			setOps: []SetOp{
 				&UserDefinedVariable{
 					Name: "x",
-					PlanValue: sqltypes.PlanValue{
-						Value: sqltypes.NewInt64(1),
-					},
+					Expr: intExpr(1),
 				},
 				&SysVarIgnore{
 					Name: "y",
@@ -176,12 +181,32 @@ func TestSetTable(t *testing.T) {
 				"1",
 			)},
 		},
+		{
+			testName: "sysvar set",
+			setOps: []SetOp{
+				&SysVarSet{
+					Name: "x",
+					Keyspace: &vindexes.Keyspace{
+						Name:    "ks",
+						Sharded: true,
+					},
+					TargetDestination: key.DestinationAnyShard{},
+					Expr:              "dummy_expr",
+				},
+			},
+			expectedQueryLog: []string{
+				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+				`ExecuteMultiShard ks.-20: select dummy_expr from dual where false {} false false`,
+				`SysVar set with (x,dummy_expr)`,
+			},
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
 			set := &Set{
-				Ops: tc.setOps,
+				Ops:   tc.setOps,
+				Input: &SingleRow{},
 			}
 			vc := &loggingVCursor{
 				shards:  []string{"-20", "20-"},
@@ -198,4 +223,36 @@ func TestSetTable(t *testing.T) {
 			vc.ExpectWarnings(t, tc.expectedWarning)
 		})
 	}
+}
+
+func TestSysVarSetErr(t *testing.T) {
+
+	setOps := []SetOp{
+		&SysVarSet{
+			Name: "x",
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			TargetDestination: key.DestinationAnyShard{},
+			Expr:              "dummy_expr",
+		},
+	}
+
+	expectedQueryLog := []string{
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`ExecuteMultiShard ks.-20: select dummy_expr from dual where false {} false false`,
+	}
+
+	set := &Set{
+		Ops:   setOps,
+		Input: &SingleRow{},
+	}
+	vc := &loggingVCursor{
+		shards:         []string{"-20", "20-"},
+		multiShardErrs: []error{fmt.Errorf("error")},
+	}
+	_, err := set.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.EqualError(t, err, "error")
+	vc.ExpectLog(t, expectedQueryLog)
 }
