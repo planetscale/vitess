@@ -1055,6 +1055,12 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Re
 func (mysqld *Mysqld) defaultsExtraFile(connParams *mysql.ConnParams) (string, error) {
 	var contents string
 	connParams.Pass = strings.Replace(connParams.Pass, "#", "\\#", -1)
+
+	// FIXME
+	mysqldParamSection := `
+[mysqld]
+sql-mode="ALLOW_INVALID_DATES"
+`
 	if connParams.UnixSocket == "" {
 		contents = fmt.Sprintf(`
 [client]
@@ -1062,14 +1068,18 @@ user=%v
 password=%v
 host=%v
 port=%v
-`, connParams.Uname, connParams.Pass, connParams.Host, connParams.Port)
+
+%s
+`, connParams.Uname, connParams.Pass, connParams.Host, connParams.Port, mysqldParamSection)
 	} else {
 		contents = fmt.Sprintf(`
 [client]
 user=%v
 password=%v
 socket=%v
-`, connParams.Uname, connParams.Pass, connParams.UnixSocket)
+
+%s
+`, connParams.Uname, connParams.Pass, connParams.UnixSocket, mysqldParamSection)
 	}
 
 	tmpfile, err := ioutil.TempFile("", "example")
