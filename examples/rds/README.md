@@ -7,20 +7,18 @@
 # binlog_row_metadata FULL
 # gtid_mode ON
 # enforce_gtid_consistency ON
-#
+
 # Setup commerce0 RDS instance:
-# drop database if exists _vt; drop database if exists commerce; create database _vt; create database commerce;
+# create_commerce_schema.sql
+
 # Setup customer0, customerx80, customer80x RDS instances:
-# drop database if exists _vt; drop database if exists customer; create database _vt; create database customer;
+# create_customer_schema.sql
 
 # Create EKS cluster
 # Deploy dashboard if needed: https://docs.aws.amazon.com/eks/latest/userguide/dashboard-tutorial.html
 
 # Install Operator
 kubectl apply -f ../operator/operator.yaml
-
-# Apply schema to commerce
-# ../operator/create_commerce_schema.sql
 
 # Bring up initial cluster and commerce keyspace
 kubectl apply -f 101_initial_cluster.yaml
