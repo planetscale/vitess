@@ -1061,6 +1061,9 @@ func (mysqld *Mysqld) defaultsExtraFile(connParams *mysql.ConnParams) (string, e
 [mysqld]
 sql-mode="ALLOW_INVALID_DATES"
 `
+
+	// FIXME: Remove
+	mysqldParamSection = ""
 	if connParams.UnixSocket == "" {
 		contents = fmt.Sprintf(`
 [client]
