@@ -600,6 +600,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			log.Infof("got table schemas from target master %v.", target.MasterAlias)
 
 			log.Infof("got table schemas from target master %v.", target.MasterAlias)
 			for _, td := range targetSchema.TableDefinitions {
@@ -688,10 +689,9 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				AllowReplication: true,
 			})
 			if err != nil {
-				log.Infof("ERROR: applying schema to target tablet %v, err: %+v", target.MasterAlias, err)
 				return err
 			}
-			log.Infof("DONE: applying schema to target tablet %v, sql: %s", target.MasterAlias, sql)
+			log.Infof("applied schema to target tablet %v.", target.MasterAlias)
 		}
 
 		return nil

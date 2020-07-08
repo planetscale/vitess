@@ -147,9 +147,9 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 	}
 }
 
-// GetAndLock fetches the connection associated to the transactionID and blocks it from concurrent use
+// GetAndLock fetches the connection associated to the connID and blocks it from concurrent use
 // You must call Unlock on TxConnection once done.
-func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (tx.IStatefulConnection, error) {
+func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnection, error) {
 	conn, err := tp.scp.GetAndLock(connID, reason)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
@@ -158,7 +158,7 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (tx.IStatefulConne
 }
 
 // Commit commits the transaction on the connection.
-func (tp *TxPool) Commit(ctx context.Context, txConn tx.IStatefulConnection) (string, error) {
+func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (string, error) {
 	if !txConn.IsInTransaction() {
 		return "", vterrors.New(vtrpcpb.Code_INTERNAL, "not in a transaction")
 	}
@@ -177,7 +177,7 @@ func (tp *TxPool) Commit(ctx context.Context, txConn tx.IStatefulConnection) (st
 }
 
 // RollbackAndRelease rolls back the transaction on the specified connection, and releases the connection when done
-func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn tx.IStatefulConnection) {
+func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn *StatefulConnection) {
 	defer txConn.Release(tx.TxRollback)
 	rollbackError := tp.Rollback(ctx, txConn)
 	if rollbackError != nil {
@@ -186,7 +186,7 @@ func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn tx.IStatefulCon
 }
 
 // Rollback rolls back the transaction on the specified connection.
-func (tp *TxPool) Rollback(ctx context.Context, txConn tx.IStatefulConnection) error {
+func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) error {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Rollback")
 	defer span.Finish()
 	if txConn.IsClosed() || !txConn.IsInTransaction() {
@@ -208,18 +208,48 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn tx.IStatefulConnection) e
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (tx.IStatefulConnection, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64) (*StatefulConnection, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
-	beginQueries := ""
 
+	var conn *StatefulConnection
+	var err error
+	if reservedID != 0 {
+		conn, err = tp.scp.GetAndLock(reservedID, "start transaction on reserve conn")
+	} else {
+		immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
+		effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
+		if !tp.limiter.Get(immediateCaller, effectiveCaller) {
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
+		}
+		conn, err = tp.createConn(ctx, options)
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	sql, err := tp.begin(ctx, options, readOnly, conn)
+	if err != nil {
+		conn.Close()
+		conn.Release(tx.ConnInitFail)
+		return nil, "", err
+	}
+	return conn, sql, nil
+}
+
+func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection) (string, error) {
 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
-
-	if !tp.limiter.Get(immediateCaller, effectiveCaller) {
-		return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
+	beginQueries, autocommit, err := createTransaction(ctx, options, conn, readOnly)
+	if err != nil {
+		return "", err
 	}
 
+	conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommit)
+
+	return beginQueries, nil
+}
+
+func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
 	conn, err := tp.scp.NewConn(ctx, options)
 	if err != nil {
 		switch err {
@@ -230,37 +260,39 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (t
 			tp.LogActive()
 			err = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
 		}
-		return nil, "", err
+		return nil, err
 	}
-	err = func() error {
-		autocommitTransaction := false
-		if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
-			if queries.setIsolationLevel != "" {
-				txQuery := "set transaction isolation level " + queries.setIsolationLevel
-				if err := conn.execWithRetry(ctx, txQuery, 1, false); err != nil {
-					return vterrors.Wrap(err, txQuery)
-				}
-				beginQueries = queries.setIsolationLevel + "; "
+	return conn, nil
+}
+
+func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, conn *StatefulConnection, readOnly bool) (string, bool, error) {
+	beginQueries := ""
+
+	autocommitTransaction := false
+	if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
+		if queries.setIsolationLevel != "" {
+			txQuery := "set transaction isolation level " + queries.setIsolationLevel
+			if err := conn.execWithRetry(ctx, txQuery, 1, false); err != nil {
+				return "", false, vterrors.Wrap(err, txQuery)
 			}
-			if err := conn.execWithRetry(ctx, queries.openTransaction, 1, false); err != nil {
-				return vterrors.Wrap(err, queries.openTransaction)
-			}
-			beginQueries = beginQueries + queries.openTransaction
-		} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
-			autocommitTransaction = true
-		} else {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
+			beginQueries = queries.setIsolationLevel + "; "
 		}
-		conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommitTransaction)
-		return nil
-	}()
-	if err != nil {
-		conn.Close()
-		conn.Release(tx.ConnInitFail)
-		return nil, "", err
+		beginSQL := queries.openTransaction
+		if readOnly &&
+			options.GetTransactionIsolation() != querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY {
+			beginSQL = "start transaction read only"
+		}
+		if err := conn.execWithRetry(ctx, beginSQL, 1, false); err != nil {
+			return "", false, vterrors.Wrap(err, beginSQL)
+		}
+		beginQueries = beginQueries + beginSQL
+	} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
+		autocommitTransaction = true
+	} else {
+		return "", false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
 
-	return conn, beginQueries, nil
+	return beginQueries, autocommitTransaction, nil
 }
 
 // LogActive causes all existing transactions to be logged when they complete.
@@ -288,13 +320,13 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 	tp.ticks.SetInterval(timeout / 10)
 }
 
-func (tp *TxPool) txComplete(conn tx.IStatefulConnection, reason tx.ReleaseReason) {
+func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) {
 	tp.log(conn, reason)
 	tp.limiter.Release(conn.TxProperties().ImmediateCaller, conn.TxProperties().EffectiveCaller)
 	conn.CleanTxState()
 }
 
-func (tp *TxPool) log(txc tx.IStatefulConnection, reason tx.ReleaseReason) {
+func (tp *TxPool) log(txc *StatefulConnection, reason tx.ReleaseReason) {
 	if txc.TxProperties() == nil {
 		return //Nothing to log as no transaction exists on this connection.
 	}

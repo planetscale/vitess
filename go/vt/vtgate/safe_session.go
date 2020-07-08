@@ -92,7 +92,6 @@ func (session *SafeSession) Reset() {
 	session.mustRollback = false
 	session.autocommitState = notAutocommittable
 	session.Session.InTransaction = false
-	session.SingleDb = false
 	session.ShardSessions = nil
 	session.PreSessions = nil
 	session.PostSessions = nil
@@ -150,8 +149,8 @@ func (session *SafeSession) InTransaction() bool {
 	return session.Session.InTransaction
 }
 
-// Find returns the transactionId, if any, for a session
-func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) int64 {
+// Find returns the transactionId and tabletAlias, if any, for a session
+func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) (transactionID int64, alias *topodatapb.TabletAlias) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	sessions := session.ShardSessions
@@ -163,10 +162,10 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	}
 	for _, shardSession := range sessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
-			return shardSession.TransactionId
+			return shardSession.TransactionId, shardSession.TabletAlias
 		}
 	}
-	return 0
+	return 0, nil
 }
 
 // Append adds a new ShardSession
@@ -202,8 +201,7 @@ func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, 
 }
 
 func (session *SafeSession) isSingleDB(txMode vtgatepb.TransactionMode) bool {
-	return session.SingleDb ||
-		session.TransactionMode == vtgatepb.TransactionMode_SINGLE ||
+	return session.TransactionMode == vtgatepb.TransactionMode_SINGLE ||
 		(session.TransactionMode == vtgatepb.TransactionMode_UNSPECIFIED && txMode == vtgatepb.TransactionMode_SINGLE)
 }
 
