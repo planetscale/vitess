@@ -38,7 +38,7 @@ export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
 # This target needs to be manually run every time any file within web/vtctld2/app is modified to regenerate rice-box.go
-embed_static: 
+embed_static:
 	cd go/vt/vtctld
 	go run github.com/GeertJohan/go.rice/rice embed-go
 	go build .
@@ -237,7 +237,7 @@ docker_lite_mysql56:
 
 docker_lite_mysql57:
 	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mysql57 -t vitess/lite:mysql57 .
+	docker build --build-arg CGO_ENABLED=1 -f docker/lite/Dockerfile.mysql57 -t vitess/lite:mysql57 .
 
 docker_lite_ubi7.mysql57:
 	chmod -R o=g *
@@ -245,7 +245,7 @@ docker_lite_ubi7.mysql57:
 
 docker_lite_mysql80:
 	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mysql80 -t vitess/lite:mysql80 .
+	docker build --build-arg CGO_ENABLED=1 -f docker/lite/Dockerfile.mysql80 -t vitess/lite:mysql80 .
 
 docker_lite_ubi7.mysql80:
 	chmod -R o=g *

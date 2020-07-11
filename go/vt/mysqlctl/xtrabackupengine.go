@@ -31,7 +31,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/klauspost/pgzip"
+	"github.com/DataDog/zstd"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -46,6 +46,8 @@ import (
 type XtrabackupEngine struct {
 }
 
+type CompressionType string
+
 var (
 	// path where backup engine program is located
 	xtrabackupEnginePath = flag.String("xtrabackup_root_path", "", "directory location of the xtrabackup executable, e.g., /usr/bin")
@@ -59,8 +61,9 @@ var (
 	xtrabackupStreamMode = flag.String("xtrabackup_stream_mode", "tar", "which mode to use if streaming, valid values are tar and xbstream")
 	xtrabackupUser       = flag.String("xtrabackup_user", "", "User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.")
 	// striping mode
-	xtrabackupStripes         = flag.Uint("xtrabackup_stripes", 0, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
-	xtrabackupStripeBlockSize = flag.Uint("xtrabackup_stripe_block_size", 102400, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
+	xtrabackupStripes              = flag.Uint("xtrabackup_stripes", 0, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
+	xtrabackupStripeBlockSize      = flag.Uint("xtrabackup_stripe_block_size", 102400, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
+	xtrabackupZstdCompressionLevel = flag.Int("xtrabackup_zstd_compression_level", zstd.BestSpeed, "ZStandard compression level to use when doing compression is requested")
 )
 
 const (
@@ -71,6 +74,9 @@ const (
 
 	// closeTimeout is the timeout for closing backup files after writing.
 	closeTimeout = 10 * time.Minute
+
+	NoCompression        CompressionType = "none"
+	ZStandardCompression CompressionType = "zstd"
 )
 
 // xtraBackupManifest represents a backup.
@@ -97,6 +103,10 @@ type xtraBackupManifest struct {
 	// false for backups that were created before the field existed, and those
 	// backups all had compression enabled.
 	SkipCompress bool
+
+	// FIXME: Add handling for different types of compression as enum.
+	// Type of compression.
+	CompressionType CompressionType
 }
 
 func (be *XtrabackupEngine) backupFileName() string {
@@ -106,7 +116,7 @@ func (be *XtrabackupEngine) backupFileName() string {
 		fileName += *xtrabackupStreamMode
 	}
 	if *backupStorageCompress {
-		fileName += ".gz"
+		fileName += ".zst"
 	}
 	return fileName
 }
@@ -166,6 +176,12 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	}
 	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
+	skipCompress := !*backupStorageCompress
+	compressionType := NoCompression
+	if !skipCompress {
+		compressionType = ZStandardCompression
+	}
+
 	// JSON-encode and write the MANIFEST
 	bm := &xtraBackupManifest{
 		// Common base fields
@@ -179,7 +195,8 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 		// XtraBackup-specific fields
 		FileName:        backupFileName,
 		StreamMode:      *xtrabackupStreamMode,
-		SkipCompress:    !*backupStorageCompress,
+		SkipCompress:    skipCompress,
+		CompressionType: compressionType,
 		Params:          *xtrabackupBackupFlags,
 		NumStripes:      int32(numStripes),
 		StripeBlockSize: int32(*xtrabackupStripeBlockSize),
@@ -269,19 +286,16 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 
 	destWriters := []io.Writer{}
 	destBuffers := []*bufio.Writer{}
-	destCompressors := []*pgzip.Writer{}
+	destCompressors := []*zstd.Writer{}
 	for _, file := range destFiles {
 		buffer := bufio.NewWriterSize(file, writerBufferSize)
 		destBuffers = append(destBuffers, buffer)
 		writer := io.Writer(buffer)
 
+		// FIXME: Comment
 		// Create the gzip compression pipe, if necessary.
 		if *backupStorageCompress {
-			compressor, err := pgzip.NewWriterLevel(writer, pgzip.BestSpeed)
-			if err != nil {
-				return replicationPosition, vterrors.Wrap(err, "cannot create gzip compressor")
-			}
-			compressor.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
+			compressor := zstd.NewWriterLevel(writer, *xtrabackupZstdCompressionLevel)
 			writer = compressor
 			destCompressors = append(destCompressors, compressor)
 		}
@@ -324,6 +338,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		}
 	}()
 
+	// FIXME
 	// Copy from the stream output to destination file (optional gzip)
 	blockSize := int64(*xtrabackupStripeBlockSize)
 	if blockSize < 1024 {
@@ -498,6 +513,9 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	// backups taken with different flags. Some fields were not always present,
 	// so if necessary we default to the flag values.
 	compressed := !bm.SkipCompress
+	if compressed && bm.CompressionType != ZStandardCompression {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "CompressionType not supported: %s", bm.CompressionType)
+	}
 	streamMode := bm.StreamMode
 	if streamMode == "" {
 		streamMode = *xtrabackupStreamMode
@@ -519,16 +537,13 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	}()
 
 	srcReaders := []io.Reader{}
-	srcDecompressors := []*pgzip.Reader{}
+	srcDecompressors := []io.ReadCloser{}
 	for _, file := range srcFiles {
 		reader := io.Reader(file)
 
 		// Create the decompressor if needed.
 		if compressed {
-			decompressor, err := pgzip.NewReader(reader)
-			if err != nil {
-				return vterrors.Wrap(err, "can't create gzip decompressor")
-			}
+			decompressor := zstd.NewReader(reader)
 			srcDecompressors = append(srcDecompressors, decompressor)
 			reader = decompressor
 		}
@@ -538,7 +553,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	defer func() {
 		for _, decompressor := range srcDecompressors {
 			if cerr := decompressor.Close(); cerr != nil {
-				logger.Errorf("failed to close gzip decompressor: %v", cerr)
+				logger.Errorf("failed to close zstd decompressor: %v", cerr)
 			}
 		}
 	}()
@@ -732,6 +747,7 @@ func copyToStripes(writers []io.Writer, reader io.Reader, blockSize int64) (writ
 		return io.Copy(writers[0], reader)
 	}
 
+	// FIXME: Comment.
 	// Read blocks from source and round-robin them to destination writers.
 	// Since we put a buffer in front of the destination file, and pgzip has its
 	// own buffer as well, we are writing into a buffer either way (whether a
@@ -773,6 +789,7 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 	reader, writer := io.Pipe()
 
 	go func() {
+		// FIXME: Comment.
 		// Read blocks from each source in round-robin and send them to the pipe.
 		// When using pgzip, there is already a read-ahead goroutine for every
 		// source, so we don't need to launch one for each source.
