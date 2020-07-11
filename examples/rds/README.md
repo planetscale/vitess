@@ -26,6 +26,9 @@ kubectl apply -f 101_initial_cluster.yaml
 # setup pf
 ../operator/pf.sh
 
+Apply Schema
+mysql < create_commerce_schema.sql
+
 vtctlclient ApplyVSchema -vschema="$(cat ../operator/vschema_commerce_initial.json)" commerce
 
 # Insert and verify data
@@ -51,9 +54,10 @@ vtctlclient DropSources customer.commerce2customer
 
 # Prepare for resharding
 # Apply schema for commerce
-# ../operator/create_commerce_seq.sql
+mysql < create_commerce_seq.sql
+
 # Apply schema for customer
-# ../operator/create_customer_sharded.sql
+mysql < create_customer_sharded.sql
 
 # Apply vschema
 vtctlclient ApplyVSchema -vschema="$(cat ../operator/vschema_commerce_seq.json)" commerce

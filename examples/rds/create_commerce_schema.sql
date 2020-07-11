@@ -1,8 +1,4 @@
-drop database if exists _vt;
-create database _vt;
-drop database if exists commerce;
-create database commerce;
-
+use commerce;
 create table product(
   sku varbinary(128),
   description varbinary(128),

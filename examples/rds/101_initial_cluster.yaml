@@ -8,12 +8,12 @@ metadata:
   name: example
 spec:
   images:
-    vtctld: vitess/lite:v6.0.20-20200429
-    vtgate: vitess/lite:v6.0.20-20200429
-    vttablet: vitess/lite:v6.0.20-20200429
-    vtbackup: vitess/lite:v6.0.20-20200429
+    vtctld: sougou/lite:rds
+    vtgate: sougou/lite:rds
+    vttablet: sougou/lite:rds
+    vtbackup: sougou/lite:rds
     mysqld:
-      mysql56Compatible: vitess/lite:v6.0.20-20200429
+      mysql56Compatible: sougou/lite:rds
     mysqldExporter: prom/mysqld-exporter:v0.11.0
   cells:
   - name: useast2
@@ -62,6 +62,7 @@ spec:
             replicas: 1
             vttablet:
               extraFlags:
+                init_create_db: "true"
                 db_charset: utf8mb4
                 queryserver-config-pool-size: "5"
                 queryserver-config-stream-pool-size: "5"
