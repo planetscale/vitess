@@ -2194,46 +2194,46 @@ func TestStripConstraints(t *testing.T) {
 	}{
 		{
 			desc: "constraints",
-			ddl: "CREATE TABLE `pulse_channel_recipient` (\n" +
+			ddl: "CREATE TABLE `table1` (\n" +
 				"`id` int(11) NOT NULL AUTO_INCREMENT,\n" +
-				"`pulse_channel_id` int(11) NOT NULL,\n" +
+				"`foreign_id` int(11) NOT NULL,\n" +
 				"`user_id` int(11) NOT NULL,\n" +
 				"PRIMARY KEY (`id`),\n" +
-				"KEY `fk_pulse_channel_recipient_ref_pulse_channel_id` (`pulse_channel_id`),\n" +
-				"KEY `fk_pulse_channel_recipient_ref_user_id` (`user_id`),\n" +
-				"CONSTRAINT `fk_pulse_channel_recipient_ref_pulse_channel_id` FOREIGN KEY (`pulse_channel_id`) REFERENCES `pulse_channel` (`id`),\n" +
-				"CONSTRAINT `fk_pulse_channel_recipient_ref_user_id` FOREIGN KEY (`user_id`) REFERENCES `core_user` (`id`)\n" +
+				"KEY `fk_table1_ref_foreign_id` (`foreign_id`),\n" +
+				"KEY `fk_table1_ref_user_id` (`user_id`),\n" +
+				"CONSTRAINT `fk_table1_ref_foreign_id` FOREIGN KEY (`foreign_id`) REFERENCES `foreign` (`id`),\n" +
+				"CONSTRAINT `fk_table1_ref_user_id` FOREIGN KEY (`user_id`) REFERENCES `core_user` (`id`)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
 
-			newDDL: "create table pulse_channel_recipient (\n" +
+			newDDL: "create table table1 (\n" +
 				"\tid int(11) not null auto_increment,\n" +
-				"\tpulse_channel_id int(11) not null,\n" +
+				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tPRIMARY KEY (id),\n" +
-				"\tKEY fk_pulse_channel_recipient_ref_pulse_channel_id (pulse_channel_id),\n" +
-				"\tKEY fk_pulse_channel_recipient_ref_user_id (user_id)\n" +
+				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tKEY fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1",
 
-			hasErr: true,
+			hasErr: false,
 		},
 		{
 			desc: "no constraints",
-			ddl: "CREATE TABLE `pulse_channel_recipient` (\n" +
+			ddl: "CREATE TABLE `table1` (\n" +
 				"`id` int(11) NOT NULL AUTO_INCREMENT,\n" +
-				"`pulse_channel_id` int(11) NOT NULL,\n" +
+				"`foreign_id` int(11) NOT NULL,\n" +
 				"`user_id` int(11) NOT NULL,\n" +
 				"PRIMARY KEY (`id`),\n" +
-				"KEY `fk_pulse_channel_recipient_ref_pulse_channel_id` (`pulse_channel_id`),\n" +
-				"KEY `fk_pulse_channel_recipient_ref_user_id` (`user_id`)\n" +
+				"KEY `fk_table1_ref_foreign_id` (`foreign_id`),\n" +
+				"KEY `fk_table1_ref_user_id` (`user_id`)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
 
-			newDDL: "create table pulse_channel_recipient (\n" +
+			newDDL: "create table table1 (\n" +
 				"\tid int(11) not null auto_increment,\n" +
-				"\tpulse_channel_id int(11) not null,\n" +
+				"\tforeign_id int(11) not null,\n" +
 				"\tuser_id int(11) not null,\n" +
 				"\tPRIMARY KEY (id),\n" +
-				"\tKEY fk_pulse_channel_recipient_ref_pulse_channel_id (pulse_channel_id),\n" +
-				"\tKEY fk_pulse_channel_recipient_ref_user_id (user_id)\n" +
+				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tKEY fk_table1_ref_user_id (user_id)\n" +
 				") ENGINE=InnoDB DEFAULT CHARSET=latin1",
 		},
 		{

@@ -747,10 +747,10 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
 func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
-	return tsv.begin(ctx, target, 0, options)
+	return tsv.begin(ctx, target, nil, 0, options)
 }
 
-func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, reservedID int64, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
+func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Begin", "begin", nil,
@@ -761,8 +761,9 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, rese
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			var beginSQL string
-			transactionID, beginSQL, err = tsv.te.Begin(ctx, reservedID, options)
+			transactionID, beginSQL, err = tsv.te.Begin(ctx, preQueries, reservedID, options)
 			logStats.TransactionID = transactionID
+			logStats.ReservedID = reservedID
 
 			// Record the actual statements that were executed in the logStats.
 			// If nothing was actually executed, don't count the operation in
@@ -792,6 +793,10 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 
 			var commitSQL string
 			newReservedID, commitSQL, err = tsv.te.Commit(ctx, transactionID)
+			if newReservedID > 0 {
+				// commit executed on old reserved id.
+				logStats.ReservedID = transactionID
+			}
 
 			// If nothing was actually executed, don't count the operation in
 			// the tablet metrics, and clear out the logStats Method so that
@@ -817,6 +822,10 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 			defer tsv.stats.QueryTimings.Record("ROLLBACK", time.Now())
 			logStats.TransactionID = transactionID
 			newReservedID, err = tsv.te.Rollback(ctx, transactionID)
+			if newReservedID > 0 {
+				// rollback executed on old reserved id.
+				logStats.ReservedID = transactionID
+			}
 			return err
 		},
 	)
@@ -993,7 +1002,8 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			if transactionID != 0 {
 				connID = transactionID
 			}
-
+			logStats.ReservedID = reservedID
+			logStats.TransactionID = transactionID
 			qre := &QueryExecutor{
 				query:          query,
 				marginComments: comments,
@@ -1142,7 +1152,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 }
 
 // BeginExecute combines Begin and Execute.
-func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 
 	// Disable hot row protection in case of reserve connection.
 	if tsv.enableHotRowProtection && reservedID == 0 {
@@ -1155,7 +1165,7 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	transactionID, alias, err := tsv.begin(ctx, target, reservedID, options)
+	transactionID, alias, err := tsv.begin(ctx, target, preQueries, reservedID, options)
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -1389,12 +1399,13 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 		"ReserveBegin", "begin", bindVariables,
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			defer tsv.stats.QueryTimings.Record("ReserveBegin", time.Now())
+			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
 			connID, err = tsv.te.ReserveBegin(ctx, options, preQueries)
 			if err != nil {
 				return err
 			}
 			logStats.TransactionID = connID
+			logStats.ReservedID = connID
 			return nil
 		},
 	)
@@ -1417,12 +1428,13 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 		"Reserve", "", bindVariables,
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			defer tsv.stats.QueryTimings.Record("Reserve", time.Now())
+			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
 			connID, err = tsv.te.Reserve(ctx, options, transactionID, preQueries)
 			if err != nil {
 				return err
 			}
-			logStats.TransactionID = connID
+			logStats.TransactionID = transactionID
+			logStats.ReservedID = connID
 			return nil
 		},
 	)
@@ -1446,13 +1458,13 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RELEASE", time.Now())
+			logStats.TransactionID = transactionID
+			logStats.ReservedID = reservedID
 			if reservedID != 0 {
 				//Release to close the underlying connection.
-				logStats.TransactionID = reservedID
-				return tsv.te.Release(ctx, reservedID)
+				return tsv.te.Release(reservedID)
 			}
 			// Rollback to cleanup the transaction before returning to the pool.
-			logStats.TransactionID = transactionID
 			_, err := tsv.te.Rollback(ctx, transactionID)
 			return err
 		},

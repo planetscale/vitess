@@ -53,7 +53,8 @@ type materializer struct {
 }
 
 const (
-	createDDLAsCopy = "copy"
+	createDDLAsCopy               = "copy"
+	createDDLAsCopyDropConstraint = "copy:drop_constraint"
 )
 
 // MoveTables initiates moving table(s) over to another keyspace
@@ -645,7 +646,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				return fmt.Errorf("target table %v does not exist and there is no create ddl defined", ts.TargetTable)
 			}
 			createDDL := ts.CreateDdl
-			if createDDL == createDDLAsCopy {
+			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint {
 				if ts.SourceExpression != "" {
 					// Check for table if non-empty SourceExpression.
 					sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
@@ -656,7 +657,6 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 						return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
 
 					}
-
 				}
 
 				ddl, ok := sourceDDL[ts.TargetTable]
@@ -664,16 +664,15 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 					return fmt.Errorf("source table %v does not exist", ts.TargetTable)
 				}
 
-				newDDL, err := stripTableConstraints(ddl)
-				if err != nil {
-					return err
-				}
+				if createDDL == createDDLAsCopyDropConstraint {
+					strippedDDL, err := stripTableConstraints(ddl)
+					if err != nil {
+						return err
+					}
 
-				if ddl != newDDL {
-					log.Infof("rewrote constraint ddl:\n\nold: %s\n\nnew: %s", ddl, newDDL)
+					ddl = strippedDDL
 				}
-
-				createDDL = newDDL
+				createDDL = ddl
 			}
 
 			applyDDLs = append(applyDDLs, createDDL)
