@@ -185,23 +185,3 @@ spec:
                 key: db_creds.json
   updateStrategy:
     type: Immediate
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: example-cluster-config
-type: Opaque
-stringData:
-  users.json: |
-    {
-      "user": [{
-        "UserData": "user",
-        "Password": ""
-      }]
-    }
-  db_creds.json: |
-    {
-      "admin": ["admin123"]
-    }
-  init_db.sql: |
-    # Empty

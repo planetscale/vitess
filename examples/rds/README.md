@@ -8,11 +8,7 @@
 # gtid_mode ON
 # enforce_gtid_consistency ON
 
-# Setup commerce0 RDS instance:
-# create_commerce_schema.sql
-
-# Setup customer0, customerx80, customer80x RDS instances:
-# create_customer_schema.sql
+# Setup commerce0, customer0, customerx80, customer80x RDS instances.
 
 # Create EKS cluster
 # Deploy dashboard if needed: https://docs.aws.amazon.com/eks/latest/userguide/dashboard-tutorial.html
