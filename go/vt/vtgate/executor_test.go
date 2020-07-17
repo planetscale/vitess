@@ -465,6 +465,27 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 	}
 
+	query = fmt.Sprintf("show tables where Tables_in_vt_%v", KsTestUnsharded)
+	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	require.NoError(t, err)
+
+	if len(sbclookup.Queries) != 1 {
+		t.Errorf("Tablet should have received one 'show' query. Instead received: %v", sbclookup.Queries)
+	} else {
+		lastQuery := sbclookup.Queries[len(sbclookup.Queries)-1].Sql
+		want := "show tables"
+		if lastQuery != want {
+			t.Errorf("Got: %v, want %v", lastQuery, want)
+		}
+	}
+
+	wantqr = showResults
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
+	}
+
+	t.Fatal("fixme")
+
 	wantErrNoTable := "table unknown_table not found"
 	_, err = executor.Execute(ctx, "TestExecute", session, "show create table unknown_table", nil)
 	if err.Error() != wantErrNoTable {
@@ -1164,7 +1185,7 @@ func TestExecutorDDL(t *testing.T) {
 		"drop table t2",
 		`create table test_partitioned (
 			id bigint,
-			date_create int,		
+			date_create int,
 			primary key(id)
 		) Engine=InnoDB	/*!50100 PARTITION BY RANGE (date_create)
 		  (PARTITION p2018_06_14 VALUES LESS THAN (1528959600) ENGINE = InnoDB,

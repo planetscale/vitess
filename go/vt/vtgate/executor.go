@@ -700,6 +700,7 @@ func validateSetOnOff(v interface{}, typ string) (int64, error) {
 }
 
 func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
+	fmt.Println("sql", sql)
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
