@@ -537,6 +537,26 @@ func TestMakeSureToCloseDbConnWhenBeginQueryFails(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestBlah(t *testing.T) {
+	db, tsv := setupTabletServerTest(t)
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	options := &querypb.ExecuteOptions{}
+
+	// run a query with a non-existent reserved id
+	_, err := tsv.Execute(ctx, &target, "show tables from db1 where Tables_in_db1 = 'table1'", nil, 0, 0, options)
+
+	t.Fatalf("dbname: %s", tsv.config.DB.DBName)
+	require.Contains(t, db.QueryLog(), "show tables from db1 where tables_in_db1 = 'table1'")
+
+	t.Fatal(db.QueryLog())
+
+	require.NoError(t, err)
+}
+
 func TestTabletServerReserveAndBeginCommit(t *testing.T) {
 	db, tsv := setupTabletServerTest(t)
 	defer tsv.StopService()

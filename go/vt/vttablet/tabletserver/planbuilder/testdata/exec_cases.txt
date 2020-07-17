@@ -753,7 +753,16 @@ options:PassthroughDMLs
 "show a"
 {
   "PlanID": "OtherRead",
-  "TableName": ""
+  "TableName": "",
+  "FullQuery": "show a"
+}
+
+# show
+"show tables from db1 where Tables_in_db1='table1'"
+{
+  "PlanID": "OtherRead",
+  "TableName": "",
+  "FullQuery": "show tables from db1 where Tables_in_vt_db1='table1'"
 }
 
 # describe

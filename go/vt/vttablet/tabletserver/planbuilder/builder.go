@@ -132,6 +132,13 @@ func analyzeSet(set *sqlparser.Set) (plan *Plan) {
 	}
 }
 
+func analyzeShow(show *sqlparser.Show) (plan *Plan) {
+	return &Plan{
+		PlanID:    PlanOtherRead,
+		FullQuery: GenerateFullQuery(show),
+	}
+}
+
 func lookupTable(tableExprs sqlparser.TableExprs, tables map[string]*schema.Table) *schema.Table {
 	if len(tableExprs) > 1 {
 		return nil

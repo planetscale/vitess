@@ -83,6 +83,8 @@ func TestStrictMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	qe.Close()
+
+	t.Fatal("blah")
 }
 
 func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {

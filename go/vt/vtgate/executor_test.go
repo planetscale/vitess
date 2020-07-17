@@ -465,7 +465,20 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 	}
 
-	query = fmt.Sprintf("show tables where Tables_in_vt_%v", KsTestUnsharded)
+	// FIXME
+	showResults = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "Tables_in_keyspace", Type: sqltypes.VarChar},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar("some_table"),
+		}},
+	}
+	sbclookup.SetResults([]*sqltypes.Result{showResults})
+
+	query = fmt.Sprintf("show tables from %v where Tables_in_%v = 'table1'", KsTestUnsharded, KsTestUnsharded)
 	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)
 

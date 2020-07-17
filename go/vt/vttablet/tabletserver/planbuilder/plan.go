@@ -179,9 +179,9 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Pla
 	case *sqlparser.DDL:
 		// DDLs and other statements below don't get fully parsed.
 		// We have to use the original query at the time of execution.
-		plan = &Plan{PlanID: PlanDDL}
+		plan, err = &Plan{PlanID: PlanDDL}, nil
 	case *sqlparser.Show:
-		plan, err = &Plan{PlanID: PlanOtherRead}, nil
+		plan, err = analyzeShow(stmt), nil
 	case *sqlparser.OtherRead:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:

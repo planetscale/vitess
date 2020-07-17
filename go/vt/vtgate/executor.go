@@ -700,7 +700,7 @@ func validateSetOnOff(v interface{}, typ string) (int64, error) {
 }
 
 func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
-	fmt.Println("sql", sql)
+	fmt.Println("sql", sql, "dest keyspace", destKeyspace)
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -710,6 +710,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		// This code is unreachable.
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized SHOW statement: %v", sql)
 	}
+	fmt.Println("parsed sql", sqlparser.String(show))
 	execStart := time.Now()
 	defer func() { logStats.ExecuteTime = time.Since(execStart) }()
 	switch strings.ToLower(show.Type) {
@@ -827,9 +828,11 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		sql = sqlparser.String(show)
 	case sqlparser.KeywordString(sqlparser.TABLES):
 		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
+			fmt.Printf("show tables: %+v\n", show)
 			if destKeyspace == "" {
 				// Change "show tables from <keyspace>" to "show tables" directed to that keyspace.
 				destKeyspace = show.ShowTablesOpt.DbName
+				fmt.Printf("show tables assigned destKeyspace: %+v\n", destKeyspace)
 			}
 			show.ShowTablesOpt.DbName = ""
 		}
@@ -1086,6 +1089,7 @@ func (e *Executor) showTablets() (*sqltypes.Result, error) {
 }
 
 func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
+	fmt.Println("handleOther: ", destKeyspace)
 	if destKeyspace == "" {
 		return nil, errNoKeyspace
 	}

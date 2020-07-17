@@ -272,6 +272,8 @@ func (qe *QueryEngine) StopServing() {
 // You must ensure that no more queries will be sent
 // before calling Close.
 func (qe *QueryEngine) Close() {
+	fmt.Printf("ext conns: %+v\n", qe.env.Config())
+
 	if !qe.isOpen {
 		return
 	}
