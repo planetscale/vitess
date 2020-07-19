@@ -40,11 +40,12 @@ require (
 	github.com/hashicorp/serf v0.9.2 // indirect
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
 	github.com/imdario/mergo v0.3.6 // indirect
+	github.com/julienschmidt/httprouter v1.3.0
 	github.com/klauspost/compress v1.4.1 // indirect
 	github.com/klauspost/cpuid v1.2.0 // indirect
 	github.com/klauspost/pgzip v1.2.4
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
-	github.com/krishicks/yaml-patch v0.0.10
+	github.com/krishicks/yaml-patch v0.0.10 // indirect
 	github.com/magiconair/properties v1.8.1
 	github.com/mattn/go-runewidth v0.0.3 // indirect
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1

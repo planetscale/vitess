@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -53,6 +54,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/ghost"
 	"vitess.io/vitess/go/vt/vttablet/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
@@ -171,6 +173,8 @@ type TabletServer struct {
 	txThrottler *txthrottler.TxThrottler
 	messager    *messager.Engine
 
+	ghostExecutor *ghost.GhostExecutor
+
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex          sync.Mutex
 	streamHealthIndex          int
@@ -237,6 +241,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
+	tsv.ghostExecutor = ghost.NewGhostExecutor(tsv)
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
 		tsv.mu.Lock()
@@ -256,6 +261,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerQueryzHandler()
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
+	tsv.registerSchemaMigrationHandler()
 	return tsv
 }
 
@@ -540,6 +546,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.hw.Init(tsv.target); err != nil {
 		return err
 	}
+	tsv.ghostExecutor.Init()
 	tsv.hr.Init(tsv.target)
 	tsv.vstreamer.Open(tsv.target.Keyspace, tsv.alias.Cell)
 	return tsv.serveNewType()
@@ -602,6 +609,7 @@ func (tsv *TabletServer) StopService() {
 	tsv.hw.Close()
 	tsv.qe.Close()
 	tsv.se.Close()
+	tsv.ghostExecutor.Close()
 	log.Info("Shutdown complete.")
 	tsv.transition(StateNotConnected)
 }
@@ -629,6 +637,7 @@ func (tsv *TabletServer) closeAll() {
 	tsv.qe.streamQList.TerminateAll()
 	tsv.qe.Close()
 	tsv.se.Close()
+	tsv.ghostExecutor.Close()
 	tsv.transition(StateNotConnected)
 }
 
@@ -1942,6 +1951,25 @@ func (tsv *TabletServer) registerTwopczHandler() {
 			te:       tsv.te,
 		}
 		twopczHandler(txe, w, r)
+	})
+}
+
+func (tsv *TabletServer) registerSchemaMigrationHandler() {
+	tsv.exporter.HandleFunc("/schema-migration", func(w http.ResponseWriter, r *http.Request) {
+		ctx := tabletenv.LocalContext()
+		schema := r.URL.Query().Get("schema")
+		table := r.URL.Query().Get("table")
+		alter := r.URL.Query().Get("alter")
+		if alter == "" {
+			if b, err := ioutil.ReadAll(r.Body); err != nil {
+				alter = string(b)
+			}
+		}
+		if err := tsv.ghostExecutor.Execute(ctx, tsv.target, tsv.alias, schema, table, alter); err != nil {
+			w.Write([]byte(err.Error()))
+		} else {
+			w.Write([]byte("submitted"))
+		}
 	})
 }
 

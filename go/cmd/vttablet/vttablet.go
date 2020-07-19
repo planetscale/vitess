@@ -19,6 +19,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 
 	"golang.org/x/net/context"
@@ -101,6 +102,7 @@ func main() {
 	if err := tm.Start(tablet); err != nil {
 		log.Exitf("failed to parse -tablet-path: %v", err)
 	}
+	fmt.Printf("===========2 tablet mysql: %+v, %+v\n", tablet.MysqlHostname, tablet.MysqlPort)
 	servenv.OnClose(func() {
 		// Close the tm so that our topo entry gets pruned properly and any
 		// background goroutines that use the topo connection are stopped.
