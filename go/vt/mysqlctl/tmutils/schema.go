@@ -325,6 +325,8 @@ type SchemaChange struct {
 	SQL              string
 	Force            bool
 	AllowReplication bool
+	Online           bool
+	Hint             string
 	BeforeSchema     *tabletmanagerdatapb.SchemaDefinition
 	AfterSchema      *tabletmanagerdatapb.SchemaDefinition
 }
@@ -334,6 +336,8 @@ func (s *SchemaChange) Equal(s2 *SchemaChange) bool {
 	return s.SQL == s2.SQL &&
 		s.Force == s2.Force &&
 		s.AllowReplication == s2.AllowReplication &&
+		s.Online == s2.Online &&
+		s.Hint == s2.Hint &&
 		proto.Equal(s.BeforeSchema, s2.BeforeSchema) &&
 		proto.Equal(s.AfterSchema, s2.AfterSchema)
 }
