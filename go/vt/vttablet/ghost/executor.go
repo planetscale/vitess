@@ -21,9 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -35,25 +34,23 @@ import (
 )
 
 var (
-	GhostExecutorNotWritableTablet error = errors.New("Cannot run gh-ost migration on non-writable tablet")
+	// ErrGhostExecutorNotWritableTablet error is thrown when executor is asked to run gh-ost on a read-only server
+	ErrGhostExecutorNotWritableTablet = errors.New("Cannot run gh-ost migration on non-writable tablet")
 )
 
-// Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
-// table at a regular interval, defined by heartbeat_interval.
+// GhostExecutor wraps and manages the execution of a gh-ost migration.
 type GhostExecutor struct {
 	hash string
 
-	env      tabletenv.Env
-	errorLog *logutil.ThrottledLogger
-	pool     *connpool.Pool
+	env  tabletenv.Env
+	pool *connpool.Pool
 }
 
 // NewGhostExecutor creates a new gh-ost executor.
 func NewGhostExecutor(env tabletenv.Env) *GhostExecutor {
 	return &GhostExecutor{
-		hash:     RandomHash(),
-		env:      env,
-		errorLog: logutil.NewThrottledLogger("GhostExecutor", 60*time.Second),
+		hash: ShortRandomHash(),
+		env:  env,
 		pool: connpool.NewPool(env, "GhostExecutorPool", tabletenv.ConnPoolConfig{
 			Size:               1,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
@@ -61,10 +58,12 @@ func NewGhostExecutor(env tabletenv.Env) *GhostExecutor {
 	}
 }
 
+// Init initializes the executor
 func (e *GhostExecutor) Init() {
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
 }
 
+// Close frees resources
 func (e *GhostExecutor) Close() {
 	e.pool.Close()
 }
@@ -73,6 +72,7 @@ func (e *GhostExecutor) panicFlagFileName() string {
 	return fmt.Sprintf("/tmp/ghost.%s.panic.flag", e.hash)
 }
 
+// readMySQLVariables contacts the backend MySQL server to read some of its configuration
 func (e *GhostExecutor) readMySQLVariables(ctx context.Context) (host string, port int, readOnly bool, err error) {
 	conn, err := e.pool.Get(ctx)
 	if err != nil {
@@ -101,26 +101,47 @@ func (e *GhostExecutor) readMySQLVariables(ctx context.Context) (host string, po
 	return host, port, readOnly, nil
 }
 
-// Init runs at tablet startup and last minute initialization of db settings, and
-// creates the necessary tables for heartbeat.
+// Execute validates and runs a gh-ost process.
+// Validation included testing the backend MySQL server and the gh-ost binray itself
+// Execution runs first a dry run, then an actual migration
 func (e *GhostExecutor) Execute(ctx context.Context, target querypb.Target, alias topodatapb.TabletAlias, schema, table, alter string) error {
 	if target.TabletType != topodatapb.TabletType_MASTER {
-		return GhostExecutorNotWritableTablet
+		return ErrGhostExecutorNotWritableTablet
 	}
 	mysqlHost, mysqlPort, readOnly, err := e.readMySQLVariables(ctx)
 	if err != nil {
-		e.errorLog.Errorf("Error before running gh-ost: %+v", err)
+		log.Errorf("Error before running gh-ost: %+v", err)
 		return err
 	}
 	if readOnly {
 		err := fmt.Errorf("Error before running gh-ost: MySQL server is read_only")
-		e.errorLog.Errorf(err.Error())
+		log.Errorf(err.Error())
 		return err
 	}
-	go func() {
-		e.errorLog.Errorf("Will now run gh-ost on: %s:%d", mysqlHost, mysqlPort)
-		_, _, err := execCmd(
-			"gh-ost",
+	// Validate gh-ost binary:
+	log.Infof("Will now validate gh-ost binary")
+	_, err = execCmd(
+		"gh-ost-wrapper.sh",
+		[]string{
+			"--version",
+		},
+		os.Environ(),
+		"/tmp",
+		nil,
+		nil,
+	)
+	if err != nil {
+		log.Errorf("Error testing gh-ost binary: %+v", err)
+		return err
+	}
+	log.Infof("+ OK")
+
+	runGhost := func(execute bool) error {
+		// TODO[(shlomi, the code below assumes user+password are gh-ost:gh-ost)]: externalize credentials before submitting the PR
+		// TODO[(shlomi, gh-ost-wrapper.sh): either remove need for gh-ost-wrapper.sh or standardize the gh-ost utils directory layout, before merging this in a PR
+
+		_, err := execCmd(
+			"gh-ost-wrapper.sh",
 			[]string{
 				fmt.Sprintf(`--host=%s`, mysqlHost),
 				fmt.Sprintf(`--port=%d`, mysqlPort),
@@ -136,24 +157,44 @@ func (e *GhostExecutor) Execute(ctx context.Context, target querypb.Target, alia
 				`--timestamp-old-table`,
 				`--initially-drop-ghost-table`,
 				`--default-retries=120`,
+				fmt.Sprintf(`--hooks-hint=%s`, e.hash),
 				fmt.Sprintf(`--database=%s`, schema),
 				fmt.Sprintf(`--table=%s`, table),
 				fmt.Sprintf(`--alter=%s`, alter),
 				fmt.Sprintf(`--panic-flag-file=%s`, e.panicFlagFileName()),
-				`--execute`,
+				fmt.Sprintf(`--execute=%t`, execute),
 			},
-			[]string{},
+			os.Environ(),
 			"/tmp",
 			nil,
+			nil,
 		)
-		e.errorLog.Errorf("+ result: %+v", err)
-		if err != nil {
-			e.errorLog.Errorf("Error while running gh-ost: %+v", err)
+		return err
+	}
+
+	go func() error {
+		log.Infof("Will now dry-run gh-ost on: %s:%d", mysqlHost, mysqlPort)
+		if err := runGhost(false); err != nil {
+			log.Errorf("Error executing gh-ost dry run: %+v", err)
+			return err
 		}
+		log.Infof("+ OK")
+
+		log.Infof("Will now run gh-ost on: %s:%d", mysqlHost, mysqlPort)
+		startedMigrations.Add(1)
+		if err := runGhost(true); err != nil {
+			failedMigrations.Add(1)
+			log.Errorf("Error running gh-ost: %+v", err)
+			return err
+		}
+		successfulMigrations.Add(1)
+		log.Infof("+ OK")
+		return nil
 	}()
 	return nil
 }
 
+// Cancel attempts to abort a running migration by touching the panic flag file
 func (e *GhostExecutor) Cancel() error {
 	file, err := os.OpenFile(e.panicFlagFileName(), os.O_RDONLY|os.O_CREATE, 0666)
 	if file != nil {
