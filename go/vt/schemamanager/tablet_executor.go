@@ -36,6 +36,7 @@ type TabletExecutor struct {
 	tablets              []*topodatapb.Tablet
 	isClosed             bool
 	allowBigSchemaChange bool
+	onlineSchemaChange   bool
 	keyspace             string
 	waitReplicasTimeout  time.Duration
 }
@@ -46,6 +47,7 @@ func NewTabletExecutor(wr *wrangler.Wrangler, waitReplicasTimeout time.Duration)
 		wr:                   wr,
 		isClosed:             true,
 		allowBigSchemaChange: false,
+		onlineSchemaChange:   false,
 		waitReplicasTimeout:  waitReplicasTimeout,
 	}
 }
@@ -60,6 +62,11 @@ func (exec *TabletExecutor) AllowBigSchemaChange() {
 // TabletExecutor will reject these.
 func (exec *TabletExecutor) DisallowBigSchemaChange() {
 	exec.allowBigSchemaChange = false
+}
+
+// SetOnlineSchemaChange sets TabletExecutor such that it initiates online schema change migrations
+func (exec *TabletExecutor) SetOnlineSchemaChange() {
+	exec.onlineSchemaChange = true
 }
 
 // Open opens a connection to the master for every shard.
@@ -160,6 +167,11 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		switch ddl.Action {
 		case sqlparser.DropStr, sqlparser.CreateStr, sqlparser.TruncateStr, sqlparser.RenameStr:
 			continue
+		case sqlparser.AlterStr:
+			if exec.onlineSchemaChange {
+				// Seeing that we intend to run an online-schema-change, we can skip the "big change" check.
+				continue
+			}
 		}
 		tableName := ddl.Table.Name.String()
 		if rowCount, ok := tableWithCount[tableName]; ok {
@@ -217,7 +229,24 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 
 	for index, sql := range sqls {
 		execResult.CurSQLIndex = index
-		exec.executeOnAllTablets(ctx, &execResult, sql)
+
+		stat, err := sqlparser.Parse(sql)
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+			return &execResult
+		}
+		executeOnlineSchemaChange := false
+		switch ddl := stat.(type) {
+		case *sqlparser.DDL:
+			if ddl.Action == sqlparser.AlterStr && exec.onlineSchemaChange {
+				executeOnlineSchemaChange = true
+			}
+		}
+		if executeOnlineSchemaChange {
+			// TODO[(shlomi, run gh-ost)]: run gh-ost before submitting PR
+		} else {
+			exec.executeOnAllTablets(ctx, &execResult, sql)
+		}
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
