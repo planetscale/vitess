@@ -193,6 +193,7 @@ type (
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
+		AlterSpec     *string // in case of an ALTER statement, the set of alter commands following (and excluding) the 'ALTER TABLE <tbl>' clause
 
 		// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr.
 		VindexSpec *VindexSpec

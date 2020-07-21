@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -238,15 +239,15 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		executeOnlineSchemaChange := false
 		switch ddl := stat.(type) {
 		case *sqlparser.DDL:
+			// TODO(shlomi): remove comments before merging
+			fmt.Printf("============ DDL: %+v, %+v\n", ddl.Action, ddl.Table)
+			fmt.Printf("============ DDL: %+v\n", ddl)
+			fmt.Printf("============ sql: %+v\n", sql)
 			if ddl.Action == sqlparser.AlterStr && exec.onlineSchemaChange {
 				executeOnlineSchemaChange = true
 			}
 		}
-		if executeOnlineSchemaChange {
-			// TODO[(shlomi, run gh-ost)]: run gh-ost before submitting PR
-		} else {
-			exec.executeOnAllTablets(ctx, &execResult, sql)
-		}
+		exec.executeOnAllTablets(ctx, &execResult, sql, executeOnlineSchemaChange)
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
@@ -254,7 +255,10 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	return &execResult
 }
 
-func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult *ExecuteResult, sql string) {
+func (exec *TabletExecutor) executeOnAllTablets(
+	ctx context.Context, execResult *ExecuteResult, sql string,
+	executeOnlineSchemaChange bool,
+) {
 	var wg sync.WaitGroup
 	numOfMasterTablets := len(exec.tablets)
 	wg.Add(numOfMasterTablets)
@@ -263,7 +267,11 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 	for _, tablet := range exec.tablets {
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
-			exec.executeOneTablet(ctx, tablet, sql, errChan, successChan)
+			if executeOnlineSchemaChange {
+				exec.executeOnlineSchemaChangeOneTablet(ctx, tablet, sql, errChan, successChan)
+			} else {
+				exec.executeOneTablet(ctx, tablet, sql, errChan, successChan)
+			}
 		}(tablet)
 	}
 	wg.Wait()
@@ -303,7 +311,8 @@ func (exec *TabletExecutor) executeOneTablet(
 	tablet *topodatapb.Tablet,
 	sql string,
 	errChan chan ShardWithError,
-	successChan chan ShardResult) {
+	successChan chan ShardResult,
+) {
 	result, err := exec.wr.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
@@ -323,6 +332,28 @@ func (exec *TabletExecutor) executeOneTablet(
 		Shard:    tablet.Shard,
 		Result:   result,
 		Position: pos,
+	}
+}
+
+func (exec *TabletExecutor) executeOnlineSchemaChangeOneTablet(
+	ctx context.Context,
+	tablet *topodatapb.Tablet,
+	sql string,
+	errChan chan ShardWithError,
+	successChan chan ShardResult,
+) {
+	change := &tmutils.SchemaChange{
+		SQL:    sql,
+		Online: true,
+		Hint:   "", // TODO(shlomi) generate and populate hint
+	}
+	_, err := exec.wr.TabletManagerClient().ApplySchema(ctx, tablet, change)
+	if err != nil {
+		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
+		return
+	}
+	successChan <- ShardResult{
+		Shard: tablet.Shard,
 	}
 }
 

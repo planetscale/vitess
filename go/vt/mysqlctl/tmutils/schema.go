@@ -325,10 +325,10 @@ type SchemaChange struct {
 	SQL              string
 	Force            bool
 	AllowReplication bool
-	Online           bool
-	Hint             string
 	BeforeSchema     *tabletmanagerdatapb.SchemaDefinition
 	AfterSchema      *tabletmanagerdatapb.SchemaDefinition
+	Online           bool
+	Hint             string
 }
 
 // Equal compares two SchemaChange objects.

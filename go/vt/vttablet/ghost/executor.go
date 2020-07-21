@@ -38,17 +38,17 @@ var (
 	ErrGhostExecutorNotWritableTablet = errors.New("Cannot run gh-ost migration on non-writable tablet")
 )
 
-// GhostExecutor wraps and manages the execution of a gh-ost migration.
-type GhostExecutor struct {
+// Executor wraps and manages the execution of a gh-ost migration.
+type Executor struct {
 	hash string
 
 	env  tabletenv.Env
 	pool *connpool.Pool
 }
 
-// NewGhostExecutor creates a new gh-ost executor.
-func NewGhostExecutor(env tabletenv.Env) *GhostExecutor {
-	return &GhostExecutor{
+// NewExecutor creates a new gh-ost executor.
+func NewExecutor(env tabletenv.Env) *Executor {
+	return &Executor{
 		hash: ShortRandomHash(),
 		env:  env,
 		pool: connpool.NewPool(env, "GhostExecutorPool", tabletenv.ConnPoolConfig{
@@ -59,21 +59,21 @@ func NewGhostExecutor(env tabletenv.Env) *GhostExecutor {
 }
 
 // Init initializes the executor
-func (e *GhostExecutor) Init() {
+func (e *Executor) Init() {
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
 }
 
 // Close frees resources
-func (e *GhostExecutor) Close() {
+func (e *Executor) Close() {
 	e.pool.Close()
 }
 
-func (e *GhostExecutor) panicFlagFileName() string {
+func (e *Executor) panicFlagFileName() string {
 	return fmt.Sprintf("/tmp/ghost.%s.panic.flag", e.hash)
 }
 
 // readMySQLVariables contacts the backend MySQL server to read some of its configuration
-func (e *GhostExecutor) readMySQLVariables(ctx context.Context) (host string, port int, readOnly bool, err error) {
+func (e *Executor) readMySQLVariables(ctx context.Context) (host string, port int, readOnly bool, err error) {
 	conn, err := e.pool.Get(ctx)
 	if err != nil {
 		return host, port, readOnly, err
@@ -104,7 +104,7 @@ func (e *GhostExecutor) readMySQLVariables(ctx context.Context) (host string, po
 // Execute validates and runs a gh-ost process.
 // Validation included testing the backend MySQL server and the gh-ost binray itself
 // Execution runs first a dry run, then an actual migration
-func (e *GhostExecutor) Execute(ctx context.Context, target querypb.Target, alias topodatapb.TabletAlias, schema, table, alter string) error {
+func (e *Executor) Execute(ctx context.Context, target querypb.Target, alias topodatapb.TabletAlias, schema, table, alter string) error {
 	if target.TabletType != topodatapb.TabletType_MASTER {
 		return ErrGhostExecutorNotWritableTablet
 	}
@@ -137,8 +137,8 @@ func (e *GhostExecutor) Execute(ctx context.Context, target querypb.Target, alia
 	log.Infof("+ OK")
 
 	runGhost := func(execute bool) error {
-		// TODO[(shlomi, the code below assumes user+password are gh-ost:gh-ost)]: externalize credentials before submitting the PR
-		// TODO[(shlomi, gh-ost-wrapper.sh): either remove need for gh-ost-wrapper.sh or standardize the gh-ost utils directory layout, before merging this in a PR
+		// TODO(shlomi, the code below assumes user+password are gh-ost:gh-ost): externalize credentials before submitting the PR
+		// TODO(shlomi, gh-ost-wrapper.sh): either remove need for gh-ost-wrapper.sh or standardize the gh-ost utils directory layout, before merging this in a PR
 
 		_, err := execCmd(
 			"gh-ost-wrapper.sh",
@@ -195,7 +195,7 @@ func (e *GhostExecutor) Execute(ctx context.Context, target querypb.Target, alia
 }
 
 // Cancel attempts to abort a running migration by touching the panic flag file
-func (e *GhostExecutor) Cancel() error {
+func (e *Executor) Cancel() error {
 	file, err := os.OpenFile(e.panicFlagFileName(), os.O_RDONLY|os.O_CREATE, 0666)
 	if file != nil {
 		defer file.Close()

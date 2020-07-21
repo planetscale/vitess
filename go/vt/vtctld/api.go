@@ -592,7 +592,8 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			executor.SetOnlineSchemaChange()
 		}
 		return schemamanager.Run(ctx,
-			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)
+			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor,
+		)
 	})
 
 	// Features

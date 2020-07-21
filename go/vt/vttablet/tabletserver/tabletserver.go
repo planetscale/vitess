@@ -173,7 +173,7 @@ type TabletServer struct {
 	txThrottler *txthrottler.TxThrottler
 	messager    *messager.Engine
 
-	ghostExecutor *ghost.GhostExecutor
+	ghostExecutor *ghost.Executor
 
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex          sync.Mutex
@@ -241,7 +241,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
-	tsv.ghostExecutor = ghost.NewGhostExecutor(tsv)
+	tsv.ghostExecutor = ghost.NewExecutor(tsv)
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
 		tsv.mu.Lock()

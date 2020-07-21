@@ -86,7 +86,7 @@ type TabletManagerClient interface {
 	// PreflightSchema will test a list of schema changes.
 	PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
 
-	// ApplySchema will apply a schema change
+	// ApplySchema will apply a schema change, possibly using an online-schema-change technique
 	ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
 	LockTables(ctx context.Context, tablet *topodatapb.Tablet) error

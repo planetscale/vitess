@@ -17,6 +17,8 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -78,6 +80,8 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 		return nil, err
 	}
 	defer tm.unlock()
+
+	fmt.Printf("============= request for schema change! %+v \n", *change)
 
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(tm.Tablet())
