@@ -308,6 +308,11 @@ func (tsv *TabletServer) LogError() {
 	}
 }
 
+// GetGhostExecutor return this server's gh-ost executor
+func (tsv *TabletServer) GetGhostExecutor() *ghost.Executor {
+	return tsv.ghostExecutor
+}
+
 // RegisterQueryRuleSource registers ruleSource for setting query rules.
 func (tsv *TabletServer) RegisterQueryRuleSource(ruleSource string) {
 	tsv.qe.queryRuleSources.RegisterSource(ruleSource)
@@ -1965,7 +1970,7 @@ func (tsv *TabletServer) registerSchemaMigrationHandler() {
 				alter = string(b)
 			}
 		}
-		if err := tsv.ghostExecutor.Execute(ctx, tsv.target, tsv.alias, schema, table, alter); err != nil {
+		if err := tsv.ghostExecutor.Execute(ctx, tsv.target, schema, table, alter); err != nil {
 			w.Write([]byte(err.Error()))
 		} else {
 			w.Write([]byte("submitted"))

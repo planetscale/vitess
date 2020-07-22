@@ -104,7 +104,7 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (host string, port in
 // Execute validates and runs a gh-ost process.
 // Validation included testing the backend MySQL server and the gh-ost binray itself
 // Execution runs first a dry run, then an actual migration
-func (e *Executor) Execute(ctx context.Context, target querypb.Target, alias topodatapb.TabletAlias, schema, table, alter string) error {
+func (e *Executor) Execute(ctx context.Context, target querypb.Target, schema, table, alter string) error {
 	if target.TabletType != topodatapb.TabletType_MASTER {
 		return ErrGhostExecutorNotWritableTablet
 	}

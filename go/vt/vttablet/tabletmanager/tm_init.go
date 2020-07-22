@@ -65,6 +65,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vttablet/ghost"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
@@ -135,6 +136,7 @@ type TabletManager struct {
 	QueryServiceControl tabletserver.Controller
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
+	GhostExecutor       *ghost.Executor
 
 	// HealthReporter initiates healthchecks.
 	HealthReporter health.Reporter

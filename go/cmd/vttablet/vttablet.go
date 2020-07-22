@@ -97,6 +97,7 @@ func main() {
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
 		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld),
 		HealthReporter:      health.DefaultAggregator,
+		GhostExecutor:       qsc.GetGhostExecutor(),
 	}
 	if err := tm.Start(tablet); err != nil {
 		log.Exitf("failed to parse -tablet-path: %v", err)
