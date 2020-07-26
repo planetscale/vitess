@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/withddl"
 )
 
+const createSidecarDB = "CREATE DATABASE IF NOT EXISTS _vt"
 const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version (
 		 id INT AUTO_INCREMENT,
 		  pos VARBINARY(10000) NOT NULL,
@@ -48,6 +49,7 @@ const alterSchemaTrackingTableDDLBlob = "alter table _vt.schema_version modify c
 const alterSchemaTrackingTableSchemaxBlob = "alter table _vt.schema_version modify column schemax LONGBLOB NOT NULL"
 
 var withDDL = withddl.New([]string{
+	createSidecarDB,
 	createSchemaTrackingTable,
 	alterSchemaTrackingTableDDLBlob,
 	alterSchemaTrackingTableSchemaxBlob,
@@ -151,7 +153,7 @@ func (tr *Tracker) process(ctx context.Context) {
 					gtid = event.Gtid
 				}
 				if event.Type == binlogdatapb.VEventType_DDL {
-					if err := tr.schemaUpdated(gtid, event.Ddl, event.Timestamp); err != nil {
+					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
 						log.Errorf("Error updating schema: %s", sqlparser.TruncateForLog(err.Error()))
 					}
