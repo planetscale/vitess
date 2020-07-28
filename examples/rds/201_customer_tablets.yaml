@@ -8,12 +8,12 @@ metadata:
   name: example
 spec:
   images:
-    vtctld: sougou/lite:rds
-    vtgate: sougou/lite:rds
-    vttablet: sougou/lite:rds
-    vtbackup: sougou/lite:rds
+    vtctld: vitess/lite:v6.0.20-20200624
+    vtgate: vitess/lite:v6.0.20-20200624
+    vttablet: vitess/lite:v6.0.20-20200624
+    vtbackup: vitess/lite:v6.0.20-20200624
     mysqld:
-      mysql56Compatible: sougou/lite:rds
+      mysql56Compatible: vitess/lite:v6.0.20-20200624
     mysqldExporter: prom/mysqld-exporter:v0.11.0
   cells:
   - name: useast2

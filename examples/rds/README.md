@@ -4,7 +4,6 @@
 # RDS configuration
 # Vitess settings:
 # binlog_format ROW
-# binlog_row_metadata FULL
 # gtid_mode ON
 # enforce_gtid_consistency ON
 
