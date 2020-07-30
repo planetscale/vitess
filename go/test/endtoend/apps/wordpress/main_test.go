@@ -17,6 +17,7 @@ limitations under the License.
 package wordpress
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -29,13 +30,9 @@ import (
 	"testing"
 	"time"
 
-	"database/sql"
-
-	vtenv "vitess.io/vitess/go/vt/env"
-
-	_ "github.com/go-sql-driver/mysql"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	vtenv "vitess.io/vitess/go/vt/env"
 )
 
 var (
@@ -64,14 +61,9 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
-	current, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
 
-	path := current + "/wordpress.cnf"
-	os.Setenv("EXTRA_MY_CNF", path)
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(Cell, "localhost")
 		defer clusterInstance.Teardown()

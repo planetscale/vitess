@@ -28,7 +28,6 @@ import (
 )
 
 func TestInstallation(t *testing.T) {
-	t.Skip("not successful yet. run manually until this test reliably passes")
 	queryLog, err := apps.ReadLogFile("wordpres_install_querylog.txt")
 	require.NoError(t, err)
 
