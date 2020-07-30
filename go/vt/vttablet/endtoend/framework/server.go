@@ -74,6 +74,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.TwoPCAbandonAge = 1
 	config.TwoPCCoordinatorAddress = "fake"
 	config.HotRowProtection.Mode = tabletenv.Enable
+	config.TrackSchemaVersions = true
 
 	Target = querypb.Target{
 		Keyspace:   "vttest",
@@ -84,7 +85,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 
 	Server = tabletserver.NewTabletServer("", config, TopoServer, topodatapb.TabletAlias{})
 	Server.Register()
-	err := Server.StartService(Target, dbcfgs)
+	err := Server.StartService(Target, dbcfgs, nil /* mysqld */)
 	if err != nil {
 		return vterrors.Wrap(err, "could not start service")
 	}

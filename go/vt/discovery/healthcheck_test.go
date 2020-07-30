@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 
@@ -48,7 +50,11 @@ import (
 
 func init() {
 	tabletconn.RegisterDialer("fake_gateway", tabletDialer)
-	flag.Set("tablet_protocol", "fake_gateway")
+
+	//log error
+	if err := flag.Set("tablet_protocol", "fake_gateway"); err != nil {
+		log.Errorf("failed to set flag \"tablet_protocol\" to \"fake_gateway\":%v", err)
+	}
 }
 
 func TestHealthCheck(t *testing.T) {
@@ -730,7 +736,11 @@ func TestTemplate(t *testing.T) {
 }
 
 func TestDebugURLFormatting(t *testing.T) {
-	flag.Set("tablet_url_template", "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp")
+
+	//log error
+	if err2 := flag.Set("tablet_url_template", "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp"); err2 != nil {
+		log.Errorf("flag.Set(\"tablet_url_template\", \"https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp\") failed : %v", err2)
+	}
 	ParseTabletURLTemplateFromFlag()
 
 	tablet := topo.NewTablet(0, "cell", "host.dc.domain")
@@ -767,7 +777,7 @@ func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservic
 }
 
 func createTestHc(ts *topo.Server) *HealthCheckImpl {
-	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell")
+	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell", "")
 }
 
 type fakeConn struct {
@@ -850,6 +860,17 @@ func checkErrorCounter(keyspace, shard string, tabletType topodatapb.TabletType,
 		return fmt.Errorf("wrong value for hcErrorCounters got = %v, want = %v", got, want)
 	}
 	return nil
+}
+
+func createFixedHealthConn(tablet *topodatapb.Tablet, fixedResult *querypb.StreamHealthResponse) *fakeConn {
+	key := TabletToMapKey(tablet)
+	conn := &fakeConn{
+		QueryService: fakes.ErrorQueryService,
+		tablet:       tablet,
+		fixedResult:  fixedResult,
+	}
+	connMap[key] = conn
+	return conn
 }
 
 var mustMatch = utils.MustMatchFn(
