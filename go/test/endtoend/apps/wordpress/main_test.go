@@ -153,7 +153,7 @@ func startVanillaMySQL() {
 
 	mysqld, err = startCommand(mysqldPath, args)
 	handleErr(err)
-	time.Sleep(1 * time.Second) // give mysqld a chance to start listening to the socket before running tests
+	time.Sleep(2 * time.Second) // give mysqld a chance to start listening to the socket before running tests
 
 	planMysql, err := sql.Open("mysql", fmt.Sprintf("root@unix(%s)/", socketFile))
 	handleErr(err)
