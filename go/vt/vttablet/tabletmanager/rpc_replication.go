@@ -290,10 +290,6 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		}
 	}
 
-	pos, err := mysql.DecodePosition(position)
-	if err != nil {
-		return err
-	}
 	ti, err := tm.TopoServer.GetTablet(ctx, parent)
 	if err != nil {
 		return err
@@ -309,10 +305,6 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		tt = topodatapb.TabletType_REPLICA
 	}
 	if err := tm.fixSemiSync(tt); err != nil {
-		return err
-	}
-
-	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
 	if err := tm.MysqlDaemon.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* stopReplicationAfter */); err != nil {

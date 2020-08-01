@@ -82,7 +82,7 @@ func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
 	}
 
-	force := subFlags.Bool("force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
+	_ = subFlags.Bool("force", false, "DEPRECATED")
 	// for backwards compatibility
 	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "DEPRECATED -- use -wait_replicas_timeout")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
@@ -103,7 +103,7 @@ func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
-	return wr.InitShardMaster(ctx, keyspace, shard, tabletAlias, *force, *waitReplicasTimeout)
+	return wr.InitShardMaster(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout)
 }
 
 func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
