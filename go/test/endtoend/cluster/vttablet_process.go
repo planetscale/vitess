@@ -303,9 +303,25 @@ func (vttablet *VttabletProcess) TearDown() error {
 
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
-	_, _ = vttablet.QueryTablet(fmt.Sprintf("drop database IF EXISTS vt_%s", keyspace), keyspace, false)
-	_, err := vttablet.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace), keyspace, false)
-	return err
+	// This sequence of queries is needed to allow legacy tests
+	// to pass, because the create a db and later expect InitShardMaster
+	// to reset replication, which is not the case any more.
+	queries := []string{
+		fmt.Sprintf("drop database IF EXISTS vt_%s", keyspace),
+		fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace),
+		"STOP SLAVE",
+		"RESET SLAVE ALL",
+		"RESET MASTER",
+		// This is a MariaDB only construct. So, we have to ignore the
+		// error returned by the MySQL flavor.
+		"SET GLOBAL gtid_slave_pos = ''",
+	}
+	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), "")
+	err := executeQueries(dbParams, queries)
+	if err != nil && !strings.Contains(err.Error(), "Unknown system variable") {
+		return err
+	}
+	return nil
 }
 
 // QueryTablet lets you execute a query in this tablet and get the result
@@ -328,6 +344,21 @@ func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) 
 		dbParams.Pass = vttablet.DbPassword
 	}
 	return executeQuery(dbParams, query)
+}
+
+func executeQueries(dbParams mysql.ConnParams, queries []string) error {
+	ctx := context.Background()
+	dbConn, err := mysql.Connect(ctx, &dbParams)
+	if err != nil {
+		return err
+	}
+	defer dbConn.Close()
+	for _, query := range queries {
+		if _, err = dbConn.ExecuteFetch(query, 10000, true); err != nil {
+			return fmt.Errorf("error executing %v: %v", query, err)
+		}
+	}
+	return nil
 }
 
 func executeQuery(dbParams mysql.ConnParams, query string) (*sqltypes.Result, error) {
