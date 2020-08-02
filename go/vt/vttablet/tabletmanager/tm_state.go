@@ -229,6 +229,14 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		}
 	}
 
+	if reason == "" {
+		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
+			log.Errorf("Cannot start query service: %v", err)
+		}
+	}
+
+	// Open VREngine after queryservice because it will create the
+	// db if not present, which allow the vrengine to start successfully.
 	if ts.tm.VREngine != nil {
 		if ts.tablet.Type == topodatapb.TabletType_MASTER {
 			ts.tm.VREngine.Open(ts.tm.BatchCtx)
@@ -237,12 +245,6 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		}
 	}
 
-	// Open TabletServer last so that it advertises serving after all other services are up.
-	if reason == "" {
-		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
-			log.Errorf("Cannot start query service: %v", err)
-		}
-	}
 }
 
 func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {

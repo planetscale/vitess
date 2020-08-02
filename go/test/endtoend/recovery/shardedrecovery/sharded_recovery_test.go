@@ -297,7 +297,8 @@ func TestShardedRecovery(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	err = localCluster.VtctlclientProcess.ExecuteCommand("SplitClone", "test_keyspace", "0", "-80,80-")
+	out, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("SplitClone", "test_keyspace", "0", "-80,80-")
+	t.Log(out)
 	require.NoError(t, err)
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "test_keyspace/0", "rdonly")

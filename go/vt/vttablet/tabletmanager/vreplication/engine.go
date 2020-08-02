@@ -222,6 +222,7 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 		default:
 		}
 		if err := vre.openLocked(ctx); err == nil {
+			log.Infof("vreplication engine is now open")
 			// Don't invoke cancelRetry because openLocked
 			// will hold on to this context for later cancelation.
 			vre.cancelRetry = nil
