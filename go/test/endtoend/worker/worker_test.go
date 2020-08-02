@@ -302,6 +302,9 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 
 	}
 
+	// Add a 5-second sleep to ensure that the reparent time stamp advances
+	time.Sleep(5 * time.Second)
+
 	// Reparent away from the old masters.
 	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
 		"test_keyspace/-80", "-new_master", shard0Replica.Alias)
@@ -310,9 +313,6 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		"test_keyspace/80-", "-new_master", shard1Replica.Alias)
 
 	proc.Wait()
-
-	// Verify that we were forced to re-resolve and retry.
-	pollForVarsWorkerRetryCount(t, 1)
 
 	err = localCluster.VtworkerProcess.TearDown()
 	assert.Nil(t, err)
@@ -388,6 +388,7 @@ func pollForVars(t *testing.T, mssg string) {
 }
 
 func pollForVarsWorkerRetryCount(t *testing.T, count int) {
+	t.Helper()
 	startTime := time.Now()
 	var resultMap map[string]interface{}
 	var err error
@@ -403,6 +404,7 @@ func pollForVarsWorkerRetryCount(t *testing.T, count int) {
 		if workerRetryCountInt > count || (time.Now().After(startTime.Add(60 * time.Second))) {
 			break
 		}
+		time.Sleep(10 * time.Millisecond)
 		continue
 	}
 	assert.Greater(t, workerRetryCountInt, count)
