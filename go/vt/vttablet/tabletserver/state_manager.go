@@ -104,7 +104,7 @@ type stateManager struct {
 	txThrottler txThrottler
 	te          txEngine
 	messager    subComponent
-	ge          ghostExecutor
+	ddle        onlineDDLExecutor
 
 	// notify will be invoked by stateManager on every state change.
 	// The implementation is provided by healthStreamer.ChangeState.
@@ -159,7 +159,7 @@ type (
 		Close()
 	}
 
-	ghostExecutor interface {
+	onlineDDLExecutor interface {
 		Open() error
 		Close()
 	}
@@ -473,7 +473,7 @@ func (sm *stateManager) connect() error {
 	if err := sm.qe.Open(); err != nil {
 		return err
 	}
-	if err := sm.ge.Open(); err != nil {
+	if err := sm.ddle.Open(); err != nil {
 		return err
 	}
 	return sm.txThrottler.Open()
@@ -484,7 +484,7 @@ func (sm *stateManager) unserveCommon() {
 	sm.te.Close()
 	sm.qe.StopServing()
 	sm.tracker.Close()
-	sm.ge.Close()
+	sm.ddle.Close()
 	sm.requests.Wait()
 }
 
@@ -498,7 +498,7 @@ func (sm *stateManager) closeAll() {
 	sm.vstreamer.Close()
 	sm.rt.Close()
 	sm.se.Close()
-	sm.ge.Close()
+	sm.ddle.Close()
 	sm.setState(topodatapb.TabletType_UNKNOWN, StateNotConnected)
 }
 
