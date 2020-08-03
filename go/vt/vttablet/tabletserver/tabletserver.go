@@ -107,7 +107,7 @@ type TabletServer struct {
 
 	// sm manages state transitions.
 	sm            *stateManager
-	ghostExecutor *ghost.Executor
+	ghostExecutor *ghost.GhostExecutor
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
@@ -157,7 +157,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 	tsv.hs = newHealthStreamer(tsv, alias)
-	tsv.ghostExecutor = ghost.NewExecutor(tsv)
+	tsv.ghostExecutor = ghost.NewGhostExecutor(tsv)
 
 	tsv.sm = &stateManager{
 		se:          tsv.se,
