@@ -268,8 +268,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds sqlparser.BindVarNeeds, bindVa
 	return nil
 }
 
-func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
-	return e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, false /* notInTransaction */, safeSession.Options, logStats, false /* canAutocommit */)
+func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
+	return e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, safeSession.Options, logStats, false /* canAutocommit */, ignoreMaxMemoryRows)
 }
 
 func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
@@ -299,15 +299,52 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
 	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
-	err := e.CloseSession(ctx, safeSession)
+	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
 }
 
-// CloseSession closes the current transaction, if any. It is called both for explicit "rollback"
-// statements and implicitly when the mysql server closes the connection.
+func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession, sql string, planType string, logStats *LogStats, nonTxResponse func(query string) (*sqltypes.Result, error), ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	e.updateQueryCounts(planType, "", "", int64(logStats.ShardQueries))
+	defer func() {
+		logStats.ExecuteTime = time.Since(execStart)
+	}()
+
+	if len(safeSession.ShardSessions) == 0 {
+		if safeSession.InTransaction() {
+			// Storing, as this needs to be executed just after starting transaction on the shard.
+			safeSession.StoreSavepoint(sql)
+			return &sqltypes.Result{}, nil
+		}
+		return nonTxResponse(sql)
+	}
+	var rss []*srvtopo.ResolvedShard
+	for _, shardSession := range safeSession.ShardSessions {
+		rss = append(rss, &srvtopo.ResolvedShard{
+			Target:  shardSession.Target,
+			Gateway: e.resolver.resolver.GetGateway(),
+		})
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{Sql: sql}
+	}
+	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false /*autocommit*/, ignoreMaxMemoryRows)
+	err := vterrors.Aggregate(errs)
+	if err != nil {
+		return nil, err
+	}
+	safeSession.StoreSavepoint(sql)
+	return qr, nil
+}
+
+// CloseSession releases the current connection, which rollbacks open transactions and closes reserved connections.
+// It is called then the MySQL servers closes the connection to its client.
 func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) error {
-	return e.txConn.Rollback(ctx, safeSession)
+	return e.txConn.Release(ctx, safeSession)
 }
 
 func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
@@ -671,6 +708,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		// This code is unreachable.
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized SHOW statement: %v", sql)
 	}
+	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	execStart := time.Now()
 	defer func() { logStats.ExecuteTime = time.Since(execStart) }()
 	switch strings.ToLower(show.Type) {
@@ -687,7 +725,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			if len(keyspaces) == 0 {
 				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
 			}
-			return e.handleOther(ctx, safeSession, sql, bindVars, dest, keyspaces[0], destTabletType, logStats)
+			return e.handleOther(ctx, safeSession, sql, bindVars, dest, keyspaces[0], destTabletType, logStats, ignoreMaxMemoryRows)
 		}
 	// for STATUS, return empty result set
 	case sqlparser.KeywordString(sqlparser.STATUS):
@@ -959,7 +997,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	case sqlparser.KeywordString(sqlparser.WARNINGS):
 		fields := []*querypb.Field{
 			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Type", Type: sqltypes.Uint16},
+			{Name: "Code", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		}
 		rows := make([][]sqltypes.Value, 0)
@@ -981,7 +1019,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	// Any other show statement is passed through
-	return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+	return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats, ignoreMaxMemoryRows)
 }
 
 func (e *Executor) showTablets() (*sqltypes.Result, error) {
@@ -1046,7 +1084,7 @@ func (e *Executor) showTablets() (*sqltypes.Result, error) {
 	}, nil
 }
 
-func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
 	if destKeyspace == "" {
 		return nil, errNoKeyspace
 	}
@@ -1077,8 +1115,9 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Destination can only be a single shard for statement: %s, got: %v", sql, dest)
 	}
+
 	execStart := time.Now()
-	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats, ignoreMaxMemoryRows)
 
 	e.updateQueryCounts("Other", "", "", int64(logStats.ShardQueries))
 
@@ -1098,6 +1137,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	}
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver)
+	vcursor.SetIgnoreMaxMemoryRows(true)
 
 	switch stmtType {
 	case sqlparser.StmtStream:
@@ -1274,19 +1314,26 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if e.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
-	planKey := vcursor.planPrefixKey() + ":" + sql
-	if plan, ok := e.plans.Get(planKey); ok {
-		return plan.(*engine.Plan), nil
-	}
+
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
-
-	// Normalize if possible and retry.
 	query := sql
 	statement := stmt
 	bindVarNeeds := sqlparser.BindVarNeeds{}
+	if !sqlparser.IgnoreMaxPayloadSizeDirective(statement) && !isValidPayloadSize(query) {
+		return nil, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query payload size above threshold")
+	}
+	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
+	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
+
+	planKey := vcursor.planPrefixKey() + ":" + sql
+	if plan, ok := e.plans.Get(planKey); ok {
+		return plan.(*engine.Plan), nil
+	}
+
+	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.IsSetStatement(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
 		result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg", parameterize)
@@ -1495,6 +1542,21 @@ func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
 	return "", nil
 }
 
+// isValidPayloadSize validates whether a query payload is above the
+// configured MaxPayloadSize threshold. The WarnPayloadSizeExceeded will increment
+// if the payload size exceeds the warnPayloadSize.
+
+func isValidPayloadSize(query string) bool {
+	payloadSize := len(query)
+	if *maxPayloadSize > 0 && payloadSize > *maxPayloadSize {
+		return false
+	}
+	if *warnPayloadSize > 0 && payloadSize > *warnPayloadSize {
+		warnings.Add("WarnPayloadSizeExceeded", 1)
+	}
+	return true
+}
+
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
@@ -1585,7 +1647,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	var errCount uint64
 	if err != nil {
 		logStats.Error = err
-		errCount = 1
+		errCount = 1 //nolint
 		return nil, err
 	}
 	logStats.RowsAffected = qr.RowsAffected
@@ -1596,8 +1658,8 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 }
 
 // ExecuteMultiShard implements the IExecutor interface
-func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, notInTransaction bool, autocommit bool) (qr *sqltypes.Result, errs []error) {
-	return e.scatterConn.ExecuteMultiShard(ctx, rss, queries, session, notInTransaction, autocommit)
+func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error) {
+	return e.scatterConn.ExecuteMultiShard(ctx, rss, queries, session, autocommit, ignoreMaxMemoryRows)
 }
 
 // StreamExecuteMulti implements the IExecutor interface

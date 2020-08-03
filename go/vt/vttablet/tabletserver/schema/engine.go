@@ -19,6 +19,7 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -38,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -62,33 +64,24 @@ type Engine struct {
 	notifierMu  sync.Mutex
 	notifiers   map[string]notifier
 
-	// The following fields have their own synchronization
-	// and do not require locking mu.
+	// SkipMetaCheck skips the metadata about the database and table information
+	SkipMetaCheck bool
+
+	historian *historian
+
 	conns *connpool.Pool
 	ticks *timer.Timer
 }
 
-// Lock acquires the SE mutex with optional logging (useful for debugging deadlocks)
-func (se *Engine) Lock(msg string) {
-	log.V(2).Infof("SE: acquiring Lock %s", msg)
-	se.mu.Lock()
-}
-
-// Unlock releases the SE mutex with optional logging (useful for debugging deadlocks)
-func (se *Engine) Unlock(msg string) {
-	log.V(2).Infof("SE: releasing Lock %s", msg)
-	se.mu.Unlock()
-}
-
 // NewEngine creates a new Engine.
 func NewEngine(env tabletenv.Env) *Engine {
-	reloadTime := time.Duration(env.Config().SchemaReloadIntervalSeconds * 1e9)
+	reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
 	se := &Engine{
 		env: env,
-		// We need two connections: one for the reloader, and one for
-		// the historian.
+		// We need three connections: one for the reloader, one for
+		// the historian, and one for the tracker.
 		conns: connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:               2,
+			Size:               3,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
 		ticks:      timer.NewTimer(reloadTime),
@@ -108,6 +101,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 
 		schemazHandler(se.GetSchema(), w, r)
 	})
+	se.historian = newHistorian(env.Config().TrackSchemaVersions, se.conns)
 	return se
 }
 
@@ -119,14 +113,26 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 // Open initializes the Engine. Calling Open on an already
 // open engine is a no-op.
 func (se *Engine) Open() error {
-	se.Lock("Open")
-	defer se.Unlock("Open")
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	if se.isOpen {
 		return nil
 	}
+	log.Info("Schema Engine: opening")
 
 	ctx := tabletenv.LocalContext()
+
+	// The function we're in is supposed to be idempotent, but this conns.Open()
+	// call is not itself idempotent. Therefore, if we return for any reason
+	// without marking ourselves as open, we need to call conns.Close() so the
+	// pools aren't leaked the next time we call Open().
 	se.conns.Open(se.cp, se.cp, se.cp)
+	defer func() {
+		if !se.isOpen {
+			se.conns.Close()
+		}
+	}()
+
 	se.tables = map[string]*Table{
 		"dual": NewTable("dual"),
 	}
@@ -135,50 +141,55 @@ func (se *Engine) Open() error {
 	if err := se.reload(ctx); err != nil {
 		return err
 	}
+	if !se.SkipMetaCheck {
+		if err := se.historian.Open(); err != nil {
+			return err
+		}
+	}
 
 	se.ticks.Start(func() {
 		if err := se.Reload(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
+
 	se.isOpen = true
 	return nil
 }
 
 // IsOpen checks if engine is open
 func (se *Engine) IsOpen() bool {
-	se.Lock("IsOpen")
-	defer se.Unlock("IsOpen")
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	return se.isOpen
-}
-
-// GetConnection returns a connection from the pool
-func (se *Engine) GetConnection(ctx context.Context) (*connpool.DBConn, error) {
-	return se.conns.Get(ctx)
 }
 
 // Close shuts down Engine and is idempotent.
 // It can be re-opened after Close.
 func (se *Engine) Close() {
-	se.Lock("Close")
-	defer se.Unlock("Close")
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	if !se.isOpen {
 		return
 	}
+
 	se.ticks.Stop()
+	se.historian.Close()
 	se.conns.Close()
+
 	se.tables = make(map[string]*Table)
 	se.lastChange = 0
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
+	log.Info("Schema Engine: closed")
 }
 
 // MakeNonMaster clears the sequence caches to make sure that
 // they don't get accidentally reused after losing mastership.
 func (se *Engine) MakeNonMaster() {
 	// This function is tested through endtoend test.
-	se.Lock("MakeNonMaster")
-	defer se.Unlock("MakeNonMaster")
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	for _, t := range se.tables {
 		if t.SequenceInfo != nil {
 			t.SequenceInfo.Lock()
@@ -187,6 +198,12 @@ func (se *Engine) MakeNonMaster() {
 			t.SequenceInfo.Unlock()
 		}
 	}
+}
+
+// EnableHistorian forces tracking to be on or off.
+// Only used for testing.
+func (se *Engine) EnableHistorian(enabled bool) error {
+	return se.historian.Enable(enabled)
 }
 
 // Reload reloads the schema info from the db.
@@ -200,8 +217,8 @@ func (se *Engine) Reload(ctx context.Context) error {
 // It maintains the position at which the schema was reloaded and if the same position is provided
 // (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
 func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
-	se.Lock("ReloadAt")
-	defer se.Unlock("ReloadAt")
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	if !se.isOpen {
 		log.Warning("Schema reload called for an engine that is not yet open")
 		return nil
@@ -236,6 +253,10 @@ func (se *Engine) reload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// if this flag is set, then we don't need table meta information
+	if se.SkipMetaCheck {
+		return nil
+	}
 	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
 	if err != nil {
 		return err
@@ -252,6 +273,8 @@ func (se *Engine) reload(ctx context.Context) error {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := evalengine.ToInt64(row[2])
+		// TODO(sougou); find a better way detect changed tables. This method
+		// seems unreliable. The endtoend test flags all tables as changed.
 		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
 			continue
 		}
@@ -297,7 +320,8 @@ func (se *Engine) reload(ctx context.Context) error {
 }
 
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
-	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
+	// Keep `SELECT UNIX_TIMESTAMP` is in uppercase because binlog server queries are case sensitive and expect it to be so.
+	tm, err := conn.Exec(ctx, "SELECT UNIX_TIMESTAMP()", 1, false)
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get MySQL time: %v", err)
 	}
@@ -331,6 +355,30 @@ func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.DBConn
 		table.PKColumns = append(table.PKColumns, index)
 	}
 	return nil
+}
+
+// RegisterVersionEvent is called by the vstream when it encounters a version event (an insert into _vt.schema_tracking)
+// It triggers the historian to load the newer rows from the database to update its cache
+func (se *Engine) RegisterVersionEvent() error {
+	return se.historian.RegisterVersionEvent()
+}
+
+// GetTableForPos returns a best-effort schema for a specific gtid
+func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*binlogdatapb.MinimalTable, error) {
+	mt, err := se.historian.GetTableForPos(tableName, gtid)
+	if err != nil {
+		return nil, err
+	}
+	if mt != nil {
+		return mt, nil
+	}
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	st, ok := se.tables[tableName.String()]
+	if !ok {
+		return nil, fmt.Errorf("table %v not found in vttablet schema", tableName.String())
+	}
+	return newMinimalTable(st), nil
 }
 
 // RegisterNotifier registers the function for schema change notification.
@@ -384,21 +432,26 @@ func (se *Engine) broadcast(created, altered, dropped []string) {
 
 // GetTable returns the info for a table.
 func (se *Engine) GetTable(tableName sqlparser.TableIdent) *Table {
-	se.Lock("GetTable")
-	defer se.Unlock("GetTable")
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	return se.tables[tableName.String()]
 }
 
 // GetSchema returns the current The Tables are a shared
 // data structure and must be treated as read-only.
 func (se *Engine) GetSchema() map[string]*Table {
-	se.Lock("GetSchema")
-	defer se.Unlock("GetSchema")
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	tables := make(map[string]*Table, len(se.tables))
 	for k, v := range se.tables {
 		tables[k] = v
 	}
 	return tables
+}
+
+// GetConnection returns a connection from the pool
+func (se *Engine) GetConnection(ctx context.Context) (*connpool.DBConn, error) {
+	return se.conns.Get(ctx)
 }
 
 func (se *Engine) handleDebugSchema(response http.ResponseWriter, request *http.Request) {
@@ -444,7 +497,7 @@ func NewEngineForTests() *Engine {
 
 // SetTableForTests puts a Table in the map directly.
 func (se *Engine) SetTableForTests(table *Table) {
-	se.Lock("SetTableForTests")
-	defer se.Unlock("SetTableForTests")
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	se.tables[table.Name.String()] = table
 }

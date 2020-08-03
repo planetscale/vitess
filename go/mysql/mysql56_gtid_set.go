@@ -171,8 +171,28 @@ func (set Mysql56GTIDSet) String() string {
 	return buf.String()
 }
 
+// Last returns the last gtid as string
+// For gtidset having multiple SIDs or multiple intervals
+// it just returns the last SID with last interval
+func (set Mysql56GTIDSet) Last() string {
+	buf := &bytes.Buffer{}
+
+	if len(set.SIDs()) > 0 {
+		sid := set.SIDs()[len(set.SIDs())-1]
+		buf.WriteString(sid.String())
+		sequences := set[sid]
+		if len(sequences) > 0 {
+			buf.WriteByte(':')
+			lastInterval := sequences[len(sequences)-1]
+			buf.WriteString(strconv.FormatInt(lastInterval.end, 10))
+		}
+	}
+
+	return buf.String()
+}
+
 // Flavor implements GTIDSet.
-func (Mysql56GTIDSet) Flavor() string { return mysql56FlavorID }
+func (Mysql56GTIDSet) Flavor() string { return Mysql56FlavorID }
 
 // ContainsGTID implements GTIDSet.
 func (set Mysql56GTIDSet) ContainsGTID(gtid GTID) bool {
@@ -435,6 +455,8 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 	return buf.Bytes()
 }
 
+// Difference will supply the difference between the receiver and supplied Mysql56GTIDSets, and supply the result
+// as a Mysql56GTIDSet.
 func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 	if other == nil || set == nil {
 		return set
@@ -625,5 +647,5 @@ func popInterval(dst *interval, s1, s2 *[]interval) bool {
 }
 
 func init() {
-	gtidSetParsers[mysql56FlavorID] = parseMysql56GTIDSet
+	gtidSetParsers[Mysql56FlavorID] = parseMysql56GTIDSet
 }

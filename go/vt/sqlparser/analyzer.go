@@ -53,6 +53,9 @@ const (
 	StmtComment
 	StmtPriv
 	StmtExplain
+	StmtSavepoint
+	StmtSRollback
+	StmtRelease
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -84,6 +87,12 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtCommit
 	case *Rollback:
 		return StmtRollback
+	case *Savepoint:
+		return StmtSavepoint
+	case *SRollback:
+		return StmtSRollback
+	case *Release:
+		return StmtRelease
 	default:
 		return StmtUnknown
 	}
@@ -137,6 +146,8 @@ func Preview(sql string) StatementType {
 		return StmtUpdate
 	case "delete":
 		return StmtDelete
+	case "savepoint":
+		return StmtSavepoint
 	}
 	// For the following statements it is not sufficient to rely
 	// on loweredFirstWord. This is because they are not statements
@@ -167,6 +178,10 @@ func Preview(sql string) StatementType {
 		return StmtOther
 	case "grant", "revoke":
 		return StmtPriv
+	case "release":
+		return StmtRelease
+	case "rollback":
+		return StmtSRollback
 	}
 	return StmtUnknown
 }
@@ -205,6 +220,12 @@ func (s StatementType) String() string {
 		return "PRIV"
 	case StmtExplain:
 		return "EXPLAIN"
+	case StmtSavepoint:
+		return "SAVEPOINT"
+	case StmtSRollback:
+		return "SAVEPOINT_ROLLBACK"
+	case StmtRelease:
+		return "RELEASE"
 	default:
 		return "UNKNOWN"
 	}
@@ -384,4 +405,22 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		}
 	}
 	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
+}
+
+//IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
+func IsLockingFunc(node Expr) bool {
+	switch p := node.(type) {
+	case *FuncExpr:
+		_, found := lockingFunctions[p.Name.Lowered()]
+		return found
+	}
+	return false
+}
+
+var lockingFunctions = map[string]interface{}{
+	"get_lock":          nil,
+	"is_free_lock":      nil,
+	"is_used_lock":      nil,
+	"release_all_locks": nil,
+	"release_lock":      nil,
 }

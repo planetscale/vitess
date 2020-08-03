@@ -67,6 +67,8 @@ var (
 	HealthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
 	// HealthCheckTimeout is the timeout on the RPC call to tablets
 	HealthCheckTimeout = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
+	maxPayloadSize     = flag.Int("max_payload_size", 0, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")
+	warnPayloadSize    = flag.Int("warn_payload_size", 0, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -140,7 +142,8 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
-	gw := NewTabletGateway(ctx, serv, cell)
+	// TabletGateway can create it's own healthcheck
+	gw := NewTabletGateway(ctx, nil /*discovery.Healthcheck*/, serv, cell)
 	gw.RegisterStats()
 	if err := WaitForTablets(gw, tabletTypesToWait); err != nil {
 		log.Fatalf("gateway.WaitForTablets failed: %v", err)
@@ -194,7 +197,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	_ = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
 	_ = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
 
-	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded")
+	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded", "WarnPayloadSizeExceeded")
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
