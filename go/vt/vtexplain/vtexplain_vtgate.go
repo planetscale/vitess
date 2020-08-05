@@ -22,8 +22,6 @@ package vtexplain
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -44,7 +42,7 @@ import (
 var (
 	explainTopo    *ExplainTopo
 	vtgateExecutor *vtgate.Executor
-	healthCheck    *discovery.FakeHealthCheck
+	healthCheck    *discovery.FakeLegacyHealthCheck
 
 	vtgateSession = &vtgatepb.Session{
 		TargetString: "",
@@ -54,10 +52,9 @@ var (
 
 func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	explainTopo = &ExplainTopo{NumShards: opts.NumShards}
-	explainTopo.TopoServer = memorytopo.NewServer(vtexplainCell)
-	healthCheck = discovery.NewFakeHealthCheck()
+	healthCheck = discovery.NewFakeLegacyHealthCheck()
 
-	resolver := newFakeResolver(opts, explainTopo, vtexplainCell)
+	resolver := newFakeResolver(opts, healthCheck, explainTopo, vtexplainCell)
 
 	err := buildTopology(opts, vSchemaStr, opts.NumShards)
 	if err != nil {
@@ -73,17 +70,19 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 	return nil
 }
 
-func newFakeResolver(opts *Options, serv srvtopo.Server, cell string) *vtgate.Resolver {
+func newFakeResolver(opts *Options, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *vtgate.Resolver {
 	ctx := context.Background()
-	gw := vtgate.NewTabletGateway(ctx, healthCheck, serv, cell)
-	_ = gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+	// change this back after fixing vtexplain to work with new healthcheck
+	// gw := vtgate.GatewayCreator()(ctx, hc, serv, cell, 3)
+	gw := vtgate.NewDiscoveryGateway(ctx, hc, serv, cell, 3)
+	gw.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
 
 	txMode := vtgatepb.TransactionMode_MULTI
 	if opts.ExecutionMode == ModeTwoPC {
 		txMode = vtgatepb.TransactionMode_TWOPC
 	}
 	tc := vtgate.NewTxConn(gw, txMode)
-	sc := vtgate.NewScatterConn("", tc, gw)
+	sc := vtgate.NewLegacyScatterConn("", tc, gw, hc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return vtgate.NewResolver(srvResolver, serv, cell, sc)
 }

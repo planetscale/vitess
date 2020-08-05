@@ -29,12 +29,13 @@
     "OperatorType": "Set",
     "Ops": [
       {
-        "Type": "SysVarSet",
+        "Type": "SysVarCheckAndIgnore",
         "Name": "sql_mode",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
+        "TargetDestination": {},
         "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
       }
     ],
@@ -46,7 +47,7 @@
   }
 }
 
-# set system settings
+# set check and ignore plan
 "set @@sql_safe_updates = 1"
 {
   "QueryType": "SET",
@@ -61,6 +62,7 @@
           "Name": "main",
           "Sharded": false
         },
+        "TargetDestination": {},
         "Expr": "1"
       }
     ],
@@ -74,26 +76,4 @@
 
 # set plan building not supported
 "set @@innodb_strict_mode = OFF"
-{
-  "QueryType": "SET",
-  "Original": "set @@innodb_strict_mode = OFF",
-  "Instructions": {
-    "OperatorType": "Set",
-    "Ops": [
-      {
-        "Type": "SysVarIgnore",
-        "Name": "innodb_strict_mode",
-        "Expr": "'off'"
-      }
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "SingleRow"
-      }
-    ]
-  }
-}
-
-# set system settings
-"set @@ndbinfo_max_bytes = 192"
-"ndbinfo_max_bytes: system setting is not supported"
+"plan building not supported"

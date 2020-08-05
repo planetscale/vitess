@@ -110,9 +110,6 @@ type builder interface {
 	// specified column.
 	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
 
-	// PushLock pushes "FOR UPDATE", "LOCK IN SHARE MODE" down to all routes
-	PushLock(lock string) error
-
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
@@ -131,7 +128,6 @@ type ContextVSchema interface {
 	TabletType() topodatapb.TabletType
 	TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error)
 	AnyKeyspace() (*vindexes.Keyspace, error)
-	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 }
 
 //-------------------------------------------------------------------------
@@ -337,7 +333,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
 	case *sqlparser.Show, *sqlparser.SetTransaction:
 		return nil, ErrPlanNotSupported
-	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
 		// Empty by design. Not executed by a plan
 		return nil, nil
 	}

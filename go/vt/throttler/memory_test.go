@@ -19,37 +19,21 @@ package throttler
 import (
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 func TestMemory(t *testing.T) {
 	m := newMemory(5, 1*time.Second, 0.10)
-
 	// Add several good rates.
-	if err := m.markGood(201); err != nil {
-		log.Errorf("m.markGood(201) failed :%v ", err)
-	}
-
+	m.markGood(201)
 	want200 := int64(200)
 	if got := m.highestGood(); got != want200 {
 		t.Fatalf("memory with one good entry: got = %v, want = %v", got, want200)
 	}
-
-	//log error
-	if err := m.markGood(101); err != nil {
-		log.Errorf("m.markGood(101) failed :%v ", err)
-	}
-
+	m.markGood(101)
 	if got := m.highestGood(); got != want200 {
 		t.Fatalf("wrong order within memory: got = %v, want = %v", got, want200)
 	}
-
-	//log error
-	if err := m.markGood(301); err != nil {
-		log.Errorf(" m.markGood(301) failed :%v ", err)
-	}
-
+	m.markGood(301)
 	want300 := int64(300)
 	if got := m.highestGood(); got != want300 {
 		t.Fatalf("wrong order within memory: got = %v, want = %v", got, want300)
@@ -64,12 +48,7 @@ func TestMemory(t *testing.T) {
 	if got := m.lowestBad(); got != 0 {
 		t.Fatalf("lowestBad should return zero value when no bad rate is recorded yet: got = %v", got)
 	}
-
-	//log error
-	if err := m.markBad(300, sinceZero(0)); err != nil {
-		log.Errorf(" m.markBad(300, sinceZero(0)) failed :%v ", err)
-	}
-
+	m.markBad(300, sinceZero(0))
 	if got, want := m.lowestBad(), want300; got != want {
 		t.Fatalf("bad rate was not recorded: got = %v, want = %v", got, want)
 	}
@@ -77,11 +56,7 @@ func TestMemory(t *testing.T) {
 		t.Fatalf("new lower bad rate did not invalidate previous good rates: got = %v, want = %v", got, want200)
 	}
 
-	//log error
-	if err := m.markBad(311, sinceZero(0)); err != nil {
-		log.Errorf(" m.markBad(311, sinceZero(0)) failed :%v ", err)
-	}
-
+	m.markBad(311, sinceZero(0))
 	if got := m.lowestBad(); got != want300 {
 		t.Fatalf("bad rates higher than the current one should be ignored: got = %v, want = %v", got, want300)
 	}
@@ -98,12 +73,7 @@ func TestMemory(t *testing.T) {
 	}
 
 	// 199 will be rounded up to 200.
-	err := m.markBad(199, sinceZero(0))
-
-	if err != nil {
-		t.Fatalf(" m.markBad(199, sinceZero(0)) failed :%v ", err)
-	}
-
+	m.markBad(199, sinceZero(0))
 	if got := m.lowestBad(); got != want200 {
 		t.Fatalf("bad rate was not updated: got = %v, want = %v", got, want200)
 	}

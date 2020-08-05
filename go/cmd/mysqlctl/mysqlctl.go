@@ -42,8 +42,7 @@ var (
 	tabletUID   = flag.Uint("tablet_uid", 41983, "tablet uid")
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 
-	// Reason for nolint : Being used in line 246 (tabletAddr = netutil.JoinHostPort("localhost", int32(*port))
-	tabletAddr string //nolint
+	tabletAddr string
 )
 
 func initConfigCmd(subFlags *flag.FlagSet, args []string) error {

@@ -29,8 +29,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
@@ -116,9 +114,6 @@ type DB struct {
 	// connections tracks all open connections.
 	// The key for the map is the value of mysql.Conn.ConnectionID.
 	connections map[uint32]*mysql.Conn
-
-	// queryPatternUserCallback stores optional callbacks when a query with a pattern is called
-	queryPatternUserCallback map[*regexp.Regexp]func(string)
 }
 
 // QueryHandler is the interface used by the DB to simulate executed queries
@@ -160,14 +155,13 @@ func New(t *testing.T) *DB {
 
 	// Create our DB.
 	db := &DB{
-		t:                        t,
-		socketFile:               socketFile,
-		name:                     "fakesqldb",
-		data:                     make(map[string]*ExpectedResult),
-		rejectedData:             make(map[string]error),
-		queryCalled:              make(map[string]int),
-		connections:              make(map[uint32]*mysql.Conn),
-		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
+		t:            t,
+		socketFile:   socketFile,
+		name:         "fakesqldb",
+		data:         make(map[string]*ExpectedResult),
+		rejectedData: make(map[string]error),
+		queryCalled:  make(map[string]int),
+		connections:  make(map[uint32]*mysql.Conn),
 	}
 
 	db.Handler = db
@@ -214,6 +208,7 @@ func (db *DB) Close() {
 	db.listener.Close()
 	db.acceptWG.Wait()
 
+	db.WaitForClose(250 * time.Millisecond)
 	db.CloseAllConnections()
 
 	tmpDir := path.Dir(db.socketFile)
@@ -348,14 +343,11 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	defer db.mu.Unlock()
 	db.queryCalled[key]++
 	db.querylog = append(db.querylog, key)
+
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose {
 		c.Close()
-
-		//log error
-		if err := callback(&sqltypes.Result{}); err != nil {
-			log.Errorf("callback failed : %v", err)
-		}
+		callback(&sqltypes.Result{})
 		return nil
 	}
 
@@ -363,10 +355,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// may send this at connection time, and we don't want it to
 	// interfere.
 	if key == "set names utf8" {
-		//log error
-		if err := callback(&sqltypes.Result{}); err != nil {
-			log.Errorf("callback failed : %v", err)
-		}
+		callback(&sqltypes.Result{})
 		return nil
 	}
 
@@ -387,10 +376,6 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// Check query patterns from AddQueryPattern().
 	for _, pat := range db.patternData {
 		if pat.expr.MatchString(query) {
-			userCallback, ok := db.queryPatternUserCallback[pat.expr]
-			if ok {
-				userCallback(query)
-			}
 			return callback(pat.result)
 		}
 	}
@@ -505,13 +490,6 @@ func (db *DB) AddQueryPattern(queryPattern string, expectedResult *sqltypes.Resu
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.patternData = append(db.patternData, exprResult{expr, &result})
-}
-
-// AddQueryPatternWithCallback is similar to AddQueryPattern: in addition it calls the provided callback function
-// The callback can be used to set user counters/variables for testing specific usecases
-func (db *DB) AddQueryPatternWithCallback(queryPattern string, expectedResult *sqltypes.Result, callback func(string)) {
-	db.AddQueryPattern(queryPattern, expectedResult)
-	db.queryPatternUserCallback[db.patternData[len(db.patternData)-1].expr] = callback
 }
 
 // DeleteQuery deletes query from the fake DB.

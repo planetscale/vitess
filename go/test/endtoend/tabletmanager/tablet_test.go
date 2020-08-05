@@ -36,24 +36,32 @@ func TestLocalMetadata(t *testing.T) {
 	// Create new tablet
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
+	// Init Tablet
+	err := clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
+	require.Nil(t, err)
+
 	clusterInstance.VtTabletExtraArgs = []string{
 		"-lock_tables_timeout", "5s",
 		"-init_populate_metadata",
 	}
 	rTablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(rTablet.TabletUID, rTablet.MySQLPort, clusterInstance.TmpDirectory)
-	err := rTablet.MysqlctlProcess.Start()
-	require.NoError(t, err)
+	err = rTablet.MysqlctlProcess.Start()
+	require.Nil(t, err)
 
 	log.Info(fmt.Sprintf("Started vttablet %v", rTablet))
 	// SupportsBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	cluster.VerifyLocalMetadata(t, rTablet, keyspaceName, shardName, cell)
 
 	// Create another new tablet
 	rTablet2 := clusterInstance.NewVttabletInstance("replica", 0, "")
+
+	// Init Tablet
+	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet2, cell, keyspaceName, hostname, shardName)
+	require.Nil(t, err)
 
 	// start with -init_populate_metadata false (default)
 	clusterInstance.VtTabletExtraArgs = []string{
@@ -61,17 +69,17 @@ func TestLocalMetadata(t *testing.T) {
 	}
 	rTablet2.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(rTablet2.TabletUID, rTablet2.MySQLPort, clusterInstance.TmpDirectory)
 	err = rTablet2.MysqlctlProcess.Start()
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	log.Info(fmt.Sprintf("Started vttablet %v", rTablet2))
 	// SupportsBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
 	err = clusterInstance.StartVttablet(rTablet2, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// check that tablet did _not_ get populated
 	qr, err := rTablet2.VttabletProcess.QueryTablet("select * from _vt.local_metadata", keyspaceName, false)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	require.Nil(t, qr.Rows)
 
 	// Reset the VtTabletExtraArgs and kill tablets

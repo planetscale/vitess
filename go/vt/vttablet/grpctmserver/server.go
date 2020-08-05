@@ -37,32 +37,32 @@ import (
 
 // server is the gRPC implementation of the RPC server
 type server struct {
-	// implementation of the tm to call
-	tm tabletmanager.RPCTM
+	// implementation of the agent to call
+	agent tabletmanager.RPCAgent
 }
 
 func (s *server) Ping(ctx context.Context, request *tabletmanagerdatapb.PingRequest) (response *tabletmanagerdatapb.PingResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "Ping", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "Ping", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PingResponse{
-		Payload: s.tm.Ping(ctx, request.Payload),
+		Payload: s.agent.Ping(ctx, request.Payload),
 	}
 	return response, nil
 }
 
 func (s *server) Sleep(ctx context.Context, request *tabletmanagerdatapb.SleepRequest) (response *tabletmanagerdatapb.SleepResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "Sleep", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "Sleep", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.SleepResponse{}
-	s.tm.Sleep(ctx, time.Duration(request.Duration))
+	s.agent.Sleep(ctx, time.Duration(request.Duration))
 	return response, nil
 }
 
 func (s *server) ExecuteHook(ctx context.Context, request *tabletmanagerdatapb.ExecuteHookRequest) (response *tabletmanagerdatapb.ExecuteHookResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ExecuteHook", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "ExecuteHook", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ExecuteHookResponse{}
-	hr := s.tm.ExecuteHook(ctx, &hook.Hook{
+	hr := s.agent.ExecuteHook(ctx, &hook.Hook{
 		Name:       request.Name,
 		Parameters: request.Parameters,
 		ExtraEnv:   request.ExtraEnv,
@@ -74,10 +74,10 @@ func (s *server) ExecuteHook(ctx context.Context, request *tabletmanagerdatapb.E
 }
 
 func (s *server) GetSchema(ctx context.Context, request *tabletmanagerdatapb.GetSchemaRequest) (response *tabletmanagerdatapb.GetSchemaResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "GetSchema", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "GetSchema", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.GetSchemaResponse{}
-	sd, err := s.tm.GetSchema(ctx, request.Tables, request.ExcludeTables, request.IncludeViews)
+	sd, err := s.agent.GetSchema(ctx, request.Tables, request.ExcludeTables, request.IncludeViews)
 	if err == nil {
 		response.SchemaDefinition = sd
 	}
@@ -85,10 +85,10 @@ func (s *server) GetSchema(ctx context.Context, request *tabletmanagerdatapb.Get
 }
 
 func (s *server) GetPermissions(ctx context.Context, request *tabletmanagerdatapb.GetPermissionsRequest) (response *tabletmanagerdatapb.GetPermissionsResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "GetPermissions", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "GetPermissions", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.GetPermissionsResponse{}
-	p, err := s.tm.GetPermissions(ctx)
+	p, err := s.agent.GetPermissions(ctx)
 	if err == nil {
 		response.Permissions = p
 	}
@@ -100,60 +100,60 @@ func (s *server) GetPermissions(ctx context.Context, request *tabletmanagerdatap
 //
 
 func (s *server) SetReadOnly(ctx context.Context, request *tabletmanagerdatapb.SetReadOnlyRequest) (response *tabletmanagerdatapb.SetReadOnlyResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "SetReadOnly", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "SetReadOnly", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.SetReadOnlyResponse{}
-	return response, s.tm.SetReadOnly(ctx, true)
+	return response, s.agent.SetReadOnly(ctx, true)
 }
 
 func (s *server) SetReadWrite(ctx context.Context, request *tabletmanagerdatapb.SetReadWriteRequest) (response *tabletmanagerdatapb.SetReadWriteResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "SetReadWrite", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "SetReadWrite", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.SetReadWriteResponse{}
-	return response, s.tm.SetReadOnly(ctx, false)
+	return response, s.agent.SetReadOnly(ctx, false)
 }
 
 func (s *server) ChangeType(ctx context.Context, request *tabletmanagerdatapb.ChangeTypeRequest) (response *tabletmanagerdatapb.ChangeTypeResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ChangeType", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "ChangeType", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ChangeTypeResponse{}
-	return response, s.tm.ChangeType(ctx, request.TabletType)
+	return response, s.agent.ChangeType(ctx, request.TabletType)
 }
 
 func (s *server) RefreshState(ctx context.Context, request *tabletmanagerdatapb.RefreshStateRequest) (response *tabletmanagerdatapb.RefreshStateResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "RefreshState", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "RefreshState", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.RefreshStateResponse{}
-	return response, s.tm.RefreshState(ctx)
+	return response, s.agent.RefreshState(ctx)
 }
 
 func (s *server) RunHealthCheck(ctx context.Context, request *tabletmanagerdatapb.RunHealthCheckRequest) (response *tabletmanagerdatapb.RunHealthCheckResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "RunHealthCheck", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "RunHealthCheck", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.RunHealthCheckResponse{}
-	s.tm.RunHealthCheck(ctx)
+	s.agent.RunHealthCheck(ctx)
 	return response, nil
 }
 
 func (s *server) IgnoreHealthError(ctx context.Context, request *tabletmanagerdatapb.IgnoreHealthErrorRequest) (response *tabletmanagerdatapb.IgnoreHealthErrorResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "IgnoreHealthError", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "IgnoreHealthError", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.IgnoreHealthErrorResponse{}
-	return response, s.tm.IgnoreHealthError(ctx, request.Pattern)
+	return response, s.agent.IgnoreHealthError(ctx, request.Pattern)
 }
 
 func (s *server) ReloadSchema(ctx context.Context, request *tabletmanagerdatapb.ReloadSchemaRequest) (response *tabletmanagerdatapb.ReloadSchemaResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ReloadSchema", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "ReloadSchema", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ReloadSchemaResponse{}
-	return response, s.tm.ReloadSchema(ctx, request.WaitPosition)
+	return response, s.agent.ReloadSchema(ctx, request.WaitPosition)
 }
 
 func (s *server) PreflightSchema(ctx context.Context, request *tabletmanagerdatapb.PreflightSchemaRequest) (response *tabletmanagerdatapb.PreflightSchemaResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "PreflightSchema", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "PreflightSchema", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PreflightSchemaResponse{}
-	results, err := s.tm.PreflightSchema(ctx, request.Changes)
+	results, err := s.agent.PreflightSchema(ctx, request.Changes)
 	if err == nil {
 		response.ChangeResults = results
 	}
@@ -161,10 +161,10 @@ func (s *server) PreflightSchema(ctx context.Context, request *tabletmanagerdata
 }
 
 func (s *server) ApplySchema(ctx context.Context, request *tabletmanagerdatapb.ApplySchemaRequest) (response *tabletmanagerdatapb.ApplySchemaResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ApplySchema", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "ApplySchema", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ApplySchemaResponse{}
-	scr, err := s.tm.ApplySchema(ctx, &tmutils.SchemaChange{
+	scr, err := s.agent.ApplySchema(ctx, &tmutils.SchemaChange{
 		SQL:              request.Sql,
 		Force:            request.Force,
 		AllowReplication: request.AllowReplication,
@@ -179,7 +179,7 @@ func (s *server) ApplySchema(ctx context.Context, request *tabletmanagerdatapb.A
 }
 
 func (s *server) LockTables(ctx context.Context, req *tabletmanagerdatapb.LockTablesRequest) (*tabletmanagerdatapb.LockTablesResponse, error) {
-	err := s.tm.LockTables(ctx)
+	err := s.agent.LockTables(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func (s *server) LockTables(ctx context.Context, req *tabletmanagerdatapb.LockTa
 }
 
 func (s *server) UnlockTables(ctx context.Context, req *tabletmanagerdatapb.UnlockTablesRequest) (*tabletmanagerdatapb.UnlockTablesResponse, error) {
-	err := s.tm.UnlockTables(ctx)
+	err := s.agent.UnlockTables(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -195,10 +195,10 @@ func (s *server) UnlockTables(ctx context.Context, req *tabletmanagerdatapb.Unlo
 }
 
 func (s *server) ExecuteFetchAsDba(ctx context.Context, request *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (response *tabletmanagerdatapb.ExecuteFetchAsDbaResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ExecuteFetchAsDba", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "ExecuteFetchAsDba", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ExecuteFetchAsDbaResponse{}
-	qr, err := s.tm.ExecuteFetchAsDba(ctx, request.Query, request.DbName, int(request.MaxRows), request.DisableBinlogs, request.ReloadSchema)
+	qr, err := s.agent.ExecuteFetchAsDba(ctx, request.Query, request.DbName, int(request.MaxRows), request.DisableBinlogs, request.ReloadSchema)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -207,10 +207,10 @@ func (s *server) ExecuteFetchAsDba(ctx context.Context, request *tabletmanagerda
 }
 
 func (s *server) ExecuteFetchAsAllPrivs(ctx context.Context, request *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (response *tabletmanagerdatapb.ExecuteFetchAsAllPrivsResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ExecuteFetchAsAllPrivs", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "ExecuteFetchAsAllPrivs", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ExecuteFetchAsAllPrivsResponse{}
-	qr, err := s.tm.ExecuteFetchAsAllPrivs(ctx, request.Query, request.DbName, int(request.MaxRows), request.ReloadSchema)
+	qr, err := s.agent.ExecuteFetchAsAllPrivs(ctx, request.Query, request.DbName, int(request.MaxRows), request.ReloadSchema)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -219,10 +219,10 @@ func (s *server) ExecuteFetchAsAllPrivs(ctx context.Context, request *tabletmana
 }
 
 func (s *server) ExecuteFetchAsApp(ctx context.Context, request *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (response *tabletmanagerdatapb.ExecuteFetchAsAppResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ExecuteFetchAsApp", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "ExecuteFetchAsApp", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ExecuteFetchAsAppResponse{}
-	qr, err := s.tm.ExecuteFetchAsApp(ctx, request.Query, int(request.MaxRows))
+	qr, err := s.agent.ExecuteFetchAsApp(ctx, request.Query, int(request.MaxRows))
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -234,22 +234,11 @@ func (s *server) ExecuteFetchAsApp(ctx context.Context, request *tabletmanagerda
 // Replication related methods
 //
 
-func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerdatapb.ReplicationStatusRequest) (response *tabletmanagerdatapb.ReplicationStatusResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ReplicationStatus", request, response, false /*verbose*/, &err)
+func (s *server) SlaveStatus(ctx context.Context, request *tabletmanagerdatapb.SlaveStatusRequest) (response *tabletmanagerdatapb.SlaveStatusResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "SlaveStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.ReplicationStatusResponse{}
-	status, err := s.tm.ReplicationStatus(ctx)
-	if err == nil {
-		response.Status = status
-	}
-	return response, err
-}
-
-func (s *server) MasterStatus(ctx context.Context, request *tabletmanagerdatapb.MasterStatusRequest) (response *tabletmanagerdatapb.MasterStatusResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "MasterStatus", request, response, false /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.MasterStatusResponse{}
-	status, err := s.tm.MasterStatus(ctx)
+	response = &tabletmanagerdatapb.SlaveStatusResponse{}
+	status, err := s.agent.SlaveStatus(ctx)
 	if err == nil {
 		response.Status = status
 	}
@@ -257,10 +246,10 @@ func (s *server) MasterStatus(ctx context.Context, request *tabletmanagerdatapb.
 }
 
 func (s *server) MasterPosition(ctx context.Context, request *tabletmanagerdatapb.MasterPositionRequest) (response *tabletmanagerdatapb.MasterPositionResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "MasterPosition", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "MasterPosition", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.MasterPositionResponse{}
-	position, err := s.tm.MasterPosition(ctx)
+	position, err := s.agent.MasterPosition(ctx)
 	if err == nil {
 		response.Position = position
 	}
@@ -268,49 +257,49 @@ func (s *server) MasterPosition(ctx context.Context, request *tabletmanagerdatap
 }
 
 func (s *server) WaitForPosition(ctx context.Context, request *tabletmanagerdatapb.WaitForPositionRequest) (response *tabletmanagerdatapb.WaitForPositionResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "WaitForPosition", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "WaitForPosition", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.WaitForPositionResponse{}
-	return response, s.tm.WaitForPosition(ctx, request.Position)
+	return response, s.agent.WaitForPosition(ctx, request.Position)
 }
 
-func (s *server) StopReplication(ctx context.Context, request *tabletmanagerdatapb.StopReplicationRequest) (response *tabletmanagerdatapb.StopReplicationResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "StopReplication", request, response, true /*verbose*/, &err)
+func (s *server) StopSlave(ctx context.Context, request *tabletmanagerdatapb.StopSlaveRequest) (response *tabletmanagerdatapb.StopSlaveResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "StopSlave", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.StopReplicationResponse{}
-	return response, s.tm.StopReplication(ctx)
+	response = &tabletmanagerdatapb.StopSlaveResponse{}
+	return response, s.agent.StopSlave(ctx)
 }
 
-func (s *server) StopReplicationMinimum(ctx context.Context, request *tabletmanagerdatapb.StopReplicationMinimumRequest) (response *tabletmanagerdatapb.StopReplicationMinimumResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "StopReplicationMinimum", request, response, true /*verbose*/, &err)
+func (s *server) StopSlaveMinimum(ctx context.Context, request *tabletmanagerdatapb.StopSlaveMinimumRequest) (response *tabletmanagerdatapb.StopSlaveMinimumResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "StopSlaveMinimum", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.StopReplicationMinimumResponse{}
-	position, err := s.tm.StopReplicationMinimum(ctx, request.Position, time.Duration(request.WaitTimeout))
+	response = &tabletmanagerdatapb.StopSlaveMinimumResponse{}
+	position, err := s.agent.StopSlaveMinimum(ctx, request.Position, time.Duration(request.WaitTimeout))
 	if err == nil {
 		response.Position = position
 	}
 	return response, err
 }
 
-func (s *server) StartReplication(ctx context.Context, request *tabletmanagerdatapb.StartReplicationRequest) (response *tabletmanagerdatapb.StartReplicationResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "StartReplication", request, response, true /*verbose*/, &err)
+func (s *server) StartSlave(ctx context.Context, request *tabletmanagerdatapb.StartSlaveRequest) (response *tabletmanagerdatapb.StartSlaveResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "StartSlave", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.StartReplicationResponse{}
-	return response, s.tm.StartReplication(ctx)
+	response = &tabletmanagerdatapb.StartSlaveResponse{}
+	return response, s.agent.StartSlave(ctx)
 }
 
-func (s *server) StartReplicationUntilAfter(ctx context.Context, request *tabletmanagerdatapb.StartReplicationUntilAfterRequest) (response *tabletmanagerdatapb.StartReplicationUntilAfterResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "StartReplication", request, response, true /*verbose*/, &err)
+func (s *server) StartSlaveUntilAfter(ctx context.Context, request *tabletmanagerdatapb.StartSlaveUntilAfterRequest) (response *tabletmanagerdatapb.StartSlaveUntilAfterResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "StartSlave", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.StartReplicationUntilAfterResponse{}
-	return response, s.tm.StartReplicationUntilAfter(ctx, request.Position, time.Duration(request.WaitTimeout))
+	response = &tabletmanagerdatapb.StartSlaveUntilAfterResponse{}
+	return response, s.agent.StartSlaveUntilAfter(ctx, request.Position, time.Duration(request.WaitTimeout))
 }
 
-func (s *server) GetReplicas(ctx context.Context, request *tabletmanagerdatapb.GetReplicasRequest) (response *tabletmanagerdatapb.GetReplicasResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "GetReplicas", request, response, false /*verbose*/, &err)
+func (s *server) GetSlaves(ctx context.Context, request *tabletmanagerdatapb.GetSlavesRequest) (response *tabletmanagerdatapb.GetSlavesResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "GetSlaves", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.GetReplicasResponse{}
-	addrs, err := s.tm.GetReplicas(ctx)
+	response = &tabletmanagerdatapb.GetSlavesResponse{}
+	addrs, err := s.agent.GetSlaves(ctx)
 	if err == nil {
 		response.Addrs = addrs
 	}
@@ -318,17 +307,17 @@ func (s *server) GetReplicas(ctx context.Context, request *tabletmanagerdatapb.G
 }
 
 func (s *server) VReplicationExec(ctx context.Context, request *tabletmanagerdatapb.VReplicationExecRequest) (response *tabletmanagerdatapb.VReplicationExecResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "VReplicationExec", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "VReplicationExec", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.VReplicationExecResponse{}
-	response.Result, err = s.tm.VReplicationExec(ctx, request.Query)
+	response.Result, err = s.agent.VReplicationExec(ctx, request.Query)
 	return response, err
 }
 
 func (s *server) VReplicationWaitForPos(ctx context.Context, request *tabletmanagerdatapb.VReplicationWaitForPosRequest) (response *tabletmanagerdatapb.VReplicationWaitForPosResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "VReplicationWaitForPos", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "VReplicationWaitForPos", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	err = s.tm.VReplicationWaitForPos(ctx, int(request.Id), request.Position)
+	err = s.agent.VReplicationWaitForPos(ctx, int(request.Id), request.Position)
 	return &tabletmanagerdatapb.VReplicationWaitForPosResponse{}, err
 }
 
@@ -337,17 +326,17 @@ func (s *server) VReplicationWaitForPos(ctx context.Context, request *tabletmana
 //
 
 func (s *server) ResetReplication(ctx context.Context, request *tabletmanagerdatapb.ResetReplicationRequest) (response *tabletmanagerdatapb.ResetReplicationResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ResetReplication", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "ResetReplication", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ResetReplicationResponse{}
-	return response, s.tm.ResetReplication(ctx)
+	return response, s.agent.ResetReplication(ctx)
 }
 
 func (s *server) InitMaster(ctx context.Context, request *tabletmanagerdatapb.InitMasterRequest) (response *tabletmanagerdatapb.InitMasterResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "InitMaster", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "InitMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.InitMasterResponse{}
-	position, err := s.tm.InitMaster(ctx)
+	position, err := s.agent.InitMaster(ctx)
 	if err == nil {
 		response.Position = position
 	}
@@ -355,78 +344,99 @@ func (s *server) InitMaster(ctx context.Context, request *tabletmanagerdatapb.In
 }
 
 func (s *server) PopulateReparentJournal(ctx context.Context, request *tabletmanagerdatapb.PopulateReparentJournalRequest) (response *tabletmanagerdatapb.PopulateReparentJournalResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "PopulateReparentJournal", request, response, false /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "PopulateReparentJournal", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PopulateReparentJournalResponse{}
-	return response, s.tm.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, request.MasterAlias, request.ReplicationPosition)
+	return response, s.agent.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, request.MasterAlias, request.ReplicationPosition)
 }
 
-func (s *server) InitReplica(ctx context.Context, request *tabletmanagerdatapb.InitReplicaRequest) (response *tabletmanagerdatapb.InitReplicaResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "InitReplica", request, response, true /*verbose*/, &err)
+func (s *server) InitSlave(ctx context.Context, request *tabletmanagerdatapb.InitSlaveRequest) (response *tabletmanagerdatapb.InitSlaveResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "InitSlave", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.InitReplicaResponse{}
-	return response, s.tm.InitReplica(ctx, request.Parent, request.ReplicationPosition, request.TimeCreatedNs)
+	response = &tabletmanagerdatapb.InitSlaveResponse{}
+	return response, s.agent.InitSlave(ctx, request.Parent, request.ReplicationPosition, request.TimeCreatedNs)
 }
 
 func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.DemoteMasterRequest) (response *tabletmanagerdatapb.DemoteMasterResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "DemoteMaster", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "DemoteMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.DemoteMasterResponse{}
-	masterStatus, err := s.tm.DemoteMaster(ctx)
+	position, err := s.agent.DemoteMaster(ctx)
 	if err == nil {
-		response.DeprecatedPosition = masterStatus.Position
-		response.MasterStatus = masterStatus
+		response.Position = position
 	}
 	return response, err
 }
 
 func (s *server) UndoDemoteMaster(ctx context.Context, request *tabletmanagerdatapb.UndoDemoteMasterRequest) (response *tabletmanagerdatapb.UndoDemoteMasterResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "UndoDemoteMaster", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "UndoDemoteMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.UndoDemoteMasterResponse{}
-	err = s.tm.UndoDemoteMaster(ctx)
+	err = s.agent.UndoDemoteMaster(ctx)
 	return response, err
 }
 
-func (s *server) ReplicaWasPromoted(ctx context.Context, request *tabletmanagerdatapb.ReplicaWasPromotedRequest) (response *tabletmanagerdatapb.ReplicaWasPromotedResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ReplicaWasPromoted", request, response, true /*verbose*/, &err)
+// Deprecated
+func (s *server) PromoteSlaveWhenCaughtUp(ctx context.Context, request *tabletmanagerdatapb.PromoteSlaveWhenCaughtUpRequest) (response *tabletmanagerdatapb.PromoteSlaveWhenCaughtUpResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "PromoteSlaveWhenCaughtUp", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.ReplicaWasPromotedResponse{}
-	return response, s.tm.ReplicaWasPromoted(ctx)
+	response = &tabletmanagerdatapb.PromoteSlaveWhenCaughtUpResponse{}
+	position, err := s.agent.PromoteSlaveWhenCaughtUp(ctx, request.Position)
+	if err == nil {
+		response.Position = position
+	}
+	return response, err
+}
+
+func (s *server) SlaveWasPromoted(ctx context.Context, request *tabletmanagerdatapb.SlaveWasPromotedRequest) (response *tabletmanagerdatapb.SlaveWasPromotedResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "SlaveWasPromoted", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.SlaveWasPromotedResponse{}
+	return response, s.agent.SlaveWasPromoted(ctx)
 }
 
 func (s *server) SetMaster(ctx context.Context, request *tabletmanagerdatapb.SetMasterRequest) (response *tabletmanagerdatapb.SetMasterResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "SetMaster", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "SetMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.SetMasterResponse{}
-	return response, s.tm.SetMaster(ctx, request.Parent, request.TimeCreatedNs, request.WaitPosition, request.ForceStartReplication)
+	return response, s.agent.SetMaster(ctx, request.Parent, request.TimeCreatedNs, request.WaitPosition, request.ForceStartSlave)
 }
 
-func (s *server) ReplicaWasRestarted(ctx context.Context, request *tabletmanagerdatapb.ReplicaWasRestartedRequest) (response *tabletmanagerdatapb.ReplicaWasRestartedResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "ReplicaWasRestarted", request, response, true /*verbose*/, &err)
+func (s *server) SlaveWasRestarted(ctx context.Context, request *tabletmanagerdatapb.SlaveWasRestartedRequest) (response *tabletmanagerdatapb.SlaveWasRestartedResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "SlaveWasRestarted", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.ReplicaWasRestartedResponse{}
-	return response, s.tm.ReplicaWasRestarted(ctx, request.Parent)
+	response = &tabletmanagerdatapb.SlaveWasRestartedResponse{}
+	return response, s.agent.SlaveWasRestarted(ctx, request.Parent)
 }
 
 func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *tabletmanagerdatapb.StopReplicationAndGetStatusRequest) (response *tabletmanagerdatapb.StopReplicationAndGetStatusResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "StopReplicationAndGetStatus", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "StopReplicationAndGetStatus", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.StopReplicationAndGetStatusResponse{}
-	statusResponse, err := s.tm.StopReplicationAndGetStatus(ctx, request.StopReplicationMode)
+	status, err := s.agent.StopReplicationAndGetStatus(ctx)
 	if err == nil {
-		response.HybridStatus = statusResponse.HybridStatus
-		response.Status = statusResponse.Status
+		response.Status = status
+	}
+	return response, err
+}
 
+// Deprecated
+func (s *server) PromoteSlave(ctx context.Context, request *tabletmanagerdatapb.PromoteSlaveRequest) (response *tabletmanagerdatapb.PromoteSlaveResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "PromoteSlave", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.PromoteSlaveResponse{}
+	position, err := s.agent.PromoteSlave(ctx)
+	if err == nil {
+		response.Position = position
 	}
 	return response, err
 }
 
 func (s *server) PromoteReplica(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaRequest) (response *tabletmanagerdatapb.PromoteReplicaResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "PromoteReplica", request, response, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "PromoteReplica", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PromoteReplicaResponse{}
-	position, err := s.tm.PromoteReplica(ctx)
+	position, err := s.agent.PromoteReplica(ctx)
 	if err == nil {
 		response.Position = position
 	}
@@ -435,7 +445,7 @@ func (s *server) PromoteReplica(ctx context.Context, request *tabletmanagerdatap
 
 func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream tabletmanagerservicepb.TabletManager_BackupServer) (err error) {
 	ctx := stream.Context()
-	defer s.tm.HandleRPCPanic(ctx, "Backup", request, nil, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "Backup", request, nil, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 
 	// create a logger, send the result back to the caller
@@ -448,12 +458,12 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 		})
 	})
 
-	return s.tm.Backup(ctx, int(request.Concurrency), logger, bool(request.AllowMaster))
+	return s.agent.Backup(ctx, int(request.Concurrency), logger, bool(request.AllowMaster))
 }
 
 func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBackupRequest, stream tabletmanagerservicepb.TabletManager_RestoreFromBackupServer) (err error) {
 	ctx := stream.Context()
-	defer s.tm.HandleRPCPanic(ctx, "RestoreFromBackup", request, nil, true /*verbose*/, &err)
+	defer s.agent.HandleRPCPanic(ctx, "RestoreFromBackup", request, nil, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 
 	// create a logger, send the result back to the caller
@@ -466,104 +476,20 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 		})
 	})
 
-	return s.tm.RestoreFromBackup(ctx, logger)
-}
-
-// Deprecated
-func (s *server) InitSlave(ctx context.Context, request *tabletmanagerdatapb.InitSlaveRequest) (response *tabletmanagerdatapb.InitSlaveResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "InitSlave", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.InitSlaveResponse{}
-	return response, s.tm.InitSlave(ctx, request.Parent, request.ReplicationPosition, request.TimeCreatedNs)
-}
-
-// Deprecated
-func (s *server) SlaveStatus(ctx context.Context, request *tabletmanagerdatapb.SlaveStatusRequest) (response *tabletmanagerdatapb.SlaveStatusResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "SlaveStatus", request, response, false /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.SlaveStatusResponse{}
-	status, err := s.tm.SlaveStatus(ctx)
-	if err == nil {
-		response.Status = status
-	}
-	return response, err
-}
-
-// Deprecated
-func (s *server) StopSlave(ctx context.Context, request *tabletmanagerdatapb.StopSlaveRequest) (response *tabletmanagerdatapb.StopSlaveResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "StopSlave", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.StopSlaveResponse{}
-	return response, s.tm.StopSlave(ctx)
-}
-
-// Deprecated
-func (s *server) StopSlaveMinimum(ctx context.Context, request *tabletmanagerdatapb.StopSlaveMinimumRequest) (response *tabletmanagerdatapb.StopSlaveMinimumResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "StopSlaveMinimum", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.StopSlaveMinimumResponse{}
-	position, err := s.tm.StopSlaveMinimum(ctx, request.Position, time.Duration(request.WaitTimeout))
-	if err == nil {
-		response.Position = position
-	}
-	return response, err
-}
-
-// Deprecated
-func (s *server) StartSlave(ctx context.Context, request *tabletmanagerdatapb.StartSlaveRequest) (response *tabletmanagerdatapb.StartSlaveResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "StartSlave", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.StartSlaveResponse{}
-	return response, s.tm.StartSlave(ctx)
-}
-
-// Deprecated
-func (s *server) StartSlaveUntilAfter(ctx context.Context, request *tabletmanagerdatapb.StartSlaveUntilAfterRequest) (response *tabletmanagerdatapb.StartSlaveUntilAfterResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "StartSlaveUntilAfter", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.StartSlaveUntilAfterResponse{}
-	return response, s.tm.StartSlaveUntilAfter(ctx, request.Position, time.Duration(request.WaitTimeout))
-}
-
-// Deprecated
-func (s *server) GetSlaves(ctx context.Context, request *tabletmanagerdatapb.GetSlavesRequest) (response *tabletmanagerdatapb.GetSlavesResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "GetSlaves", request, response, false /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.GetSlavesResponse{}
-	addrs, err := s.tm.GetSlaves(ctx)
-	if err == nil {
-		response.Addrs = addrs
-	}
-	return response, err
-}
-
-// Deprecated
-func (s *server) SlaveWasPromoted(ctx context.Context, request *tabletmanagerdatapb.SlaveWasPromotedRequest) (response *tabletmanagerdatapb.SlaveWasPromotedResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "SlaveWasPromoted", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.SlaveWasPromotedResponse{}
-	return response, s.tm.SlaveWasPromoted(ctx)
-}
-
-// Deprecated
-func (s *server) SlaveWasRestarted(ctx context.Context, request *tabletmanagerdatapb.SlaveWasRestartedRequest) (response *tabletmanagerdatapb.SlaveWasRestartedResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "SlaveWasRestarted", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.SlaveWasRestartedResponse{}
-	return response, s.tm.SlaveWasRestarted(ctx, request.Parent)
+	return s.agent.RestoreFromBackup(ctx, logger)
 }
 
 // registration glue
 
 func init() {
-	tabletmanager.RegisterTabletManagers = append(tabletmanager.RegisterTabletManagers, func(tm *tabletmanager.TabletManager) {
+	tabletmanager.RegisterQueryServices = append(tabletmanager.RegisterQueryServices, func(agent *tabletmanager.ActionAgent) {
 		if servenv.GRPCCheckServiceMap("tabletmanager") {
-			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{tm})
+			tabletmanagerservicepb.RegisterTabletManagerServer(servenv.GRPCServer, &server{agent})
 		}
 	})
 }
 
 // RegisterForTest will register the RPC, to be used by test instances only
-func RegisterForTest(s *grpc.Server, tm *tabletmanager.TabletManager) {
-	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm})
+func RegisterForTest(s *grpc.Server, agent *tabletmanager.ActionAgent) {
+	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{agent})
 }

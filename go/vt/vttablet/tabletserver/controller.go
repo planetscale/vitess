@@ -20,7 +20,6 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -48,11 +47,11 @@ type Controller interface {
 	Stats() *tabletenv.Stats
 
 	// InitDBConfig sets up the db config vars.
-	InitDBConfig(querypb.Target, *dbconfigs.DBConfigs, mysqlctl.MysqlDaemon) error
+	InitDBConfig(querypb.Target, *dbconfigs.DBConfigs) error
 
 	// SetServingType transitions the query service to the required serving type.
 	// Returns true if the state of QueryService or the tablet type changed.
-	SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool, reason string) error
+	SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (bool, error)
 
 	// EnterLameduck causes tabletserver to enter the lameduck state.
 	EnterLameduck()
@@ -85,7 +84,11 @@ type Controller interface {
 	SchemaEngine() *schema.Engine
 
 	// BroadcastHealth sends the current health to all listeners
-	BroadcastHealth()
+	BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration)
+
+	// HeartbeatLag returns the current lag as calculated by the heartbeat
+	// package, if heartbeat is enabled. Otherwise returns 0.
+	HeartbeatLag() (time.Duration, error)
 
 	// TopoServer returns the topo server.
 	TopoServer() *topo.Server

@@ -37,16 +37,16 @@ type TabletExecutor struct {
 	isClosed             bool
 	allowBigSchemaChange bool
 	keyspace             string
-	waitReplicasTimeout  time.Duration
+	waitSlaveTimeout     time.Duration
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
-func NewTabletExecutor(wr *wrangler.Wrangler, waitReplicasTimeout time.Duration) *TabletExecutor {
+func NewTabletExecutor(wr *wrangler.Wrangler, waitSlaveTimeout time.Duration) *TabletExecutor {
 	return &TabletExecutor{
 		wr:                   wr,
 		isClosed:             true,
 		allowBigSchemaChange: false,
-		waitReplicasTimeout:  waitReplicasTimeout,
+		waitSlaveTimeout:     waitSlaveTimeout,
 	}
 }
 
@@ -253,11 +253,11 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 		return
 	}
 
-	// If all shards succeeded, wait (up to waitReplicasTimeout) for replicas to
+	// If all shards succeeded, wait (up to waitSlaveTimeout) for slaves to
 	// execute the schema change via replication. This is best-effort, meaning
 	// we still return overall success if the timeout expires.
 	concurrency := sync2.NewSemaphore(10, 0)
-	reloadCtx, cancel := context.WithTimeout(ctx, exec.waitReplicasTimeout)
+	reloadCtx, cancel := context.WithTimeout(ctx, exec.waitSlaveTimeout)
 	defer cancel()
 	for _, result := range execResult.SuccessShards {
 		wg.Add(1)

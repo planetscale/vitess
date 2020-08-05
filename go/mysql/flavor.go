@@ -29,12 +29,9 @@ import (
 )
 
 var (
-	// ErrNotReplica means there is no replication status.
-	// Returned by ShowReplicationStatus().
-	ErrNotReplica = errors.New("no slave status")
-
-	// ErrNoMasterStatus means no status was returned by ShowMasterStatus().
-	ErrNoMasterStatus = errors.New("no master status")
+	// ErrNotSlave means there is no slave status.
+	// Returned by ShowSlaveStatus().
+	ErrNotSlave = errors.New("no slave status")
 )
 
 const (
@@ -55,25 +52,22 @@ type flavor interface {
 	// masterGTIDSet returns the current GTIDSet of a server.
 	masterGTIDSet(c *Conn) (GTIDSet, error)
 
-	// startReplicationCommand returns the command to start the replication.
-	startReplicationCommand() string
+	// startSlave returns the command to start the slave.
+	startSlaveCommand() string
 
-	// restartReplicationCommands returns the commands to stop, reset and start the replication.
-	restartReplicationCommands() []string
+	// restartSlave returns the commands to stop, reset and start the slave.
+	restartSlaveCommands() []string
 
-	// startReplicationUntilAfter will restart replication, but only allow it
+	// startSlaveUntilAfter will restart replication, but only allow it
 	// to run until `pos` is reached. After reaching pos, replication will be stopped again
-	startReplicationUntilAfter(pos Position) string
+	startSlaveUntilAfter(pos Position) string
 
-	// stopReplicationCommand returns the command to stop the replication.
-	stopReplicationCommand() string
-
-	// stopIOThreadCommand returns the command to stop the replica's io thread only.
-	stopIOThreadCommand() string
+	// stopSlave returns the command to stop the slave.
+	stopSlaveCommand() string
 
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
-	sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error
+	sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error
 
 	// readBinlogEvent reads the next BinlogEvent from the connection.
 	readBinlogEvent(c *Conn) (BinlogEvent, error)
@@ -82,21 +76,17 @@ type flavor interface {
 	// replication on the host.
 	resetReplicationCommands(c *Conn) []string
 
-	// setReplicationPositionCommands returns the commands to set the
-	// replication position at which the replica will resume.
-	setReplicationPositionCommands(pos Position) []string
+	// setSlavePositionCommands returns the commands to set the
+	// replication position at which the slave will resume.
+	setSlavePositionCommands(pos Position) []string
 
 	// changeMasterArg returns the specific parameter to add to
 	// a change master command.
 	changeMasterArg() string
 
-	// status returns the result of the appropriate status command,
+	// status returns the result of 'SHOW SLAVE STATUS',
 	// with parsed replication position.
-	status(c *Conn) (ReplicationStatus, error)
-
-	// masterStatus returns the result of 'SHOW MASTER STATUS',
-	// with parsed executed position.
-	masterStatus(c *Conn) (MasterStatus, error)
+	status(c *Conn) (SlaveStatus, error)
 
 	// waitUntilPositionCommand returns the SQL command to issue
 	// to wait until the given position, until the context
@@ -173,48 +163,31 @@ func (c *Conn) MasterPosition() (Position, error) {
 	}, nil
 }
 
-// MasterFilePosition returns the current master's file based replication position.
-func (c *Conn) MasterFilePosition() (Position, error) {
-	filePosFlavor := filePosFlavor{}
-	gtidSet, err := filePosFlavor.masterGTIDSet(c)
-	if err != nil {
-		return Position{}, err
-	}
-	return Position{
-		GTIDSet: gtidSet,
-	}, nil
+// StartSlaveCommand returns the command to start the slave.
+func (c *Conn) StartSlaveCommand() string {
+	return c.flavor.startSlaveCommand()
 }
 
-// StartReplicationCommand returns the command to start the replication.
-func (c *Conn) StartReplicationCommand() string {
-	return c.flavor.startReplicationCommand()
+// RestartSlaveCommands returns the commands to stop, reset and start the slave.
+func (c *Conn) RestartSlaveCommands() []string {
+	return c.flavor.restartSlaveCommands()
 }
 
-// RestartReplicationCommands returns the commands to stop, reset and start the replication.
-func (c *Conn) RestartReplicationCommands() []string {
-	return c.flavor.restartReplicationCommands()
+// StartSlaveUntilAfterCommand returns the command to start the slave.
+func (c *Conn) StartSlaveUntilAfterCommand(pos Position) string {
+	return c.flavor.startSlaveUntilAfter(pos)
 }
 
-// StartReplicationUntilAfterCommand returns the command to start the replication.
-func (c *Conn) StartReplicationUntilAfterCommand(pos Position) string {
-	return c.flavor.startReplicationUntilAfter(pos)
-}
-
-// StopReplicationCommand returns the command to stop the replication.
-func (c *Conn) StopReplicationCommand() string {
-	return c.flavor.stopReplicationCommand()
-}
-
-// StopIOThreadCommand returns the command to stop the replica's io thread.
-func (c *Conn) StopIOThreadCommand() string {
-	return c.flavor.stopIOThreadCommand()
+// StopSlaveCommand returns the command to stop the slave.
+func (c *Conn) StopSlaveCommand() string {
+	return c.flavor.stopSlaveCommand()
 }
 
 // SendBinlogDumpCommand sends the flavor-specific version of
 // the COM_BINLOG_DUMP command to start dumping raw binlog
-// events over a server connection, starting at a given GTID.
-func (c *Conn) SendBinlogDumpCommand(serverID uint32, startPos Position) error {
-	return c.flavor.sendBinlogDumpCommand(c, serverID, startPos)
+// events over a slave connection, starting at a given GTID.
+func (c *Conn) SendBinlogDumpCommand(slaveID uint32, startPos Position) error {
+	return c.flavor.sendBinlogDumpCommand(c, slaveID, startPos)
 }
 
 // ReadBinlogEvent reads the next BinlogEvent. This must be used
@@ -229,11 +202,11 @@ func (c *Conn) ResetReplicationCommands() []string {
 	return c.flavor.resetReplicationCommands(c)
 }
 
-// SetReplicationPositionCommands returns the commands to set the
-// replication position at which the replica will resume
+// SetSlavePositionCommands returns the commands to set the
+// replication position at which the slave will resume
 // when it is later reparented with SetMasterCommands.
-func (c *Conn) SetReplicationPositionCommands(pos Position) []string {
-	return c.flavor.setReplicationPositionCommands(pos)
+func (c *Conn) SetSlavePositionCommands(pos Position) []string {
+	return c.flavor.setSlavePositionCommands(pos)
 }
 
 // SetMasterCommand returns the command to use the provided master
@@ -267,7 +240,7 @@ func (c *Conn) SetMasterCommand(params *ConnParams, masterHost string, masterPor
 	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 }
 
-// resultToMap is a helper function used by ShowReplicationStatus.
+// resultToMap is a helper function used by ShowSlaveStatus.
 func resultToMap(qr *sqltypes.Result) (map[string]string, error) {
 	if len(qr.Rows) == 0 {
 		// The query succeeded, but there is no data.
@@ -287,13 +260,12 @@ func resultToMap(qr *sqltypes.Result) (map[string]string, error) {
 	return result, nil
 }
 
-// parseReplicationStatus parses the common (non-flavor-specific) fields of ReplicationStatus
-func parseReplicationStatus(fields map[string]string) ReplicationStatus {
-	status := ReplicationStatus{
-		MasterHost: fields["Master_Host"],
-		// These fields are returned from the underlying DB and cannot be renamed
-		IOThreadRunning:  fields["Slave_IO_Running"] == "Yes" || fields["Slave_IO_Running"] == "Connecting",
-		SQLThreadRunning: fields["Slave_SQL_Running"] == "Yes",
+// parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
+func parseSlaveStatus(fields map[string]string) SlaveStatus {
+	status := SlaveStatus{
+		MasterHost:      fields["Master_Host"],
+		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
+		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
 	}
 	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 0)
 	status.MasterPort = int(parseInt)
@@ -330,35 +302,10 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	return status
 }
 
-// ShowReplicationStatus executes the right command to fetch replication status,
-// and returns a parsed Position with other fields.
-func (c *Conn) ShowReplicationStatus() (ReplicationStatus, error) {
+// ShowSlaveStatus executes the right SHOW SLAVE STATUS command,
+// and returns a parse Position with other fields.
+func (c *Conn) ShowSlaveStatus() (SlaveStatus, error) {
 	return c.flavor.status(c)
-}
-
-// parseMasterStatus parses the common fields of SHOW MASTER STATUS.
-func parseMasterStatus(fields map[string]string) MasterStatus {
-	status := MasterStatus{}
-
-	fileExecPosStr := fields["Position"]
-	file := fields["File"]
-	if file != "" && fileExecPosStr != "" {
-		filePos, err := strconv.Atoi(fileExecPosStr)
-		if err == nil {
-			status.FilePosition.GTIDSet = filePosGTID{
-				file: file,
-				pos:  filePos,
-			}
-		}
-	}
-
-	return status
-}
-
-// ShowMasterStatus executes the right SHOW MASTER STATUS command,
-// and returns a parsed executed Position, as well as file based Position.
-func (c *Conn) ShowMasterStatus() (MasterStatus, error) {
-	return c.flavor.masterStatus(c)
 }
 
 // WaitUntilPositionCommand returns the SQL command to issue
@@ -367,15 +314,6 @@ func (c *Conn) ShowMasterStatus() (MasterStatus, error) {
 // returns NULL if GTIDs are not enabled.
 func (c *Conn) WaitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
 	return c.flavor.waitUntilPositionCommand(ctx, pos)
-}
-
-// WaitUntilFilePositionCommand returns the SQL command to issue
-// to wait until the given position, until the context
-// expires for the file position flavor.  The command returns -1 if it times out. It
-// returns NULL if GTIDs are not enabled.
-func (c *Conn) WaitUntilFilePositionCommand(ctx context.Context, pos Position) (string, error) {
-	filePosFlavor := filePosFlavor{}
-	return filePosFlavor.waitUntilPositionCommand(ctx, pos)
 }
 
 // EnableBinlogPlaybackCommand returns a command to run to enable

@@ -72,18 +72,14 @@ func NewEngine(tsv TabletService, se *schema.Engine, vs VStreamer) *Engine {
 }
 
 // Open starts the Engine service.
-func (me *Engine) Open() {
-	me.mu.Lock()
+func (me *Engine) Open() error {
 	if me.isOpen {
-		me.mu.Unlock()
-		return
+		return nil
 	}
-	me.mu.Unlock()
-	log.Info("Messager: opening")
-	// Unlock before invoking RegisterNotifier because it
-	// obtains the same lock.
+
 	me.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
+	return nil
 }
 
 // Close closes the Engine service.
@@ -99,7 +95,6 @@ func (me *Engine) Close() {
 		mm.Close()
 	}
 	me.managers = make(map[string]*messageManager)
-	log.Info("Messager: closed")
 }
 
 // Subscribe subscribes to messages from the requested table.

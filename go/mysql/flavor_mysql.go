@@ -32,8 +32,7 @@ type mysqlFlavor struct{}
 
 // masterGTIDSet is part of the Flavor interface.
 func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
-	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
-	qr, err := c.ExecuteFetch("SELECT @@global.gtid_executed", 1, false)
+	qr, err := c.ExecuteFetch("SELECT @@GLOBAL.gtid_executed", 1, false)
 	if err != nil {
 		return nil, err
 	}
@@ -43,11 +42,11 @@ func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
-func (mysqlFlavor) startReplicationCommand() string {
+func (mysqlFlavor) startSlaveCommand() string {
 	return "START SLAVE"
 }
 
-func (mysqlFlavor) restartReplicationCommands() []string {
+func (mysqlFlavor) restartSlaveCommands() []string {
 	return []string{
 		"STOP SLAVE",
 		"RESET SLAVE",
@@ -55,20 +54,16 @@ func (mysqlFlavor) restartReplicationCommands() []string {
 	}
 }
 
-func (mysqlFlavor) startReplicationUntilAfter(pos Position) string {
+func (mysqlFlavor) startSlaveUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL SQL_AFTER_GTIDS = '%s'", pos)
 }
 
-func (mysqlFlavor) stopReplicationCommand() string {
+func (mysqlFlavor) stopSlaveCommand() string {
 	return "STOP SLAVE"
 }
 
-func (mysqlFlavor) stopIOThreadCommand() string {
-	return "STOP SLAVE IO_THREAD"
-}
-
 // sendBinlogDumpCommand is part of the Flavor interface.
-func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error {
+func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error {
 	gtidSet, ok := startPos.GTIDSet.(Mysql56GTIDSet)
 	if !ok {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
@@ -76,7 +71,7 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Posi
 
 	// Build the command.
 	sidBlock := gtidSet.SIDBlock()
-	return c.WriteComBinlogDumpGTID(serverID, "", 4, 0, sidBlock)
+	return c.WriteComBinlogDumpGTID(slaveID, "", 4, 0, sidBlock)
 }
 
 // resetReplicationCommands is part of the Flavor interface.
@@ -87,51 +82,51 @@ func (mysqlFlavor) resetReplicationCommands(c *Conn) []string {
 		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
 	}
 	if c.SemiSyncExtensionLoaded() {
-		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false") // semi-sync will be enabled if needed when replica is started.
+		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false") // semi-sync will be enabled if needed when slave is started.
 	}
 	return resetCommands
 }
 
-// setReplicationPositionCommands is part of the Flavor interface.
-func (mysqlFlavor) setReplicationPositionCommands(pos Position) []string {
+// setSlavePositionCommands is part of the Flavor interface.
+func (mysqlFlavor) setSlavePositionCommands(pos Position) []string {
 	return []string{
 		"RESET MASTER", // We must clear gtid_executed before setting gtid_purged.
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", pos),
 	}
 }
 
-// setReplicationPositionCommands is part of the Flavor interface.
+// setSlavePositionCommands is part of the Flavor interface.
 func (mysqlFlavor) changeMasterArg() string {
 	return "MASTER_AUTO_POSITION = 1"
 }
 
 // status is part of the Flavor interface.
-func (mysqlFlavor) status(c *Conn) (ReplicationStatus, error) {
+func (mysqlFlavor) status(c *Conn) (SlaveStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW SLAVE STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return ReplicationStatus{}, err
+		return SlaveStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data, meaning the server
-		// is not configured as a replica.
-		return ReplicationStatus{}, ErrNotReplica
+		// is not configured as a slave.
+		return SlaveStatus{}, ErrNotSlave
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return ReplicationStatus{}, err
+		return SlaveStatus{}, err
 	}
 
-	return parseMysqlReplicationStatus(resultMap)
+	return parseMysqlSlaveStatus(resultMap)
 }
 
-func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus, error) {
-	status := parseReplicationStatus(resultMap)
+func parseMysqlSlaveStatus(resultMap map[string]string) (SlaveStatus, error) {
+	status := parseSlaveStatus(resultMap)
 	uuidString := resultMap["Master_UUID"]
 	if uuidString != "" {
 		sid, err := ParseSID(uuidString)
 		if err != nil {
-			return ReplicationStatus{}, vterrors.Wrapf(err, "cannot decode MasterUUID")
+			return SlaveStatus{}, vterrors.Wrapf(err, "cannot decode MasterUUID")
 		}
 		status.MasterUUID = sid
 	}
@@ -139,11 +134,11 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	var err error
 	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
-		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
+		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
 	relayLogGTIDSet, err := parseMysql56GTIDSet(resultMap["Retrieved_Gtid_Set"])
 	if err != nil {
-		return ReplicationStatus{}, vterrors.Wrapf(err, "ReplicationStatus can't parse MySQL 5.6 GTID (Retrieved_Gtid_Set: %#v)", resultMap["Retrieved_Gtid_Set"])
+		return SlaveStatus{}, vterrors.Wrapf(err, "SlaveStatus can't parse MySQL 5.6 GTID (Retrieved_Gtid_Set: %#v)", resultMap["Retrieved_Gtid_Set"])
 	}
 	// We take the union of the executed and retrieved gtidset, because the retrieved gtidset only represents GTIDs since
 	// the relay log has been reset. To get the full Position, we need to take a union of executed GTIDSets, since these would
@@ -152,39 +147,6 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 
 	return status, nil
 }
-
-// masterStatus is part of the Flavor interface.
-func (mysqlFlavor) masterStatus(c *Conn) (MasterStatus, error) {
-	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
-	if err != nil {
-		return MasterStatus{}, err
-	}
-	if len(qr.Rows) == 0 {
-		// The query returned no data. We don't know how this could happen.
-		return MasterStatus{}, ErrNoMasterStatus
-	}
-
-	resultMap, err := resultToMap(qr)
-	if err != nil {
-		return MasterStatus{}, err
-	}
-
-	return parseMysqlMasterStatus(resultMap)
-}
-
-func parseMysqlMasterStatus(resultMap map[string]string) (MasterStatus, error) {
-	status := parseMasterStatus(resultMap)
-
-	var err error
-	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
-	if err != nil {
-		return MasterStatus{}, vterrors.Wrapf(err, "MasterStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
-	}
-
-	return status, nil
-}
-
-// waitUntilPositionCommand is part of the Flavor interface.
 
 // waitUntilPositionCommand is part of the Flavor interface.
 func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {

@@ -26,8 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// MariadbFlavorID is the string identifier for the MariaDB flavor.
-const MariadbFlavorID = "MariaDB"
+const mariadbFlavorID = "MariaDB"
 
 // parseMariadbGTID is registered as a GTID parser.
 func parseMariadbGTID(s string) (GTID, error) {
@@ -94,7 +93,7 @@ func (gtid MariadbGTID) String() string {
 
 // Flavor implements GTID.Flavor().
 func (gtid MariadbGTID) Flavor() string {
-	return MariadbFlavorID
+	return mariadbFlavorID
 }
 
 // SequenceDomain implements GTID.SequenceDomain().
@@ -141,7 +140,7 @@ func (gtidSet MariadbGTIDSet) String() string {
 
 // Flavor implements GTIDSet.Flavor()
 func (gtidSet MariadbGTIDSet) Flavor() string {
-	return MariadbFlavorID
+	return mariadbFlavorID
 }
 
 // ContainsGTID implements GTIDSet.ContainsGTID().
@@ -233,21 +232,6 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 	return newSet
 }
 
-//Last returns the last gtid
-func (gtidSet MariadbGTIDSet) Last() string {
-	// Sort domains so the string format is deterministic.
-	domains := make([]uint32, 0, len(gtidSet))
-	for domain := range gtidSet {
-		domains = append(domains, domain)
-	}
-	sort.Slice(domains, func(i, j int) bool {
-		return domains[i] < domains[j]
-	})
-
-	lastGTID := domains[len(gtidSet)-1]
-	return gtidSet[lastGTID].String()
-}
-
 // deepCopy returns a deep copy of the set.
 func (gtidSet MariadbGTIDSet) deepCopy() MariadbGTIDSet {
 	newSet := make(MariadbGTIDSet, len(gtidSet))
@@ -267,6 +251,6 @@ func (gtidSet MariadbGTIDSet) addGTID(otherGTID MariadbGTID) {
 }
 
 func init() {
-	gtidParsers[MariadbFlavorID] = parseMariadbGTID
-	gtidSetParsers[MariadbFlavorID] = parseMariadbGTIDSet
+	gtidParsers[mariadbFlavorID] = parseMariadbGTID
+	gtidSetParsers[mariadbFlavorID] = parseMariadbGTIDSet
 }

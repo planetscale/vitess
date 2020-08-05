@@ -20,8 +20,6 @@ import (
 	"context"
 	"testing"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -37,9 +35,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Cells: []string{"cell", "cell1"},
 	}
 
-	if err := ts.CreateCellsAlias(context.Background(), "region1", cellsAlias); err != nil {
-		log.Errorf("creating cellsAlias \"region1\" failed: %v", err)
-	}
+	ts.CreateCellsAlias(context.Background(), "region1", cellsAlias)
 
 	defer ts.DeleteCellsAlias(context.Background(), "region1")
 
@@ -47,9 +43,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		Cells: []string{"cell2"},
 	}
 
-	if err := ts.CreateCellsAlias(context.Background(), "region2", cellsAlias); err != nil {
-		log.Errorf("creating cellsAlias \"region2\" failed: %v", err)
-	}
+	ts.CreateCellsAlias(context.Background(), "region2", cellsAlias)
 
 	defer ts.DeleteCellsAlias(context.Background(), "region2")
 
@@ -236,7 +230,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
-	// add a third tablet as replica in diff cell, same region
+	// add a third tablet as slave in diff cell, same region
 	tablet3 := topo.NewTablet(12, "cell1", "host3")
 	ts3 := &LegacyTabletStats{
 		Key:     "t3",
@@ -257,7 +251,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
-	// add a 4th replica tablet in a diff cell, diff region
+	// add a 4th slave tablet in a diff cell, diff region
 	tablet4 := topo.NewTablet(13, "cell2", "host4")
 	ts4 := &LegacyTabletStats{
 		Key:     "t4",

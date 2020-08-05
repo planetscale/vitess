@@ -146,9 +146,6 @@ create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) co
     },
 	"cproduct": {
 		"type": "reference"
-	},
-	"vproduct": {
-		"type": "reference"
 	}
   }
 }

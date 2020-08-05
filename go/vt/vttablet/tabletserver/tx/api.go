@@ -17,13 +17,17 @@ limitations under the License.
 package tx
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 type (
@@ -40,6 +44,39 @@ type (
 		AcceptReadWrite() error
 		AcceptReadOnly() error
 		StopGently()
+	}
+
+	//IStatefulConnection is a connection where the user is trusted to clean things up after using the connection
+	IStatefulConnection interface {
+		// Executes a query on the connection
+		Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
+
+		// Release is used after we are done with the connection and will not use it again
+		Release(reason ReleaseReason)
+
+		// Releasef is used after we are done with the connection and will not use it again
+		Releasef(format string, params ...interface{})
+
+		// Unlock marks the connection as not in use. The connection remains active.
+		Unlock()
+
+		IsInTransaction() bool
+
+		Close()
+
+		IsClosed() bool
+
+		String() string
+
+		TxProperties() *Properties
+
+		ID() ConnID
+
+		UnderlyingdDBConn() *connpool.DBConn
+
+		CleanTxState()
+
+		Stats() *tabletenv.Stats
 	}
 
 	// ReleaseReason as type int
@@ -76,12 +113,6 @@ const (
 
 	// ConnInitFail - connection released on failed to start tx.
 	ConnInitFail
-
-	// ConnRelease - connection closed.
-	ConnRelease
-
-	// ConnRenewFail - reserve connection renew failed.
-	ConnRenewFail
 )
 
 func (r ReleaseReason) String() string {
@@ -94,23 +125,19 @@ func (r ReleaseReason) Name() string {
 }
 
 var txResolutions = map[ReleaseReason]string{
-	TxClose:       "closed",
-	TxCommit:      "transaction committed",
-	TxRollback:    "transaction rolled back",
-	TxKill:        "kill",
-	ConnInitFail:  "initFail",
-	ConnRelease:   "release connection",
-	ConnRenewFail: "connection renew failed",
+	TxClose:      "closed",
+	TxCommit:     "transaction committed",
+	TxRollback:   "transaction rolled back",
+	TxKill:       "kill",
+	ConnInitFail: "initFail",
 }
 
 var txNames = map[ReleaseReason]string{
-	TxClose:       "close",
-	TxCommit:      "commit",
-	TxRollback:    "rollback",
-	TxKill:        "kill",
-	ConnInitFail:  "initFail",
-	ConnRelease:   "release",
-	ConnRenewFail: "renewFail",
+	TxClose:      "close",
+	TxCommit:     "commit",
+	TxRollback:   "rollback",
+	TxKill:       "kill",
+	ConnInitFail: "initFail",
 }
 
 // RecordQuery records the query against this transaction.

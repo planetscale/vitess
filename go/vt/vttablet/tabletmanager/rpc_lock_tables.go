@@ -35,52 +35,44 @@ var (
 )
 
 // LockTables will lock all tables with read locks, effectively pausing replication while the lock is held (idempotent)
-func (tm *TabletManager) LockTables(ctx context.Context) error {
+func (agent *ActionAgent) LockTables(ctx context.Context) error {
 	// get a connection
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
 
-	if tm._lockTablesConnection != nil {
+	if agent._lockTablesConnection != nil {
 		// tables are already locked, bail out
 		return errors.New("tables already locked on this tablet")
 	}
 
-	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
+	conn, err := agent.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
 		return err
 	}
-	// We successfully opened a connection. If we return for any reason before
-	// storing this connection in the TabletManager object, we need to close it
-	// to avoid leaking it.
-	defer func() {
-		if tm._lockTablesConnection != conn {
-			conn.Close()
-		}
-	}()
 
 	// FTWRL is preferable, so we'll try that first
 	_, err = conn.ExecuteFetch("FLUSH TABLES WITH READ LOCK", 0, false)
 	if err != nil {
 		// as fall back, we can lock each individual table as well.
 		// this requires slightly less privileges but achieves the same effect
-		err = tm.lockTablesUsingLockTables(conn)
+		err = agent.lockTablesUsingLockTables(conn)
 		if err != nil {
 			return err
 		}
 	}
 	log.Infof("[%v] Tables locked", conn.ConnectionID)
 
-	tm._lockTablesConnection = conn
-	tm._lockTablesTimer = time.AfterFunc(*lockTablesTimeout, func() {
+	agent._lockTablesConnection = conn
+	agent._lockTablesTimer = time.AfterFunc(*lockTablesTimeout, func() {
 		// Here we'll sleep until the timeout time has elapsed.
 		// If the table locks have not been released yet, we'll release them here
-		tm.mutex.Lock()
-		defer tm.mutex.Unlock()
+		agent.mutex.Lock()
+		defer agent.mutex.Unlock()
 
 		// We need the mutex locked before we check this field
-		if tm._lockTablesConnection == conn {
+		if agent._lockTablesConnection == conn {
 			log.Errorf("table lock timed out and released the lock - something went wrong")
-			err = tm.unlockTablesHoldingMutex()
+			err = agent.unlockTablesHoldingMutex()
 			if err != nil {
 				log.Errorf("failed to unlock tables: %v", err)
 			}
@@ -90,13 +82,13 @@ func (tm *TabletManager) LockTables(ctx context.Context) error {
 	return nil
 }
 
-func (tm *TabletManager) lockTablesUsingLockTables(conn *dbconnpool.DBConnection) error {
+func (agent *ActionAgent) lockTablesUsingLockTables(conn *dbconnpool.DBConnection) error {
 	log.Warningf("failed to lock tables with FTWRL - falling back to LOCK TABLES")
 
 	// Ensure schema engine is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized. Open() is idempotent, so this
 	// is always safe
-	se := tm.QueryServiceControl.SchemaEngine()
+	se := agent.QueryServiceControl.SchemaEngine()
 	if err := se.Open(); err != nil {
 		return err
 	}
@@ -110,7 +102,7 @@ func (tm *TabletManager) lockTablesUsingLockTables(conn *dbconnpool.DBConnection
 		tableNames = append(tableNames, fmt.Sprintf("%s READ", sqlescape.EscapeID(name)))
 	}
 	lockStatement := fmt.Sprintf("LOCK TABLES %v", strings.Join(tableNames, ", "))
-	_, err := conn.ExecuteFetch(fmt.Sprintf("USE %s", tm.DBConfigs.DBName), 0, false)
+	_, err := conn.ExecuteFetch(fmt.Sprintf("USE %s", agent.DBConfigs.DBName), 0, false)
 	if err != nil {
 		return err
 	}
@@ -124,28 +116,28 @@ func (tm *TabletManager) lockTablesUsingLockTables(conn *dbconnpool.DBConnection
 }
 
 // UnlockTables will unlock all tables (idempotent)
-func (tm *TabletManager) UnlockTables(ctx context.Context) error {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
+func (agent *ActionAgent) UnlockTables(ctx context.Context) error {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
 
-	if tm._lockTablesConnection == nil {
+	if agent._lockTablesConnection == nil {
 		return fmt.Errorf("tables were not locked")
 	}
 
-	return tm.unlockTablesHoldingMutex()
+	return agent.unlockTablesHoldingMutex()
 }
 
-func (tm *TabletManager) unlockTablesHoldingMutex() error {
+func (agent *ActionAgent) unlockTablesHoldingMutex() error {
 	// We are cleaning up manually, let's kill the timer
-	tm._lockTablesTimer.Stop()
-	_, err := tm._lockTablesConnection.ExecuteFetch("UNLOCK TABLES", 0, false)
+	agent._lockTablesTimer.Stop()
+	_, err := agent._lockTablesConnection.ExecuteFetch("UNLOCK TABLES", 0, false)
 	if err != nil {
 		return err
 	}
-	log.Infof("[%v] Tables unlocked", tm._lockTablesConnection.ConnectionID)
-	tm._lockTablesConnection.Close()
-	tm._lockTablesConnection = nil
-	tm._lockTablesTimer = nil
+	log.Infof("[%v] Tables unlocked", agent._lockTablesConnection.ConnectionID)
+	agent._lockTablesConnection.Close()
+	agent._lockTablesConnection = nil
+	agent._lockTablesTimer = nil
 
 	return nil
 }

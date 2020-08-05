@@ -7,6 +7,8 @@ services:
     volumes:
       - .:/go/src/vitess.io/vitess/examples/are-you-alive
     working_dir: /go/src/vitess.io/vitess/examples/are-you-alive
+    environment:
+      MYSQL_CONN_STRING: root:mysql@tcp(mysql)/testfixture
     depends_on:
       - mysql
     ports:

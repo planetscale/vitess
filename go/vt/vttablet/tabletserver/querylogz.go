@@ -52,7 +52,6 @@ var (
 				<th>RowsAffected</th>
 				<th>Response Size</th>
 				<th>Transaction ID</th>
-				<th>Reserved ID</th>
 				<th>Error</th>
 			</tr>
 		</thead>
@@ -81,7 +80,6 @@ var (
 			<td>{{.RowsAffected}}</td>
 			<td>{{.SizeOfResponse}}</td>
 			<td>{{.TransactionID}}</td>
-			<td>{{.ReservedID}}</td>
 			<td>{{.ErrorStr}}</td>
 		</tr>
 	`))

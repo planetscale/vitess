@@ -17,16 +17,8 @@ limitations under the License.
 package discovery
 
 import (
-	"context"
 	"sort"
 	"sync"
-
-	"vitess.io/vitess/go/sync2"
-
-	"github.com/golang/protobuf/proto"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -37,12 +29,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	currentTabletUID sync2.AtomicInt32
-)
-
 // This file contains the definitions for a FakeHealthCheck class to
-// simulate a HealthCheck module. Note it is not in a sub-package because
+// simulate a LegacyHealthCheck module. Note it is not in a sub-package because
 // otherwise it couldn't be used in this package's tests because of
 // circular dependencies.
 
@@ -53,7 +41,7 @@ func NewFakeHealthCheck() *FakeHealthCheck {
 	}
 }
 
-// FakeHealthCheck implements discovery.HealthCheck.
+// FakeHealthCheck implements discovery.LegacyHealthCheck.
 type FakeHealthCheck struct {
 	// mu protects the items map
 	mu    sync.RWMutex
@@ -61,40 +49,20 @@ type FakeHealthCheck struct {
 }
 
 type fhcItem struct {
-	ts *TabletHealth
+	ts   *TabletHealth
+	conn queryservice.QueryService
 }
 
 //
-// discovery.HealthCheck interface methods
+// discovery.LegacyHealthCheck interface methods
 //
 
 // RegisterStats is not implemented.
 func (fhc *FakeHealthCheck) RegisterStats() {
 }
 
-// WaitForAllServingTablets is not implemented.
-func (fhc *FakeHealthCheck) WaitForAllServingTablets(ctx context.Context, targets []*querypb.Target) error {
-	return nil
-}
-
-// GetHealthyTabletStats is not implemented.
-func (fhc *FakeHealthCheck) GetHealthyTabletStats(target *querypb.Target) []*TabletHealth {
-	result := make([]*TabletHealth, 0)
-	for _, item := range fhc.items {
-		if proto.Equal(item.ts.Target, target) {
-			result = append(result, item.ts)
-		}
-	}
-	return result
-}
-
-// Subscribe is not implemented.
-func (fhc *FakeHealthCheck) Subscribe() chan *TabletHealth {
-	return nil
-}
-
-// Unsubscribe is not implemented.
-func (fhc *FakeHealthCheck) Unsubscribe(c chan *TabletHealth) {
+// WaitForInitialStatsUpdates is not implemented.
+func (fhc *FakeHealthCheck) WaitForInitialStatsUpdates() {
 }
 
 // AddTablet adds the tablet.
@@ -144,16 +112,13 @@ func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet) {
 }
 
 // TabletConnection returns the TabletConn of the given tablet.
-func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
-	aliasStr := topoproto.TabletAliasString(alias)
+func (fhc *FakeHealthCheck) TabletConnection(key string) queryservice.QueryService {
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
-	for _, item := range fhc.items {
-		if proto.Equal(alias, item.ts.Tablet.Alias) {
-			return item.ts.Conn, nil
-		}
+	if item := fhc.items[key]; item != nil {
+		return item.conn
 	}
-	return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet %v not found", aliasStr)
+	return nil
 }
 
 // CacheStatus returns the status for each tablet
@@ -195,10 +160,7 @@ func (fhc *FakeHealthCheck) Reset() {
 // The Listener is called, as if AddTablet had been called.
 // For flexibility the connection is created via a connFactory callback
 func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, connFactory func(*topodatapb.Tablet) queryservice.QueryService) queryservice.QueryService {
-	// tabletUID must be unique
-	currentTabletUID.Add(1)
-	uid := currentTabletUID.Get()
-	t := topo.NewTablet(uint32(uid), cell, host)
+	t := topo.NewTablet(0, cell, host)
 	t.Keyspace = keyspace
 	t.Shard = shard
 	t.Type = tabletType
@@ -226,7 +188,7 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 	item.ts.Stats = &querypb.RealtimeStats{}
 	item.ts.LastError = err
 	conn := connFactory(t)
-	item.ts.Conn = conn
+	item.conn = conn
 
 	return conn
 }

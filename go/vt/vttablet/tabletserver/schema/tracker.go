@@ -20,23 +20,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"sync"
-	"time"
-
-	"vitess.io/vitess/go/mysql"
-
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/gogo/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/withddl"
 )
 
-const createSidecarDB = "CREATE DATABASE IF NOT EXISTS _vt"
 const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version (
 		 id INT AUTO_INCREMENT,
 		  pos VARBINARY(10000) NOT NULL,
@@ -45,231 +35,84 @@ const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version
 		  schemax BLOB NOT NULL,
 		  PRIMARY KEY (id)
 		) ENGINE=InnoDB`
-const alterSchemaTrackingTableDDLBlob = "alter table _vt.schema_version modify column ddl BLOB NOT NULL"
-const alterSchemaTrackingTableSchemaxBlob = "alter table _vt.schema_version modify column schemax LONGBLOB NOT NULL"
 
-var withDDL = withddl.New([]string{
-	createSidecarDB,
-	createSchemaTrackingTable,
-	alterSchemaTrackingTableDDLBlob,
-	alterSchemaTrackingTableSchemaxBlob,
-})
-
-// VStreamer defines  the functions of VStreamer
-// that the replicationWatcher needs.
-type VStreamer interface {
-	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+//Subscriber will get notified when the schema has been updated
+type Subscriber interface {
+	SchemaUpdated(gtid string, ddl string, timestamp int64) error
 }
 
-// Tracker watches the replication and saves the latest schema into _vt.schema_version when a DDL is encountered.
+var _ Subscriber = (*Tracker)(nil)
+
+// Tracker implements Subscriber and persists versions into the ddb
 type Tracker struct {
+	engine  *Engine
 	enabled bool
-
-	mu     sync.Mutex
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-
-	env    tabletenv.Env
-	vs     VStreamer
-	engine *Engine
 }
 
 // NewTracker creates a Tracker, needs an Open SchemaEngine (which implements the trackerEngine interface)
-func NewTracker(env tabletenv.Env, vs VStreamer, engine *Engine) *Tracker {
-	return &Tracker{
-		enabled: env.Config().TrackSchemaVersions,
-		env:     env,
-		vs:      vs,
-		engine:  engine,
-	}
+func NewTracker(engine *Engine) *Tracker {
+	return &Tracker{engine: engine}
 }
 
 // Open enables the tracker functionality
-func (tr *Tracker) Open() {
-	if !tr.enabled {
-		return
-	}
-	log.Info("Schema Tracker: opening")
-
-	tr.mu.Lock()
-	defer tr.mu.Unlock()
-	if tr.cancel != nil {
-		return
-	}
-
-	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
-	tr.cancel = cancel
-	tr.wg.Add(1)
-
-	go tr.process(ctx)
+func (t *Tracker) Open() {
+	t.enabled = true
 }
 
 // Close disables the tracker functionality
-func (tr *Tracker) Close() {
-	tr.mu.Lock()
-	defer tr.mu.Unlock()
-	if tr.cancel == nil {
-		return
-	}
-
-	tr.cancel()
-	tr.cancel = nil
-	tr.wg.Wait()
-	log.Info("Schema Tracker: closed")
+func (t *Tracker) Close() {
+	t.enabled = false
 }
 
-// Enable forces tracking to be on or off.
-// Only used for testing.
-func (tr *Tracker) Enable(enabled bool) {
-	tr.mu.Lock()
-	tr.enabled = enabled
-	tr.mu.Unlock()
-	if enabled {
-		tr.Open()
-	} else {
-		tr.Close()
-	}
-}
-
-func (tr *Tracker) process(ctx context.Context) {
-	defer tr.env.LogError()
-	defer tr.wg.Done()
-	if err := tr.possiblyInsertInitialSchema(ctx); err != nil {
-		log.Errorf("possiblyInsertInitialSchema eror: %v", err)
-		return
-	}
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match: "/.*",
-		}},
-	}
-
-	var gtid string
-	for {
-		err := tr.vs.Stream(ctx, "current", nil, filter, func(events []*binlogdatapb.VEvent) error {
-			for _, event := range events {
-				if event.Type == binlogdatapb.VEventType_GTID {
-					gtid = event.Gtid
-				}
-				if event.Type == binlogdatapb.VEventType_DDL {
-					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
-						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
-						log.Errorf("Error updating schema: %s", sqlparser.TruncateForLog(err.Error()))
-					}
-				}
-			}
-			return nil
-		})
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(5 * time.Second):
-		}
-		log.Infof("Tracker's vStream ended: %v, retrying in 5 seconds", err)
-		time.Sleep(5 * time.Second)
-	}
-}
-
-func (tr *Tracker) currentPosition(ctx context.Context) (mysql.Position, error) {
-	conn, err := tr.engine.cp.Connect(ctx)
-	if err != nil {
-		return mysql.Position{}, err
-	}
-	defer conn.Close()
-	return conn.MasterPosition()
-}
-
-func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) {
-	conn, err := tr.engine.GetConnection(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer conn.Recycle()
-	result, err := withDDL.Exec(ctx, "select id from _vt.schema_version limit 1", conn.Exec)
-	if err != nil {
-		return false, err
-	}
-	if len(result.Rows) == 0 {
-		return true, nil
-	}
-	return false, nil
-}
-
-// possiblyInsertInitialSchema stores the latest schema when a tracker starts and the schema_version table is empty
-// this enables the right schema to be available between the time the tracker starts first and the first DDL is applied
-func (tr *Tracker) possiblyInsertInitialSchema(ctx context.Context) error {
-	var err error
-	needsWarming, err := tr.isSchemaVersionTableEmpty(ctx)
-	if err != nil {
-		return err
-	}
-	if !needsWarming { // _vt.schema_version is not empty, nothing to do here
+// SchemaUpdated is called by a vstream when it encounters a DDL
+func (t *Tracker) SchemaUpdated(gtid string, ddl string, timestamp int64) error {
+	if !t.enabled {
+		log.Infof("Tracker not enabled, ignoring SchemaUpdated event")
 		return nil
 	}
-	if err = tr.engine.Reload(ctx); err != nil {
-		return err
-	}
-
-	timestamp := time.Now().UnixNano() / 1e9
-	ddl := ""
-	pos, err := tr.currentPosition(ctx)
-	if err != nil {
-		return err
-	}
-	gtid := mysql.EncodePosition(pos)
-	log.Infof("Saving initial schema for gtid %s", gtid)
-
-	return tr.saveCurrentSchemaToDb(ctx, gtid, ddl, timestamp)
-}
-
-func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error {
-	log.Infof("Processing schemaUpdated event for gtid %s, ddl %s", gtid, ddl)
+	log.Infof("Processing SchemaUpdated event for gtid %s, ddl %s", gtid, ddl)
 	if gtid == "" || ddl == "" {
-		return fmt.Errorf("got invalid gtid or ddl in schemaUpdated")
+		return fmt.Errorf("got invalid gtid or ddl in SchemaUpdated")
 	}
 	ctx := context.Background()
-	// Engine will have reloaded the schema because vstream will reload it on a DDL
-	return tr.saveCurrentSchemaToDb(ctx, gtid, ddl, timestamp)
-}
 
-func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, timestamp int64) error {
-	tables := tr.engine.GetSchema()
+	// Engine will have reloaded the schema because vstream will reload it on a DDL
+	tables := t.engine.GetSchema()
 	dbSchema := &binlogdatapb.MinimalSchema{
 		Tables: []*binlogdatapb.MinimalTable{},
 	}
-	for _, table := range tables {
-		dbSchema.Tables = append(dbSchema.Tables, newMinimalTable(table))
+	for name, table := range tables {
+		t := &binlogdatapb.MinimalTable{
+			Name:   name,
+			Fields: table.Fields,
+		}
+		pks := make([]int64, 0)
+		for _, pk := range table.PKColumns {
+			pks = append(pks, int64(pk))
+		}
+		t.PKColumns = pks
+		dbSchema.Tables = append(dbSchema.Tables, t)
 	}
 	blob, _ := proto.Marshal(dbSchema)
 
-	conn, err := tr.engine.GetConnection(ctx)
+	conn, err := t.engine.GetConnection(ctx)
 	if err != nil {
 		return err
 	}
 	defer conn.Recycle()
-
+	_, err = conn.Exec(ctx, createSchemaTrackingTable, 1, false)
+	if err != nil {
+		return err
+	}
 	query := fmt.Sprintf("insert into _vt.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
 		"values (%v, %v, %v, %d)", encodeString(gtid), encodeString(ddl), encodeString(string(blob)), timestamp)
-	_, err = withDDL.Exec(ctx, query, conn.Exec)
+
+	_, err = conn.Exec(ctx, query, 1, false)
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {
-	table := &binlogdatapb.MinimalTable{
-		Name:   st.Name.String(),
-		Fields: st.Fields,
-	}
-	var pkc []int64
-	for _, pk := range st.PKColumns {
-		pkc = append(pkc, int64(pk))
-	}
-	table.PKColumns = pkc
-	return table
 }
 
 func encodeString(in string) string {

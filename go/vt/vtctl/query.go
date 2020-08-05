@@ -228,12 +228,11 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
-	// We do not support reserve connection through vtctl commands, so reservedID is always 0.
 	qr, err := conn.Execute(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
-	}, subFlags.Arg(1), bindVars, int64(*transactionID), 0, executeOptions)
+	}, subFlags.Arg(1), bindVars, int64(*transactionID), executeOptions)
 	if err != nil {
 		return fmt.Errorf("execute failed: %v", err)
 	}
@@ -328,13 +327,11 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	defer conn.Close(ctx)
 
-	// we do not support reserving through vtctl commands
-	_, err = conn.Commit(ctx, &querypb.Target{
+	return conn.Commit(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
 	}, transactionID)
-	return err
 }
 
 func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -374,13 +371,11 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	}
 	defer conn.Close(ctx)
 
-	// we do not support reserving through vtctl commands
-	_, err = conn.Rollback(ctx, &querypb.Target{
+	return conn.Rollback(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
 	}, transactionID)
-	return err
 }
 
 func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

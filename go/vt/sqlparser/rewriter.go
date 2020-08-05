@@ -515,18 +515,6 @@ func replaceRangeCondTo(newNode, parent SQLNode) {
 	parent.(*RangeCond).To = newNode.(Expr)
 }
 
-func replaceReleaseName(newNode, parent SQLNode) {
-	parent.(*Release).Name = newNode.(ColIdent)
-}
-
-func replaceSRollbackName(newNode, parent SQLNode) {
-	parent.(*SRollback).Name = newNode.(ColIdent)
-}
-
-func replaceSavepointName(newNode, parent SQLNode) {
-	parent.(*Savepoint).Name = newNode.(ColIdent)
-}
-
 func replaceSelectComments(newNode, parent SQLNode) {
 	parent.(*Select).Comments = newNode.(Comments)
 }
@@ -733,8 +721,8 @@ func replaceUnaryExprExpr(newNode, parent SQLNode) {
 	parent.(*UnaryExpr).Expr = newNode.(Expr)
 }
 
-func replaceUnionFirstStatement(newNode, parent SQLNode) {
-	parent.(*Union).FirstStatement = newNode.(SelectStatement)
+func replaceUnionLeft(newNode, parent SQLNode) {
+	parent.(*Union).Left = newNode.(SelectStatement)
 }
 
 func replaceUnionLimit(newNode, parent SQLNode) {
@@ -745,18 +733,8 @@ func replaceUnionOrderBy(newNode, parent SQLNode) {
 	parent.(*Union).OrderBy = newNode.(OrderBy)
 }
 
-type replaceUnionUnionSelects int
-
-func (r *replaceUnionUnionSelects) replace(newNode, container SQLNode) {
-	container.(*Union).UnionSelects[int(*r)] = newNode.(*UnionSelect)
-}
-
-func (r *replaceUnionUnionSelects) inc() {
-	*r++
-}
-
-func replaceUnionSelectStatement(newNode, parent SQLNode) {
-	parent.(*UnionSelect).Statement = newNode.(SelectStatement)
+func replaceUnionRight(newNode, parent SQLNode) {
+	parent.(*Union).Right = newNode.(SelectStatement)
 }
 
 func replaceUpdateComments(newNode, parent SQLNode) {
@@ -862,14 +840,6 @@ func replaceWhenVal(newNode, parent SQLNode) {
 
 func replaceWhereExpr(newNode, parent SQLNode) {
 	parent.(*Where).Expr = newNode.(Expr)
-}
-
-func replaceXorExprLeft(newNode, parent SQLNode) {
-	parent.(*XorExpr).Left = newNode.(Expr)
-}
-
-func replaceXorExprRight(newNode, parent SQLNode) {
-	parent.(*XorExpr).Right = newNode.(Expr)
 }
 
 // apply is where the visiting happens. Here is where we keep the big switch-case that will be used
@@ -1179,18 +1149,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case ReferenceAction:
 
-	case *Release:
-		a.apply(node, n.Name, replaceReleaseName)
-
 	case *Rollback:
 
 	case *SQLVal:
-
-	case *SRollback:
-		a.apply(node, n.Name, replaceSRollbackName)
-
-	case *Savepoint:
-		a.apply(node, n.Name, replaceSavepointName)
 
 	case *Select:
 		a.apply(node, n.Comments, replaceSelectComments)
@@ -1310,18 +1271,10 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Expr, replaceUnaryExprExpr)
 
 	case *Union:
-		a.apply(node, n.FirstStatement, replaceUnionFirstStatement)
+		a.apply(node, n.Left, replaceUnionLeft)
 		a.apply(node, n.Limit, replaceUnionLimit)
 		a.apply(node, n.OrderBy, replaceUnionOrderBy)
-		replacerUnionSelects := replaceUnionUnionSelects(0)
-		replacerUnionSelectsB := &replacerUnionSelects
-		for _, item := range n.UnionSelects {
-			a.apply(node, item, replacerUnionSelectsB.replace)
-			replacerUnionSelectsB.inc()
-		}
-
-	case *UnionSelect:
-		a.apply(node, n.Statement, replaceUnionSelectStatement)
+		a.apply(node, n.Right, replaceUnionRight)
 
 	case *Update:
 		a.apply(node, n.Comments, replaceUpdateComments)
@@ -1384,10 +1337,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Where:
 		a.apply(node, n.Expr, replaceWhereExpr)
-
-	case *XorExpr:
-		a.apply(node, n.Left, replaceXorExprLeft)
-		a.apply(node, n.Right, replaceXorExprRight)
 
 	default:
 		panic("unknown ast type " + reflect.TypeOf(node).String())

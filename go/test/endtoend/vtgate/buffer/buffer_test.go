@@ -73,7 +73,7 @@ const (
 	demoteMasterQuery          = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
 	disableSemiSyncMasterQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
 	enableSemiSyncMasterQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
-	promoteQuery               = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
+	promoteSlaveQuery          = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
 )
 
 //threadParams is set of params passed into read and write threads
@@ -142,10 +142,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	attempt := c.i
 	// Value used in next UPDATE query. Increased after every query.
 	c.i++
-
-	if _, err := conn.ExecuteFetch("begin", 1000, true); err != nil {
-		log.Errorf("begin failed:%v", err)
-	}
+	conn.ExecuteFetch("begin", 1000, true)
 
 	result, err := conn.ExecuteFetch(fmt.Sprintf("UPDATE buffer SET msg='update %d' WHERE id = %d", attempt, updateRowID), 1000, true)
 
@@ -272,11 +269,9 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 		externalReparenting(ctx, t, clusterInstance)
 	} else {
 		//reparent call
-		if err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+		clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
 			fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-			"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias); err != nil {
-			log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand(\"PlannedRepare... caused an error : %v", err)
-		}
+			"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
 	}
 
 	<-readThreadInstance.waitForNotification
@@ -359,12 +354,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	newMaster := replica
 	master.VttabletProcess.QueryTablet(demoteMasterQuery, keyspaceUnshardedName, true)
 	if master.VttabletProcess.EnableSemiSync {
-
-		//log error
-		if _, err := master.VttabletProcess.QueryTablet(disableSemiSyncMasterQuery, keyspaceUnshardedName, true); err != nil {
-			log.Errorf("master.VttabletProcess.QueryTablet(disableSemi... caused an error : %v", err)
-		}
-
+		master.VttabletProcess.QueryTablet(disableSemiSyncMasterQuery, keyspaceUnshardedName, true)
 	}
 
 	// Wait for replica to catch up to master.
@@ -378,16 +368,11 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 		time.Sleep(time.Duration(w) * time.Second)
 	}
 
-	//Promote replica to new master and log error
-	if _, err := replica.VttabletProcess.QueryTablet(promoteQuery, keyspaceUnshardedName, true); err != nil {
-		log.Errorf("replica.VttabletProcess.QueryTablet(promoteQuery... caused an error : %v", err)
-	}
+	// Promote replica to new master.
+	replica.VttabletProcess.QueryTablet(promoteSlaveQuery, keyspaceUnshardedName, true)
 
 	if replica.VttabletProcess.EnableSemiSync {
-		//Log error
-		if _, err := replica.VttabletProcess.QueryTablet(enableSemiSyncMasterQuery, keyspaceUnshardedName, true); err != nil {
-			log.Errorf("replica.VttabletProcess.QueryTablet caused an error : %v", err)
-		}
+		replica.VttabletProcess.QueryTablet(enableSemiSyncMasterQuery, keyspaceUnshardedName, true)
 	}
 
 	// Configure old master to replicate from new master.
@@ -397,14 +382,8 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
 	changeMasterCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newMaster.MySQLPort)
+	oldMaster.VttabletProcess.QueryTablet(changeMasterCommands, keyspaceUnshardedName, true)
 
-	//Log error
-	if _, err := oldMaster.VttabletProcess.QueryTablet(changeMasterCommands, keyspaceUnshardedName, true); err != nil {
-		log.Errorf("oldMaster.VttabletProcess.QueryTablet caused an error : %v", err)
-	}
-
-	//Notify the new vttablet master about the reparent and Log error
-	if err := clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias); err != nil {
-		log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand caused an error : %v", err)
-	}
+	// Notify the new vttablet master about the reparent.
+	clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias)
 }

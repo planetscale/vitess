@@ -77,7 +77,7 @@ type (
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
 func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	config := env.Config()
-	transactionTimeout := config.Oltp.TxTimeoutSeconds.Get()
+	transactionTimeout := time.Duration(config.Oltp.TxTimeoutSeconds * 1e9)
 	axp := &TxPool{
 		env:                env,
 		scp:                NewStatefulConnPool(env),
@@ -125,12 +125,7 @@ func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
 	for _, conn := range tp.scp.GetOutdated(tp.Timeout(), "for tx killer rollback") {
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String())
-		if conn.IsTainted() {
-			tp.env.Stats().KillCounters.Add("ReservedConnection", 1)
-		}
-		if conn.IsInTransaction() {
-			tp.env.Stats().KillCounters.Add("Transactions", 1)
-		}
+		tp.env.Stats().KillCounters.Add("Transactions", 1)
 		conn.Close()
 		conn.Releasef("exceeded timeout: %v", tp.Timeout())
 	}
@@ -152,9 +147,9 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 	}
 }
 
-// GetAndLock fetches the connection associated to the connID and blocks it from concurrent use
+// GetAndLock fetches the connection associated to the transactionID and blocks it from concurrent use
 // You must call Unlock on TxConnection once done.
-func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnection, error) {
+func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (tx.IStatefulConnection, error) {
 	conn, err := tp.scp.GetAndLock(connID, reason)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
@@ -163,7 +158,7 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 }
 
 // Commit commits the transaction on the connection.
-func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (string, error) {
+func (tp *TxPool) Commit(ctx context.Context, txConn tx.IStatefulConnection) (string, error) {
 	if !txConn.IsInTransaction() {
 		return "", vterrors.New(vtrpcpb.Code_INTERNAL, "not in a transaction")
 	}
@@ -182,7 +177,7 @@ func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (strin
 }
 
 // RollbackAndRelease rolls back the transaction on the specified connection, and releases the connection when done
-func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn *StatefulConnection) {
+func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn tx.IStatefulConnection) {
 	defer txConn.Release(tx.TxRollback)
 	rollbackError := tp.Rollback(ctx, txConn)
 	if rollbackError != nil {
@@ -191,7 +186,7 @@ func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn *StatefulConnec
 }
 
 // Rollback rolls back the transaction on the specified connection.
-func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) error {
+func (tp *TxPool) Rollback(ctx context.Context, txConn tx.IStatefulConnection) error {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Rollback")
 	defer span.Finish()
 	if txConn.IsClosed() || !txConn.IsInTransaction() {
@@ -213,45 +208,30 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64, preQueries []string) (*StatefulConnection, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool) (tx.IStatefulConnection, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 
-	var conn *StatefulConnection
-	var err error
-	if reservedID != 0 {
-		conn, err = tp.scp.GetAndLock(reservedID, "start transaction on reserve conn")
-	} else {
-		immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
-		effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
-		if !tp.limiter.Get(immediateCaller, effectiveCaller) {
-			return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
-		}
-		conn, err = tp.createConn(ctx, options)
+	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
+	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
+	if !tp.limiter.Get(immediateCaller, effectiveCaller) {
+		return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 	}
+
+	conn, err := tp.createConn(ctx, options)
 	if err != nil {
 		return nil, "", err
 	}
-	sql, err := tp.begin(ctx, options, readOnly, conn, preQueries)
+	beginQueries, autocommit, err := createTransaction(ctx, options, conn, readOnly)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
 		return nil, "", err
 	}
-	return conn, sql, nil
-}
-
-func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection, preQueries []string) (string, error) {
-	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
-	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
-	beginQueries, autocommit, err := createTransaction(ctx, options, conn, readOnly, preQueries)
-	if err != nil {
-		return "", err
-	}
 
 	conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommit)
 
-	return beginQueries, nil
+	return conn, beginQueries, nil
 }
 
 func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
@@ -270,7 +250,7 @@ func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOption
 	return conn, nil
 }
 
-func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, conn *StatefulConnection, readOnly bool, preQueries []string) (string, bool, error) {
+func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, conn *StatefulConnection, readOnly bool) (string, bool, error) {
 	beginQueries := ""
 
 	autocommitTransaction := false
@@ -297,11 +277,6 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 		return "", false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
 
-	for _, preQuery := range preQueries {
-		if _, err := conn.Exec(ctx, preQuery, 1, false); err != nil {
-			return "", false, vterrors.Wrap(err, preQuery)
-		}
-	}
 	return beginQueries, autocommitTransaction, nil
 }
 
@@ -330,8 +305,29 @@ func (tp *TxPool) SetTimeout(timeout time.Duration) {
 	tp.ticks.SetInterval(timeout / 10)
 }
 
-func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) {
-	conn.LogTransaction(reason)
+func (tp *TxPool) txComplete(conn tx.IStatefulConnection, reason tx.ReleaseReason) {
+	tp.log(conn, reason)
 	tp.limiter.Release(conn.TxProperties().ImmediateCaller, conn.TxProperties().EffectiveCaller)
 	conn.CleanTxState()
+}
+
+func (tp *TxPool) log(txc tx.IStatefulConnection, reason tx.ReleaseReason) {
+	if txc.TxProperties() == nil {
+		return //Nothing to log as no transaction exists on this connection.
+	}
+	txc.TxProperties().Conclusion = reason.Name()
+	txc.TxProperties().EndTime = time.Now()
+
+	username := callerid.GetPrincipal(txc.TxProperties().EffectiveCaller)
+	if username == "" {
+		username = callerid.GetUsername(txc.TxProperties().ImmediateCaller)
+	}
+	duration := txc.TxProperties().EndTime.Sub(txc.TxProperties().StartTime)
+	txc.Stats().UserTransactionCount.Add([]string{username, reason.Name()}, 1)
+	txc.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
+	txc.TxProperties().Stats.Add(reason.Name(), duration)
+	if txc.TxProperties().LogToFile {
+		log.Infof("Logged transaction: %s", txc.String())
+	}
+	tabletenv.TxLogger.Send(txc)
 }

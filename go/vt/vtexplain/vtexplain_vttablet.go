@@ -73,13 +73,10 @@ type explainTablet struct {
 	currentTime   int
 }
 
-var _ queryservice.QueryService = (*explainTablet)(nil)
-
 func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
 
 	config := tabletenv.NewCurrentConfig()
-	config.TrackSchemaVersions = false
 	if opts.ExecutionMode == ModeTwoPC {
 		config.TwoPCCoordinatorAddress = "XXX"
 		config.TwoPCAbandonAge = 1.0
@@ -87,7 +84,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	}
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), *t.Alias)
+	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 
 	tablet := explainTablet{db: db, tsv: tsv}
 	db.Handler = &tablet
@@ -110,7 +107,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 		Shard:      t.Shard,
 		TabletType: topodatapb.TabletType_MASTER,
 	}
-	tsv.StartService(target, dbcfgs, nil /* mysqld */)
+	tsv.StartService(target, dbcfgs)
 
 	// clear all the schema initialization queries out of the tablet
 	// to avoid clutttering the output
@@ -136,7 +133,7 @@ func (t *explainTablet) Begin(ctx context.Context, target *querypb.Target, optio
 }
 
 // Commit is part of the QueryService interface.
-func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
+func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 	t.tabletQueries = append(t.tabletQueries, &TabletQuery{
@@ -149,7 +146,7 @@ func (t *explainTablet) Commit(ctx context.Context, target *querypb.Target, tran
 }
 
 // Rollback is part of the QueryService interface.
-func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
+func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 	t.mu.Unlock()
@@ -157,7 +154,7 @@ func (t *explainTablet) Rollback(ctx context.Context, target *querypb.Target, tr
 }
 
 // Execute is part of the QueryService interface.
-func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 
@@ -171,7 +168,7 @@ func (t *explainTablet) Execute(ctx context.Context, target *querypb.Target, sql
 	})
 	t.mu.Unlock()
 
-	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
+	return t.tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
 }
 
 // Prepare is part of the QueryService interface.
@@ -251,7 +248,7 @@ func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target
 }
 
 // BeginExecute is part of the QueryService interface.
-func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 	bindVariables = sqltypes.CopyBindVariables(bindVariables)
@@ -262,7 +259,7 @@ func (t *explainTablet) BeginExecute(ctx context.Context, target *querypb.Target
 	})
 	t.mu.Unlock()
 
-	return t.tsv.BeginExecute(ctx, target, preQueries, sql, bindVariables, reservedID, options)
+	return t.tsv.BeginExecute(ctx, target, sql, bindVariables, options)
 }
 
 // Close is part of the QueryService interface.
@@ -457,7 +454,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		case *sqlparser.Select:
 			selStmt = stmt
 		case *sqlparser.Union:
-			selStmt = stmt.FirstStatement.(*sqlparser.Select)
+			selStmt = stmt.Right.(*sqlparser.Select)
 		default:
 			return fmt.Errorf("vtexplain: unsupported statement type +%v", reflect.TypeOf(stmt))
 		}
@@ -499,66 +496,30 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			}
 		}
 
-		// the query against lookup table is in-query, handle it specifically
-		var inColName string
-		inVal := make([][]byte, 0, 10)
-		rowCount := 1
-		if selStmt.Where != nil {
-			switch v := selStmt.Where.Expr.(type) {
-			case *sqlparser.ComparisonExpr:
-				if v.Operator == sqlparser.InStr {
-					switch c := v.Left.(type) {
-					case *sqlparser.ColName:
-						switch values := v.Right.(type) {
-						case sqlparser.ValTuple:
-							for _, val := range values {
-								switch v := val.(type) {
-								case *sqlparser.SQLVal:
-									inVal = append(inVal, v.Val)
-								}
-							}
-							rowCount = len(inVal)
-						}
-						inColName = strings.ToLower(c.Name.String())
-					}
-				}
-			}
-		}
-
 		fields := make([]*querypb.Field, len(colNames))
-		rows := make([][]sqltypes.Value, 0, rowCount)
+		values := make([]sqltypes.Value, len(colNames))
 		for i, col := range colNames {
 			colType := colTypes[i]
 			fields[i] = &querypb.Field{
 				Name: col,
 				Type: colType,
 			}
-		}
 
-		for j := 0; j < rowCount; j++ {
-			values := make([]sqltypes.Value, len(colNames))
-			for i, col := range colNames {
-				// Generate a fake value for the given column. For the column in the IN clause,
-				// use the provided values in the query, For numeric types,
-				// use the column index. For all other types, just shortcut to using
-				// a string type that encodes the column name + index.
-				colType := colTypes[i]
-				if len(inVal) > j && col == inColName {
-					values[i], _ = sqltypes.NewValue(querypb.Type_VARBINARY, inVal[j])
-				} else if sqltypes.IsIntegral(colType) {
-					values[i] = sqltypes.NewInt32(int32(i + 1))
-				} else if sqltypes.IsFloat(colType) {
-					values[i] = sqltypes.NewFloat64(1.0 + float64(i))
-				} else {
-					values[i] = sqltypes.NewVarChar(fmt.Sprintf("%s_val_%d", col, i+1))
-				}
+			// Generate a fake value for the given column. For numeric types,
+			// use the column index. For all other types, just shortcut to using
+			// a string type that encodes the column name + index.
+			if sqltypes.IsIntegral(colType) {
+				values[i] = sqltypes.NewInt32(int32(i + 1))
+			} else if sqltypes.IsFloat(colType) {
+				values[i] = sqltypes.NewFloat64(1.0 + float64(i))
+			} else {
+				values[i] = sqltypes.NewVarChar(fmt.Sprintf("%s_val_%d", col, i+1))
 			}
-			rows = append(rows, values)
 		}
 		result = &sqltypes.Result{
 			Fields:   fields,
 			InsertID: 0,
-			Rows:     rows,
+			Rows:     [][]sqltypes.Value{values},
 		}
 
 		resultJSON, _ := json.MarshalIndent(result, "", "    ")

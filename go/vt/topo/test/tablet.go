@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -47,7 +48,7 @@ func checkTablet(t *testing.T, ts *topo.Server) {
 		Type:     topodatapb.TabletType_MASTER,
 		KeyRange: newKeyRange("-10"),
 	}
-	tablet.MysqlPort = 3334
+	topoproto.SetMysqlPort(tablet, 3334)
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet: %v", err)
 	}

@@ -23,8 +23,6 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -142,10 +140,7 @@ func TestMain(m *testing.M) {
 		}
 		if err := cluster.Setup(); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
-			//log error
-			if err := cluster.TearDown(); err != nil {
-				log.Errorf("cluster.TearDown() did not work: ", err)
-			}
+			cluster.TearDown()
 			return 1
 		}
 		defer cluster.TearDown()

@@ -47,8 +47,6 @@ type resharder struct {
 	targetMasters map[string]*topo.TabletInfo
 	vschema       *vschemapb.Keyspace
 	refStreams    map[string]*refStream
-	cell          string //single cell or cellsAlias or comma-separated list of cells/cellsAliases
-	tabletTypes   string
 }
 
 type refStream struct {
@@ -59,12 +57,12 @@ type refStream struct {
 }
 
 // Reshard initiates a resharding workflow.
-func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sources, targets []string, skipSchemaCopy bool, cell, tabletTypes string) error {
+func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sources, targets []string, skipSchemaCopy bool) error {
 	if err := wr.validateNewWorkflow(ctx, keyspace, workflow); err != nil {
 		return err
 	}
 
-	rs, err := wr.buildResharder(ctx, keyspace, workflow, sources, targets, cell, tabletTypes)
+	rs, err := wr.buildResharder(ctx, keyspace, workflow, sources, targets)
 	if err != nil {
 		return vterrors.Wrap(err, "buildResharder")
 	}
@@ -82,15 +80,13 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 	return nil
 }
 
-func (wr *Wrangler) buildResharder(ctx context.Context, keyspace, workflow string, sources, targets []string, cell, tabletTypes string) (*resharder, error) {
+func (wr *Wrangler) buildResharder(ctx context.Context, keyspace, workflow string, sources, targets []string) (*resharder, error) {
 	rs := &resharder{
 		wr:            wr,
 		keyspace:      keyspace,
 		workflow:      workflow,
 		sourceMasters: make(map[string]*topo.TabletInfo),
 		targetMasters: make(map[string]*topo.TabletInfo),
-		cell:          cell,
-		tabletTypes:   tabletTypes,
 	}
 	for _, shard := range sources {
 		si, err := wr.ts.GetShard(ctx, keyspace, shard)
@@ -302,7 +298,7 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 				Shard:    source.ShardName(),
 				Filter:   filter,
 			}
-			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes)
+			ig.AddRow(rs.workflow, bls, "", "", "")
 		}
 
 		for _, rstream := range rs.refStreams {

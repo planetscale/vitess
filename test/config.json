@@ -8,7 +8,7 @@
             "java_test"
           ],
           "Manual": false,
-          "Shard": 10,
+          "Shard": 25,
           "RetryMax": 0,
           "Tags": []
         },
@@ -261,17 +261,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,
-			"RetryMax": 0,
-			"Tags": [
-				"site_test"
-			]
-		},
-		"pitr": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
-			"Command": [],
-			"Manual": false,
-			"Shard": 10,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"

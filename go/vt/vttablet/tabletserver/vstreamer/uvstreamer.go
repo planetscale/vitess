@@ -53,11 +53,11 @@ type uvstreamer struct {
 	send       func([]*binlogdatapb.VEvent) error
 	cp         dbconfigs.Connector
 	se         *schema.Engine
+	sh         schema.Historian
 	startPos   string
 	filter     *binlogdatapb.Filter
 	inTablePKs []*binlogdatapb.TableLastPK
-
-	vschema *localVSchema
+	vschema    *localVSchema
 
 	// map holds tables remaining to be fully copied, it is depleted as each table gets completely copied
 	plans        map[string]*tablePlan
@@ -80,7 +80,7 @@ type uvstreamer struct {
 
 	config *uvstreamerConfig
 
-	vs *vstreamer //last vstreamer created in uvstreamer
+	vs *vstreamer //last vstreamer created in uvstreamer: FIXME currently used only for setting vschema, find another way?
 }
 
 type uvstreamerConfig struct {
@@ -88,7 +88,7 @@ type uvstreamerConfig struct {
 	CatchupRetryTime  time.Duration
 }
 
-func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
+func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, sh schema.Historian, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -101,6 +101,7 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		send:       send,
 		cp:         cp,
 		se:         se,
+		sh:         sh,
 		startPos:   startPos,
 		filter:     filter,
 		vschema:    vschema,
@@ -117,10 +118,14 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 //		the first time, with just the filter and an empty pos
 //		during a restart, with both the filter and list of TableLastPK from the vgtid
 func (uvs *uvstreamer) buildTablePlan() error {
+
 	uvs.plans = make(map[string]*tablePlan)
 	tableLastPKs := make(map[string]*binlogdatapb.TableLastPK)
 	for _, tablePK := range uvs.inTablePKs {
 		tableLastPKs[tablePK.TableName] = tablePK
+	}
+	if err := uvs.se.Reload(uvs.ctx); err != nil {
+		return err
 	}
 	tables := uvs.se.GetSchema()
 	for range tables {
@@ -362,40 +367,18 @@ func (uvs *uvstreamer) Stream() error {
 		}
 		uvs.sendTestEvent("Copy Done")
 	}
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.getVSchema(), uvs.send)
-
-	uvs.setVs(vs)
-	return vs.Stream()
-}
-
-func (uvs *uvstreamer) lock(msg string) {
-	uvs.mu.Lock()
-}
-
-func (uvs *uvstreamer) unlock(msg string) {
-	uvs.mu.Unlock()
-}
-
-func (uvs *uvstreamer) setVs(vs *vstreamer) {
-	uvs.lock("setVs")
-	defer uvs.unlock("setVs")
+	log.V(2).Infof("Starting replicate in uvstreamer.Stream()")
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, uvs.sh, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.vschema, uvs.send)
 	uvs.vs = vs
+	return vs.Stream()
 }
 
 // SetVSchema updates the vstreamer against the new vschema.
 func (uvs *uvstreamer) SetVSchema(vschema *localVSchema) {
-	uvs.lock("SetVSchema")
-	defer uvs.unlock("SetVSchema")
 	uvs.vschema = vschema
 	if uvs.vs != nil {
 		uvs.vs.SetVSchema(vschema)
 	}
-}
-
-func (uvs *uvstreamer) getVSchema() *localVSchema {
-	uvs.lock("getVSchema")
-	defer uvs.unlock("getVSchema")
-	return uvs.vschema
 }
 
 func (uvs *uvstreamer) setCopyState(tableName string, qr *querypb.QueryResult) {

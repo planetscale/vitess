@@ -36,15 +36,11 @@ type VtctlClientProcess struct {
 
 // InitShardMaster executes vtctlclient command to make one of tablet as master
 func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
-	output, err := vtctlclient.ExecuteCommandWithOutput(
+	return vtctlclient.ExecuteCommand(
 		"InitShardMaster",
-		"-force", "-wait_replicas_timeout", "31s",
+		"-force",
 		fmt.Sprintf("%s/%s", Keyspace, Shard),
 		fmt.Sprintf("%s-%d", Cell, TabletUID))
-	if err != nil {
-		log.Errorf("error in InitShardMaster output %s, err %s", output, err.Error())
-	}
-	return err
 }
 
 // ApplySchema applies SQL schema to the keyspace
@@ -77,11 +73,7 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error
 		pArgs...,
 	)
 	log.Infof("Executing vtctlclient with command: %v", strings.Join(tmpProcess.Args, " "))
-	output, err := tmpProcess.Output()
-	if err != nil {
-		log.Errorf("Error executing %s: output %s, err %v", strings.Join(tmpProcess.Args, " "), output, err)
-	}
-	return err
+	return tmpProcess.Run()
 }
 
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output

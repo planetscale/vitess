@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -30,17 +29,16 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/callerid"
-
-	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -55,43 +53,432 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func TestBeginOnReplica(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
+func TestTabletServerGetState(t *testing.T) {
+	states := []int64{
+		StateNotConnected,
+		StateNotServing,
+		StateServing,
+		StateTransitioning,
+		StateShuttingDown,
+	}
+	// Don't reuse stateName.
+	names := []string{
+		"NOT_SERVING",
+		"NOT_SERVING",
+		"SERVING",
+		"NOT_SERVING",
+		"SHUTTING_DOWN",
+	}
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	for i, state := range states {
+		tsv.setState(state)
+		require.Equal(t, names[i], tsv.GetState(), "GetState")
+	}
+	tsv.EnterLameduck()
+	require.Equal(t, "NOT_SERVING", tsv.GetState(), "GetState")
+}
 
-	db.AddQueryPattern(".*", &sqltypes.Result{})
-	target := querypb.Target{TabletType: topodatapb.TabletType_REPLICA}
-	err := tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
+func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	db.EnableConnFail()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	checkTabletServerState(t, tsv, StateNotConnected)
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.Error(t, err, "TabletServer.StartService should fail")
+	checkTabletServerState(t, tsv, StateNotConnected)
+}
+
+func TestTabletServerAllowQueries(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	checkTabletServerState(t, tsv, StateNotConnected)
+	dbcfgs := newDBConfigs(db)
+	tsv.setState(StateServing)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	tsv.StopService()
+	want := "InitDBConfig failed"
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
+	tsv.setState(StateShuttingDown)
+	err = tsv.StartService(target, dbcfgs)
+	require.Error(t, err, "TabletServer.StartService should fail")
+	tsv.StopService()
+}
+
+func TestTabletServerInitDBConfig(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv.setState(StateServing)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	dbcfgs := newDBConfigs(db)
+	err := tsv.InitDBConfig(target, dbcfgs)
+	want := "InitDBConfig failed"
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
+	tsv.setState(StateNotConnected)
+	err = tsv.InitDBConfig(target, dbcfgs)
+	require.NoError(t, err)
+}
+
+func TestDecideAction(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	dbcfgs := newDBConfigs(db)
+	err := tsv.InitDBConfig(target, dbcfgs)
 	require.NoError(t, err)
 
+	tsv.setState(StateNotConnected)
+	action, err := tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	require.NoError(t, err)
+	if action != actionNone {
+		t.Errorf("decideAction: %v, want %v", action, actionNone)
+	}
+
+	tsv.setState(StateNotConnected)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true, nil)
+	require.NoError(t, err)
+	if action != actionFullStart {
+		t.Errorf("decideAction: %v, want %v", action, actionFullStart)
+	}
+	if tsv.state != StateTransitioning {
+		t.Errorf("tsv.state: %v, want %v", tsv.state, StateTransitioning)
+	}
+
+	tsv.setState(StateNotServing)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	require.NoError(t, err)
+	if action != actionNone {
+		t.Errorf("decideAction: %v, want %v", action, actionNone)
+	}
+
+	tsv.setState(StateNotServing)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true, nil)
+	require.NoError(t, err)
+	if action != actionServeNewType {
+		t.Errorf("decideAction: %v, want %v", action, actionServeNewType)
+	}
+	if tsv.state != StateTransitioning {
+		t.Errorf("tsv.state: %v, want %v", tsv.state, StateTransitioning)
+	}
+
+	tsv.setState(StateServing)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	require.NoError(t, err)
+	if action != actionGracefulStop {
+		t.Errorf("decideAction: %v, want %v", action, actionGracefulStop)
+	}
+	if tsv.state != StateShuttingDown {
+		t.Errorf("tsv.state: %v, want %v", tsv.state, StateShuttingDown)
+	}
+
+	tsv.setState(StateServing)
+	action, err = tsv.decideAction(topodatapb.TabletType_REPLICA, true, nil)
+	require.NoError(t, err)
+	if action != actionServeNewType {
+		t.Errorf("decideAction: %v, want %v", action, actionServeNewType)
+	}
+	if tsv.state != StateTransitioning {
+		t.Errorf("tsv.state: %v, want %v", tsv.state, StateTransitioning)
+	}
+	tsv.target.TabletType = topodatapb.TabletType_MASTER
+
+	tsv.setState(StateServing)
+	action, err = tsv.decideAction(topodatapb.TabletType_MASTER, true, nil)
+	require.NoError(t, err)
+	if action != actionNone {
+		t.Errorf("decideAction: %v, want %v", action, actionNone)
+	}
+	if tsv.state != StateServing {
+		t.Errorf("tsv.state: %v, want %v", tsv.state, StateServing)
+	}
+
+	tsv.setState(StateTransitioning)
+	_, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	want := "cannot SetServingType"
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
+
+	tsv.setState(StateShuttingDown)
+	_, err = tsv.decideAction(topodatapb.TabletType_MASTER, false, nil)
+	want = "cannot SetServingType"
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
+}
+
+func TestSetServingType(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.InitDBConfig(target, dbcfgs)
+	require.NoError(t, err)
+
+	stateChanged, err := tsv.SetServingType(topodatapb.TabletType_REPLICA, false, nil)
+	if stateChanged != false {
+		t.Errorf("SetServingType() should NOT have changed the QueryService state, but did")
+	}
+	require.NoError(t, err)
+	checkTabletServerState(t, tsv, StateNotConnected)
+
+	stateChanged, err = tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	if stateChanged != true {
+		t.Errorf("SetServingType() should have changed the QueryService state, but did not")
+	}
+	require.NoError(t, err)
+	checkTabletServerState(t, tsv, StateServing)
+
+	stateChanged, err = tsv.SetServingType(topodatapb.TabletType_RDONLY, true, nil)
+	if stateChanged != true {
+		t.Errorf("SetServingType() should have changed the tablet type, but did not")
+	}
+	require.NoError(t, err)
+	checkTabletServerState(t, tsv, StateServing)
+
+	stateChanged, err = tsv.SetServingType(topodatapb.TabletType_SPARE, false, nil)
+	if stateChanged != true {
+		t.Errorf("SetServingType() should have changed the QueryService state, but did not")
+	}
+	require.NoError(t, err)
+	checkTabletServerState(t, tsv, StateNotServing)
+
+	// Verify that we exit lameduck when SetServingType is called.
+	tsv.EnterLameduck()
+	if stateName := tsv.GetState(); stateName != "NOT_SERVING" {
+		t.Errorf("GetState: %s, want NOT_SERVING", stateName)
+	}
+	stateChanged, err = tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	if stateChanged != true {
+		t.Errorf("SetServingType() should have changed the QueryService state, but did not")
+	}
+	require.NoError(t, err)
+	checkTabletServerState(t, tsv, StateServing)
+	if stateName := tsv.GetState(); stateName != "SERVING" {
+		t.Errorf("GetState: %s, want SERVING", stateName)
+	}
+
+	tsv.StopService()
+	checkTabletServerState(t, tsv, StateNotConnected)
+}
+
+func TestTabletServerSingleSchemaFailure(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+
+	want := &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table", false, ""),
+			// Return a table that tabletserver can't access (the mock will reject all queries to it).
+			mysql.BaseShowTablesRow("rejected_table", false, ""),
+		},
+	}
+	db.AddQuery(mysql.BaseShowTables, want)
+
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	defer tsv.StopService()
+	if err != nil {
+		t.Fatalf("TabletServer should successfully start even if a table's schema is unloadable, but got error: %v", err)
+	}
+}
+
+func TestTabletServerCheckMysql(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	defer tsv.StopService()
+	require.NoError(t, err)
+	if !tsv.isMySQLReachable() {
+		t.Error("isMySQLReachable should return true")
+	}
+	stateChanged, err := tsv.SetServingType(topodatapb.TabletType_SPARE, false, nil)
+	require.NoError(t, err)
+	if stateChanged != true {
+		t.Errorf("SetServingType() should have changed the QueryService state, but did not")
+	}
+	if !tsv.isMySQLReachable() {
+		t.Error("isMySQLReachable should return true")
+	}
+	checkTabletServerState(t, tsv, StateNotServing)
+}
+
+func TestTabletServerReconnect(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	query := "select addr from test_table where pk = 1 limit 1000"
+	want := &sqltypes.Result{}
+	db.AddQuery(query, want)
+	db.AddQuery("select addr from test_table where 1 != 1", &sqltypes.Result{})
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	defer tsv.StopService()
+
+	if tsv.GetState() != "SERVING" {
+		t.Errorf("GetState: %s, must be SERVING", tsv.GetState())
+	}
+	if err != nil {
+		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
+	}
+	_, err = tsv.Execute(context.Background(), &target, query, nil, 0, nil)
+	require.NoError(t, err)
+
+	// make mysql conn fail
+	db.Close()
+	_, err = tsv.Execute(context.Background(), &target, query, nil, 0, nil)
+	if err == nil {
+		t.Error("Execute: want error, got nil")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if tsv.GetState() == "SERVING" {
+		t.Error("GetState is still SERVING, must be NOT_SERVING")
+	}
+
+	// make mysql conn work
+	db = setUpTabletServerTest(t)
+	db.AddQuery(query, want)
+	db.AddQuery("select addr from test_table where 1 != 1", &sqltypes.Result{})
+	dbcfgs = newDBConfigs(db)
+	err = tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	_, err = tsv.Execute(context.Background(), &target, query, nil, 0, nil)
+	require.NoError(t, err)
+}
+
+func TestTabletServerTarget(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target1 := querypb.Target{
+		Keyspace:   "test_keyspace",
+		Shard:      "test_shard",
+		TabletType: topodatapb.TabletType_MASTER,
+	}
+	err := tsv.StartService(target1, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+
+	// query that works
+	db.AddQuery("select * from test_table limit 1000", &sqltypes.Result{})
+	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, nil)
+	require.NoError(t, err)
+
+	// wrong tablet type
+	target2 := proto.Clone(&target1).(*querypb.Target)
+	target2.TabletType = topodatapb.TabletType_REPLICA
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
+	want := "invalid tablet type"
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
+
+	// set expected target type to MASTER, but also accept REPLICA
+	tsv.SetServingType(topodatapb.TabletType_MASTER, true, []topodatapb.TabletType{topodatapb.TabletType_REPLICA})
+	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, nil)
+	require.NoError(t, err)
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
+	require.NoError(t, err)
+
+	// wrong keyspace
+	target2 = proto.Clone(&target1).(*querypb.Target)
+	target2.Keyspace = "bad"
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
+	want = "invalid keyspace bad"
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
+
+	// wrong shard
+	target2 = proto.Clone(&target1).(*querypb.Target)
+	target2.Shard = "bad"
+	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
+	want = "invalid shard bad"
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
+
+	// no target
+	_, err = tsv.Execute(ctx, nil, "select * from test_table limit 1000", nil, 0, nil)
+	want = "No target"
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
+
+	// Disallow all if service is stopped.
+	tsv.StopService()
+	_, err = tsv.Execute(ctx, &target1, "select * from test_table limit 1000", nil, 0, nil)
+	want = "operation not allowed in state NOT_SERVING"
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
+}
+
+func TestBeginOnReplica(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target1 := querypb.Target{
+		Keyspace:   "test_keyspace",
+		Shard:      "test_shard",
+		TabletType: topodatapb.TabletType_REPLICA,
+	}
+	err := tsv.StartService(target1, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
+
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 	options := querypb.ExecuteOptions{
 		TransactionIsolation: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
 	}
-	txID, alias, err := tsv.Begin(ctx, &target, &options)
+	txID, alias, err := tsv.Begin(ctx, &target1, &options)
 	require.NoError(t, err, "failed to create read only tx on replica")
 	assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
-	_, err = tsv.Rollback(ctx, &target, txID)
+	err = tsv.Rollback(ctx, &target1, txID)
 	require.NoError(t, err, "failed to rollback read only tx")
 
 	// test that we can still create transactions even in read-only mode
 	options = querypb.ExecuteOptions{}
-	txID, _, err = tsv.Begin(ctx, &target, &options)
+	txID, _, err = tsv.Begin(ctx, &target1, &options)
 	require.NoError(t, err, "expected write tx to be allowed")
-	_, err = tsv.Rollback(ctx, &target, txID)
+	err = tsv.Rollback(ctx, &target1, txID)
 	require.NoError(t, err)
 }
 
 func TestTabletServerMasterToReplica(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t)
-	defer tsv.StopService()
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	txid1, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
 
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, 0, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, nil)
 	require.NoError(t, err)
 	err = tsv.Prepare(ctx, &target, txid1, "aa")
 	require.NoError(t, err)
@@ -103,7 +490,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	require.NoError(t, err)
 	ch := make(chan bool)
 	go func() {
-		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
+		tsv.SetServingType(topodatapb.TabletType_REPLICA, true, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
 		ch <- true
 	}()
 
@@ -124,15 +511,15 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t)
-	defer tsv.StopService()
 	defer db.Close()
-	tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
+	defer tsv.StopService()
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 
 	turnOnTxEngine := func() {
-		tsv.SetServingType(topodatapb.TabletType_MASTER, time.Time{}, true, "")
+		tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
 	}
 	turnOffTxEngine := func() {
-		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
+		tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 	}
 
 	tpc := tsv.te.twoPC
@@ -207,8 +594,8 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 
 func TestTabletServerCreateTransaction(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
-	defer tsv.StopService()
 	defer db.Close()
+	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	db.AddQueryPattern(fmt.Sprintf("insert into _vt\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
@@ -222,8 +609,8 @@ func TestTabletServerCreateTransaction(t *testing.T) {
 
 func TestTabletServerStartCommit(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
-	defer tsv.StopService()
 	defer db.Close()
+	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	commitTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
@@ -240,8 +627,8 @@ func TestTabletServerStartCommit(t *testing.T) {
 
 func TestTabletserverSetRollback(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
-	defer tsv.StopService()
 	defer db.Close()
+	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	rollbackTransition := fmt.Sprintf("update _vt.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
@@ -258,8 +645,8 @@ func TestTabletserverSetRollback(t *testing.T) {
 
 func TestTabletServerReadTransaction(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
-	defer tsv.StopService()
 	defer db.Close()
+	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	db.AddQuery("select dtid, state, time_created from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
@@ -351,8 +738,8 @@ func TestTabletServerReadTransaction(t *testing.T) {
 
 func TestTabletServerConcludeTransaction(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
-	defer tsv.StopService()
 	defer db.Close()
+	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	db.AddQuery("delete from _vt.dt_state where dtid = 'aa'", &sqltypes.Result{})
@@ -362,25 +749,27 @@ func TestTabletServerConcludeTransaction(t *testing.T) {
 }
 
 func TestTabletServerBeginFail(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
 	config.TxPool.Size = 1
-	db, tsv := setupTabletServerTestCustom(t, config)
-	defer tsv.StopService()
-	defer db.Close()
-
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
 	tsv.Begin(ctx, &target, nil)
-	_, _, err := tsv.Begin(ctx, &target, nil)
+	_, _, err = tsv.Begin(ctx, &target, nil)
 	require.EqualError(t, err, "transaction pool aborting request due to already expired context", "Begin err")
 }
 
 func TestTabletServerCommitTransaction(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
-
+	// sql that will be executed in this test
 	executeSQL := "select * from test_table limit 1000"
 	executeSQLResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -391,66 +780,94 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 		},
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
-
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	transactionID, _, err := tsv.Begin(ctx, &target, nil)
-	require.NoError(t, err)
-	_, err = tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, nil)
-	require.NoError(t, err)
-	_, err = tsv.Commit(ctx, &target, transactionID)
-	require.NoError(t, err)
-}
-
-func TestTabletServerCommiRollbacktFail(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	_, err := tsv.Commit(ctx, &target, -1)
-	want := "transaction -1: not found"
-	require.Equal(t, want, err.Error())
-	_, err = tsv.Rollback(ctx, &target, -1)
-	require.Equal(t, want, err.Error())
-}
-
-func TestTabletServerRollback(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	executeSQL := "select * from test_table limit 1000"
-	executeSQLResult := &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Type: sqltypes.VarBinary},
-		},
-		Rows: [][]sqltypes.Value{
-			{sqltypes.NewVarBinary("row01")},
-		},
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
 	}
-	db.AddQuery(executeSQL, executeSQLResult)
-
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	defer tsv.StopService()
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
-	require.NoError(t, err)
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed: %v", err)
 	}
-	_, err = tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, nil)
-	require.NoError(t, err)
-	_, err = tsv.Rollback(ctx, &target, transactionID)
-	require.NoError(t, err)
+	if _, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, nil); err != nil {
+		t.Fatalf("failed to execute query: %s: %s", executeSQL, err)
+	}
+	if err := tsv.Commit(ctx, &target, transactionID); err != nil {
+		t.Fatalf("call TabletServer.Commit failed: %v", err)
+	}
+}
+
+func TestTabletServerCommiRollbacktFail(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	err = tsv.Commit(ctx, &target, -1)
+	want := "transaction -1: not found"
+	if err == nil || err.Error() != want {
+		t.Fatalf("Commit err: %v, want %v", err, want)
+	}
+	err = tsv.Rollback(ctx, &target, -1)
+	if err == nil || err.Error() != want {
+		t.Fatalf("Commit err: %v, want %v", err, want)
+	}
+}
+
+func TestTabletServerRollback(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	// sql that will be executed in this test
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	db.AddQuery(executeSQL, executeSQLResult)
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	transactionID, _, err := tsv.Begin(ctx, &target, nil)
+	if err != nil {
+		t.Fatalf("call TabletServer.Begin failed: %v", err)
+	}
+	if _, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, nil); err != nil {
+		t.Fatalf("failed to execute query: %s: %v", executeSQL, err)
+	}
+	if err := tsv.Rollback(ctx, &target, transactionID); err != nil {
+		t.Fatalf("call TabletServer.Rollback failed: %v", err)
+	}
 }
 
 func TestTabletServerPrepare(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t)
-	defer tsv.StopService()
 	defer db.Close()
+	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, 0, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil)
 	require.NoError(t, err)
 	defer tsv.RollbackPrepared(ctx, &target, "aa", 0)
 	err = tsv.Prepare(ctx, &target, transactionID, "aa")
@@ -460,12 +877,12 @@ func TestTabletServerPrepare(t *testing.T) {
 func TestTabletServerCommitPrepared(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t)
-	defer tsv.StopService()
 	defer db.Close()
+	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, 0, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil)
 	require.NoError(t, err)
 	err = tsv.Prepare(ctx, &target, transactionID, "aa")
 	require.NoError(t, err)
@@ -474,131 +891,15 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestTabletServerReserveConnection(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	db.AddQueryPattern(".*", &sqltypes.Result{})
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	options := &querypb.ExecuteOptions{}
-
-	// reserve a connection
-	_, rID, _, err := tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, 0, options)
-	require.NoError(t, err)
-
-	// run a query in it
-	_, err = tsv.Execute(ctx, &target, "select 42", nil, 0, rID, options)
-	require.NoError(t, err)
-
-	// release the connection
-	err = tsv.Release(ctx, &target, 0, rID)
-	require.NoError(t, err)
-}
-
-func TestTabletServerExecNonExistentConnection(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	db.AddQueryPattern(".*", &sqltypes.Result{})
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	options := &querypb.ExecuteOptions{}
-
-	// run a query with a non-existent reserved id
-	_, err := tsv.Execute(ctx, &target, "select 42", nil, 0, 123456, options)
-	require.Error(t, err)
-}
-
-func TestTabletServerReleaseNonExistentConnection(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	db.AddQueryPattern(".*", &sqltypes.Result{})
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-
-	// run a query with a non-existent reserved id
-	err := tsv.Release(ctx, &target, 0, 123456)
-	require.Error(t, err)
-}
-
-func TestMakeSureToCloseDbConnWhenBeginQueryFails(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	db.AddRejectedQuery("begin", errors.New("it broke"))
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	options := &querypb.ExecuteOptions{}
-
-	// run a query with a non-existent reserved id
-	_, _, _, _, err := tsv.ReserveBeginExecute(ctx, &target, []string{}, "select 42", nil, options)
-	require.Error(t, err)
-}
-
-func TestTabletServerReserveAndBeginCommit(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	db.AddQueryPattern(".*", &sqltypes.Result{})
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	options := &querypb.ExecuteOptions{}
-
-	// reserve a connection and a transaction
-	_, txID, rID, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, "select 42", nil, options)
-	require.NoError(t, err)
-	defer func() {
-		// fallback so the test finishes quickly
-		tsv.Release(ctx, &target, txID, rID)
-	}()
-
-	// run a query in it
-	_, err = tsv.Execute(ctx, &target, "select 42", nil, txID, rID, options)
-	require.NoError(t, err)
-
-	// run a query in a non-existent connection
-	_, err = tsv.Execute(ctx, &target, "select 42", nil, txID, rID+100, options)
-	require.Error(t, err)
-	_, err = tsv.Execute(ctx, &target, "select 42", nil, txID+100, rID, options)
-	require.Error(t, err)
-
-	// commit
-	newRID, err := tsv.Commit(ctx, &target, txID)
-	require.NoError(t, err)
-	assert.NotEqual(t, rID, newRID)
-	rID = newRID
-
-	// begin and rollback
-	_, txID, _, err = tsv.BeginExecute(ctx, &target, nil, "select 42", nil, rID, options)
-	require.NoError(t, err)
-	assert.Equal(t, newRID, txID)
-	rID = newRID
-
-	newRID, err = tsv.Rollback(ctx, &target, txID)
-	require.NoError(t, err)
-	assert.NotEqual(t, rID, newRID)
-	rID = newRID
-
-	// release the connection
-	err = tsv.Release(ctx, &target, 0, rID)
-	require.NoError(t, err)
-
-	// release the connection again and fail
-	err = tsv.Release(ctx, &target, 0, rID)
-	require.Error(t, err)
-}
-
 func TestTabletServerRollbackPrepared(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor(t)
-	defer tsv.StopService()
 	defer db.Close()
+	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, 0, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, nil)
 	require.NoError(t, err)
 	err = tsv.Prepare(ctx, &target, transactionID, "aa")
 	require.NoError(t, err)
@@ -607,10 +908,9 @@ func TestTabletServerRollbackPrepared(t *testing.T) {
 }
 
 func TestTabletServerStreamExecute(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
-
+	// sql that will be executed in this test
 	executeSQL := "select * from test_table limit 1000"
 	executeSQLResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -622,7 +922,15 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
 
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	callback := func(*sqltypes.Result) error { return nil }
 	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, nil, callback); err != nil {
 		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
@@ -631,10 +939,9 @@ func TestTabletServerStreamExecute(t *testing.T) {
 }
 
 func TestTabletServerStreamExecuteComments(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
-
+	// sql that will be executed in this test
 	executeSQL := "/* leading */ select * from test_table limit 1000 /* trailing */"
 	executeSQLResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -646,7 +953,15 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
 
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	callback := func(*sqltypes.Result) error { return nil }
 
 	ch := tabletenv.StatsLogger.Subscribe("test stats logging")
@@ -673,17 +988,23 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 	}
 }
 func TestTabletServerExecuteBatch(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
-
 	sql := "insert into test_table values (1, 2, 'addr', 'name')"
 	sqlResult := &sqltypes.Result{}
 	expandedSQL := "insert into test_table(pk, name, addr, name_string) values (1, 2, 'addr', 'name') /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expandedSQL, sqlResult)
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	if _, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
 		{
 			Sql:           sql,
@@ -695,22 +1016,36 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
-
-	_, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{}, false, 0, nil)
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	_, err = tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{}, false, 0, nil)
 	want := "Empty query list"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 }
 
 func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
-
-	_, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	_, err = tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
 			BindVariables: nil,
@@ -722,12 +1057,19 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
-
 	// make "begin" query fail
 	db.AddRejectedQuery("begin", errRejected)
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
@@ -739,12 +1081,19 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
-
 	// make "commit" query fail
 	db.AddRejectedQuery("commit", errRejected)
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
@@ -760,10 +1109,8 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
-
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &sqltypes.Result{}
 	expandedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
@@ -775,7 +1122,15 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	db.AddRejectedQuery(sql, errRejected)
 	db.AddRejectedQuery(expandedSQL, errRejected)
 
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	if db.GetQueryCalledNum("rollback") != 0 {
 		t.Fatalf("rollback should not be executed.")
 	}
@@ -795,10 +1150,17 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
-
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "commit",
@@ -810,16 +1172,23 @@ func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 }
 
 func TestExecuteBatchNestedTransaction(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
-
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &sqltypes.Result{}
 	expandedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expandedSQL, sqlResult)
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
 		{
 			Sql:           "begin",
@@ -855,16 +1224,20 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	// The actual execution looks like this:
 	// tx1 | tx3
 	// tx2
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.HotRowProtection.MaxConcurrency = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	config.TxPool.Size = 2
-	db, tsv := setupTabletServerTestCustom(t, config)
-	defer tsv.StopService()
-	defer db.Close()
-
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbcfgs); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
@@ -906,11 +1279,11 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, nil, q1, bvTx1, 0, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
-		if _, err := tsv.Commit(ctx, &target, tx1); err != nil {
+		if err := tsv.Commit(ctx, &target, tx1); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -921,7 +1294,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		defer wg.Done()
 
 		<-tx1Started
-		_, tx2, _, err := tsv.BeginExecute(ctx, &target, nil, q2, bvTx2, 0, nil)
+		_, tx2, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
@@ -930,7 +1303,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		// open a second connection while the request of the first connection is
 		// still pending.
 		<-tx3Finished
-		if _, err := tsv.Commit(ctx, &target, tx2); err != nil {
+		if err := tsv.Commit(ctx, &target, tx2); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -941,11 +1314,11 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 		defer wg.Done()
 
 		<-tx1Started
-		_, tx3, _, err := tsv.BeginExecute(ctx, &target, nil, q3, bvTx3, 0, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
-		if _, err := tsv.Commit(ctx, &target, tx3); err != nil {
+		if err := tsv.Commit(ctx, &target, tx3); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 		close(tx3Finished)
@@ -961,22 +1334,26 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 }
 
 func TestDMLQueryWithoutWhereClause(t *testing.T) {
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.HotRowProtection.MaxConcurrency = 1
-	config.TxPool.Size = 2
-	db, tsv := setupTabletServerTestCustom(t, config)
-	defer tsv.StopService()
-	defer db.Close()
 
+	config.TxPool.Size = 2
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	require.NoError(t, err)
+	defer tsv.StopService()
 	q := "delete from test_table"
 
 	db.AddQuery(q+" limit 10001", &sqltypes.Result{})
 
-	_, txid, _, err := tsv.BeginExecute(ctx, &target, nil, q, nil, 0, nil)
+	_, txid, _, err := tsv.BeginExecute(ctx, &target, q, nil, nil)
 	require.NoError(t, err)
-	_, err = tsv.Commit(ctx, &target, txid)
+	err = tsv.Commit(ctx, &target, txid)
 	require.NoError(t, err)
 }
 
@@ -996,16 +1373,20 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 	// The actual execution looks like this:
 	// tx1 | tx3
 	// tx2
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.HotRowProtection.MaxConcurrency = 1
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	config.TxPool.Size = 2
-	db, tsv := setupTabletServerTestCustom(t, config)
-	defer tsv.StopService()
-	defer db.Close()
-
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbcfgs); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
@@ -1048,7 +1429,7 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
 			Sql:           q1,
 			BindVariables: bvTx1,
-		}}, true /*asTransaction*/, 0 /*connID*/, nil /*options*/)
+		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1066,7 +1447,7 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
 			Sql:           q2,
 			BindVariables: bvTx2,
-		}}, true /*asTransaction*/, 0 /*connID*/, nil /*options*/)
+		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
@@ -1084,7 +1465,7 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
 			Sql:           q3,
 			BindVariables: bvTx3,
-		}}, true /*asTransaction*/, 0 /*connID*/, nil /*options*/)
+		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
@@ -1108,16 +1489,20 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	// Out of these three, two can run in parallel because we increased the
 	// ConcurrentTransactions limit to 2.
 	// One out of the three transaction will always get serialized though.
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.HotRowProtection.MaxConcurrency = 2
 	// Reduce the txpool to 2 because we should never consume more than two slots.
 	config.TxPool.Size = 2
-	db, tsv := setupTabletServerTestCustom(t, config)
-	defer tsv.StopService()
-	defer db.Close()
-
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbcfgs); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
@@ -1154,12 +1539,12 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, nil, q1, bvTx1, 0, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 
-		if _, err := tsv.Commit(ctx, &target, tx1); err != nil {
+		if err := tsv.Commit(ctx, &target, tx1); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1173,12 +1558,12 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		// In that case, we would see less than 3 pending transactions.
 		<-tx1Started
 
-		_, tx2, _, err := tsv.BeginExecute(ctx, &target, nil, q2, bvTx2, 0, nil)
+		_, tx2, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q2, err)
 		}
 
-		if _, err := tsv.Commit(ctx, &target, tx2); err != nil {
+		if err := tsv.Commit(ctx, &target, tx2); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1192,12 +1577,12 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		// In that case, we would see less than 3 pending transactions.
 		<-tx1Started
 
-		_, tx3, _, err := tsv.BeginExecute(ctx, &target, nil, q3, bvTx3, 0, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
 
-		if _, err := tsv.Commit(ctx, &target, tx3); err != nil {
+		if err := tsv.Commit(ctx, &target, tx3); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1243,15 +1628,19 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	// serialized.
 	// Since we start to queue before the transaction pool would queue, we need
 	// to enforce an upper limit as well to protect vttablet.
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.HotRowProtection.MaxQueueSize = 1
 	config.HotRowProtection.MaxConcurrency = 1
-	db, tsv := setupTabletServerTestCustom(t, config)
-	defer tsv.StopService()
-	defer db.Close()
-
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbcfgs); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
@@ -1286,11 +1675,11 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, nil, q1, bvTx1, 0, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
-		if _, err := tsv.Commit(ctx, &target, tx1); err != nil {
+		if err := tsv.Commit(ctx, &target, tx1); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1302,7 +1691,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 		defer close(tx2Failed)
 
 		<-tx1Started
-		_, _, _, err := tsv.BeginExecute(ctx, &target, nil, q2, bvTx2, 0, nil)
+		_, _, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
 			t.Errorf("tx2 should have failed because there are too many pending requests: %v", err)
 		}
@@ -1326,15 +1715,19 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTransaction(t *testing.T) {
 	// This test rejects queries if more than one transaction is currently in
 	// progress for the hot row i.e. we check that tx2 actually fails.
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.HotRowProtection.MaxQueueSize = 1
 	config.HotRowProtection.MaxConcurrency = 1
-	db, tsv := setupTabletServerTestCustom(t, config)
-	defer tsv.StopService()
-	defer db.Close()
-
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbcfgs); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
@@ -1372,7 +1765,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
 			Sql:           q1,
 			BindVariables: bvTx1,
-		}}, true /*asTransaction*/, 0 /*connID*/, nil /*options*/)
+		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
@@ -1391,7 +1784,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 		results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{{
 			Sql:           q2,
 			BindVariables: bvTx2,
-		}}, true /*asTransaction*/, 0 /*connID*/, nil /*options*/)
+		}}, true /*asTransaction*/, 0 /*transactionID*/, nil /*options*/)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
 			t.Errorf("tx2 should have failed because there are too many pending requests: %v results: %+v", err, results)
 		}
@@ -1413,14 +1806,18 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	// tx1 and tx2 run against the same row.
 	// tx2 is blocked on tx1. Eventually, tx2 is canceled and its request fails.
 	// Only after that tx1 commits and finishes.
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	config := tabletenv.NewDefaultConfig()
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.HotRowProtection.MaxConcurrency = 1
-	db, tsv := setupTabletServerTestCustom(t, config)
-	defer tsv.StopService()
-	defer db.Close()
-
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbcfgs); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
@@ -1461,12 +1858,12 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_, tx1, _, err := tsv.BeginExecute(ctx, &target, nil, q1, bvTx1, 0, nil)
+		_, tx1, _, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q1, err)
 		}
 
-		if _, err := tsv.Commit(ctx, &target, tx1); err != nil {
+		if err := tsv.Commit(ctx, &target, tx1); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1481,7 +1878,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		// Wait until tx1 has started to make the test deterministic.
 		<-tx1Started
 
-		_, _, _, err := tsv.BeginExecute(ctxTx2, &target, nil, q2, bvTx2, 0, nil)
+		_, _, _, err := tsv.BeginExecute(ctxTx2, &target, q2, bvTx2, nil)
 		if err == nil || vterrors.Code(err) != vtrpcpb.Code_CANCELED || err.Error() != "context canceled" {
 			t.Errorf("tx2 should have failed because the context was canceled: %v", err)
 		}
@@ -1498,12 +1895,12 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 			t.Error(err)
 		}
 
-		_, tx3, _, err := tsv.BeginExecute(ctx, &target, nil, q3, bvTx3, 0, nil)
+		_, tx3, _, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
 		if err != nil {
 			t.Errorf("failed to execute query: %s: %s", q3, err)
 		}
 
-		if _, err := tsv.Commit(ctx, &target, tx3); err != nil {
+		if err := tsv.Commit(ctx, &target, tx3); err != nil {
 			t.Errorf("call TabletServer.Commit failed: %v", err)
 		}
 	}()
@@ -1900,9 +2297,17 @@ func TestACLHUP(t *testing.T) {
 }
 
 func TestConfigChanges(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
+	db := setUpTabletServerTest(t)
 	defer db.Close()
+	config := tabletenv.NewDefaultConfig()
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	dbcfgs := newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbcfgs)
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 
 	newSize := 10
 	newDuration := time.Duration(10 * time.Millisecond)
@@ -1964,218 +2369,21 @@ func TestConfigChanges(t *testing.T) {
 	}
 }
 
-func TestReserveBeginExecute(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-
-	_, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, &target, []string{"select 43"}, "select 42", nil, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-
-	assert.Greater(t, transactionID, int64(0), "transactionID")
-	assert.Equal(t, reservedID, transactionID, "reservedID should equal transactionID")
-	expected := []string{
-		"select 43",
-		"begin",
-		"select 42 from dual where 1 != 1",
-		"select 42 from dual limit 10001",
-	}
-	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
-	err = tsv.Release(ctx, &target, transactionID, reservedID)
-	require.NoError(t, err)
-}
-
-func TestReserveExecute_WithoutTx(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-
-	_, reservedID, _, err := tsv.ReserveExecute(ctx, &target, []string{"select 43"}, "select 42", nil, 0, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	assert.NotEqual(t, int64(0), reservedID, "reservedID should not be zero")
-	expected := []string{
-		"select 43",
-		"select 42 from dual where 1 != 1",
-		"select 42 from dual limit 10001",
-	}
-	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
-	err = tsv.Release(ctx, &target, 0, reservedID)
-	require.NoError(t, err)
-}
-
-func TestReserveExecute_WithTx(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-
-	transactionID, _, err := tsv.Begin(ctx, &target, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	require.NotEqual(t, int64(0), transactionID)
-	db.ResetQueryLog()
-
-	_, reservedID, _, err := tsv.ReserveExecute(ctx, &target, []string{"select 43"}, "select 42", nil, transactionID, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	defer tsv.Release(ctx, &target, transactionID, reservedID)
-	assert.Equal(t, transactionID, reservedID, "reservedID should be equal to transactionID")
-	expected := []string{
-		"select 43",
-		"select 42 from dual where 1 != 1",
-		"select 42 from dual limit 10001",
-	}
-	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
-	err = tsv.Release(ctx, &target, transactionID, reservedID)
-	require.NoError(t, err)
-}
-
-func TestRelease(t *testing.T) {
-	type testcase struct {
-		begin, reserve  bool
-		expectedQueries []string
-		err             bool
-	}
-
-	tests := []testcase{{
-		begin:           true,
-		reserve:         false,
-		expectedQueries: []string{"rollback"},
-	}, {
-		begin:   true,
-		reserve: true,
-	}, {
-		begin:   false,
-		reserve: true,
-	}, {
-		begin:   false,
-		reserve: false,
-		err:     true,
-	}}
-
-	for i, test := range tests {
-
-		name := fmt.Sprintf("%d", i)
-		if test.begin {
-			name += " begin"
-		}
-		if test.reserve {
-			name += " reserve"
-		}
-		t.Run(name, func(t *testing.T) {
-			db, tsv := setupTabletServerTest(t)
-			defer tsv.StopService()
-			defer db.Close()
-			db.AddQueryPattern(".*", &sqltypes.Result{})
-			target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-
-			var err error
-			var transactionID, reservedID int64
-
-			switch {
-			case test.begin && test.reserve:
-				_, transactionID, reservedID, _, err = tsv.ReserveBeginExecute(ctx, &target, []string{"select 1212"}, "select 42", nil, &querypb.ExecuteOptions{})
-				require.NotEqual(t, int64(0), transactionID)
-				require.NotEqual(t, int64(0), reservedID)
-			case test.begin:
-				_, transactionID, _, err = tsv.BeginExecute(ctx, &target, nil, "select 42", nil, 0, &querypb.ExecuteOptions{})
-				require.NotEqual(t, int64(0), transactionID)
-			case test.reserve:
-				_, reservedID, _, err = tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, 0, &querypb.ExecuteOptions{})
-				require.NotEqual(t, int64(0), reservedID)
-			}
-			require.NoError(t, err)
-
-			db.ResetQueryLog()
-
-			err = tsv.Release(ctx, &target, transactionID, reservedID)
-			if test.err {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-			assert.Contains(t, db.QueryLog(), strings.Join(test.expectedQueries, ";"), "expected queries to run")
-		})
-	}
-}
-
-func TestReserveStats(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-
-	callerID := &querypb.VTGateCallerID{
-		Username: "test",
-	}
-	ctx := callerid.NewContext(context.Background(), nil, callerID)
-
-	// Starts reserved connection and transaction
-	_, rbeTxID, rbeRID, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, "select 42", nil, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	assert.EqualValues(t, 1, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
-
-	// Starts reserved connection
-	_, reRID, _, err := tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, 0, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
-
-	// Use previous reserved connection to start transaction
-	_, reBeTxID, _, err := tsv.BeginExecute(ctx, &target, nil, "select 42", nil, reRID, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
-
-	// Starts transaction.
-	_, beTxID, _, err := tsv.BeginExecute(ctx, &target, nil, "select 42", nil, 0, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
-
-	// Reserved the connection on previous transaction
-	_, beReRID, _, err := tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, beTxID, &querypb.ExecuteOptions{})
-	require.NoError(t, err)
-	assert.EqualValues(t, 3, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
-
-	err = tsv.Release(ctx, &target, rbeTxID, rbeRID)
-	require.NoError(t, err)
-	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
-	assert.EqualValues(t, 1, tsv.te.txPool.env.Stats().UserReservedCount.Counts()["test"])
-
-	err = tsv.Release(ctx, &target, reBeTxID, reRID)
-	require.NoError(t, err)
-	assert.EqualValues(t, 1, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
-	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserReservedCount.Counts()["test"])
-
-	err = tsv.Release(ctx, &target, beTxID, beReRID)
-	require.NoError(t, err)
-	assert.Zero(t, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
-	assert.EqualValues(t, 3, tsv.te.txPool.env.Stats().UserReservedCount.Counts()["test"])
-	assert.NotEmpty(t, tsv.te.txPool.env.Stats().UserReservedTimesNs.Counts()["test"])
-}
-
-func setupTabletServerTest(t *testing.T) (*fakesqldb.DB, *TabletServer) {
-	config := tabletenv.NewDefaultConfig()
-	return setupTabletServerTestCustom(t, config)
-}
-
-func setupTabletServerTestCustom(t *testing.T, config *tabletenv.TabletConfig) (*fakesqldb.DB, *TabletServer) {
-	db := setupFakeDB(t)
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	require.Equal(t, StateNotConnected, tsv.sm.State())
-	dbcfgs := newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbcfgs, nil /* mysqld */)
-	require.NoError(t, err)
-	return db, tsv
-}
-
-func setupFakeDB(t *testing.T) *fakesqldb.DB {
+func setUpTabletServerTest(t *testing.T) *fakesqldb.DB {
 	db := fakesqldb.New(t)
 	for query, result := range getSupportedQueries() {
 		db.AddQuery(query, result)
 	}
 	return db
+}
+
+func checkTabletServerState(t *testing.T, tsv *TabletServer, expectState int64) {
+	tsv.mu.Lock()
+	state := tsv.state
+	tsv.mu.Unlock()
+	if state != expectState {
+		t.Fatalf("TabletServer should in state: %d, but get state: %d", expectState, state)
+	}
 }
 
 func getSupportedQueries() map[string]*sqltypes.Result {
@@ -2195,6 +2403,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			RowsAffected: 1,
 		},
 		// queries for twopc
+		sqlTurnoffBinlog:                                {},
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
 		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
 		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},
@@ -2250,25 +2459,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				mysql.ShowPrimaryRow("test_table", "pk"),
 				mysql.ShowPrimaryRow("msg", "id"),
 			},
-		},
-		// queries for TestReserve*
-		"select 42 from dual where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "42",
-				Type: sqltypes.Int32,
-			}},
-		},
-		"select 42 from dual limit 10001": {
-			Fields: []*querypb.Field{{
-				Name: "42",
-				Type: sqltypes.Int32,
-			}},
-		},
-		"select 43": {
-			Fields: []*querypb.Field{{
-				Name: "43",
-				Type: sqltypes.Int32,
-			}},
 		},
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{

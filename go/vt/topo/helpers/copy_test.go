@@ -19,12 +19,11 @@ package helpers
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -61,7 +60,7 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 		DbNameOverride: "",
 		KeyRange:       nil,
 	}
-	tablet1.MysqlPort = 3306
+	topoproto.SetMysqlPort(tablet1, 3306)
 	if err := fromTS.CreateTablet(ctx, tablet1); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
@@ -74,8 +73,8 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 			"vt":   8101,
 			"grpc": 8102,
 		},
-		Hostname:      "replicahost",
-		MysqlHostname: "replicahost",
+		Hostname:      "slavehost",
+		MysqlHostname: "slavehost",
 
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
@@ -83,9 +82,10 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 		DbNameOverride: "",
 		KeyRange:       nil,
 	}
-	tablet2.MysqlPort = 3306
-	err := fromTS.CreateTablet(ctx, tablet2)
-	require.NoError(t, err, "cannot create tablet: %v", tablet2)
+	topoproto.SetMysqlPort(tablet2, 3306)
+	if err := fromTS.CreateTablet(ctx, tablet2); err != nil {
+		t.Fatalf("cannot create slave tablet: %v", err)
+	}
 
 	rr := &vschemapb.RoutingRules{
 		Rules: []*vschemapb.RoutingRule{{

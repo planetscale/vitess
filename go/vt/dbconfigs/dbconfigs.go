@@ -27,8 +27,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -192,10 +190,6 @@ func (c Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 
 // MysqlParams returns the connections params
 func (c Connector) MysqlParams() (*mysql.ConnParams, error) {
-	if c.connParams == nil {
-		// This is only possible during tests.
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "parameters are empty")
-	}
 	params, err := withCredentials(c.connParams)
 	if err != nil {
 		return nil, err
@@ -398,12 +392,6 @@ func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig,
 		log.Exitf("Invalid db user key requested: %s", userKey)
 	}
 	return uc, cp
-}
-
-// SetDbParams sets the dba and app params
-func (dbcfgs *DBConfigs) SetDbParams(dbaParams, appParams mysql.ConnParams) {
-	dbcfgs.dbaParams = dbaParams
-	dbcfgs.appParams = appParams
 }
 
 // NewTestDBConfigs returns a DBConfigs meant for testing.

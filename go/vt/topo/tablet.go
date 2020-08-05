@@ -107,11 +107,11 @@ func IsRunningUpdateStream(tt topodatapb.TabletType) bool {
 	return false
 }
 
-// IsReplicaType returns if this type should be connected to a master db
+// IsSlaveType returns if this type should be connected to a master db
 // and actively replicating?
 // MASTER is not obviously (only support one level replication graph)
 // BACKUP, RESTORE, DRAINED may or may not be, but we don't know for sure
-func IsReplicaType(tt topodatapb.TabletType) bool {
+func IsSlaveType(tt topodatapb.TabletType) bool {
 	switch tt {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED:
 		return false
@@ -184,7 +184,7 @@ func (ti *TabletInfo) Addr() string {
 
 // MysqlAddr returns hostname:mysql port.
 func (ti *TabletInfo) MysqlAddr() string {
-	return netutil.JoinHostPort(ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort)
+	return netutil.JoinHostPort(topoproto.MysqlHostname(ti.Tablet), topoproto.MysqlPort(ti.Tablet))
 }
 
 // DbName is usually implied by keyspace. Having the shard information in the
@@ -204,14 +204,19 @@ func (ti *TabletInfo) IsInServingGraph() bool {
 	return IsInServingGraph(ti.Type)
 }
 
-// IsReplicaType returns if this tablet's type is a slave
-func (ti *TabletInfo) IsReplicaType() bool {
-	return IsReplicaType(ti.Type)
+// IsSlaveType returns if this tablet's type is a slave
+func (ti *TabletInfo) IsSlaveType() bool {
+	return IsSlaveType(ti.Type)
 }
 
 // GetMasterTermStartTime returns the tablet's master term start time as a Time value.
 func (ti *TabletInfo) GetMasterTermStartTime() time.Time {
 	return logutil.ProtoToTime(ti.Tablet.MasterTermStartTime)
+}
+
+// SetMasterTermStartTime sets the tablet's master term start time as a Time value.
+func (ti *TabletInfo) SetMasterTermStartTime(t time.Time) {
+	ti.Tablet.MasterTermStartTime = logutil.TimeToProto(t)
 }
 
 // NewTabletInfo returns a TabletInfo basing on tablet with the

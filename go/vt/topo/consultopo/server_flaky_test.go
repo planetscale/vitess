@@ -26,8 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/hashicorp/consul/api"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/testfiles"
@@ -131,15 +129,8 @@ func TestConsulTopo(t *testing.T) {
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "")
 	defer func() {
-		// Alerts command did not run successful
-		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
-		}
-		// Alerts command did not run successful
-		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd wait has an error: %v", err)
-		}
-
+		cmd.Process.Kill()
+		cmd.Wait()
 		os.Remove(configFilename)
 	}()
 
@@ -175,14 +166,8 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	// Start a single consul in the background.
 	cmd, configFilename, serverAddr := startConsul(t, "123456")
 	defer func() {
-		// Alerts command did not run successful
-		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
-		}
-		// Alerts command did not run successful
-		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd process wait has an error: %v", err)
-		}
+		cmd.Process.Kill()
+		cmd.Wait()
 		os.Remove(configFilename)
 	}()
 

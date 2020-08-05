@@ -17,60 +17,70 @@ limitations under the License.
 package timer
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"vitess.io/vitess/go/sync2"
 )
 
 const (
-	half    = 50 * time.Millisecond
-	quarter = 25 * time.Millisecond
-	tenth   = 10 * time.Millisecond
+	half    = time.Duration(500e5)
+	quarter = time.Duration(250e5)
+	tenth   = time.Duration(100e5)
 )
 
-var numcalls sync2.AtomicInt64
+var numcalls int32
 
 func f() {
-	numcalls.Add(1)
+	atomic.AddInt32(&numcalls, 1)
 }
 
 func TestWait(t *testing.T) {
-	numcalls.Set(0)
+	atomic.StoreInt32(&numcalls, 0)
 	timer := NewTimer(quarter)
-	assert.False(t, timer.Running())
 	timer.Start(f)
 	defer timer.Stop()
-	assert.True(t, timer.Running())
 	time.Sleep(tenth)
-	assert.Equal(t, int64(0), numcalls.Get())
+	if atomic.LoadInt32(&numcalls) != 0 {
+		t.Errorf("want 0, received %v", numcalls)
+	}
 	time.Sleep(quarter)
-	assert.Equal(t, int64(1), numcalls.Get())
+	if atomic.LoadInt32(&numcalls) != 1 {
+		t.Errorf("want 1, received %v", numcalls)
+	}
 	time.Sleep(quarter)
-	assert.Equal(t, int64(2), numcalls.Get())
+	if atomic.LoadInt32(&numcalls) != 2 {
+		t.Errorf("want 1, received %v", numcalls)
+	}
 }
 
 func TestReset(t *testing.T) {
-	numcalls.Set(0)
+	atomic.StoreInt32(&numcalls, 0)
 	timer := NewTimer(half)
 	timer.Start(f)
 	defer timer.Stop()
 	timer.SetInterval(quarter)
 	time.Sleep(tenth)
-	assert.Equal(t, int64(0), numcalls.Get())
+	if atomic.LoadInt32(&numcalls) != 0 {
+		t.Errorf("want 0, received %v", numcalls)
+	}
 	time.Sleep(quarter)
-	assert.Equal(t, int64(1), numcalls.Get())
+	if atomic.LoadInt32(&numcalls) != 1 {
+		t.Errorf("want 1, received %v", numcalls)
+	}
 }
 
 func TestIndefinite(t *testing.T) {
-	numcalls.Set(0)
+	atomic.StoreInt32(&numcalls, 0)
 	timer := NewTimer(0)
 	timer.Start(f)
 	defer timer.Stop()
 	timer.TriggerAfter(quarter)
 	time.Sleep(tenth)
-	assert.Equal(t, int64(0), numcalls.Get())
+	if atomic.LoadInt32(&numcalls) != 0 {
+		t.Errorf("want 0, received %v", numcalls)
+	}
 	time.Sleep(quarter)
-	assert.Equal(t, int64(1), numcalls.Get())
+	if atomic.LoadInt32(&numcalls) != 1 {
+		t.Errorf("want 1, received %v", numcalls)
+	}
 }

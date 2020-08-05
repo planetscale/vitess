@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
@@ -89,9 +91,8 @@ func TestMain(m *testing.M) {
 
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
-		streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, env.Cells[0])
-		streamerEngine.InitDBConfig(env.KeyspaceName)
-		streamerEngine.Open()
+		streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, schema.NewHistorian(env.SchemaEngine))
+		streamerEngine.Open(env.KeyspaceName, env.Cells[0])
 		defer streamerEngine.Close()
 
 		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("create database %s", vrepldb)); err != nil {
@@ -109,7 +110,10 @@ func TestMain(m *testing.M) {
 			"extb": env.Dbcfgs,
 		}
 		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb, externalConfig)
-		playerEngine.Open(context.Background())
+		if err := playerEngine.Open(context.Background()); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
 		defer playerEngine.Close()
 
 		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), binlogplayer.CreateVReplicationTable()); err != nil {

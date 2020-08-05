@@ -454,28 +454,14 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 // Replication related methods
 //
 
-// ReplicationStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
+// SlaveStatus is part of the tmclient.TabletManagerClient interface.
+func (client *Client) SlaveStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer cc.Close()
-	response, err := c.ReplicationStatus(ctx, &tabletmanagerdatapb.ReplicationStatusRequest{})
-	if err != nil {
-		return nil, err
-	}
-	return response.Status, nil
-}
-
-// MasterStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return nil, err
-	}
-	defer cc.Close()
-	response, err := c.MasterStatus(ctx, &tabletmanagerdatapb.MasterStatusRequest{})
+	response, err := c.SlaveStatus(ctx, &tabletmanagerdatapb.SlaveStatusRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -507,25 +493,25 @@ func (client *Client) WaitForPosition(ctx context.Context, tablet *topodatapb.Ta
 	return err
 }
 
-// StopReplication is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+// StopSlave is part of the tmclient.TabletManagerClient interface.
+func (client *Client) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
-	_, err = c.StopReplication(ctx, &tabletmanagerdatapb.StopReplicationRequest{})
+	_, err = c.StopSlave(ctx, &tabletmanagerdatapb.StopSlaveRequest{})
 	return err
 }
 
-// StopReplicationMinimum is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopReplicationMinimum(ctx context.Context, tablet *topodatapb.Tablet, minPos string, waitTime time.Duration) (string, error) {
+// StopSlaveMinimum is part of the tmclient.TabletManagerClient interface.
+func (client *Client) StopSlaveMinimum(ctx context.Context, tablet *topodatapb.Tablet, minPos string, waitTime time.Duration) (string, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return "", err
 	}
 	defer cc.Close()
-	response, err := c.StopReplicationMinimum(ctx, &tabletmanagerdatapb.StopReplicationMinimumRequest{
+	response, err := c.StopSlaveMinimum(ctx, &tabletmanagerdatapb.StopSlaveMinimumRequest{
 		Position:    minPos,
 		WaitTimeout: int64(waitTime),
 	})
@@ -535,39 +521,39 @@ func (client *Client) StopReplicationMinimum(ctx context.Context, tablet *topoda
 	return response.Position, nil
 }
 
-// StartReplication is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StartReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+// StartSlave is part of the tmclient.TabletManagerClient interface.
+func (client *Client) StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
-	_, err = c.StartReplication(ctx, &tabletmanagerdatapb.StartReplicationRequest{})
+	_, err = c.StartSlave(ctx, &tabletmanagerdatapb.StartSlaveRequest{})
 	return err
 }
 
-// StartReplicationUntilAfter is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StartReplicationUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, waitTime time.Duration) error {
+// StartSlaveUntilAfter is part of the tmclient.TabletManagerClient interface.
+func (client *Client) StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, waitTime time.Duration) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
-	_, err = c.StartReplicationUntilAfter(ctx, &tabletmanagerdatapb.StartReplicationUntilAfterRequest{
+	_, err = c.StartSlaveUntilAfter(ctx, &tabletmanagerdatapb.StartSlaveUntilAfterRequest{
 		Position:    position,
 		WaitTimeout: int64(waitTime),
 	})
 	return err
 }
 
-// GetReplicas is part of the tmclient.TabletManagerClient interface.
-func (client *Client) GetReplicas(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
+// GetSlaves is part of the tmclient.TabletManagerClient interface.
+func (client *Client) GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer cc.Close()
-	response, err := c.GetReplicas(ctx, &tabletmanagerdatapb.GetReplicasRequest{})
+	response, err := c.GetSlaves(ctx, &tabletmanagerdatapb.GetSlavesRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -646,14 +632,14 @@ func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topod
 	return err
 }
 
-// InitReplica is part of the tmclient.TabletManagerClient interface.
-func (client *Client) InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error {
+// InitSlave is part of the tmclient.TabletManagerClient interface.
+func (client *Client) InitSlave(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
-	_, err = c.InitReplica(ctx, &tabletmanagerdatapb.InitReplicaRequest{
+	_, err = c.InitSlave(ctx, &tabletmanagerdatapb.InitSlaveRequest{
 		Parent:              parent,
 		ReplicationPosition: replicationPosition,
 		TimeCreatedNs:       timeCreatedNS,
@@ -662,25 +648,17 @@ func (client *Client) InitReplica(ctx context.Context, tablet *topodatapb.Tablet
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+func (client *Client) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer cc.Close()
 	response, err := c.DemoteMaster(ctx, &tabletmanagerdatapb.DemoteMasterRequest{})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	masterStatus := response.MasterStatus
-	if masterStatus == nil {
-		// We are assuming this means a response came from an older server.
-		masterStatus = &replicationdatapb.MasterStatus{
-			Position:     response.DeprecatedPosition,
-			FilePosition: "",
-		}
-	}
-	return masterStatus, nil
+	return response.Position, nil
 }
 
 // UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
@@ -694,63 +672,75 @@ func (client *Client) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.T
 	return err
 }
 
-// ReplicaWasPromoted is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ReplicaWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error {
+// PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface.
+// Deprecated
+func (client *Client) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topodatapb.Tablet, pos string) (string, error) {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return "", err
+	}
+	defer cc.Close()
+	response, err := c.PromoteSlaveWhenCaughtUp(ctx, &tabletmanagerdatapb.PromoteSlaveWhenCaughtUpRequest{
+		Position: pos,
+	})
+	if err != nil {
+		return "", err
+	}
+	return response.Position, nil
+}
+
+// SlaveWasPromoted is part of the tmclient.TabletManagerClient interface.
+func (client *Client) SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
-	_, err = c.ReplicaWasPromoted(ctx, &tabletmanagerdatapb.ReplicaWasPromotedRequest{})
+	_, err = c.SlaveWasPromoted(ctx, &tabletmanagerdatapb.SlaveWasPromotedRequest{})
 	return err
 }
 
 // SetMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+func (client *Client) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
 	_, err = c.SetMaster(ctx, &tabletmanagerdatapb.SetMasterRequest{
-		Parent:                parent,
-		TimeCreatedNs:         timeCreatedNS,
-		WaitPosition:          waitPosition,
-		ForceStartReplication: forceStartReplication,
+		Parent:          parent,
+		TimeCreatedNs:   timeCreatedNS,
+		WaitPosition:    waitPosition,
+		ForceStartSlave: forceStartSlave,
 	})
 	return err
 }
 
-// ReplicaWasRestarted is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ReplicaWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
+// SlaveWasRestarted is part of the tmclient.TabletManagerClient interface.
+func (client *Client) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
-	_, err = c.ReplicaWasRestarted(ctx, &tabletmanagerdatapb.ReplicaWasRestartedRequest{
+	_, err = c.SlaveWasRestarted(ctx, &tabletmanagerdatapb.SlaveWasRestartedRequest{
 		Parent: parent,
 	})
 	return err
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (hybridStatus *replicationdatapb.Status, status *replicationdatapb.StopReplicationStatus, err error) {
+func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer cc.Close()
-	response, err := c.StopReplicationAndGetStatus(ctx, &tabletmanagerdatapb.StopReplicationAndGetStatusRequest{
-		StopReplicationMode: stopReplicationMode,
-	})
+	response, err := c.StopReplicationAndGetStatus(ctx, &tabletmanagerdatapb.StopReplicationAndGetStatusRequest{})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return response.HybridStatus, &replicationdatapb.StopReplicationStatus{
-		Before: response.Status.Before,
-		After:  response.Status.After,
-	}, nil
+	return response.Status, nil
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
@@ -761,6 +751,21 @@ func (client *Client) PromoteReplica(ctx context.Context, tablet *topodatapb.Tab
 	}
 	defer cc.Close()
 	response, err := c.PromoteReplica(ctx, &tabletmanagerdatapb.PromoteReplicaRequest{})
+	if err != nil {
+		return "", err
+	}
+	return response.Position, nil
+}
+
+// PromoteSlave is part of the tmclient.TabletManagerClient interface.
+// Deprecated
+func (client *Client) PromoteSlave(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return "", err
+	}
+	defer cc.Close()
+	response, err := c.PromoteSlave(ctx, &tabletmanagerdatapb.PromoteSlaveRequest{})
 	if err != nil {
 		return "", err
 	}
@@ -848,124 +853,4 @@ func (client *Client) Close() {
 		}
 	}
 	client.rpcClientMap = nil
-}
-
-// SlaveStatus is deprecated
-func (client *Client) SlaveStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return nil, err
-	}
-	defer cc.Close()
-	response, err := c.SlaveStatus(ctx, &tabletmanagerdatapb.SlaveStatusRequest{})
-	if err != nil {
-		return nil, err
-	}
-	return response.Status, nil
-}
-
-// StopSlave is deprecated
-func (client *Client) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return err
-	}
-	defer cc.Close()
-	_, err = c.StopSlave(ctx, &tabletmanagerdatapb.StopSlaveRequest{})
-	return err
-}
-
-// StopSlaveMinimum is deprecated
-func (client *Client) StopSlaveMinimum(ctx context.Context, tablet *topodatapb.Tablet, minPos string, waitTime time.Duration) (string, error) {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return "", err
-	}
-	defer cc.Close()
-	response, err := c.StopSlaveMinimum(ctx, &tabletmanagerdatapb.StopSlaveMinimumRequest{
-		Position:    minPos,
-		WaitTimeout: int64(waitTime),
-	})
-	if err != nil {
-		return "", err
-	}
-	return response.Position, nil
-}
-
-// StartSlave is deprecated
-func (client *Client) StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return err
-	}
-	defer cc.Close()
-	_, err = c.StartSlave(ctx, &tabletmanagerdatapb.StartSlaveRequest{})
-	return err
-}
-
-// StartSlaveUntilAfter is deprecated
-func (client *Client) StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, waitTime time.Duration) error {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return err
-	}
-	defer cc.Close()
-	_, err = c.StartSlaveUntilAfter(ctx, &tabletmanagerdatapb.StartSlaveUntilAfterRequest{
-		Position:    position,
-		WaitTimeout: int64(waitTime),
-	})
-	return err
-}
-
-// GetSlaves is deprecated
-func (client *Client) GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return nil, err
-	}
-	defer cc.Close()
-	response, err := c.GetSlaves(ctx, &tabletmanagerdatapb.GetSlavesRequest{})
-	if err != nil {
-		return nil, err
-	}
-	return response.Addrs, nil
-}
-
-// InitSlave is deprecated
-func (client *Client) InitSlave(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return err
-	}
-	defer cc.Close()
-	_, err = c.InitSlave(ctx, &tabletmanagerdatapb.InitSlaveRequest{
-		Parent:              parent,
-		ReplicationPosition: replicationPosition,
-		TimeCreatedNs:       timeCreatedNS,
-	})
-	return err
-}
-
-// SlaveWasPromoted is deprecated
-func (client *Client) SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return err
-	}
-	defer cc.Close()
-	_, err = c.SlaveWasPromoted(ctx, &tabletmanagerdatapb.SlaveWasPromotedRequest{})
-	return err
-}
-
-// SlaveWasRestarted is deprecated
-func (client *Client) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
-	cc, c, err := client.dial(tablet)
-	if err != nil {
-		return err
-	}
-	defer cc.Close()
-	_, err = c.SlaveWasRestarted(ctx, &tabletmanagerdatapb.SlaveWasRestartedRequest{
-		Parent: parent,
-	})
-	return err
 }

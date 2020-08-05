@@ -53,8 +53,7 @@ type materializer struct {
 }
 
 const (
-	createDDLAsCopy               = "copy"
-	createDDLAsCopyDropConstraint = "copy:drop_constraint"
+	createDDLAsCopy = "copy"
 )
 
 // MoveTables initiates moving table(s) over to another keyspace
@@ -643,7 +642,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				return fmt.Errorf("target table %v does not exist and there is no create ddl defined", ts.TargetTable)
 			}
 			createDDL := ts.CreateDdl
-			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint {
+			if createDDL == createDDLAsCopy {
 				if ts.SourceExpression != "" {
 					// Check for table if non-empty SourceExpression.
 					sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
@@ -654,20 +653,12 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 						return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
 
 					}
+
 				}
 
 				ddl, ok := sourceDDL[ts.TargetTable]
 				if !ok {
 					return fmt.Errorf("source table %v does not exist", ts.TargetTable)
-				}
-
-				if createDDL == createDDLAsCopyDropConstraint {
-					strippedDDL, err := stripTableConstraints(ddl)
-					if err != nil {
-						return err
-					}
-
-					ddl = strippedDDL
 				}
 				createDDL = ddl
 			}
@@ -676,9 +667,10 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		}
 
 		if len(applyDDLs) > 0 {
+
 			sql := strings.Join(applyDDLs, ";\n")
 
-			log.Infof("applying schema to target tablet %v, sql: %s", target.MasterAlias, sql)
+			log.Infof("applying schema to target tablet %v...", target.MasterAlias)
 			_, err = mz.wr.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
 				SQL:              sql,
 				Force:            false,
@@ -692,28 +684,6 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 
 		return nil
 	})
-}
-
-func stripTableConstraints(ddl string) (string, error) {
-	ast, err := sqlparser.ParseStrictDDL(ddl)
-	if err != nil {
-		return "", err
-	}
-
-	stripConstraints := func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.DDL:
-			if node.TableSpec != nil {
-				node.TableSpec.Constraints = nil
-			}
-		}
-		return true
-	}
-
-	noConstraintAST := sqlparser.Rewrite(ast, stripConstraints, nil)
-	newDDL := sqlparser.String(noConstraintAST)
-
-	return newDDL, nil
 }
 
 func (mz *materializer) generateInserts(ctx context.Context) (string, error) {

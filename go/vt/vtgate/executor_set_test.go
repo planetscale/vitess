@@ -19,6 +19,7 @@ package vtgate
 import (
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/test/utils"
@@ -38,7 +39,7 @@ import (
 )
 
 func TestExecutorSet(t *testing.T) {
-	executorEnv, _, _, _ := createExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 
 	testcases := []struct {
 		in  string
@@ -180,6 +181,24 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set autocommit = 1+1",
 		err: "invalid syntax: 1 + 1",
 	}, {
+		in:  "set character_set_results=null",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results='binary'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results='utf8'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results='utf8mb4'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results='latin1'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set character_set_results='abcd'",
+		err: "disallowed value for character_set_results: abcd",
+	}, {
 		in:  "set foo = 1",
 		err: "unsupported construct: set foo = 1",
 	}, {
@@ -198,17 +217,50 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set character set ascii",
 		err: "unexpected value for charset/names: ascii",
 	}, {
+		in:  "set net_write_timeout = 600",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set net_read_timeout = 600",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set sql_quote_show_create = 1",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set foreign_key_checks = 0",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set unique_checks = 0",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
 		in:  "set skip_query_plan_cache = 1",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SkipQueryPlanCache: true}},
 	}, {
 		in:  "set skip_query_plan_cache = 0",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
+		in:  "set sql_auto_is_null = 0",
+		out: &vtgatepb.Session{Autocommit: true}, // no effect
+	}, {
+		in:  "set sql_auto_is_null = 1",
+		err: "sql_auto_is_null is not currently supported",
+	}, {
 		in:  "set tx_read_only = 2",
 		err: "unexpected value for tx_read_only: 2",
 	}, {
 		in:  "set transaction_read_only = 2",
 		err: "unexpected value for transaction_read_only: 2",
+	}, {
+		in:  "set tx_isolation = 'invalid'",
+		err: "unexpected value for tx_isolation: invalid",
+	}, {
+		in:  "set @foo = 'bar'",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"}), Autocommit: true},
+	}, {
+		in:  "set @foo = 2",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{2}), Autocommit: true},
+	}, {
+		in:  "set @foo = 2.1, @bar = 'baz'",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{2.1, "baz"}), Autocommit: true},
 	}, {
 		in:  "set session transaction isolation level repeatable read",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -237,82 +289,36 @@ func TestExecutorSet(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
-			_, err := executorEnv.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
-			if tcase.err == "" {
-				require.NoError(t, err)
-				utils.MustMatch(t, tcase.out, session.Session, "new executor")
-			} else {
+			_, err := executor.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
+			if err != nil {
 				require.EqualError(t, err, tcase.err)
+			} else {
+				utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
 			}
 		})
 	}
 }
 
 func TestExecutorSetOp(t *testing.T) {
-	executor, _, _, sbclookup := createLegacyExecutorEnv()
-
-	sbclookup.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("sql_mode", "varchar"), "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("sql_safe_updates", "int64"), "1"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("tx_isolation", "varchar"), "read-committed"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("sql_quote_show_create", "int64"), "0"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("foreign_key_checks", "int64")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("unique_checks", "int64"), "0"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("net_write_timeout", "int64"), "600"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("net_read_timeout", "int64"), "300"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_client", "varchar"), "utf8"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-	})
+	executor, sbc1, _, _ := createExecutorEnv()
 
 	testcases := []struct {
 		in      string
 		warning []*querypb.QueryWarning
 		sysVars map[string]string
 	}{{
-		in: "set big_tables = 1", //ignore
+		in: "set sql_mode = 'STRICT_ALL_TABLES'",
+		warning: []*querypb.QueryWarning{{
+			Code:    mysql.ERNotSupportedYet,
+			Message: "Ignored inapplicable SET sql_mode = 'STRICT_ALL_TABLES'",
+		}},
 	}, {
-		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
-		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_AUTO_UPDATES'"},
-	}, {
-		in:      "set sql_safe_updates = 1",
-		sysVars: map[string]string{"sql_safe_updates": "1"},
-	}, {
-		in:      "set tx_isolation = 'read-committed'",
-		sysVars: map[string]string{"tx_isolation": "'read-committed'"},
-	}, {
-		in:      "set sql_quote_show_create = 0",
-		sysVars: map[string]string{"sql_quote_show_create": "0"},
-	}, {
-		in: "set foreign_key_checks = 1",
-	}, {
-		in:      "set unique_checks = 0",
-		sysVars: map[string]string{"unique_checks": "0"},
-	}, {
-		in: "set net_write_timeout = 600",
-	}, {
-		in: "set net_read_timeout = 600",
-	}, {
-		in: "set character_set_client = utf8",
-	}, {
-		in: "set character_set_results=null",
-	}, {
-		in: "set character_set_results='binary'",
-	}, {
-		in: "set character_set_results='utf8'",
-	}, {
-		in: "set character_set_results=utf8mb4",
-	}, {
-		in: "set character_set_results='latin1'",
-	}, {
-		in: "set character_set_results='abcd'",
+		in:      "set sql_safe_updates = 2",
+		sysVars: map[string]string{"sql_safe_updates": "2"},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
+			sbc1.SetResults([]*sqltypes.Result{{}})
 			session := NewAutocommitSession(masterSession)
 			session.TargetString = KsTestUnsharded
 			_, err := executor.Execute(
@@ -329,7 +335,7 @@ func TestExecutorSetOp(t *testing.T) {
 }
 
 func TestExecutorSetMetadata(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
@@ -341,7 +347,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
 
-	executor, _, _, _ = createLegacyExecutorEnv()
+	executor, _, _, _ = createExecutorEnv()
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
 
 	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
@@ -386,7 +392,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 }
 
 func TestPlanExecutorSetUDV(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 
 	testcases := []struct {
 		in  string
@@ -416,7 +422,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 }
 
 func TestSetUDVFromTabletInput(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, sbc1, _, _ := createExecutorEnv()
 
 	fields := sqltypes.MakeTestFields("some", "VARBINARY")
 	sbc1.SetResults([]*sqltypes.Result{

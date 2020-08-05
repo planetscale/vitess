@@ -52,7 +52,7 @@ var (
 )
 
 const (
-	maxRowsToFetch = 10000
+	MaxRowsToFetch = 10000
 )
 
 // CheckSrvKeyspace verifies the schema with expectedPartition
@@ -104,7 +104,7 @@ func CheckValues(t *testing.T, vttablet cluster.Vttablet, id uint64, msg string,
 	}
 	var result *sqltypes.Result
 	if dbConn != nil {
-		r1, err := dbConn.ExecuteFetch(query, maxRowsToFetch, true)
+		r1, err := dbConn.ExecuteFetch(query, MaxRowsToFetch, true)
 		require.Nil(t, err)
 		result = r1
 	} else {
@@ -246,10 +246,10 @@ func InsertLots(t *testing.T, count uint64, vttablet cluster.Vttablet, table str
 }
 
 func executeQueryInTransaction(t *testing.T, query string, dbConn *mysql.Conn) {
-	dbConn.ExecuteFetch("begin", maxRowsToFetch, true)
-	_, err := dbConn.ExecuteFetch(query, maxRowsToFetch, true)
+	dbConn.ExecuteFetch("begin", MaxRowsToFetch, true)
+	_, err := dbConn.ExecuteFetch(query, MaxRowsToFetch, true)
 	require.NoError(t, err)
-	dbConn.ExecuteFetch("commit", maxRowsToFetch, true)
+	dbConn.ExecuteFetch("commit", MaxRowsToFetch, true)
 }
 
 // ExecuteOnTablet executes a write query on specified vttablet
@@ -348,7 +348,7 @@ func CheckTabletQueryService(t *testing.T, vttablet cluster.Vttablet, expectedSt
 	tabletStatus := vttablet.VttabletProcess.GetTabletStatus()
 	assert.Equal(t, tabletStatus, expectedStatus)
 
-	queryServiceDisabled := "TabletControl.DisableQueryService set"
+	queryServiceDisabled := "Query Service disabled: TabletControl.DisableQueryService set"
 	status := vttablet.VttabletProcess.GetStatus()
 	if tabletControlEnabled {
 		assert.Contains(t, status, queryServiceDisabled)

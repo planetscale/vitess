@@ -56,10 +56,7 @@ func (s *Server) newUniqueEphemeralKV(ctx context.Context, cli *clientv3.Client,
 			// succeeded or not. In any case, let's try to
 			// delete the node, so we don't leave an orphan
 			// node behind for *leaseTTL time.
-
-			if _, err := cli.Delete(context.Background(), newKey); err != nil {
-				log.Errorf("cli.Delete(context.Background(), newKey) failed :%v", err)
-			}
+			cli.Delete(context.Background(), newKey)
 		}
 		return "", 0, convertError(err, newKey)
 	}

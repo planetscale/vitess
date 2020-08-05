@@ -22,8 +22,7 @@ import (
 	"strings"
 )
 
-// FilePosFlavorID is the string identifier for the filePos flavor.
-const FilePosFlavorID = "FilePos"
+const filePosFlavorID = "FilePos"
 
 // parsefilePosGTID is registered as a GTID parser.
 func parseFilePosGTID(s string) (GTID, error) {
@@ -66,7 +65,7 @@ func (gtid filePosGTID) String() string {
 
 // Flavor implements GTID.Flavor().
 func (gtid filePosGTID) Flavor() string {
-	return FilePosFlavorID
+	return filePosFlavorID
 }
 
 // SequenceDomain implements GTID.SequenceDomain().
@@ -147,15 +146,8 @@ func (gtid filePosGTID) Union(other GTIDSet) GTIDSet {
 	return filePosOther
 }
 
-// Last returns last filePosition
-// For filePos based GTID we have only one position
-// here we will just return the current filePos
-func (gtid filePosGTID) Last() string {
-	return gtid.String()
-}
-
 func init() {
-	gtidParsers[FilePosFlavorID] = parseFilePosGTID
-	gtidSetParsers[FilePosFlavorID] = parseFilePosGTIDSet
-	flavors[FilePosFlavorID] = newFilePosFlavor
+	gtidParsers[filePosFlavorID] = parseFilePosGTID
+	gtidSetParsers[filePosFlavorID] = parseFilePosGTIDSet
+	flavors[filePosFlavorID] = newFilePosFlavor
 }

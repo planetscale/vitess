@@ -103,12 +103,14 @@ func TestMigrateServedFrom(t *testing.T) {
 	destMaster.StartActionLoop(t, wr)
 	defer destMaster.StopActionLoop(t)
 
-	// Override with a fake VREngine after TM is initialized in action loop.
+	// Override with a fake VREngine after Agent is initialized in action loop.
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	destMaster.TM.VREngine = vreplication.NewTestEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory, dbClient.DBName(), nil)
+	destMaster.Agent.VREngine = vreplication.NewTestEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory, dbClient.DBName(), nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	destMaster.TM.VREngine.Open(context.Background())
+	if err := destMaster.Agent.VREngine.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	// select pos, state, message from _vt.vreplication
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),

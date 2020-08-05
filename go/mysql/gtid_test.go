@@ -193,7 +193,6 @@ type fakeGTID struct {
 }
 
 func (f fakeGTID) String() string            { return f.value }
-func (f fakeGTID) Last() string              { panic("not implemented") }
 func (f fakeGTID) Flavor() string            { return f.flavor }
 func (fakeGTID) SourceServer() interface{}   { return int(1) }
 func (fakeGTID) SequenceNumber() interface{} { return int(1) }

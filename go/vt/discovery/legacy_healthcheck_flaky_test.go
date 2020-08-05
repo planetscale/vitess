@@ -26,13 +26,12 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -43,11 +42,7 @@ var connMap map[string]*fakeConn
 
 func init() {
 	tabletconn.RegisterDialer("fake_discovery", discoveryDialer)
-
-	//log error
-	if err := flag.Set("tablet_protocol", "fake_discovery"); err != nil {
-		log.Errorf("flag.Set(\"tablet_protocol\", \"fake_discovery\") failed : %v", err)
-	}
+	flag.Set("tablet_protocol", "fake_discovery")
 	connMap = make(map[string]*fakeConn)
 }
 
@@ -657,6 +652,17 @@ func newListener() *listener {
 
 func (l *listener) StatsUpdate(ts *LegacyTabletStats) {
 	l.output <- ts
+}
+
+func createFixedHealthConn(tablet *topodatapb.Tablet, fixedResult *querypb.StreamHealthResponse) *fakeConn {
+	key := TabletToMapKey(tablet)
+	conn := &fakeConn{
+		QueryService: fakes.ErrorQueryService,
+		tablet:       tablet,
+		fixedResult:  fixedResult,
+	}
+	connMap[key] = conn
+	return conn
 }
 
 func discoveryDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {

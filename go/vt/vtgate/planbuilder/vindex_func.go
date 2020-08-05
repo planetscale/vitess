@@ -82,11 +82,6 @@ func (vf *vindexFunc) Primitive() engine.Primitive {
 	return vf.eVindexFunc
 }
 
-// PushLock satisfies the builder interface.
-func (vf *vindexFunc) PushLock(lock string) error {
-	return nil
-}
-
 // First satisfies the builder interface.
 func (vf *vindexFunc) First() builder {
 	return vf

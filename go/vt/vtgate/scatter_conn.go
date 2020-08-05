@@ -69,7 +69,7 @@ type shardActionFunc func(rs *srvtopo.ResolvedShard, i int) error
 // multiGoTransaction is capable of executing multiple
 // shardActionTransactionFunc actions in parallel and consolidating
 // the results and errors for the caller.
-type shardActionTransactionFunc func(rs *srvtopo.ResolvedShard, i int, shardActionInfo *shardActionInfo) (*shardActionInfo, error)
+type shardActionTransactionFunc func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64, alias *topodatapb.TabletAlias) (int64, *topodatapb.TabletAlias, error)
 
 // NewLegacyScatterConn creates a new ScatterConn.
 func NewLegacyScatterConn(statsName string, txConn *TxConn, gw Gateway, hc discovery.LegacyHealthCheck) *ScatterConn {
@@ -138,6 +138,76 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 	stc.timings.Record(statsKey, startTime)
 }
 
+// Execute executes a non-streaming query on the specified shards.
+func (stc *ScatterConn) Execute(
+	ctx context.Context,
+	query string,
+	bindVars map[string]*querypb.BindVariable,
+	rss []*srvtopo.ResolvedShard,
+	session *SafeSession,
+	notInTransaction bool,
+	options *querypb.ExecuteOptions,
+	autocommit bool,
+) (*sqltypes.Result, error) {
+
+	// mu protects qr
+	var mu sync.Mutex
+	qr := new(sqltypes.Result)
+
+	allErrors := stc.multiGoTransaction(
+		ctx,
+		"Execute",
+		rss,
+		session,
+		notInTransaction,
+		func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64, alias *topodatapb.TabletAlias) (int64, *topodatapb.TabletAlias, error) {
+			var (
+				innerqr *sqltypes.Result
+				err     error
+				opts    *querypb.ExecuteOptions
+			)
+			switch {
+			case autocommit:
+				innerqr, err = stc.executeAutocommit(ctx, rs, query, bindVars, opts)
+			case shouldBegin:
+				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, query, bindVars, options)
+			default:
+				var qs queryservice.QueryService
+				_, usingLegacy := rs.Gateway.(*DiscoveryGateway)
+				if transactionID != 0 && usingLegacy && rs.Target.TabletType != topodatapb.TabletType_MASTER {
+					return 0, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "replica transactions not supported using the legacy healthcheck")
+				}
+
+				if usingLegacy || transactionID == 0 {
+					qs = rs.Gateway
+				} else {
+					qs, err = rs.Gateway.QueryServiceByAlias(alias)
+				}
+				if err == nil {
+					innerqr, err = qs.Execute(ctx, rs.Target, query, bindVars, transactionID, options)
+				}
+			}
+			if err != nil {
+				return transactionID, alias, err
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			// Don't append more rows if row count is exceeded.
+			if len(qr.Rows) <= *maxMemoryRows {
+				qr.AppendResult(innerqr)
+			}
+			return transactionID, alias, nil
+		},
+	)
+
+	if len(qr.Rows) > *maxMemoryRows {
+		return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)
+	}
+
+	return qr, allErrors.AggrError(vterrors.Aggregate)
+}
+
 // ExecuteMultiShard is like Execute,
 // but each shard gets its own Sql Queries and BindVariables.
 //
@@ -149,13 +219,9 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	rss []*srvtopo.ResolvedShard,
 	queries []*querypb.BoundQuery,
 	session *SafeSession,
+	notInTransaction bool,
 	autocommit bool,
-	ignoreMaxMemoryRows bool,
 ) (qr *sqltypes.Result, errs []error) {
-
-	if len(rss) != len(queries) {
-		return nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: got mismatched number of queries and shards")}
-	}
 
 	// mu protects qr
 	var mu sync.Mutex
@@ -166,94 +232,68 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		"Execute",
 		rss,
 		session,
-		autocommit,
-		func(rs *srvtopo.ResolvedShard, i int, info *shardActionInfo) (*shardActionInfo, error) {
+		notInTransaction,
+		func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64, alias *topodatapb.TabletAlias) (int64, *topodatapb.TabletAlias, error) {
 			var (
 				innerqr *sqltypes.Result
 				err     error
 				opts    *querypb.ExecuteOptions
-				alias   *topodatapb.TabletAlias
 			)
-			transactionID := info.transactionID
-			reservedID := info.reservedID
-
 			if session != nil && session.Session != nil {
 				opts = session.Session.Options
 			}
 
-			if autocommit {
-				// As this is auto-commit, the transactionID is supposed to be zero.
-				if info.transactionID != int64(0) {
-					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "in autocommit mode, transactionID should be zero but was: %d", info.transactionID)
+			switch {
+			case autocommit:
+				// tansactionID and alias are not used by this call, it is one round trip
+				innerqr, err = stc.executeAutocommit(ctx, rs, queries[i].Sql, queries[i].BindVariables, opts)
+			case shouldBegin:
+				innerqr, transactionID, alias, err = rs.Gateway.BeginExecute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, opts)
+			default:
+				var qs queryservice.QueryService
+				_, usingLegacy := rs.Gateway.(*DiscoveryGateway)
+				if usingLegacy || transactionID == 0 {
+					qs = rs.Gateway
+				} else {
+					qs, err = rs.Gateway.QueryServiceByAlias(alias)
 				}
+				if err == nil {
+					innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, transactionID, opts)
+				}
+			}
+			if err != nil {
+				return transactionID, alias, err
 			}
 
-			switch info.actionNeeded {
-			case nothing:
-				qs, err := getQueryService(rs, info)
-				if err != nil {
-					return nil, err
-				}
-				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reservedID, opts)
-				if err != nil {
-					return nil, err
-				}
-			case begin:
-				qs, err := getQueryService(rs, info)
-				if err != nil {
-					return nil, err
-				}
-				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, info.reservedID, opts)
-				if err != nil {
-					return info.updateTransactionID(transactionID, alias), err
-				}
-			case reserve:
-				qs, err := getQueryService(rs, info)
-				if err != nil {
-					return nil, err
-				}
-				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, info.transactionID, opts)
-				if err != nil {
-					return info.updateReservedID(reservedID, alias), err
-				}
-			case reserveBegin:
-				innerqr, transactionID, reservedID, alias, err = rs.Gateway.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, opts)
-				if err != nil {
-					return info.updateTransactionAndReservedID(transactionID, reservedID, alias), err
-				}
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected actionNeeded on ScatterConn#ExecuteMultiShard %v", info.actionNeeded)
-			}
 			mu.Lock()
 			defer mu.Unlock()
-
 			// Don't append more rows if row count is exceeded.
-			if ignoreMaxMemoryRows || len(qr.Rows) <= *maxMemoryRows {
+			if len(qr.Rows) <= *maxMemoryRows {
 				qr.AppendResult(innerqr)
 			}
-			return info.updateTransactionAndReservedID(transactionID, reservedID, alias), nil
+			return transactionID, alias, nil
 		},
 	)
 
-	if !ignoreMaxMemoryRows && len(qr.Rows) > *maxMemoryRows {
+	if len(qr.Rows) > *maxMemoryRows {
 		return nil, []error{vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
 	}
 
 	return qr, allErrors.GetErrors()
 }
 
-func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryservice.QueryService, error) {
-	_, usingLegacyGw := rs.Gateway.(*DiscoveryGateway)
-	if usingLegacyGw {
-		switch info.actionNeeded {
-		case reserve, reserveBegin:
-			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "reserved connections are not supported on old gen gateway")
-		}
+func (stc *ScatterConn) executeAutocommit(ctx context.Context, rs *srvtopo.ResolvedShard, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	queries := []*querypb.BoundQuery{{
+		Sql:           sql,
+		BindVariables: bindVariables,
+	}}
+	// ExecuteBatch is a stop-gap because it's the only function that can currently do
+	// single round-trip commit.
+	qrs, err := rs.Gateway.ExecuteBatch(ctx, rs.Target, queries, true /* asTransaction */, 0, options)
+	if err != nil {
+		return nil, err
 	}
-	if usingLegacyGw || info.alias == nil {
-		return rs.Gateway, nil
-	}
-	return rs.Gateway.QueryServiceByAlias(info.alias)
+	return &qrs[0], nil
 }
 
 func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *bool, qr *sqltypes.Result, callback func(*sqltypes.Result) error) error {
@@ -494,7 +534,7 @@ func (stc *ScatterConn) multiGoTransaction(
 	name string,
 	rss []*srvtopo.ResolvedShard,
 	session *SafeSession,
-	autocommit bool,
+	notInTransaction bool,
 	action shardActionTransactionFunc,
 ) (allErrors *concurrency.AllErrorRecorder) {
 
@@ -509,19 +549,14 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shardActionInfo := transactionInfo(rs.Target, session, autocommit)
-		updated, err := action(rs, i, shardActionInfo)
-		if updated == nil {
-			return
-		}
-		if updated.actionNeeded != nothing && (updated.transactionID != 0 || updated.reservedID != 0) {
-			appendErr := session.AppendOrUpdate(&vtgatepb.Session_ShardSession{
+		shouldBegin, transactionID, alias := transactionInfo(rs.Target, session, notInTransaction)
+		transactionID, alias, err = action(rs, i, shouldBegin, transactionID, alias)
+		if shouldBegin && transactionID != 0 {
+			if appendErr := session.Append(&vtgatepb.Session_ShardSession{
 				Target:        rs.Target,
-				TransactionId: updated.transactionID,
-				ReservedId:    updated.reservedID,
-				TabletAlias:   updated.alias,
-			}, stc.txConn.mode)
-			if appendErr != nil {
+				TransactionId: transactionID,
+				TabletAlias:   alias,
+			}, stc.txConn.mode); appendErr != nil {
 				err = appendErr
 			}
 		}
@@ -550,65 +585,31 @@ func (stc *ScatterConn) multiGoTransaction(
 	return allErrors
 }
 
-// transactionInfo looks at the current session, and returns information about what needs to be done for this tablet
-func transactionInfo(target *querypb.Target, session *SafeSession, autocommit bool) *shardActionInfo {
-	if !(session.InTransaction() || session.InReservedConn()) {
-		return &shardActionInfo{}
+// transactionInfo looks at the current session, and returns:
+// - shouldBegin: if we should call 'Begin' to get a transactionID
+// - transactionID: the transactionID to use, or 0 if not in a transaction.
+func transactionInfo(
+	target *querypb.Target,
+	session *SafeSession,
+	notInTransaction bool,
+) (shouldBegin bool, transactionID int64, alias *topodatapb.TabletAlias) {
+	if !session.InTransaction() {
+		return false, 0, nil
 	}
 	// No need to protect ourselves from the race condition between
-	// Find and AppendOrUpdate. The higher level functions ensure that no
+	// Find and Append. The higher level functions ensure that no
 	// duplicate (target) tuples can execute
 	// this at the same time.
-	transactionID, reservedID, alias := session.Find(target.Keyspace, target.Shard, target.TabletType)
-
-	shouldReserve := session.InReservedConn() && reservedID == 0
-	shouldBegin := session.InTransaction() && transactionID == 0 && !autocommit
-
-	var act = nothing
-	switch {
-	case shouldBegin && shouldReserve:
-		act = reserveBegin
-	case shouldReserve:
-		act = reserve
-	case shouldBegin:
-		act = begin
+	transactionID, alias = session.Find(target.Keyspace, target.Shard, target.TabletType)
+	if transactionID != 0 {
+		return false, transactionID, alias
+	}
+	// We are in a transaction at higher level,
+	// but client requires not to start a transaction for this query.
+	// If a transaction was started on this conn, we will use it (as above).
+	if notInTransaction {
+		return false, 0, nil
 	}
 
-	return &shardActionInfo{
-		actionNeeded:  act,
-		transactionID: transactionID,
-		reservedID:    reservedID,
-		alias:         alias,
-	}
+	return true, 0, nil
 }
-
-type shardActionInfo struct {
-	actionNeeded              actionNeeded
-	reservedID, transactionID int64
-	alias                     *topodatapb.TabletAlias
-}
-
-func (sai *shardActionInfo) updateTransactionID(txID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
-	return sai.updateTransactionAndReservedID(txID, sai.reservedID, alias)
-}
-
-func (sai *shardActionInfo) updateReservedID(rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
-	return sai.updateTransactionAndReservedID(sai.transactionID, rID, alias)
-}
-
-func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
-	newInfo := *sai
-	newInfo.reservedID = rID
-	newInfo.transactionID = txID
-	newInfo.alias = alias
-	return &newInfo
-}
-
-type actionNeeded int
-
-const (
-	nothing actionNeeded = iota
-	reserveBegin
-	reserve
-	begin
-)

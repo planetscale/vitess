@@ -62,21 +62,6 @@ type CephBackupHandle struct {
 	waitGroup sync.WaitGroup
 }
 
-// RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *CephBackupHandle) RecordError(err error) {
-	bh.errors.RecordError(err)
-}
-
-// HasErrors is part of the concurrency.ErrorRecorder interface.
-func (bh *CephBackupHandle) HasErrors() bool {
-	return bh.errors.HasErrors()
-}
-
-// Error is part of the concurrency.ErrorRecorder interface.
-func (bh *CephBackupHandle) Error() error {
-	return bh.errors.Error()
-}
-
 // Directory implements BackupHandle.
 func (bh *CephBackupHandle) Directory() string {
 	return bh.dir
@@ -109,7 +94,7 @@ func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string, filesi
 			// Signal the writer that an error occurred, in case it's not done writing yet.
 			reader.CloseWithError(err)
 			// In case the error happened after the writer finished, we need to remember it.
-			bh.RecordError(err)
+			bh.errors.RecordError(err)
 		}
 	}()
 	// Give our caller the write end of the pipe.
@@ -123,7 +108,7 @@ func (bh *CephBackupHandle) EndBackup(ctx context.Context) error {
 	}
 	bh.waitGroup.Wait()
 	// Return the saved PutObject() errors, if any.
-	return bh.Error()
+	return bh.errors.Error()
 }
 
 // AbortBackup implements BackupHandle.

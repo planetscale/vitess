@@ -58,6 +58,12 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	masterTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 	replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
 
+	err = clusterInstance.VtctlclientProcess.InitTablet(&masterTablet, clusterInstance.Cell, keyspace, hostname, shardName)
+	require.Nil(t, err)
+	// create database so vttablet can start behaving normally
+	err = masterTablet.VttabletProcess.CreateDB(keyspace)
+	require.Nil(t, err)
+
 	if isClientCertPassed {
 		replicaTablet.VttabletProcess.ExtraArgs = append(replicaTablet.VttabletProcess.ExtraArgs, "-db_flags", "2048",
 			"-db_ssl_ca", path.Join(certDirectory, "ca-cert.pem"),
@@ -65,6 +71,11 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 			"-db_ssl_key", path.Join(certDirectory, "client-key.pem"),
 		)
 	}
+
+	err = clusterInstance.VtctlclientProcess.InitTablet(&replicaTablet, clusterInstance.Cell, keyspace, hostname, shardName)
+	require.Nil(t, err)
+	err = replicaTablet.VttabletProcess.CreateDB(keyspace)
+	require.Nil(t, err)
 
 	// start the tablets
 	for _, tablet := range []cluster.Vttablet{masterTablet, replicaTablet} {
@@ -74,7 +85,7 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	// Reparent using SSL (this will also check replication works)
 	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspace, shardName, clusterInstance.Cell, masterTablet.TabletUID)
 	if isClientCertPassed {
-		require.NoError(t, err)
+		require.Nil(t, err)
 	} else {
 		require.Error(t, err)
 	}
@@ -95,33 +106,33 @@ func initializeCluster(t *testing.T) (int, error) {
 	_ = encryption.CreateDirectory(certDirectory, 0700)
 
 	err := encryption.ExecuteVttlstestCommand("-root", certDirectory, "CreateCA")
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	err = encryption.ExecuteVttlstestCommand("-root", certDirectory, "CreateSignedCert", "-common_name", "Mysql Server", "-serial", "01", "server")
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	err = encryption.ExecuteVttlstestCommand("-root", certDirectory, "CreateSignedCert", "-common_name", "Mysql Client", "-serial", "02", "client")
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	extraMyCnf := path.Join(certDirectory, "secure.cnf")
 	f, err := os.Create(extraMyCnf)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	_, err = f.WriteString("require_secure_transport=" + "true\n")
-	require.NoError(t, err)
+	require.Nil(t, err)
 	_, err = f.WriteString("ssl-ca=" + certDirectory + "/ca-cert.pem\n")
-	require.NoError(t, err)
+	require.Nil(t, err)
 	_, err = f.WriteString("ssl-cert=" + certDirectory + "/server-cert.pem\n")
-	require.NoError(t, err)
+	require.Nil(t, err)
 	_, err = f.WriteString("ssl-key=" + certDirectory + "/server-key.pem\n")
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	err = f.Close()
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	err = os.Setenv("EXTRA_MY_CNF", extraMyCnf)
 
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	for _, keyspaceStr := range []string{keyspace} {
 		KeyspacePtr := &cluster.Keyspace{Name: keyspaceStr}
@@ -139,11 +150,12 @@ func initializeCluster(t *testing.T) (int, error) {
 
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			proc, err := tablet.MysqlctlProcess.StartProcess()
-			if err != nil {
+			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 				return 1, err
+			} else {
+				// ignore golint warning, we need the else block to use proc
+				mysqlProcesses = append(mysqlProcesses, proc)
 			}
-			mysqlProcesses = append(mysqlProcesses, proc)
 			// start vttablet process
 			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,

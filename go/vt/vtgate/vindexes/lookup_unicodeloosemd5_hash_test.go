@@ -37,7 +37,7 @@ const (
 
 func TestLookupUnicodeLooseMD5HashMap(t *testing.T) {
 	lookup := createLookup(t, "lookup_unicodeloosemd5_hash", false)
-	vc := &vcursor{numRows: 2, keys: []sqltypes.Value{sqltypes.NewUint64(hashed10), sqltypes.NewUint64(hashed20)}}
+	vc := &vcursor{numRows: 2}
 
 	got, err := lookup.Map(vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
 	require.NoError(t, err)
@@ -55,12 +55,15 @@ func TestLookupUnicodeLooseMD5HashMap(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewUint64(hashed10), sqltypes.NewUint64(hashed20)})
-	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "select fromc, toc from t where fromc in ::fromc",
+		Sql: "select toc from t where fromc = :fromc",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": vars,
+			"fromc": sqltypes.Uint64BindVariable(hashed10),
+		},
+	}, {
+		Sql: "select toc from t where fromc = :fromc",
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Uint64BindVariable(hashed20),
 		},
 	}}
 	if !reflect.DeepEqual(vc.queries, wantqueries) {
@@ -89,7 +92,7 @@ func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	lookupNonUnique := vindex.(SingleColumn)
-	vc := &vcursor{numRows: 2, keys: []sqltypes.Value{sqltypes.NewUint64(hashed10), sqltypes.NewUint64(hashed20)}}
+	vc := &vcursor{numRows: 2}
 
 	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
 	require.NoError(t, err)
@@ -107,19 +110,22 @@ func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewUint64(hashed10), sqltypes.NewUint64(hashed20)})
-	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "select fromc, toc from t where fromc in ::fromc",
+		Sql: "select toc from t where fromc = :fromc",
 		BindVariables: map[string]*querypb.BindVariable{
-			"fromc": vars,
+			"fromc": sqltypes.Uint64BindVariable(hashed10),
+		},
+	}, {
+		Sql: "select toc from t where fromc = :fromc",
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc": sqltypes.Uint64BindVariable(hashed20),
 		},
 	}}
 	if !reflect.DeepEqual(vc.queries, wantqueries) {
 		t.Errorf("lookup.Map queries:\n%v, want\n%v", vc.queries, wantqueries)
 	}
 
-	if got, want := vc.autocommits, 1; got != want {
+	if got, want := vc.autocommits, 2; got != want {
 		t.Errorf("Create(autocommit) count: %d, want %d", got, want)
 	}
 }

@@ -22,70 +22,70 @@ var (
 		Help:    "Latency to recieve a count error",
 		Buckets: defaultBuckets,
 	},
-		[]string{"database_name", "tablet_type"},
+		[]string{"environment_name", "database_name", "tablet_type"},
 	)
 	readErrorLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "are_you_alive_read_error_latency_seconds",
 		Help:    "Latency to recieve a read error",
 		Buckets: defaultBuckets,
 	},
-		[]string{"database_name", "tablet_type"},
+		[]string{"environment_name", "database_name", "tablet_type"},
 	)
 	deleteErrorLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "are_you_alive_delete_error_latency_seconds",
 		Help:    "Latency to recieve a delete error",
 		Buckets: defaultBuckets,
 	},
-		[]string{"database_name"},
+		[]string{"environment_name", "database_name"},
 	)
 	writeErrorLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "are_you_alive_write_error_latency_seconds",
 		Help:    "Latency to recieve a write error",
 		Buckets: defaultBuckets,
 	},
-		[]string{"database_name"},
+		[]string{"environment_name", "database_name"},
 	)
 	connectErrorLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "are_you_alive_connect_error_latency_seconds",
 		Help:    "Latency to recieve a connect error",
 		Buckets: defaultBuckets,
 	},
-		[]string{"database_name", "tablet_type"},
+		[]string{"environment_name", "database_name", "tablet_type"},
 	)
 	countLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "are_you_alive_count_latency_seconds",
 		Help:    "Time it takes to count to the database",
 		Buckets: defaultBuckets,
 	},
-		[]string{"database_name", "tablet_type"},
+		[]string{"environment_name", "database_name", "tablet_type"},
 	)
 	readLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "are_you_alive_read_latency_seconds",
 		Help:    "Time it takes to read to the database",
 		Buckets: defaultBuckets,
 	},
-		[]string{"database_name", "tablet_type"},
+		[]string{"environment_name", "database_name", "tablet_type"},
 	)
 	deleteLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "are_you_alive_delete_latency_seconds",
 		Help:    "Time it takes to delete to the database",
 		Buckets: defaultBuckets,
 	},
-		[]string{"database_name"},
+		[]string{"environment_name", "database_name"},
 	)
 	writeLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "are_you_alive_write_latency_seconds",
 		Help:    "Time it takes to write to the database",
 		Buckets: defaultBuckets,
 	},
-		[]string{"database_name"},
+		[]string{"environment_name", "database_name"},
 	)
 	connectLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "are_you_alive_connect_latency_seconds",
 		Help:    "Time it takes to connect to the database",
 		Buckets: defaultBuckets,
 	},
-		[]string{"database_name", "tablet_type"},
+		[]string{"environment_name", "database_name", "tablet_type"},
 	)
 )
 
@@ -115,7 +115,7 @@ func ParseTabletType(connectionString string) string {
 	}
 }
 
-func openDatabase(connectionString string) (*sql.DB, error) {
+func openDatabase(environmentName string, connectionString string) (*sql.DB, error) {
 	databaseName := ParseDBName(connectionString)
 	tabletType := ParseTabletType(connectionString)
 	// NOTE: This is probably not measuring open connections.  I think they
@@ -125,8 +125,9 @@ func openDatabase(connectionString string) (*sql.DB, error) {
 	// happening locally.  We should just see everything complete within
 	// milliseconds.
 	labels := prometheus.Labels{
-		"database_name": databaseName,
-		"tablet_type":   tabletType}
+		"environment_name": environmentName,
+		"database_name":    databaseName,
+		"tablet_type":      tabletType}
 	connectTimer := prometheus.NewTimer(connectLatency.With(labels))
 	connectErrorTimer := prometheus.NewTimer(connectErrorLatency.With(labels))
 	db, err := sql.Open("mysql", connectionString)
@@ -143,13 +144,13 @@ func openDatabase(connectionString string) (*sql.DB, error) {
 // given tableName, and recreate it with the schema that the rest of the client
 // expects.  This is not something any normal client would do but is convenient
 // here because we are just using this client for monitoring.
-func InitializeDatabase(connectionString string, tableName string) error {
+func InitializeDatabase(environmentName string, connectionString string, tableName string) error {
 
 	// 0. Create logger
 	log := logrus.WithField("connection_string", connectionString)
 
 	// 1. Open client to database
-	db, err := openDatabase(connectionString)
+	db, err := openDatabase(environmentName, connectionString)
 	if err != nil {
 		log.WithError(err).Error("Error opening database")
 		return err
@@ -175,13 +176,13 @@ func InitializeDatabase(connectionString string, tableName string) error {
 // everything in the table given by tableName because this client expects the
 // table to be empty.  No client would normally do this, but it's convenient for
 // testing.
-func WipeTestTable(connectionString string, tableName string) error {
+func WipeTestTable(environmentName string, connectionString string, tableName string) error {
 
 	// 0. Create logger
 	log := logrus.WithField("connection_string", connectionString)
 
 	// 1. Open client to database
-	db, err := openDatabase(connectionString)
+	db, err := openDatabase(environmentName, connectionString)
 	if err != nil {
 		log.WithError(err).Error("Error opening database")
 		return err
@@ -197,14 +198,14 @@ func WipeTestTable(connectionString string, tableName string) error {
 
 // Write will write the record given by page to the test table in the database
 // referenced by connectionString.
-func Write(connectionString string, page int) error {
+func Write(environmentName string, connectionString string, page int) error {
 
 	// 0. Create logger
 	log := logrus.WithField("connection_string", connectionString)
 
 	// 1. Open client to database
 	databaseName := ParseDBName(connectionString)
-	db, err := openDatabase(connectionString)
+	db, err := openDatabase(environmentName, connectionString)
 	if err != nil {
 		log.WithError(err).Error("Error opening database")
 		return err
@@ -213,7 +214,8 @@ func Write(connectionString string, page int) error {
 
 	// 2. Write record
 	labels := prometheus.Labels{
-		"database_name": databaseName}
+		"environment_name": environmentName,
+		"database_name":    databaseName}
 	writeTimer := prometheus.NewTimer(writeLatency.With(labels))
 	writeErrorTimer := prometheus.NewTimer(writeErrorLatency.With(labels))
 	if _, err := db.Exec("INSERT INTO are_you_alive_messages (page, message) VALUES (?, ?)", page, "foo"); err != nil {
@@ -227,14 +229,14 @@ func Write(connectionString string, page int) error {
 
 // Read will read the record given by page from the test table in the database
 // referenced by connectionString.
-func Read(connectionString string, page int) (int, string, error) {
+func Read(environmentName string, connectionString string, page int) (int, string, error) {
 
 	// 0. Create logger
 	log := logrus.WithField("connection_string", connectionString)
 
 	// 1. Open client to database
 	databaseName := ParseDBName(connectionString)
-	db, err := openDatabase(connectionString)
+	db, err := openDatabase(environmentName, connectionString)
 	if err != nil {
 		log.WithError(err).Error("Error opening database")
 		return 0, "", err
@@ -244,8 +246,9 @@ func Read(connectionString string, page int) (int, string, error) {
 	// 2. Read record
 	tabletType := ParseTabletType(connectionString)
 	labels := prometheus.Labels{
-		"database_name": databaseName,
-		"tablet_type":   tabletType}
+		"environment_name": environmentName,
+		"database_name":    databaseName,
+		"tablet_type":      tabletType}
 	readTimer := prometheus.NewTimer(readLatency.With(labels))
 	readErrorTimer := prometheus.NewTimer(readErrorLatency.With(labels))
 	row := db.QueryRow("SELECT * FROM are_you_alive_messages WHERE page=?", page)
@@ -272,14 +275,14 @@ func Read(connectionString string, page int) (int, string, error) {
 
 // Count will count all the documents in the test table in the database
 // referenced by connectionString.
-func Count(connectionString string) (int, error) {
+func Count(environmentName string, connectionString string) (int, error) {
 
 	// 0. Create logger
 	log := logrus.WithField("connection_string", connectionString)
 
 	// 1. Open client to database
 	databaseName := ParseDBName(connectionString)
-	db, err := openDatabase(connectionString)
+	db, err := openDatabase(environmentName, connectionString)
 	if err != nil {
 		log.WithError(err).Error("Error opening database")
 		return 0, err
@@ -289,8 +292,9 @@ func Count(connectionString string) (int, error) {
 	// 2. Run Count
 	tabletType := ParseTabletType(connectionString)
 	labels := prometheus.Labels{
-		"database_name": databaseName,
-		"tablet_type":   tabletType}
+		"environment_name": environmentName,
+		"database_name":    databaseName,
+		"tablet_type":      tabletType}
 	countTimer := prometheus.NewTimer(countLatency.With(labels))
 	countErrorTimer := prometheus.NewTimer(countErrorLatency.With(labels))
 	row := db.QueryRow("SELECT COUNT(*) FROM are_you_alive_messages")
@@ -309,7 +313,7 @@ func Count(connectionString string) (int, error) {
 
 // Delete will delete the record given by page from the test table in the
 // database referenced by connectionString.
-func Delete(connectionString string, page int) error {
+func Delete(environmentName string, connectionString string, page int) error {
 
 	// 0. Create logger
 	log := logrus.WithFields(logrus.Fields{
@@ -320,10 +324,11 @@ func Delete(connectionString string, page int) error {
 	// 1. Open client to database
 	databaseName := ParseDBName(connectionString)
 	labels := prometheus.Labels{
-		"database_name": databaseName}
+		"environment_name": environmentName,
+		"database_name":    databaseName}
 	deleteTimer := prometheus.NewTimer(deleteLatency.With(labels))
 	deleteErrorTimer := prometheus.NewTimer(deleteErrorLatency.With(labels))
-	db, err := openDatabase(connectionString)
+	db, err := openDatabase(environmentName, connectionString)
 	if err != nil {
 		log.WithError(err).Error("Error opening database")
 		deleteErrorTimer.ObserveDuration()

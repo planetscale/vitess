@@ -86,8 +86,8 @@ func TestLookupHashMap(t *testing.T) {
 
 	// Test conversion fail.
 	vc.result = sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
-		"1|notint",
+		sqltypes.MakeTestFields("a", "varbinary"),
+		"notint",
 	)
 	got, err = lookuphash.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestLookupHashMapAbsent(t *testing.T) {
 
 func TestLookupHashMapNull(t *testing.T) {
 	lookuphash := createLookup(t, "lookup_hash", false)
-	vc := &vcursor{numRows: 1, keys: []sqltypes.Value{sqltypes.NULL}}
+	vc := &vcursor{numRows: 1}
 
 	got, err := lookuphash.Map(vc, []sqltypes.Value{sqltypes.NULL})
 	require.NoError(t, err)

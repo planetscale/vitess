@@ -92,12 +92,6 @@ func (rb *route) Primitive() engine.Primitive {
 	return rb.routeOptions[0].eroute
 }
 
-// PushLock satisfies the builder interface.
-func (rb *route) PushLock(lock string) error {
-	rb.Select.SetLock(lock)
-	return nil
-}
-
 // First satisfies the builder interface.
 func (rb *route) First() builder {
 	return rb
@@ -396,10 +390,7 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 		sqlparser.FormatImpossibleQuery(buf, node)
 	}
 
-	buffer := sqlparser.NewTrackedBuffer(formatter)
-	node := buffer.WriteNode(sel)
-	query := node.ParsedQuery()
-	return query.Query
+	return sqlparser.NewTrackedBuffer(formatter).WriteNode(sel).ParsedQuery().Query
 }
 
 // SupplyVar satisfies the builder interface.

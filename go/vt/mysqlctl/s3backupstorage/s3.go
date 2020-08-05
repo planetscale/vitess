@@ -41,7 +41,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"golang.org/x/net/context"
 
@@ -86,7 +85,7 @@ var logNameMap logNameToLogLevel
 
 // S3BackupHandle implements the backupstorage.BackupHandle interface.
 type S3BackupHandle struct {
-	client    s3iface.S3API
+	client    *s3.S3
 	bs        *S3BackupStorage
 	dir       string
 	name      string
@@ -103,21 +102,6 @@ func (bh *S3BackupHandle) Directory() string {
 // Name is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) Name() string {
 	return bh.name
-}
-
-// RecordError is part of the concurrency.ErrorRecorder interface.
-func (bh *S3BackupHandle) RecordError(err error) {
-	bh.errors.RecordError(err)
-}
-
-// HasErrors is part of the concurrency.ErrorRecorder interface.
-func (bh *S3BackupHandle) HasErrors() bool {
-	return bh.errors.HasErrors()
-}
-
-// Error is part of the concurrency.ErrorRecorder interface.
-func (bh *S3BackupHandle) Error() error {
-	return bh.errors.Error()
 }
 
 // AddFile is part of the backupstorage.BackupHandle interface.
@@ -159,7 +143,7 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		})
 		if err != nil {
 			reader.CloseWithError(err)
-			bh.RecordError(err)
+			bh.errors.RecordError(err)
 		}
 	}()
 
@@ -172,7 +156,7 @@ func (bh *S3BackupHandle) EndBackup(ctx context.Context) error {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
 	bh.waitGroup.Wait()
-	return bh.Error()
+	return bh.errors.Error()
 }
 
 // AbortBackup is part of the backupstorage.BackupHandle interface.

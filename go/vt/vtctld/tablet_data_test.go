@@ -89,14 +89,10 @@ func (s *streamHealthTabletServer) streamHealthUnregister(id int) error {
 }
 
 // BroadcastHealth will broadcast the current health to all listeners
-func (s *streamHealthTabletServer) BroadcastHealth() {
+func (s *streamHealthTabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration) {
 	shr := &querypb.StreamHealthResponse{
-		TabletExternallyReparentedTimestamp: 42,
-		RealtimeStats: &querypb.RealtimeStats{
-			HealthError:         "testHealthError",
-			SecondsBehindMaster: 72,
-			CpuUsage:            1.1,
-		},
+		TabletExternallyReparentedTimestamp: terTimestamp,
+		RealtimeStats:                       stats,
 	}
 
 	s.streamHealthMutex.Lock()
@@ -125,6 +121,12 @@ func TestTabletData(t *testing.T) {
 
 	thc := newTabletHealthCache(ts)
 
+	stats := &querypb.RealtimeStats{
+		HealthError:         "testHealthError",
+		SecondsBehindMaster: 72,
+		CpuUsage:            1.1,
+	}
+
 	// Keep broadcasting until the first result goes through.
 	stop := make(chan struct{})
 	go func() {
@@ -133,7 +135,7 @@ func TestTabletData(t *testing.T) {
 			case <-stop:
 				return
 			default:
-				shsq.BroadcastHealth()
+				shsq.BroadcastHealth(42, stats, time.Minute)
 			}
 		}
 	}()
@@ -146,12 +148,6 @@ func TestTabletData(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("thc.Get failed: %v", err)
-	}
-
-	stats := &querypb.RealtimeStats{
-		HealthError:         "testHealthError",
-		SecondsBehindMaster: 72,
-		CpuUsage:            1.1,
 	}
 	if got, want := result.RealtimeStats, stats; !proto.Equal(got, want) {
 		t.Errorf("RealtimeStats = %#v, want %#v", got, want)

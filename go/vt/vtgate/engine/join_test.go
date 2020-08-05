@@ -20,7 +20,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -128,77 +127,62 @@ func TestJoinExecute(t *testing.T) {
 }
 
 func TestJoinExecuteMaxMemoryRows(t *testing.T) {
-	saveMax := testMaxMemoryRows
-	saveIgnore := testIgnoreMaxMemoryRows
+	save := testMaxMemoryRows
 	testMaxMemoryRows = 3
-	defer func() {
-		testMaxMemoryRows = saveMax
-		testIgnoreMaxMemoryRows = saveIgnore
-	}()
+	defer func() { testMaxMemoryRows = save }()
 
-	testCases := []struct {
-		ignoreMaxMemoryRows bool
-		err                 string
-	}{
-		{true, ""},
-		{false, "in-memory row count exceeded allowed limit of 3"},
+	leftPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col1|col2|col3",
+					"int64|varchar|varchar",
+				),
+				"1|a|aa",
+				"2|b|bb",
+				"3|c|cc",
+			),
+		},
 	}
-	for _, test := range testCases {
-		leftPrim := &fakePrimitive{
-			results: []*sqltypes.Result{
-				sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields(
-						"col1|col2|col3",
-						"int64|varchar|varchar",
-					),
-					"1|a|aa",
-					"2|b|bb",
-					"3|c|cc",
-				),
-			},
-		}
-		rightFields := sqltypes.MakeTestFields(
-			"col4|col5|col6",
-			"int64|varchar|varchar",
-		)
-		rightPrim := &fakePrimitive{
-			results: []*sqltypes.Result{
-				sqltypes.MakeTestResult(
-					rightFields,
-					"4|d|dd",
-				),
-				sqltypes.MakeTestResult(
-					rightFields,
-				),
-				sqltypes.MakeTestResult(
-					rightFields,
-					"5|e|ee",
-					"6|f|ff",
-					"7|g|gg",
-				),
-			},
-		}
-		bv := map[string]*querypb.BindVariable{
-			"a": sqltypes.Int64BindVariable(10),
-		}
+	rightFields := sqltypes.MakeTestFields(
+		"col4|col5|col6",
+		"int64|varchar|varchar",
+	)
+	rightPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				rightFields,
+				"4|d|dd",
+			),
+			sqltypes.MakeTestResult(
+				rightFields,
+			),
+			sqltypes.MakeTestResult(
+				rightFields,
+				"5|e|ee",
+				"6|f|ff",
+				"7|g|gg",
+			),
+		},
+	}
+	bv := map[string]*querypb.BindVariable{
+		"a": sqltypes.Int64BindVariable(10),
+	}
 
-		// Normal join
-		jn := &Join{
-			Opcode: NormalJoin,
-			Left:   leftPrim,
-			Right:  rightPrim,
-			Cols:   []int{-1, -2, 1, 2},
-			Vars: map[string]int{
-				"bv": 1,
-			},
-		}
-		testIgnoreMaxMemoryRows = test.ignoreMaxMemoryRows
-		_, err := jn.Execute(noopVCursor{}, bv, true)
-		if testIgnoreMaxMemoryRows {
-			require.NoError(t, err)
-		} else {
-			require.EqualError(t, err, test.err)
-		}
+	// Normal join
+	jn := &Join{
+		Opcode: NormalJoin,
+		Left:   leftPrim,
+		Right:  rightPrim,
+		Cols:   []int{-1, -2, 1, 2},
+		Vars: map[string]int{
+			"bv": 1,
+		},
+	}
+	_, err := jn.Execute(noopVCursor{}, bv, true)
+	want := "in-memory row count exceeded allowed limit of 3"
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute(): %v, want %v", err, want)
 	}
 }
 

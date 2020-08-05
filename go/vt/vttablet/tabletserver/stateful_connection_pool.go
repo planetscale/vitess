@@ -149,17 +149,16 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 
 	connID := sf.lastID.Add(1)
 	sfConn := &StatefulConnection{
-		dbConn:         conn,
-		ConnID:         connID,
-		pool:           sf,
-		env:            sf.env,
-		enforceTimeout: options.GetWorkload() != querypb.ExecuteOptions_DBA,
+		dbConn: conn,
+		ConnID: connID,
+		pool:   sf,
+		env:    sf.env,
 	}
 
 	err = sf.active.Register(
 		sfConn.ConnID,
 		sfConn,
-		sfConn.enforceTimeout,
+		options.GetWorkload() != querypb.ExecuteOptions_DBA,
 	)
 	if err != nil {
 		sfConn.Release(tx.ConnInitFail)
@@ -192,11 +191,4 @@ func (sf *StatefulConnectionPool) markAsNotInUse(id tx.ConnID) {
 // Capacity returns the pool capacity.
 func (sf *StatefulConnectionPool) Capacity() int {
 	return int(sf.conns.Capacity())
-}
-
-//renewConn unregister and registers with new id.
-func (sf *StatefulConnectionPool) renewConn(sc *StatefulConnection) error {
-	sf.active.Unregister(sc.ConnID, "renew existing connection")
-	sc.ConnID = sf.lastID.Add(1)
-	return sf.active.Register(sc.ConnID, sc, sc.enforceTimeout)
 }

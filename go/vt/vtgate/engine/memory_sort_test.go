@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -341,53 +340,38 @@ func TestMemorySortMultiColumn(t *testing.T) {
 }
 
 func TestMemorySortMaxMemoryRows(t *testing.T) {
-	saveMax := testMaxMemoryRows
-	saveIgnore := testIgnoreMaxMemoryRows
+	save := testMaxMemoryRows
 	testMaxMemoryRows = 3
-	defer func() {
-		testMaxMemoryRows = saveMax
-		testIgnoreMaxMemoryRows = saveIgnore
-	}()
+	defer func() { testMaxMemoryRows = save }()
 
-	testCases := []struct {
-		ignoreMaxMemoryRows bool
-		err                 string
-	}{
-		{true, ""},
-		{false, "in-memory row count exceeded allowed limit of 3"},
-	}
 	fields := sqltypes.MakeTestFields(
 		"c1|c2",
 		"varbinary|decimal",
 	)
-	for _, test := range testCases {
-		fp := &fakePrimitive{
-			results: []*sqltypes.Result{sqltypes.MakeTestResult(
-				fields,
-				"a|1",
-				"b|2",
-				"a|1",
-				"c|4",
-				"c|3",
-			)},
-		}
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"b|2",
+			"a|1",
+			"c|4",
+			"c|3",
+		)},
+	}
 
-		ms := &MemorySort{
-			OrderBy: []OrderbyParams{{
-				Col: 1,
-			}},
-			Input: fp,
-		}
+	ms := &MemorySort{
+		OrderBy: []OrderbyParams{{
+			Col: 1,
+		}},
+		Input: fp,
+	}
 
-		testIgnoreMaxMemoryRows = test.ignoreMaxMemoryRows
-		err := ms.StreamExecute(noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
-			return nil
-		})
-		if testIgnoreMaxMemoryRows {
-			require.NoError(t, err)
-		} else {
-			require.EqualError(t, err, test.err)
-		}
+	err := ms.StreamExecute(noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+		return nil
+	})
+	want := "in-memory row count exceeded allowed limit of 3"
+	if err == nil || err.Error() != want {
+		t.Errorf("StreamExecute err: %v, want %v", err, want)
 	}
 }
 

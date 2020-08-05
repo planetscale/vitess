@@ -208,9 +208,23 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	}
 
 	query := fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id=%d", vr.id)
-	qr, err := withDDL.Exec(ctx, query, vr.dbClient.ExecuteFetch)
+	qr, err := vr.dbClient.Execute(query)
 	if err != nil {
-		return settings, numTablesToCopy, err
+		// If it's a not found error, create it.
+		merr, isSQLErr := err.(*mysql.SQLError)
+		if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb) {
+			return settings, numTablesToCopy, err
+		}
+		log.Info("Looks like _vt.copy_state table may not exist. Trying to create... ")
+		if _, merr := vr.dbClient.Execute(createCopyState); merr != nil {
+			log.Errorf("Failed to ensure _vt.copy_state table exists: %v", merr)
+			return settings, numTablesToCopy, err
+		}
+		// Redo the read.
+		qr, err = vr.dbClient.Execute(query)
+		if err != nil {
+			return settings, numTablesToCopy, err
+		}
 	}
 	if len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 {
 		return settings, numTablesToCopy, fmt.Errorf("unexpected result from %s: %v", query, qr)

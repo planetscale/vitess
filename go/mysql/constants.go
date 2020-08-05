@@ -438,7 +438,6 @@ const (
 	ERInvalidOnUpdate              = 1294
 	ERUnknownTimeZone              = 1298
 	ERInvalidCharacterString       = 1300
-	ERSavepointNotExist            = 1305
 	ERIllegalReference             = 1247
 	ERDerivedMustHaveAlias         = 1248
 	ERTableNameNotAllowedHere      = 1250
@@ -560,10 +559,11 @@ var CharacterSetMap = map[string]uint8{
 
 // IsNum returns true if a MySQL type is a numeric value.
 // It is the same as IS_NUM defined in mysql.h.
+//
+// FIXME(alainjobart) This needs to use the constants in
+// replication/constants.go, so we are using numerical values here.
 func IsNum(typ uint8) bool {
-	return (typ <= TypeInt24 && typ != TypeTimestamp) ||
-		typ == TypeYear ||
-		typ == TypeNewDecimal
+	return ((typ <= 9 /* MYSQL_TYPE_INT24 */ && typ != 7 /* MYSQL_TYPE_TIMESTAMP */) || typ == 13 /* MYSQL_TYPE_YEAR */ || typ == 246 /* MYSQL_TYPE_NEWDECIMAL */)
 }
 
 // IsConnErr returns true if the error is a connection error.

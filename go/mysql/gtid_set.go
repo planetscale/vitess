@@ -49,9 +49,6 @@ type GTIDSet interface {
 
 	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
 	Union(GTIDSet) GTIDSet
-
-	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
-	Last() string
 }
 
 // gtidSetParsers maps flavor names to parser functions. It is used by
