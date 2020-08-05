@@ -20,6 +20,7 @@ package sqltypes
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -37,6 +38,9 @@ var (
 	DontEscape = byte(255)
 
 	nullstr = []byte("null")
+
+	// ErrIncompatibleTypeCast indicates a casting problem
+	ErrIncompatibleTypeCast = errors.New("Cannot convert value to desired type")
 )
 
 // BinWriter interface is used for encoding values.
@@ -201,6 +205,29 @@ func (v Value) ToBytes() []byte {
 // Len returns the length.
 func (v Value) Len() int {
 	return len(v.val)
+}
+
+// ToInt64 returns the value as MySQL would return it as a int64.
+// This operation succeeds if the underlying type is int64 or subset (a smallet int)
+func (v Value) ToInt64() (int64, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+	if v.typ == querypb.Type_UINT64 {
+		// cannot trust that a uint64 value will fit in an int64
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	return strconv.ParseInt(v.ToString(), 10, 64)
+}
+
+// ToUint64 returns the value as MySQL would return it as a uint64.
+func (v Value) ToUint64() (uint64, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	return strconv.ParseUint(v.ToString(), 10, 64)
 }
 
 // ToString returns the value as MySQL would return it as string.
