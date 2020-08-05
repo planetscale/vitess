@@ -55,3 +55,15 @@ func ToNamedResult(result *Result) (r *NamedResult) {
 	}
 	return r
 }
+
+// Row assumes this result has exactly one row, and returns it, or else returns nil.
+// It is useful for queries like:
+// - select count(*) from ...
+// - select @@read_only
+// - select 1 from dual
+func (r *NamedResult) Row() RowNamedValues {
+	if len(r.Rows) != 1 {
+		return nil
+	}
+	return r.Rows[0]
+}
