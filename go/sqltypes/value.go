@@ -208,13 +208,8 @@ func (v Value) Len() int {
 }
 
 // ToInt64 returns the value as MySQL would return it as a int64.
-// This operation succeeds if the underlying type is int64 or subset (a smallet int)
 func (v Value) ToInt64() (int64, error) {
 	if !v.IsIntegral() {
-		return 0, ErrIncompatibleTypeCast
-	}
-	if v.typ == querypb.Type_UINT64 {
-		// cannot trust that a uint64 value will fit in an int64
 		return 0, ErrIncompatibleTypeCast
 	}
 
@@ -228,6 +223,21 @@ func (v Value) ToUint64() (uint64, error) {
 	}
 
 	return strconv.ParseUint(v.ToString(), 10, 64)
+}
+
+// ToBool returns the value as a bool value
+func (v Value) ToBool() (bool, error) {
+	i, err := v.ToInt64()
+	if err != nil {
+		return false, err
+	}
+	switch i {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	}
+	return false, ErrIncompatibleTypeCast
 }
 
 // ToString returns the value as MySQL would return it as string.
