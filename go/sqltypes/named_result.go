@@ -17,11 +17,82 @@ limitations under the License.
 package sqltypes
 
 import (
+	"errors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
+)
+
+var (
+	// ErrNoSuchField indicates a search for a value by an unknown field/column name
+	ErrNoSuchField = errors.New("No such field in RowNamedValues")
 )
 
 // RowNamedValues contains a row's values as a map based on Field (aka table column) name
 type RowNamedValues map[string]Value
+
+// ToString returns the named field as string
+func (r RowNamedValues) ToString(fieldName string) (string, error) {
+	if v, ok := r[fieldName]; ok {
+		return v.ToString(), nil
+	}
+	return "", ErrNoSuchField
+}
+
+// AsString returns the named field as string, or default value if nonexistent/error
+func (r RowNamedValues) AsString(fieldName string, def string) string {
+	if v, err := r.ToString(fieldName); err == nil {
+		return v
+	}
+	return def
+}
+
+// ToInt64 returns the named field as int64
+func (r RowNamedValues) ToInt64(fieldName string) (int64, error) {
+	if v, ok := r[fieldName]; ok {
+		return v.ToInt64()
+	}
+	return 0, ErrNoSuchField
+}
+
+// AsInt64 returns the named field as int64, or default value if nonexistent/error
+func (r RowNamedValues) AsInt64(fieldName string, def int64) int64 {
+	if v, err := r.ToInt64(fieldName); err == nil {
+		return v
+	}
+	return def
+}
+
+// ToUint64 returns the named field as uint64
+func (r RowNamedValues) ToUint64(fieldName string) (uint64, error) {
+	if v, ok := r[fieldName]; ok {
+		return v.ToUint64()
+	}
+	return 0, ErrNoSuchField
+}
+
+// AsUint64 returns the named field as uint64, or default value if nonexistent/error
+func (r RowNamedValues) AsUint64(fieldName string, def uint64) uint64 {
+	if v, err := r.ToUint64(fieldName); err == nil {
+		return v
+	}
+	return def
+}
+
+// ToBool returns the named field as bool
+func (r RowNamedValues) ToBool(fieldName string) (bool, error) {
+	if v, ok := r[fieldName]; ok {
+		return v.ToBool()
+	}
+	return false, ErrNoSuchField
+}
+
+// AsBool returns the named field as bool, or default value if nonexistent/error
+func (r RowNamedValues) AsBool(fieldName string, def bool) bool {
+	if v, err := r.ToBool(fieldName); err == nil {
+		return v
+	}
+	return def
+}
 
 // NamedResult represents a query result with named values as opposed to ordinal values.
 type NamedResult struct {
@@ -60,7 +131,7 @@ func ToNamedResult(result *Result) (r *NamedResult) {
 // It is useful for queries like:
 // - select count(*) from ...
 // - select @@read_only
-// - select 1 from dual
+// - select UNIX_TIMESTAMP() from dual
 func (r *NamedResult) Row() RowNamedValues {
 	if len(r.Rows) != 1 {
 		return nil
