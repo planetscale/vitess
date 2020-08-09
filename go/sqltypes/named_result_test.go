@@ -17,6 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -35,9 +36,9 @@ func TestToNamedResult(t *testing.T) {
 		InsertID:     1,
 		RowsAffected: 2,
 		Rows: [][]Value{
-			{TestValue(Int64, "1"), TestValue(VarChar, "first")},
-			{TestValue(Int64, "2"), TestValue(VarChar, "second")},
-			{TestValue(Int64, "3"), TestValue(VarChar, "third")},
+			{TestValue(Int64, "0"), TestValue(VarChar, "s0")},
+			{TestValue(Int64, "1"), TestValue(VarChar, "s1")},
+			{TestValue(Int64, "2"), TestValue(VarChar, "s2")},
 		},
 	}
 	named := in.Named()
@@ -48,12 +49,22 @@ func TestToNamedResult(t *testing.T) {
 			if !reflect.DeepEqual(want, got) {
 				t.Errorf("Named:%+v\n, want:%+v\n", got, want)
 			}
+			wantAs := int64(i)
+			gotAs := named.Rows[i].AsInt64("id", 0)
+			if gotAs != wantAs {
+				t.Errorf("Named:%+v\n, want:%+v\n", gotAs, wantAs)
+			}
 		}
 		{
 			want := in.Rows[i][1]
 			got := named.Rows[i]["status"]
 			if !reflect.DeepEqual(want, got) {
 				t.Errorf("Named:%+v\n, want:%+v\n", got, want)
+			}
+			wantAs := fmt.Sprintf("s%d", i)
+			gotAs := named.Rows[i].AsString("status", "notfound")
+			if gotAs != wantAs {
+				t.Errorf("Named:%+v\n, want:%+v\n", gotAs, wantAs)
 			}
 		}
 	}
