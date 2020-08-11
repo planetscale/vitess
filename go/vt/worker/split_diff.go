@@ -239,19 +239,17 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate tablet in destination shard
 	var err error
-	sdw.destinationAlias, err = FindWorkerTablet(
+	sdw.destinationAlias, err = findWorkerTablet(
 		ctx,
 		sdw.wr,
 		sdw.cleaner,
-		nil, /* tsc */
 		sdw.cell,
 		sdw.keyspace,
 		sdw.shard,
-		1, /* minHealthyTablets */
 		sdw.destinationTabletType,
 	)
 	if err != nil {
-		return vterrors.Wrapf(err, "FindWorkerTablet() failed for %v/%v/%v", sdw.cell, sdw.keyspace, sdw.shard)
+		return vterrors.Wrapf(err, "findWorkerTablet() failed for %v/%v/%v", sdw.cell, sdw.keyspace, sdw.shard)
 	}
 
 	// find an appropriate tablet in the source shard
@@ -264,11 +262,11 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	for {
 		select {
 		case <-shortCtx.Done():
-			return vterrors.Errorf(vtrpc.Code_ABORTED, "could not find healthy table for %v/%v%v: after: %v, aborting", sdw.cell, sdw.keyspace, sdw.sourceShard.Shard, *remoteActionsTimeout)
+			return vterrors.Errorf(vtrpc.Code_ABORTED, "could not find healthy tablet for %v/%v%v: after: %v, aborting", sdw.cell, sdw.keyspace, sdw.sourceShard.Shard, *remoteActionsTimeout)
 		default:
-			sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, sdw.sourceShard.Shard, sdw.minHealthyRdonlyTablets, topodatapb.TabletType_RDONLY)
+			sdw.sourceAlias, err = findWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.sourceShard.Shard, topodatapb.TabletType_RDONLY)
 			if err != nil {
-				sdw.wr.Logger().Infof("FindWorkerTablet() failed for %v/%v/%v: %v retrying...", sdw.cell, sdw.keyspace, sdw.sourceShard.Shard, err)
+				sdw.wr.Logger().Infof("findWorkerTablet() failed for %v/%v/%v: %v retrying...", sdw.cell, sdw.keyspace, sdw.sourceShard.Shard, err)
 				continue
 			}
 			cancel()
