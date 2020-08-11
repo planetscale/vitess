@@ -357,9 +357,9 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	// find an appropriate tablet in the source shards
 	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
-		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyRdonlyTablets, topodatapb.TabletType_RDONLY)
+		scw.sourceAliases[i], err = findWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName(), topodatapb.TabletType_RDONLY)
 		if err != nil {
-			return vterrors.Wrapf(err, "FindWorkerTablet() failed for %v/%v/%v", scw.cell, si.Keyspace(), si.ShardName())
+			return vterrors.Wrapf(err, "findWorkerTablet() failed for %v/%v/%v", scw.cell, si.Keyspace(), si.ShardName())
 		}
 		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topoproto.TabletAliasString(scw.sourceAliases[i]), si.Keyspace(), si.ShardName())
 	}
@@ -435,6 +435,28 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func findWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string, tabletType topodatapb.TabletType) (*topodatapb.TabletAlias, error) {
+	cells := strings.Split(cell, ",")
+	tp, err := discovery.NewTabletPicker(wr.TopoServer(), cells, keyspace, shard, tabletType.String())
+	if err != nil {
+		return nil, err
+	}
+	tablet, err := tp.PickForStreaming(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	wr.Logger().Infof("Changing tablet %v to '%v'", topoproto.TabletAliasString(tablet.Alias), topodatapb.TabletType_DRAINED)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	defer cancel()
+	if err := wr.ChangeTabletType(shortCtx, tablet.Alias, topodatapb.TabletType_DRAINED); err != nil {
+		return nil, err
+	}
+	// Record a clean-up action to take the tablet back to tabletAlias.
+	wrangler.RecordChangeTabletTypeAction(cleaner, tablet.Alias, topodatapb.TabletType_DRAINED, tabletType)
+	return tablet.Alias, nil
 }
 
 // copy phase:
