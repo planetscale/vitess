@@ -2,10 +2,16 @@
   "sharded": true,
   "vindexes": {
     "region_vdx": {
-	"type": "region_json",
+	"type": "custom_region_json",
 	"params": {
-	    "region_map": "/home/user/my-vitess/examples/region_sharding/countries.json",
-	    "region_bytes": "1"
+      "United States": "1",
+      "Canada": "2",
+      "France": "64",
+      "Germany": "65",
+      "China": "128",
+      "Japan": "129",
+      "India": "192",
+      "Indonesia": "193"
 	}
     },
     "customer_region_lookup": {
