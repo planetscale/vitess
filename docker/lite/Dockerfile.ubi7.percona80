@@ -30,7 +30,7 @@ USER vitess
 RUN make install PREFIX=/vt/install
 
 # Start over and build the final image.
-FROM registry.access.redhat.com/ubi7/ubi:latest
+FROM registry.access.redhat.com/ubi7/ubi:7.8
 
 # Install keys and dependencies
 RUN mkdir /tmp/gpg && chmod 700 /tmp/gpg && export GNUPGHOME=/tmp/gpg \
