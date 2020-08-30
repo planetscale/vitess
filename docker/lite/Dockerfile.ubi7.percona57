@@ -52,7 +52,7 @@ RUN curl -L --retry-delay 10 --retry 3 -o /tmp/libev.rpm http://mirror.centos.or
  && curl -L --retry-delay 10 --retry 3 -o /tmp/strace.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/strace-4.12-9.el7.x86_64.rpm \
  && rpm -i --nodeps /tmp/libev.rpm /tmp/gperf.rpm /tmp/numactl.rpm /tmp/sysstat.rpm /tmp/strace.rpm \
  && rm -f /tmp/libev.rpm /tmp/gperf.rpm /tmp/numactl.rpm /tmp/sysstat.rpm /tmp/strace.rpm
-RUN yum update \
+RUN yum update -y \
  && yum install --setopt=alwaysprompt=no --setopt=tsflags=nodocs bzip2 ca-certificates gnupg libaio libcurl \
     jemalloc gperftools-libs procps-ng rsync wget openssl hostname curl tzdata make \
 # Can't use alwaysprompt=no here, since we need to pick up deps
