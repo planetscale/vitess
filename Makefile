@@ -239,6 +239,10 @@ docker_lite_ubi7.mysql80:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.ubi7.mysql80 -t vitess/lite:ubi7.mysql80 .
 
+docker_lite_ubi8.mysql80:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.ubi8.mysql80 -t vitess/lite:ubi8.mysql80 .
+
 docker_lite_mariadb:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.mariadb -t vitess/lite:mariadb .
