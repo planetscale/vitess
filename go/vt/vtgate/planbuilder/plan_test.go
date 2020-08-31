@@ -138,11 +138,38 @@ func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 var _ vindexes.Vindex = (*costlyIndex)(nil)
 var _ vindexes.Lookup = (*costlyIndex)(nil)
 
+// multiColLookupIndex is a unique Vindex, and satisfies Lookup and MultiColumn Vindex.
+type multiColLookupIndex struct{ name string }
+
+func (v *multiColLookupIndex) String() string   { return v.name }
+func (*multiColLookupIndex) Cost() int          { return 2 }
+func (*multiColLookupIndex) IsUnique() bool     { return true }
+func (*multiColLookupIndex) NeedsVCursor() bool { return false }
+func (*multiColLookupIndex) Verify(vindexes.VCursor, [][]sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*multiColLookupIndex) Map(cursor vindexes.VCursor, ids [][]sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
+func (*multiColLookupIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
+func (*multiColLookupIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
+func (*multiColLookupIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
+	return nil
+}
+
+func newMultiColLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &multiColLookupIndex{name: name}, nil
+}
+
+var _ vindexes.MultiColumn = (*multiColLookupIndex)(nil)
+var _ vindexes.Lookup = (*multiColLookupIndex)(nil)
+
 func init() {
 	vindexes.Register("hash_test", newHashIndex)
 	vindexes.Register("lookup_test", newLookupIndex)
 	vindexes.Register("multi", newMultiIndex)
 	vindexes.Register("costly", newCostlyIndex)
+	vindexes.Register("multiColLookup_test", newMultiColLookupIndex)
 }
 
 func TestPlan(t *testing.T) {

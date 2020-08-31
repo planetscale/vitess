@@ -1,24 +1,41 @@
 {
   "routing_rules": {
-    "rules": [{
-      "from_table": "route1",
-      "to_tables": ["user.user"]
-    }, {
-      "from_table": "route2",
-      "to_tables": ["main.unsharded"]
-    }, {
-      "from_table": "second_user.user",
-      "to_tables": ["user.user"]
-    }, {
-      "from_table": "master_redirect@master",
-      "to_tables": ["user.user"]
-    }, {
-      "from_table": "bad_table",
-      "to_tables": ["none.none"]
-    }, {
-      "from_table": "disabled",
-      "to_tables": []
-    }]
+    "rules": [
+      {
+        "from_table": "route1",
+        "to_tables": [
+          "user.user"
+        ]
+      },
+      {
+        "from_table": "route2",
+        "to_tables": [
+          "main.unsharded"
+        ]
+      },
+      {
+        "from_table": "second_user.user",
+        "to_tables": [
+          "user.user"
+        ]
+      },
+      {
+        "from_table": "master_redirect@master",
+        "to_tables": [
+          "user.user"
+        ]
+      },
+      {
+        "from_table": "bad_table",
+        "to_tables": [
+          "none.none"
+        ]
+      },
+      {
+        "from_table": "disabled",
+        "to_tables": []
+      }
+    ]
   },
   "keyspaces": {
     "user": {
@@ -78,6 +95,10 @@
         "vindex2": {
           "type": "lookup_test",
           "owner": "samecolvin"
+        },
+        "col2_col3_map": {
+          "type": "multiColLookup_test",
+          "owner": "foo"
         }
       },
       "tables": {
@@ -211,7 +232,10 @@
               "name": "cola_map"
             },
             {
-              "columns": ["column_b", "column_c"],
+              "columns": [
+                "column_b",
+                "column_c"
+              ],
               "name": "colb_colc_map"
             }
           ]
@@ -223,7 +247,10 @@
               "name": "kid_index"
             },
             {
-              "columns": ["column_a", "kid"],
+              "columns": [
+                "column_a",
+                "kid"
+              ],
               "name": "cola_kid_map"
             }
           ]
@@ -251,6 +278,18 @@
             {
               "column": "a`b*c",
               "name": "user_index"
+            }
+          ]
+        },
+        "foo": {
+          "column_vindexes": [
+            {
+              "column": "col1",
+              "name": "user_md5_index"
+            },
+            {
+              "columns": ["col2",  "col3"],
+              "name": "col2_col3_map"
             }
           ]
         }

@@ -1,1 +1,21 @@
-# Add your test case here for debugging and run go test -run=One.
+# Single table with multi column vindex
+"select col1 from foo where (col2,col3) = (1,2)"
+{
+  "QueryType": "SELECT",
+  "Original": "select kid from multicolvin where (column_b, column_c) in (1, 2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select kid from multicolvin where 1 != 1",
+    "Query": "select kid from multicolvin where (column_b, column_c) in (1, 2)",
+    "Table": "multicolvin",
+    "Values": [
+      1
+    ],
+    "Vindex": "colb_colc_map"
+  }
+}

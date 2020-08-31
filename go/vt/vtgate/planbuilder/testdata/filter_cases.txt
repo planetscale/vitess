@@ -1425,4 +1425,25 @@
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"
   }
 }
-                
+
+# Single table with multi column vindex
+"select kid from multicolvin where column_b = 1 AND column_c = 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select kid from multicolvin where column_b = 1 AND column_c = 2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select kid from multicolvin where 1 != 1",
+    "Query": "select kid from multicolvin where column_b = 1 and column_c = 2",
+    "Table": "multicolvin",
+    "Values": [
+      1
+    ],
+    "Vindex": "colb_colc_map"
+  }
+}
