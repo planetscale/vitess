@@ -291,8 +291,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			log.Infof("Received binlog events, timestamp %d", ev.Timestamp())
 			vevents, err := vs.parseEvent(ev)
 			if err != nil {
+				log.Errorf("parseEvent returned error: %s", err.Error())
 				return err
 			}
+			log.Infof("Parse event returned %d vevents", len(vevents))
 			for _, vevent := range vevents {
 				if err := bufferAndTransmit(vevent); err != nil {
 					if err == io.EOF {
@@ -329,7 +331,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 // parseEvent parses an event from the binlog and converts it to a list of VEvents.
 func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
-
+	log.Infof("Start of parseEvent %v", ev)
 	if !ev.IsValid() {
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
 	}
@@ -338,6 +340,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	// seen one, because another one might come along (e.g. on log rotate due to
 	// binlog settings change) that changes the format.
 	if ev.IsFormatDescription() {
+		log.Info("Is format description")
 		var err error
 		vs.format, err = ev.Format()
 		if err != nil {
@@ -349,10 +352,12 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	// We can't parse anything until we get a FORMAT_DESCRIPTION_EVENT that
 	// tells us the size of the event header.
 	if vs.format.IsZero() {
+		log.Info("IsZero")
 		// The only thing that should come before the FORMAT_DESCRIPTION_EVENT
 		// is a fake ROTATE_EVENT, which the master sends to tell us the name
 		// of the current log file.
 		if ev.IsRotate() {
+			log.Info("IsRotate")
 			return nil, nil
 		}
 		return nil, fmt.Errorf("got a real event before FORMAT_DESCRIPTION_EVENT: %#v", ev)
@@ -370,9 +375,13 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		return nil, err
 	}
 	var vevents []*binlogdatapb.VEvent
+	defer func() {
+		log.Infof("Returning from parseEvent with %d events: %v", len(vevents), vevents)
+	}()
 	switch {
 	case ev.IsGTID():
 		gtid, hasBegin, err := ev.GTID(vs.format)
+		log.Infof("IsGTID %s, hasBegin %t", gtid, hasBegin)
 		if err != nil {
 			return nil, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 		}
@@ -381,8 +390,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_BEGIN,
 			})
 		}
-		vs.pos = mysql.AppendGTID(vs.pos, gtid) //TODO: #sugu why Append?
+		vs.pos = mysql.AppendGTID(vs.pos, gtid)
 	case ev.IsXID():
+		log.Info("IsXID")
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
 			Gtid: mysql.EncodePosition(vs.pos),
@@ -391,6 +401,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		})
 	case ev.IsQuery():
 		q, err := ev.Query(vs.format)
+		log.Info("IsQuery %s", q.SQL)
 		if err != nil {
 			return nil, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 		}
@@ -399,6 +410,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
 			mustSend := mustSendStmt(q, params.DbName)
+			log.Info("Insert %t", mustSend)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_INSERT,
@@ -407,6 +419,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			}
 		case sqlparser.StmtUpdate:
 			mustSend := mustSendStmt(q, params.DbName)
+			log.Info("Update %t", mustSend)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_UPDATE,
@@ -415,6 +428,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			}
 		case sqlparser.StmtDelete:
 			mustSend := mustSendStmt(q, params.DbName)
+			log.Info("Delete %t", mustSend)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_DELETE,
@@ -423,6 +437,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			}
 		case sqlparser.StmtReplace:
 			mustSend := mustSendStmt(q, params.DbName)
+			log.Info("Replace %t", mustSend)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_REPLACE,
@@ -430,14 +445,17 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtBegin:
+			log.Info("Begin")
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_BEGIN,
 			})
 		case sqlparser.StmtCommit:
+			log.Info("Commit")
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
+			log.Info("DDL")
 			if mustSendDDL(q, params.DbName, vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
@@ -461,6 +479,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			}
 			vs.se.ReloadAt(context.Background(), vs.pos)
 		case sqlparser.StmtSavepoint:
+			log.Info("Savepoint")
 			mustSend := mustSendStmt(q, params.DbName)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
@@ -469,6 +488,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtOther, sqlparser.StmtPriv:
+			log.Info("Other/Priv")
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.
 			// 2) Privilege-altering statements like GRANT/REVOKE
@@ -483,6 +503,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", cat, q.SQL)
 		}
 	case ev.IsTableMap():
+		log.Info("IsTableMap")
 		// This is very frequent. It precedes every row event.
 		// If it's the first time for a table, we generate a FIELD
 		// event, and also cache the plan. Subsequent TableMap events
@@ -510,8 +531,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.plans[id] = nil
 			return nil, nil
 		}
-
 		vevent, err := vs.buildTablePlan(id, tm)
+		log.Infof("buildTablePlan for %s, vevent %v", tm.Name, vevent)
 		if err != nil {
 			return nil, err
 		}
@@ -524,6 +545,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		// before and after images end up going to different shards.
 		// If so, an update will be treated as delete on one shard
 		// and insert on the other.
+		log.Info("Write/Delete/Update Rows")
 		id := ev.TableID(vs.format)
 		plan := vs.plans[id]
 		if plan == nil {
@@ -549,9 +571,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, err
 		}
 	}
+	log.Infof("End of parseEvents")
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
 		vevent.CurrentTime = time.Now().UnixNano()
+		log.Infof("Found event in parseEvent: %s", vevent.String())
 	}
 	return vevents, nil
 }
