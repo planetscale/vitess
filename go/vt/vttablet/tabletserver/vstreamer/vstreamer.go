@@ -199,12 +199,15 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// all existing rows are sent without the new row.
 	// If a single row exceeds the packet size, it will be in its own packet.
 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
+		log.Infof("bufferAndTransmit received vevent: Type:%d, String:%s", vevent.Type, vevent.String())
 		switch vevent.Type {
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
 			binlogdatapb.VEventType_JOURNAL:
 			// We never have to send GTID, BEGIN, FIELD events on their own.
 			// A JOURNAL event is always preceded by a BEGIN and followed by a COMMIT.
 			// So, we don't have to send it right away.
+			log.Infof("buffering vevent: Type:%d, String:%s", vevent.Type, vevent.String())
+
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER,
 			binlogdatapb.VEventType_HEARTBEAT, binlogdatapb.VEventType_VERSION:
@@ -213,6 +216,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			// of a transaction. If so, we still send the partial transaction along
 			// with the heartbeat.
 			bufferedEvents = append(bufferedEvents, vevent)
+			log.Infof("Sending %d events, recent %s", len(bufferedEvents), vevent.String())
 			vevents := bufferedEvents
 			bufferedEvents = nil
 			curSize = 0
@@ -220,6 +224,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
 			newSize := len(vevent.GetDml())
 			if curSize+newSize > *PacketSize {
+				log.Infof("> PacketSize, sending %d events, recent %s", len(bufferedEvents), vevent.String())
 				vs.vse.vstreamerNumPackets.Add(1)
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
@@ -241,6 +246,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 			}
 			if curSize+newSize > *PacketSize {
+				log.Infof("> PacketSize, sending %d events, recent %s", len(bufferedEvents), vevent.String())
 				vs.vse.vstreamerNumPackets.Add(1)
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
@@ -248,8 +254,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				return vs.send(vevents)
 			}
 			curSize += newSize
+			log.Infof("buffering vevent: Type:%d, String:%s", vevent.Type, vevent.String())
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_SAVEPOINT:
+			log.Infof("buffering vevent: Type:%d, String:%s", vevent.Type, vevent.String())
 			bufferedEvents = append(bufferedEvents, vevent)
 		default:
 			return fmt.Errorf("unexpected event: %v", vevent)
@@ -261,6 +269,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	timer := time.NewTimer(HeartbeatTime)
 	defer timer.Stop()
 	for {
+		log.Infof("Start of parseEvents loop")
 		timer.Reset(HeartbeatTime)
 		// Drain event if timer fired before reset.
 		select {
@@ -273,11 +282,13 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			if !ok {
 				select {
 				case <-ctx.Done():
+					log.Infof("Context done")
 					return nil
 				default:
 				}
 				return fmt.Errorf("unexpected server EOF")
 			}
+			log.Infof("Received binlog events, timestamp %d", ev.Timestamp())
 			vevents, err := vs.parseEvent(ev)
 			if err != nil {
 				return err
@@ -291,12 +302,14 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 			}
 		case vs.vschema = <-vs.vevents:
+			log.Infof("VSchema received")
 			if err := vs.rebuildPlans(); err != nil {
 				return err
 			}
 			// Increment this counter for testing.
 			vschemaUpdateCount.Add(1)
 		case <-ctx.Done():
+			log.Infof("Context done")
 			return nil
 		case <-timer.C:
 			now := time.Now().UnixNano()
