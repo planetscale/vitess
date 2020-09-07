@@ -442,6 +442,9 @@ type Comments [][]byte
 // SelectExprs represents SELECT expressions.
 type SelectExprs []SelectExpr
 
+// FuncArgs represents expressions used as function arguments
+type FuncArgs []SelectExpr
+
 type (
 	// SelectExpr represents a SELECT expression.
 	SelectExpr interface {
@@ -690,7 +693,7 @@ type (
 		Qualifier TableIdent
 		Name      ColIdent
 		Distinct  bool
-		Exprs     SelectExprs
+		Exprs     FuncArgs
 	}
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT
@@ -1392,6 +1395,15 @@ func (node Comments) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node SelectExprs) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// Format formats the node.
+func (node FuncArgs) Format(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node {
 		buf.astPrintf(node, "%s%v", prefix, n)

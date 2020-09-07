@@ -2726,19 +2726,19 @@ value_expression:
 function_call_generic:
   sql_id openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
+    $$ = &FuncExpr{Name: $1, Exprs: FuncArgs($3)}
   }
 | sql_id openb DISTINCT select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: FuncArgs($4)}
   }
 | sql_id openb DISTINCTROW select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: FuncArgs($4)}
   }  
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
+    $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: FuncArgs($5)}
   }
 
 /*
@@ -2748,11 +2748,11 @@ function_call_generic:
 function_call_keyword:
   LEFT openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("left"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("left"), Exprs: FuncArgs($3)}
   }
 | RIGHT openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: FuncArgs($3)}
   }
 | CONVERT openb expression ',' convert_type closeb
   {
@@ -2896,31 +2896,31 @@ func_datetime_precision:
 function_call_conflict:
   IF openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("if"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("if"), Exprs: FuncArgs($3)}
   }
 | DATABASE openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: FuncArgs($3)}
   }
 | SCHEMA openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("schema"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("schema"), Exprs: FuncArgs($3)}
   }
 | MOD openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: FuncArgs($3)}
   }
 | REPLACE openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: FuncArgs($3)}
   }
 | SUBSTR openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: FuncArgs($3)}
   }
 | SUBSTRING openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: FuncArgs($3)}
   }
 
 match_option:

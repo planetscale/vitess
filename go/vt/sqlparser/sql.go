@@ -6798,37 +6798,37 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2728
 		{
-			yyVAL.expr = &FuncExpr{Name: yyDollar[1].colIdent, Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: yyDollar[1].colIdent, Exprs: FuncArgs(yyDollar[3].selectExprs)}
 		}
 	case 528:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:2732
 		{
-			yyVAL.expr = &FuncExpr{Name: yyDollar[1].colIdent, Distinct: true, Exprs: yyDollar[4].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: yyDollar[1].colIdent, Distinct: true, Exprs: FuncArgs(yyDollar[4].selectExprs)}
 		}
 	case 529:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:2736
 		{
-			yyVAL.expr = &FuncExpr{Name: yyDollar[1].colIdent, Distinct: true, Exprs: yyDollar[4].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: yyDollar[1].colIdent, Distinct: true, Exprs: FuncArgs(yyDollar[4].selectExprs)}
 		}
 	case 530:
 		yyDollar = yyS[yypt-6 : yypt+1]
 //line sql.y:2740
 		{
-			yyVAL.expr = &FuncExpr{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].colIdent, Exprs: yyDollar[5].selectExprs}
+			yyVAL.expr = &FuncExpr{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].colIdent, Exprs: FuncArgs(yyDollar[5].selectExprs)}
 		}
 	case 531:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2750
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("left"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: NewColIdent("left"), Exprs: FuncArgs(yyDollar[3].selectExprs)}
 		}
 	case 532:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2754
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("right"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: NewColIdent("right"), Exprs: FuncArgs(yyDollar[3].selectExprs)}
 		}
 	case 533:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -7002,43 +7002,43 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2898
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("if"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: NewColIdent("if"), Exprs: FuncArgs(yyDollar[3].selectExprs)}
 		}
 	case 564:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2902
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("database"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: NewColIdent("database"), Exprs: FuncArgs(yyDollar[3].selectExprs)}
 		}
 	case 565:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2906
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("schema"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: NewColIdent("schema"), Exprs: FuncArgs(yyDollar[3].selectExprs)}
 		}
 	case 566:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2910
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("mod"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: NewColIdent("mod"), Exprs: FuncArgs(yyDollar[3].selectExprs)}
 		}
 	case 567:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2914
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("replace"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: NewColIdent("replace"), Exprs: FuncArgs(yyDollar[3].selectExprs)}
 		}
 	case 568:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2918
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("substr"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: NewColIdent("substr"), Exprs: FuncArgs(yyDollar[3].selectExprs)}
 		}
 	case 569:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2922
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("substr"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.expr = &FuncExpr{Name: NewColIdent("substr"), Exprs: FuncArgs(yyDollar[3].selectExprs)}
 		}
 	case 570:
 		yyDollar = yyS[yypt-0 : yypt+1]

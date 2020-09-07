@@ -296,8 +296,18 @@ func replaceForeignKeyDefinitionSource(newNode, parent SQLNode) {
 	parent.(*ForeignKeyDefinition).Source = newNode.(Columns)
 }
 
+type replaceFuncArgsItems int
+
+func (r *replaceFuncArgsItems) replace(newNode, container SQLNode) {
+	container.(FuncArgs)[int(*r)] = newNode.(SelectExpr)
+}
+
+func (r *replaceFuncArgsItems) inc() {
+	*r++
+}
+
 func replaceFuncExprExprs(newNode, parent SQLNode) {
-	parent.(*FuncExpr).Exprs = newNode.(SelectExprs)
+	parent.(*FuncExpr).Exprs = newNode.(FuncArgs)
 }
 
 func replaceFuncExprName(newNode, parent SQLNode) {
@@ -1041,6 +1051,14 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.ReferencedColumns, replaceForeignKeyDefinitionReferencedColumns)
 		a.apply(node, n.ReferencedTable, replaceForeignKeyDefinitionReferencedTable)
 		a.apply(node, n.Source, replaceForeignKeyDefinitionSource)
+
+	case FuncArgs:
+		replacer := replaceFuncArgsItems(0)
+		replacerRef := &replacer
+		for _, item := range n {
+			a.apply(node, item, replacerRef.replace)
+			replacerRef.inc()
+		}
 
 	case *FuncExpr:
 		a.apply(node, n.Exprs, replaceFuncExprExprs)

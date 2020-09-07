@@ -26,6 +26,8 @@ import (
 	"sync"
 	"testing"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -1719,6 +1721,18 @@ func TestValid(t *testing.T) {
 				return true, nil
 			}, tree)
 		})
+	}
+}
+
+func BenchmarkPrepareAST(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		for _, tcase := range validSQL {
+			parse, err := Parse(tcase.input)
+			if err != nil {
+				continue
+			}
+			PrepareAST(parse, map[string]*querypb.BindVariable{}, "", true)
+		}
 	}
 }
 
