@@ -33,7 +33,7 @@ import (
 // treated as distinct.
 func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) {
 	nz := newNormalizer(stmt, bindVars, prefix)
-	Rewrite(stmt, nz.WalkStatement, nil)
+	Rewrite(stmt, nz.WalkStatement, nz.WalkStatementUp)
 }
 
 type normalizer struct {
@@ -42,6 +42,7 @@ type normalizer struct {
 	reserved map[string]struct{}
 	counter  int
 	vals     map[string]string
+	inSelect bool
 }
 
 func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) *normalizer {
@@ -63,11 +64,13 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, *DDL, *SRollback, *Release, *OtherAdmin, *OtherRead:
 		return false
 	case *Select:
-		Rewrite(node, nz.WalkSelect, nil)
-		// Don't continue
-		return false
+		nz.inSelect = true
 	case *Literal:
-		nz.convertLiteral(node, cursor)
+		if nz.inSelect {
+			nz.convertLiteralDedup(node, cursor)
+		} else {
+			nz.convertLiteral(node, cursor)
+		}
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *ColName, TableName:
@@ -76,27 +79,17 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 		return false
 	case *ConvertType: // we should not rewrite the type description
 		return false
+	case OrderBy, GroupBy:
+		// do not make a bind var for order by column_position
+		return false
 	}
 	return true
 }
 
-// WalkSelect normalizes the AST in Select mode.
-func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
-	switch node := cursor.Node().(type) {
-	case *Literal:
-		nz.convertLiteralDedup(node, cursor)
-	case *ComparisonExpr:
-		nz.convertComparison(node)
-	case *ColName, TableName:
-		// Common node types that never contain Literals or ListArgs but create a lot of object
-		// allocations.
-		return false
-	case OrderBy, GroupBy:
-		// do not make a bind var for order by column_position
-		return false
-	case *ConvertType:
-		// we should not rewrite the type description
-		return false
+func (nz *normalizer) WalkStatementUp(cursor *Cursor) bool {
+	switch cursor.Node().(type) {
+	case *Select:
+		nz.inSelect = false
 	}
 	return true
 }

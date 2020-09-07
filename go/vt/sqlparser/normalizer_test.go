@@ -21,6 +21,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"gotest.tools/assert"
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -204,20 +208,15 @@ func TestNormalize(t *testing.T) {
 		},
 	}}
 	for _, tc := range testcases {
-		stmt, err := Parse(tc.in)
-		if err != nil {
-			t.Error(err)
-			continue
-		}
-		bv := make(map[string]*querypb.BindVariable)
-		Normalize(stmt, bv, prefix)
-		outstmt := String(stmt)
-		if outstmt != tc.outstmt {
-			t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
-		}
-		if !reflect.DeepEqual(tc.outbv, bv) {
-			t.Errorf("Query:\n%s:\n%v, want\n%v", tc.in, bv, tc.outbv)
-		}
+		t.Run(tc.in, func(t *testing.T) {
+			stmt, err := Parse(tc.in)
+			require.NoError(t, err)
+			bv := make(map[string]*querypb.BindVariable)
+			Normalize(stmt, bv, prefix)
+			outstmt := String(stmt)
+			assert.Equal(t, outstmt, tc.outstmt)
+			utils.MustMatch(t, tc.outbv, bv, "bindvars")
+		})
 	}
 }
 
