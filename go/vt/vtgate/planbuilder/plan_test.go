@@ -250,7 +250,39 @@ func TestOtherPlanningFromFile(t *testing.T) {
 	testFile(t, "other_admin_cases.txt", testOutputTempDir, vschema)
 }
 
-func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
+func BenchmarkPlanning(b *testing.B) {
+	vschemaWrapper := &vschemaWrapper{
+		v:             loadSchema(b, "schema_test.json"),
+		sysVarEnabled: true,
+	}
+
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(testOutputTempDir)
+
+	for i := 0; i < b.N; i++ {
+		benchmarkFile(b, "aggr_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "dml_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "from_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "filter_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "postprocess_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "select_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "symtab_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "unsupported_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "vindex_func_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "wireup_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "memory_sort_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "use_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "set_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "union_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "transaction_cases.txt", testOutputTempDir, vschemaWrapper)
+		benchmarkFile(b, "lock_cases.txt", testOutputTempDir, vschemaWrapper)
+	}
+}
+
+func loadSchema(t testing.TB, filename string) *vindexes.VSchema {
 	formal, err := vindexes.LoadFormal(locateFile(filename))
 	if err != nil {
 		t.Fatal(err)
@@ -376,6 +408,12 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) //nolint
 		}
 	})
+}
+
+func benchmarkFile(b *testing.B, filename, tempDir string, vschema *vschemaWrapper) {
+	for tcase := range iterateExecFile(filename) {
+		_, _ = Build(tcase.input, vschema)
+	}
 }
 
 func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
