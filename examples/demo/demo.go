@@ -62,9 +62,21 @@ func runCluster() {
 				Keyspaces: []*vttestpb.Keyspace{{
 					Name: "user",
 					Shards: []*vttestpb.Shard{{
-						Name: "-80",
+						Name: "-20",
 					}, {
-						Name: "80-",
+						Name: "20-40",
+					}, {
+						Name: "40-60",
+					}, {
+						Name: "60-80",
+					}, {
+						Name: "80-a0",
+					}, {
+						Name: "a0-c0",
+					}, {
+						Name: "c0-e0",
+					}, {
+						Name: "e0-",
 					}},
 				}, {
 					Name: "lookup",
@@ -140,21 +152,21 @@ func exec(w http.ResponseWriter, req *http.Request) {
 	}
 	response["queries"] = queries
 
-	execQuery(conn, "user0", "select * from user", "user", "-80", response)
-	execQuery(conn, "user1", "select * from user", "user", "80-", response)
-	execQuery(conn, "user_extra0", "select * from user_extra", "user", "-80", response)
-	execQuery(conn, "user_extra1", "select * from user_extra", "user", "80-", response)
-	execQuery(conn, "music0", "select * from music", "user", "-80", response)
-	execQuery(conn, "music1", "select * from music", "user", "80-", response)
-	execQuery(conn, "music_extra0", "select * from music_extra", "user", "-80", response)
-	execQuery(conn, "music_extra1", "select * from music_extra", "user", "80-", response)
-	execQuery(conn, "name_info0", "select * from name_info", "user", "-80", response)
-	execQuery(conn, "name_info1", "select * from name_info", "user", "80-", response)
-	execQuery(conn, "music_keyspace_idx0", "select music_id, hex(keyspace_id) from music_keyspace_idx", "user", "-80", response)
-	execQuery(conn, "music_keyspace_idx1", "select music_id, hex(keyspace_id) from music_keyspace_idx", "user", "80-", response)
+	execQuery(conn, "user0", "select * from user", "user", "40-60", response)
+	execQuery(conn, "user1", "select * from user", "user", "-20", response)
+	execQuery(conn, "user_extra0", "select * from user_extra", "user", "40-60", response)
+	execQuery(conn, "user_extra1", "select * from user_extra", "user", "-20", response)
+	execQuery(conn, "music0", "select * from music", "user", "40-60", response)
+	execQuery(conn, "music1", "select * from music", "user", "-20", response)
+	execQuery(conn, "music_extra0", "select * from music_extra", "user", "40-60", response)
+	execQuery(conn, "music_extra1", "select * from music_extra", "user", "-20", response)
+	execQuery(conn, "name_info0", "select * from name_info", "user", "40-60", response)
+	execQuery(conn, "name_info1", "select * from name_info", "user", "-20", response)
+	execQuery(conn, "music_keyspace_idx0", "select music_id, keyspace_id from music_keyspace_idx", "user", "40-60", response)
+	execQuery(conn, "music_keyspace_idx1", "select music_id, keyspace_id from music_keyspace_idx", "user", "-20", response)
 	execQuery(conn, "user_seq", "select * from user_seq", "lookup", "0", response)
 	execQuery(conn, "music_seq", "select * from music_seq", "lookup", "0", response)
-	execQuery(conn, "name_keyspace_idx", "select name, hex(keyspace_id) from name_keyspace_idx", "lookup", "0", response)
+	execQuery(conn, "name_keyspace_idx", "select name, keyspace_id from name_keyspace_idx", "lookup", "0", response)
 	enc.Encode(response)
 }
 
@@ -175,9 +187,9 @@ func execQuery(conn *mysql.Conn, key, query, keyspace, shard string, response ma
 	title := key
 	switch {
 	case strings.HasSuffix(key, "0"):
-		title = key[:len(key)-1] + ":-80"
+		title = key[:len(key)-1] + ":40-60"
 	case strings.HasSuffix(key, "1"):
-		title = key[:len(key)-1] + ":80-"
+		title = key[:len(key)-1] + ":-20"
 	}
 	qr, err := conn.ExecuteFetch(query, 10000, true)
 	if err != nil {
