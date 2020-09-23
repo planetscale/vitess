@@ -400,7 +400,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 	serveSocketFile := path.Join(tempDir, "serve.sock")
 
 	if err := e.deleteGhostPanicFlagFile(onlineDDL.UUID); err != nil {
-		log.Errorf("Error removing gh-ost panic filag file %s: %+v", e.ghostPanicFlagFileName(onlineDDL.UUID), err)
+		log.Errorf("Error removing gh-ost panic flag file %s: %+v", e.ghostPanicFlagFileName(onlineDDL.UUID), err)
 		return err
 	}
 	// Validate gh-ost binary:
