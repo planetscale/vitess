@@ -317,7 +317,7 @@ func (e *Executor) getThrottleReplicas(ctx context.Context) ([]string, error) {
 }
 
 // ExecuteWithGhost validates and runs a gh-ost process.
-// Validation included testing the backend MySQL server and the gh-ost binray itself
+// Validation included testing the backend MySQL server and the gh-ost binary itself
 // Execution runs first a dry run, then an actual migration
 func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	e.migrationMutex.Lock()
