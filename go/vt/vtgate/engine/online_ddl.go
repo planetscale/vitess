@@ -87,7 +87,7 @@ func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 		},
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary(onlineDDL.UUID),
+				sqltypes.NewVarChar(onlineDDL.UUID),
 			},
 		},
 		RowsAffected: 1,
