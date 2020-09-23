@@ -145,6 +145,11 @@ func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 	return json.Marshal(onlineDDL)
 }
 
+// ToJSON exports this onlineDDL to JSON
+func (onlineDDL *OnlineDDL) ToString() string {
+	return fmt.Sprintf("OnlineDDL: keyspace=%s, table=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.Table, onlineDDL.SQL)
+}
+
 // WriteTopo writes this online DDL to given topo connection, based on basePath and and this DDL's UUID
 func (onlineDDL *OnlineDDL) WriteTopo(ctx context.Context, conn topo.Conn, basePath string) error {
 	if onlineDDL.UUID == "" {
