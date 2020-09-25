@@ -583,7 +583,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "error building Handshake packet: got %v bytes expected %v", pos, len(data))
 	}
 
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(false); err != nil {
 		if strings.HasSuffix(err.Error(), "write: connection reset by peer") {
 			return nil, io.EOF
 		}
@@ -790,7 +790,7 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 	if pos != len(data) {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building AuthSwitchRequestPacket packet: got %v bytes expected %v", pos, len(data))
 	}
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(false)
 }
 
 // Whenever we move to a new version of go, we will need add any new supported TLS versions here

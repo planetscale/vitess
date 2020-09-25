@@ -46,7 +46,7 @@ func (c *Conn) WriteComQuery(query string) error {
 	data[pos] = ComQuery
 	pos++
 	copy(data[pos:], query)
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(false); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -60,7 +60,7 @@ func (c *Conn) writeComInitDB(db string) error {
 	data[pos] = ComInitDB
 	pos++
 	copy(data[pos:], db)
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(false); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -73,7 +73,7 @@ func (c *Conn) writeComSetOption(operation uint16) error {
 	data[pos] = ComSetOption
 	pos++
 	writeUint16(data, pos, operation)
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(false); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -866,7 +866,7 @@ func (c *Conn) sendColumnCount(count uint64) error {
 	length := lenEncIntSize(count)
 	data, pos := c.startEphemeralPacketWithHeader(length)
 	writeLenEncInt(data, pos, count)
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(false)
 }
 
 func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
@@ -912,7 +912,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "packing of column definition used %v bytes instead of %v", pos, len(data))
 	}
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(false)
 }
 
 func (c *Conn) writeRow(row []sqltypes.Value) error {
@@ -937,7 +937,7 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 		}
 	}
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(false)
 }
 
 // writeFields writes the fields of a Result. It should be called only
@@ -1018,7 +1018,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	pos = writeByte(data, pos, 0x00)
 	writeUint16(data, pos, 0x0000)
 
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(false); err != nil {
 		return err
 	}
 
@@ -1093,14 +1093,14 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 		} else {
 			v, err := val2MySQL(val)
 			if err != nil {
-				c.recycleWritePacket()
+				c.recycleWritePacket(false)
 				return fmt.Errorf("internal value %v to MySQL value error: %v", val, err)
 			}
 			pos += copy(data[pos:], v)
 		}
 	}
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(false)
 }
 
 // writeBinaryRows sends the rows of a Result with binary form.

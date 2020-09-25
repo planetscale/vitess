@@ -180,7 +180,7 @@ func (c *Conn) Ping() error {
 	data, pos := c.startEphemeralPacketWithHeader(1)
 	data[pos] = ComPing
 
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(false); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
 	data, err := c.readEphemeralPacket()
@@ -556,7 +556,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 	_ = writeByte(data, pos, characterSet)
 
 	// And send it as is.
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(false); err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send SSLRequest: %v", err)
 	}
 	return nil
@@ -647,7 +647,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "writeHandshakeResponse41: only packed %v bytes, out of %v allocated", pos, len(data))
 	}
 
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(false); err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send HandshakeResponse41: %v", err)
 	}
 	return nil
@@ -678,7 +678,7 @@ func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	if pos != len(data) {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
 	}
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(true)
 }
 
 // writeMysqlNativePassword writes the encrypted mysql_native_password format
@@ -691,5 +691,5 @@ func (c *Conn) writeMysqlNativePassword(params *ConnParams, salt []byte) error {
 	if pos != len(data) {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building MysqlNativePassword packet: got %v bytes expected %v", pos, len(data))
 	}
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(true)
 }

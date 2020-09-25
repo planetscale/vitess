@@ -593,8 +593,8 @@ func (c *Conn) startEphemeralPacketWithHeader(length int) ([]byte, int) {
 
 // writeEphemeralPacket writes the packet that was allocated by
 // startEphemeralPacketWithHeader.
-func (c *Conn) writeEphemeralPacket() error {
-	defer c.recycleWritePacket()
+func (c *Conn) writeEphemeralPacket(clear bool) error {
+	defer c.recycleWritePacket(clear)
 
 	switch c.currentEphemeralPolicy {
 	case ephemeralWrite:
@@ -611,12 +611,17 @@ func (c *Conn) writeEphemeralPacket() error {
 
 // recycleWritePacket recycles the write packet. It needs to be called
 // after writeEphemeralPacket was called.
-func (c *Conn) recycleWritePacket() {
+func (c *Conn) recycleWritePacket(clear bool) {
 	if c.currentEphemeralPolicy != ephemeralWrite {
 		// Programming error.
 		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to call recycleWritePacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
 	}
 	// Release our reference so the buffer can be gced
+	if clear {
+		for i := range *c.currentEphemeralBuffer {
+			(*c.currentEphemeralBuffer)[i] = 0
+		}
+	}
 	bufPool.Put(c.currentEphemeralBuffer)
 	c.currentEphemeralBuffer = nil
 	c.currentEphemeralPolicy = ephemeralUnused
@@ -632,7 +637,7 @@ func (c *Conn) writeComQuit() error {
 
 	data, pos := c.startEphemeralPacketWithHeader(1)
 	data[pos] = ComQuit
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(false); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -688,7 +693,7 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 	pos = writeUint16(data, pos, flags)
 	_ = writeUint16(data, pos, warnings)
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(false)
 }
 
 // writeOKPacketWithEOFHeader writes an OK packet with an EOF header.
@@ -709,7 +714,7 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 	pos = writeUint16(data, pos, flags)
 	_ = writeUint16(data, pos, warnings)
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(false)
 }
 
 // writeErrorPacket writes an error packet.
@@ -731,7 +736,7 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 	pos = writeEOFString(data, pos, sqlState)
 	_ = writeEOFString(data, pos, errorMessage)
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(false)
 }
 
 // writeErrorPacketFromError writes an error packet, from a regular error.
@@ -753,7 +758,7 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 	pos = writeUint16(data, pos, warnings)
 	_ = writeUint16(data, pos, flags)
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(false)
 }
 
 // handleNextCommand is called in the server loop to process
