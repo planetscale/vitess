@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -25,6 +26,10 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
@@ -507,8 +512,8 @@ func recoverDeadMaster(topologyRecovery *TopologyRecovery, candidateInstanceKey 
 
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: will recover %+v", *failedInstanceKey))
 
-	err = TabletDemoteMaster(*failedInstanceKey)
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletDemoteMaster: %v", err))
+	err = DemoteMasterInstance(*failedInstanceKey)
+	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: DemoteMasterInstance: %v", err))
 
 	topologyRecovery.RecoveryType = GetMasterRecoveryType(analysisEntry)
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: masterRecoveryType=%+v", topologyRecovery.RecoveryType))
@@ -586,8 +591,8 @@ func recoverDeadMaster(topologyRecovery *TopologyRecovery, candidateInstanceKey 
 	}
 
 	if promotedReplica == nil {
-		err := TabletUndoDemoteMaster(*failedInstanceKey)
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletUndoDemoteMaster: %v", err))
+		err := UndoDemoteMasterInstance(*failedInstanceKey)
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: UndoDemoteMasterInstance: %v", err))
 		message := "Failure: no replica promoted."
 		AuditTopologyRecovery(topologyRecovery, message)
 		inst.AuditOperation("recover-dead-master", failedInstanceKey, message)
@@ -2042,8 +2047,192 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 	return topologyRecovery, promotedMasterCoordinates, err
 }
 
+// PlannedLeaderElection will demote master of existing topology and promote the
+// designated replica instead.
+// This function is graceful in that it will first lock down the master, then wait
+// for the designated replica to catch up with the last position.
+// It will point the old master at the newly promoted master at the correct coordinates.
+func PlannedLeaderElection(ctx context.Context, keyspace, shard, designatedTablet string, avoidTablet string) (topologyRecovery *TopologyRecovery, err error) {
+	// Lock and reload
+	lockCtx, cancel := context.WithTimeout(ctx, time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
+	defer cancel()
+	_, unlock, err := ts.LockShard(lockCtx, keyspace, shard, "Orc Recovery")
+	if err != nil {
+		return nil, vterrors.Wrap(err, "PlannedLeaderElection: unable to obtain topology lock")
+	}
+	defer unlock(&err)
+	// reload tablets for the keyspace and shard
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(instanceKey *inst.InstanceKey) {
+		DiscoverInstance(*instanceKey)
+	})
+
+	// Read replicas using information from topo
+	allTablets, err := inst.ReadAllTablets(keyspace, shard)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "PlannedLeaderElection: error reading all tablets")
+	}
+
+	currentMaster, err := inst.ReadCurrentMaster(keyspace, shard)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "PlannedLeaderElection: error reading current master")
+	}
+	currentMasterAlias := topoproto.TabletAliasString(currentMaster.Alias)
+	clusterMasterKey := &inst.InstanceKey{
+		Hostname: currentMaster.MysqlHostname,
+		Port:     int(currentMaster.MysqlPort),
+	}
+	if len(allTablets) == 1 && currentMaster == nil {
+		// Unreachable code (if currentMaster is nil we should have returned an error before we get here)
+		return nil, fmt.Errorf("Primary %+v doesn't seem to have replicas", topoproto.TabletAliasString(currentMaster.Alias))
+	}
+	if avoidTablet == "" {
+		avoidTablet = currentMasterAlias
+	}
+	if avoidTablet != currentMasterAlias {
+		// TODO: what should be returned as topologyRecovery here, since there is no recovery?
+		return nil, nil
+	}
+	// TODO: if a new master is not specified we will find one
+	var designatedInstance *inst.Instance
+	var designatedTabletInfo *topodatapb.Tablet
+	if designatedTablet == "" {
+		// avoid avoidTablet here
+		clusterMasterDirectReplicas, err := inst.ReadReplicaInstances(clusterMasterKey)
+		if err != nil {
+			return nil, log.Errore(err)
+		}
+
+		if len(clusterMasterDirectReplicas) == 0 {
+			return nil, fmt.Errorf("Master %+v doesn't seem to have replicas", clusterMasterKey)
+		}
+
+		designatedInstance, err = getGracefulMasterTakeoverDesignatedInstance(clusterMasterKey, nil, clusterMasterDirectReplicas, true /*auto is true because designatedKey is nil*/)
+		if err != nil {
+			return nil, log.Errore(err)
+		}
+		designatedTabletInfo, err = inst.ReadTablet(designatedInstance.Key)
+		if err != nil {
+			return nil, log.Errore(err)
+		}
+		designatedTablet = topoproto.TabletAliasString(designatedTabletInfo.Alias)
+	} else {
+		for _, t := range allTablets {
+			if designatedTablet == topoproto.TabletAliasString(t.Alias) {
+				designatedTabletInfo = t
+			}
+		}
+	}
+
+	if designatedTablet == currentMasterAlias {
+		// This covers the case where a previous PLE was incomplete
+		// and the tablet might have been marked as MASTER without the rest of the actions
+		_, err := PromoteReplica(designatedTabletInfo)
+		return nil, err
+	}
+	if designatedTabletInfo == nil {
+		return nil, fmt.Errorf("PlannedLeaderElection: indicated designated instance %v must be belong to keyspace/shard %v/%v", designatedTablet, keyspace, shard)
+	}
+	log.Infof("PlannedLeaderElection: designated leader/primary instructed to be %+v", designatedTabletInfo)
+
+	designatedInstance, ok, err := inst.ReadInstanceForTablet(designatedTabletInfo)
+	if !ok || err != nil {
+		// TODO: make up an error if err == nil
+		return nil, err
+	}
+
+	if designatedInstance.MasterKey != *clusterMasterKey {
+		// is it possible that MasterKey is not set?
+		return nil, fmt.Errorf("PlannedLeaderElection: indicated designated instance %v must be replicating from current master", designatedTablet)
+	}
+	// TODO: verify that designatedInstance is valid for promotion
+	// replace this with durability plugin
+	//if inst.IsBannedFromBeingCandidateReplica(designatedInstance) {
+	//	return nil, nil, fmt.Errorf("PlannedLeaderElection: designated instance %+v cannot be promoted due to promotion rule or it is explicitly ignored in PromotionIgnoreHostnameFilters configuration", designatedInstance.Key)
+	//}
+
+	if !designatedInstance.HasReasonableMaintenanceReplicationLag() {
+		return nil, fmt.Errorf("Designated instance %+v seems to be lagging too much for this operation. Aborting.", designatedInstance.Key)
+	}
+
+	log.Infof("PlannedLeaderElection: Will demote %+v and promote %+v instead", clusterMasterKey, designatedInstance.Key)
+
+	// demote current primary
+	// Note: we are only using GTID position here, though we can in theory access and use file-based position as well
+	pos, err := DemoteMasterInstance(*clusterMasterKey)
+	if err != nil {
+		_ = UndoDemoteMasterInstance(*clusterMasterKey)
+		return nil, log.Errore(err)
+	}
+
+	currentMasterInstance, err := inst.ReadTopologyInstance(clusterMasterKey)
+	if err != nil {
+		return nil, err
+	}
+	// wait for catchup
+	// replace with call to tmc.WaitForPosition
+	log.Infof("PlannedLeaderElection: Will wait for %+v to reach master coordinates %+v", designatedInstance.Key, pos)
+	err = WaitForPosition(designatedTabletInfo, pos)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("PlannedLeaderElection: attempting to promote %v", designatedInstance.Key)
+	// promote designatedInstance
+	promotedMasterCoordinates, err := PromoteReplica(designatedTabletInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	// change master on old primary
+	// TODO: durability
+	clusterMaster, err = inst.ChangeMasterTo(clusterMasterKey, &designatedInstance.Key, promotedMasterCoordinates, false, inst.GTIDHintForce /* GTID is required in vitess */)
+	if !clusterMaster.SelfBinlogCoordinates.Equals(demotedMasterSelfBinlogCoordinates) {
+		log.Errorf("GracefulMasterTakeover: sanity problem. Demoted master's coordinates changed from %+v to %+v while supposed to have been frozen", *demotedMasterSelfBinlogCoordinates, clusterMaster.SelfBinlogCoordinates)
+	}
+	_, startReplicationErr := inst.StartReplication(&clusterMaster.Key)
+	if err == nil {
+		err = startReplicationErr
+	}
+
+	if designatedInstance.AllowTLS {
+		_, enableSSLErr := inst.EnableMasterSSL(&clusterMaster.Key)
+		if err == nil {
+			err = enableSSLErr
+		}
+	}
+	if len(clusterMasterDirectReplicas) > 1 {
+		log.Infof("PlannedLeaderElection: Will let %+v take over its siblings", designatedInstance.Key)
+		relocatedReplicas, _, rerr, _ := inst.RelocateReplicas(&clusterMaster.Key, &designatedInstance.Key, "")
+		if rerr != nil {
+			err = rerr
+		}
+		if len(relocatedReplicas) != len(clusterMasterDirectReplicas)-1 {
+			// We are unable to make designated instance master of all its siblings
+			relocatedReplicasKeyMap := inst.NewInstanceKeyMap()
+			relocatedReplicasKeyMap.AddInstances(relocatedReplicas)
+			// Let's see which replicas have not been relocated
+			for _, directReplica := range clusterMasterDirectReplicas {
+				if relocatedReplicasKeyMap.HasKey(directReplica.Key) {
+					// relocated, good
+					continue
+				}
+				if directReplica.Key.Equals(&designatedInstance.Key) {
+					// obviously we skip this one
+					continue
+				}
+				if directReplica.IsDowntimed {
+					// obviously we skip this one
+					log.Warningf("PlannedLeaderElection: unable to relocate %+v below designated %+v, but since it is downtimed (downtime reason: %s) I will proceed", directReplica.Key, designatedInstance.Key, directReplica.DowntimeReason)
+					continue
+				}
+			}
+		}
+	}
+	return topologyRecovery, err
+}
+
 // electNewMaster elects a new master while none were present before.
-// TODO(sougou): this should be mreged with recoverDeadMaster
+// TODO(sougou): this should be merged with recoverDeadMaster
 func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
 	if topologyRecovery == nil {
@@ -2188,7 +2377,7 @@ func fixMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *ins
 		return false, topologyRecovery, err
 	}
 
-	if err := TabletUndoDemoteMaster(analysisEntry.AnalyzedInstanceKey); err != nil {
+	if err := UndoDemoteMasterInstance(analysisEntry.AnalyzedInstanceKey); err != nil {
 		return false, topologyRecovery, err
 	}
 	return true, topologyRecovery, nil

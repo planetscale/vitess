@@ -1306,6 +1306,14 @@ func ReadInstance(instanceKey *InstanceKey) (*Instance, bool, error) {
 	return instances[0], true, nil
 }
 
+func ReadInstanceForTablet(tablet *topodatapb.Tablet) (*Instance, bool, error) {
+	instanceKey := &InstanceKey{
+		Hostname: tablet.MysqlHostname,
+		Port:     int(tablet.MysqlPort),
+	}
+	return ReadInstance(instanceKey)
+}
+
 // ReadClusterInstances reads all instances of a given cluster
 func ReadClusterInstances(clusterName string) ([](*Instance), error) {
 	if strings.Contains(clusterName, "'") {

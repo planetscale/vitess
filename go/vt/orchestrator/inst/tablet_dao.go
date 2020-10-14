@@ -155,3 +155,48 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 	)
 	return err
 }
+
+// ReadCurrentMaster finds the current master based on the latest snapshot of topology
+// select from vitess_tablet where tablet_type=MASTER order by master_timestamp desc
+// get the first record
+func ReadCurrentMaster(keyspace, shard string) (tablet *topodatapb.Tablet, err error) {
+	query := `
+		select info from vitess_tablet
+			where keyspace = ? and shard = ? and tablet_type = 'MASTER'
+			order by master_timestamp desc limit 1
+		`
+	args := sqlutils.Args(keyspace, shard)
+	tablet = &topodatapb.Tablet{}
+	err = db.QueryOrchestrator(query, args, func(row sqlutils.RowMap) error {
+		return proto.UnmarshalText(row.GetString("info"), tablet)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if tablet.Alias == nil {
+		return nil, ErrTabletAliasNil
+	}
+	return tablet, nil
+}
+
+// ReadAllTablets finds all tablets for the given keyspace and shard using the
+// latest snapshot of topology
+func ReadAllTablets(keyspace, shard string) (tablets []*topodatapb.Tablet, err error) {
+	query := `
+		select info from vitess_tablet
+			where keyspace = ? and shard = ?
+		`
+	args := sqlutils.Args(keyspace, shard)
+	err = db.QueryOrchestrator(query, args, func(row sqlutils.RowMap) error {
+		tablet := &topodatapb.Tablet{}
+		err := proto.UnmarshalText(row.GetString("info"), tablet)
+		if err == nil {
+			tablets = append(tablets, tablet)
+		}
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return tablets, nil
+}

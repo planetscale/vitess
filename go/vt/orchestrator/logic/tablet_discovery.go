@@ -267,23 +267,43 @@ func TabletRefresh(instanceKey inst.InstanceKey) (*topodatapb.Tablet, error) {
 	return ti.Tablet, nil
 }
 
-// TabletDemoteMaster requests the master tablet to stop accepting transactions.
-func TabletDemoteMaster(instanceKey inst.InstanceKey) error {
+// DemoteMasterInstance requests the master tablet to stop accepting transactions.
+func DemoteMasterInstance(instanceKey inst.InstanceKey) (string, error) {
 	return tabletDemoteMaster(instanceKey, true)
 }
 
-// TabletUndoDemoteMaster requests the master tablet to undo the demote.
-func TabletUndoDemoteMaster(instanceKey inst.InstanceKey) error {
-	return tabletDemoteMaster(instanceKey, false)
+// PromoteReplica requests the master tablet to stop accepting transactions.
+func PromoteReplica(tablet *topodatapb.Tablet) (string, error) {
+	// TODO: needs to handle durability
+	tmc := tmclient.NewTabletManagerClient()
+	// TODO(sougou): this timeout should be controllable
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return tmc.PromoteReplica(ctx, tablet)
 }
 
-func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) error {
+// WaitForPosition
+func WaitForPosition(tablet *topodatapb.Tablet, pos string) error {
+	tmc := tmclient.NewTabletManagerClient()
+	// TODO(sougou): this timeout should be controllable
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return tmc.WaitForPosition(ctx, tablet, pos)
+}
+
+// UndoDemoteMasterInstance requests the master tablet to undo the demote.
+func UndoDemoteMasterInstance(instanceKey inst.InstanceKey) error {
+	_, err := tabletDemoteMaster(instanceKey, false)
+	return err
+}
+
+func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) (string, error) {
 	if instanceKey.Hostname == "" {
-		return errors.New("Can't demote/undo master: instance is unspecified")
+		return "", errors.New("Can't demote/undo master: instance is unspecified")
 	}
 	tablet, err := inst.ReadTablet(instanceKey)
 	if err != nil {
-		return err
+		return "", err
 	}
 	tmc := tmclient.NewTabletManagerClient()
 	// TODO(sougou): this should be controllable because we may want
@@ -291,11 +311,14 @@ func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	if forward {
-		_, err = tmc.DemoteMaster(ctx, tablet)
-	} else {
-		err = tmc.UndoDemoteMaster(ctx, tablet)
+		pos, err := tmc.DemoteMaster(ctx, tablet)
+		if err != nil {
+			return "", err
+		}
+		return pos.Position, nil
 	}
-	return err
+	err = tmc.UndoDemoteMaster(ctx, tablet)
+	return "", err
 }
 
 func ShardMaster(instanceKey *inst.InstanceKey) (masterKey *inst.InstanceKey, err error) {

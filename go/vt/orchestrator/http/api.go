@@ -3116,6 +3116,40 @@ func (this *HttpAPI) GracefulMasterTakeoverAuto(params martini.Params, r render.
 	this.gracefulMasterTakeover(params, r, req, user, true)
 }
 
+// PlannedLeaderElection allows the caller to invoke a planned change to the cluster primary.
+func (this *HttpAPI) PlannedLeaderElection(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+	if !isAuthorizedForAction(req, user) {
+		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
+		return
+	}
+	// Let us assume keyspace and shard are given to us
+	keyspace := params["keyspace"]
+	if keyspace == "" {
+		Respond(r, &APIResponse{Code: ERROR, Message: "planned-leader-election: no keyspace provided"})
+		return
+	}
+	shard := params["shard"]
+	if shard == "" {
+		Respond(r, &APIResponse{Code: ERROR, Message: "planned-leader-election: no shard provided"})
+		return
+	}
+	// TODO: validate keyspace and shard exist?
+	// This can be unspecified and PLE should choose a candidate
+	designatedTablet := params["designatedTablet"]
+	// TODO: add avoidTablet
+	avoidTablet := params["avoidTablet"]
+	topologyRecovery, err := logic.PlannedLeaderElection(req.Context(), keyspace, shard, designatedTablet, avoidTablet)
+	if err != nil {
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), Details: topologyRecovery})
+		return
+	}
+	if topologyRecovery == nil || topologyRecovery.SuccessorKey == nil {
+		Respond(r, &APIResponse{Code: ERROR, Message: "planned-leader-election: no successor promoted", Details: topologyRecovery})
+		return
+	}
+	Respond(r, &APIResponse{Code: OK, Message: "planned-leader-election: successor promoted", Details: topologyRecovery})
+}
+
 // ForceMasterFailover fails over a master (even if there's no particular problem with the master)
 func (this *HttpAPI) ForceMasterFailover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
