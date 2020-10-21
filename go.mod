@@ -25,7 +25,7 @@ require (
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/golang/mock v1.3.1
-	github.com/golang/protobuf v1.3.2
+	github.com/golang/protobuf v1.3.3
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
 	github.com/golangci/gocyclo v0.0.0-20180528144436-0a533e8fa43d // indirect
 	github.com/golangci/golangci-lint v1.21.0 // indirect
@@ -87,7 +87,7 @@ require (
 	golang.org/x/tools v0.0.0-20191219041853-979b82bfef62
 	google.golang.org/api v0.9.0
 	google.golang.org/genproto v0.0.0-20190926190326-7ee9db18f195 // indirect
-	google.golang.org/grpc v1.24.0
+	google.golang.org/grpc v1.29.1
 	gopkg.in/DataDog/dd-trace-go.v1 v1.17.0
 	gopkg.in/ldap.v2 v2.5.0
 	gotest.tools v2.2.0+incompatible
