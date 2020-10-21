@@ -20,6 +20,7 @@ package grpcclient
 
 import (
 	"flag"
+	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -35,10 +36,12 @@ import (
 )
 
 var (
-	keepaliveTime         = flag.Duration("grpc_keepalive_time", 0, "After a duration of this time if the client doesn't see any activity it pings the server to see if the transport is still alive.")
-	keepaliveTimeout      = flag.Duration("grpc_keepalive_timeout", 0, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
-	initialConnWindowSize = flag.Int("grpc_initial_conn_window_size", 0, "grpc initial connection window size")
-	initialWindowSize     = flag.Int("grpc_initial_window_size", 0, "grpc initial window size")
+	keepaliveTime         = flag.Duration("grpc_keepalive_time", 10*time.Second, "After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive.")
+	keepaliveTimeout      = flag.Duration("grpc_keepalive_timeout", 10*time.Second, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
+	initialConnWindowSize = flag.Int("grpc_initial_conn_window_size", 0, "gRPC initial connection window size")
+	initialWindowSize     = flag.Int("grpc_initial_window_size", 0, "gRPC initial window size")
+	readBufferSize        = flag.Int("grpc_read_buffer_size", 32768, "gRPC client read buffer size")
+	writeBufferSize       = flag.Int("grpc_write_buffer_size", 32768, "gRPC client write buffer size")
 )
 
 // FailFast is a self-documenting type for the grpc.FailFast.
@@ -63,6 +66,8 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 			grpc.MaxCallSendMsgSize(*grpccommon.MaxMessageSize),
 			grpc.FailFast(bool(failFast)),
 		),
+		grpc.WithReadBufferSize(*readBufferSize),
+		grpc.WithWriteBufferSize(*writeBufferSize),
 	}
 
 	if *keepaliveTime != 0 || *keepaliveTimeout != 0 {
