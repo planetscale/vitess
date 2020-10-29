@@ -6,8 +6,18 @@ name: Nightly Build
 # To access GCR:
 #   - GCP_SA_EMAIL
 #   - GCP_SA_KEY
+# Use: infrastructure/gcp/ensure_github_service_account.sh planetscale-production
+#
+# To send Slack notofications:
+#   - SLACK_WEBHOOK_URL
+# Use: Setup https://api.slack.com/messaging/webhooks to send notificaitons to #builds
+#
+# NOTE: These are the same secrets as monorepo.yaml
 
 on:
+  # Enable manually trigger button in UI
+  workflow_dispatch:
+
   schedule:
     # Every day at 5am UTC (9pm PST / 10pm PDT)
     - cron: '0 5 * * *'
@@ -105,3 +115,21 @@ jobs:
       - name: Output last pushed vitess/lite:${{ matrix.image }}
         if: steps.last-built-image.outputs.cache-hit == 'true'
         run: cat ${{ runner.temp }}/vitess-lite/${{ matrix.image }}
+
+  slack-notify:
+    name: "Send Slack Notification to #builds"
+    needs:
+      - build-tag-push-lite
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          repository: planetscale/vitess-private
+          fetch-depth: 0
+          ref: master
+
+      - uses: ./.github/actions/_planetscale_slack-notify
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
