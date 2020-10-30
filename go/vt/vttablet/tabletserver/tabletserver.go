@@ -1094,7 +1094,7 @@ func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, st
 }
 
 // VStreamRows streams rows from the specified starting point.
-func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target, query, piiStrategy string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
 		return err
 	}
@@ -1106,7 +1106,7 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target
 		}
 		row = r.Rows[0]
 	}
-	return tsv.vstreamer.StreamRows(ctx, query, row, send)
+	return tsv.vstreamer.StreamRows(ctx, query, piiStrategy, row, send)
 }
 
 // VStreamResults streams rows from the specified starting point.

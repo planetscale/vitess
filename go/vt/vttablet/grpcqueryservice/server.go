@@ -361,7 +361,7 @@ func (q *query) VStreamRows(request *binlogdatapb.VStreamRowsRequest, stream que
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	err = q.server.VStreamRows(ctx, request.Target, request.Query, request.Lastpk, stream.Send)
+	err = q.server.VStreamRows(ctx, request.Target, request.Query, request.PiiStrategy, request.Lastpk, stream.Send)
 	return vterrors.ToGRPC(err)
 }
 

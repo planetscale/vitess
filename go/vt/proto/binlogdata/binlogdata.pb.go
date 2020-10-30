@@ -1632,6 +1632,7 @@ type VStreamRowsRequest struct {
 	Target               *query.Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
 	Query                string                `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
 	Lastpk               *query.QueryResult    `protobuf:"bytes,5,opt,name=lastpk,proto3" json:"lastpk,omitempty"`
+	PiiStrategy          string                `protobuf:"bytes,6,opt,name=pii_strategy,proto3" json:"pii_strategy,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`

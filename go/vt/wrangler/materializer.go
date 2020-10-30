@@ -55,6 +55,7 @@ type materializer struct {
 	targetVSchema *vindexes.KeyspaceSchema
 	sourceShards  []*topo.ShardInfo
 	targetShards  []*topo.ShardInfo
+	piiStrategy   string
 }
 
 const (
@@ -64,7 +65,7 @@ const (
 
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
-	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool) error {
+	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool, piiStrategy string) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var err error
@@ -187,6 +188,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		Cell:           cell,
 		TabletTypes:    tabletTypes,
 		StopAfterCopy:  stopAfterCopy,
+		PiiStrategy:    piiStrategy,
 	}
 	for _, table := range tables {
 		buf := sqlparser.NewTrackedBuffer(nil)
@@ -837,6 +839,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 		targetVSchema: targetVSchema,
 		sourceShards:  sourceShards,
 		targetShards:  targetShards,
+		piiStrategy:   ms.PiiStrategy,
 	}, nil
 }
 
@@ -1042,7 +1045,7 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 			}
 
 			rule.Filter = filter
-
+			rule.Pii = mz.piiStrategy
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
 		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes)

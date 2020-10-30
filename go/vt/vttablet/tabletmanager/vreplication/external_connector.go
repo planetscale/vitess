@@ -50,7 +50,7 @@ type VStreamerClient interface {
 	VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
 
 	// VStreamRows streams rows of a table from the specified starting point.
-	VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error
+	VStreamRows(ctx context.Context, query, piiStrategy string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error
 }
 
 type externalConnector struct {
@@ -129,7 +129,7 @@ func (c *mysqlConnector) VStream(ctx context.Context, startPos string, tablePKs 
 	return c.vstreamer.Stream(ctx, startPos, tablePKs, filter, send)
 }
 
-func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (c *mysqlConnector) VStreamRows(ctx context.Context, query, piiStrategy string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	var row []sqltypes.Value
 	if lastpk != nil {
 		r := sqltypes.Proto3ToResult(lastpk)
@@ -138,7 +138,7 @@ func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *
 		}
 		row = r.Rows[0]
 	}
-	return c.vstreamer.StreamRows(ctx, query, row, send)
+	return c.vstreamer.StreamRows(ctx, query, piiStrategy, row, send)
 }
 
 //-----------------------------------------------------------
@@ -174,6 +174,6 @@ func (tc *tabletConnector) VStream(ctx context.Context, startPos string, tablePK
 	return tc.qs.VStream(ctx, tc.target, startPos, tablePKs, filter, send)
 }
 
-func (tc *tabletConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	return tc.qs.VStreamRows(ctx, tc.target, query, lastpk, send)
+func (tc *tabletConnector) VStreamRows(ctx context.Context, query, piiStrategy string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	return tc.qs.VStreamRows(ctx, tc.target, query, piiStrategy, lastpk, send)
 }

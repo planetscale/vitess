@@ -2335,6 +2335,7 @@ type MaterializeSettings struct {
 	// optional parameters.
 	Cell                 string   `protobuf:"bytes,6,opt,name=cell,proto3" json:"cell,omitempty"`
 	TabletTypes          string   `protobuf:"bytes,7,opt,name=tablet_types,json=tabletTypes,proto3" json:"tablet_types,omitempty"`
+	PiiStrategy          string   `protobuf:"bytes,8,opt,name=pii_strategy,json=piiStrategy,proto3" json:"piiStrategy,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`

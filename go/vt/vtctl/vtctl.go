@@ -1918,6 +1918,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
+	piiStrategy := subFlags.String("pii_strategy", "", "Pii strategy to apply to relevant tables. One of redact or fake")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1942,7 +1943,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	target := subFlags.Arg(1)
 	tableSpecs := subFlags.Arg(2)
 	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables,
-		*excludes, *autoStart, *stopAfterCopy)
+		*excludes, *autoStart, *stopAfterCopy, *piiStrategy)
 }
 
 // VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard
@@ -1983,6 +1984,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	sourceShards := subFlags.String("source_shards", "", "Source shards")
 	targetShards := subFlags.String("target_shards", "", "Target shards")
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to target shards")
+
+	piiStrategy := subFlags.String("pii_strategy", "", "Pii strategy to apply to relevant tables. One of redact or fake")
 
 	_ = subFlags.Bool("v2", true, "")
 
@@ -2061,6 +2064,10 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			if *sourceKeyspace == "" {
 				return fmt.Errorf("source keyspace is not specified")
 			}
+			if *piiStrategy != "" && !(*piiStrategy == "redact" || *piiStrategy == "fake") {
+				return fmt.Errorf("piiStrategy has to be one of redact or fake")
+			}
+
 			_, err := wr.TopoServer().GetKeyspace(ctx, *sourceKeyspace)
 			if err != nil {
 				wr.Logger().Errorf("keyspace %s not found", *sourceKeyspace)

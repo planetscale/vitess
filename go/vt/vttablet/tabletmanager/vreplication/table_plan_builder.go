@@ -140,7 +140,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, pkInfoMap map[string][]*Pr
 		if rule == nil {
 			continue
 		}
-		tablePlan, err := buildTablePlan(tableName, rule.Filter, pkInfoMap, lastpk)
+		tablePlan, err := buildTablePlan(tableName, rule.Filter, rule.Pii, pkInfoMap, lastpk)
 		if err != nil {
 			return nil, err
 		}
@@ -179,7 +179,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKeyInfo, lastpk *sqltypes.Result) (*TablePlan, error) {
+func buildTablePlan(tableName, filter, piiStrategy string, pkInfoMap map[string][]*PrimaryKeyInfo, lastpk *sqltypes.Result) (*TablePlan, error) {
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
 	switch {
@@ -200,6 +200,7 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 	}
 	sendRule := &binlogdatapb.Rule{
 		Match: fromTable,
+		Pii:   piiStrategy,
 	}
 
 	if expr, ok := sel.SelectExprs[0].(*sqlparser.StarExpr); ok {
