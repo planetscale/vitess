@@ -33,6 +33,36 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestStreamRowsPii(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	if err := env.SetVSchema(shardedVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer env.SetVSchema("{}")
+
+	execStatements(t, []string{
+		"create table t1(id1 int, val varchar(50) comment 'pii-name', primary key(id1))",
+		"insert into t1 values (1,'kepler'), (2, 'newton')",
+	})
+
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	time.Sleep(1 * time.Second)
+
+	wantStream := []string{
+		`fields:<name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 > fields:<name:"val" type:VARCHAR table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:150 charset:33 > pkfields:<name:"id1" type:INT32 > `,
+		`rows:<lengths:1 lengths:0 values:"1" > rows:<lengths:1 lengths:0 values:"2" > lastpk:<lengths:1 values:"2" > `,
+	}
+	wantQuery := "select id1, val from t1 order by id1"
+	checkStreamWithPii(t, "select * from t1", "pii-redact", nil, wantQuery, wantStream)
+}
+
 func TestStreamRowsScan(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -214,7 +244,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err = engine.StreamRows(context.Background(), "select * from t1", "", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		// Skip fields.
 		if len(rows.Rows) == 0 {
 			return nil
@@ -377,7 +407,7 @@ func TestStreamRowsCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err := engine.StreamRows(ctx, "select * from t1", "", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		cancel()
 		return nil
 	})
@@ -386,7 +416,7 @@ func TestStreamRowsCancel(t *testing.T) {
 	}
 }
 
-func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery string, wantStream []string) {
+func checkStreamWithPii(t *testing.T, query, piiStrategy string, lastpk []sqltypes.Value, wantQuery string, wantStream []string) {
 	t.Helper()
 
 	i := 0
@@ -396,7 +426,7 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 	go func() {
 		first := true
 		defer close(ch)
-		err := engine.StreamRows(context.Background(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		err := engine.StreamRows(context.Background(), query, piiStrategy, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			if first {
 				if rows.Gtid == "" {
 					ch <- fmt.Errorf("stream gtid is empty")
@@ -429,6 +459,10 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 	for err := range ch {
 		t.Error(err)
 	}
+
+}
+func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery string, wantStream []string) {
+	checkStreamWithPii(t, query, "", lastpk, wantQuery, wantStream)
 }
 
 func expectStreamError(t *testing.T, query string, want string) {
@@ -436,7 +470,7 @@ func expectStreamError(t *testing.T, query string, want string) {
 	ch := make(chan error)
 	go func() {
 		defer close(ch)
-		err := engine.StreamRows(context.Background(), query, nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		err := engine.StreamRows(context.Background(), query, "", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			return nil
 		})
 		require.EqualError(t, err, want, "Got incorrect error")

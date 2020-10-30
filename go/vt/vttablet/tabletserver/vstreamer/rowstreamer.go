@@ -39,7 +39,7 @@ type RowStreamer interface {
 
 // NewRowStreamer returns a RowStreamer
 func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) RowStreamer {
-	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send, vse)
+	return newRowStreamer(ctx, cp, se, query, "", lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send, vse)
 }
 
 // rowStreamer is used for copying the existing rows of a table
@@ -65,20 +65,23 @@ type rowStreamer struct {
 	pkColumns []int
 	sendQuery string
 	vse       *Engine
+
+	piiStrategy string
 }
 
-func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
+func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query, piiStrategy string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
-		ctx:     ctx,
-		cancel:  cancel,
-		cp:      cp,
-		se:      se,
-		query:   query,
-		lastpk:  lastpk,
-		send:    send,
-		vschema: vschema,
-		vse:     vse,
+		ctx:         ctx,
+		cancel:      cancel,
+		cp:          cp,
+		se:          se,
+		query:       query,
+		lastpk:      lastpk,
+		send:        send,
+		vschema:     vschema,
+		vse:         vse,
+		piiStrategy: piiStrategy,
 	}
 }
 
@@ -118,15 +121,20 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
+	extColInfos, err := getExtColInfos(rs.ctx, rs.cp, fromTable.String(), st.Fields[0].Database)
+	if err != nil {
+		return err
+	}
 	ti := &Table{
-		Name:   st.Name,
-		Fields: st.Fields,
+		Name:        st.Name,
+		Fields:      st.Fields,
+		ExtColInfos: extColInfos,
 	}
 	// The plan we build is identical to the one for vstreamer.
 	// This is because the row format of a read is identical
 	// to the row format of a binlog event. So, the same
 	// filtering will work.
-	rs.plan, err = buildTablePlan(ti, rs.vschema, rs.query)
+	rs.plan, err = buildTablePlan(ti, rs.vschema, rs.query, rs.piiStrategy)
 	if err != nil {
 		log.Errorf("%s", err.Error())
 		return err

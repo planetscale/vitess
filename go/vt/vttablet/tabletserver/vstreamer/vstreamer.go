@@ -655,10 +655,14 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 	if err != nil {
 		return nil, err
 	}
-
+	extColInfos, err := getExtColInfos(vs.ctx, vs.cp, tm.Name, tm.Database)
+	if err != nil {
+		return nil, err
+	}
 	table := &Table{
-		Name:   tm.Name,
-		Fields: cols,
+		Name:        tm.Name,
+		Fields:      cols,
+		ExtColInfos: extColInfos,
 	}
 	plan, err := buildPlan(table, vs.vschema, vs.filter)
 	if err != nil {

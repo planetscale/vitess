@@ -138,6 +138,8 @@ message Rule {
   // to be excluded.
   // TODO(sougou): support this on vstreamer side also.
   string filter = 2;
+  // Pii
+  string pii = 3;
 }
 
 // Filter represents a list of ordered rules. The first

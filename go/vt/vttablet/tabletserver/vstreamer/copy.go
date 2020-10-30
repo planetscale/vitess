@@ -201,12 +201,13 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 
 	var newLastPK *sqltypes.Result
 	lastPK := getLastPKFromQR(uvs.plans[tableName].tablePK.Lastpk)
-	filter := uvs.plans[tableName].rule.Filter
-
+	rule := uvs.plans[tableName].rule
+	filter := rule.Filter
+	piiStrategy := rule.Pii
 	log.Infof("Starting copyTable for %s, PK %v", tableName, lastPK)
 	uvs.sendTestEvent(fmt.Sprintf("Copy Start %s", tableName))
 
-	err := uvs.vse.StreamRows(ctx, filter, lastPK, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err := uvs.vse.StreamRows(ctx, filter, piiStrategy, lastPK, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		select {
 		case <-ctx.Done():
 			log.Infof("Returning io.EOF in StreamRows")

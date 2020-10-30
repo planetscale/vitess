@@ -201,6 +201,7 @@ func NullsafeCompare(v1, v2 sqltypes.Value) (int, error) {
 	if isByteComparable(v1) && isByteComparable(v2) {
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
+
 	return 0, fmt.Errorf("types are not comparable: %v vs %v", v1.Type(), v2.Type())
 }
 

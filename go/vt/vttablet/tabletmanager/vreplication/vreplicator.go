@@ -243,12 +243,12 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 					if currentField == nil {
 						continue
 					}
-					dataType = row[3].ToString()
-					columnType = row[4].ToString()
 					if sqltypes.IsText(currentField.Type) {
 						charSet = row[0].ToString()
 						collation = row[1].ToString()
 					}
+					dataType = row[3].ToString()
+					columnType = row[4].ToString()
 					break
 				}
 			}

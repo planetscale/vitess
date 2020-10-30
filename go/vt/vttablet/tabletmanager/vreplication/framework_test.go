@@ -262,7 +262,7 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, target *querypb.Targ
 		}
 		row = r.Rows[0]
 	}
-	return streamerEngine.StreamRows(ctx, query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	return streamerEngine.StreamRows(ctx, query, "", row, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)
 		}

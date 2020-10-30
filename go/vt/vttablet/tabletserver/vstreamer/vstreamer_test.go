@@ -120,6 +120,41 @@ func TestSetAndEnum(t *testing.T) {
 	runCases(t, nil, testcases, "current", nil)
 }
 
+func TestPii(t *testing.T) {
+
+	execStatements(t, []string{
+		"create table t1(id int, email varchar(50) comment 'pii-email', primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'dumbledore@hogwarts.wiz')",
+		"commit",
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"t1" fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"email" type:VARCHAR table:"t1" org_table:"t1" database:"vttest" org_name:"email" column_length:150 charset:33 > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:0 values:"1" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+			Pii:    "redact",
+		}},
+	}
+	runCases(t, filter, testcases, "current", nil)
+}
+
 func TestCellValuePadding(t *testing.T) {
 
 	execStatements(t, []string{

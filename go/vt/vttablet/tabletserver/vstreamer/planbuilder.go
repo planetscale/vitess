@@ -17,10 +17,13 @@ limitations under the License.
 package vstreamer
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/vt/dbconfigs"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -48,6 +51,8 @@ type Plan struct {
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
 	Filters []Filter
+
+	PiiStrategy string
 }
 
 // Opcode enumerates the operators supported in a where clause
@@ -93,10 +98,20 @@ type ColExpr struct {
 	FixedValue sqltypes.Value
 }
 
+// ExtColInfo has additional column attributes needed for pii filtering
+type ExtColInfo struct {
+	dataType          string
+	columnType        string
+	columnComment     string
+	columnMaxLength   int64
+	columnOctetLength int64
+}
+
 // Table contains the metadata for a table.
 type Table struct {
-	Name   string
-	Fields []*querypb.Field
+	Name        string
+	Fields      []*querypb.Field
+	ExtColInfos map[string]*ExtColInfo
 }
 
 // fields returns the fields for the plan.
@@ -106,6 +121,56 @@ func (plan *Plan) fields() []*querypb.Field {
 		fields[i] = ce.Field
 	}
 	return fields
+}
+
+func getExtColInfos(ctx context.Context, cp dbconfigs.Connector, table, database string) (map[string]*ExtColInfo, error) {
+	log.Infof("in getExtColInfos for %s, %s", table, database)
+	extColInfos := make(map[string]*ExtColInfo)
+	conn, err := cp.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	queryTemplate := "select column_name, data_type, column_type, column_comment, character_maximum_length, character_octet_length from information_schema.columns where table_schema='%s' and table_name='%s';"
+	query := fmt.Sprintf(queryTemplate, database, table)
+	qr, err := conn.ExecuteFetch(query, 10000, false)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range qr.Rows {
+		maxLength, _ := row[4].ToInt64()
+		maxOctetLength, _ := row[5].ToInt64()
+		extColInfo := &ExtColInfo{
+			dataType:          row[1].ToString(),
+			columnType:        row[2].ToString(),
+			columnComment:     row[3].ToString(),
+			columnMaxLength:   maxLength,
+			columnOctetLength: maxOctetLength,
+		}
+		extColInfos[row[0].ToString()] = extColInfo
+	}
+	return extColInfos, nil
+}
+
+func (plan *Plan) pii(value sqltypes.Value, colExpr ColExpr) (sqltypes.Value, error) {
+	log.Infof("In pii %s", plan.PiiStrategy)
+	if plan.PiiStrategy == "" {
+		return value, nil
+	}
+	val := value
+	colName := colExpr.Field.Name
+	extColInfo, ok := plan.Table.ExtColInfos[colName]
+	if !ok {
+		return sqltypes.NULL, fmt.Errorf("no extended column info for %s", colName)
+	}
+	comment := extColInfo.columnComment
+	if strings.Contains(comment, "pii") {
+		switch extColInfo.dataType {
+		case "varchar":
+			val = sqltypes.NewVarChar("")
+		}
+	}
+	return val, nil
 }
 
 // filter filters the row against the plan. It returns false if the row did not match.
@@ -142,7 +207,11 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 			return false, nil, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
 		}
 		if colExpr.Vindex == nil {
-			result[i] = values[colExpr.ColNum]
+			value, err := plan.pii(values[colExpr.ColNum], colExpr)
+			if err != nil {
+				return false, nil, err
+			}
+			result[i] = value //values[colExpr.ColNum]
 		} else {
 			ksid, err := getKeyspaceID(values, colExpr.Vindex, colExpr.VindexColumns)
 			if err != nil {
@@ -254,7 +323,7 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*
 			}
 			return buildREPlan(ti, vschema, rule.Filter)
 		case rule.Match == ti.Name:
-			return buildTablePlan(ti, vschema, rule.Filter)
+			return buildTablePlan(ti, vschema, rule.Filter, rule.Pii)
 		}
 	}
 	return nil, nil
@@ -305,7 +374,8 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 
 // BuildTablePlan handles cases where a specific table name is specified.
 // The filter must be a select statement.
-func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, error) {
+func buildTablePlan(ti *Table, vschema *localVSchema, query string, piiStrategy string) (*Plan, error) {
+
 	sel, fromTable, err := analyzeSelect(query)
 	if err != nil {
 		log.Errorf("%s", err.Error())
@@ -317,7 +387,8 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, erro
 	}
 
 	plan := &Plan{
-		Table: ti,
+		Table:       ti,
+		PiiStrategy: piiStrategy,
 	}
 	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
 		log.Errorf("%s", err.Error())
