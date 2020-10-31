@@ -14,6 +14,7 @@ require (
 	github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878
 	github.com/aws/aws-sdk-go v1.28.8
+	github.com/brianvoe/gofakeit v3.18.0+incompatible
 	github.com/buger/jsonparser v0.0.0-20200322175846-f7e751efca13
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
