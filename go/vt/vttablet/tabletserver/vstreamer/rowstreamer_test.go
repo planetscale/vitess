@@ -60,7 +60,7 @@ func TestStreamRowsPii(t *testing.T) {
 		`rows:<lengths:1 lengths:0 values:"1" > rows:<lengths:1 lengths:0 values:"2" > lastpk:<lengths:1 values:"2" > `,
 	}
 	wantQuery := "select id1, val from t1 order by id1"
-	checkStreamWithPii(t, "select * from t1", "pii-redact", nil, wantQuery, wantStream)
+	checkStreamWithPii(t, "select * from t1", "redact", nil, wantQuery, wantStream)
 }
 
 func TestStreamRowsScan(t *testing.T) {

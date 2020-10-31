@@ -192,8 +192,8 @@ func filterPii(piiStrategy, colName, colComment, colDataType string, colLength i
 	}
 	piiFilter := match[0][4:]
 
-	stringFilters := []string{"name", "email", "phone", "gender", "uid", "address", "date"}
-	intFilters := []string{"int"}
+	stringFilters := []string{"name", "email", "phone", "gender", "ssn", "address", "date"}
+	intFilters := []string{"salary"}
 	found := false
 	filterType := ""
 	for _, filter := range stringFilters {
@@ -228,27 +228,36 @@ func filterPii(piiStrategy, colName, colComment, colDataType string, colLength i
 		s = faker.Gender()
 	case "phone":
 		s = faker.Phone()
-	case "uid":
+	case "ssn":
 		s = faker.SSN()
 	case "date":
-		s = faker.Date().Format("2020-01-01")
+		s = faker.Date().Format("2006-01-01")
 	default:
 		found = false
 	}
 	if found {
 		switch colDataType {
-		case "varchar", "char", "date":
+		case "varchar", "char":
+			if len(s) > colLength {
+				s = s[:colLength]
+			}
 			return sqltypes.NewVarChar(s), nil
 		case "varbinary", "binary":
+			if len(s) > colLength {
+				s = s[:colLength]
+			}
 			return sqltypes.NewVarBinary(s), nil
+		case "date":
+			return sqltypes.MakeTrusted(querypb.Type_DATE, []byte(s)), nil
 		default:
 			return sqltypes.NULL, fmt.Errorf("pii type %s does not match data type %s", piiFilter, filterType)
 		}
 	}
+	found = true
 	var i int64
 	switch piiFilter {
-	case "int":
-		i = faker.Int64()
+	case "salary":
+		i = int64(faker.Number(10000, 1000000))
 	default:
 		found = false
 	}
@@ -299,17 +308,19 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 			return false, nil, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
 		}
 		if colExpr.Vindex == nil {
-			//colName, colComment, colDataType string, value sqltypes.Value
 			colName := colExpr.Field.Name
-			extColInfo, ok := plan.Table.ExtColInfos[colName]
-			if !ok {
-				return false, nil, fmt.Errorf("no extended column info for %s", colName)
+			result[i] = values[colExpr.ColNum]
+			if plan.PiiStrategy != "" {
+				extColInfo, ok := plan.Table.ExtColInfos[colName]
+				if !ok {
+					return false, nil, fmt.Errorf("no extended column info for %s", colName)
+				}
+				value, err := filterPii(plan.PiiStrategy, colName, extColInfo.columnComment, extColInfo.dataType, int(extColInfo.columnMaxLength), result[i])
+				if err != nil {
+					return false, nil, err
+				}
+				result[i] = value //values[colExpr.ColNum]
 			}
-			value, err := filterPii(plan.PiiStrategy, colName, extColInfo.columnComment, extColInfo.dataType, int(extColInfo.columnMaxLength), values[colExpr.ColNum])
-			if err != nil {
-				return false, nil, err
-			}
-			result[i] = value //values[colExpr.ColNum]
 		} else {
 			ksid, err := getKeyspaceID(values, colExpr.Vindex, colExpr.VindexColumns)
 			if err != nil {
