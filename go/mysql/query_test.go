@@ -253,6 +253,54 @@ func TestComStmtExecuteWithNil(t *testing.T) {
 	require.Equal(t, prepare.StatementID, stmtID)
 }
 
+func TestComStmtExecuteAllDataTypes(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	sql := "UPDATE test SET __bit= ? ,__tinyInt= ? ,__tinyIntU = ? ,__smallInt = ? ,__smallIntU= ? ,__mediumInt= ? ,__mediumIntU = ? ,__int= ? ,__intU = ? ,__bigInt = ? ,__bigIntU= ? ,__decimal= ? ,__float= ? ,__double = ? ,__date = ? ,__datetime = ? ,__timestamp= ? ,__time = ? ,__year = ? ,__char = ? ,__varchar= ? ,__binary = ? ,__varbinary= ? ,__tinyblob = ? ,__tinytext = ? ,__blob = ? ,__text = ? ,__enum = ? ,__set= ? WHERE __id=0)"
+
+	prepare := &PrepareData{
+		StatementID: 1,
+		PrepareStmt: sql,
+		ParamsCount: 29,
+		ParamsType:  []int32{int32(querypb.Type_BIT), int32(querypb.Type_INT8), int32(querypb.Type_UINT8), int32(querypb.Type_INT16), int32(querypb.Type_UINT16), int32(querypb.Type_INT24), int32(querypb.Type_UINT24), int32(querypb.Type_INT32), int32(querypb.Type_UINT32), int32(querypb.Type_INT64), int32(querypb.Type_UINT64), int32(querypb.Type_DECIMAL), int32(querypb.Type_FLOAT32), int32(querypb.Type_FLOAT64), int32(querypb.Type_DATE), int32(querypb.Type_DATETIME), int32(querypb.Type_TIMESTAMP), int32(querypb.Type_TIME), int32(querypb.Type_YEAR), int32(querypb.Type_CHAR), int32(querypb.Type_VARCHAR), int32(querypb.Type_BINARY), int32(querypb.Type_VARBINARY), int32(querypb.Type_BLOB), int32(querypb.Type_TEXT), int32(querypb.Type_BLOB), int32(querypb.Type_TEXT), int32(querypb.Type_ENUM), int32(querypb.Type_SET)},
+		BindVars:    map[string]*querypb.BindVariable{},
+	}
+
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+
+	dat := `0000   17 01 00 00 00 00 01 00 00 00 00 00 00 00 01 10   ................
+0010   00 01 00 01 80 02 00 02 80 03 00 03 80 03 00 03   ................
+0020   80 08 00 08 80 00 00 04 00 05 00 0a 00 0c 00 07   ................
+0030   00 0b 00 0d 80 fe 00 fe 00 fc 00 fc 00 fc 00 fe   ................
+0040   00 fc 00 fe 00 fe 00 fe 00 08 00 00 00 00 00 00   ................
+0050   aa e0 80 ff 00 80 ff ff 00 00 80 ff ff ff ff 00   ................
+0060   00 00 00 80 ff ff ff ff 00 00 00 00 00 00 00 80   ................
+0070   ff ff ff ff ff ff ff ff 15 31 32 33 34 35 36 37   .........1234567
+0080   38 39 30 2e 30 31 32 33 34 35 36 37 38 39 d0 0f   890.0123456789..
+0090   49 40 44 17 41 54 fb 21 09 40 04 e0 07 08 08 0b   I@D.AT.!.@......
+00a0   e0 07 08 08 11 19 3b 00 00 00 00 0b e0 07 08 08   ......;.........
+00b0   11 19 3b 00 00 00 00 0c 01 08 00 00 00 07 3b 3b   ..;...........;;
+00c0   00 00 00 00 04 31 39 39 39 08 31 32 33 34 35 36   .....1999.123456
+00d0   37 38 0c e9 9f a9 e5 86 ac e7 9c 9f e8 b5 9e 08   78..............
+00e0   31 32 33 34 35 36 37 38 08 31 32 33 34 35 36 37   12345678.1234567
+00f0   38 08 31 32 33 34 35 36 37 38 0c e9 9f a9 e5 86   8.12345678......
+0100   ac e7 9c 9f e8 b5 9e 08 31 32 33 34 35 36 37 38   ........12345678
+0110   0c e9 9f a9 e5 86 ac e7 9c 9f e8 b5 9e 03 66 6f   ..............fo
+0120   6f 07 66 6f 6f 2c 62 61 72                        o.foo,bar
+`
+	data := ReadWiresharkDump(dat)
+
+	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	require.NoError(t, err)
+	require.Equal(t, prepare.StatementID, stmtID)
+}
+
 func TestComStmtClose(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
