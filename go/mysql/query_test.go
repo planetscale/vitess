@@ -22,6 +22,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -214,12 +216,41 @@ func TestComStmtExecute(t *testing.T) {
 	data := []byte{23, 18, 0, 0, 0, 128, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 
 	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
-	if err != nil {
-		t.Fatalf("parseComStmtExeute failed: %v", err)
+	require.NoError(t, err)
+	require.Equal(t, prepare.StatementID, stmtID)
+}
+
+func TestComStmtExecuteWithNil(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	sql := "INSERT INTO squareNum VALUES( ?, ?, ? )"
+
+	prepare := &PrepareData{
+		StatementID: 1,
+		PrepareStmt: sql,
+		ParamsCount: 3,
+		ParamsType:  []int32{int32(querypb.Type_INT64), int32(querypb.Type_INT64), int32(querypb.Type_CHAR)},
+		ColumnNames: []string{"id", "id2", "id3"},
+		BindVars:    map[string]*querypb.BindVariable{},
 	}
-	if stmtID != 18 {
-		t.Fatalf("Parsed incorrect values")
-	}
+
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+
+	dat := `0000   17 01 00 00 00 00 01 00 00 00 04 01 08 00 08 00   ................
+0010   06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00   ................
+0020   00 00                                             ..
+`
+	data := ReadWiresharkDump(dat)
+
+	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	require.NoError(t, err)
+	require.Equal(t, prepare.StatementID, stmtID)
 }
 
 func TestComStmtClose(t *testing.T) {

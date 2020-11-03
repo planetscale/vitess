@@ -419,6 +419,48 @@ func ReadHexDump(value string) []byte {
 	return data
 }
 
+// ReadWiresharkDump is used to read wireshark dump obtained by - Copy Byte as Hex + ASCII dump
+func ReadWiresharkDump(value string) []byte {
+	lines := strings.Split(value, "\n")
+	var data []byte
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+		indexOfPipe := strings.Index(line, "   ")
+		endOfPipe := strings.Index(line[indexOfPipe+1:], "   ")
+		s := line[indexOfPipe+3 : indexOfPipe+endOfPipe+1]
+		hexValues := strings.Split(s, " ")
+		for _, val := range hexValues {
+			if val != "" {
+				i, _ := hex.DecodeString(val)
+				data = append(data, i...)
+			}
+		}
+	}
+
+	return data
+	// Example Input
+	//0000   02 00 00 00 45 00 00 5a 00 00 40 00 40 06 00 00   ....E..Z..@.@...
+	//0010   7f 00 00 01 7f 00 00 01 d9 0d 0c ea 79 30 2a 0a   ............y0*.
+	//0020   35 e2 8a e6 80 18 18 e6 fe 4e 00 00 01 01 08 0a   5........N......
+	//0030   13 c0 82 d1 13 c0 82 d1 22 00 00 00 17 01 00 00   ........".......
+	//0040   00 00 01 00 00 00 04 01 08 00 08 00 06 00 01 00   ................
+	//0050   00 00 00 00 00 00 01 00 00 00 00 00 00 00         ..............
+}
+
+func TestWiresharkDump(t *testing.T) {
+	data := `0000   02 00 00 00 45 00 00 5a 00 00 40 00 40 06 00 00   ....E..Z..@.@...
+0010   7f 00 00 01 7f 00 00 01 d9 0d 0c ea 79 30 2a 0a   ............y0*.
+0020   35 e2 8a e6 80 18 18 e6 fe 4e 00 00 01 01 08 0a   5........N......
+0030   13 c0 82 d1 13 c0 82 d1 22 00 00 00 17 01 00 00   ........".......
+0040   00 00 01 00 00 00 04 01 08 00 08 00 06 00 01 00   ................
+0050   00 00 00 00 00 00 01 00 00 00 00 00 00 00         ..............
+`
+	res := ReadWiresharkDump(data)
+	require.NotNil(t, res)
+}
+
 // Mostly a sanity check.
 func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 	for i := 0; i < 100; i++ {

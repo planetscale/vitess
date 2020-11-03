@@ -596,8 +596,10 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 				continue
 			}
 		}
-
-		if (bitMap[i/8] & (1 << uint(i%8))) > 0 {
+		bitMapValue := int(bitMap[i/8])
+		position := 1 << uint(i%8)
+		isNull := position & bitMapValue
+		if isNull > 0 {
 			val, pos, ok = c.parseStmtArgs(nil, sqltypes.Null, pos)
 		} else {
 			val, pos, ok = c.parseStmtArgs(payload, querypb.Type(prepare.ParamsType[i]), pos)
