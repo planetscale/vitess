@@ -301,6 +301,36 @@ func TestComStmtExecuteAllDataTypes(t *testing.T) {
 	require.Equal(t, prepare.StatementID, stmtID)
 }
 
+func TestComStmtExecuteCharType(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	sql := "UPDATE testChar SET  __char = ? "
+	prepare := &PrepareData{
+		StatementID: 1,
+		PrepareStmt: sql,
+		ParamsCount: 1,
+		ParamsType:  []int32{int32(querypb.Type_CHAR)},
+		BindVars:    map[string]*querypb.BindVariable{},
+	}
+
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+
+	dat := `0000   17 01 00 00 00 00 01 00 00 00 00 01 fe 00 08 31   ...............1
+0010   32 33 34 35 36 37 38                              2345678
+`
+	data := ReadWiresharkDump(dat)
+
+	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	require.NoError(t, err)
+	require.Equal(t, prepare.StatementID, stmtID)
+}
+
 func TestComStmtClose(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
