@@ -564,6 +564,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 		}
 	}
 
+	types := make([]querypb.Type, prepare.ParamsCount)
 	newParamsBoundFlag, pos, ok := readByte(payload, pos)
 	if ok && newParamsBoundFlag == 0x01 {
 		var mysqlType, flags byte
@@ -584,11 +585,11 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 				return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "MySQLToType(%v,%v) failed: %v", mysqlType, flags, err)
 			}
 
-			prepare.ParamsType[i] = int32(valType)
+			types[i] = valType
 		}
 	}
 
-	for i := 0; i < len(prepare.ParamsType); i++ {
+	for i, typ := range types {
 		var val sqltypes.Value
 		parameterID := fmt.Sprintf("v%d", i+1)
 		if v, ok := prepare.BindVars[parameterID]; ok {
@@ -599,14 +600,17 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 		bitMapValue := int(bitMap[i/8])
 		position := 1 << uint(i%8)
 		isNull := position & bitMapValue
+		fmt.Printf("offset: %d pos: %d param: %s type: %d ", i, pos, parameterID, typ)
 		if isNull > 0 {
 			val, pos, ok = c.parseStmtArgs(nil, sqltypes.Null, pos)
 		} else {
-			val, pos, ok = c.parseStmtArgs(payload, querypb.Type(prepare.ParamsType[i]), pos)
+			val, pos, ok = c.parseStmtArgs(payload, typ, pos)
 		}
 		if !ok {
-			return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding parameter value failed: %v", prepare.ParamsType[i])
+			return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding parameter value failed: %v", typ)
 		}
+
+		fmt.Printf("value:%s\n", val.ToString())
 
 		prepare.BindVars[parameterID] = sqltypes.ValueBindVariable(val)
 	}
@@ -638,7 +642,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 		return sqltypes.NewInt64(int64(int32(val))), pos, ok
 	case sqltypes.Float32:
 		val, pos, ok := readUint32(data, pos)
-		return sqltypes.NewFloat64(float64(math.Float32frombits(uint32(val)))), pos, ok
+		return sqltypes.NewFloat64(float64(math.Float32frombits(val))), pos, ok
 	case sqltypes.Uint64:
 		val, pos, ok := readUint64(data, pos)
 		return sqltypes.NewUint64(val), pos, ok
@@ -661,8 +665,8 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 	}
 }
 
-func parseTime(data []byte, pos int) (sqltypes.Value, int, bool) {
-	size, pos, ok := readByte(data, pos)
+func parseTime(data []byte, in int) (sqltypes.Value, int, bool) {
+	size, pos, ok := readByte(data, in)
 	if !ok {
 		return sqltypes.NULL, 0, false
 	}
@@ -670,30 +674,30 @@ func parseTime(data []byte, pos int) (sqltypes.Value, int, bool) {
 	case 0x00:
 		return sqltypes.NewVarChar("00:00:00"), pos, ok
 	case 0x0c:
-		isNegative, pos, ok := readByte(data, pos)
+		isNegative, pos2, ok := readByte(data, pos)
 		if !ok {
 			return sqltypes.NULL, 0, false
 		}
-		days, pos, ok := readUint32(data, pos)
+		days, pos3, ok := readUint32(data, pos2)
 		if !ok {
 			return sqltypes.NULL, 0, false
 		}
-		hour, pos, ok := readByte(data, pos)
+		hour, pos4, ok := readByte(data, pos3)
 		if !ok {
 			return sqltypes.NULL, 0, false
 		}
 
 		hours := uint32(hour) + days*uint32(24)
 
-		minute, pos, ok := readByte(data, pos)
+		minute, pos5, ok := readByte(data, pos4)
 		if !ok {
 			return sqltypes.NULL, 0, false
 		}
-		second, pos, ok := readByte(data, pos)
+		second, pos6, ok := readByte(data, pos5)
 		if !ok {
 			return sqltypes.NULL, 0, false
 		}
-		microSecond, pos, ok := readUint32(data, pos)
+		microSecond, pos7, ok := readUint32(data, pos6)
 		if !ok {
 			return sqltypes.NULL, 0, false
 		}
@@ -707,7 +711,7 @@ func parseTime(data []byte, pos int) (sqltypes.Value, int, bool) {
 			strconv.Itoa(int(second)) + "." +
 			fmt.Sprintf("%06d", microSecond)
 
-		return sqltypes.NewVarChar(val), pos, ok
+		return sqltypes.NewVarChar(val), pos7, ok
 	case 0x08:
 		isNegative, pos, ok := readByte(data, pos)
 		if !ok {
@@ -1033,9 +1037,9 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	data, pos := c.startEphemeralPacketWithHeader(12)
 
 	pos = writeByte(data, pos, 0x00)
-	pos = writeUint32(data, pos, uint32(prepare.StatementID))
+	pos = writeUint32(data, pos, prepare.StatementID)
 	pos = writeUint16(data, pos, uint16(columnCount))
-	pos = writeUint16(data, pos, uint16(paramsCount))
+	pos = writeUint16(data, pos, paramsCount)
 	pos = writeByte(data, pos, 0x00)
 	writeUint16(data, pos, 0x0000)
 
@@ -1196,7 +1200,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 			return []byte{}, err
 		}
 		out = make([]byte, 8)
-		writeUint64(out, pos, uint64(val))
+		writeUint64(out, pos, val)
 	case sqltypes.Int64:
 		val, err := strconv.ParseInt(v.ToString(), 10, 64)
 		if err != nil {
@@ -1365,7 +1369,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 			if err != nil {
 				return []byte{}, err
 			}
-			pos = writeUint32(out, pos, uint32(days))
+			pos = writeUint32(out, pos, days)
 			pos = writeByte(out, pos, byte(hours))
 			pos = writeByte(out, pos, byte(minutes))
 			pos = writeByte(out, pos, byte(seconds))
@@ -1421,7 +1425,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 			if err != nil {
 				return []byte{}, err
 			}
-			pos = writeUint32(out, pos, uint32(days))
+			pos = writeUint32(out, pos, days)
 			pos = writeByte(out, pos, byte(hours))
 			pos = writeByte(out, pos, byte(minutes))
 			writeByte(out, pos, byte(seconds))

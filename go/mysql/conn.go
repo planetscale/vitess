@@ -173,11 +173,11 @@ type Conn struct {
 	// It can be allocated from bufPool or heap and should be recycled in the same manner.
 	currentEphemeralBuffer *[]byte
 
-	// StatementID is the prepared statement ID.
-	StatementID uint32
+	// NextStatementID keeps track of used statement ids
+	NextStatementID uint32
 
-	// PrepareData is the map to use a prepared statement.
-	PrepareData map[uint32]*PrepareData
+	// PreparedStatements is the map to use a prepared statement.
+	PreparedStatements map[uint32]*PrepareData
 }
 
 // PrepareData is a buffer used for store prepare statement meta data
@@ -185,7 +185,6 @@ type PrepareData struct {
 	StatementID uint32
 	PrepareStmt string
 	ParamsCount uint16
-	ParamsType  []int32
 	ColumnNames []string
 	BindVars    map[string]*querypb.BindVariable
 }
@@ -222,10 +221,10 @@ func newConn(conn net.Conn) *Conn {
 // size for reads.
 func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	c := &Conn{
-		conn:        conn,
-		listener:    listener,
-		closed:      sync2.NewAtomicBool(false),
-		PrepareData: make(map[uint32]*PrepareData),
+		conn:               conn,
+		listener:           listener,
+		closed:             sync2.NewAtomicBool(false),
+		PreparedStatements: make(map[uint32]*PrepareData),
 	}
 	if listener.connReadBufferSize > 0 {
 		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
@@ -874,7 +873,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		stmtID, ok := c.parseComStmtClose(data)
 		c.recycleReadPacket()
 		if ok {
-			delete(c.PrepareData, stmtID)
+			delete(c.PreparedStatements, stmtID)
 		}
 	case ComStmtReset:
 		return c.handleComStmtReset(data)
@@ -898,7 +897,7 @@ func (c *Conn) handleComResetConnection(handler Handler) {
 	c.recycleReadPacket()
 	handler.ComResetConnection(c)
 	// Reset prepared statements
-	c.PrepareData = make(map[uint32]*PrepareData)
+	c.PreparedStatements = make(map[uint32]*PrepareData)
 	err := c.writeOKPacket(&PacketOK{})
 	if err != nil {
 		c.writeErrorPacketFromError(err)
@@ -915,7 +914,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 		}
 	}
 
-	prepare, ok := c.PrepareData[stmtID]
+	prepare, ok := c.PreparedStatements[stmtID]
 	if !ok {
 		log.Error("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
 		if !c.writeErrorAndLog(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data) {
@@ -944,7 +943,7 @@ func (c *Conn) handleComStmtSendLongData(data []byte) bool {
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
-	prepare, ok := c.PrepareData[stmtID]
+	prepare, ok := c.PreparedStatements[stmtID]
 	if !ok {
 		err := fmt.Errorf("got wrong statement id from client %v, statement ID(%v) is not found from record", c.ConnectionID, stmtID)
 		return c.writeErrorPacketFromErrorAndLog(err)
@@ -978,13 +977,13 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		}
 	}()
 	queryStart := time.Now()
-	stmtID, _, err := c.parseComStmtExecute(c.PrepareData, data)
+	stmtID, _, err := c.parseComStmtExecute(c.PreparedStatements, data)
 	c.recycleReadPacket()
 
 	if stmtID != uint32(0) {
 		defer func() {
 			// Allocate a new bindvar map every time since VTGate.Execute() mutates it.
-			prepare := c.PrepareData[stmtID]
+			prepare := c.PreparedStatements[stmtID]
 			prepare.BindVars = make(map[string]*querypb.BindVariable, prepare.ParamsCount)
 		}()
 	}
@@ -996,7 +995,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	fieldSent := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
-	prepare := c.PrepareData[stmtID]
+	prepare := c.PreparedStatements[stmtID]
 	err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 		if sendFinished {
 			// Failsafe: Unreachable if server is well-behaved.
@@ -1063,10 +1062,8 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 	query := c.parseComPrepare(data)
 	c.recycleReadPacket()
 
-	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		var err error
-		queries, err = sqlparser.SplitStatementToPieces(query)
+		queries, err := sqlparser.SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1075,16 +1072,15 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 			log.Errorf("Conn %v: can not prepare multiple statements", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
-	} else {
-		queries = []string{query}
+		query = queries[0]
 	}
 
-	// Popoulate PrepareData
-	c.StatementID++
+	// Popoulate PreparedStatements
 	prepare := &PrepareData{
-		StatementID: c.StatementID,
-		PrepareStmt: queries[0],
+		StatementID: c.NextStatementID,
+		PrepareStmt: query,
 	}
+	c.NextStatementID++
 
 	statement, err := sqlparser.ParseStrictDDL(query)
 	if err != nil {
@@ -1107,7 +1103,6 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 
 	if paramsCount > 0 {
 		prepare.ParamsCount = paramsCount
-		prepare.ParamsType = make([]int32, paramsCount)
 		prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
 	}
 
@@ -1117,15 +1112,15 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 		bindVars[parameterID] = &querypb.BindVariable{}
 	}
 
-	c.PrepareData[c.StatementID] = prepare
+	c.PreparedStatements[prepare.StatementID] = prepare
 
-	fld, err := handler.ComPrepare(c, queries[0], bindVars)
+	fld, err := handler.ComPrepare(c, query, bindVars)
 
 	if err != nil {
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
-	if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
+	if err := c.writePrepare(fld, c.PreparedStatements[prepare.StatementID]); err != nil {
 		log.Error("Error writing prepare data to client %v: %v", c.ConnectionID, err)
 		return false
 	}

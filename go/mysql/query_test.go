@@ -32,7 +32,7 @@ import (
 )
 
 // Utility function to write sql query as packets to test parseComPrepare
-func MockQueryPackets(t *testing.T, query string) []byte {
+func MockQueryPackets(query string) []byte {
 	data := make([]byte, len(query)+1+packetHeaderSize)
 	// Not sure if it makes a difference
 	pos := packetHeaderSize
@@ -41,7 +41,7 @@ func MockQueryPackets(t *testing.T, query string) []byte {
 	return data
 }
 
-func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
+func MockPrepareData() (*PrepareData, *sqltypes.Result) {
 	sql := "select * from test_table where id = ?"
 
 	result := &sqltypes.Result{
@@ -63,7 +63,6 @@ func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
 		StatementID: 18,
 		PrepareStmt: sql,
 		ParamsCount: 1,
-		ParamsType:  []int32{263},
 		ColumnNames: []string{"id"},
 		BindVars: map[string]*querypb.BindVariable{
 			"v1": sqltypes.Int32BindVariable(10),
@@ -129,7 +128,7 @@ func TestComStmtPrepare(t *testing.T) {
 	}()
 
 	sql := "select * from test_table where id = ?"
-	mockData := MockQueryPackets(t, sql)
+	mockData := MockQueryPackets(sql)
 
 	if err := cConn.writePacket(mockData); err != nil {
 		t.Fatalf("writePacket failed: %v", err)
@@ -145,9 +144,9 @@ func TestComStmtPrepare(t *testing.T) {
 		t.Fatalf("Received incorrect query, want: %v, got: %v", sql, parsedQuery)
 	}
 
-	prepare, result := MockPrepareData(t)
-	sConn.PrepareData = make(map[uint32]*PrepareData)
-	sConn.PrepareData[prepare.StatementID] = prepare
+	prepare, result := MockPrepareData()
+	sConn.PreparedStatements = make(map[uint32]*PrepareData)
+	sConn.PreparedStatements[prepare.StatementID] = prepare
 
 	// write the response to the client
 	if err := sConn.writePrepare(result.Fields, prepare); err != nil {
@@ -171,9 +170,9 @@ func TestComStmtSendLongData(t *testing.T) {
 		cConn.Close()
 	}()
 
-	prepare, result := MockPrepareData(t)
-	cConn.PrepareData = make(map[uint32]*PrepareData)
-	cConn.PrepareData[prepare.StatementID] = prepare
+	prepare, result := MockPrepareData()
+	cConn.PreparedStatements = make(map[uint32]*PrepareData)
+	cConn.PreparedStatements[prepare.StatementID] = prepare
 	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
@@ -208,14 +207,14 @@ func TestComStmtExecute(t *testing.T) {
 		cConn.Close()
 	}()
 
-	prepare, _ := MockPrepareData(t)
-	cConn.PrepareData = make(map[uint32]*PrepareData)
-	cConn.PrepareData[prepare.StatementID] = prepare
+	prepare, _ := MockPrepareData()
+	cConn.PreparedStatements = make(map[uint32]*PrepareData)
+	cConn.PreparedStatements[prepare.StatementID] = prepare
 
 	// This is simulated packets for `select * from test_table where id = ?`
 	data := []byte{23, 18, 0, 0, 0, 128, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 
-	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	stmtID, _, err := sConn.parseComStmtExecute(cConn.PreparedStatements, data)
 	require.NoError(t, err)
 	require.Equal(t, prepare.StatementID, stmtID)
 }
@@ -234,13 +233,12 @@ func TestComStmtExecuteWithNil(t *testing.T) {
 		StatementID: 1,
 		PrepareStmt: sql,
 		ParamsCount: 3,
-		ParamsType:  []int32{int32(querypb.Type_INT64), int32(querypb.Type_INT64), int32(querypb.Type_CHAR)},
 		ColumnNames: []string{"id", "id2", "id3"},
 		BindVars:    map[string]*querypb.BindVariable{},
 	}
 
-	cConn.PrepareData = make(map[uint32]*PrepareData)
-	cConn.PrepareData[prepare.StatementID] = prepare
+	cConn.PreparedStatements = make(map[uint32]*PrepareData)
+	cConn.PreparedStatements[prepare.StatementID] = prepare
 
 	dat := `0000   17 01 00 00 00 00 01 00 00 00 04 01 08 00 08 00   ................
 0010   06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00   ................
@@ -248,7 +246,7 @@ func TestComStmtExecuteWithNil(t *testing.T) {
 `
 	data := ReadWiresharkDump(dat)
 
-	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	stmtID, _, err := sConn.parseComStmtExecute(cConn.PreparedStatements, data)
 	require.NoError(t, err)
 	require.Equal(t, prepare.StatementID, stmtID)
 }
@@ -267,14 +265,14 @@ func TestComStmtExecuteAllDataTypes(t *testing.T) {
 		StatementID: 1,
 		PrepareStmt: sql,
 		ParamsCount: 29,
-		ParamsType:  []int32{int32(querypb.Type_BIT), int32(querypb.Type_INT8), int32(querypb.Type_UINT8), int32(querypb.Type_INT16), int32(querypb.Type_UINT16), int32(querypb.Type_INT24), int32(querypb.Type_UINT24), int32(querypb.Type_INT32), int32(querypb.Type_UINT32), int32(querypb.Type_INT64), int32(querypb.Type_UINT64), int32(querypb.Type_DECIMAL), int32(querypb.Type_FLOAT32), int32(querypb.Type_FLOAT64), int32(querypb.Type_DATE), int32(querypb.Type_DATETIME), int32(querypb.Type_TIMESTAMP), int32(querypb.Type_TIME), int32(querypb.Type_YEAR), int32(querypb.Type_CHAR), int32(querypb.Type_VARCHAR), int32(querypb.Type_BINARY), int32(querypb.Type_VARBINARY), int32(querypb.Type_BLOB), int32(querypb.Type_TEXT), int32(querypb.Type_BLOB), int32(querypb.Type_TEXT), int32(querypb.Type_ENUM), int32(querypb.Type_SET)},
 		BindVars:    map[string]*querypb.BindVariable{},
 	}
 
-	cConn.PrepareData = make(map[uint32]*PrepareData)
-	cConn.PrepareData[prepare.StatementID] = prepare
+	cConn.PreparedStatements = make(map[uint32]*PrepareData)
+	cConn.PreparedStatements[prepare.StatementID] = prepare
 
-	dat := `0000   17 01 00 00 00 00 01 00 00 00 00 00 00 00 01 10   ................
+	dat := `
+0000   17 01 00 00 00 00 01 00 00 00 00 00 00 00 01 10   ................
 0010   00 01 00 01 80 02 00 02 80 03 00 03 80 03 00 03   ................
 0020   80 08 00 08 80 00 00 04 00 05 00 0a 00 0c 00 07   ................
 0030   00 0b 00 0d 80 fe 00 fe 00 fc 00 fc 00 fc 00 fe   ................
@@ -296,7 +294,7 @@ func TestComStmtExecuteAllDataTypes(t *testing.T) {
 `
 	data := ReadWiresharkDump(dat)
 
-	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	stmtID, _, err := sConn.parseComStmtExecute(cConn.PreparedStatements, data)
 	require.NoError(t, err)
 	require.Equal(t, prepare.StatementID, stmtID)
 }
@@ -314,19 +312,19 @@ func TestComStmtExecuteCharType(t *testing.T) {
 		StatementID: 1,
 		PrepareStmt: sql,
 		ParamsCount: 1,
-		ParamsType:  []int32{int32(querypb.Type_CHAR)},
 		BindVars:    map[string]*querypb.BindVariable{},
 	}
 
-	cConn.PrepareData = make(map[uint32]*PrepareData)
-	cConn.PrepareData[prepare.StatementID] = prepare
+	cConn.PreparedStatements = make(map[uint32]*PrepareData)
+	cConn.PreparedStatements[prepare.StatementID] = prepare
 
-	dat := `0000   17 01 00 00 00 00 01 00 00 00 00 01 fe 00 08 31   ...............1
+	dat := `
+0000   17 01 00 00 00 00 01 00 00 00 00 01 fe 00 08 31   ...............1
 0010   32 33 34 35 36 37 38                              2345678
 `
 	data := ReadWiresharkDump(dat)
 
-	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	stmtID, _, err := sConn.parseComStmtExecute(cConn.PreparedStatements, data)
 	require.NoError(t, err)
 	require.Equal(t, prepare.StatementID, stmtID)
 }
@@ -339,9 +337,9 @@ func TestComStmtClose(t *testing.T) {
 		cConn.Close()
 	}()
 
-	prepare, result := MockPrepareData(t)
-	cConn.PrepareData = make(map[uint32]*PrepareData)
-	cConn.PrepareData[prepare.StatementID] = prepare
+	prepare, result := MockPrepareData()
+	cConn.PreparedStatements = make(map[uint32]*PrepareData)
+	cConn.PreparedStatements[prepare.StatementID] = prepare
 	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
