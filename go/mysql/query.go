@@ -649,195 +649,203 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 		val, pos, ok := readUint64(data, pos)
 		return sqltypes.NewFloat64(math.Float64frombits(val)), pos, ok
 	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Datetime:
-		size, pos, ok := readByte(data, pos)
-		if !ok {
-			return sqltypes.NULL, 0, false
-		}
-		switch size {
-		case 0x00:
-			return sqltypes.NewVarChar(" "), pos, ok
-		case 0x0b:
-			year, pos, ok := readUint16(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			month, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			day, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			hour, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			minute, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			second, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			microSecond, pos, ok := readUint32(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			val := strconv.Itoa(int(year)) + "-" +
-				strconv.Itoa(int(month)) + "-" +
-				strconv.Itoa(int(day)) + " " +
-				strconv.Itoa(int(hour)) + ":" +
-				strconv.Itoa(int(minute)) + ":" +
-				strconv.Itoa(int(second)) + "." +
-				fmt.Sprintf("%06d", microSecond)
-
-			return sqltypes.NewVarChar(val), pos, ok
-		case 0x07:
-			year, pos, ok := readUint16(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			month, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			day, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			hour, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			minute, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			second, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			val := strconv.Itoa(int(year)) + "-" +
-				strconv.Itoa(int(month)) + "-" +
-				strconv.Itoa(int(day)) + " " +
-				strconv.Itoa(int(hour)) + ":" +
-				strconv.Itoa(int(minute)) + ":" +
-				strconv.Itoa(int(second))
-
-			return sqltypes.NewVarChar(val), pos, ok
-		case 0x04:
-			year, pos, ok := readUint16(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			month, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			day, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			val := strconv.Itoa(int(year)) + "-" +
-				strconv.Itoa(int(month)) + "-" +
-				strconv.Itoa(int(day))
-
-			return sqltypes.NewVarChar(val), pos, ok
-		default:
-			return sqltypes.NULL, 0, false
-		}
+		return parseDatetime(data, pos)
 	case sqltypes.Time:
-		size, pos, ok := readByte(data, pos)
-		if !ok {
-			return sqltypes.NULL, 0, false
-		}
-		switch size {
-		case 0x00:
-			return sqltypes.NewVarChar("00:00:00"), pos, ok
-		case 0x0c:
-			isNegative, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			days, pos, ok := readUint32(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			hour, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-
-			hours := uint32(hour) + days*uint32(24)
-
-			minute, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			second, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			microSecond, pos, ok := readUint32(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-
-			val := ""
-			if isNegative == 0x01 {
-				val += "-"
-			}
-			val += strconv.Itoa(int(hours)) + ":" +
-				strconv.Itoa(int(minute)) + ":" +
-				strconv.Itoa(int(second)) + "." +
-				fmt.Sprintf("%06d", microSecond)
-
-			return sqltypes.NewVarChar(val), pos, ok
-		case 0x08:
-			isNegative, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			days, pos, ok := readUint32(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			hour, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-
-			hours := uint32(hour) + days*uint32(24)
-
-			minute, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-			second, pos, ok := readByte(data, pos)
-			if !ok {
-				return sqltypes.NULL, 0, false
-			}
-
-			val := ""
-			if isNegative == 0x01 {
-				val += "-"
-			}
-			val += strconv.Itoa(int(hours)) + ":" +
-				strconv.Itoa(int(minute)) + ":" +
-				strconv.Itoa(int(second))
-
-			return sqltypes.NewVarChar(val), pos, ok
-		default:
-			return sqltypes.NULL, 0, false
-		}
+		return parseTime(data, pos)
 	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar, sqltypes.VarBinary, sqltypes.Char,
 		sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON:
 		val, pos, ok := readLenEncStringAsBytesCopy(data, pos)
 		return sqltypes.MakeTrusted(sqltypes.VarBinary, val), pos, ok
 	default:
 		return sqltypes.NULL, pos, false
+	}
+}
+
+func parseTime(data []byte, pos int) (sqltypes.Value, int, bool) {
+	size, pos, ok := readByte(data, pos)
+	if !ok {
+		return sqltypes.NULL, 0, false
+	}
+	switch size {
+	case 0x00:
+		return sqltypes.NewVarChar("00:00:00"), pos, ok
+	case 0x0c:
+		isNegative, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		days, pos, ok := readUint32(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		hour, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+
+		hours := uint32(hour) + days*uint32(24)
+
+		minute, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		second, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		microSecond, pos, ok := readUint32(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+
+		val := ""
+		if isNegative == 0x01 {
+			val += "-"
+		}
+		val += strconv.Itoa(int(hours)) + ":" +
+			strconv.Itoa(int(minute)) + ":" +
+			strconv.Itoa(int(second)) + "." +
+			fmt.Sprintf("%06d", microSecond)
+
+		return sqltypes.NewVarChar(val), pos, ok
+	case 0x08:
+		isNegative, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		days, pos, ok := readUint32(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		hour, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+
+		hours := uint32(hour) + days*uint32(24)
+
+		minute, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		second, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+
+		val := ""
+		if isNegative == 0x01 {
+			val += "-"
+		}
+		val += strconv.Itoa(int(hours)) + ":" +
+			strconv.Itoa(int(minute)) + ":" +
+			strconv.Itoa(int(second))
+
+		return sqltypes.NewVarChar(val), pos, ok
+	default:
+		return sqltypes.NULL, 0, false
+	}
+}
+
+func parseDatetime(data []byte, pos int) (sqltypes.Value, int, bool) {
+	size, pos, ok := readByte(data, pos)
+	if !ok {
+		return sqltypes.NULL, 0, false
+	}
+	switch size {
+	case 0x00:
+		return sqltypes.NewVarChar(" "), pos, ok
+	case 0x0b:
+		year, pos, ok := readUint16(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		month, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		day, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		hour, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		minute, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		second, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		microSecond, pos, ok := readUint32(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		val := strconv.Itoa(int(year)) + "-" +
+			strconv.Itoa(int(month)) + "-" +
+			strconv.Itoa(int(day)) + " " +
+			strconv.Itoa(int(hour)) + ":" +
+			strconv.Itoa(int(minute)) + ":" +
+			strconv.Itoa(int(second)) + "." +
+			fmt.Sprintf("%06d", microSecond)
+
+		return sqltypes.NewVarChar(val), pos, ok
+	case 0x07:
+		year, pos, ok := readUint16(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		month, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		day, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		hour, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		minute, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		second, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		val := strconv.Itoa(int(year)) + "-" +
+			strconv.Itoa(int(month)) + "-" +
+			strconv.Itoa(int(day)) + " " +
+			strconv.Itoa(int(hour)) + ":" +
+			strconv.Itoa(int(minute)) + ":" +
+			strconv.Itoa(int(second))
+
+		return sqltypes.NewVarChar(val), pos, ok
+	case 0x04:
+		year, pos, ok := readUint16(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		month, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		day, pos, ok := readByte(data, pos)
+		if !ok {
+			return sqltypes.NULL, 0, false
+		}
+		val := strconv.Itoa(int(year)) + "-" +
+			strconv.Itoa(int(month)) + "-" +
+			strconv.Itoa(int(day))
+
+		return sqltypes.NewVarChar(val), pos, ok
+	default:
+		return sqltypes.NULL, 0, false
 	}
 }
 
