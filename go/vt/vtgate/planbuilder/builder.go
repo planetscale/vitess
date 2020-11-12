@@ -277,6 +277,21 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	return BuildFromStmt(query, result.AST, vschema, result.BindVarNeeds)
 }
 
+// Build builds a plan for a query based on the specified vschema.
+// This method is only used from tests
+func Build2(query string, vschema ContextVSchema) (*engine.Plan, error) {
+	stmt, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
+	result, err := sqlparser.RewriteAST(stmt)
+	if err != nil {
+		return nil, err
+	}
+
+	return BuildFromStmt2(query, result.AST, vschema, result.BindVarNeeds)
+}
+
 // ErrPlanNotSupported is an error for plan building not supported
 var ErrPlanNotSupported = errors.New("plan building not supported")
 

@@ -356,13 +356,16 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 		for tcase := range iterateExecFile(filename) {
 			t.Run(tcase.comments, func(t *testing.T) {
 				plan, err := Build(tcase.input, vschema)
-
 				out := getPlanOrErrorOutput(err, plan)
 
 				if out != tcase.output {
 					fail = true
 					t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
 				}
+
+				plan2, err := Build2(tcase.input, vschema)
+				out2 := getPlanOrErrorOutput(err, plan2)
+				require.Equal(t, out, out2)
 
 				if err != nil {
 					out = `"` + out + `"`
