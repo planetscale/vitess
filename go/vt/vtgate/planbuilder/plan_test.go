@@ -365,7 +365,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 
 				plan2, err := Build2(tcase.input, vschema)
 				out2 := getPlanOrErrorOutput(err, plan2)
-				require.Equal(t, out, out2)
+				require.Equal(t, out, out2, "new planner producing different result")
 
 				if err != nil {
 					out = `"` + out + `"`

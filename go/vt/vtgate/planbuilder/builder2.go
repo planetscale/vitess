@@ -43,6 +43,8 @@ type (
 		// TargetTabletType specifies an explicit target destination tablet type
 		// this is only used in conjunction with TargetDestination
 		TargetTabletType topodatapb.TabletType
+
+		TableName string
 	}
 )
 
@@ -86,13 +88,16 @@ func BuildFromStmt2(query string, stmt sqlparser.Statement, vschema ContextVSche
 func transformToEnginePrimitive(pctx *planContext, logical LogicalPlan) (engine.Primitive, error) {
 	switch plan := logical.(type) {
 	case *routePlan:
+		buf := sqlparser.NewTrackedBuffer(nil)
+		sqlparser.FormatImpossibleQuery(buf, plan.Select)
 		prim := &engine.Route{
 			Opcode:            plan.Opcode,
 			Keyspace:          plan.Keyspace,
 			TargetDestination: plan.TargetDestination,
 			TargetTabletType:  plan.TargetTabletType,
-			FieldQuery:        "sqlparser.FormatImpossibleQuery()",
+			FieldQuery:        buf.String(),
 			Query:             sqlparser.String(plan.Select),
+			TableName:         plan.TableName,
 		}
 		return prim, nil
 	}
@@ -164,6 +169,7 @@ func buildTablePlan(pctx *planContext, tableExpr *sqlparser.AliasedTableExpr, ta
 		Keyspace:          keyspace,
 		TargetTabletType:  destTabletTyp,
 		TargetDestination: destTarget,
+		TableName:         sqlparser.String(tableName),
 	}
 	return &plan, nil
 }
