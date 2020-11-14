@@ -16,6 +16,8 @@ limitations under the License.
 
 package mysql
 
+import "strings"
+
 const (
 	// MaxPacketSize is the maximum payload length of a packet
 	// the server supports.
@@ -568,9 +570,39 @@ func IsNum(typ uint8) bool {
 
 // IsConnErr returns true if the error is a connection error.
 func IsConnErr(err error) bool {
+	if IsTooManyConnectionsErr(err) {
+		return false
+	}
 	if sqlErr, ok := err.(*SQLError); ok {
 		num := sqlErr.Number()
 		return (num >= CRUnknownError && num <= CRNamedPipeStateError) || num == ERQueryInterrupted
+	}
+	return false
+}
+
+// IsTooManyConnectionsErr returns true if the error is due to too many connections.
+func IsTooManyConnectionsErr(err error) bool {
+	if sqlErr, ok := err.(*SQLError); ok {
+		if sqlErr.Number() == CRServerHandshakeErr && strings.Contains(sqlErr.Message, "Too many connections") {
+			return true
+		}
+	}
+	return false
+}
+
+// IsSchemaApplyError returns true when given error is a MySQL error applying schema change
+func IsSchemaApplyError(err error) bool {
+	merr, isSQLErr := err.(*SQLError)
+	if !isSQLErr {
+		return false
+	}
+	switch merr.Num {
+	case
+		ERDupKeyName,
+		ERCantDropFieldOrKey,
+		ERTableExists,
+		ERDupFieldName:
+		return true
 	}
 	return false
 }
