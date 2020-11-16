@@ -21,7 +21,7 @@ db migrations, etc.
 ## Impacted Areas in Vitess
 List general components of the application that this PR will affect:
 
-* Query Serving
-* VReplication
-* Cluster Management
-* Build 
+- [ ]  Query Serving
+- [ ]  VReplication
+- [ ]  Cluster Management
+- [ ]  Build 
