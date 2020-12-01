@@ -36,15 +36,30 @@ func EmitReplacementMethods(vd *VisitorPlan) string {
 	return sb.String()
 }
 
-// EmitTypeSwitches is an anti-parser (a.k.a prettifier) - it takes a struct that is much like an AST,
+// EmitRewriteTypeSwitches is an anti-parser (a.k.a prettifier) - it takes a struct that is much like an AST,
 // and produces a string from it. This method will produce the switch cases needed to cover the Vitess AST.
-func EmitTypeSwitches(vd *VisitorPlan) string {
+func EmitRewriteTypeSwitches(vd *VisitorPlan) string {
 	var sb builder
 	for _, s := range vd.Switches {
 		sb.newLine()
 		sb.appendF("	case %s:", s.Type.toTypString())
 		for _, k := range s.Fields {
-			sb.appendF(k.asSwitchCase())
+			sb.appendF(k.asRewriteSwitchCase())
+		}
+	}
+
+	return sb.String()
+}
+
+// EmitChildrenTypeSwitches is a function that will generate type switch used to return the list of children
+// from SQL nodes.
+func EmitChildrenTypeSwitches(vd *VisitorPlan) string {
+	var sb builder
+	for _, s := range vd.Switches {
+		sb.newLine()
+		sb.appendF("	case %s:", s.Type.toTypString())
+		for _, k := range s.Fields {
+			sb.appendF(k.asChildrenSwitchCase())
 		}
 	}
 

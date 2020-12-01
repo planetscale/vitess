@@ -1165,3 +1165,25 @@ const (
 	// DoubleAt represnts @@
 	DoubleAt
 )
+
+//func GetChildren(in SQLNode) []SQLNode {
+//	var children []SQLNode
+//	switch node := in.(type) {
+//	case *Select:
+//		children = append(children, node.Comments)
+//		children = append(children, node.SelectExprs)
+//		children = append(children, node.From)
+//		children = append(children, node.OrderBy)
+//		children = append(children, node.GroupBy)
+//		children = append(children, node.Having)
+//		children = append(children, node.Into)
+//	case *Union:
+//		return node.UnionSelects
+//		for _, unionSelect := range node.UnionSelects {
+//			children = append(children, unionSelect)
+//		}
+//	case *SelectExprs:
+//
+//	}
+//	return children
+//}

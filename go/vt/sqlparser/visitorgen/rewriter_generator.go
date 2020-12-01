@@ -39,14 +39,17 @@ func GenerateRewriter(astFile, outfile string, compareOnly bool) error {
 	vd := ToVisitorPlan(vp)
 
 	replacementMethods := EmitReplacementMethods(vd)
-	typeSwitch := EmitTypeSwitches(vd)
+	rewriteTypeSwitch := EmitRewriteTypeSwitches(vd)
+	childrenTypeSwitch := EmitChildrenTypeSwitches(vd)
 
 	b := &bytes.Buffer{}
 	fmt.Fprint(b, fileHeader)
 	fmt.Fprintln(b)
 	fmt.Fprintln(b, replacementMethods)
 	fmt.Fprint(b, applyHeader)
-	fmt.Fprintln(b, typeSwitch)
+	fmt.Fprintln(b, rewriteTypeSwitch)
+	fmt.Fprint(b, intermediate)
+	fmt.Fprintln(b, childrenTypeSwitch)
 	fmt.Fprintln(b, fileFooter)
 
 	if compareOnly {
@@ -107,10 +110,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	// walk children
 	// (the order of the cases is alphabetical)
 	switch n := node.(type) {
-	case nil:
 	`
 
-const fileFooter = `
+const intermediate = `
 	default:
 		panic("unknown ast type " + reflect.TypeOf(node).String())
 	}
@@ -120,6 +122,27 @@ const fileFooter = `
 	}
 
 	a.cursor = saved
+}
+
+func GetChildren(node SQLNode) []SQLNode {
+	if node == nil || isNilValue(node) {
+		return nil
+	}
+	var children []SQLNode
+	add := func(sqlNode SQLNode) {
+		if sqlNode != nil && !isNilValue(sqlNode) {
+			children = append(children, sqlNode)
+		}
+	}
+	switch n := node.(type) {
+	`
+
+const fileFooter = `
+	default:
+		panic("unknown ast type " + reflect.TypeOf(node).String())
+	}
+
+	return children
 }
 
 func isNilValue(i interface{}) bool {

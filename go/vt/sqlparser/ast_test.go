@@ -805,3 +805,12 @@ func TestShowTableStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tree)
 }
+
+func TestChildrenAst(t *testing.T) {
+	query := "select 42 union select 43 union select 44 order by 1"
+	tree, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, tree)
+	children := GetChildren(tree)
+	require.Equal(t, 4, len(children))
+}

@@ -27,7 +27,8 @@ type (
 	VisitorItem interface {
 		toFieldItemString() string
 		typeName() string
-		asSwitchCase() string
+		asRewriteSwitchCase() string
+		asChildrenSwitchCase() string
 		asReplMethod() string
 		getFieldName() string
 	}
@@ -130,8 +131,12 @@ func (s *SingleFieldItem) toFieldItemString() string {
 	return fmt.Sprintf("single item: %v of type: %v", s.FieldName, s.FieldType.toTypString())
 }
 
-func (s *SingleFieldItem) asSwitchCase() string {
+func (s *SingleFieldItem) asRewriteSwitchCase() string {
 	return fmt.Sprintf(`		a.apply(node, n.%s, %s)`, s.FieldName, s.typeName())
+}
+
+func (s *SingleFieldItem) asChildrenSwitchCase() string {
+	return fmt.Sprintf(`		add(n.%s)`, s.FieldName)
 }
 
 func (s *SingleFieldItem) asReplMethod() string {
@@ -200,7 +205,7 @@ func (afi *ArrayFieldItem) getFieldName() string {
 	return afi.FieldName
 }
 
-func (ai *ArrayItem) asSwitchCase() string {
+func (ai *ArrayItem) asRewriteSwitchCase() string {
 	return fmt.Sprintf(`		replacer := %s(0)
 		replacerRef := &replacer
 		for _, item := range n {
@@ -209,13 +214,25 @@ func (ai *ArrayItem) asSwitchCase() string {
 		}`, ai.typeName())
 }
 
-func (afi *ArrayFieldItem) asSwitchCase() string {
+func (ai *ArrayItem) asChildrenSwitchCase() string {
+	return `		for _, item := range n {
+			add(item)
+		}`
+}
+
+func (afi *ArrayFieldItem) asRewriteSwitchCase() string {
 	return fmt.Sprintf(`		replacer%s := %s(0)
 		replacer%sB := &replacer%s
 		for _, item := range n.%s {
 			a.apply(node, item, replacer%sB.replace)
 			replacer%sB.inc()
 		}`, afi.FieldName, afi.typeName(), afi.FieldName, afi.FieldName, afi.FieldName, afi.FieldName, afi.FieldName)
+}
+
+func (afi *ArrayFieldItem) asChildrenSwitchCase() string {
+	return fmt.Sprintf(`		for _, item := range n.%s {
+			add(item)
+		}`, afi.FieldName)
 }
 
 func (ai *ArrayItem) typeName() string {

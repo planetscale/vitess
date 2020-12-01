@@ -933,7 +933,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	// walk children
 	// (the order of the cases is alphabetical)
 	switch n := node.(type) {
-	case nil:
 	case AccessMode:
 
 	case *AliasedExpr:
@@ -1470,6 +1469,482 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	}
 
 	a.cursor = saved
+}
+
+func GetChildren(node SQLNode) []SQLNode {
+	if node == nil || isNilValue(node) {
+		return nil
+	}
+	var children []SQLNode
+	add := func(sqlNode SQLNode) {
+		if sqlNode != nil && !isNilValue(sqlNode) {
+			children = append(children, sqlNode)
+		}
+	}
+	switch n := node.(type) {
+	case AccessMode:
+
+	case *AliasedExpr:
+		add(n.As)
+		add(n.Expr)
+
+	case *AliasedTableExpr:
+		add(n.As)
+		add(n.Expr)
+		add(n.Hints)
+		add(n.Partitions)
+
+	case *AndExpr:
+		add(n.Left)
+		add(n.Right)
+
+	case Argument:
+
+	case *AutoIncSpec:
+		add(n.Column)
+		add(n.Sequence)
+
+	case *Begin:
+
+	case *BinaryExpr:
+		add(n.Left)
+		add(n.Right)
+
+	case BoolVal:
+
+	case *CaseExpr:
+		add(n.Else)
+		add(n.Expr)
+		for _, item := range n.Whens {
+			add(item)
+		}
+
+	case *CheckConstraintDefinition:
+		add(n.Expr)
+
+	case ColIdent:
+
+	case *ColName:
+		add(n.Name)
+		add(n.Qualifier)
+
+	case *CollateExpr:
+		add(n.Expr)
+
+	case *ColumnDefinition:
+		add(n.Name)
+
+	case *ColumnType:
+		add(n.Comment)
+		add(n.Default)
+		add(n.Length)
+		add(n.OnUpdate)
+		add(n.Scale)
+
+	case Columns:
+		for _, item := range n {
+			add(item)
+		}
+
+	case Comments:
+
+	case *Commit:
+
+	case *ComparisonExpr:
+		add(n.Escape)
+		add(n.Left)
+		add(n.Right)
+
+	case *ConstraintDefinition:
+		add(n.Details)
+
+	case *ConvertExpr:
+		add(n.Expr)
+		add(n.Type)
+
+	case *ConvertType:
+		add(n.Length)
+		add(n.Scale)
+
+	case *ConvertUsingExpr:
+		add(n.Expr)
+
+	case *CreateDatabase:
+
+	case *CreateIndex:
+		add(n.Name)
+		add(n.Table)
+
+	case *CurTimeFuncExpr:
+		add(n.Fsp)
+		add(n.Name)
+
+	case *DBDDL:
+
+	case *DDL:
+		add(n.AutoIncSpec)
+		add(n.FromTables)
+		add(n.OptLike)
+		add(n.PartitionSpec)
+		add(n.Table)
+		add(n.TableSpec)
+		add(n.ToTables)
+		for _, item := range n.VindexCols {
+			add(item)
+		}
+		add(n.VindexSpec)
+
+	case *Default:
+
+	case *Delete:
+		add(n.Comments)
+		add(n.Limit)
+		add(n.OrderBy)
+		add(n.Partitions)
+		add(n.TableExprs)
+		add(n.Targets)
+		add(n.Where)
+
+	case *DerivedTable:
+		add(n.Select)
+
+	case *ExistsExpr:
+		add(n.Subquery)
+
+	case *Explain:
+		add(n.Statement)
+
+	case Exprs:
+		for _, item := range n {
+			add(item)
+		}
+
+	case *ForeignKeyDefinition:
+		add(n.OnDelete)
+		add(n.OnUpdate)
+		add(n.ReferencedColumns)
+		add(n.ReferencedTable)
+		add(n.Source)
+
+	case *FuncExpr:
+		add(n.Exprs)
+		add(n.Name)
+		add(n.Qualifier)
+
+	case GroupBy:
+		for _, item := range n {
+			add(item)
+		}
+
+	case *GroupConcatExpr:
+		add(n.Exprs)
+		add(n.Limit)
+		add(n.OrderBy)
+
+	case *IndexDefinition:
+		add(n.Info)
+
+	case *IndexHints:
+		for _, item := range n.Indexes {
+			add(item)
+		}
+
+	case *IndexInfo:
+		add(n.Name)
+
+	case *Insert:
+		add(n.Columns)
+		add(n.Comments)
+		add(n.OnDup)
+		add(n.Partitions)
+		add(n.Rows)
+		add(n.Table)
+
+	case *IntervalExpr:
+		add(n.Expr)
+
+	case *IsExpr:
+		add(n.Expr)
+
+	case IsolationLevel:
+
+	case JoinCondition:
+		add(n.On)
+		add(n.Using)
+
+	case *JoinTableExpr:
+		add(n.Condition)
+		add(n.LeftExpr)
+		add(n.RightExpr)
+
+	case *Limit:
+		add(n.Offset)
+		add(n.Rowcount)
+
+	case ListArg:
+
+	case *Literal:
+
+	case *Load:
+
+	case *MatchExpr:
+		add(n.Columns)
+		add(n.Expr)
+
+	case Nextval:
+		add(n.Expr)
+
+	case *NotExpr:
+		add(n.Expr)
+
+	case *NullVal:
+
+	case OnDup:
+		for _, item := range n {
+			add(item)
+		}
+
+	case *OptLike:
+		add(n.LikeTable)
+
+	case *OrExpr:
+		add(n.Left)
+		add(n.Right)
+
+	case *Order:
+		add(n.Expr)
+
+	case OrderBy:
+		for _, item := range n {
+			add(item)
+		}
+
+	case *OtherAdmin:
+
+	case *OtherRead:
+
+	case *ParenSelect:
+		add(n.Select)
+
+	case *ParenTableExpr:
+		add(n.Exprs)
+
+	case *PartitionDefinition:
+		add(n.Limit)
+		add(n.Name)
+
+	case *PartitionSpec:
+		for _, item := range n.Definitions {
+			add(item)
+		}
+		add(n.Name)
+
+	case Partitions:
+		for _, item := range n {
+			add(item)
+		}
+
+	case *RangeCond:
+		add(n.From)
+		add(n.Left)
+		add(n.To)
+
+	case ReferenceAction:
+
+	case *Release:
+		add(n.Name)
+
+	case *Rollback:
+
+	case *SRollback:
+		add(n.Name)
+
+	case *Savepoint:
+		add(n.Name)
+
+	case *Select:
+		add(n.Comments)
+		add(n.From)
+		add(n.GroupBy)
+		add(n.Having)
+		add(n.Into)
+		add(n.Limit)
+		add(n.OrderBy)
+		add(n.SelectExprs)
+		add(n.Where)
+
+	case SelectExprs:
+		for _, item := range n {
+			add(item)
+		}
+
+	case *SelectInto:
+
+	case *Set:
+		add(n.Comments)
+		add(n.Exprs)
+
+	case *SetExpr:
+		add(n.Expr)
+		add(n.Name)
+
+	case SetExprs:
+		for _, item := range n {
+			add(item)
+		}
+
+	case *SetTransaction:
+		for _, item := range n.Characteristics {
+			add(item)
+		}
+		add(n.Comments)
+
+	case *Show:
+		add(n.Internal)
+
+	case *ShowColumns:
+		add(n.Filter)
+		add(n.Table)
+
+	case *ShowFilter:
+		add(n.Filter)
+
+	case *ShowLegacy:
+		add(n.OnTable)
+		add(n.ShowCollationFilterOpt)
+		add(n.Table)
+
+	case *ShowTableStatus:
+		add(n.Filter)
+
+	case *StarExpr:
+		add(n.TableName)
+
+	case *Stream:
+		add(n.Comments)
+		add(n.SelectExpr)
+		add(n.Table)
+
+	case *Subquery:
+		add(n.Select)
+
+	case *SubstrExpr:
+		add(n.From)
+		add(n.Name)
+		add(n.StrVal)
+		add(n.To)
+
+	case TableExprs:
+		for _, item := range n {
+			add(item)
+		}
+
+	case TableIdent:
+
+	case TableName:
+		add(n.Name)
+		add(n.Qualifier)
+
+	case TableNames:
+		for _, item := range n {
+			add(item)
+		}
+
+	case *TableSpec:
+		for _, item := range n.Columns {
+			add(item)
+		}
+		for _, item := range n.Constraints {
+			add(item)
+		}
+		for _, item := range n.Indexes {
+			add(item)
+		}
+
+	case *TimestampFuncExpr:
+		add(n.Expr1)
+		add(n.Expr2)
+
+	case *UnaryExpr:
+		add(n.Expr)
+
+	case *Union:
+		add(n.FirstStatement)
+		add(n.Limit)
+		add(n.OrderBy)
+		for _, item := range n.UnionSelects {
+			add(item)
+		}
+
+	case *UnionSelect:
+		add(n.Statement)
+
+	case *Update:
+		add(n.Comments)
+		add(n.Exprs)
+		add(n.Limit)
+		add(n.OrderBy)
+		add(n.TableExprs)
+		add(n.Where)
+
+	case *UpdateExpr:
+		add(n.Expr)
+		add(n.Name)
+
+	case UpdateExprs:
+		for _, item := range n {
+			add(item)
+		}
+
+	case *Use:
+		add(n.DBName)
+
+	case *VStream:
+		add(n.Comments)
+		add(n.Limit)
+		add(n.SelectExpr)
+		add(n.Table)
+		add(n.Where)
+
+	case ValTuple:
+		for _, item := range n {
+			add(item)
+		}
+
+	case Values:
+		for _, item := range n {
+			add(item)
+		}
+
+	case *ValuesFuncExpr:
+		add(n.Name)
+
+	case VindexParam:
+		add(n.Key)
+
+	case *VindexSpec:
+		add(n.Name)
+		for _, item := range n.Params {
+			add(item)
+		}
+		add(n.Type)
+
+	case *When:
+		add(n.Cond)
+		add(n.Val)
+
+	case *Where:
+		add(n.Expr)
+
+	case *XorExpr:
+		add(n.Left)
+		add(n.Right)
+
+	default:
+		panic("unknown ast type " + reflect.TypeOf(node).String())
+	}
+
+	return children
 }
 
 func isNilValue(i interface{}) bool {
