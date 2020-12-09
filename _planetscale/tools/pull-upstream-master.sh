@@ -13,4 +13,4 @@ git rev-parse upstream/master > _planetscale/version/upstream_commit.txt
 git add _planetscale/version/upstream_commit.txt
 
 # Now commit the merge.
-git commit -m "Merge branch 'master' of https://github.com/vitessio/vitess"
+git commit -n -m "Merge branch 'master' of https://github.com/vitessio/vitess"
