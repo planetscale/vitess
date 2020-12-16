@@ -106,6 +106,8 @@ install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	# vitess-private binaries
+	cp "$${VTROOT}/bin/vttablet-starter" "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
