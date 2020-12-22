@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"sort"
 	"strconv"
@@ -27,6 +28,10 @@ func main() {
 	// are going to pass all our args to the target command instead of parsing them.
 	labelsFilePath := os.Getenv("LABELS_FILE_PATH")
 	vttabletPath := os.Getenv("VTTABLET_PATH")
+	listenAddress := os.Getenv("LISTEN_ADDRESS")
+	if listenAddress == "" {
+		listenAddress = ":15000"
+	}
 
 	// The args we were passed, excluding our own command path, will become
 	// vttablet args when we're ready to run it.
@@ -40,7 +45,12 @@ func main() {
 		exit.Return(1)
 	}
 
-	// TODO: Serve a fake health check handler until we're ready to start vttablet.
+	// Serve a fake no-op health check handler until we're ready to start vttablet.
+	http.HandleFunc("/", func(http.ResponseWriter, *http.Request) {})
+	server := &http.Server{
+		Addr: ":15000",
+	}
+	go server.ListenAndServe()
 
 	fmt.Printf("Waiting for required Pod labels to be assigned: %v\n", strings.Join(requiredLabelKeys, ", "))
 	labels, err := waitForLabelKeys(labelsFilePath, requiredLabelKeys)
@@ -55,6 +65,9 @@ func main() {
 		fmt.Printf("generateArgs failed: %v\n", err)
 		exit.Return(1)
 	}
+
+	// Shut down the fake health check handler.
+	server.Close()
 
 	fmt.Println("Executing vttablet with final command args...")
 
@@ -115,7 +128,7 @@ func loadDownwardAPIMap(filePath string) (map[string]string, error) {
 		key := string(parts[0])
 		value, err := strconv.Unquote(string(parts[1]))
 		if err != nil {
-			return nil, fmt.Errorf("can't parse quoted value: %v", parts[1])
+			return nil, fmt.Errorf("can't parse quoted value: %q", parts[1])
 		}
 		result[key] = value
 	}
