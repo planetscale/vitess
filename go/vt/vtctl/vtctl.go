@@ -1954,7 +1954,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 type VReplicationWorkflowAction string
 
 const (
-	vReplicationWorkflowActionStart          = "start"
+	vReplicationWorkflowActionCreate         = "create"
 	vReplicationWorkflowActionSwitchTraffic  = "switchtraffic"
 	vReplicationWorkflowActionReverseTraffic = "reversetraffic"
 	vReplicationWorkflowActionComplete       = "complete"
@@ -2053,7 +2053,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	originalAction := action
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
 	switch action {
-	case vReplicationWorkflowActionStart:
+	case vReplicationWorkflowActionCreate:
 		switch workflowType {
 		case wrangler.MoveTablesWorkflow:
 			if *sourceKeyspace == "" {
@@ -2106,7 +2106,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		log.Warningf("NewVReplicationWorkflow returned error %+v", wf)
 		return err
 	}
-	if !wf.Exists() && action != vReplicationWorkflowActionStart {
+	if !wf.Exists() && action != vReplicationWorkflowActionCreate {
 		return fmt.Errorf("workflow %s does not exist", ksWorkflow)
 	}
 
@@ -2145,8 +2145,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		return printDetails()
 	case vReplicationWorkflowActionProgress:
 		return printCopyProgress()
-	case vReplicationWorkflowActionStart:
-		err = wf.Start()
+	case vReplicationWorkflowActionCreate:
+		err = wf.Create()
 		if err != nil {
 			return err
 		}
