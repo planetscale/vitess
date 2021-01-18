@@ -1,0 +1,11 @@
+Format Options:
+
+
+Find: \n  ([^ ]+) ?(.+)?\n    \t(.+)
+Replace: | \1 | \2 | \3 |\n
+
+
+Format vtctl table:
+
+Find:   ([a-z]+)(.+)
+Replace: | [\1](../vtctl/serving-graph#\1) | `\1 \2` |
