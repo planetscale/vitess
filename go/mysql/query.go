@@ -320,6 +320,9 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 	}
 
 	res, more, _, err := c.ReadQueryResult(maxrows, wantfields)
+	if err != nil {
+		return nil, false, err
+	}
 	return res, more, err
 }
 
@@ -359,6 +362,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			RowsAffected:        packetOk.affectedRows,
 			InsertID:            packetOk.lastInsertID,
 			SessionStateChanges: packetOk.sessionStateData,
+			StatusFlags:         packetOk.statusFlags,
 		}, more, warnings, nil
 	}
 
@@ -427,10 +431,13 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			// The deprecated EOF packets change means that this is either an
 			// EOF packet or an OK packet with the EOF type code.
 			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-				warnings, more, err = parseEOFPacket(data)
+				var statusFlags uint16
+				warnings, statusFlags, err = parseEOFPacket(data)
 				if err != nil {
 					return nil, false, 0, err
 				}
+				more = (statusFlags & ServerMoreResultsExists) != 0
+				result.StatusFlags = statusFlags
 			} else {
 				packetOk, err := c.parseOKPacket(data)
 				if err != nil {
@@ -439,6 +446,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 				warnings = packetOk.warnings
 				more = (packetOk.statusFlags & ServerMoreResultsExists) != 0
 				result.SessionStateChanges = packetOk.sessionStateData
+				result.StatusFlags = packetOk.statusFlags
 			}
 			return result, more, warnings, nil
 

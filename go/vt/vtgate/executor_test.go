@@ -437,11 +437,19 @@ func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
-	for _, query := range []string{"show databases", "show vitess_keyspaces", "show keyspaces", "show DATABASES", "show schemas", "show SCHEMAS"} {
+	for _, query := range []string{"show vitess_keyspaces", "show keyspaces"} {
 		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		require.EqualValues(t, 5, qr.RowsAffected, fmt.Sprintf("unexpected results running query: %s", query))
 	}
+
+	for _, query := range []string{"show databases", "show DATABASES", "show schemas", "show SCHEMAS"} {
+		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
+		require.NoError(t, err)
+		// Showing default tables (5+4[default])
+		require.EqualValues(t, 9, qr.RowsAffected, fmt.Sprintf("unexpected results running query: %s", query))
+	}
+
 	_, err := executor.Execute(ctx, "TestExecute", session, "show variables", nil)
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "show collation", nil)
@@ -2260,6 +2268,71 @@ func TestExecutorSavepointWithoutTx(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT_ROLLBACK", "rollback to b", 0)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 0)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+}
+
+func TestExecutorCallProc(t *testing.T) {
+	executor, sbc1, sbc2, sbcUnsharded := createExecutorEnv()
+
+	type cnts struct {
+		Sbc1Cnt      int64
+		Sbc2Cnt      int64
+		SbcUnsharded int64
+	}
+
+	tcs := []struct {
+		name, targetStr string
+
+		hasNoKeyspaceErr bool
+		unshardedOnlyErr bool
+		wantCnts         cnts
+	}{{
+		name:             "simple call with no keyspace set",
+		targetStr:        "",
+		hasNoKeyspaceErr: true,
+	}, {
+		name:      "keyrange targeted keyspace",
+		targetStr: "TestExecutor[-]",
+		wantCnts: cnts{
+			Sbc1Cnt:      1,
+			Sbc2Cnt:      1,
+			SbcUnsharded: 0,
+		},
+	}, {
+		name:      "unsharded call proc",
+		targetStr: KsTestUnsharded,
+		wantCnts: cnts{
+			Sbc1Cnt:      0,
+			Sbc2Cnt:      0,
+			SbcUnsharded: 1,
+		},
+	}, {
+		name:             "should fail with sharded call proc",
+		targetStr:        "TestExecutor",
+		unshardedOnlyErr: true,
+	}}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			sbc1.ExecCount.Set(0)
+			sbc2.ExecCount.Set(0)
+			sbcUnsharded.ExecCount.Set(0)
+
+			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), "CALL proc()", nil)
+			if tc.hasNoKeyspaceErr {
+				assert.EqualError(t, err, "keyspace not specified")
+			} else if tc.unshardedOnlyErr {
+				require.EqualError(t, err, "CALL is only allowed for targeted queries or on unsharded keyspaces")
+			} else {
+				assert.NoError(t, err)
+			}
+
+			utils.MustMatch(t, tc.wantCnts, cnts{
+				Sbc1Cnt:      sbc1.ExecCount.Get(),
+				Sbc2Cnt:      sbc2.ExecCount.Get(),
+				SbcUnsharded: sbcUnsharded.ExecCount.Get(),
+			}, "count did not match")
+		})
+	}
 }
 
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {

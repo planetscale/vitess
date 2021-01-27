@@ -1479,10 +1479,10 @@ var (
 		output: "show variables",
 	}, {
 		input:  "show vitess_keyspaces",
-		output: "show databases",
+		output: "show keyspaces",
 	}, {
 		input:  "show vitess_keyspaces like '%'",
-		output: "show databases like '%'",
+		output: "show keyspaces like '%'",
 	}, {
 		input: "show vitess_shards",
 	}, {
@@ -1843,6 +1843,14 @@ var (
 		input: "release savepoint a",
 	}, {
 		input: "release savepoint `@@@;a`",
+	}, {
+		input: "call proc()",
+	}, {
+		input: "call qualified.proc()",
+	}, {
+		input: "call proc(1, 'foo')",
+	}, {
+		input: "call proc(@param)",
 	}}
 )
 

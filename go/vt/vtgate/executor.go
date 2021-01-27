@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/vt/sysvars"
 
 	"context"
@@ -295,6 +297,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(session.DDLStrategy)
 		case sysvars.SessionUUID.Name:
 			bindVars[key] = sqltypes.StringBindVariable(session.SessionUUID)
+		case sysvars.SessionEnableSystemSettings.Name:
+			bindVars[key] = sqltypes.BoolBindVariable(session.EnableSystemSettings)
 		case sysvars.ReadAfterWriteGTID.Name:
 			var v string
 			ifReadAfterWriteExist(session, func(raw *vtgatepb.ReadAfterWrite) {
@@ -315,6 +319,10 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 				}
 			})
 			bindVars[key] = sqltypes.StringBindVariable(v)
+		case sysvars.Version.Name:
+			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.MySQLVersion())
+		case sysvars.VersionComment.Name:
+			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		}
 	}
 
