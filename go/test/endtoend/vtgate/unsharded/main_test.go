@@ -36,7 +36,7 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	cell            = "zone1"
 	hostname        = "localhost"
-	KeyspaceName    = "customer"
+	KeyspaceName    = "db"
 	SchemaSQL       = `
 CREATE TABLE t1 (
     c1 BIGINT NOT NULL,
@@ -52,7 +52,14 @@ CREATE TABLE t1 (
 CREATE TABLE allDefaults (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255)
-) ENGINE=Innodb;`
+) ENGINE=Innodb;
+
+CREATE TABLE Language (
+ langID int(11) NOT NULL AUTO_INCREMENT,
+ languageText varchar(50) NOT NULL,
+ PRIMARY KEY (langID)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT;`
+
 	VSchema = `
 {
     "sharded": false,
@@ -88,7 +95,8 @@ CREATE TABLE allDefaults (
                     "type": "VARCHAR"
                 }
             ]
-        }
+        },
+		"Language": {}
     }
 }
 `
@@ -212,7 +220,21 @@ func TestDDLUnsharded(t *testing.T) {
 	assertMatches(t, conn, "select * from v1", `[[INT64(3) INT64(0) INT64(3) VARCHAR("a")] [INT64(30) INT64(10) INT64(30) VARCHAR("ac")] [INT64(300) INT64(100) INT64(300) VARCHAR("abc")]]`)
 	exec(t, conn, `drop view v1`)
 	exec(t, conn, `drop table tempt1`)
-	assertMatches(t, conn, "show tables", `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
+	assertMatches(t, conn, "show tables", `[[VARCHAR("Language")] [VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
+}
+
+func TestLanguageTable(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	assertMatches(t, conn, "select * from Language", `[]`)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
