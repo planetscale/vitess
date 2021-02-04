@@ -34,8 +34,18 @@ import (
 var (
 	// ErrBinlogUnavailable is returned by this library when we
 	// cannot find a suitable binlog to satisfy the request.
-	ErrBinlogUnavailable = fmt.Errorf("cannot find relevant binlogs on this server")
+	ErrBinlogUnavailable   = fmt.Errorf("cannot find relevant binlogs on this server")
+	EnableVStreamerPooling = true
 )
+
+type IBinlogConnection interface {
+	getServerID() uint32
+	SendBinlogDumpCommand(uint32, mysql.Position) error
+	ReadBinlogEvent() (mysql.BinlogEvent, error)
+	setConnection(conn *mysql.Conn)
+	getConnector() dbconfigs.Connector
+	closeConnection()
+}
 
 // BinlogConnection represents a connection to mysqld that pretends to be a replica
 // connecting for replication. Each such connection must identify itself to
@@ -43,11 +53,15 @@ var (
 // among actual replicas in the topology.
 type BinlogConnection struct {
 	*mysql.Conn
-	cp       dbconfigs.Connector
-	serverID uint32
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
+	cp           dbconfigs.Connector
+	serverID     uint32
+	cancel       context.CancelFunc
+	teardown     func()
+	wg           sync.WaitGroup
+	streamerPool *streamerPool
 }
+
+var _ IBinlogConnection = (*BinlogConnection)(nil)
 
 // serverIDPool is the IDPool for server IDs used to connect as a replica.
 // We randomize the initial value, so it is unlikely that we reuse serverID
@@ -65,16 +79,18 @@ func getRandomInitialServerID() uint32 {
 
 // NewBinlogConnection creates a new binlog connection to the mysqld instance.
 func NewBinlogConnection(cp dbconfigs.Connector) (*BinlogConnection, error) {
-	conn, err := connectForReplication(cp)
-	if err != nil {
-		return nil, err
-	}
-
 	bc := &BinlogConnection{
-		Conn:     conn,
 		cp:       cp,
 		serverID: serverIDPool.Get(),
 	}
+	if !EnableVStreamerPooling {
+		conn, err := connectForReplication(cp)
+		if err != nil {
+			return nil, err
+		}
+		bc.Conn = conn
+	}
+
 	log.Infof("new binlog connection: serverID=%d", bc.serverID)
 	return bc, nil
 }
@@ -95,18 +111,47 @@ func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 	return conn, nil
 }
 
+
+func (bc *BinlogConnection) setConnection(conn *mysql.Conn) {
+	bc.Conn = conn
+}
+func (bc *BinlogConnection) getConnector() dbconfigs.Connector {
+	return bc.cp
+}
+
+func (bc *BinlogConnection) getServerID() uint32 {
+	return bc.serverID
+}
+
+func (bc *BinlogConnection) closeConnection() {
+	bc.Conn.Close()
+}
+
+func (bc *BinlogConnection) ReadBinlogEvent() (mysql.BinlogEvent, error) {
+	return bc.Conn.ReadBinlogEvent()
+}
+
 // StartBinlogDumpFromCurrent requests a replication binlog dump from
 // the current position.
 func (bc *BinlogConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mysql.Position, <-chan mysql.BinlogEvent, error) {
 	ctx, bc.cancel = context.WithCancel(ctx)
 
-	masterPosition, err := bc.Conn.MasterPosition()
-	if err != nil {
-		return mysql.Position{}, nil, fmt.Errorf("failed to get master position: %v", err)
-	}
+	if EnableVStreamerPooling {
+		pos, eventCh, teardown, err := theStreamerPool.get(ctx, bc, mysql.Position{})
+		if err == nil {
+			bc.teardown = teardown
+		}
+		return pos, eventCh, err
+	} else {
+		log.Infof("StartBinlogDumpFromCurrent")
+		masterPosition, err := bc.Conn.MasterPosition()
+		if err != nil {
+			return mysql.Position{}, nil, fmt.Errorf("failed to get master position: %v", err)
+		}
 
-	c, err := bc.StartBinlogDumpFromPosition(ctx, masterPosition)
-	return masterPosition, c, err
+		c, err := bc.StartBinlogDumpFromPosition(ctx, masterPosition)
+		return masterPosition, c, err
+	}
 }
 
 // StartBinlogDumpFromPosition requests a replication binlog dump from
@@ -119,14 +164,28 @@ func (bc *BinlogConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mys
 // Note the context is valid and used until eventChan is closed.
 func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, startPos mysql.Position) (<-chan mysql.BinlogEvent, error) {
 	ctx, bc.cancel = context.WithCancel(ctx)
-
-	log.Infof("sending binlog dump command: startPos=%v, serverID=%v", startPos, bc.serverID)
-	if err := bc.SendBinlogDumpCommand(bc.serverID, startPos); err != nil {
-		log.Errorf("couldn't send binlog dump command: %v", err)
-		return nil, err
+	var err error
+	var teardown func()
+	var eventCh <-chan mysql.BinlogEvent
+	log.Infof("StartBinlogDumpFromPosition %s", startPos.String())
+	if EnableVStreamerPooling {
+		_, eventCh, teardown, err = theStreamerPool.get(ctx, bc, startPos) //TODO: use serverId pool
+		if err != nil {
+			log.Errorf("error getting from pool: %s", err)
+			return nil, err
+		} else {
+			bc.teardown = teardown
+		}
+		log.Infof("theStreamerPool returned event channel %v", eventCh)
+	} else {
+		log.Infof("sending binlog dump command: startPos=%v, serverID=%v", startPos, bc.serverID)
+		if err := bc.SendBinlogDumpCommand(bc.serverID, startPos); err != nil {
+			log.Errorf("couldn't send binlog dump command: %v", err)
+			return nil, err
+		}
+		return bc.streamEvents(ctx), nil
 	}
-
-	return bc.streamEvents(ctx), nil
+	return eventCh, nil
 }
 
 // streamEvents returns a channel on which events are streamed.
@@ -273,23 +332,32 @@ func (bc *BinlogConnection) getBinlogTimeStamp(filename string) (blTimestamp int
 // started with StartBinlogDump() to stop and close its BinlogEvent channel.
 // The ID for the binlog connection is recycled back into the pool.
 func (bc *BinlogConnection) Close() {
-	if bc.Conn != nil {
-		log.Infof("closing binlog socket to unblock reads")
-		bc.Conn.Close()
-
-		// bc.cancel is set at the beginning of the StartBinlogDump*
-		// methods. If we error out before then, it's nil.
-		// Note we also may error out before adding 1 to bc.wg,
-		// but then the Wait() still works.
-		if bc.cancel != nil {
-			log.Infof("waiting for binlog dump thread to end")
-			bc.cancel()
-			bc.wg.Wait()
-			bc.cancel = nil
+	if EnableVStreamerPooling {
+		if bc.teardown != nil {
+			log.Infof("Closing BinlogConnection")
+			bc.teardown()
+			log.Infof("Closing BinlogConnection: after teardown")
+			serverIDPool.Put(bc.serverID)
 		}
+	} else {
+		if bc.Conn != nil {
+			log.Infof("closing binlog socket to unblock reads")
+			bc.Conn.Close()
 
-		log.Infof("closing binlog MySQL client with serverID %v. Will recycle ID.", bc.serverID)
-		bc.Conn = nil
-		serverIDPool.Put(bc.serverID)
+			// bc.cancel is set at the beginning of the StartBinlogDump*
+			// methods. If we error out before then, it's nil.
+			// Note we also may error out before adding 1 to bc.wg,
+			// but then the Wait() still works.
+			if bc.cancel != nil {
+				log.Infof("waiting for binlog dump thread to end")
+				bc.cancel()
+				bc.wg.Wait()
+				bc.cancel = nil
+			}
+
+			log.Infof("closing binlog MySQL client with serverID %v. Will recycle ID.", bc.serverID)
+			bc.Conn = nil
+			serverIDPool.Put(bc.serverID)
+		}
 	}
 }

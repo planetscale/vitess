@@ -172,16 +172,20 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 		return wrapError(err, vs.pos, vs.vse)
 	}
 
+	log.Infof("replicate: before NewBinlogConnection")
 	conn, err := binlog.NewBinlogConnection(vs.cp)
 	if err != nil {
 		return wrapError(err, vs.pos, vs.vse)
 	}
 	defer conn.Close()
 
+	log.Infof("replicate: before StartBinlogDumpFromPosition for pos %s", vs.pos.String())
 	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
 	if err != nil {
+		log.Errorf("replicate StartBinlogDumpFromPosition error %s", err.Error())
 		return wrapError(err, vs.pos, vs.vse)
 	}
+	log.Infof("replicate: before vs.parseEvents")
 	err = vs.parseEvents(vs.ctx, events)
 	return wrapError(err, vs.pos, vs.vse)
 }
@@ -282,6 +286,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 
 			ev, ok := <-events
+			log.Infof("parseEvents: found event %+v", ev)
 			if ok {
 				throttledEvents <- ev
 			} else {

@@ -414,13 +414,15 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 			switchRdonly = true
 		}
 	}
-
+	log.Infof("1111111111111111111111111")
 	// if there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
 	// are updated for rdonly as well. Otherwise vitess will not know that the workflow has completed and will
 	// incorrectly report that not all reads have been switched. User currently is forced to switch non-existent rdonly tablets
 	if switchReplicas && !switchRdonly {
+		log.Infof("aaaaaaaaaaaaaaaaaaaa")
 		var err error
 		rdonlyTabletsExist, err := wr.doCellsHaveRdonlyTablets(ctx, cells)
+		log.Infof("bbbbbbbbbbbbbbbbb")
 		if err != nil {
 			return nil, err
 		}
@@ -428,6 +430,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 			servedTypes = append(servedTypes, topodatapb.TabletType_RDONLY)
 		}
 	}
+	log.Infof("ccccccccccccc")
 
 	// If journals exist notify user and fail
 	journalsExist, _, err := ts.checkJournals(ctx)
@@ -435,6 +438,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		wr.Logger().Errorf("checkJournals failed: %v", err)
 		return nil, err
 	}
+	log.Infof("dddddddddddddddddddd")
 	if journalsExist {
 		log.Infof("Found a previous journal entry for %d", ts.id)
 	}
@@ -445,10 +449,12 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		sw = &switcher{ts: ts, wr: wr}
 	}
 
+	log.Infof("22222222222222222222")
 	if err := ts.validate(ctx); err != nil {
 		ts.wr.Logger().Errorf("validate failed: %v", err)
 		return nil, err
 	}
+	log.Infof("3333333333333333333333333333")
 
 	// For reads, locking the source keyspace is sufficient.
 	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.sourceKeyspace, "SwitchReads")
@@ -457,6 +463,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		return nil, lockErr
 	}
 	defer unlock(&err)
+	log.Infof("4444444444444444444")
 
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
 		if err := sw.switchTableReads(ctx, cells, servedTypes, direction); err != nil {

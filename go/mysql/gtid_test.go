@@ -211,3 +211,6 @@ func (f fakeGTID) Equal(other GTIDSet) bool {
 	return f == otherFake
 }
 func (fakeGTID) AddGTID(GTID) GTIDSet { return nil }
+
+func (fakeGTID) Distance(GTIDSet) (int64, error) {panic("implement me")
+}

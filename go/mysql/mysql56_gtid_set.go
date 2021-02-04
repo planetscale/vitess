@@ -19,6 +19,7 @@ package mysql
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -425,6 +426,36 @@ func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 	}
 
 	return newSet
+}
+
+func (set Mysql56GTIDSet) NumTransactions() (int64, error) {
+	txs := int64(0)
+	for _, intervals := range set {
+		for _, interval := range intervals {
+			txs += interval.end - interval.start + 1
+		}
+	}
+	return txs, nil
+}
+
+func (set Mysql56GTIDSet) Distance(other GTIDSet) (int64, error) {
+	mydbOther, ok := other.(Mysql56GTIDSet)
+	if !ok {
+		return -1, fmt.Errorf("passed GTIDSet is not a MySQL GTIDSet")
+	}
+	numTransactions1, err := set.NumTransactions()
+	if err != nil {
+		return 0, err
+	}
+	numTransactions2, err := mydbOther.NumTransactions()
+	if err != nil {
+		return 0, err
+	}
+	dist := numTransactions1 - numTransactions2
+	if dist < 0 {
+		return -dist, nil
+	}
+	return dist, nil
 }
 
 // SIDBlock returns the binary encoding of a MySQL 5.6 GTID set as expected

@@ -248,6 +248,10 @@ func (gtidSet MariadbGTIDSet) Last() string {
 	return gtidSet[lastGTID].String()
 }
 
+func (gtid MariadbGTIDSet) Distance(other GTIDSet) (int64, error) {
+	panic("implement me")
+}
+
 // deepCopy returns a deep copy of the set.
 func (gtidSet MariadbGTIDSet) deepCopy() MariadbGTIDSet {
 	newSet := make(MariadbGTIDSet, len(gtidSet))

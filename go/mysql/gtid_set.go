@@ -50,8 +50,12 @@ type GTIDSet interface {
 	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
 	Union(GTIDSet) GTIDSet
 
-	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
+	// Last returns the last GTID of the receiver GTIDSet.
 	Last() string
+
+	// Distance returns the absolute difference between the gtid of the receiver GTIDSet and the supplied GTIDSet
+	Distance(GTIDSet) (int64, error)
+
 }
 
 // gtidSetParsers maps flavor names to parser functions. It is used by
