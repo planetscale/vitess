@@ -65,17 +65,39 @@ func checkHealth(t *testing.T, url string) bool {
 	return true
 }
 
-func validateCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
+func validateCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) string {
 	qr := execVtgateQuery(t, conn, database, fmt.Sprintf("select count(*) from %s", table))
 	require.NotNil(t, qr)
 	require.NotNil(t, qr.Rows)
-	require.Equal(t, fmt.Sprintf("[[INT64(%d)]]", want), fmt.Sprintf("%v", qr.Rows))
+	if got, want := fmt.Sprintf("%v", qr.Rows), fmt.Sprintf("[[INT64(%d)]]", want); got != want {
+		return fmt.Sprintf("got: %v want %v", got, want)
+	}
+	return ""
 }
 
-func validateQuery(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
+func waitForCount(t *testing.T, conn *mysql.Conn, database string, table string, want, timeoutSeconds int) {
+	pollIntervalMilliseconds := 500 //ms
+	maxIterations := timeoutSeconds * 1000 / pollIntervalMilliseconds
+	iterations := 0
+	for {
+		if iterations >= maxIterations {
+			break
+		}
+		output := validateCount(t, conn, database, table, want)
+		if output == "" {
+			return
+		}
+	}
+	require.Failf(t, "Incorrect count", "database %s: row count for %s never reached %d", database, table, want)
+}
+
+func validateQuery(t *testing.T, conn *mysql.Conn, database string, query string, want string) string {
 	qr := execVtgateQuery(t, conn, database, query)
 	require.NotNil(t, qr)
-	require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
+	if got := fmt.Sprintf("%v", qr.Rows); got != want {
+		return fmt.Sprintf("got:\n%v want:\n%v", got, want)
+	}
+	return ""
 }
 
 func validateCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) {
