@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"strings"
@@ -3190,4 +3191,23 @@ func BenchmarkParse3(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+func BenchmarkParseSet(b *testing.B) {
+	file, err := os.Open("./test_queries/large_set_query.txt")
+	value, err := ioutil.ReadFile("/proc/self/status")
+	fmt.Printf("%s", value)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer file.Close()
+	reader := bufio.NewReader(file)
+	largeSetQuery, _ := reader.ReadString('\n')
+	for i := 0; i < b.N; i++ {
+		_, err := Parse(largeSetQuery)
+		require.Error(b, err)
+	}
+
+	value, err = ioutil.ReadFile("/proc/self/status")
+	fmt.Printf("%s", value)
 }
