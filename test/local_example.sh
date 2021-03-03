@@ -33,6 +33,8 @@ sleep 5 # Give vtgate time to really start.
 
 mysql < ../common/insert_commerce_data.sql
 mysql --table < ../common/select_commerce_data.sql
+mysql --table < ../common/pii.sql
+
 
 ./201_customer_tablets.sh
 
@@ -43,8 +45,11 @@ for shard in "customer/0"; do
  done;
 done;
 
+exit
+
 ./202_move_tables.sh
 sleep 3 # required for now
+
 
 ./203_switch_reads.sh
 

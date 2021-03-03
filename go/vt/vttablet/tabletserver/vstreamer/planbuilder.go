@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	faker "github.com/brianvoe/gofakeit"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -159,10 +161,36 @@ func filterPii(piiStrategy, colName, colComment, colDataType string, colLength i
 	}
 
 	val := value
+	re := regexp.MustCompile(`pii-[a-z]+`)
+	match := re.FindStringSubmatch(colComment)
+	if len(match) == 0 {
+		log.Warningf("found string pii- but pii match failed", colComment)
+		return val, nil
+	}
+	if len(match) > 1 {
+		log.Warningf("found multiple pii matches: %v, will use first match: %s", match, match[0])
+	}
+	piiFilter := match[0][4:]
+
 	if piiStrategy == "redact" {
 		switch colDataType {
 		case "varchar", "char":
-			val = sqltypes.NewVarChar("")
+			switch piiFilter {
+			case "ssn":
+				val = sqltypes.NewVarChar("*****" + val.ToString()[5:])
+			case "hash":
+				val = sqltypes.NewVarChar(fmt.Sprintf("%x", md5.Sum([]byte(val.String()))))
+			case "email":
+				email := val.ToString()
+				splits := strings.Split(email, "@")
+				stars := "******************************************************************"
+				email = fmt.Sprintf("%s%s@%s", splits[0][:3], stars[:len(splits[0])-4], splits[1])
+				val = sqltypes.NewVarChar(email)
+			case "address":
+				val = sqltypes.NewVarChar("<redacted>")
+			default:
+
+			}
 		case "varbinary", "binary":
 			val = sqltypes.NewVarBinary("")
 		case "int", "int32":
@@ -181,18 +209,7 @@ func filterPii(piiStrategy, colName, colComment, colDataType string, colLength i
 		return sqltypes.NULL, fmt.Errorf("invalid pii strategy %s found", piiStrategy)
 	}
 
-	re := regexp.MustCompile(`pii-[a-z]+`)
-	match := re.FindStringSubmatch(colComment)
-	if len(match) == 0 {
-		log.Warningf("found string pii- but pii match failed", colComment)
-		return val, nil
-	}
-	if len(match) > 1 {
-		log.Warningf("found multiple pii matches: %v, will use first match: %s", match, match[0])
-	}
-	piiFilter := match[0][4:]
-
-	stringFilters := []string{"name", "email", "phone", "gender", "ssn", "address", "date"}
+	stringFilters := []string{"name", "email", "phone", "gender", "ssn", "address", "date", "hash"}
 	intFilters := []string{"salary"}
 	found := false
 	filterType := ""
@@ -232,6 +249,8 @@ func filterPii(piiStrategy, colName, colComment, colDataType string, colLength i
 		s = faker.SSN()
 	case "date":
 		s = faker.Date().Format("2006-01-01")
+	case "hash":
+		s = faker.HackerPhrase()
 	default:
 		found = false
 	}
