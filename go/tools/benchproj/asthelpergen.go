@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"go/types"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -30,7 +31,7 @@ import (
 )
 
 type benchmark struct {
-	filePath, path, name string
+	filePath, pkgName, name string
 }
 
 type benchmarkRunLine struct {
@@ -45,15 +46,22 @@ var benchmarkResultRe = regexp.MustCompile(`Benchmark.+\b\s*([0-9]+)\s+(\d+) ns/
 
 func main() {
 
-	var pattern string
+	var pkg string
+	var output string
 
-	flag.StringVar(&pattern, "in", "", "Go package to benchmark")
+	flag.StringVar(&pkg, "in", "", "Go package to benchmark")
+	flag.StringVar(&output, "out", "", "Output file")
 	flag.Parse()
 
 	loaded, err := packages.Load(&packages.Config{
 		Mode:  packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
 		Tests: true,
-	}, pattern)
+	}, pkg)
+	if err != nil {
+		panic(err)
+	}
+
+	w, err := os.Create(output)
 	if err != nil {
 		panic(err)
 	}
@@ -77,11 +85,19 @@ func main() {
 				submatch := benchmarkResultRe.FindStringSubmatch(benchLine.Output)
 				if len(submatch) > 0 {
 					fmt.Printf("%s %s ns/op\n", benchmark.name, submatch[2])
+					fmt.Fprintf(w, "%s %s ns/op\n", benchmark.name, submatch[2])
 				}
-
 			}
 		} else {
 			fmt.Println(err.Error())
+		}
+
+		cpuprofFile := fmt.Sprintf("cpuprof_%s.%s.out", benchmark.pkgName, benchmark.name)
+		command = exec.Command("go", "test", "-bench=^"+benchmark.name+"$", "-run==", "-count=1", path, fmt.Sprintf("-cpuprofile=%s", cpuprofFile))
+		b, err = command.Output()
+		if err == nil {
+			fmt.Printf("CPU profile generated %s\n", cpuprofFile)
+			fmt.Fprintf(w, "CPU profile generated %s\n", cpuprofFile)
 		}
 	}
 }
@@ -95,7 +111,7 @@ func findBenchmarks(loaded []*packages.Package) []benchmark {
 			if ok && isBenchmark(f) {
 				fs := pkg.Fset.File(f.Pos())
 				benchmarks = append(benchmarks, benchmark{
-					path:     f.Pkg().Path(),
+					pkgName:  f.Pkg().Name(),
 					name:     f.Name(),
 					filePath: fs.Name(),
 				})
