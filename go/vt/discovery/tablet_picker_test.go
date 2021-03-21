@@ -331,6 +331,34 @@ func TestPickError(t *testing.T) {
 	require.EqualError(t, err, "context has expired")
 }
 
+func TestPickerFairnessAcrossCells(t *testing.T) {
+	picks := map[string]int{}
+	cells := []string{"cell1", "cell2"}
+	te := newPickerTestEnv(t, cells)
+	for _, cell := range cells {
+		for i := 1; i <= 32; i++ {
+			tab := addTablet(te, 100*i, topodatapb.TabletType_REPLICA, cell, true, true)
+			picks[tab.Alias.String()] = 0
+			defer deleteTablet(te, tab)
+		}
+	}
+	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	require.NoError(t, err)
+
+	// Total 64 tablets: 32 in each cell. Each should be picked 1000 times +- 10%
+	for i := 0; i < 64000; i++ {
+		tab, err := tp.PickForStreaming(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, tab)
+		picks[tab.Alias.String()]++
+	}
+	for _, v := range picks {
+		//fmt.Printf("%d,", v)
+		require.Greater(t, v, 900)
+		require.Less(t, v, 1100)
+	}
+}
+
 type pickerTestEnv struct {
 	t        *testing.T
 	keyspace string
