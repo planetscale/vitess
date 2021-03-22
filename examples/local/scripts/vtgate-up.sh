@@ -34,6 +34,7 @@ vtgate \
   -grpc_port $grpc_port \
   -mysql_server_port $mysql_server_port \
   -mysql_server_socket_path $mysql_server_socket_path \
+  -mysql_server_version '8.0.23-Vitess' \
   -cell $cell \
   -cells_to_watch $cell \
   -tablet_types_to_wait MASTER,REPLICA \

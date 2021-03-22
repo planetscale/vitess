@@ -32,19 +32,26 @@ fi
 CELL=zone1 ./scripts/vtctld-up.sh
 
 # start vttablets for keyspace commerce
-for i in 100 101 102; do
+for i in 100 101; do
 	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
 	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
+# start vttablets for keyspace shadow
+for i in 200 201; do
+        CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+        CELL=zone1 KEYSPACE=shadow TABLET_UID=$i ./scripts/vttablet-up.sh
+done
+
 # set one of the replicas to master
 vtctldclient InitShardPrimary --force commerce/0 zone1-100
+vtctldclient InitShardPrimary --force shadow/0 zone1-200
 
 # create the schema
-vtctlclient ApplySchema -sql-file create_commerce_schema.sql commerce
+#vtctlclient ApplySchema -sql-file create_commerce_schema.sql commerce
 
 # create the vschema
-vtctlclient ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
+# vtctlclient ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
 
 # start vtgate
 CELL=zone1 ./scripts/vtgate-up.sh
