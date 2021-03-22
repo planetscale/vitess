@@ -25,6 +25,8 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"testing"
@@ -3237,4 +3239,25 @@ func BenchmarkParse3(b *testing.B) {
 	b.Run("escaped", func(b *testing.B) {
 		largeQueryBenchmark(b, true)
 	})
+}
+
+func BenchmarkOOM(b *testing.B) {
+	file, err := os.Open("./testdata/large_query.txt")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+	largeQuery, _ := reader.ReadString('\n')
+
+	for i := 0; i < b.N; i++ {
+		_, err := Parse(largeQuery)
+		require.Error(b, err)
+		runtime.GC()
+	}
+
+	file, _ = os.Create("./memprofileWithGC")
+	err = pprof.WriteHeapProfile(file)
+	require.NoError(b, err)
 }
