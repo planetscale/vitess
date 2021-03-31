@@ -59,8 +59,8 @@ func (p *Projection) Execute(vcursor VCursor, bindVars map[string]*querypb.BindV
 	return result, nil
 }
 
-func (p *Projection) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	result, err := p.Input.Execute(vcursor, bindVars, wantields)
+func (p *Projection) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
+	result, err := p.Input.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func (p *Projection) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		BindVars: bindVars,
 	}
 
-	if wantields {
+	if wantfields {
 		err = p.addFields(result, bindVars)
 		if err != nil {
 			return err

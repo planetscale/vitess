@@ -68,7 +68,7 @@ func (updTarget *UpdateTarget) Execute(vcursor VCursor, bindVars map[string]*que
 }
 
 // StreamExecute implements the Primitive interface
-func (updTarget *UpdateTarget) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (updTarget *UpdateTarget) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	result, err := updTarget.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err

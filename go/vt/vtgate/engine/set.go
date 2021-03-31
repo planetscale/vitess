@@ -132,8 +132,8 @@ func (s *Set) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable
 }
 
 //StreamExecute implements the Primitive interface method.
-func (s *Set) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	result, err := s.Execute(vcursor, bindVars, wantields)
+func (s *Set) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
+	result, err := s.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}

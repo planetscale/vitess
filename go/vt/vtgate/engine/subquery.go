@@ -60,7 +60,7 @@ func (sq *Subquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 }
 
 // StreamExecute performs a streaming exec.
-func (sq *Subquery) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sq *Subquery) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	return sq.Subquery.StreamExecute(vcursor, bindVars, wantfields, func(inner *sqltypes.Result) error {
 		return callback(sq.buildResult(inner))
 	})

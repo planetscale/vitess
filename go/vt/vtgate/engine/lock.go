@@ -76,7 +76,7 @@ func (l *Lock) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 }
 
 // StreamExecute is part of the Primitive interface
-func (l *Lock) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (l *Lock) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	qr, err := l.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err

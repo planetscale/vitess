@@ -55,7 +55,7 @@ func (s *SingleRow) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 }
 
 // StreamExecute performs a streaming exec.
-func (s *SingleRow) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+func (s *SingleRow) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	result := sqltypes.Result{
 		Rows: [][]sqltypes.Value{
 			{},

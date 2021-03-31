@@ -181,7 +181,7 @@ func (c *DBDDL) dropDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.Res
 }
 
 // StreamExecute implements the Primitive interface
-func (c *DBDDL) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *DBDDL) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	res, err := c.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err

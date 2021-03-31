@@ -300,7 +300,7 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 }
 
 // StreamExecute performs a streaming exec.
-func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	var rss []*srvtopo.ResolvedShard
 	var bvs []map[string]*querypb.BindVariable
 	var err error

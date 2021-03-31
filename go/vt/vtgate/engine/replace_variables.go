@@ -60,7 +60,7 @@ func (r *ReplaceVariables) Execute(vcursor VCursor, bindVars map[string]*querypb
 }
 
 // StreamExecute implements the Primitive interface
-func (r *ReplaceVariables) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (r *ReplaceVariables) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	innerCallback := callback
 	callback = func(result *sqltypes.Result) error {
 		replaceVariables(result, bindVars)

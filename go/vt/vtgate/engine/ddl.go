@@ -105,7 +105,7 @@ func (ddl *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable
 }
 
 // StreamExecute implements the Primitive interface
-func (ddl *DDL) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ddl *DDL) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	results, err := ddl.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err

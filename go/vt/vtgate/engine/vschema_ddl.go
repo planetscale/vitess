@@ -73,7 +73,7 @@ func (v *AlterVSchema) Execute(vcursor VCursor, bindVars map[string]*query.BindV
 }
 
 //StreamExecute implements the Primitive interface
-func (v *AlterVSchema) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+func (v *AlterVSchema) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Alter vschema not supported in streaming")
 }
 

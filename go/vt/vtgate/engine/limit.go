@@ -86,7 +86,7 @@ func (l *Limit) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 }
 
 // StreamExecute satisfies the Primtive interface.
-func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	count, err := l.fetchCount(bindVars)
 	if err != nil {
 		return err

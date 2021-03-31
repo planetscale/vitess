@@ -140,7 +140,7 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 }
 
 // StreamExecute performs a streaming exec.
-func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	var seenFields []*querypb.Field
 	var fieldset sync.WaitGroup
 	var cbMu sync.Mutex

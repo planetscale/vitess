@@ -110,7 +110,7 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 }
 
 // StreamExecute implements Primitive interface
-func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
 		return err

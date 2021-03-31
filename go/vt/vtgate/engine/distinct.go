@@ -116,7 +116,7 @@ func (d *Distinct) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 }
 
 // StreamExecute implements the Primitive interface
-func (d *Distinct) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (d *Distinct) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	pt := newProbeTable()
 
 	err := d.Source.StreamExecute(vcursor, bindVars, wantfields, func(input *sqltypes.Result) error {

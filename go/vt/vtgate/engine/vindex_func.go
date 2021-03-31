@@ -91,7 +91,7 @@ func (vf *VindexFunc) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 // StreamExecute performs a streaming exec.
-func (vf *VindexFunc) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (vf *VindexFunc) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	r, err := vf.mapVindex(vcursor, bindVars)
 	if err != nil {
 		return err

@@ -77,7 +77,7 @@ func (f *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.Bi
 	return r, nil
 }
 
-func (f *fakePrimitive) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (f *fakePrimitive) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error {
 	f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {
 		return f.sendErr

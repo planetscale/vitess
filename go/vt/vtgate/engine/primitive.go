@@ -184,7 +184,7 @@ type (
 		GetKeyspaceName() string
 		GetTableName() string
 		Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
-		StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
+		StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, targets ...*DestinationInformation) error
 		GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 
@@ -194,6 +194,11 @@ type (
 		// description is the description, sans the inputs, of this Primitive.
 		// to get the plan description with all children, use PrimitiveToPlanDescription()
 		description() PrimitiveDescription
+	}
+
+	DestinationInformation struct {
+		Target *srvtopo.ResolvedShard
+		Ids    []*querypb.Value
 	}
 
 	// noInputs default implementation for Primitives that are leaves
