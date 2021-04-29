@@ -25,11 +25,15 @@ FROM "${image}" AS builder
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
 
+# Download dependencies to improve "incremental" build time
+COPY --chown=vitess:vitess go.mod go.sum /vt/src/vitess.io/vitess/
+USER vitess
+RUN go mod download
+
 # Re-copy sources from working tree.
 COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 
 # Build and install Vitess in a temporary output directory.
-USER vitess
 RUN make install-testing PREFIX=/vt/install
 
 # Start over and build the final image.
