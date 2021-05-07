@@ -25,6 +25,8 @@ import (
 	"regexp"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -257,7 +259,7 @@ func KeyRangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange,
 	}
 	// compute max(c,a) and min(b,d)
 	// start with (a,b)
-	result := *first
+	result := proto.Clone(first).(*topodatapb.KeyRange)
 	// if c > a, then use c
 	if bytes.Compare(second.Start, first.Start) > 0 {
 		result.Start = second.Start
@@ -269,7 +271,7 @@ func KeyRangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange,
 	if len(first.End) == 0 || (len(second.End) != 0 && bytes.Compare(second.End, first.End) < 0) {
 		result.End = second.End
 	}
-	return &result, nil
+	return result, nil
 }
 
 // KeyRangeIncludes returns true if the first provided KeyRange, big,
