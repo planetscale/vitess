@@ -30,6 +30,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -739,8 +740,15 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	if mysqld.capabilities.hasInitializeInServer() {
 		err = os.MkdirAll(filepath.Dir(cnf.path), 0755)
 		if err != nil {
-			log.Errorf("Failed to mkdir %s: %v", filepath.Dir(cnf.path), err)
+			log.Errorf("Failed to mkdir %s: %v\n", filepath.Dir(cnf.path), err)
 			return err
+		}
+		log.Infof(">>> %s contents:\n", filepath.Dir(cnf.path))
+		err = filepath.Walk(filepath.Dir(cnf.path), func(path string, info fs.FileInof, err error) error {
+			log.Infof("%s\n", path)
+		})
+		if err != nil {
+			log.Error("Failed to walk %s: %v\n", filepath.Dir(cnf.path), err)
 		}
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 		args := []string{
