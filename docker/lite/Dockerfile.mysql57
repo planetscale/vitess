@@ -30,6 +30,7 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 
 # Build and install Vitess in a temporary output directory.
 USER vitess
+RUN go version
 RUN make install PREFIX=/vt/install
 
 # Start over and build the final image.
