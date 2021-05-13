@@ -82,7 +82,7 @@ var (
 )
 
 // How many bytes from MySQL error log to sample for error messages
-const maxLogFileSampleSize = 4096
+const maxLogFileSampleSize = 65536
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
