@@ -750,6 +750,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		if err != nil {
 			log.Error("Failed to walk %s: %v\n", filepath.Dir(cnf.path), err)
 		}
+		execCmd("ls", []string{"-al", filepath.Dir(cnf.path)}, nil, mysqlRoot, nil)
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 		args := []string{
 			"--defaults-file=" + cnf.path,
