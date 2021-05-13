@@ -737,6 +737,11 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		return err
 	}
 	if mysqld.capabilities.hasInitializeInServer() {
+		err = os.MkdirAll(filepath.Dir(cnf.path), 0755)
+		if err != nil {
+			log.Errorf("Failed to mkdir %s: %v", filepath.Dir(cnf.path), err)
+			return err
+		}
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 		args := []string{
 			"--defaults-file=" + cnf.path,
