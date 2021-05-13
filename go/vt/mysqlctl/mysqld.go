@@ -745,6 +745,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		log.Infof(">>> %s contents:\n", filepath.Dir(cnf.path))
 		err = filepath.Walk(filepath.Dir(cnf.path), func(path string, info os.FileInfo, err error) error {
 			log.Infof("%s\n", path)
+			return err
 		})
 		if err != nil {
 			log.Error("Failed to walk %s: %v\n", filepath.Dir(cnf.path), err)
