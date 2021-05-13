@@ -30,7 +30,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -744,7 +743,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 			return err
 		}
 		log.Infof(">>> %s contents:\n", filepath.Dir(cnf.path))
-		err = filepath.Walk(filepath.Dir(cnf.path), func(path string, info fs.FileInof, err error) error {
+		err = filepath.Walk(filepath.Dir(cnf.path), func(path string, info os.FileInfo, err error) error {
 			log.Infof("%s\n", path)
 		})
 		if err != nil {
