@@ -441,6 +441,12 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 	}
 	defer conn.Close()
 
+	// needed in case we use a lot of keyspaces
+	_, err = conn.ExecuteFetch("set global max_connections = 20000", 0, false)
+	if err != nil {
+		return err
+	}
+
 	_, err = conn.ExecuteFetch("START TRANSACTION", 0, false)
 	if err != nil {
 		return err
