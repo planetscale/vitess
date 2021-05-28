@@ -249,6 +249,11 @@ func (db *LocalCluster) Setup() error {
 			return err
 		}
 
+		// needed in case we use a lot of keyspaces
+		if _, err = db.Query("set global max_connections = 100000", "", 0); err != nil {
+			return err
+		}
+
 		if err := db.createDatabases(); err != nil {
 			return err
 		}
@@ -440,12 +445,6 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 		return err
 	}
 	defer conn.Close()
-
-	// needed in case we use a lot of keyspaces
-	_, err = conn.ExecuteFetch("set global max_connections = 20000", 0, false)
-	if err != nil {
-		return err
-	}
 
 	_, err = conn.ExecuteFetch("START TRANSACTION", 0, false)
 	if err != nil {
