@@ -74,6 +74,7 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	// Create a Conn on both sides.
 	cConn := newConn(clientConn)
 	sConn := newConn(serverConn)
+	sConn.PrepareData = make(map[uint32]*PrepareData)
 
 	return listener, sConn, cConn
 }
@@ -296,9 +297,27 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 // one is going to do prepare + (send long + exec)* (test the output for send long)
 // others are gonna do whatever (to stress test)
 
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func randSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
 func TestPrepareAndExecute(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	for i := 0; i < 1000; i++ {
+		startGoRoutine(ctx, t, randSeq(20))
+	}
+
+	time.Sleep(10 * time.Second)
+}
+
+func startGoRoutine(ctx context.Context, t *testing.T, s string) {
 	go func(longData string) {
 		listener, sConn, cConn := createSocketPair(t)
 		defer func() {
@@ -308,20 +327,7 @@ func TestPrepareAndExecute(t *testing.T) {
 		}()
 
 		runSendLongDataStmt(ctx, t, cConn, sConn, longData)
-	}("foo")
-
-	go func(longData string) {
-		listener, sConn, cConn := createSocketPair(t)
-		defer func() {
-			listener.Close()
-			sConn.Close()
-			cConn.Close()
-		}()
-
-		runSendLongDataStmt(ctx, t, cConn, sConn, longData)
-	}("bar")
-
-	time.Sleep(100 * time.Second)
+	}(s)
 }
 
 func runSendLongDataStmt(ctx context.Context, t *testing.T, cConn, sConn *Conn, longData string) {
@@ -354,7 +360,6 @@ func runSendLongDataStmt(ctx context.Context, t *testing.T, cConn, sConn *Conn, 
 		time.Sleep((time.Duration)(rand.Int63n(100)) * time.Millisecond)
 		cConn.sequence = 0
 		longDataPacket := createSendLongDataPacket(sConn.StatementID, 0, []byte(longData))
-		require.Equal(t, 10, len(longDataPacket))
 		err = cConn.writePacket(longDataPacket)
 		require.NoError(t, err)
 
