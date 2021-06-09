@@ -18,13 +18,20 @@ package mysql
 
 import (
 	"bytes"
+	"context"
 	crypto_rand "crypto/rand"
+	"encoding/binary"
 	"math/rand"
 	"net"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
@@ -283,3 +290,135 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		}
 	}
 }
+
+// multiple sConn and cConn
+// goroutine to hammer the server
+// one is going to do prepare + (send long + exec)* (test the output for send long)
+// others are gonna do whatever (to stress test)
+
+func TestPrepareAndExecute(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func(longData string) {
+		listener, sConn, cConn := createSocketPair(t)
+		defer func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		}()
+
+		runSendLongDataStmt(ctx, t, cConn, sConn, longData)
+	}("foo")
+
+	go func(longData string) {
+		listener, sConn, cConn := createSocketPair(t)
+		defer func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		}()
+
+		runSendLongDataStmt(ctx, t, cConn, sConn, longData)
+	}("bar")
+
+	time.Sleep(100 * time.Second)
+}
+
+func runSendLongDataStmt(ctx context.Context, t *testing.T, cConn, sConn *Conn, longData string) {
+	sql := "SELECT * FROM test WHERE id = ?"
+	mockData := MockQueryPackets(t, sql)
+
+	err := cConn.writePacket(mockData)
+	require.NoError(t, err)
+
+	handler := &testRun{
+		t:              t,
+		expParamCounts: 1,
+		expQuery:       sql,
+		expStmtID:      1,
+	}
+
+	err = sConn.handleNextCommand(handler)
+	require.NoError(t, err)
+
+	resp, err := cConn.ReadPacket()
+	require.NoError(t, err)
+	require.EqualValues(t, 0, resp[0])
+
+	for count := 0; ; count++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		time.Sleep((time.Duration)(rand.Int63n(100)) * time.Millisecond)
+		cConn.sequence = 0
+		longDataPacket := createSendLongDataPacket(sConn.StatementID, 0, []byte(longData))
+		require.Equal(t, 10, len(longDataPacket))
+		err = cConn.writePacket(longDataPacket)
+		require.NoError(t, err)
+
+		err = sConn.handleNextCommand(handler)
+		require.NoError(t, err)
+		require.Equalf(t, []byte(longData), sConn.PrepareData[sConn.StatementID].BindVars["v1"].Value[len(longData)*count:], "failed at: %d", count)
+	}
+}
+
+func createSendLongDataPacket(stmtID uint32, paramID uint16, data []byte) []byte {
+	stmtIDBinary := make([]byte, 4)
+	binary.LittleEndian.PutUint32(stmtIDBinary, stmtID)
+
+	paramIDBinary := make([]byte, 2)
+	binary.LittleEndian.PutUint16(paramIDBinary, paramID)
+
+	packet := []byte{ComStmtSendLongData}
+	packet = append(packet, stmtIDBinary...)  // append stmt ID
+	packet = append(packet, paramIDBinary...) // append param ID
+	packet = append(packet, data...)          // append data
+	return packet
+}
+
+// real stmt execute, then do multiple with multiple BV values
+// check in the handler if all values are clean and correct
+
+type testRun struct {
+	t              *testing.T
+	expParamCounts int
+	expQuery       string
+	expStmtID      int
+}
+
+func (t testRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
+	panic("implement me")
+}
+
+func (t testRun) NewConnection(c *Conn) {
+	panic("implement me")
+}
+
+func (t testRun) ConnectionClosed(c *Conn) {
+	panic("implement me")
+}
+
+func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	panic("implement me")
+}
+
+func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, error) {
+	assert.Equal(t.t, t.expQuery, query)
+	assert.EqualValues(t.t, t.expStmtID, c.StatementID)
+	assert.NotNil(t.t, c.PrepareData[c.StatementID])
+	assert.EqualValues(t.t, t.expParamCounts, c.PrepareData[c.StatementID].ParamsCount)
+	assert.Len(t.t, c.PrepareData, int(c.PrepareData[c.StatementID].ParamsCount))
+	return nil, nil
+}
+
+func (t testRun) WarningCount(c *Conn) uint16 {
+	return 0
+}
+
+func (t testRun) ComResetConnection(c *Conn) {
+	panic("implement me")
+}
+
+var _ Handler = (*testRun)(nil)
