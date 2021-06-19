@@ -18,6 +18,7 @@ package grpctmclient
 
 import (
 	"context"
+	"flag"
 	"io"
 	"sync"
 	"time"
@@ -33,9 +34,16 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+var (
+	defaultPoolCapacity      = flag.Int("tablet_manager_grpc_connpool_size", 10, "number of tablets to keep tmclient connections open to")
+	defaultPoolIdleTimeout   = flag.Duration("tablet_manager_grpc_connpool_idle_timeout", time.Second*30, "how long to leave a connection in the tmclient connpool. acquiring a connection resets this period for that connection")
+	defaultPoolWaitTimeout   = flag.Duration("tablet_manager_grpc_connpool_wait_timeout", time.Millisecond*50, "how long to wait for a connection from the tmclient connpool")
+	defaultPoolSweepInterval = flag.Duration("tablet_manager_grpc_connpool_sweep_interval", time.Second*30, "how often to clean up and close unused tmclient connections that exceed the idle timeout")
+)
+
 func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpc-cached", func() tmclient.TabletManagerClient {
-		return NewCachedClient()
+		return NewCachedClient(*defaultPoolCapacity, *defaultPoolIdleTimeout, *defaultPoolWaitTimeout, *defaultPoolSweepInterval)
 	})
 }
 
@@ -96,7 +104,10 @@ func (tmc *pooledTMC) Close() error {
 }
 
 type cachedClient struct {
-	capacity int
+	capacity    int
+	idleTimeout time.Duration
+	waitTimeout time.Duration
+
 	// freeCh is used to signal that a slot in the conns map has been freed up
 	freeCh chan *struct{}
 
@@ -109,12 +120,14 @@ type cachedClient struct {
 // NewCachedClient returns a Client using the cachedClient dialer implementation.
 // Because all connections are cached/pooled, it does not implement poolDialer,
 // and grpctmclient.Client will use pooled connections for all RPCs.
-func NewCachedClient() *Client {
+func NewCachedClient(capacity int, idleTimeout time.Duration, waitTimeout time.Duration, sweepInterval time.Duration) *Client {
 	cc := &cachedClient{
-		capacity:   poolCapacity,
-		freeCh:     make(chan *struct{}, poolCapacity),
-		conns:      make(map[string]*pooledTMC, poolCapacity),
-		sweepTimer: timer.NewTimer(poolSweepInterval),
+		capacity:    capacity,
+		idleTimeout: idleTimeout,
+		waitTimeout: waitTimeout,
+		freeCh:      make(chan *struct{}, capacity),
+		conns:       make(map[string]*pooledTMC, capacity),
+		sweepTimer:  timer.NewTimer(sweepInterval),
 	}
 
 	// mark all slots as open
@@ -127,13 +140,6 @@ func NewCachedClient() *Client {
 		dialer: cc,
 	}
 }
-
-const (
-	poolCapacity      = 5                     // TODO: flag
-	poolIdleTimeout   = time.Second * 30      // TODO: flag
-	poolWaitTimeout   = time.Millisecond * 50 // TODO: flag
-	poolSweepInterval = time.Second * 30      // TODO: flag
-)
 
 func (client *cachedClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
 	addr := getTabletAddr(tablet)
@@ -152,7 +158,7 @@ func (client *cachedClient) dial(ctx context.Context, tablet *topodatapb.Tablet)
 	// Slow path, we're going to see if there's a free slot. If so, we'll claim
 	// it and dial a new conn. If not, we're going to have to wait or timeout.
 	// We don't hold the lock while we're polling.
-	ctx, cancel := context.WithTimeout(ctx, poolWaitTimeout)
+	ctx, cancel := context.WithTimeout(ctx, client.waitTimeout)
 	defer cancel()
 
 	for {
@@ -221,7 +227,7 @@ func (client *cachedClient) sweep() {
 
 	now := time.Now()
 	client.sweepFnLocked(func(conn *pooledTMC) (bool, bool) {
-		return conn.refs == 0 && conn.lastAccessTime.Add(poolIdleTimeout).Before(now), false
+		return conn.refs == 0 && conn.lastAccessTime.Add(client.idleTimeout).Before(now), false
 	})
 }
 
