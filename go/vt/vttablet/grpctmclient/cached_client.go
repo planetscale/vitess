@@ -188,6 +188,19 @@ func (client *cachedClient) dial(ctx context.Context, tablet *topodatapb.Tablet)
 
 			client.conns[addr] = conn
 			return conn, conn, nil
+		default:
+			client.m.Lock()
+			client.sweepFnLocked(func(conn *pooledTMC) (bool, bool) {
+				if conn.refs == 0 {
+					// We only want to sweep far enough to free one conn, then
+					// stop and let the rest of the sweeping happen in the
+					// background timer.
+					return true, true
+				}
+
+				return false, false
+			})
+			client.m.Unlock()
 		}
 	}
 }
@@ -197,11 +210,9 @@ func (client *cachedClient) Close() {
 	defer client.m.Unlock()
 
 	client.sweepTimer.Stop()
-	for key, conn := range client.conns {
-		conn.cc.Close()
-		client.freeCh <- nil
-		delete(client.conns, key)
-	}
+	client.sweepFnLocked(func(conn *pooledTMC) (bool, bool) {
+		return true, false
+	})
 }
 
 func (client *cachedClient) sweep() {
@@ -209,19 +220,32 @@ func (client *cachedClient) sweep() {
 	defer client.m.Unlock()
 
 	now := time.Now()
+	client.sweepFnLocked(func(conn *pooledTMC) (bool, bool) {
+		return conn.refs == 0 && conn.lastAccessTime.Add(poolIdleTimeout).Before(now), false
+	})
+}
 
+func (client *cachedClient) sweepFnLocked(f func(conn *pooledTMC) (shouldFree bool, stopSweep bool)) {
 	for key, conn := range client.conns {
 		conn.m.Lock()
-		shouldFree := conn.refs == 0 && conn.lastAccessTime.Add(poolIdleTimeout).Before(now)
-
+		shouldFree, stopSweep := f(conn)
 		if !shouldFree {
 			conn.m.Unlock()
+			if stopSweep {
+				return
+			}
+
 			continue
 		}
 
 		conn.cc.Close()
 		client.freeCh <- nil
 		delete(client.conns, key)
+		conn.m.Unlock()
+
+		if stopSweep {
+			return
+		}
 	}
 }
 
