@@ -18,6 +18,7 @@ package grpctmclient
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"io"
 	"sync"
@@ -51,7 +52,7 @@ type pooledTMC struct {
 	tabletmanagerservicepb.TabletManagerClient
 	cc *grpc.ClientConn
 
-	m              sync.Mutex // protects lastAccessTime and refs
+	m              sync.RWMutex // protects lastAccessTime and refs
 	lastAccessTime time.Time
 	refs           int
 }
@@ -111,10 +112,10 @@ type cachedClient struct {
 	// freeCh is used to signal that a slot in the conns map has been freed up
 	freeCh chan *struct{}
 
-	m     sync.Mutex // protects conns map
+	m     sync.RWMutex // protects conns map
 	conns map[string]*pooledTMC
 
-	sweepTimer *timer.Timer
+	janitor *janitor
 }
 
 // NewCachedClient returns a Client using the cachedClient dialer implementation.
@@ -127,15 +128,20 @@ func NewCachedClient(capacity int, idleTimeout time.Duration, waitTimeout time.D
 		waitTimeout: waitTimeout,
 		freeCh:      make(chan *struct{}, capacity),
 		conns:       make(map[string]*pooledTMC, capacity),
-		sweepTimer:  timer.NewTimer(sweepInterval),
+		janitor: &janitor{
+			ch:    make(chan *struct{}, 10), // TODO: flag
+			timer: timer.NewTimer(sweepInterval),
+		},
 	}
 
 	// mark all slots as open
 	for i := 0; i < cc.capacity; i++ {
-		cc.freeCh <- nil
+		cc.freeCh <- sentinel
 	}
 
-	cc.sweepTimer.Start(cc.sweep)
+	cc.janitor.client = cc
+	go cc.janitor.run()
+
 	return &Client{
 		dialer: cc,
 	}
@@ -144,16 +150,16 @@ func NewCachedClient(capacity int, idleTimeout time.Duration, waitTimeout time.D
 func (client *cachedClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
 	addr := getTabletAddr(tablet)
 
-	client.m.Lock()
+	client.m.RLock()
 	if conn, ok := client.conns[addr]; ok {
 		// Fast path, we have a conn for this addr in the cache. Mark it as
 		// acquired and return it.
-		defer client.m.Unlock()
+		defer client.m.RUnlock()
 		conn.acquire()
 
 		return conn, conn, nil
 	}
-	client.m.Unlock()
+	client.m.RUnlock()
 
 	// Slow path, we're going to see if there's a free slot. If so, we'll claim
 	// it and dial a new conn. If not, we're going to have to wait or timeout.
@@ -165,7 +171,10 @@ func (client *cachedClient) dial(ctx context.Context, tablet *topodatapb.Tablet)
 		select {
 		case <-ctx.Done():
 			return nil, nil, ctx.Err() // TODO: wrap
-		case <-client.freeCh:
+		case s := <-client.freeCh:
+			if s == nil {
+				return nil, nil, errors.New("client is closed") // TODO: named error
+			}
 			// TODO: if something isn't immediately free, we should try to trigger the
 			// sweeper, but we'll need another structure to make sure we aren't constantly
 			// doing that; some sort of backoff/grace period.
@@ -173,40 +182,32 @@ func (client *cachedClient) dial(ctx context.Context, tablet *topodatapb.Tablet)
 			// Also, if we're doing that, we probably want the sweeper to evict
 			// the first conn with no refs, and ignore IdleTimeout. No one's
 			// using that conn, and we want to use this one, so we shall.
-			client.m.Lock()
 			select {
 			case <-ctx.Done():
 				// context expired while we were waiting for the lock, relinquish
 				// our spot in the freeCh
-				client.m.Unlock()
-				client.freeCh <- nil
+				client.freeCh <- sentinel
 				return nil, nil, ctx.Err() // TODO: wrap
 			default:
 			}
 			// Time to get a new conn. We will return from the end of this
 			// section no matter what.
+			client.m.Lock()
 			defer client.m.Unlock()
 			conn, err := newPooledConn(addr)
 			if err != nil {
-				client.freeCh <- nil
+				client.freeCh <- sentinel
 				return nil, nil, err
 			}
 
 			client.conns[addr] = conn
 			return conn, conn, nil
 		default:
-			client.m.Lock()
-			client.sweepFnLocked(func(conn *pooledTMC) (bool, bool) {
-				if conn.refs == 0 {
-					// We only want to sweep far enough to free one conn, then
-					// stop and let the rest of the sweeping happen in the
-					// background timer.
-					return true, true
-				}
-
-				return false, false
-			})
-			client.m.Unlock()
+			// Non-blocking signal to the janitor that it should consider sweeping soon.
+			select {
+			case client.janitor.ch <- sentinel:
+			default:
+			}
 		}
 	}
 }
@@ -215,18 +216,62 @@ func (client *cachedClient) Close() {
 	client.m.Lock()
 	defer client.m.Unlock()
 
-	client.sweepTimer.Stop()
+	close(client.janitor.ch)
 	client.sweepFnLocked(func(conn *pooledTMC) (bool, bool) {
 		return true, false
 	})
 }
 
-func (client *cachedClient) sweep() {
-	client.m.Lock()
-	defer client.m.Unlock()
+func (client *cachedClient) sweep2(f func(conn *pooledTMC) (bool, bool)) {
+	client.m.RLock()
 
+	var toFree []string
+	for key, conn := range client.conns {
+		conn.m.RLock()
+		shouldFree, stopSweep := f(conn)
+		conn.m.RUnlock()
+
+		if shouldFree {
+			toFree = append(toFree, key)
+		}
+
+		if stopSweep {
+			break
+		}
+	}
+
+	client.m.RUnlock()
+
+	if len(toFree) > 0 {
+		client.m.Lock()
+		defer client.m.Unlock()
+
+		for _, key := range toFree {
+			conn, ok := client.conns[key]
+			if !ok {
+				continue
+			}
+
+			conn.m.Lock()
+			// check the condition again, things may have changed since we
+			// transitioned from the read lock to the write lock
+			shouldFree, _ := f(conn)
+			if !shouldFree {
+				conn.m.Unlock()
+				continue
+			}
+
+			conn.cc.Close()
+			conn.m.Unlock()
+			delete(client.conns, key)
+			client.freeCh <- sentinel
+		}
+	}
+}
+
+func (client *cachedClient) sweep() {
 	now := time.Now()
-	client.sweepFnLocked(func(conn *pooledTMC) (bool, bool) {
+	client.sweep2(func(conn *pooledTMC) (bool, bool) {
 		return conn.refs == 0 && conn.lastAccessTime.Add(client.idleTimeout).Before(now), false
 	})
 }
@@ -245,7 +290,7 @@ func (client *cachedClient) sweepFnLocked(f func(conn *pooledTMC) (shouldFree bo
 		}
 
 		conn.cc.Close()
-		client.freeCh <- nil
+		client.freeCh <- sentinel
 		delete(client.conns, key)
 		conn.m.Unlock()
 
@@ -253,6 +298,69 @@ func (client *cachedClient) sweepFnLocked(f func(conn *pooledTMC) (shouldFree bo
 			return
 		}
 	}
+}
+
+var sentinel = &struct{}{}
+
+type janitor struct {
+	ch     chan *struct{}
+	client *cachedClient
+	timer  *timer.Timer
+
+	m         sync.Mutex
+	sweeping  bool
+	lastSweep time.Time
+}
+
+func (j *janitor) run() {
+	j.timer.Start(j.sweep)
+	defer j.timer.Stop()
+
+	for s := range j.ch {
+		if s == nil {
+			break
+		}
+
+		scan := true
+		t := time.NewTimer(time.Millisecond * 50) // TODO: flag
+		for scan {
+			select {
+			case <-t.C:
+				scan = false
+			case s := <-j.ch:
+				if s == nil {
+					scan = false
+				}
+			default:
+				scan = false
+			}
+		}
+
+		t.Stop()
+		j.sweep()
+	}
+}
+
+func (j *janitor) sweep() {
+	j.m.Lock()
+	if j.sweeping {
+		j.m.Unlock()
+		return
+	}
+
+	if j.lastSweep.Add(time.Millisecond * 10 /* TODO: flag */).After(time.Now()) {
+		j.m.Unlock()
+		return
+	}
+
+	j.sweeping = true
+	j.m.Unlock()
+
+	j.client.sweep()
+	j.m.Lock()
+	j.sweeping = false
+	j.lastSweep = time.Now()
+	j.m.Unlock()
 }
 
 func getTabletAddr(tablet *topodatapb.Tablet) string {
