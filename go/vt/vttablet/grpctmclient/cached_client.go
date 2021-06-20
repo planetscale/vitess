@@ -18,7 +18,6 @@ package grpctmclient
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"io"
 	"sync"
@@ -27,6 +26,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -109,8 +109,8 @@ type cachedClient struct {
 	idleTimeout time.Duration
 	waitTimeout time.Duration
 
-	// freeCh is used to signal that a slot in the conns map has been freed up
-	freeCh chan *struct{}
+	// sema gates the addition of new connections to the cache
+	sema *sync2.Semaphore
 
 	m     sync.RWMutex // protects conns map
 	conns map[string]*pooledTMC
@@ -126,17 +126,12 @@ func NewCachedClient(capacity int, idleTimeout time.Duration, waitTimeout time.D
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
 		waitTimeout: waitTimeout,
-		freeCh:      make(chan *struct{}, capacity),
+		sema:        sync2.NewSemaphore(capacity, waitTimeout),
 		conns:       make(map[string]*pooledTMC, capacity),
 		janitor: &janitor{
 			ch:    make(chan *struct{}, 10), // TODO: flag
 			timer: timer.NewTimer(sweepInterval),
 		},
-	}
-
-	// mark all slots as open
-	for i := 0; i < cc.capacity; i++ {
-		cc.freeCh <- sentinel
 	}
 
 	cc.janitor.client = cc
@@ -167,49 +162,48 @@ func (client *cachedClient) dial(ctx context.Context, tablet *topodatapb.Tablet)
 	ctx, cancel := context.WithTimeout(ctx, client.waitTimeout)
 	defer cancel()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, nil, ctx.Err() // TODO: wrap
-		case s := <-client.freeCh:
-			if s == nil {
-				return nil, nil, errors.New("client is closed") // TODO: named error
-			}
-			// TODO: if something isn't immediately free, we should try to trigger the
-			// sweeper, but we'll need another structure to make sure we aren't constantly
-			// doing that; some sort of backoff/grace period.
-			//
-			// Also, if we're doing that, we probably want the sweeper to evict
-			// the first conn with no refs, and ignore IdleTimeout. No one's
-			// using that conn, and we want to use this one, so we shall.
-			select {
-			case <-ctx.Done():
-				// context expired while we were waiting for the lock, relinquish
-				// our spot in the freeCh
-				client.freeCh <- sentinel
-				return nil, nil, ctx.Err() // TODO: wrap
-			default:
-			}
-			// Time to get a new conn. We will return from the end of this
-			// section no matter what.
-			client.m.Lock()
-			defer client.m.Unlock()
-			conn, err := newPooledConn(addr)
-			if err != nil {
-				client.freeCh <- sentinel
-				return nil, nil, err
-			}
+	dial := func(addr string) (conn *pooledTMC, closer io.Closer, err error) {
+		client.m.Lock()
+		defer client.m.Unlock()
 
-			client.conns[addr] = conn
-			return conn, conn, nil
-		default:
-			// Non-blocking signal to the janitor that it should consider sweeping soon.
-			select {
-			case client.janitor.ch <- sentinel:
-			default:
+		defer func() {
+			// If we failed to dial a new conn for any reason, release our spot
+			// in the sema so another dial can take its place.
+			if err != nil {
+				client.sema.Release()
 			}
+		}()
+
+		select {
+		case <-ctx.Done(): // We timed out waiting for the write lock, bail.
+			return nil, nil, ctx.Err() // TODO: wrap
+		default:
 		}
+
+		conn, err = newPooledConn(addr)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		client.conns[addr] = conn
+		return conn, conn, nil
 	}
+
+	if client.sema.TryAcquire() {
+		return dial(addr)
+	}
+
+	select {
+	// Non-blocking signal to the janitor that it should consider sweeping soon.
+	case client.janitor.ch <- sentinel:
+	default:
+	}
+
+	if !client.sema.AcquireContext(ctx) {
+		return nil, nil, ctx.Err()
+	}
+
+	return dial(addr)
 }
 
 func (client *cachedClient) Close() {
@@ -264,7 +258,7 @@ func (client *cachedClient) sweep2(f func(conn *pooledTMC) (bool, bool)) {
 			conn.cc.Close()
 			conn.m.Unlock()
 			delete(client.conns, key)
-			client.freeCh <- sentinel
+			client.sema.Release()
 		}
 	}
 }
@@ -290,8 +284,8 @@ func (client *cachedClient) sweepFnLocked(f func(conn *pooledTMC) (shouldFree bo
 		}
 
 		conn.cc.Close()
-		client.freeCh <- sentinel
 		delete(client.conns, key)
+		client.sema.Release()
 		conn.m.Unlock()
 
 		if stopSweep {
