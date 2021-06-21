@@ -168,6 +168,17 @@ func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
 	}
 }
 
+func TestRawConnection(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+	assert.IsType(t, &net.TCPConn{}, sConn.GetRawConn())
+	assert.IsType(t, &net.TCPConn{}, cConn.GetRawConn())
+}
+
 func TestPackets(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
@@ -276,7 +287,7 @@ func TestBasicPackets(t *testing.T) {
 
 // Mostly a sanity check.
 func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 500; i++ {
 		bytes := make([]byte, rand.Intn(16)+1)
 		_, err := crypto_rand.Read(bytes)
 		if err != nil {
@@ -310,7 +321,7 @@ func randSeq(n int) string {
 func TestPrepareAndExecute(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		startGoRoutine(ctx, t, randSeq(20))
 	}
 
