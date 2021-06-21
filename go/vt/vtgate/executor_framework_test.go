@@ -24,10 +24,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	"github.com/stretchr/testify/assert"
-
 	"context"
 
 	"vitess.io/vitess/go/cache"
@@ -550,14 +546,19 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	t.Helper()
 
 	logStats := getQueryLog(logChan)
-	require.NotNil(t, logStats)
+	if logStats == nil {
+		t.Errorf("logstats: no querylog in channel, want sql %s", sql)
+		return nil
+	}
 
 	var log bytes.Buffer
 	streamlog.GetFormatter(QueryLogger)(&log, nil, logStats)
 	fields := strings.Split(log.String(), "\t")
 
 	// fields[0] is the method
-	assert.Equal(t, method, fields[0], "logstats: method")
+	if method != fields[0] {
+		t.Errorf("logstats: method want %q got %q", method, fields[0])
+	}
 
 	// fields[1] - fields[6] are the caller id, start/end times, etc
 
@@ -587,16 +588,22 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	}
 
 	// fields[11] is the statement type
-	assert.Equal(t, stmtType, fields[11], "logstats: stmtType")
+	if stmtType != fields[11] {
+		t.Errorf("logstats: stmtType want %q got %q", stmtType, fields[11])
+	}
 
 	// fields[12] is the original sql
 	wantSQL := fmt.Sprintf("%q", sql)
-	assert.Equal(t, wantSQL, fields[12], "logstats: SQL")
+	if wantSQL != fields[12] {
+		t.Errorf("logstats: SQL want %s got %s", wantSQL, fields[12])
+	}
 
 	// fields[13] contains the formatted bind vars
 
 	// fields[14] is the count of shard queries
-	assert.Equal(t, fmt.Sprintf("%v", shardQueries), fields[14], "logstats: ShardQueries")
+	if fmt.Sprintf("%v", shardQueries) != fields[14] {
+		t.Errorf("logstats: ShardQueries want %v got %v", shardQueries, fields[14])
+	}
 
 	return logStats
 }
