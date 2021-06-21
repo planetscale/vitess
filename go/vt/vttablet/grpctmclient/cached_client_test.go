@@ -250,19 +250,22 @@ func TestCachedClientMultipleSweeps(t *testing.T) {
 		}
 	}
 
-	// make sure we can dial every tablet
-	for _, tablet := range tablets {
-		err := NewClient().Ping(context.Background(), tablet)
-		require.NoError(t, err, "failed to dial tablet %s", tablet.Hostname)
-	}
+	// // make sure we can dial every tablet
+	// for _, tablet := range tablets {
+	// 	err := NewClient().Ping(context.Background(), tablet)
+	// 	require.NoError(t, err, "failed to dial tablet %s", tablet.Hostname)
+	// }
 
-	poolSize := int(float64(numTablets) * 0.8)
-	client := NewCachedClient(poolSize, time.Second*10, time.Millisecond*100, time.Second*30)
+	poolSize := int(float64(numTablets) * 0.5)
+	// client := NewCachedClient(poolSize, time.Second*10, time.Millisecond*100, time.Second*30)
 	// client := NewPooledDialer()
+	client := NewCachedConnClient(poolSize)
 	defer client.Close()
 
 	dialAttempts := sync2.NewAtomicInt64(0)
 	dialErrors := sync2.NewAtomicInt64(0)
+
+	longestDials := make(chan time.Duration, numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
@@ -271,21 +274,29 @@ func TestCachedClientMultipleSweeps(t *testing.T) {
 
 			attempts := 0
 			jitter := time.Second * 0
+			longestDial := time.Duration(0)
 
 			for {
 				select {
 				case <-testCtx.Done():
 					dialAttempts.Add(int64(attempts))
+					longestDials <- longestDial
 					return
 				case <-time.After(jitter):
-					jitter = time.Millisecond * (time.Duration(rand.Intn(51) + 100))
+					jitter = time.Millisecond * (time.Duration(rand.Intn(11) + 50))
 					attempts++
 
 					tablet := tablets[rand.Intn(len(tablets))]
+					start := time.Now()
 					_, closer, err := client.dialer.dial(context.Background(), tablet)
 					if err != nil {
 						dialErrors.Add(1)
 						continue
+					}
+
+					dialDuration := time.Since(start)
+					if dialDuration > longestDial {
+						longestDial = dialDuration
 					}
 
 					closer.Close()
@@ -297,7 +308,17 @@ func TestCachedClientMultipleSweeps(t *testing.T) {
 	time.Sleep(time.Minute)
 	testCancel()
 	wg.Wait()
+	close(longestDials)
+
+	longestDial := time.Duration(0)
+	for dialDuration := range longestDials {
+		if dialDuration > longestDial {
+			longestDial = dialDuration
+		}
+	}
 
 	attempts, errors := dialAttempts.Get(), dialErrors.Get()
 	assert.Less(t, float64(errors)/float64(attempts), 0.001, fmt.Sprintf("fewer than 0.1%% of dial attempts should fail (attempts = %d, errors = %d, max running procs = %d)", attempts, errors, procs))
+	assert.Less(t, errors, int64(1), "at least one dial attempt failed (attempts = %d, errors = %d)", attempts, errors)
+	assert.Less(t, longestDial.Milliseconds(), int64(50))
 }

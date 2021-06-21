@@ -17,6 +17,7 @@ limitations under the License.
 package grpctmclient
 
 import (
+	"container/heap"
 	"context"
 	"flag"
 	"io"
@@ -45,6 +46,9 @@ var (
 func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpc-cached", func() tmclient.TabletManagerClient {
 		return NewCachedClient(*defaultPoolCapacity, *defaultPoolIdleTimeout, *defaultPoolWaitTimeout, *defaultPoolSweepInterval)
+	})
+	tmclient.RegisterTabletManagerClientFactory("grpc-cached-pqueue", func() tmclient.TabletManagerClient {
+		return NewCachedConnClient(*defaultPoolCapacity)
 	})
 }
 
@@ -78,6 +82,21 @@ func newPooledConn(addr string) (*pooledTMC, error) {
 	}, nil
 }
 
+func dialCommon(addr string) (*grpc.ClientConn, error) {
+	// sharing code between my two implementations because i'm lazy
+	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
+	if err != nil {
+		return nil, err
+	}
+
+	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
+	if err != nil {
+		return nil, err
+	}
+
+	return cc, nil
+}
+
 func (tmc *pooledTMC) acquire() {
 	tmc.m.Lock()
 	defer tmc.m.Unlock()
@@ -103,6 +122,14 @@ func (tmc *pooledTMC) Close() error {
 	tmc.release()
 	return nil
 }
+
+type closeFunc func() error
+
+func (fn closeFunc) Close() error {
+	return fn()
+}
+
+var _ io.Closer = (*closeFunc)(nil)
 
 type cachedClient struct {
 	capacity    int
@@ -355,6 +382,206 @@ func (j *janitor) sweep() {
 	j.sweeping = false
 	j.lastSweep = time.Now()
 	j.m.Unlock()
+}
+
+type cachedConn struct {
+	tabletmanagerservicepb.TabletManagerClient
+	cc *grpc.ClientConn
+
+	lastAccessTime time.Time
+	refs           int
+
+	index int
+	key   string
+}
+
+type cachedConns []*cachedConn
+
+var _ heap.Interface = (*cachedConns)(nil)
+
+func (queue cachedConns) Len() int { return len(queue) }
+
+func (queue cachedConns) Less(i, j int) bool {
+	left, right := queue[i], queue[j]
+	if left.refs == right.refs {
+		// break ties by access time.
+		// more stale connections have higher priority for removal
+		// this condition is equvalent to:
+		//		left.lastAccessTime <= right.lastAccessTime
+		return !left.lastAccessTime.After(right.lastAccessTime)
+	}
+
+	// connections with fewer refs have higher priority for removal
+	return left.refs < right.refs
+}
+
+func (queue cachedConns) Swap(i, j int) {
+	queue[i], queue[j] = queue[j], queue[i]
+	queue[i].index = i
+	queue[j].index = j
+}
+
+func (queue *cachedConns) Push(x interface{}) {
+	n := len(*queue)
+	conn := x.(*cachedConn)
+	conn.index = n
+	*queue = append(*queue, conn)
+}
+
+func (queue *cachedConns) Pop() interface{} {
+	old := *queue
+	n := len(old)
+	conn := old[n-1]
+	old[n-1] = nil  // avoid memory leak
+	conn.index = -1 // for safety
+	*queue = old[0 : n-1]
+
+	return conn
+}
+
+type cachedConnDialer struct {
+	m            sync.RWMutex
+	conns        map[string]*cachedConn
+	qMu          sync.Mutex
+	queue        cachedConns
+	connWaitSema *sync2.Semaphore
+}
+
+// NewCachedConnClient returns a grpc Client using the priority queue cache
+// dialer implementation.
+func NewCachedConnClient(capacity int) *Client {
+	dialer := &cachedConnDialer{
+		conns:        make(map[string]*cachedConn, capacity),
+		queue:        make(cachedConns, 0, capacity),
+		connWaitSema: sync2.NewSemaphore(capacity, 0),
+	}
+
+	heap.Init(&dialer.queue)
+	return &Client{dialer}
+}
+
+var _ dialer = (*cachedConnDialer)(nil)
+
+func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	addr := getTabletAddr(tablet)
+	dialer.m.RLock()
+	if conn, ok := dialer.conns[addr]; ok {
+		defer dialer.m.RUnlock()
+		dialer.qMu.Lock()
+		defer dialer.qMu.Unlock()
+
+		conn.lastAccessTime = time.Now()
+		conn.refs++
+		heap.Fix(&dialer.queue, conn.index)
+
+		return conn, closeFunc(func() error {
+			dialer.qMu.Lock()
+			defer dialer.qMu.Unlock()
+
+			conn.refs--
+			heap.Fix(&dialer.queue, conn.index)
+			return nil
+		}), nil
+	}
+	dialer.m.RUnlock()
+
+	if dialer.connWaitSema.TryAcquire() {
+		dialer.m.Lock()
+		defer dialer.m.Unlock()
+
+		cc, err := dialCommon(addr)
+		if err != nil {
+			dialer.connWaitSema.Release()
+			return nil, nil, err
+		}
+
+		dialer.qMu.Lock()
+		defer dialer.qMu.Unlock()
+
+		conn := &cachedConn{
+			TabletManagerClient: tabletmanagerservicepb.NewTabletManagerClient(cc),
+			cc:                  cc,
+			lastAccessTime:      time.Now(),
+			refs:                1,
+			index:               -1, // gets set by call to Push
+			key:                 addr,
+		}
+		heap.Push(&dialer.queue, conn)
+		dialer.conns[addr] = conn
+
+		return conn, closeFunc(func() error {
+			dialer.qMu.Lock()
+			defer dialer.qMu.Unlock()
+
+			conn.refs--
+			heap.Fix(&dialer.queue, conn.index)
+			return nil
+		}), nil
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		default:
+			dialer.m.Lock()
+			dialer.qMu.Lock()
+			conn := dialer.queue[0]
+			if conn.refs != 0 {
+				dialer.qMu.Unlock()
+				dialer.m.Unlock()
+				continue
+			}
+
+			// We're going to return from this point
+			defer dialer.m.Unlock()
+			defer dialer.qMu.Unlock()
+			heap.Pop(&dialer.queue)
+			delete(dialer.conns, addr)
+			conn.cc.Close()
+
+			cc, err := dialCommon(addr)
+			if err != nil {
+				// We deleted a stale connection, but didn't claim one. Signal
+				// to the connWaitSema
+				dialer.connWaitSema.Release()
+				return nil, nil, err
+			}
+
+			conn = &cachedConn{
+				TabletManagerClient: tabletmanagerservicepb.NewTabletManagerClient(cc),
+				cc:                  cc,
+				lastAccessTime:      time.Now(),
+				refs:                1,
+				index:               -1, // gets set by call to Push
+				key:                 addr,
+			}
+			heap.Push(&dialer.queue, conn)
+			dialer.conns[addr] = conn
+
+			return conn, closeFunc(func() error {
+				dialer.qMu.Lock()
+				defer dialer.qMu.Unlock()
+
+				conn.refs--
+				heap.Fix(&dialer.queue, conn.index)
+				return nil
+			}), nil
+		}
+	}
+}
+
+func (dialer *cachedConnDialer) Close() {
+	dialer.m.Lock()
+	defer dialer.m.Unlock()
+	dialer.qMu.Lock()
+	defer dialer.qMu.Unlock()
+
+	for dialer.queue.Len() > 0 {
+		conn := dialer.queue.Pop().(*cachedConn)
+		conn.cc.Close()
+		delete(dialer.conns, conn.key)
+	}
 }
 
 func getTabletAddr(tablet *topodatapb.Tablet) string {
