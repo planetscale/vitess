@@ -63,7 +63,7 @@ func MustMatchFn(ignoredFields ...string) func(t *testing.T, want, got interface
 		t.Helper()
 		diff := cmp.Diff(want, got, diffOpts...)
 		if diff != "" {
-			t.Fatalf("%v: (-want +got)\n%v", errMsg, diff)
+			t.Fatalf("%s: (-want +got)\n%v", errMsg, diff)
 		}
 	}
 }

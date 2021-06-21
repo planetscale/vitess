@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -620,8 +621,10 @@ func TestSelectBindvars(t *testing.T) {
 	lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "varbinary|varbinary"),
 		"foo1|1",
+		"foo2|1",
 	), sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "varbinary|varbinary"),
+		"foo1|1",
 		"foo2|1",
 	)})
 
@@ -634,8 +637,12 @@ func TestSelectBindvars(t *testing.T) {
 		Sql:           "select id from `user` where id = :id",
 		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
 	}}
-	utils.MustMatch(t, sbc1.Queries, wantQueries)
-	assert.Empty(t, sbc2.Queries)
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
 	sbc1.Queries = nil
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
@@ -654,9 +661,10 @@ func TestSelectBindvars(t *testing.T) {
 			"__vals": sqltypes.TestBindVariable([]interface{}{"foo1", "foo2"}),
 		},
 	}}
-	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
 	sbc1.Queries = nil
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
@@ -668,14 +676,17 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from `user` where 1 != 1",
+		Sql: "select id from user where `name` in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name1": sqltypes.BytesBindVariable([]byte("foo1")),
-			"name2": sqltypes.BytesBindVariable([]byte("foo2")),
+			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
+			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
+			"__vals": sqltypes.TestBindVariable([]interface{}{[]byte("foo1"), []byte("foo2")}),
 		},
 	}}
-	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+
 	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
@@ -704,7 +715,9 @@ func TestSelectBindvars(t *testing.T) {
 			"name": sqltypes.StringBindVariable("nonexistent"),
 		},
 	}}
-	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
 
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("nonexistent")})
 	require.NoError(t, err)
@@ -714,8 +727,9 @@ func TestSelectBindvars(t *testing.T) {
 			"name": vars,
 		},
 	}}
-
-	utils.MustMatch(t, wantLookupQueries, lookup.Queries)
+	if !reflect.DeepEqual(lookup.Queries, wantLookupQueries) {
+		t.Errorf("lookup.Queries: %+v, want %+v\n", lookup.Queries, wantLookupQueries)
+	}
 
 	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
@@ -850,7 +864,7 @@ func TestSelectNormalize(t *testing.T) {
 		},
 	}}
 	require.Empty(t, sbc1.Queries)
-	utils.MustMatch(t, wantQueries, sbc2.Queries, "sbc2.Queries")
+	utils.MustMatch(t, sbc2.Queries, wantQueries, "sbc2.Queries")
 	sbc2.Queries = nil
 	masterSession.TargetString = ""
 }
