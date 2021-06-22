@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -447,6 +448,20 @@ type cachedConnDialer struct {
 	connWaitSema *sync2.Semaphore
 }
 
+var dialerStats = struct {
+	ConnReuse            *stats.Gauge
+	ConnNew              *stats.Gauge
+	DialTimeouts         *stats.Gauge
+	DialTimings          *stats.Timings
+	EvictionQueueTimings *stats.Timings
+}{
+	ConnReuse:    stats.NewGauge("tabletmanagerclient_cachedconn_reuse", "number of times a call to dial() was able to reuse an existing connection"),
+	ConnNew:      stats.NewGauge("tabletmanagerclient_cachedconn_new", "number of times a call to dial() resulted in a dialing a new grpc clientconn"),
+	DialTimeouts: stats.NewGauge("tabletmanagerclient_cachedconn_dial_timeouts", "number of context timeouts during dial()"),
+	DialTimings:  stats.NewTimings("tabletmanagerclient_cachedconn_dialtimings", "timings for various dial paths", "path", "rlock_fast", "sema_fast", "sema_poll"),
+	// TODO: add timings for heap operations (push, pop, fix)
+}
+
 // NewCachedConnClient returns a grpc Client using the priority queue cache
 // dialer implementation.
 func NewCachedConnClient(capacity int) *Client {
@@ -463,15 +478,23 @@ func NewCachedConnClient(capacity int) *Client {
 var _ dialer = (*cachedConnDialer)(nil)
 
 func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	start := time.Now()
+
 	addr := getTabletAddr(tablet)
 	dialer.m.RLock()
 	if conn, ok := dialer.conns[addr]; ok {
+		defer func() {
+			dialerStats.DialTimings.Add("rlock_fast", time.Since(start))
+		}()
 		defer dialer.m.RUnlock()
 		return dialer.redial(conn)
 	}
 	dialer.m.RUnlock()
 
 	if dialer.connWaitSema.TryAcquire() {
+		defer func() {
+			dialerStats.DialTimings.Add("sema_fast", time.Since(start))
+		}()
 		dialer.m.Lock()
 		defer dialer.m.Unlock()
 
@@ -485,9 +508,14 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 		return dialer.newdial(addr, true /* manage queue lock */)
 	}
 
+	defer func() {
+		dialerStats.DialTimings.Add("sema_poll", time.Since(start))
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
+			dialerStats.DialTimeouts.Add(1)
 			return nil, nil, ctx.Err()
 		default:
 			dialer.m.Lock()
@@ -527,6 +555,8 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 // It returns the three-tuple of client-interface, closer, and error that the
 // main dial func returns.
 func (dialer *cachedConnDialer) newdial(addr string, manageQueueLock bool) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	dialerStats.ConnNew.Add(1)
+
 	cc, err := dialCommon(addr)
 	if err != nil {
 		dialer.connWaitSema.Release()
@@ -564,6 +594,8 @@ func (dialer *cachedConnDialer) newdial(addr string, manageQueueLock bool) (tabl
 // It returns the three-tuple of client-interface, closer, and error that the
 // main dial func returns.
 func (dialer *cachedConnDialer) redial(conn *cachedConn) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	dialerStats.ConnReuse.Add(1)
+
 	dialer.qMu.Lock()
 	defer dialer.qMu.Unlock()
 
