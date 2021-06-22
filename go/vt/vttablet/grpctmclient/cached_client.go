@@ -46,21 +46,8 @@ func init() {
 	})
 }
 
-func dialCommon(addr string) (*grpc.ClientConn, error) {
-	// sharing code between my two implementations because i'm lazy
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
-	if err != nil {
-		return nil, err
-	}
-
-	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
-	if err != nil {
-		return nil, err
-	}
-
-	return cc, nil
-}
-
+// closeFunc allows a standalone function to implement io.Closer, similar to
+// how http.HandlerFunc allows standalone functions to implement http.Handler.
 type closeFunc func() error
 
 func (fn closeFunc) Close() error {
@@ -80,12 +67,22 @@ type cachedConn struct {
 	key   string
 }
 
+// cachedConns provides a priority queue implementation for O(log n) connection
+// eviction management. It is a nearly verbatim copy of the priority queue
+// sample at https://golang.org/pkg/container/heap/#pkg-overview, with the
+// Less function changed such that connections with refs==0 get pushed to the
+// front of the queue, because those are the connections we are going to want
+// to evict.
 type cachedConns []*cachedConn
 
 var _ heap.Interface = (*cachedConns)(nil)
 
+// Len is part of the sort.Interface interface and is used by container/heap
+// functions.
 func (queue cachedConns) Len() int { return len(queue) }
 
+// Less is part of the sort.Interface interface and is used by container/heap
+// functions.
 func (queue cachedConns) Less(i, j int) bool {
 	left, right := queue[i], queue[j]
 	if left.refs == right.refs {
@@ -100,12 +97,15 @@ func (queue cachedConns) Less(i, j int) bool {
 	return left.refs < right.refs
 }
 
+// Swap is part of the sort.Interface interface and is used by container/heap
+// functions.
 func (queue cachedConns) Swap(i, j int) {
 	queue[i], queue[j] = queue[j], queue[i]
 	queue[i].index = i
 	queue[j].index = j
 }
 
+// Push is part of the container/heap.Interface interface.
 func (queue *cachedConns) Push(x interface{}) {
 	n := len(*queue)
 	conn := x.(*cachedConn)
@@ -113,6 +113,7 @@ func (queue *cachedConns) Push(x interface{}) {
 	*queue = append(*queue, conn)
 }
 
+// Pop is part of the container/heap.Interface interface.
 func (queue *cachedConns) Pop() interface{} {
 	old := *queue
 	n := len(old)
@@ -241,7 +242,13 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 func (dialer *cachedConnDialer) newdial(addr string, manageQueueLock bool) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
 	dialerStats.ConnNew.Add(1)
 
-	cc, err := dialCommon(addr)
+	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
+	if err != nil {
+		dialer.connWaitSema.Release()
+		return nil, nil, err
+	}
+
+	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
 	if err != nil {
 		dialer.connWaitSema.Release()
 		return nil, nil, err
@@ -290,6 +297,9 @@ func (dialer *cachedConnDialer) redial(conn *cachedConn) (tabletmanagerservicepb
 	return dialer.connWithCloser(conn)
 }
 
+// connWithCloser returns the three-tuple expected by the main dial func, where
+// the closer handles the correct state management for updating the conns place
+// in the eviction queue.
 func (dialer *cachedConnDialer) connWithCloser(conn *cachedConn) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
 	return conn, closeFunc(func() error {
 		dialer.qMu.Lock()
@@ -301,6 +311,16 @@ func (dialer *cachedConnDialer) connWithCloser(conn *cachedConn) (tabletmanagers
 	}), nil
 }
 
+// Close closes all currently cached connections, ***regardless of whether
+// those connections are in use***. Calling Close therefore will fail any RPCs
+// using currently lent-out connections, and, furthermore, will invalidate the
+// io.Closer that was returned for that connection from dialer.dial().
+//
+// As a result, it is not safe to reuse a cachedConnDialer after calling Close,
+// and you should instead obtain a new one by calling either
+// tmclient.TabletManagerClient() with
+// TabletManagerProtocol set to "grpc-cached", or by calling
+// grpctmclient.NewCachedConnClient directly.
 func (dialer *cachedConnDialer) Close() {
 	dialer.m.Lock()
 	defer dialer.m.Unlock()
@@ -311,6 +331,7 @@ func (dialer *cachedConnDialer) Close() {
 		conn := dialer.queue.Pop().(*cachedConn)
 		conn.cc.Close()
 		delete(dialer.conns, conn.key)
+		dialer.connWaitSema.Release()
 	}
 }
 
