@@ -63,39 +63,7 @@ func grpcTestServer(t testing.TB, tm tabletmanager.RPCTM) (*net.TCPAddr, func())
 	}
 }
 
-func TestPooledTMC(t *testing.T) {
-	tmserv := tmrpctest.NewFakeRPCTM(t)
-	addr, shutdown := grpcTestServer(t, tmserv)
-	defer shutdown()
-
-	start := time.Now()
-	tmc, err := newPooledConn(addr.String())
-	require.NoError(t, err)
-	assert.Equal(t, tmc.refs, 1, "TODO")
-	assert.True(t, start.Before(tmc.lastAccessTime), "lastAccessTime is not after start; should have %v < %v", start, tmc.lastAccessTime)
-
-	checkpoint := tmc.lastAccessTime
-	tmc.acquire()
-	assert.Equal(t, tmc.refs, 2, "TODO")
-	assert.True(t, checkpoint.Before(tmc.lastAccessTime), "lastAccessTime is not after checkpoint; should have %v < %v", checkpoint, tmc.lastAccessTime)
-
-	checkpoint = tmc.lastAccessTime
-	tmc.release()
-	tmc.release()
-	assert.Equal(t, tmc.refs, 0, "TODO")
-	assert.True(t, checkpoint.Equal(tmc.lastAccessTime), "releasing pooledTMC should not change access time; should have %v = %v", checkpoint, tmc.lastAccessTime)
-
-	t.Run("release panic", func(t *testing.T) {
-		defer func() {
-			err := recover()
-			assert.NotNil(t, err, "release on unacquired pooledTMC should panic")
-		}()
-
-		tmc.release()
-	})
-}
-
-func BenchmarkCachedClient(b *testing.B) {
+func BenchmarkCachedConnClient(b *testing.B) {
 	tmserv := tmrpctest.NewFakeRPCTM(b)
 	tablets := make([]*topodatapb.Tablet, 4)
 	for i := 0; i < len(tablets); i++ {
@@ -115,7 +83,7 @@ func BenchmarkCachedClient(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	client := NewCachedClient(5, time.Second*30, time.Millisecond*50, time.Second*30)
+	client := NewCachedConnClient(5)
 	defer client.Close()
 
 	for i := 0; i < b.N; i++ {
@@ -130,82 +98,19 @@ func BenchmarkCachedClient(b *testing.B) {
 	}
 }
 
-func TestCachedClient(t *testing.T) {
+func TestCachedConnClient(t *testing.T) {
 	t.Parallel()
 
-	tmserv := tmrpctest.NewFakeRPCTM(t)
-	tablets := make([]*topodatapb.Tablet, 4)
-	for i := 0; i < len(tablets); i++ {
-		addr, shutdown := grpcTestServer(t, tmserv)
-		defer shutdown()
-
-		tablets[i] = &topodatapb.Tablet{
-			Alias: &topodatapb.TabletAlias{
-				Cell: "test",
-				Uid:  uint32(addr.Port),
-			},
-			Hostname: addr.IP.String(),
-			PortMap: map[string]int32{
-				"grpc": int32(addr.Port),
-			},
+	if os.Getenv("VT_PPROF_TEST") != "" {
+		file, err := os.Create(fmt.Sprintf("%s.profile.out", t.Name()))
+		require.NoError(t, err)
+		defer file.Close()
+		if err := pprof.StartCPUProfile(file); err != nil {
+			t.Errorf("failed to start cpu profile: %v", err)
+			return
 		}
+		defer pprof.StopCPUProfile()
 	}
-
-	client := NewCachedClient(5, time.Second*30, time.Millisecond*50, time.Second*30)
-	defer client.Close()
-
-	dialAttempts := sync2.NewAtomicInt64(0)
-	dialErrors := sync2.NewAtomicInt64(0)
-	testCtx, testCancel := context.WithCancel(context.Background())
-	wg := sync.WaitGroup{}
-
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			attempts := 0
-
-			for {
-				select {
-				case <-testCtx.Done():
-					dialAttempts.Add(int64(attempts))
-					return
-				default:
-					attempts++
-
-					tablet := tablets[rand.Intn(len(tablets))]
-					_, closer, err := client.dialer.dial(context.Background(), tablet)
-					if err != nil {
-						dialErrors.Add(1)
-						continue
-					}
-
-					closer.Close()
-				}
-			}
-		}()
-	}
-
-	time.Sleep(time.Second * 35)
-	testCancel()
-	wg.Wait()
-
-	attempts, errors := dialAttempts.Get(), dialErrors.Get()
-	assert.Less(t, float64(errors)/float64(attempts), 0.001, "fewer than 0.1% of dial attempts should fail")
-}
-
-func TestCachedClientMultipleSweeps(t *testing.T) {
-	t.Parallel()
-
-	file, err := os.Create("profile.out")
-	require.NoError(t, err)
-	defer file.Close()
-	if err := pprof.StartCPUProfile(file); err != nil {
-		t.Errorf("failed to start cpu profile: %v", err)
-		return
-	}
-	defer pprof.StopCPUProfile()
 
 	testCtx, testCancel := context.WithCancel(context.Background())
 	wg := sync.WaitGroup{}
@@ -250,15 +155,7 @@ func TestCachedClientMultipleSweeps(t *testing.T) {
 		}
 	}
 
-	// // make sure we can dial every tablet
-	// for _, tablet := range tablets {
-	// 	err := NewClient().Ping(context.Background(), tablet)
-	// 	require.NoError(t, err, "failed to dial tablet %s", tablet.Hostname)
-	// }
-
 	poolSize := int(float64(numTablets) * 0.5)
-	// client := NewCachedClient(poolSize, time.Second*10, time.Millisecond*100, time.Second*30)
-	// client := NewPooledDialer()
 	client := NewCachedConnClient(poolSize)
 	defer client.Close()
 
