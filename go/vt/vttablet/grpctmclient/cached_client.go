@@ -467,21 +467,7 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 	dialer.m.RLock()
 	if conn, ok := dialer.conns[addr]; ok {
 		defer dialer.m.RUnlock()
-		dialer.qMu.Lock()
-		defer dialer.qMu.Unlock()
-
-		conn.lastAccessTime = time.Now()
-		conn.refs++
-		heap.Fix(&dialer.queue, conn.index)
-
-		return conn, closeFunc(func() error {
-			dialer.qMu.Lock()
-			defer dialer.qMu.Unlock()
-
-			conn.refs--
-			heap.Fix(&dialer.queue, conn.index)
-			return nil
-		}), nil
+		return dialer.redial(conn)
 	}
 	dialer.m.RUnlock()
 
@@ -493,51 +479,10 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 		// while we were waiting for the write lock. This is identical to the
 		// read-lock section above.
 		if conn, ok := dialer.conns[addr]; ok {
-			dialer.qMu.Lock()
-			defer dialer.qMu.Unlock()
-
-			conn.lastAccessTime = time.Now()
-			conn.refs++
-			heap.Fix(&dialer.queue, conn.index)
-
-			return conn, closeFunc(func() error {
-				dialer.qMu.Lock()
-				defer dialer.qMu.Unlock()
-
-				conn.refs--
-				heap.Fix(&dialer.queue, conn.index)
-				return nil
-			}), nil
+			return dialer.redial(conn)
 		}
 
-		cc, err := dialCommon(addr)
-		if err != nil {
-			dialer.connWaitSema.Release()
-			return nil, nil, err
-		}
-
-		dialer.qMu.Lock()
-		defer dialer.qMu.Unlock()
-
-		conn := &cachedConn{
-			TabletManagerClient: tabletmanagerservicepb.NewTabletManagerClient(cc),
-			cc:                  cc,
-			lastAccessTime:      time.Now(),
-			refs:                1,
-			index:               -1, // gets set by call to Push
-			key:                 addr,
-		}
-		heap.Push(&dialer.queue, conn)
-		dialer.conns[addr] = conn
-
-		return conn, closeFunc(func() error {
-			dialer.qMu.Lock()
-			defer dialer.qMu.Unlock()
-
-			conn.refs--
-			heap.Fix(&dialer.queue, conn.index)
-			return nil
-		}), nil
+		return dialer.newdial(addr, true /* manage queue lock */)
 	}
 
 	for {
@@ -561,35 +506,76 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 			delete(dialer.conns, conn.key)
 			conn.cc.Close()
 
-			cc, err := dialCommon(addr)
-			if err != nil {
-				// We deleted a stale connection, but didn't claim one. Signal
-				// to the connWaitSema
-				dialer.connWaitSema.Release()
-				return nil, nil, err
-			}
-
-			conn = &cachedConn{
-				TabletManagerClient: tabletmanagerservicepb.NewTabletManagerClient(cc),
-				cc:                  cc,
-				lastAccessTime:      time.Now(),
-				refs:                1,
-				index:               -1, // gets set by call to Push
-				key:                 addr,
-			}
-			heap.Push(&dialer.queue, conn)
-			dialer.conns[addr] = conn
-
-			return conn, closeFunc(func() error {
-				dialer.qMu.Lock()
-				defer dialer.qMu.Unlock()
-
-				conn.refs--
-				heap.Fix(&dialer.queue, conn.index)
-				return nil
-			}), nil
+			return dialer.newdial(addr, false /* manage queue lock */)
 		}
 	}
+}
+
+// newdial creates a new cached connection, and updates the cache and eviction
+// queue accordingly. This must be called only while holding the write lock on
+// dialer.m as well as after having successfully acquired the dialer.connWaitSema. If newdial fails to create the underlying
+// gRPC connection, it will make a call to Release the connWaitSema for other
+// newdial calls.
+//
+// It returns the three-tuple of client-interface, closer, and error that the
+// main dial func returns.
+func (dialer *cachedConnDialer) newdial(addr string, manageQueueLock bool) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	cc, err := dialCommon(addr)
+	if err != nil {
+		dialer.connWaitSema.Release()
+		return nil, nil, err
+	}
+
+	// In the case where dial is evicting a connection from the cache, we
+	// already have a lock on the eviction queue. Conversely, in the case where
+	// we are able to create a new connection without evicting (because the
+	// cache is not yet full), we don't have the queue lock yet.
+	if manageQueueLock {
+		dialer.qMu.Lock()
+		defer dialer.qMu.Unlock()
+	}
+
+	conn := &cachedConn{
+		TabletManagerClient: tabletmanagerservicepb.NewTabletManagerClient(cc),
+		cc:                  cc,
+		lastAccessTime:      time.Now(),
+		refs:                1,
+		index:               -1, // gets set by call to Push
+		key:                 addr,
+	}
+	heap.Push(&dialer.queue, conn)
+	dialer.conns[addr] = conn
+
+	return dialer.connWithCloser(conn)
+}
+
+// redial takes an already-dialed connection in the cache does all the work of
+// lending that connection out to one more caller. this should only ever be
+// called while holding at least the RLock on dialer.m (but the write lock is
+// fine too), to prevent the connection from getting evicted out from under us.
+//
+// It returns the three-tuple of client-interface, closer, and error that the
+// main dial func returns.
+func (dialer *cachedConnDialer) redial(conn *cachedConn) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	dialer.qMu.Lock()
+	defer dialer.qMu.Unlock()
+
+	conn.lastAccessTime = time.Now()
+	conn.refs++
+	heap.Fix(&dialer.queue, conn.index)
+
+	return dialer.connWithCloser(conn)
+}
+
+func (dialer *cachedConnDialer) connWithCloser(conn *cachedConn) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
+	return conn, closeFunc(func() error {
+		dialer.qMu.Lock()
+		defer dialer.qMu.Unlock()
+
+		conn.refs--
+		heap.Fix(&dialer.queue, conn.index)
+		return nil
+	}), nil
 }
 
 func (dialer *cachedConnDialer) Close() {
