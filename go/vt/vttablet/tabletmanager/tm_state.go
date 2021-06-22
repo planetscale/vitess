@@ -287,11 +287,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 }
 
 func (ts *tmState) populateLocalMetadataLocked() {
-	if ts.tm.MetadataManager == nil {
-		return
-	}
-
-	if ts.isOpening && !*initPopulateMetadata {
+	if ts.tm.MetadataManager == nil || !*initPopulateMetadata {
 		return
 	}
 
