@@ -489,6 +489,27 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 		dialer.m.Lock()
 		defer dialer.m.Unlock()
 
+		// Check if another goroutine managed to dial a conn for the same addr
+		// while we were waiting for the write lock. This is identical to the
+		// read-lock section above.
+		if conn, ok := dialer.conns[addr]; ok {
+			dialer.qMu.Lock()
+			defer dialer.qMu.Unlock()
+
+			conn.lastAccessTime = time.Now()
+			conn.refs++
+			heap.Fix(&dialer.queue, conn.index)
+
+			return conn, closeFunc(func() error {
+				dialer.qMu.Lock()
+				defer dialer.qMu.Unlock()
+
+				conn.refs--
+				heap.Fix(&dialer.queue, conn.index)
+				return nil
+			}), nil
+		}
+
 		cc, err := dialCommon(addr)
 		if err != nil {
 			dialer.connWaitSema.Release()
@@ -537,7 +558,7 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 			defer dialer.m.Unlock()
 			defer dialer.qMu.Unlock()
 			heap.Pop(&dialer.queue)
-			delete(dialer.conns, addr)
+			delete(dialer.conns, conn.key)
 			conn.cc.Close()
 
 			cc, err := dialCommon(addr)
