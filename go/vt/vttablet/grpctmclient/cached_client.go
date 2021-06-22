@@ -491,6 +491,13 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 			return nil, nil, ctx.Err()
 		default:
 			dialer.m.Lock()
+			if conn, ok := dialer.conns[addr]; ok {
+				// Someone else dialed this addr while we were polling. No need
+				// to evict anyone else, just reuse the existing conn.
+				defer dialer.m.Unlock()
+				return dialer.redial(conn)
+			}
+
 			dialer.qMu.Lock()
 			conn := dialer.queue[0]
 			if conn.refs != 0 {
