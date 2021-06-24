@@ -140,11 +140,11 @@ var dialerStats = struct {
 	DialTimings          *stats.Timings
 	EvictionQueueTimings *stats.Timings
 }{
-	ConnReuse:    stats.NewGauge("tabletmanagerclient_cachedconn_reuse", "number of times a call to dial() was able to reuse an existing connection"),
-	ConnNew:      stats.NewGauge("tabletmanagerclient_cachedconn_new", "number of times a call to dial() resulted in a dialing a new grpc clientconn"),
-	DialTimeouts: stats.NewGauge("tabletmanagerclient_cachedconn_dial_timeouts", "number of context timeouts during dial()"),
-	DialTimings:  stats.NewTimings("tabletmanagerclient_cachedconn_dialtimings", "timings for various dial paths", "path", "rlock_fast", "sema_fast", "sema_poll"),
-	// TODO: add timings for heap operations (push, pop, fix)
+	ConnReuse:            stats.NewGauge("tabletmanagerclient_cachedconn_reuse", "number of times a call to dial() was able to reuse an existing connection"),
+	ConnNew:              stats.NewGauge("tabletmanagerclient_cachedconn_new", "number of times a call to dial() resulted in a dialing a new grpc clientconn"),
+	DialTimeouts:         stats.NewGauge("tabletmanagerclient_cachedconn_dial_timeouts", "number of context timeouts during dial()"),
+	DialTimings:          stats.NewTimings("tabletmanagerclient_cachedconn_dialtimings", "timings for various dial paths", "path", "rlock_fast", "sema_fast", "sema_poll"),
+	EvictionQueueTimings: stats.NewTimings("tabletmanagerclient_cachedconn_eviction_queue_timings", "timings for eviction queue management operations", "operation", "init", "push", "pop", "fix"),
 }
 
 // NewCachedConnClient returns a grpc Client using the priority queue cache
@@ -156,7 +156,7 @@ func NewCachedConnClient(capacity int) *Client {
 		connWaitSema: sync2.NewSemaphore(capacity, 0),
 	}
 
-	heap.Init(&dialer.queue)
+	dialer.heapInit()
 	return &Client{dialer}
 }
 
@@ -263,7 +263,7 @@ func (dialer *cachedConnDialer) pollOnce(addr string) (client tabletmanagerservi
 		return nil, nil, false, nil
 	}
 
-	heap.Pop(&dialer.queue)
+	dialer.heapPop()
 	delete(dialer.conns, conn.key)
 	conn.cc.Close()
 
@@ -311,7 +311,7 @@ func (dialer *cachedConnDialer) newdial(addr string, manageQueueLock bool) (tabl
 		index:               -1, // gets set by call to Push
 		key:                 addr,
 	}
-	heap.Push(&dialer.queue, conn)
+	dialer.heapPush(conn)
 	dialer.conns[addr] = conn
 
 	return dialer.connWithCloser(conn)
@@ -332,7 +332,7 @@ func (dialer *cachedConnDialer) redial(conn *cachedConn) (tabletmanagerservicepb
 
 	conn.lastAccessTime = time.Now()
 	conn.refs++
-	heap.Fix(&dialer.queue, conn.index)
+	dialer.heapFix(conn.index)
 
 	return dialer.connWithCloser(conn)
 }
@@ -346,9 +346,37 @@ func (dialer *cachedConnDialer) connWithCloser(conn *cachedConn) (tabletmanagers
 		defer dialer.qMu.Unlock()
 
 		conn.refs--
-		heap.Fix(&dialer.queue, conn.index)
+		dialer.heapFix(conn.index)
 		return nil
 	}), nil
+}
+
+// Functions to wrap queue operations to record timings for them.
+
+func (dialer *cachedConnDialer) heapInit() {
+	start := time.Now()
+	heap.Init(&dialer.queue)
+	dialerStats.EvictionQueueTimings.Add("init", time.Since(start))
+}
+
+func (dialer *cachedConnDialer) heapFix(index int) {
+	start := time.Now()
+	heap.Fix(&dialer.queue, index)
+	dialerStats.EvictionQueueTimings.Add("fix", time.Since(start))
+}
+
+func (dialer *cachedConnDialer) heapPop() interface{} {
+	start := time.Now()
+	x := heap.Pop(&dialer.queue)
+	dialerStats.EvictionQueueTimings.Add("pop", time.Since(start))
+
+	return x
+}
+
+func (dialer *cachedConnDialer) heapPush(conn *cachedConn) {
+	start := time.Now()
+	heap.Push(&dialer.queue, conn)
+	dialerStats.EvictionQueueTimings.Add("push", time.Since(start))
 }
 
 // Close closes all currently cached connections, ***regardless of whether
