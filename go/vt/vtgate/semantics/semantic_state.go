@@ -77,22 +77,74 @@ type (
 	}
 )
 
+func (v vTableInfo) HasAsExpr() bool {
+	panic("implement me")
+}
+
+func (v vTableInfo) AsExprString() string {
+	panic("implement me")
+}
+
+func (v vTableInfo) KeyspaceName() string {
+	panic("implement me")
+}
+
+func (v vTableInfo) Name() string {
+	panic("implement me")
+}
+
+func (v vTableInfo) IsAuthoritative() bool {
+	panic("implement me")
+}
+
+func (v vTableInfo) InVSchema() bool {
+	panic("implement me")
+}
+
+func (v vTableInfo) GetColumns() (sqlparser.SelectExprs, error) {
+	panic("implement me")
+}
+
+func (v vTableInfo) GetTableColumns() []vindexes.Column {
+	panic("implement me")
+}
+
+func (v vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
+	panic("implement me")
+}
+
+func (v vTableInfo) TableName() string {
+	panic("implement me")
+}
+
+func (v vTableInfo) DBName() string {
+	panic("implement me")
+}
+
+// GetTableColumns returns all the tables in the VSchema
 func (t *TableInfo) GetTableColumns() []vindexes.Column {
+	if !t.InVSchema() {
+		return []vindexes.Column{}
+	}
 	return t.Table.Columns
 }
 
+// TableName returns the name of the table specified in the query
 func (t *TableInfo) TableName() string {
 	return t.tableName
 }
 
+// DBName returns the name of the database specified in the query
 func (t *TableInfo) DBName() string {
 	return t.dbName
 }
 
+// GetExpr returns the AST node
 func (t *TableInfo) GetExpr() *sqlparser.AliasedTableExpr {
 	return t.ASTNode
 }
 
+// GetColumns returns the column found in the AST node
 func (t *TableInfo) GetColumns() (sqlparser.SelectExprs, error) {
 	tblName, err := t.ASTNode.TableName()
 	if err != nil {
@@ -108,18 +160,25 @@ func (t *TableInfo) GetColumns() (sqlparser.SelectExprs, error) {
 	return colNames, nil
 }
 
+// HasAsExpr returns true if the AS expression is in the query
 func (t *TableInfo) HasAsExpr() bool {
 	return t.ASTNode.As.IsEmpty()
 }
 
+// AsExprString return the AS expression as a string
 func (t *TableInfo) AsExprString() string {
 	return t.ASTNode.As.String()
 }
 
+// KeyspaceName returns the name of the keyspace from the VSchema
 func (t *TableInfo) KeyspaceName() string {
+	if !t.InVSchema() {
+		return ""
+	}
 	return t.Table.Keyspace.Name
 }
 
+// Name returns the name of the table
 func (t *TableInfo) Name() string {
 	expr, ok := t.ASTNode.Expr.(sqlparser.TableName)
 	if !ok {
@@ -128,10 +187,12 @@ func (t *TableInfo) Name() string {
 	return expr.Name.String()
 }
 
+// IsAuthoritative returns true if the table is marked as authoritative in the vschema
 func (t *TableInfo) IsAuthoritative() bool {
 	return t.InVSchema() && t.Table.ColumnListAuthoritative
 }
 
+// InVSchema returns true if the table is in the vschema
 func (t *TableInfo) InVSchema() bool {
 	return t.Table != nil
 }
