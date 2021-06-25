@@ -34,6 +34,10 @@ type (
 		Table             *vindexes.Table
 	}
 
+	vTableInfo struct {
+		cols []*sqlparser.AliasedExpr
+	}
+
 	// TableSet is how a set of tables is expressed.
 	// Tables get unique bits assigned in the order that they are encountered during semantic analysis
 	TableSet uint64 // we can only join 64 tables with this underlying data type
@@ -45,10 +49,14 @@ type (
 		exprDependencies map[sqlparser.Expr]TableSet
 		selectScope      map[*sqlparser.Select]*scope
 	}
-
+	/*
+	   select 1, (select t.col from x) from t
+	*/
 	scope struct {
-		parent *scope
-		tables []*TableInfo
+		parent      *scope
+		selectExprs sqlparser.SelectExprs
+		tables      []*TableInfo
+		vtables     []*vTableInfo
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.

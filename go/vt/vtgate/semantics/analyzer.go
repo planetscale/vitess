@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"fmt"
+	"strconv"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -35,17 +36,18 @@ type (
 		err       error
 		currentDb string
 
-		selectScope map[*sqlparser.Select]*scope
+		rScope map[*sqlparser.Select]*scope
+		wScope map[*sqlparser.Select]*scope
 	}
 )
 
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	return &analyzer{
-		exprDeps:    map[sqlparser.Expr]TableSet{},
-		selectScope: map[*sqlparser.Select]*scope{},
-		currentDb:   dbName,
-		si:          si,
+		exprDeps:  map[sqlparser.Expr]TableSet{},
+		rScope:    map[*sqlparser.Select]*scope{},
+		currentDb: dbName,
+		si:        si,
 	}
 }
 
@@ -57,7 +59,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.selectScope}, nil
+	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.rScope}, nil
 }
 
 // analyzeDown pushes new scopes when we encounter sub queries,
@@ -70,8 +72,15 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		if node.Having != nil {
 			a.err = Gen4NotSupportedF("HAVING")
 		}
-		a.push(newScope(current))
-		a.selectScope[node] = a.currentScope()
+
+		currScope := newScope(current)
+		a.push(currScope)
+
+		// Needed for order by with Literal to find the Expression.
+		currScope.selectExprs = node.SelectExprs
+
+		a.rScope[node] = currScope
+		a.wScope[node] = newScope(nil)
 	case *sqlparser.DerivedTable:
 		a.err = Gen4NotSupportedF("derived tables")
 	case sqlparser.TableExpr:
@@ -88,6 +97,69 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 
 	case *sqlparser.Union:
 		a.push(newScope(current))
+	case sqlparser.SelectExprs:
+		sel, ok := cursor.Parent().(*sqlparser.Select)
+		if !ok {
+			break
+		}
+
+		//currScope := a.currentScope()
+		wScope, exists := a.wScope[sel]
+		if !exists {
+			break
+		}
+
+		vTbl := &vTableInfo{}
+		for _, selectExpr := range node {
+			expr, ok := selectExpr.(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			vTbl.cols = append(vTbl.cols, expr)
+		}
+		wScope.vtables = append(wScope.vtables, vTbl)
+	case sqlparser.OrderBy:
+		sel, ok := cursor.Parent().(*sqlparser.Select)
+		if !ok {
+			break
+		}
+		nScope := newScope(a.currentScope())
+		a.push(nScope)
+		wScope := a.wScope[sel]
+		nScope.vtables = append(nScope.vtables, wScope.vtables...)
+	case *sqlparser.Order:
+		l, ok := node.Expr.(*sqlparser.Literal)
+		if !ok {
+			break
+		}
+		if l.Type != sqlparser.IntVal {
+			break
+		}
+		currScope := a.currentScope()
+		num, err := strconv.Atoi(l.Val)
+		if err != nil {
+			a.err = err
+			break
+		}
+		if num < 1 || num > len(currScope.selectExprs) {
+			a.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in 'order clause'", num)
+		}
+
+		expr, ok := currScope.selectExprs[num-1].(*sqlparser.AliasedExpr)
+		if !ok {
+			break
+		}
+
+		var deps TableSet
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			expr, ok := node.(sqlparser.Expr)
+			if ok {
+				deps = deps.Merge(a.exprDeps[expr])
+			}
+			return true, nil
+		}, expr.Expr)
+
+		a.exprDeps[node.Expr] = deps
 	case *sqlparser.ColName:
 		t, err := a.resolveColumn(node, current)
 		if err != nil {
@@ -116,7 +188,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
-	var t *TableInfo
+	var t *TableInfo // select a.col as x, x-1 from a join b on a.id = b.id order by x
 	var err error
 	if colName.Qualifier.IsEmpty() {
 		t, err = a.resolveUnQualifiedColumn(current, colName)
@@ -225,7 +297,7 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	switch cursor.Node().(type) {
-	case *sqlparser.Union, *sqlparser.Select:
+	case *sqlparser.Union, *sqlparser.Select, sqlparser.OrderBy:
 		a.popScope()
 	case sqlparser.TableExpr:
 		_, isSelect := cursor.Parent().(*sqlparser.Select)
@@ -243,6 +315,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 			}
 		}
 	}
+
 	return a.shouldContinue()
 }
 
