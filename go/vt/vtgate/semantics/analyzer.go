@@ -30,7 +30,7 @@ type (
 	analyzer struct {
 		si SchemaInformation
 
-		Tables    []*TableInfo
+		Tables    []ITableInfo
 		scopes    []*scope
 		exprDeps  map[sqlparser.Expr]TableSet
 		err       error
@@ -188,7 +188,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
-	var t *TableInfo // select a.col as x, x-1 from a join b on a.id = b.id order by x
+	var t ITableInfo
 	var err error
 	if colName.Qualifier.IsEmpty() {
 		t, err = a.resolveUnQualifiedColumn(current, colName)
@@ -198,18 +198,18 @@ func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (Ta
 	if err != nil {
 		return 0, err
 	}
-	return a.tableSetFor(t.ASTNode), nil
+	return a.tableSetFor(t.GetExpr()), nil
 }
 
 // resolveQualifiedColumn handles `tabl.col` expressions
-func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
+func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (ITableInfo, error) {
 	// search up the scope stack until we find a match
 	for current != nil {
 		dbName := expr.Qualifier.Qualifier.String()
 		tableName := expr.Qualifier.Name.String()
 		for _, table := range current.tables {
-			if tableName == table.tableName &&
-				(dbName == table.dbName || (dbName == "" && (table.dbName == a.currentDb || a.currentDb == ""))) {
+			if tableName == table.TableName() &&
+				(dbName == table.DBName() || (dbName == "" && (table.DBName() == a.currentDb || a.currentDb == ""))) {
 				return table, nil
 			}
 		}
@@ -219,19 +219,19 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 }
 
 // resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (ITableInfo, error) {
 	if len(current.tables) == 1 {
 		for _, tableExpr := range current.tables {
 			return tableExpr, nil
 		}
 	}
 
-	var tblInfo *TableInfo
+	var tblInfo ITableInfo
 	for _, tbl := range current.tables {
-		if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
+		if !tbl.IsAuthoritative() {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
 		}
-		for _, col := range tbl.Table.Columns {
+		for _, col := range tbl.GetTableColumns() {
 			if expr.Name.Equal(col.Name) {
 				if tblInfo != nil {
 					return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
@@ -245,7 +245,7 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 
 func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for i, t2 := range a.Tables {
-		if t == t2.ASTNode {
+		if t == t2.GetExpr() {
 			return TableSet(1 << i)
 		}
 	}

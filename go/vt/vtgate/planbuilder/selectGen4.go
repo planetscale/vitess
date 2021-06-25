@@ -136,7 +136,7 @@ func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemT
 				return nil, err
 			}
 			weightStringNeeded := true
-			for _, c := range tableInfo.Table.Columns {
+			for _, c := range tableInfo.GetTableColumns() {
 				if colName.Name.Equal(c.Name) {
 					if sqltypes.IsNumber(c.Type) {
 						weightStringNeeded = false

@@ -27,6 +27,20 @@ import (
 )
 
 type (
+	ITableInfo interface {
+		HasAsExpr() bool
+		AsExprString() string
+		KeyspaceName() string
+		Name() string
+		IsAuthoritative() bool
+		InVSchema() bool
+		GetColumns() (sqlparser.SelectExprs, error)
+		GetTableColumns() []vindexes.Column
+		GetExpr() *sqlparser.AliasedTableExpr
+		TableName() string
+		DBName() string
+	}
+
 	// TableInfo contains the alias table expr and vindex table
 	TableInfo struct {
 		dbName, tableName string
@@ -45,17 +59,15 @@ type (
 
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
-		Tables           []*TableInfo
+		Tables           []ITableInfo
 		exprDependencies map[sqlparser.Expr]TableSet
 		selectScope      map[*sqlparser.Select]*scope
 	}
-	/*
-	   select 1, (select t.col from x) from t
-	*/
+
 	scope struct {
 		parent      *scope
 		selectExprs sqlparser.SelectExprs
-		tables      []*TableInfo
+		tables      []ITableInfo
 		vtables     []*vTableInfo
 	}
 
@@ -65,6 +77,65 @@ type (
 	}
 )
 
+func (t *TableInfo) GetTableColumns() []vindexes.Column {
+	return t.Table.Columns
+}
+
+func (t *TableInfo) TableName() string {
+	return t.tableName
+}
+
+func (t *TableInfo) DBName() string {
+	return t.dbName
+}
+
+func (t *TableInfo) GetExpr() *sqlparser.AliasedTableExpr {
+	return t.ASTNode
+}
+
+func (t *TableInfo) GetColumns() (sqlparser.SelectExprs, error) {
+	tblName, err := t.ASTNode.TableName()
+	if err != nil {
+		return nil, err
+	}
+	var colNames sqlparser.SelectExprs
+	for _, col := range t.Table.Columns {
+		colNames = append(colNames, &sqlparser.AliasedExpr{
+			Expr: sqlparser.NewColNameWithQualifier(col.Name.String(), tblName),
+			As:   sqlparser.NewColIdent(col.Name.String()),
+		})
+	}
+	return colNames, nil
+}
+
+func (t *TableInfo) HasAsExpr() bool {
+	return t.ASTNode.As.IsEmpty()
+}
+
+func (t *TableInfo) AsExprString() string {
+	return t.ASTNode.As.String()
+}
+
+func (t *TableInfo) KeyspaceName() string {
+	return t.Table.Keyspace.Name
+}
+
+func (t *TableInfo) Name() string {
+	expr, ok := t.ASTNode.Expr.(sqlparser.TableName)
+	if !ok {
+		return ""
+	}
+	return expr.Name.String()
+}
+
+func (t *TableInfo) IsAuthoritative() bool {
+	return t.InVSchema() && t.Table.ColumnListAuthoritative
+}
+
+func (t *TableInfo) InVSchema() bool {
+	return t.Table != nil
+}
+
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
 	return &SemTable{exprDependencies: map[sqlparser.Expr]TableSet{}}
@@ -73,7 +144,7 @@ func NewSemTable() *SemTable {
 // TableSetFor returns the bitmask for this particular tableshoe
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2.ASTNode {
+		if t == t2.GetExpr() {
 			return 1 << idx
 		}
 	}
@@ -81,7 +152,7 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 }
 
 // TableInfoFor returns the table info for the table set. It should contains only single table.
-func (st *SemTable) TableInfoFor(id TableSet) (*TableInfo, error) {
+func (st *SemTable) TableInfoFor(id TableSet) (ITableInfo, error) {
 	if id.NumberOfTables() > 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
 	}
@@ -110,7 +181,7 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 }
 
 // GetSelectTables returns the table in the select.
-func (st *SemTable) GetSelectTables(node *sqlparser.Select) []*TableInfo {
+func (st *SemTable) GetSelectTables(node *sqlparser.Select) []ITableInfo {
 	scope := st.selectScope[node]
 	return scope.tables
 }
@@ -127,12 +198,12 @@ func newScope(parent *scope) *scope {
 	return &scope{parent: parent}
 }
 
-func (s *scope) addTable(table *TableInfo) error {
+func (s *scope) addTable(table ITableInfo) error {
 	for _, scopeTable := range s.tables {
-		b := scopeTable.tableName == table.tableName
-		b2 := scopeTable.dbName == table.dbName
+		b := scopeTable.TableName() == table.TableName()
+		b2 := scopeTable.DBName() == table.DBName()
 		if b && b2 {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", table.tableName)
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", table.TableName())
 		}
 	}
 

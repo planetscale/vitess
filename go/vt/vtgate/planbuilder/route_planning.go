@@ -161,7 +161,7 @@ func (sr *starRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func expandTableColumns(tables []*semantics.TableInfo, starExpr *sqlparser.StarExpr) (sqlparser.SelectExprs, *expandStarInfo, error) {
+func expandTableColumns(tables []semantics.ITableInfo, starExpr *sqlparser.StarExpr) (sqlparser.SelectExprs, *expandStarInfo, error) {
 	unknownTbl := true
 	var colNames sqlparser.SelectExprs
 	expStar := &expandStarInfo{
@@ -170,42 +170,35 @@ func expandTableColumns(tables []*semantics.TableInfo, starExpr *sqlparser.StarE
 
 	for _, tbl := range tables {
 		if !starExpr.TableName.IsEmpty() {
-			if !tbl.ASTNode.As.IsEmpty() {
+			if !tbl.HasAsExpr() {
 				if !starExpr.TableName.Qualifier.IsEmpty() {
 					continue
 				}
-				if starExpr.TableName.Name.String() != tbl.ASTNode.As.String() {
+				if starExpr.TableName.Name.String() != tbl.AsExprString() {
 					continue
 				}
 			} else {
 				if !starExpr.TableName.Qualifier.IsEmpty() {
-					if starExpr.TableName.Qualifier.String() != tbl.Table.Keyspace.Name {
+					if starExpr.TableName.Qualifier.String() != tbl.KeyspaceName() {
 						continue
 					}
 				}
-				tblName := tbl.ASTNode.Expr.(sqlparser.TableName)
-				if starExpr.TableName.Name.String() != tblName.Name.String() {
+				if starExpr.TableName.Name.String() != tbl.Name() {
 					continue
 				}
 			}
 		}
 		unknownTbl = false
-		if tbl.Table == nil || !tbl.Table.ColumnListAuthoritative {
+		if !tbl.IsAuthoritative() {
 			expStar.proceed = false
 			break
 		}
 		expStar.proceed = true
-		tblName, err := tbl.ASTNode.TableName()
+		colNames, err := tbl.GetColumns()
 		if err != nil {
 			return nil, nil, err
 		}
-		for _, col := range tbl.Table.Columns {
-			colNames = append(colNames, &sqlparser.AliasedExpr{
-				Expr: sqlparser.NewColNameWithQualifier(col.Name.String(), tblName),
-				As:   sqlparser.NewColIdent(col.Name.String()),
-			})
-		}
-		expStar.tblColMap[tbl.ASTNode] = colNames
+		expStar.tblColMap[tbl.GetExpr()] = colNames
 	}
 
 	if unknownTbl {
