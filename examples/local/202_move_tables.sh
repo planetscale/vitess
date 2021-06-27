@@ -19,4 +19,4 @@
 
 source ./env.sh
 
-vtctlclient MoveTables -workflow=commerce2customer commerce customer '{"customer":{}, "corder":{}}'
+vtctlclient MoveTables -v2 -source commerce -tables 'customer,corder' Start customer.commerce2customer

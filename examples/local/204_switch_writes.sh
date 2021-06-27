@@ -19,4 +19,4 @@
 
 source ./env.sh
 
-vtctlclient SwitchWrites customer.commerce2customer
+vtctlclient MoveTables -v2 -tablet_types=master SwitchTraffic customer.commerce2customer
