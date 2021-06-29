@@ -675,7 +675,7 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where `name` in ::__vals",
+		Sql: "select id from `user` where `name` in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
 			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
