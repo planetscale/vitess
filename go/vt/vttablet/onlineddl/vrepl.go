@@ -452,6 +452,7 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 			if targetCol == nil {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
 			}
+			selectClause := fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name))
 			{
 				// Check source and target charset/encoding. If needed, create
 				// a binlogdatapb.CharsetConversion entry (later written to vreplication)
@@ -470,9 +471,16 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 						ToCharset:   targetCol.Charset,
 					}
 				}
+				switch {
+				case fromEncoding == nil && toEncoding == nil:
+					selectClause = escapeName(name)
+				case fromEncoding != nil && strings.HasPrefix(targetCol.Charset, "utf8"):
+					// from non-trivial to utf8, e.g. from latin1 to utf8
+					selectClause = fmt.Sprintf("convert(%s using %s)", escapeName(name), targetCol.Charset)
+				}
 			}
 			// We will always read strings as utf8mb4.
-			sb.WriteString(escapeName(name))
+			sb.WriteString(selectClause)
 			// sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))

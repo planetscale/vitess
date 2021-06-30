@@ -314,21 +314,6 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 				}
 			}
 		}
-		{
-			toEncoding, encodingOK := mysql.CharacterSetEncoding[conversion.ToCharset]
-			if !encodingOK {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.ToCharset, field.Name)
-			}
-			if toEncoding != nil {
-				// As reminder, encoding can be nil for trivial charsets, like utf8 or ascii.
-				// encoding will be non-nil for charsets like latin1, gbk, etc.
-				if s, err := toEncoding.NewEncoder().String(valString); err != nil {
-					return nil, err
-				} else {
-					valString = s
-				}
-			}
-		}
 		return sqltypes.StringBindVariable(valString), nil
 	}
 	if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
