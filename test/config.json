@@ -922,6 +922,15 @@
 			"Shard": "vreplication_migrate",
 			"RetryMax": 1,
 			"Tags": []
+		},
+		"vstream_failover": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVStreamFailover"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_migrate",
+			"RetryMax": 1,
+			"Tags": []
 		}
 	}
 }
