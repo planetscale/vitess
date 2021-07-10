@@ -444,9 +444,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		go func() {
 			tabletConn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 				var errString string
-				if shr.RealtimeStats == nil {
-					errString = "Health check failed"
+				if shr == nil || shr.RealtimeStats == nil || shr.Target == nil {
+					return fmt.Errorf("health check failed")
 				}
+
 				if vs.tabletType != shr.Target.TabletType {
 					errString = fmt.Sprintf("Tablet %s is no longer healthy: %s, restarting vstream",
 						tablet.Alias, shr.RealtimeStats.HealthError)
