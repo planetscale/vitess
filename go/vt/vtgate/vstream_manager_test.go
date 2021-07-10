@@ -1057,10 +1057,11 @@ func startVStream(ctx context.Context, t *testing.T, vsm *vstreamManager, vgtid 
 	}
 	ch := make(chan *binlogdatapb.VStreamResponse)
 	go func() {
-		_ = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+		err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
 			ch <- &binlogdatapb.VStreamResponse{Events: events}
 			return nil
 		})
+		require.NoError(t, err)
 	}()
 	return ch
 }
@@ -1069,6 +1070,7 @@ func verifyEvents(t *testing.T, ch <-chan *binlogdatapb.VStreamResponse, wants .
 	t.Helper()
 	for i, want := range wants {
 		got := <-ch
+		require.NotNil(t, got)
 		for _, event := range got.Events {
 			event.Timestamp = 0
 		}
