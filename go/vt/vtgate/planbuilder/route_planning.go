@@ -483,7 +483,7 @@ func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, vsch
 		if err != nil {
 			return nil, err
 		}
-		return &routePlan{
+		rp := &routePlan{
 			routeOpCode: engine.SelectDBA,
 			solved:      solves,
 			// TODO: find keyspace to route using the predicates as in v3
@@ -496,7 +496,13 @@ func createRoutePlan(table *abstract.QueryTable, solves semantics.TableSet, vsch
 				},
 			}},
 			predicates: table.Predicates,
-		}, nil
+		}
+		err = rp.findSysInfoRoutingPredicatesGen4()
+		if err != nil {
+			return nil, err
+		}
+
+		return rp, nil
 	}
 	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(table.Table)
 	if err != nil {
