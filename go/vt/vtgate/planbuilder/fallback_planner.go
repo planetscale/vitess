@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -49,6 +51,7 @@ func (fp *fallbackPlanner) plan(query string) func(sqlparser.Statement, *sqlpars
 
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 		res, err := primaryF(stmt, reservedVars, vschema)
+		log.Error("Gen4 failed planning - ", err)
 		if err != nil {
 			return backupF(stmt, reservedVars, vschema)
 		}

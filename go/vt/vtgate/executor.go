@@ -206,6 +206,9 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 
 func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
 	stmtType, qr, err := e.newExecute(ctx, safeSession, sql, bindVars, logStats)
+	if err != nil {
+		log.Error("Executed query :-", sql, "Error -", err)
+	}
 	if err == planbuilder.ErrPlanNotSupported {
 		return e.legacyExecute(ctx, safeSession, sql, bindVars, logStats)
 	}

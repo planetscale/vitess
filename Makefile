@@ -298,7 +298,7 @@ docker_mini:
 DOCKER_VTTESTSERVER_SUFFIX = mysql57 mysql80
 DOCKER_VTTESTSERVER_TARGETS = $(addprefix docker_vttestserver_,$(DOCKER_VTTESTSERVER_SUFFIX))
 $(DOCKER_VTTESTSERVER_TARGETS): docker_vttestserver_%:
-	${call build_docker_image,docker/vttestserver/Dockerfile.$*,vitess/vttestserver:$*}
+	${call build_docker_image,docker/vttestserver/Dockerfile.$*,vitess/vttestserver-gen4fallback-log-schema-tracking:$*}
 
 docker_vttestserver: $(DOCKER_VTTESTSERVER_TARGETS)
 # This rule loads the working copy of the code into a bootstrap image,
