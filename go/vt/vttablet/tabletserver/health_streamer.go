@@ -379,6 +379,9 @@ func (hs *healthStreamer) reload() error {
 		return err
 	}
 
+	res, err := conn.Exec(ctx, mysql.FetchTables, 100000, false)
+	log.Error("schema-copy insert - ", res, " err - ", err)
+
 	_, err = conn.Exec(ctx, "commit", 1, false)
 	if err != nil {
 		return err

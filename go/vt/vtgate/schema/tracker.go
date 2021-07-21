@@ -156,6 +156,7 @@ func (t *Tracker) Tables(ks string) map[string][]vindexes.Column {
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	tablesUpdated := th.Stats.TableSchemaChanged
+	log.Error("updated tables in schema", tablesUpdated)
 	tables, err := sqltypes.BuildBindVariable(tablesUpdated)
 	if err != nil {
 		log.Errorf("failed to read updated tables from TabletHealth: %v", err)
@@ -178,6 +179,7 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	for _, tbl := range tablesUpdated {
 		t.tables.delete(th.Target.Keyspace, tbl)
 	}
+	log.Error("tables found in schemacopy", res)
 	t.updateTables(th.Target.Keyspace, res)
 	return true
 }
@@ -217,6 +219,7 @@ type tableMap struct {
 }
 
 func (tm *tableMap) set(ks, tbl string, cols []vindexes.Column) {
+	log.Error("setting ", ks, "/", tbl, " to ", cols)
 	m := tm.m[ks]
 	if m == nil {
 		m = make(map[tableNameStr][]vindexes.Column)
