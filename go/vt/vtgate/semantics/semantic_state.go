@@ -22,6 +22,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -82,12 +83,18 @@ type (
 		ProjectionErr    error
 		exprDependencies ExprDependencies
 		selectScope      map[*sqlparser.Select]*scope
+		subqueryMap      map[*sqlparser.Select][]*uncorrelatedSubquery
+	}
+
+	uncorrelatedSubquery struct {
+		subQuery *sqlparser.Subquery
+		opcode   engine.PulloutOpcode
 	}
 
 	scope struct {
-		parent      *scope
-		selectExprs sqlparser.SelectExprs
-		tables      []TableInfo
+		parent     *scope
+		selectStmt *sqlparser.Select
+		tables     []TableInfo
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.

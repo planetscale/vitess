@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -40,6 +42,7 @@ type (
 		err          error
 		currentDb    string
 		inProjection []bool
+		subqueryMap  map[*sqlparser.Select][]*uncorrelatedSubquery
 
 		rScope  map[*sqlparser.Select]*scope
 		wScope  map[*sqlparser.Select]*scope
@@ -66,7 +69,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.rScope, ProjectionErr: analyzer.projErr}, nil
+	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables, selectScope: analyzer.rScope, ProjectionErr: analyzer.projErr, subqueryMap: analyzer.subqueryMap}, nil
 }
 
 func (a *analyzer) setError(err error) {
@@ -97,14 +100,30 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		a.push(currScope)
 
 		// Needed for order by with Literal to find the Expression.
-		currScope.selectExprs = node.SelectExprs
+		currScope.selectStmt = node
 
 		a.rScope[node] = currScope
 		a.wScope[node] = newScope(nil)
 	case *sqlparser.DerivedTable:
 		a.setError(Gen4NotSupportedF("derived tables"))
 	case *sqlparser.Subquery:
-		a.setError(Gen4NotSupportedF("subquery"))
+		currScope := a.currentScope()
+		opcode := engine.PulloutValue
+		switch par := cursor.Parent().(type) {
+		case *sqlparser.ComparisonExpr:
+			switch par.Operator {
+			case sqlparser.InOp:
+				opcode = engine.PulloutIn
+			case sqlparser.NotInOp:
+				opcode = engine.PulloutNotIn
+			}
+		case *sqlparser.ExistsExpr:
+			opcode = engine.PulloutExists
+		}
+		a.subqueryMap[currScope.selectStmt] = append(a.subqueryMap[currScope.selectStmt], &uncorrelatedSubquery{
+			subQuery: node,
+			opcode:   opcode,
+		})
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
 			a.push(newScope(nil))
@@ -201,12 +220,12 @@ func (a *analyzer) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, cal
 		a.err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", l.Val)
 		return
 	}
-	if num < 1 || num > len(currScope.selectExprs) {
+	if num < 1 || num > len(currScope.selectStmt.SelectExprs) {
 		a.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
 		return
 	}
 
-	expr, ok := currScope.selectExprs[num-1].(*sqlparser.AliasedExpr)
+	expr, ok := currScope.selectStmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
 	if !ok {
 		return
 	}
@@ -235,7 +254,7 @@ func (a *analyzer) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
 	a.push(nScope)
 	wScope := a.wScope[sel]
 	nScope.tables = append(nScope.tables, wScope.tables...)
-	nScope.selectExprs = incomingScope.selectExprs
+	nScope.selectStmt = incomingScope.selectStmt
 
 	if a.rScope[sel] != incomingScope {
 		panic("BUG: scope counts did not match")
