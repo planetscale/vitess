@@ -51,7 +51,7 @@ func (fp *fallbackPlanner) plan(query string) func(sqlparser.Statement, *sqlpars
 
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 		res, err := primaryF(stmt, reservedVars, vschema)
-		log.Error("Gen4 failed planning - ", err)
+		log.Error("Gen4 failed planning on ", query, " - ", err)
 		if err != nil {
 			return backupF(stmt, reservedVars, vschema)
 		}
