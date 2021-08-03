@@ -79,11 +79,166 @@
           "type": "lookup_test",
           "owner": "samecolvin"
         },
+        "binary_md5": {
+          "type": "hash_test"
+        },
         "cfc": {
           "type": "cfc"
         }
       },
       "tables": {
+        "order2s": {
+          "column_vindexes": [
+            {
+              "columns": [
+                "customer2_id"
+              ],
+              "name": "binary_md5"
+            }
+          ],
+          "auto_increment": {
+            "column": "id",
+            "sequence": "order2s_seq"
+          },
+          "columns": [
+            {
+              "name": "id",
+              "type": "INT64"
+            },
+            {
+              "name": "customer2_id",
+              "type": "INT64"
+            },
+            {
+              "name": "status",
+              "type": "INT32"
+            },
+            {
+              "name": "created_at",
+              "type": "DATETIME"
+            },
+            {
+              "name": "updated_at",
+              "type": "DATETIME"
+            }
+          ],
+          "column_list_authoritative": true
+        },
+        "book6s": {
+          "column_vindexes": [
+            {
+              "columns": [
+                "author5_id"
+              ],
+              "name": "binary_md5"
+            }
+          ],
+          "auto_increment": {
+            "column": "id",
+            "sequence": "book6s_seq"
+          },
+          "columns": [
+            {
+              "name": "id",
+              "type": "INT64"
+            },
+            {
+              "name": "author5_id",
+              "type": "INT64"
+            },
+            {
+              "name": "supplier5_id",
+              "type": "INT64"
+            },
+            {
+              "name": "title",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "price",
+              "type": "INT32"
+            },
+            {
+              "name": "year_published",
+              "type": "INT32"
+            },
+            {
+              "name": "out_of_print",
+              "type": "INT8"
+            },
+            {
+              "name": "created_at",
+              "type": "DATETIME"
+            },
+            {
+              "name": "updated_at",
+              "type": "DATETIME"
+            }
+          ],
+          "column_list_authoritative": true
+        },
+        "book6s_order2s": {
+          "column_vindexes": [
+            {
+              "columns": [
+                "book6_id"
+              ],
+              "name": "binary_md5"
+            }
+          ],
+          "columns": [
+            {
+              "name": "book6_id",
+              "type": "INT64"
+            },
+            {
+              "name": "order2_id",
+              "type": "INT64"
+            }
+          ],
+          "column_list_authoritative": true
+        },
+        "customer2s": {
+          "column_vindexes": [
+            {
+              "columns": [
+                "id"
+              ],
+              "name": "binary_md5"
+            }
+          ],
+          "auto_increment": {
+            "column": "id",
+            "sequence": "customer2s_seq"
+          },
+          "columns": [
+            {
+              "name": "id",
+              "type": "INT64"
+            },
+            {
+              "name": "first_name",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "orders_count",
+              "type": "INT32"
+            },
+            {
+              "name": "lock_version",
+              "type": "INT32"
+            },
+            {
+              "name": "created_at",
+              "type": "DATETIME"
+            },
+            {
+              "name": "updated_at",
+              "type": "DATETIME"
+            }
+          ],
+          "column_list_authoritative": true
+        },
         "user": {
           "column_vindexes": [
             {
@@ -329,6 +484,60 @@
         },
         "seq": {
           "type": "sequence"
+        },
+        "book6s_seq": {
+          "type": "sequence",
+          "columns": [
+            {
+              "name": "id",
+              "type": "INT64"
+            },
+            {
+              "name": "next_id",
+              "type": "INT64"
+            },
+            {
+              "name": "cache",
+              "type": "INT64"
+            }
+          ],
+          "column_list_authoritative": true
+        },
+        "customer2s_seq": {
+          "type": "sequence",
+          "columns": [
+            {
+              "name": "id",
+              "type": "INT64"
+            },
+            {
+              "name": "next_id",
+              "type": "INT64"
+            },
+            {
+              "name": "cache",
+              "type": "INT64"
+            }
+          ],
+          "column_list_authoritative": true
+        },
+        "order2s_seq": {
+          "type": "sequence",
+          "columns": [
+            {
+              "name": "id",
+              "type": "INT64"
+            },
+            {
+              "name": "next_id",
+              "type": "INT64"
+            },
+            {
+              "name": "cache",
+              "type": "INT64"
+            }
+          ],
+          "column_list_authoritative": true
         }
       }
     },
