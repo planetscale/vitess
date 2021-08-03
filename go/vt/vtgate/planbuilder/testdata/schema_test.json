@@ -1,24 +1,41 @@
 {
   "routing_rules": {
-    "rules": [{
-      "from_table": "route1",
-      "to_tables": ["user.user"]
-    }, {
-      "from_table": "route2",
-      "to_tables": ["main.unsharded"]
-    }, {
-      "from_table": "second_user.user",
-      "to_tables": ["user.user"]
-    }, {
-      "from_table": "master_redirect@master",
-      "to_tables": ["user.user"]
-    }, {
-      "from_table": "bad_table",
-      "to_tables": ["noks.noks"]
-    }, {
-      "from_table": "disabled",
-      "to_tables": []
-    }]
+    "rules": [
+      {
+        "from_table": "route1",
+        "to_tables": [
+          "user.user"
+        ]
+      },
+      {
+        "from_table": "route2",
+        "to_tables": [
+          "main.unsharded"
+        ]
+      },
+      {
+        "from_table": "second_user.user",
+        "to_tables": [
+          "user.user"
+        ]
+      },
+      {
+        "from_table": "master_redirect@master",
+        "to_tables": [
+          "user.user"
+        ]
+      },
+      {
+        "from_table": "bad_table",
+        "to_tables": [
+          "noks.noks"
+        ]
+      },
+      {
+        "from_table": "disabled",
+        "to_tables": []
+      }
+    ]
   },
   "keyspaces": {
     "user": {
@@ -87,18 +104,18 @@
         }
       },
       "tables": {
-        "order2s": {
+        "order": {
           "column_vindexes": [
             {
               "columns": [
-                "customer2_id"
+                "c_id"
               ],
               "name": "binary_md5"
             }
           ],
           "auto_increment": {
             "column": "id",
-            "sequence": "order2s_seq"
+            "sequence": "order_seq"
           },
           "columns": [
             {
@@ -106,36 +123,24 @@
               "type": "INT64"
             },
             {
-              "name": "customer2_id",
+              "name": "c_id",
               "type": "INT64"
-            },
-            {
-              "name": "status",
-              "type": "INT32"
-            },
-            {
-              "name": "created_at",
-              "type": "DATETIME"
-            },
-            {
-              "name": "updated_at",
-              "type": "DATETIME"
             }
           ],
           "column_list_authoritative": true
         },
-        "book6s": {
+        "book": {
           "column_vindexes": [
             {
               "columns": [
-                "author5_id"
+                "author_id"
               ],
               "name": "binary_md5"
             }
           ],
           "auto_increment": {
             "column": "id",
-            "sequence": "book6s_seq"
+            "sequence": "book_seq"
           },
           "columns": [
             {
@@ -143,62 +148,34 @@
               "type": "INT64"
             },
             {
-              "name": "author5_id",
+              "name": "author_id",
               "type": "INT64"
-            },
-            {
-              "name": "supplier5_id",
-              "type": "INT64"
-            },
-            {
-              "name": "title",
-              "type": "VARCHAR"
-            },
-            {
-              "name": "price",
-              "type": "INT32"
-            },
-            {
-              "name": "year_published",
-              "type": "INT32"
-            },
-            {
-              "name": "out_of_print",
-              "type": "INT8"
-            },
-            {
-              "name": "created_at",
-              "type": "DATETIME"
-            },
-            {
-              "name": "updated_at",
-              "type": "DATETIME"
             }
           ],
           "column_list_authoritative": true
         },
-        "book6s_order2s": {
+        "book_order": {
           "column_vindexes": [
             {
               "columns": [
-                "book6_id"
+                "b_id"
               ],
               "name": "binary_md5"
             }
           ],
           "columns": [
             {
-              "name": "book6_id",
+              "name": "b_id",
               "type": "INT64"
             },
             {
-              "name": "order2_id",
+              "name": "o_id",
               "type": "INT64"
             }
           ],
           "column_list_authoritative": true
         },
-        "customer2s": {
+        "customer": {
           "column_vindexes": [
             {
               "columns": [
@@ -209,32 +186,12 @@
           ],
           "auto_increment": {
             "column": "id",
-            "sequence": "customer2s_seq"
+            "sequence": "customer_seq"
           },
           "columns": [
             {
               "name": "id",
               "type": "INT64"
-            },
-            {
-              "name": "first_name",
-              "type": "VARCHAR"
-            },
-            {
-              "name": "orders_count",
-              "type": "INT32"
-            },
-            {
-              "name": "lock_version",
-              "type": "INT32"
-            },
-            {
-              "name": "created_at",
-              "type": "DATETIME"
-            },
-            {
-              "name": "updated_at",
-              "type": "DATETIME"
             }
           ],
           "column_list_authoritative": true
@@ -373,7 +330,10 @@
               "name": "cola_map"
             },
             {
-              "columns": ["column_b", "column_c"],
+              "columns": [
+                "column_b",
+                "column_c"
+              ],
               "name": "colb_colc_map"
             }
           ]
@@ -385,7 +345,10 @@
               "name": "kid_index"
             },
             {
-              "columns": ["column_a", "kid"],
+              "columns": [
+                "column_a",
+                "kid"
+              ],
               "name": "cola_kid_map"
             }
           ]
@@ -485,59 +448,14 @@
         "seq": {
           "type": "sequence"
         },
-        "book6s_seq": {
-          "type": "sequence",
-          "columns": [
-            {
-              "name": "id",
-              "type": "INT64"
-            },
-            {
-              "name": "next_id",
-              "type": "INT64"
-            },
-            {
-              "name": "cache",
-              "type": "INT64"
-            }
-          ],
-          "column_list_authoritative": true
+        "book_seq": {
+          "type": "sequence"
         },
-        "customer2s_seq": {
-          "type": "sequence",
-          "columns": [
-            {
-              "name": "id",
-              "type": "INT64"
-            },
-            {
-              "name": "next_id",
-              "type": "INT64"
-            },
-            {
-              "name": "cache",
-              "type": "INT64"
-            }
-          ],
-          "column_list_authoritative": true
+        "customer_seq": {
+          "type": "sequence"
         },
-        "order2s_seq": {
-          "type": "sequence",
-          "columns": [
-            {
-              "name": "id",
-              "type": "INT64"
-            },
-            {
-              "name": "next_id",
-              "type": "INT64"
-            },
-            {
-              "name": "cache",
-              "type": "INT64"
-            }
-          ],
-          "column_list_authoritative": true
+        "order_seq": {
+          "type": "sequence"
         }
       }
     },

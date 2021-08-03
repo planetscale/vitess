@@ -1,6 +1,158 @@
 # Add your test case here for debugging and run go test -run=One.
-"select book6s.* from book6s join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id"
+"select b.* from book b join book_order bo on bo.b_id = b.id join `order` o on o.id = bo.o_id join customer c on c.id = o.c_id"
 {
+  "QueryType": "SELECT",
+  "Original": "select b.* from book b join book_order bo on bo.b_id = b.id join `order` o on o.id = bo.o_id join customer c on c.id = o.c_id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,-2",
+    "JoinVars": {
+      "o_c_id": 2
+    },
+    "TableName": "book_book_order_`order`_customer",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2,1",
+        "JoinVars": {
+          "bo_o_id": 2
+        },
+        "TableName": "book_book_order_`order`",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-1,-2,1",
+            "JoinVars": {
+              "b_id": 0
+            },
+            "TableName": "book_book_order",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select b.id, b.author_id from book as b where 1 != 1",
+                "Query": "select b.id, b.author_id from book as b",
+                "Table": "book"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectEqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select bo.o_id from book_order as bo where 1 != 1",
+                "Query": "select bo.o_id from book_order as bo where bo.b_id = :b_id",
+                "Table": "book_order",
+                "Values": [
+                  ":b_id"
+                ],
+                "Vindex": "binary_md5"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select o.c_id from `order` as o where 1 != 1",
+            "Query": "select o.c_id from `order` as o where o.id = :bo_o_id",
+            "Table": "`order`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from customer as c where 1 != 1",
+        "Query": "select 1 from customer as c where c.id = :o_c_id",
+        "Table": "customer",
+        "Values": [
+          ":o_c_id"
+        ],
+        "Vindex": "binary_md5"
+      }
+    ]
+  }
 }
 {
+  "QueryType": "SELECT",
+  "Original": "select b.* from book b join book_order bo on bo.b_id = b.id join `order` o on o.id = bo.o_id join customer c on c.id = o.c_id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,-3",
+    "JoinVars": {
+      "bo_o_id": 0
+    },
+    "TableName": "book_book_order_`order`, customer",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "1,-1,-2",
+        "JoinVars": {
+          "b_id": 0
+        },
+        "TableName": "book_book_order",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select b.id, b.author_id as author_id from book as b where 1 != 1",
+            "Query": "select b.id, b.author_id as author_id from book as b",
+            "Table": "book"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select bo.o_id from book_order as bo where 1 != 1",
+            "Query": "select bo.o_id from book_order as bo where bo.b_id = :b_id",
+            "Table": "book_order",
+            "Values": [
+              ":b_id"
+            ],
+            "Vindex": "binary_md5"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `order` as o, customer as c where 1 != 1",
+        "Query": "select 1 from `order` as o, customer as c where c.id = o.c_id and o.id = :bo_o_id",
+        "Table": "`order`, customer",
+        "Values": [
+          ":bo_o_id"
+        ],
+        "Vindex": "binary_md5"
+      }
+    ]
+  }
 }
