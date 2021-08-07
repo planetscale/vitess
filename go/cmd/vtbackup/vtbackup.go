@@ -113,7 +113,7 @@ var (
 
 	initialBackup    = flag.Bool("initial_backup", false, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
 	allowFirstBackup = flag.Bool("allow_first_backup", false, "Allow this job to take the first backup of an existing shard.")
-	fullFlush        = flag.Bool("full_flush", false, "Perform a full redo & buffer flush before taking the backup, currently implemented as a clean shutdown and startup. Only makes sense to work around xtrabackup bugs.")
+	fullFlush        = flag.Bool("full_flush", true, "Perform a full redo & buffer flush before taking the backup, currently implemented as a clean shutdown and startup. Only makes sense to work around xtrabackup bugs.")
 
 	// vttablet-like flags
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
