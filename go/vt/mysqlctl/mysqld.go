@@ -539,7 +539,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		defer os.Remove(cnf)
 		args := []string{
 			"--defaults-extra-file=" + cnf,
-			"--shutdown-timeout=300",
+			"--shutdown-timeout=600",
 			"--connect-timeout=30",
 			"--wait=10",
 			"shutdown",
