@@ -72,7 +72,7 @@ func (q *StreamHealthQueryService) Execute(ctx context.Context, target *querypb.
 // the healthcheck module.
 func (q *StreamHealthQueryService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	for shr := range q.healthResponses {
-		callback(shr)
+		callback(shr) // nolint:errcheck
 	}
 	return nil
 }
@@ -103,7 +103,7 @@ func (q *StreamHealthQueryService) AddHealthResponseWithQPS(qps float64) {
 }
 
 // AddHealthResponseWithReplicationLag adds a faked health response to the
-// buffer channel. Only "seconds_behind_master" is different in this message.
+// buffer channel. Only "replication_lag_seconds" is different in this message.
 func (q *StreamHealthQueryService) AddHealthResponseWithReplicationLag(replicationLag uint32) {
 	q.healthResponses <- &querypb.StreamHealthResponse{
 		Target:  proto.Clone(q.target).(*querypb.Target),

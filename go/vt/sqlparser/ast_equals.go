@@ -422,12 +422,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return a == b
-	case JoinCondition:
-		b, ok := inB.(JoinCondition)
+	case *JoinCondition:
+		b, ok := inB.(*JoinCondition)
 		if !ok {
 			return false
 		}
-		return EqualsJoinCondition(a, b)
+		return EqualsRefOfJoinCondition(a, b)
 	case *JoinTableExpr:
 		b, ok := inB.(*JoinTableExpr)
 		if !ok {
@@ -928,8 +928,8 @@ func EqualsRefOfAddColumns(a, b *AddColumns) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSliceOfRefOfColumnDefinition(a.Columns, b.Columns) &&
-		EqualsRefOfColName(a.First, b.First) &&
+	return a.First == b.First &&
+		EqualsSliceOfRefOfColumnDefinition(a.Columns, b.Columns) &&
 		EqualsRefOfColName(a.After, b.After)
 }
 
@@ -1160,9 +1160,9 @@ func EqualsRefOfChangeColumn(a, b *ChangeColumn) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsRefOfColName(a.OldColumn, b.OldColumn) &&
+	return a.First == b.First &&
+		EqualsRefOfColName(a.OldColumn, b.OldColumn) &&
 		EqualsRefOfColumnDefinition(a.NewColDefinition, b.NewColDefinition) &&
-		EqualsRefOfColName(a.First, b.First) &&
 		EqualsRefOfColName(a.After, b.After)
 }
 
@@ -1719,8 +1719,14 @@ func EqualsRefOfIsExpr(a, b *IsExpr) bool {
 		a.Right == b.Right
 }
 
-// EqualsJoinCondition does deep equals between the two objects.
-func EqualsJoinCondition(a, b JoinCondition) bool {
+// EqualsRefOfJoinCondition does deep equals between the two objects.
+func EqualsRefOfJoinCondition(a, b *JoinCondition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
 	return EqualsExpr(a.On, b.On) &&
 		EqualsColumns(a.Using, b.Using)
 }
@@ -1736,7 +1742,7 @@ func EqualsRefOfJoinTableExpr(a, b *JoinTableExpr) bool {
 	return EqualsTableExpr(a.LeftExpr, b.LeftExpr) &&
 		a.Join == b.Join &&
 		EqualsTableExpr(a.RightExpr, b.RightExpr) &&
-		EqualsJoinCondition(a.Condition, b.Condition)
+		EqualsRefOfJoinCondition(a.Condition, b.Condition)
 }
 
 // EqualsRefOfKeyState does deep equals between the two objects.
@@ -1828,8 +1834,8 @@ func EqualsRefOfModifyColumn(a, b *ModifyColumn) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsRefOfColumnDefinition(a.NewColDefinition, b.NewColDefinition) &&
-		EqualsRefOfColName(a.First, b.First) &&
+	return a.First == b.First &&
+		EqualsRefOfColumnDefinition(a.NewColDefinition, b.NewColDefinition) &&
 		EqualsRefOfColName(a.After, b.After)
 }
 
@@ -3850,18 +3856,6 @@ func EqualsSliceOfRefOfIndexOption(a, b []*IndexOption) bool {
 		}
 	}
 	return true
-}
-
-// EqualsRefOfJoinCondition does deep equals between the two objects.
-func EqualsRefOfJoinCondition(a, b *JoinCondition) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsExpr(a.On, b.On) &&
-		EqualsColumns(a.Using, b.Using)
 }
 
 // EqualsTableAndLockTypes does deep equals between the two objects.

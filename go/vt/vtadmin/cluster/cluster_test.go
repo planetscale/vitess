@@ -23,13 +23,14 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-
-	"vitess.io/vitess/go/test/utils"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
@@ -45,6 +46,223 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
+
+func TestCreateKeyspace(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		cfg       testutil.TestClusterConfig
+		req       *vtctldatapb.CreateKeyspaceRequest
+		expected  *vtadminpb.Keyspace
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{},
+			},
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name: "testkeyspace",
+			},
+			expected: &vtadminpb.Keyspace{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				Keyspace: &vtctldatapb.Keyspace{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+				Shards: map[string]*vtctldatapb.Shard{},
+			},
+		},
+		{
+			name: "snapshot",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{},
+			},
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name:         "testkeyspace_snapshot",
+				Type:         topodatapb.KeyspaceType_SNAPSHOT,
+				BaseKeyspace: "testkeyspace",
+				SnapshotTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 3, 4, 5, 0, time.UTC)),
+			},
+			expected: &vtadminpb.Keyspace{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				Keyspace: &vtctldatapb.Keyspace{
+					Name: "testkeyspace_snapshot",
+					Keyspace: &topodatapb.Keyspace{
+						KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+						BaseKeyspace: "testkeyspace",
+						SnapshotTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 3, 4, 5, 0, time.UTC)),
+					},
+				},
+				Shards: map[string]*vtctldatapb.Shard{},
+			},
+		},
+		{
+			name: "nil request",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{},
+			},
+			req:       nil,
+			shouldErr: true,
+		},
+		{
+			name: "missing name",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{},
+			},
+			req:       &vtctldatapb.CreateKeyspaceRequest{},
+			shouldErr: true,
+		},
+		{
+			name: "failure",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{
+					CreateKeyspaceShouldErr: true,
+				},
+			},
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name: "testkeyspace",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cluster := testutil.BuildCluster(t, tt.cfg)
+			err := cluster.Vtctld.Dial(ctx)
+			require.NoError(t, err, "could not dial test vtctld")
+
+			resp, err := cluster.CreateKeyspace(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestDeleteKeyspace(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		cfg       testutil.TestClusterConfig
+		req       *vtctldatapb.DeleteKeyspaceRequest
+		expected  *vtctldatapb.DeleteKeyspaceResponse
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{},
+			},
+			req: &vtctldatapb.DeleteKeyspaceRequest{
+				Keyspace: "ks1",
+			},
+			expected: &vtctldatapb.DeleteKeyspaceResponse{},
+		},
+		{
+			name: "nil request",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{},
+			},
+			req:       nil,
+			shouldErr: true,
+		},
+		{
+			name: "missing name",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{},
+			},
+			req:       &vtctldatapb.DeleteKeyspaceRequest{},
+			shouldErr: true,
+		},
+		{
+			name: "failure",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{
+					DeleteKeyspaceShouldErr: true,
+				},
+			},
+			req: &vtctldatapb.DeleteKeyspaceRequest{
+				Keyspace: "ks1",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cluster := testutil.BuildCluster(t, tt.cfg)
+			err := cluster.Vtctld.Dial(ctx)
+			require.NoError(t, err, "could not dial test vtctld")
+
+			resp, err := cluster.DeleteKeyspace(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
 
 func TestFindTablet(t *testing.T) {
 	t.Parallel()
@@ -573,7 +791,7 @@ func TestGetSchema(t *testing.T) {
 		err := c.Vtctld.Dial(ctx)
 		require.NoError(t, err, "could not dial test vtctld")
 
-		c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
+		_, _ = c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
 			BaseRequest: req,
 			Tablets:     []*vtadminpb.Tablet{tablet},
 		})
@@ -634,8 +852,8 @@ func TestGetSchema(t *testing.T) {
 										"-80": {
 											Name: "-80",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
-												MasterAlias: &topodatapb.TabletAlias{
+												IsPrimaryServing: true,
+												PrimaryAlias: &topodatapb.TabletAlias{
 													Cell: "zone1",
 													Uid:  100,
 												},
@@ -644,8 +862,8 @@ func TestGetSchema(t *testing.T) {
 										"80-": {
 											Name: "80-",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
-												MasterAlias: &topodatapb.TabletAlias{
+												IsPrimaryServing: true,
+												PrimaryAlias: &topodatapb.TabletAlias{
 													Cell: "zone1",
 													Uid:  200,
 												},
@@ -654,7 +872,7 @@ func TestGetSchema(t *testing.T) {
 										"-": {
 											Name: "-",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: false,
+												IsPrimaryServing: false,
 											},
 										},
 									},
@@ -790,19 +1008,19 @@ func TestGetSchema(t *testing.T) {
 										"-80": {
 											Name: "-80",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
+												IsPrimaryServing: true,
 											},
 										},
 										"80-": {
 											Name: "80-",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
+												IsPrimaryServing: true,
 											},
 										},
 										"-": {
 											Name: "-",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: false,
+												IsPrimaryServing: false,
 											},
 										},
 									},
@@ -947,8 +1165,8 @@ func TestGetSchema(t *testing.T) {
 										"-80": {
 											Name: "-80",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
-												MasterAlias: &topodatapb.TabletAlias{
+												IsPrimaryServing: true,
+												PrimaryAlias: &topodatapb.TabletAlias{
 													Cell: "zone1",
 													Uid:  100,
 												},
@@ -957,8 +1175,8 @@ func TestGetSchema(t *testing.T) {
 										"80-": {
 											Name: "80-",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
-												MasterAlias: &topodatapb.TabletAlias{
+												IsPrimaryServing: true,
+												PrimaryAlias: &topodatapb.TabletAlias{
 													Cell: "zone1",
 													Uid:  200,
 												},
@@ -967,7 +1185,7 @@ func TestGetSchema(t *testing.T) {
 										"-": {
 											Name: "-",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: false,
+												IsPrimaryServing: false,
 											},
 										},
 									},
@@ -1062,8 +1280,8 @@ func TestGetSchema(t *testing.T) {
 										"-80": {
 											Name: "-80",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
-												MasterAlias: &topodatapb.TabletAlias{
+												IsPrimaryServing: true,
+												PrimaryAlias: &topodatapb.TabletAlias{
 													Cell: "zone1",
 													Uid:  100,
 												},
@@ -1072,8 +1290,8 @@ func TestGetSchema(t *testing.T) {
 										"80-": {
 											Name: "80-",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
-												MasterAlias: &topodatapb.TabletAlias{
+												IsPrimaryServing: true,
+												PrimaryAlias: &topodatapb.TabletAlias{
 													Cell: "zone1",
 													Uid:  200,
 												},
@@ -1082,7 +1300,7 @@ func TestGetSchema(t *testing.T) {
 										"-": {
 											Name: "-",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: false,
+												IsPrimaryServing: false,
 											},
 										},
 									},
@@ -1210,8 +1428,8 @@ func TestGetSchema(t *testing.T) {
 										"-80": {
 											Name: "-80",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
-												MasterAlias: &topodatapb.TabletAlias{
+												IsPrimaryServing: true,
+												PrimaryAlias: &topodatapb.TabletAlias{
 													Cell: "zone1",
 													Uid:  100,
 												},
@@ -1220,8 +1438,8 @@ func TestGetSchema(t *testing.T) {
 										"80-": {
 											Name: "80-",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
-												MasterAlias: &topodatapb.TabletAlias{
+												IsPrimaryServing: true,
+												PrimaryAlias: &topodatapb.TabletAlias{
 													Cell: "zone1",
 													Uid:  200,
 												},
@@ -1230,7 +1448,7 @@ func TestGetSchema(t *testing.T) {
 										"-": {
 											Name: "-",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: false,
+												IsPrimaryServing: false,
 											},
 										},
 									},
@@ -1399,8 +1617,8 @@ func TestGetSchema(t *testing.T) {
 										"-80": {
 											Name: "-80",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
-												MasterAlias: &topodatapb.TabletAlias{
+												IsPrimaryServing: true,
+												PrimaryAlias: &topodatapb.TabletAlias{
 													Cell: "zone1",
 													Uid:  100,
 												},
@@ -1409,8 +1627,8 @@ func TestGetSchema(t *testing.T) {
 										"80-": {
 											Name: "80-",
 											Shard: &topodatapb.Shard{
-												IsMasterServing: true,
-												MasterAlias: &topodatapb.TabletAlias{
+												IsPrimaryServing: true,
+												PrimaryAlias: &topodatapb.TabletAlias{
 													Cell: "zone1",
 													Uid:  200,
 												},

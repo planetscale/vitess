@@ -36,8 +36,6 @@ func (cached *AddColumns) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field First *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.First.CachedSize(true)
 	// field After *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.After.CachedSize(true)
 	return size
@@ -391,8 +389,6 @@ func (cached *ChangeColumn) CachedSize(alloc bool) int64 {
 	size += cached.OldColumn.CachedSize(true)
 	// field NewColDefinition *vitess.io/vitess/go/vt/sqlparser.ColumnDefinition
 	size += cached.NewColDefinition.CachedSize(true)
-	// field First *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.First.CachedSize(true)
 	// field After *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.After.CachedSize(true)
 	return size
@@ -1211,7 +1207,7 @@ func (cached *JoinTableExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(48)
 	}
 	// field LeftExpr vitess.io/vitess/go/vt/sqlparser.TableExpr
 	if cc, ok := cached.LeftExpr.(cachedObject); ok {
@@ -1221,8 +1217,8 @@ func (cached *JoinTableExpr) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.RightExpr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Condition vitess.io/vitess/go/vt/sqlparser.JoinCondition
-	size += cached.Condition.CachedSize(false)
+	// field Condition *vitess.io/vitess/go/vt/sqlparser.JoinCondition
+	size += cached.Condition.CachedSize(true)
 	return size
 }
 func (cached *KeyState) CachedSize(alloc bool) int64 {
@@ -1325,8 +1321,6 @@ func (cached *ModifyColumn) CachedSize(alloc bool) int64 {
 	}
 	// field NewColDefinition *vitess.io/vitess/go/vt/sqlparser.ColumnDefinition
 	size += cached.NewColDefinition.CachedSize(true)
-	// field First *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.First.CachedSize(true)
 	// field After *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.After.CachedSize(true)
 	return size

@@ -374,8 +374,8 @@ func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos mysq
 }
 
 // SetReplicationSource is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, masterHost string, masterPort int, stopReplicationBefore bool, startReplicationAfter bool) error {
-	input := fmt.Sprintf("%v:%v", masterHost, masterPort)
+func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int, stopReplicationBefore bool, startReplicationAfter bool) error {
+	input := fmt.Sprintf("%v:%v", host, port)
 	if fmd.SetReplicationSourceInput != input {
 		return fmt.Errorf("wrong input for SetReplicationSourceCommands: expected %v got %v", fmd.SetReplicationSourceInput, input)
 	}
@@ -398,7 +398,7 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 	return nil
 }
 
-// DemoteMaster is deprecated: use mysqld.PrimaryPosition() instead
+// DemoteMaster is deprecated: use mysqld.DemotePrimary() instead
 func (fmd *FakeMysqlDaemon) DemoteMaster() (mysql.Position, error) {
 	return fmd.CurrentPrimaryPosition, nil
 }

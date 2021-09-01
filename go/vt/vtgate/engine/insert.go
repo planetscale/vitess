@@ -188,7 +188,7 @@ func (ins *Insert) GetTableName() string {
 }
 
 // Execute performs a non-streaming exec.
-func (ins *Insert) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if ins.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(ins.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -206,7 +206,7 @@ func (ins *Insert) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 }
 
 // StreamExecute performs a streaming exec.
-func (ins *Insert) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ins *Insert) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return fmt.Errorf("query %q cannot be used for streaming", ins.Query)
 }
 
@@ -228,7 +228,7 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	err = allowOnlyMaster(rss...)
+	err = allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 	}
 
 	autocommit := (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	err = allowOnlyMaster(rss...)
+	err = allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err
 	}
@@ -626,7 +626,7 @@ func (ins *Insert) description() PrimitiveDescription {
 		OperatorType:     "Insert",
 		Keyspace:         ins.Keyspace,
 		Variant:          ins.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_MASTER,
+		TargetTabletType: topodatapb.TabletType_PRIMARY,
 		Other:            other,
 	}
 }

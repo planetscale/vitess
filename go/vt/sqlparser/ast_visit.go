@@ -154,8 +154,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case IsolationLevel:
 		return VisitIsolationLevel(in, f)
-	case JoinCondition:
-		return VisitJoinCondition(in, f)
+	case *JoinCondition:
+		return VisitRefOfJoinCondition(in, f)
 	case *JoinTableExpr:
 		return VisitRefOfJoinTableExpr(in, f)
 	case *KeyState:
@@ -334,9 +334,6 @@ func VisitRefOfAddColumns(in *AddColumns, f Visit) error {
 		if err := VisitRefOfColumnDefinition(el, f); err != nil {
 			return err
 		}
-	}
-	if err := VisitRefOfColName(in.First, f); err != nil {
-		return err
 	}
 	if err := VisitRefOfColName(in.After, f); err != nil {
 		return err
@@ -612,9 +609,6 @@ func VisitRefOfChangeColumn(in *ChangeColumn, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfColumnDefinition(in.NewColDefinition, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfColName(in.First, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfColName(in.After, f); err != nil {
@@ -1213,7 +1207,10 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 	}
 	return nil
 }
-func VisitJoinCondition(in JoinCondition, f Visit) error {
+func VisitRefOfJoinCondition(in *JoinCondition, f Visit) error {
+	if in == nil {
+		return nil
+	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
@@ -1238,7 +1235,7 @@ func VisitRefOfJoinTableExpr(in *JoinTableExpr, f Visit) error {
 	if err := VisitTableExpr(in.RightExpr, f); err != nil {
 		return err
 	}
-	if err := VisitJoinCondition(in.Condition, f); err != nil {
+	if err := VisitRefOfJoinCondition(in.Condition, f); err != nil {
 		return err
 	}
 	return nil
@@ -1326,9 +1323,6 @@ func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfColumnDefinition(in.NewColDefinition, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfColName(in.First, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfColName(in.After, f); err != nil {
@@ -2770,21 +2764,6 @@ func VisitRefOfColIdent(in *ColIdent, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	return nil
-}
-func VisitRefOfJoinCondition(in *JoinCondition, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitExpr(in.On, f); err != nil {
-		return err
-	}
-	if err := VisitColumns(in.Using, f); err != nil {
 		return err
 	}
 	return nil

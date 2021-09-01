@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"strings"
 	"testing"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -47,21 +46,50 @@ func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
 }
 
 func TestScopeForSubqueries(t *testing.T) {
-	t.Skip("subqueries not yet supported")
-	query := `
+	tcases := []struct {
+		sql  string
+		deps TableSet
+	}{
+		{
+			sql: `
 select t.col1, (
 	select t.col2 from z as t) 
-from x as t`
-	stmt, semTable := parseAndAnalyze(t, query, "")
+from x as t`,
+			deps: T2,
+		}, {
+			sql: `
+select t.col1, (
+	select t.col2 from z) 
+from x as t`,
+			deps: T1,
+		}, {
+			sql: `
+select t.col1, (
+	select (select z.col2 from y) from z) 
+from x as t`,
+			deps: T2,
+		}, {
+			sql: `
+select t.col1, (
+	select (select y.col2 from y) from z) 
+from x as t`,
+			deps: T3,
+		},
+	}
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel, _ := stmt.(*sqlparser.Select)
 
-	sel, _ := stmt.(*sqlparser.Select)
-
-	// extract the `t.col2` expression from the subquery
-	sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
-	s1 := semTable.BaseTableDependencies(extract(sel2, 0))
-
-	// if scoping works as expected, we should be able to see the inner table being used by the inner expression
-	assert.Equal(t, T2, s1)
+			// extract the first expression from the subquery (which should be the second expression in the outer query)
+			sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
+			exp := extract(sel2, 0)
+			s1 := semTable.BaseTableDependencies(exp)
+			require.NoError(t, semTable.ProjectionErr)
+			// if scoping works as expected, we should be able to see the inner table being used by the inner expression
+			assert.Equal(t, tc.deps, s1)
+		})
+	}
 }
 
 func TestBindingSingleTablePositive(t *testing.T) {
@@ -99,7 +127,7 @@ func TestBindingSingleTableNegative(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(t, err)
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{})
+			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{}, NoRewrite)
 			require.Error(t, err)
 		})
 	}
@@ -163,7 +191,7 @@ func TestOrderByBindingMultiTable(t *testing.T) {
 	})
 }
 
-func TestGroupByBindingSingleTable(t *testing.T) {
+func TestGroupByBinding(t *testing.T) {
 	tcases := []struct {
 		sql  string
 		deps TableSet
@@ -209,6 +237,55 @@ func TestGroupByBindingSingleTable(t *testing.T) {
 	}
 }
 
+func TestHavingBinding(t *testing.T) {
+	tcases := []struct {
+		sql  string
+		deps TableSet
+	}{{
+		"select col from tabl having col = 1",
+		T1,
+	}, {
+		"select col from tabl having tabl.col = 1",
+		T1,
+	}, {
+		"select col from tabl having d.tabl.col = 1",
+		T1,
+	}, {
+		"select tabl.col as x from tabl having x = 1",
+		T1,
+	}, {
+		"select tabl.col as x from tabl having col",
+		T1,
+	}, {
+		"select col from tabl having 1 = 1",
+		T0,
+	}, {
+		"select col as c from tabl having c = 1",
+		T1,
+	}, {
+		"select 1 as c from tabl having c = 1",
+		T0,
+	}, {
+		"select t1.id from t1, t2 having id = 1",
+		T1,
+	}, {
+		"select t.id from t, t1 having id = 1",
+		T1,
+	}, {
+		"select t.id, count(*) as a from t, t1 group by t.id having a = 1",
+		T1 | T2,
+	}}
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel, _ := stmt.(*sqlparser.Select)
+			hvng := sel.Having.Expr
+			d := semTable.BaseTableDependencies(hvng)
+			require.Equal(t, tc.deps, d, tc.sql)
+		})
+	}
+}
+
 func TestBindingSingleAliasedTable(t *testing.T) {
 	t.Run("positive tests", func(t *testing.T) {
 		queries := []string{
@@ -246,7 +323,7 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 					Tables: map[string]*vindexes.Table{
 						"t": {Name: sqlparser.NewTableIdent("t")},
 					},
-				})
+				}, NoRewrite)
 				require.Error(t, err)
 			})
 		}
@@ -346,7 +423,7 @@ func TestBindingMultiTable(t *testing.T) {
 						"tabl": {Name: sqlparser.NewTableIdent("tabl")},
 						"foo":  {Name: sqlparser.NewTableIdent("foo")},
 					},
-				})
+				}, NoRewrite)
 				require.Error(t, err)
 			})
 		}
@@ -373,11 +450,8 @@ func TestNotUniqueTableName(t *testing.T) {
 
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			if strings.Contains(query, ") as") {
-				t.Skip("derived tables not implemented")
-			}
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "test", &FakeSI{})
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "test", &FakeSI{}, NoRewrite)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Not unique table/alias")
 		})
@@ -392,7 +466,7 @@ func TestMissingTable(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{})
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{}, NoRewrite)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "symbol t.col not found")
 		})
@@ -492,7 +566,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			si := &FakeSI{Tables: test.schema}
-			tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
+			tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si, NoRewrite)
 			require.NoError(t, err)
 
 			if test.err {
@@ -531,7 +605,7 @@ func TestUnknownPredicate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			si := &FakeSI{Tables: test.schema}
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "", si, NoRewrite)
 			if test.err {
 				require.Error(t, err)
 			} else {
@@ -559,7 +633,7 @@ func TestScoping(t *testing.T) {
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewTableIdent("t")},
 				},
-			})
+			}, NoRewrite)
 			if query.errorMessage == "" {
 				require.NoError(t, err)
 			} else {
@@ -623,7 +697,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewTableIdent("t")},
 				},
-			})
+			}, NoRewrite)
 			if query.errorMessage != "" {
 				require.EqualError(t, err, query.errorMessage)
 			} else {
@@ -659,7 +733,7 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 			"t1": {Name: sqlparser.NewTableIdent("t1"), Columns: cols1, ColumnListAuthoritative: true},
 			"t2": {Name: sqlparser.NewTableIdent("t2"), Columns: cols2, ColumnListAuthoritative: true},
 		},
-	})
+	}, NoRewrite)
 	require.NoError(t, err)
 	return parse, semTable
 }

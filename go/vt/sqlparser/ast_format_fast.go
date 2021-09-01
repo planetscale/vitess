@@ -1208,7 +1208,10 @@ func (node *ParenTableExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node JoinCondition) formatFast(buf *TrackedBuffer) {
+func (node *JoinCondition) formatFast(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
 	if node.On != nil {
 		buf.WriteString(" on ")
 		node.On.formatFast(buf)
@@ -2046,9 +2049,8 @@ func (node *AddColumns) formatFast(buf *TrackedBuffer) {
 	if len(node.Columns) == 1 {
 		buf.WriteString("add column ")
 		node.Columns[0].formatFast(buf)
-		if node.First != nil {
-			buf.WriteString(" first ")
-			node.First.formatFast(buf)
+		if node.First {
+			buf.WriteString(" first")
 		}
 		if node.After != nil {
 			buf.WriteString(" after ")
@@ -2095,9 +2097,8 @@ func (node *ChangeColumn) formatFast(buf *TrackedBuffer) {
 	node.OldColumn.formatFast(buf)
 	buf.WriteByte(' ')
 	node.NewColDefinition.formatFast(buf)
-	if node.First != nil {
-		buf.WriteString(" first ")
-		node.First.formatFast(buf)
+	if node.First {
+		buf.WriteString(" first")
 	}
 	if node.After != nil {
 		buf.WriteString(" after ")
@@ -2109,9 +2110,8 @@ func (node *ChangeColumn) formatFast(buf *TrackedBuffer) {
 func (node *ModifyColumn) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("modify column ")
 	node.NewColDefinition.formatFast(buf)
-	if node.First != nil {
-		buf.WriteString(" first ")
-		node.First.formatFast(buf)
+	if node.First {
+		buf.WriteString(" first")
 	}
 	if node.After != nil {
 		buf.WriteString(" after ")

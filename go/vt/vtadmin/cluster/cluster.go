@@ -70,6 +70,7 @@ type Cluster struct {
 
 	backupReadPool   *pools.RPCPool
 	schemaReadPool   *pools.RPCPool
+	topoRWPool       *pools.RPCPool
 	topoReadPool     *pools.RPCPool
 	workflowReadPool *pools.RPCPool
 
@@ -121,6 +122,7 @@ func New(cfg Config) (*Cluster, error) {
 
 	cluster.backupReadPool = cfg.BackupReadPoolConfig.NewReadPool()
 	cluster.schemaReadPool = cfg.SchemaReadPoolConfig.NewReadPool()
+	cluster.topoRWPool = cfg.TopoRWPoolConfig.NewRWPool()
 	cluster.topoReadPool = cfg.TopoReadPoolConfig.NewReadPool()
 	cluster.workflowReadPool = cfg.WorkflowReadPoolConfig.NewReadPool()
 
@@ -171,7 +173,7 @@ func (c *Cluster) parseTablets(rows *sql.Rows) ([]*vtadminpb.Tablet, error) {
 }
 
 // Fields are:
-// Cell | Keyspace | Shard | TabletType (string) | ServingState (string) | Alias | Hostname | MasterTermStartTime.
+// Cell | Keyspace | Shard | TabletType (string) | ServingState (string) | Alias | Hostname | PrimaryTermStartTime.
 func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	var (
 		cell            string
@@ -225,10 +227,10 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	if mtstStr != "" {
 		timeTime, err := time.Parse(time.RFC3339, mtstStr)
 		if err != nil {
-			return nil, fmt.Errorf("failed parsing master_term_start_time %s: %w", mtstStr, err)
+			return nil, fmt.Errorf("failed parsing primary_term_start_time %s: %w", mtstStr, err)
 		}
 
-		topotablet.MasterTermStartTime = logutil.TimeToProto(timeTime)
+		topotablet.PrimaryTermStartTime = logutil.TimeToProto(timeTime)
 	}
 
 	if c.TabletFQDNTmpl != nil {
@@ -239,6 +241,65 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	}
 
 	return tablet, nil
+}
+
+// CreateKeyspace creates a keyspace in the given cluster, proxying a
+// CreateKeyspaceRequest to a vtctld in that cluster.
+func (c *Cluster) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest) (*vtadminpb.Keyspace, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.CreateKeyspace")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", errors.ErrInvalidRequest)
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("%w: keyspace name is required", errors.ErrInvalidRequest)
+	}
+
+	span.Annotate("keyspace", req.Name)
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("CreateKeyspace(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+
+	resp, err := c.Vtctld.CreateKeyspace(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.Keyspace{
+		Cluster:  c.ToProto(),
+		Keyspace: resp.Keyspace,
+		Shards:   map[string]*vtctldatapb.Shard{},
+	}, nil
+}
+
+// DeleteKeyspace deletes a keyspace in the given cluster, proxying a
+// DeleteKeyspaceRequest to a vtctld in that cluster.
+func (c *Cluster) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.DeleteKeyspace")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", errors.ErrInvalidRequest)
+	}
+
+	if req.Keyspace == "" {
+		return nil, fmt.Errorf("%w: keyspace name is required", errors.ErrInvalidRequest)
+	}
+
+	span.Annotate("keyspace", req.Keyspace)
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("DeleteKeyspace(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+
+	return c.Vtctld.DeleteKeyspace(ctx, req)
 }
 
 // FindAllShardsInKeyspaceOptions modify the behavior of a cluster's
@@ -841,7 +902,7 @@ type GetSchemaOptions struct {
 //
 // (2.1) If, in size aggregation mode, opts.SizeOpts.IncludeNonServingShards is
 // false (the default), then we will filter out any shards for which
-// IsMasterServing is false in the topo, and make GetSchema RPCs to one tablet
+// IsPrimaryServing is false in the topo, and make GetSchema RPCs to one tablet
 // in every _serving_ shard. Otherwise we will make a GetSchema RPC to one
 // tablet in _every_ shard.
 //
@@ -1027,8 +1088,8 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 			// provide a contiguous keyspace so that certain keyspace-level
 			// operations will work. In our case, we care about whether the
 			// shard is truly serving, which we define as also having a known
-			// primary (via MasterAlias) in addition to the IsMasterServing bit.
-			if !shard.Shard.IsMasterServing || shard.Shard.MasterAlias == nil {
+			// primary (via PrimaryAlias) in addition to the IsPrimaryServing bit.
+			if !shard.Shard.IsPrimaryServing || shard.Shard.PrimaryAlias == nil {
 				if !opts.TableSizeOptions.IncludeNonServingShards {
 					log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards = false", keyspace, shard.Name)
 					continue
@@ -1299,6 +1360,7 @@ func (c *Cluster) Debug() map[string]interface{} {
 			"backup_read_pool":   json.RawMessage(c.backupReadPool.StatsJSON()),
 			"schema_read_pool":   json.RawMessage(c.schemaReadPool.StatsJSON()),
 			"topo_read_pool":     json.RawMessage(c.topoReadPool.StatsJSON()),
+			"topo_rw_pool":       json.RawMessage(c.topoRWPool.StatsJSON()),
 			"workflow_read_pool": json.RawMessage(c.workflowReadPool.StatsJSON()),
 		},
 	}

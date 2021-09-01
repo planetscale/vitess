@@ -125,9 +125,9 @@ func newVCursorImpl(
 		return nil, err
 	}
 
-	// With DiscoveryGateway transactions are only allowed on master.
-	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for master tablet type, current type: %v", tabletType)
+	// With DiscoveryGateway transactions are only allowed on primary.
+	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", tabletType)
 	}
 	var ts *topo.Server
 	// We don't have access to the underlying TopoServer if this vtgate is
@@ -368,6 +368,16 @@ func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
 }
 
+func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	// TODO: this will eventually retry these queries on failure
+	return primitive.TryExecute(vc, bindVars, wantfields)
+}
+
+func (vc *vcursorImpl) StreamExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	// TODO: this will eventually retry these queries on failure
+	return primitive.TryStreamExecute(vc, bindVars, wantfields, callback)
+}
+
 // Execute is part of the engine.VCursor interface.
 func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	session := vc.safeSession
@@ -486,7 +496,7 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 		return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "unknown database '%s'", keyspace)
 	}
 
-	if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
+	if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.LockOrActiveTransaction, "can't execute the given command because you have an active transaction")
 	}
 	vc.safeSession.SetTargetString(target)

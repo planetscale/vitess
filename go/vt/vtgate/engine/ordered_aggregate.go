@@ -85,10 +85,9 @@ type AggregateParams struct {
 	KeyCol    int
 	WCol      int
 	WAssigned bool
-	// Alias is set only for distinct opcodes.
-	Alias string `json:",omitempty"`
 
-	Expr sqlparser.Expr
+	Alias string `json:",omitempty"`
+	Expr  sqlparser.Expr
 }
 
 func (ap *AggregateParams) isDistinct() bool {
@@ -125,9 +124,12 @@ const (
 )
 
 var (
-	opcodeType = map[AggregateOpcode]querypb.Type{
+	// OpcodeType keeps track of the known output types for different aggregate functions
+	OpcodeType = map[AggregateOpcode]querypb.Type{
 		AggregateCountDistinct: sqltypes.Int64,
+		AggregateCount:         sqltypes.Int64,
 		AggregateSumDistinct:   sqltypes.Decimal,
+		AggregateSum:           sqltypes.Decimal,
 		AggregateGtid:          sqltypes.VarChar,
 	}
 	// Some predefined values
@@ -185,8 +187,8 @@ func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
 	oa.TruncateColumnCount = count
 }
 
-// Execute is a Primitive function.
-func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+// TryExecute is a Primitive function.
+func (oa *OrderedAggregate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := oa.execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -195,7 +197,7 @@ func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars map[string]*queryp
 }
 
 func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := oa.Input.Execute(vcursor, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(oa.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +251,7 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 }
 
 // StreamExecute is a Primitive function.
-func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (oa *OrderedAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var current []sqltypes.Value
 	var curDistincts []sqltypes.Value
 	var fields []*querypb.Field
@@ -258,7 +260,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 		return callback(qr.Truncate(oa.TruncateColumnCount))
 	}
 
-	err := oa.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err := vcursor.StreamExecutePrimitive(oa.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			fields = oa.convertFields(qr.Fields)
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
@@ -313,7 +315,7 @@ func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) []*querypb.Fi
 		}
 		fields[aggr.Col] = &querypb.Field{
 			Name: aggr.Alias,
-			Type: opcodeType[aggr.Opcode],
+			Type: OpcodeType[aggr.Opcode],
 		}
 		if aggr.isDistinct() {
 			aggr.KeyCol = aggr.Col
@@ -341,7 +343,7 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 		case AggregateSumDistinct:
 			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
 			var err error
-			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], opcodeType[aggr.Opcode])
+			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], OpcodeType[aggr.Opcode])
 			if err != nil {
 				newRow[aggr.Col] = sumZero
 			}
@@ -437,9 +439,9 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 		case AggregateMax:
 			result[aggr.Col], err = evalengine.Max(row1[aggr.Col], row2[aggr.Col])
 		case AggregateCountDistinct:
-			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], countOne, opcodeType[aggr.Opcode])
+			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], countOne, OpcodeType[aggr.Opcode])
 		case AggregateSumDistinct:
-			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], opcodeType[aggr.Opcode])
+			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], OpcodeType[aggr.Opcode])
 		case AggregateGtid:
 			vgtid := &binlogdatapb.VGtid{}
 			err = proto.Unmarshal(row1[aggr.Col].ToBytes(), vgtid)

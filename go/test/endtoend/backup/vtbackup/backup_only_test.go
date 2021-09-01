@@ -55,7 +55,7 @@ func TestTabletInitialBackup(t *testing.T) {
 	//    - list the backups, remove them
 	defer cluster.PanicHandler(t)
 
-	vtBackup(t, true)
+	vtBackup(t, true, false)
 	verifyBackupCount(t, shardKsName, 1)
 
 	// Initialize the tablets
@@ -77,7 +77,7 @@ func TestTabletBackupOnly(t *testing.T) {
 	// Test Backup Flow
 	//    TestTabletBackupOnly will:
 	//    - Create a shard using regular init & start tablet
-	//    - Run initShardMaster to start replication
+	//    - Run InitShardPrimary to start replication
 	//    - Insert Some data
 	//    - Verify that the cluster is working
 	//    - Take a Second Backup
@@ -124,7 +124,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 	// backup the replica
 	log.Infof("taking backup %s", time.Now())
-	vtBackup(t, false)
+	vtBackup(t, false, true)
 	log.Infof("done taking backup %s", time.Now())
 
 	// check that the backup shows up in the listing
@@ -163,9 +163,12 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 }
 
-func vtBackup(t *testing.T, initialBackup bool) {
+func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
 	// Take the back using vtbackup executable
 	extraArgs := []string{"-allow_first_backup", "-db-credentials-file", dbCredentialFile}
+	if restartBeforeBackup {
+		extraArgs = append(extraArgs, "-restart_before_backup")
+	}
 	log.Infof("starting backup tablet %s", time.Now())
 	err := localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	require.Nil(t, err)
@@ -299,7 +302,7 @@ func tearDown(t *testing.T, initMysql bool) {
 
 		resetTabletDirectory(t, tablet, initMysql)
 		// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
-		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", tablet.Alias)
 		require.Nil(t, err)
 	}
 }

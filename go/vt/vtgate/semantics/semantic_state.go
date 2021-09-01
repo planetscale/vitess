@@ -17,13 +17,12 @@ limitations under the License.
 package semantics
 
 import (
-	"reflect"
-
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -73,7 +72,7 @@ type (
 	}
 
 	// vTableInfo is used to represent projected results, not real tables. It is used for
-	// ORDER BY and GROUP BY that need to access result columns, and also for derived tables.
+	// ORDER BY, GROUP BY and HAVING that need to access result columns, and also for derived tables.
 	vTableInfo struct {
 		tableName   string
 		ASTNode     *sqlparser.AliasedTableExpr
@@ -108,12 +107,29 @@ type (
 		exprTypes   map[sqlparser.Expr]querypb.Type
 		selectScope map[*sqlparser.Select]*scope
 		Comments    sqlparser.Comments
+		SubqueryMap map[*sqlparser.Select][]*subquery
+		SubqueryRef map[*sqlparser.Subquery]*subquery
+
+		// ColumnEqualities is used to enable transitive closures
+		// if a == b and b == c then a == c
+		ColumnEqualities map[columnName][]sqlparser.Expr
+	}
+
+	columnName struct {
+		Table      TableSet
+		ColumnName string
+	}
+
+	subquery struct {
+		ArgName  string
+		SubQuery *sqlparser.Subquery
+		OpCode   engine.PulloutOpcode
 	}
 
 	scope struct {
-		parent      *scope
-		selectExprs sqlparser.SelectExprs
-		tables      []TableInfo
+		parent     *scope
+		selectStmt *sqlparser.Select
+		tables     []TableInfo
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.
@@ -121,6 +137,12 @@ type (
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	}
 )
+
+// CopyDependencies copies the dependencies from one expression into the other
+func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
+	st.ExprBaseTableDeps[to] = st.BaseTableDependencies(from)
+	st.ExprDeps[to] = st.Dependencies(from)
+}
 
 // GetExprFor implements the TableInfo interface
 func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
@@ -148,11 +170,24 @@ func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, si
 		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
 		return nil, nil, nil
 	}
+	var tsF TableSet
+	var qtF *querypb.Type
+	found := false
 	for i, colName := range v.columnNames {
 		if col.Name.String() == colName {
 			ts, qt := org.depsForExpr(v.cols[i])
-			return &ts, qt, nil
+			if !found {
+				tsF = ts
+				qtF = qt
+			} else if tsF != ts {
+				// the column does not resolve to the same TableSet. Therefore, it is an ambiguous column reference.
+				return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, "Column '%s' is ambiguous", colName)
+			}
+			found = true
 		}
+	}
+	if found {
+		return &tsF, qtF, nil
 	}
 	return nil, nil, nil
 }
@@ -383,7 +418,7 @@ func (r *RealTable) Matches(name sqlparser.TableName) bool {
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
-	return &SemTable{ExprBaseTableDeps: map[sqlparser.Expr]TableSet{}}
+	return &SemTable{ExprBaseTableDeps: map[sqlparser.Expr]TableSet{}, ColumnEqualities: map[columnName][]sqlparser.Expr{}}
 }
 
 // TableSetFor returns the bitmask for this particular table
@@ -412,6 +447,30 @@ func (st *SemTable) BaseTableDependencies(expr sqlparser.Expr) TableSet {
 // Dependencies return the table dependencies of the expression.
 func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	return st.ExprDeps.Dependencies(expr)
+}
+
+// AddColumnEquality adds a relation of the given colName to the ColumnEqualities map
+func (st *SemTable) AddColumnEquality(colName *sqlparser.ColName, expr sqlparser.Expr) {
+	ts := st.ExprDeps.Dependencies(colName)
+	columnName := columnName{
+		Table:      ts,
+		ColumnName: colName.Name.String(),
+	}
+	elem := st.ColumnEqualities[columnName]
+	elem = append(elem, expr)
+	st.ColumnEqualities[columnName] = elem
+}
+
+// GetExprAndEqualities returns a slice containing the given expression, and it's known equalities if any
+func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
+	result := []sqlparser.Expr{expr}
+	switch expr := expr.(type) {
+	case *sqlparser.ColName:
+		table := st.Dependencies(expr)
+		key := columnName{Table: table, ColumnName: expr.Name.String()}
+		result = append(result, st.ColumnEqualities[key]...)
+	}
+	return result
 }
 
 // TableInfoForExpr returns the table info of the table that this expression depends on.
@@ -455,7 +514,7 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
 	// that have already set dependencies.
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		expr, ok := node.(sqlparser.Expr)
-		if !ok || !reflect.TypeOf(expr).Comparable() {
+		if !ok || !validAsMapKey(expr) {
 			// if this is not an expression, or it is an expression we can't use as a map-key,
 			// just carry on down the tree
 			return true, nil

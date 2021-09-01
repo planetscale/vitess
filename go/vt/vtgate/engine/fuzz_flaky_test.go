@@ -1,3 +1,6 @@
+//go:build gofuzz
+// +build gofuzz
+
 /*
 Copyright 2021 The Vitess Authors.
 
@@ -13,7 +16,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-// +build gofuzz
 
 /*
 	DEPENDENCIES:
@@ -324,5 +326,5 @@ func execCommand(index int, c *fuzz.ConsumeFuzzer, vc *loggingVCursor, vs *vinde
 }
 
 func newFuzzDMLTestVCursor(shards ...string) *loggingVCursor {
-	return &loggingVCursor{shards: shards, resolvedTargetTabletType: topodatapb.TabletType_MASTER}
+	return &loggingVCursor{shards: shards, resolvedTargetTabletType: topodatapb.TabletType_PRIMARY}
 }

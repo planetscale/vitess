@@ -114,6 +114,8 @@ var (
 	initialBackup    = flag.Bool("initial_backup", false, "Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
 	allowFirstBackup = flag.Bool("allow_first_backup", false, "Allow this job to take the first backup of an existing shard.")
 
+	restartBeforeBackup = flag.Bool("restart_before_backup", false, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
+
 	// vttablet-like flags
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
 	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
@@ -233,7 +235,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		// skip shutdown just because we timed out waiting for other things.
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		mysqld.Shutdown(ctx, mycnf, false)
+		if err := mysqld.Shutdown(ctx, mycnf, false); err != nil {
+			log.Errorf("failed to shutdown mysqld: %v", err)
+		}
 	}()
 
 	extraEnv := map[string]string{
@@ -319,7 +323,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	// Get the current primary replication position, and wait until we catch up
-	// to that point. We do this instead of looking at Seconds_Behind_Master
+	// to that point. We do this instead of looking at ReplicationLag
 	// because that value can
 	// sometimes lie and tell you there's 0 lag when actually replication is
 	// stopped. Also, if replication is making progress but is too slow to ever
@@ -392,6 +396,22 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}
 
+	if *restartBeforeBackup {
+		log.Info("Proceeding with clean MySQL shutdown and startup to flush all buffers.")
+		// Prep for full/clean shutdown (not typically the default)
+		if err := mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
+			return fmt.Errorf("Could not prep for full shutdown: %v", err)
+		}
+		// Shutdown, waiting for it to finish
+		if err := mysqld.Shutdown(ctx, mycnf, true); err != nil {
+			return fmt.Errorf("Something went wrong during full MySQL shutdown: %v", err)
+		}
+		// Start MySQL, waiting for it to come up
+		if err := mysqld.Start(ctx, mycnf); err != nil {
+			return fmt.Errorf("Could not start MySQL after full shutdown: %v", err)
+		}
+	}
+
 	// Now we can take a new backup.
 	if err := mysqlctl.Backup(ctx, backupParams); err != nil {
 		return fmt.Errorf("error taking backup: %v", err)
@@ -434,16 +454,16 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 	if err != nil {
 		return vterrors.Wrap(err, "can't read shard")
 	}
-	if topoproto.TabletAliasIsZero(si.MasterAlias) {
+	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
 		// Normal tablets will sit around waiting to be reparented in this case.
 		// Since vtbackup is a batch job, we just have to fail.
 		return fmt.Errorf("can't start replication after restore: shard %v/%v has no primary", *initKeyspace, *initShard)
 	}
 	// TODO(enisoc): Support replicating from another replica, preferably in the
 	//   same cell, preferably rdonly, to reduce load on the primary.
-	ti, err := topoServer.GetTablet(ctx, si.MasterAlias)
+	ti, err := topoServer.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return vterrors.Wrapf(err, "Cannot read primary tablet %v", si.MasterAlias)
+		return vterrors.Wrapf(err, "Cannot read primary tablet %v", si.PrimaryAlias)
 	}
 
 	// Stop replication (in case we're restarting), set replication source, and start replication.
@@ -458,15 +478,17 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 	if err != nil {
 		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
 	}
-	if topoproto.TabletAliasIsZero(si.MasterAlias) {
+	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
 		// Normal tablets will sit around waiting to be reparented in this case.
 		// Since vtbackup is a batch job, we just have to fail.
 		return mysql.Position{}, fmt.Errorf("shard %v/%v has no primary", *initKeyspace, *initShard)
 	}
-	ti, err := ts.GetTablet(ctx, si.MasterAlias)
+	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.MasterAlias), err)
+		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
+	// Use old RPC for backwards-compatibility
+	// TODO(deepthi): change to PrimaryPosition after v12.0
 	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
 	if err != nil {
 		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
