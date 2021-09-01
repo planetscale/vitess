@@ -469,7 +469,7 @@ var defaultConfig = TabletConfig{
 	QueryCacheMemory:                        cache.DefaultConfig.MaxMemoryUsage,
 	QueryCacheLFU:                           cache.DefaultConfig.LFU,
 	SchemaReloadIntervalSeconds:             30 * 60,
-	SignalSchemaChangeReloadIntervalSeconds: 5,
+	SignalSchemaChangeReloadIntervalSeconds: 1,
 	MessagePostponeParallelism:              4,
 	CacheResultFields:                       true,
 	SignalWhenSchemaChange:                  true, // while this feature is experimental, the safe default is off
