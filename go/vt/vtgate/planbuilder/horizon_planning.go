@@ -45,7 +45,10 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 	}
 
 	if ok && rb.isSingleShard() {
-		createSingleShardRoutePlan(hp.sel, rb)
+		err := createSingleShardRoutePlan(hp.sel, rb)
+		if err != nil {
+			return nil, err
+		}
 		return plan, nil
 	}
 
@@ -142,13 +145,16 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		if !inner && badExpr {
 			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and column expressions")
 		}
-		sel := node.Select.(*sqlparser.Select)
 		if reuseCol {
-			if i := checkIfAlreadyExists(expr, sel, semTable); i != -1 {
+			if i := checkIfAlreadyExists(expr, node.Select, semTable); i != -1 {
 				return i, false, nil
 			}
 		}
-		expr = removeQualifierFromColName(expr)
+		expr = removeKeyspaceFromColName(expr)
+		sel, isSel := node.Select.(*sqlparser.Select)
+		if !isSel {
+			return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%s' in 'order clause'", sqlparser.String(expr))
+		}
 
 		offset := len(sel.SelectExprs)
 		sel.SelectExprs = append(sel.SelectExprs, expr)
@@ -213,12 +219,20 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 			}
 		}
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot push projections in ordered aggregates")
+	case *vindexFunc:
+		i, err := node.SupplyProjection(expr, reuseCol)
+		if err != nil {
+			return 0, false, err
+		}
+		return i, true, nil
+	case *limit:
+		return pushProjection(expr, node.input, semTable, inner, reuseCol)
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
 }
 
-func removeQualifierFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
+func removeKeyspaceFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
 	if _, ok := expr.Expr.(*sqlparser.ColName); ok {
 		expr = sqlparser.CloneRefOfAliasedExpr(expr)
 		col := expr.Expr.(*sqlparser.ColName)
@@ -227,8 +241,14 @@ func removeQualifierFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedE
 	return expr
 }
 
-func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select, semTable *semantics.SemTable) int {
+func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStatement, semTable *semantics.SemTable) int {
 	exprDep := semTable.BaseTableDependencies(expr.Expr)
+	// Here to find if the expr already exists in the SelectStatement, we have 3 cases
+	// input is a Select -> In this case we want to search in the select
+	// input is a Union -> In this case we want to search in the First Select of the Union
+	// input is a Parenthesised Select -> In this case we want to search in the select
+	// all these three cases are handled by the call to GetFirstSelect.
+	sel := sqlparser.GetFirstSelect(node)
 
 	for i, selectExpr := range sel.SelectExprs {
 		selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr)
@@ -525,6 +545,13 @@ func (hp *horizonPlanning) planOrderBy(ctx planningContext, orderExprs []abstrac
 			return nil, err
 		}
 		plan.underlying = newUnderlyingPlan
+		return plan, nil
+	case *limit:
+		newUnderlyingPlan, err := hp.planOrderBy(ctx, orderExprs, plan.input)
+		if err != nil {
+			return nil, err
+		}
+		plan.input = newUnderlyingPlan
 		return plan, nil
 	default:
 		return nil, semantics.Gen4NotSupportedF("ordering on complex query %T", plan)
