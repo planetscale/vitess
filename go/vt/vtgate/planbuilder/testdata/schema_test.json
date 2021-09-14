@@ -28,6 +28,14 @@
           "type": "hash_test",
           "owner": "user"
         },
+        "null_index_1": {
+          "type": "null_test",
+          "owner": "null_table_1"
+        },
+        "null_index_2": {
+          "type": "null_test",
+          "owner": "null_table_2"
+        },
         "kid_index": {
           "type": "hash_test",
           "owner": "multicolvin"
@@ -276,6 +284,22 @@
             {
               "name": "c2",
               "type": "VARCHAR"
+            }
+          ]
+        },
+        "null_table_1": {
+          "column_vindexes": [
+            {
+              "column": "Id",
+              "name": "null_index_1"
+            }
+          ]
+        },
+        "null_table_2": {
+          "column_vindexes": [
+            {
+              "column": "Id",
+              "name": "null_index_2"
             }
           ]
         }

@@ -143,11 +143,29 @@ func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 var _ vindexes.Vindex = (*costlyIndex)(nil)
 var _ vindexes.Lookup = (*costlyIndex)(nil)
 
+type nullVindex struct{ name string }
+
+func (vind *nullVindex) String() string     { return vind.name }
+func (vind *nullVindex) Cost() int          { return 100 }
+func (vind *nullVindex) IsUnique() bool     { return true }
+func (vind *nullVindex) NeedsVCursor() bool { return false }
+func (*nullVindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*nullVindex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
+
+func newNullIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &nullVindex{name: name}, nil
+}
+
 func init() {
 	vindexes.Register("hash_test", newHashIndex)
 	vindexes.Register("lookup_test", newLookupIndex)
 	vindexes.Register("multi", newMultiIndex)
 	vindexes.Register("costly", newCostlyIndex)
+	vindexes.Register("null_test", newNullIndex)
 }
 
 const (

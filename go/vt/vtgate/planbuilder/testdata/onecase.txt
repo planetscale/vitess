@@ -1,1 +1,5 @@
 # Add your test case here for debugging and run go test -run=One.
+# Aggregates and joins
+"select count(*) from null_table_1 join null_table_2"
+"unsupported: cross-shard query with aggregates"
+Gen4 plan same as above
