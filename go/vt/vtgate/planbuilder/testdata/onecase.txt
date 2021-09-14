@@ -1,1 +1,6 @@
 # Add your test case here for debugging and run go test -run=One.
+"select author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id"
+{
+}
+{
+}
