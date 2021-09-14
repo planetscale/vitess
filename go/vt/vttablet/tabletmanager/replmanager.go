@@ -130,8 +130,13 @@ func (rm *replManager) checkActionLocked() {
 			return
 		}
 	} else {
-		if primaryIsSource, err := rm.checkPrimaryIsSource(status); err == nil && primaryIsSource {
-			return
+		// If only one of the threads is stopped, it's probably
+		// intentional. So, we don't repair replication.
+		if status.SQLThreadRunning || status.IOThreadRunning {
+			// Check if the Primary is still the source though
+			if primaryIsSource, err := rm.checkPrimaryIsSource(status); err == nil && primaryIsSource {
+				return
+			}
 		}
 	}
 
