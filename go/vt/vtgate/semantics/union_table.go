@@ -23,36 +23,26 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// vTableInfo is used to represent projected results, not real tables. It is used for
-// ORDER BY, GROUP BY and HAVING that need to access result columns
-type vTableInfo struct {
-	tableName   string
+// UnionTable is used to represent the projected results of a UNION.
+type UnionTable struct {
 	columnNames []string
 	cols        []sqlparser.Expr
 	tables      TableSet
 }
 
-var _ TableInfo = (*vTableInfo)(nil)
+var _ TableInfo = (*UnionTable)(nil)
 
 // Dependencies implements the TableInfo interface
-func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies, error) {
+func (u *UnionTable) Dependencies(colName string, org originable) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	var err error
-	for i, name := range v.columnNames {
+	for i, name := range u.columnNames {
 		if name != colName {
 			continue
 		}
-		recursiveDeps, qt := org.depsForExpr(v.cols[i])
+		recursiveDeps, qt := org.depsForExpr(u.cols[i])
 
 		var directDeps TableSet
-		/*
-				If we find a match, it means the query looks something like:
-				SELECT 1 as x FROM t1 ORDER BY/GROUP BY x - d/r: 0/0
-				SELECT t1.x as x FROM t1 ORDER BY/GROUP BY x - d/r: 0/1
-				SELECT x FROM t1 ORDER BY/GROUP BY x - d/r: 1/1
-
-			    Now, after figuring out the recursive deps
-		*/
 		if recursiveDeps.NumberOfTables() > 0 {
 			directDeps = recursiveDeps
 		}
@@ -63,46 +53,43 @@ func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies,
 			return nil, err
 		}
 	}
-	if deps.Empty() && v.hasStar() {
-		return createUncertain(v.tables, v.tables), nil
-	}
 	return deps, nil
 }
 
 // IsInfSchema implements the TableInfo interface
-func (v *vTableInfo) IsInfSchema() bool {
+func (u *UnionTable) IsInfSchema() bool {
 	return false
 }
 
 // IsActualTable implements the TableInfo interface
-func (v *vTableInfo) IsActualTable() bool {
+func (u *UnionTable) IsActualTable() bool {
 	return false
 }
 
-func (v *vTableInfo) Matches(name sqlparser.TableName) bool {
-	return v.tableName == name.Name.String() && name.Qualifier.IsEmpty()
-}
-
-func (v *vTableInfo) Authoritative() bool {
+func (u *UnionTable) Matches(_ sqlparser.TableName) bool {
 	return true
 }
 
-func (v *vTableInfo) Name() (sqlparser.TableName, error) {
+func (u *UnionTable) Authoritative() bool {
+	return true
+}
+
+func (u *UnionTable) Name() (sqlparser.TableName, error) {
 	return sqlparser.TableName{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "oh noes")
 }
 
-func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
+func (u *UnionTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return nil
 }
 
 // GetVindexTable implements the TableInfo interface
-func (v *vTableInfo) GetVindexTable() *vindexes.Table {
+func (u *UnionTable) GetVindexTable() *vindexes.Table {
 	return nil
 }
 
-func (v *vTableInfo) GetColumns() []ColumnInfo {
-	cols := make([]ColumnInfo, 0, len(v.columnNames))
-	for _, col := range v.columnNames {
+func (u *UnionTable) GetColumns() []ColumnInfo {
+	cols := make([]ColumnInfo, 0, len(u.columnNames))
+	for _, col := range u.columnNames {
 		cols = append(cols, ColumnInfo{
 			Name: col,
 		})
@@ -110,28 +97,28 @@ func (v *vTableInfo) GetColumns() []ColumnInfo {
 	return cols
 }
 
-func (v *vTableInfo) hasStar() bool {
-	return v.tables > 0
+func (u *UnionTable) hasStar() bool {
+	return u.tables > 0
 }
 
 // GetTables implements the TableInfo interface
-func (v *vTableInfo) GetTables(org originable) TableSet {
-	return v.tables
+func (u *UnionTable) GetTables(_ originable) TableSet {
+	return u.tables
 }
 
 // GetExprFor implements the TableInfo interface
-func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
-	for i, colName := range v.columnNames {
+func (u *UnionTable) GetExprFor(s string) (sqlparser.Expr, error) {
+	for i, colName := range u.columnNames {
 		if colName == s {
-			return v.cols[i], nil
+			return u.cols[i], nil
 		}
 	}
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
 }
 
-func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *vTableInfo {
+func createUnionTableForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *UnionTable {
 	cols, colNames, ts := selectExprsToInfo(expressions, tables, org)
-	return &vTableInfo{
+	return &UnionTable{
 		columnNames: colNames,
 		cols:        cols,
 		tables:      ts,

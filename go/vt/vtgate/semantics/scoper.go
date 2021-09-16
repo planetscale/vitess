@@ -242,13 +242,13 @@ func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) error 
 		nScope := newScope(nil)
 		firstSelect := sqlparser.GetFirstSelect(parent.FirstStatement)
 		nScope.selectStmt = firstSelect
-		tableInfo := createVTableInfoForExpressions(firstSelect.SelectExprs, nil /*needed for star expressions*/, s.org)
+		tableInfo := createUnionTableForExpressions(firstSelect.SelectExprs, nil /*needed for star expressions*/, s.org)
 		nScope.tables = append(nScope.tables, tableInfo)
 
 		for _, unionSelect := range parent.UnionSelects {
 			// TODO: this can probably be optimised
 			sel := sqlparser.GetFirstSelect(unionSelect.Statement)
-			thisTableInfo := createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
+			thisTableInfo := createUnionTableForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
 			if len(tableInfo.cols) != len(thisTableInfo.cols) {
 				return engine.ErrWrongNumberOfColumnsInSelect
 			}
