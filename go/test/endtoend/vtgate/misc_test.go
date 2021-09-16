@@ -640,6 +640,19 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 	exec(t, conn, "drop table function_default")
 }
 
+func TestJsonExtractAggregation(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer exec(t, conn, `delete from tbl_with_json`)
+
+	exec(t, conn, `insert into tbl_with_json (user_id, some_json) values (1, '{"string_value": "str1"}'), (2, '{"string_value": "str2"}'), (3, '{"string_value": "str2"}')`)
+	assertMatches(t, conn, `SELECT json_extract(attributes, '$.string_value') as val, count(*) FROM tbl_with_json GROUP BY val`, ``)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

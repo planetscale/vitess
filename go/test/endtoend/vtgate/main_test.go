@@ -136,6 +136,12 @@ create table t7_fk(
     CONSTRAINT t7_fk_ibfk_1 foreign key (t7_uid) references t7_xxhash(uid)
     on delete set null on update cascade
 ) Engine=InnoDB;
+
+create table tbl_with_json(
+	user_id bigint,
+	some_json json,
+	primary key(user_id)
+) Engine=InnoDB;
 `
 
 	VSchema = `
@@ -368,6 +374,14 @@ create table t7_fk(
         {
           "column": "t7_uid",
           "name": "unicode_loose_xxhash"
+        }
+      ]
+    },
+	"tbl_with_json": {
+      "column_vindexes": [
+        {
+          "column": "user_id",
+          "name": "hash"
         }
       ]
     }
