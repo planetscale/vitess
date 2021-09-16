@@ -130,6 +130,12 @@ func (b *binder) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName)
 	// search up the scope stack until we find a match
 	for current != nil {
 		deps, err := b.resolveColumnInScope(current, expr, func(table TableInfo) bool {
+			// union tables are not supposed to be skipped when trying to resolve a
+			// qualified column on them, since they have no parent scope, we try our
+			// best to resolve the column in the given scope.
+			if _, isUnionTable := table.(*UnionTable); isUnionTable {
+				return false
+			}
 			return !table.Matches(expr.Qualifier)
 		})
 		if err != nil {

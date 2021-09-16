@@ -26,7 +26,6 @@ import (
 // vTableInfo is used to represent projected results, not real tables. It is used for
 // ORDER BY, GROUP BY and HAVING that need to access result columns
 type vTableInfo struct {
-	tableName   string
 	columnNames []string
 	cols        []sqlparser.Expr
 	tables      TableSet
@@ -80,7 +79,7 @@ func (v *vTableInfo) IsActualTable() bool {
 }
 
 func (v *vTableInfo) Matches(name sqlparser.TableName) bool {
-	return v.tableName == name.Name.String() && name.Qualifier.IsEmpty()
+	return name.Name.String() == "" && name.Qualifier.IsEmpty()
 }
 
 func (v *vTableInfo) Authoritative() bool {

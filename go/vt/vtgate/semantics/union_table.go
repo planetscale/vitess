@@ -66,8 +66,8 @@ func (u *UnionTable) IsActualTable() bool {
 	return false
 }
 
-func (u *UnionTable) Matches(_ sqlparser.TableName) bool {
-	return true
+func (u *UnionTable) Matches(name sqlparser.TableName) bool {
+	return name.Name.String() == "" && name.Qualifier.IsEmpty()
 }
 
 func (u *UnionTable) Authoritative() bool {

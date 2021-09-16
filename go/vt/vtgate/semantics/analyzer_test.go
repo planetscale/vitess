@@ -593,6 +593,12 @@ func TestOrderByBindingTable(t *testing.T) {
 	}, {
 		"select a.id from t1 as a union (select uid from t2) order by 1",
 		T1 | T2,
+	}, {
+		"select b.id as a from t1 as b union (select uid as c from t2) order by 1",
+		T1 | T2,
+	}, {
+		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by 1",
+		T1 | T2,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
