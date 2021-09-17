@@ -237,6 +237,7 @@ func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) error 
 		}
 	case *sqlparser.Union:
 		nScope := newScope(nil)
+		nScope.isUnion = true
 		firstSelect := sqlparser.GetFirstSelect(parent.FirstStatement)
 		nScope.selectStmt = firstSelect
 		tableInfo := createUnionTableForExpressions(firstSelect.SelectExprs, nil /*needed for star expressions*/, s.org)
