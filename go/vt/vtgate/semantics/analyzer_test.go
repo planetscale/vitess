@@ -167,7 +167,7 @@ func TestBindingMultiTablePositive(t *testing.T) {
 		numberOfTables: 4,
 		// }, {
 		// TODO: move to subquery
-		// make sure that we don't let sub-query dependencies leak out by mistake
+		// make sure that we don't let sub-query Dependencies leak out by mistake
 		// query: "select t.col + (select 42 from s) from t",
 		// deps:  T1,
 		// }, {
@@ -469,6 +469,13 @@ func TestScoping(t *testing.T) {
 	}
 }
 
+func TestUnionOrderByRewrite(t *testing.T) {
+	query := "select tabl1.id from tabl1 union select 1 order by 1"
+
+	stmt, _ := parseAndAnalyze(t, query, "")
+	assert.Equal(t, "(select tabl1.id from tabl1) union (select 1 from dual) order by id asc", sqlparser.String(stmt))
+}
+
 func TestScopeForSubqueries(t *testing.T) {
 	tcases := []struct {
 		sql  string
@@ -756,13 +763,6 @@ func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 	assert.Equal(t, T2, d2)
 }
 
-func TestUnionOrderByRewrite(t *testing.T) {
-	query := "select tabl1.id from tabl1 union select 1 order by 1"
-
-	stmt, _ := parseAndAnalyze(t, query, "")
-	assert.Equal(t, "(select tabl1.id from tabl1) union (select 1 from dual) order by id asc", sqlparser.String(stmt))
-}
-
 func TestInvalidUnion(t *testing.T) {
 	tcases := []struct {
 		sql string
@@ -803,8 +803,8 @@ func TestUnionWithOrderBy(t *testing.T) {
 
 	stmt, semTable := parseAndAnalyze(t, query, "")
 	union, _ := stmt.(*sqlparser.Union)
-	sel1 := union.FirstStatement.(*sqlparser.Select)
-	sel2 := union.UnionSelects[0].Statement.(*sqlparser.ParenSelect).Select.(*sqlparser.Select)
+	sel1 := sqlparser.GetFirstSelect(union)
+	sel2 := sqlparser.GetFirstSelect(union.UnionSelects[0].Statement)
 
 	t1 := sel1.From[0].(*sqlparser.AliasedTableExpr)
 	t2 := sel2.From[0].(*sqlparser.AliasedTableExpr)
