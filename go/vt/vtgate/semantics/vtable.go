@@ -129,10 +129,39 @@ func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
 }
 
 func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *vTableInfo {
-	cols, colNames, ts := selectExprsToInfo(expressions, tables, org)
+	cols, colNames, ts := selectExprsToInfos(expressions, tables, org)
 	return &vTableInfo{
 		columnNames: colNames,
 		cols:        cols,
 		tables:      ts,
 	}
+}
+
+func selectExprsToInfos(
+	expressions sqlparser.SelectExprs,
+	tables []TableInfo,
+	org originable,
+) (cols []sqlparser.Expr, colNames []string, ts TableSet) {
+	for _, selectExpr := range expressions {
+		switch expr := selectExpr.(type) {
+		case *sqlparser.AliasedExpr:
+			cols = append(cols, expr.Expr)
+			if expr.As.IsEmpty() {
+				switch expr := expr.Expr.(type) {
+				case *sqlparser.ColName:
+					// for projections, we strip out the qualifier and keep only the column name
+					colNames = append(colNames, expr.Name.String())
+				default:
+					colNames = append(colNames, sqlparser.String(expr))
+				}
+			} else {
+				colNames = append(colNames, expr.As.String())
+			}
+		case *sqlparser.StarExpr:
+			for _, table := range tables {
+				ts |= table.GetTables(org)
+			}
+		}
+	}
+	return
 }
