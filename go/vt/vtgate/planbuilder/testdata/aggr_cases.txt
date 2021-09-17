@@ -2150,7 +2150,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # Group by invalid column number (code is duplicated from symab).
 "select id from user group by 1.1"
 "column number is not an int"
-Gen4 error: error parsing column number: 1.1
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # Group by out of range column number (code is duplicated from symab).
 "select id from user group by 2"
