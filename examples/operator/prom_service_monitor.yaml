@@ -1,0 +1,12 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: example-vitess
+  labels:
+    team: frontend
+spec:
+  selector:
+    matchLabels:
+      planetscale.com/cluster: example
+  endpoints:
+  - port: web

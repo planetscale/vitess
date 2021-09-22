@@ -13,9 +13,9 @@ kubectl apply -f 101_initial_cluster.yaml
 # Port-forward vtctld and vtgate and apply schema and vschema
 ./pf.sh &
 alias mysql="mysql -h 127.0.0.1 -P 15306 -u user"
-alias vtctlclient="vtctlclient -server localhost:15999 -alsologtostderr"
-vtctlclient ApplySchema -sql="$(cat create_commerce_schema.sql)" commerce
-vtctlclient ApplyVSchema -vschema="$(cat vschema_commerce_initial.json)" commerce
+alias vtctlclient="vtctlclient -server localhost:15999 -logtostderr"
+vtctlclient ApplySchema -sql="$(cat create_user_schema.sql)" commerce
+vtctlclient ApplyVSchema -vschema="$(cat vschema_user_initial.json)" commerce
 
 # Insert and verify data
 mysql < ../common/insert_commerce_data.sql
@@ -26,6 +26,10 @@ kubectl apply -f 201_customer_tablets.yaml
 
 # Initiate move tables
 vtctlclient MoveTables -source commerce -tables 'customer,corder' Create customer.commerce2customer
+
+# Show Progress
+vtctlclient Workflow .... Show
+vtctlclient Workflow .... Progress
 
 # Validate
 vtctlclient VDiff customer.commerce2customer
