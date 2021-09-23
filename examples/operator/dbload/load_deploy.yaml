@@ -1,0 +1,24 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vitess-dbload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vitess-dbload
+  template:
+    metadata:
+      labels:
+        app: vitess-dbload
+    spec:
+      containers:
+      - name: dbload
+        image: dsigireddi/dbload:latest
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database
+              key: url
