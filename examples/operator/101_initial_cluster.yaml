@@ -24,6 +24,8 @@ spec:
             name: example-cluster-config
             key: users.json
       replicas: 1
+      extraFlags:
+        enable_buffer: "false"
       resources:
         requests:
           cpu: 100m
@@ -42,9 +44,8 @@ spec:
       requests:
         cpu: 100m
         memory: 128Mi
-
   keyspaces:
-  - name: commerce
+  - name: customer
     turndownPolicy: Immediate
     partitionings:
     - equal:

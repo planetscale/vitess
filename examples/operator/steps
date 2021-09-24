@@ -1,0 +1,6 @@
+  - vtctlclient Reshard -source_shards '-' -target_shards '-80,80-' Create customer.one2two
+  - vtctlclient Reshard Show customer.one2two
+  - vtctlclient Reshard Progress customer.one2two
+  - vtctlclient Reshard -tablet_types=rdonly,replica SwitchTraffic customer.one2two
+  - vtctlclient Reshard -tablet_types=primary SwitchTraffic customer.one2two
+

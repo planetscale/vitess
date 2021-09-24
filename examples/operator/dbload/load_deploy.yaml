@@ -4,7 +4,7 @@ kind: Deployment
 metadata:
   name: vitess-dbload
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: vitess-dbload
