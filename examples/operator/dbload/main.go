@@ -19,7 +19,7 @@ var rowsPer = 1000
 
 func main() {
 
-	numThreads := flag.Int("num_threads", 5, "number of concurrent readers/writers")
+	numThreads := flag.Int("num_threads", 20, "number of concurrent readers/writers")
 	mode := flag.String("mode", "read", "read/write")
 
 	flag.Parse()

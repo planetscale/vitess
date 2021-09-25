@@ -1,22 +1,24 @@
 1. create a cluster (named demo) in GKE project vitess-kubecon
-2. requires at least 8 medium nodes for vitess + 5 for prom/grafana, start with 14 and set it up to auto-scale up to 20
+2. requires at least 8 medium nodes for vitess + 4 for prom/grafana, start with 12
 2a. gcloud container clusters get-credentials demo (to setup kubectl access)
 3. deploy cluster using operator example (101_initial_cluster.yaml)
-3a. ./pf.sh&
-4. create schema with single table - columns user_id, user_data
-5. create vschema (unsharded)
+4. deploy prometheus and grafana
+- https://computingforgeeks.com/setup-prometheus-and-grafana-on-kubernetes/
+- create servicemonitor (example-vitess)
+  - kubectl apply -f prom_service_monitor.yaml
+5. ./pf.sh&
+6. create schema with single table - columns user_id, user_data
+7. create vschema (unsharded)
 alias mysql="mysql -h 127.0.0.1 -P 15306 -u user"
 alias vtctlclient="vtctlclient -server localhost:15999 -logtostderr"
 vtctlclient ApplySchema -sql="$(cat create_user_schema.sql)" customer
 vtctlclient ApplyVSchema -vschema="$(cat vschema_user_initial.json)" customer
 
-6. load 20k rows into table
-7. deploy prometheus and grafana
-- https://computingforgeeks.com/setup-prometheus-and-grafana-on-kubernetes/
-- needs 5 new nodes
-- increase auto-scale to 20
-- create servicemonitor (example-vitess) using prom_service_monitor.yaml
-8. run 20 threads selecting concurrently from the table (with different randomly generated ids)
+8. load 20k rows into table
+ - export DATABASE_URL=user@tcp\(127.0.0.1:15306\)\/customer
+ - cd dbload
+ - go run main.go -mode=write
+9. run 20 threads selecting concurrently from the table (with different randomly generated ids)
   -- write go program with 20 goroutines
   -- Dockerfile
   -- build and upload docker image
@@ -31,24 +33,25 @@ metadata:
   name: database
 type: Opaque
 data:
-  url: $(echo -n "user@tcp(10.48.12.168:3306)/customer" | base64 -w0)
+  url: $(echo -n "user@tcp(10.48.7.45:3306)/customer" | base64 -w0)
 EOF
-  -- deploy docker image using load_deploy.yaml
-9. graph query load etc. on vtgate
-10a. stop query load
-10. reshard using hash on user_id
+  -- deploy docker image using load_deploy.yaml with replicas:1
+10. graph query load etc. on vtgate for 5 minutes
+11. edit load_deploy.yaml with replicas:2
+12. Let it run for a while
+13. stop query load
+14. reshard using hash on user_id
   - vtctlclient ApplyVSchema -vschema="$(cat vschema_user_sharded.json)" customer
   - kubectl apply -f 302_new_shards.yaml
 
 
   - vtctlclient Reshard -source_shards '-' -target_shards '-80,80-' Create customer.one2two
-  - vtctlclient Reshard Show customer.one2two
   - vtctlclient Reshard Progress customer.one2two
-  - vtctlclient Reshard -tablet_types=rdonly,replica SwitchTraffic customer.one2two
+  - vtctlclient Reshard -tablet_types=replica SwitchTraffic customer.one2two
   - vtctlclient Reshard -tablet_types=primary SwitchTraffic customer.one2two
 
-11. run 40 threads (edit load_deploy.yaml and set replicas to 2)
-12 graphs
+15. run load_deploy.yaml with replicas:2
+16. graphs
 
 
 
