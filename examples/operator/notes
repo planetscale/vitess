@@ -25,6 +25,8 @@ vtctlclient ApplyVSchema -vschema="$(cat vschema_user_initial.json)" customer
      docker build -f Dockerfile -t dsigireddi/dbload:latest .
   -- test docker image
      docker run -e DATABASE_URL=${DATABASE_URL} --network="host" dsigireddi/dbload:latest
+  -- upload docker image
+     docker push dsigireddi/dbload:latest
   -- create secret called database with url=vtgate service url (Cluster IP of the cell-specific service)
 $ cat <<EOF | kubectl apply -f -
 apiVersion: v1
