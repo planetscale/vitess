@@ -107,57 +107,55 @@ func (a *analyzer) setError(err error) {
 	}
 }
 
-func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
+func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) {
 	// If we have an error we keep on going down the tree without checking for anything else
 	// this way we can abort when we come back up.
 	if !a.shouldContinue() {
-		return true
+		return
 	}
 
 	if err := a.scoper.down(cursor); err != nil {
 		a.setError(err)
-		return true
+		return
 	}
 	if err := a.checkForInvalidConstructs(cursor); err != nil {
 		a.setError(err)
-		return true
+		return
 	}
 	if err := a.rewriter.down(cursor); err != nil {
 		a.setError(err)
-		return true
+		return
 	}
 	if err := a.binder.down(cursor); err != nil {
 		a.setError(err)
-		return true
+		return
 	}
 
 	a.enterProjection(cursor)
 	// this is the visitor going down the tree. Returning false here would just not visit the children
 	// to the current node, but that is not what we want if we have encountered an error.
 	// In order to abort the whole visitation, we have to return true here and then return false in the `analyzeUp` method
-	return true
 }
 
-func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
+func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) {
 	if !a.shouldContinue() {
-		return false
+		return
 	}
 
 	if err := a.scoper.up(cursor); err != nil {
 		a.setError(err)
-		return false
+		return
 	}
 	if err := a.tables.up(cursor); err != nil {
 		a.setError(err)
-		return false
+		return
 	}
 	if err := a.typer.up(cursor); err != nil {
 		a.setError(err)
-		return false
+		return
 	}
 
 	a.leaveProjection(cursor)
-	return a.shouldContinue()
 }
 
 func containsStar(s sqlparser.SelectExprs) bool {
@@ -229,7 +227,7 @@ func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
-	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
+	_ = sqlparser.RewriteP(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
 }
 
