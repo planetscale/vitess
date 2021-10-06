@@ -26,27 +26,86 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestRewriteVisitLeaf(t *testing.T) {
+	leaf := &Leaf{1}
+
+	for i, s := range []string{"normal", "fast"} {
+		t.Run(s, func(t *testing.T) {
+			tv := &rewriteTestVisitor{}
+
+			if i == 0 {
+				_ = Rewrite(leaf, tv.pre, tv.post)
+			} else {
+				_ = RewriteP(leaf, tv.preP, tv.postP)
+			}
+
+			expected := []step{
+				Pre{leaf},
+				Post{leaf},
+			}
+			tv.assertEquals(t, expected)
+
+		})
+	}
+}
+func TestRewriteVisitSimpleRefContainer(t *testing.T) {
+	leaf1 := &Leaf{1}
+	leaf2 := &Leaf{2}
+	container := &RefContainer{ASTType: leaf1, ASTImplementationType: leaf2}
+
+	for i, s := range []string{"normal", "fast"} {
+		t.Run(s, func(t *testing.T) {
+			tv := &rewriteTestVisitor{}
+
+			if i == 0 {
+				_ = Rewrite(container, tv.pre, tv.post)
+			} else {
+				_ = RewriteP(container, tv.preP, tv.postP)
+			}
+
+			expected := []step{
+				Pre{container},
+				Pre{leaf1},
+				Post{leaf1},
+				Pre{leaf2},
+				Post{leaf2},
+				Post{container},
+			}
+			tv.assertEquals(t, expected)
+
+		})
+	}
+}
 func TestRewriteVisitRefContainer(t *testing.T) {
 	leaf1 := &Leaf{1}
 	leaf2 := &Leaf{2}
 	container := &RefContainer{ASTType: leaf1, ASTImplementationType: leaf2}
 	containerContainer := &RefContainer{ASTType: container}
 
-	tv := &rewriteTestVisitor{}
+	for i, s := range []string{"normal", "fast"} {
+		t.Run(s, func(t *testing.T) {
+			tv := &rewriteTestVisitor{}
 
-	_ = Rewrite(containerContainer, tv.pre, tv.post)
+			if i == 0 {
+				_ = Rewrite(containerContainer, tv.pre, tv.post)
+			} else {
+				_ = RewriteP(containerContainer, tv.preP, tv.postP)
+			}
 
-	expected := []step{
-		Pre{containerContainer},
-		Pre{container},
-		Pre{leaf1},
-		Post{leaf1},
-		Pre{leaf2},
-		Post{leaf2},
-		Post{container},
-		Post{containerContainer},
+			expected := []step{
+				Pre{containerContainer},
+				Pre{container},
+				Pre{leaf1},
+				Post{leaf1},
+				Pre{leaf2},
+				Post{leaf2},
+				Post{container},
+				Post{containerContainer},
+			}
+			tv.assertEquals(t, expected)
+
+		})
 	}
-	tv.assertEquals(t, expected)
 }
 
 func TestRewriteVisitValueContainer(t *testing.T) {
@@ -54,22 +113,29 @@ func TestRewriteVisitValueContainer(t *testing.T) {
 	leaf2 := &Leaf{2}
 	container := ValueContainer{ASTType: leaf1, ASTImplementationType: leaf2}
 	containerContainer := ValueContainer{ASTType: container}
+	for i, s := range []string{"normal", "fast"} {
+		t.Run(s, func(t *testing.T) {
+			tv := &rewriteTestVisitor{}
 
-	tv := &rewriteTestVisitor{}
+			if i == 0 {
+				_ = Rewrite(containerContainer, tv.pre, tv.post)
+			} else {
+				_ = RewriteP(containerContainer, tv.preP, tv.postP)
+			}
 
-	_ = Rewrite(containerContainer, tv.pre, tv.post)
-
-	expected := []step{
-		Pre{containerContainer},
-		Pre{container},
-		Pre{leaf1},
-		Post{leaf1},
-		Pre{leaf2},
-		Post{leaf2},
-		Post{container},
-		Post{containerContainer},
+			expected := []step{
+				Pre{containerContainer},
+				Pre{container},
+				Pre{leaf1},
+				Post{leaf1},
+				Pre{leaf2},
+				Post{leaf2},
+				Post{container},
+				Post{containerContainer},
+			}
+			tv.assertEquals(t, expected)
+		})
 	}
-	tv.assertEquals(t, expected)
 }
 
 func TestRewriteVisitRefSliceContainer(t *testing.T) {
@@ -80,24 +146,33 @@ func TestRewriteVisitRefSliceContainer(t *testing.T) {
 	container := &RefSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: []*Leaf{leaf3, leaf4}}
 	containerContainer := &RefSliceContainer{ASTElements: []AST{container}}
 
-	tv := &rewriteTestVisitor{}
+	for i, s := range []string{"normal", "fast"} {
+		t.Run(s, func(t *testing.T) {
+			tv := &rewriteTestVisitor{}
 
-	_ = Rewrite(containerContainer, tv.pre, tv.post)
+			if i == 0 {
+				_ = Rewrite(containerContainer, tv.pre, tv.post)
+			} else {
+				_ = RewriteP(containerContainer, tv.preP, tv.postP)
+			}
 
-	tv.assertEquals(t, []step{
-		Pre{containerContainer},
-		Pre{container},
-		Pre{leaf1},
-		Post{leaf1},
-		Pre{leaf2},
-		Post{leaf2},
-		Pre{leaf3},
-		Post{leaf3},
-		Pre{leaf4},
-		Post{leaf4},
-		Post{container},
-		Post{containerContainer},
-	})
+			tv.assertEquals(t, []step{
+				Pre{containerContainer},
+				Pre{container},
+				Pre{leaf1},
+				Post{leaf1},
+				Pre{leaf2},
+				Post{leaf2},
+				Pre{leaf3},
+				Post{leaf3},
+				Pre{leaf4},
+				Post{leaf4},
+				Post{container},
+				Post{containerContainer},
+			})
+		})
+	}
+
 }
 
 func TestRewriteVisitValueSliceContainer(t *testing.T) {
@@ -107,25 +182,33 @@ func TestRewriteVisitValueSliceContainer(t *testing.T) {
 	leaf4 := &Leaf{4}
 	container := ValueSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: []*Leaf{leaf3, leaf4}}
 	containerContainer := ValueSliceContainer{ASTElements: []AST{container}}
+	for i, s := range []string{"normal", "fast"} {
+		t.Run(s, func(t *testing.T) {
+			tv := &rewriteTestVisitor{}
 
-	tv := &rewriteTestVisitor{}
+			if i == 0 {
+				_ = Rewrite(containerContainer, tv.pre, tv.post)
+			} else {
+				_ = RewriteP(containerContainer, tv.preP, tv.postP)
+			}
 
-	_ = Rewrite(containerContainer, tv.pre, tv.post)
+			tv.assertEquals(t, []step{
+				Pre{containerContainer},
+				Pre{container},
+				Pre{leaf1},
+				Post{leaf1},
+				Pre{leaf2},
+				Post{leaf2},
+				Pre{leaf3},
+				Post{leaf3},
+				Pre{leaf4},
+				Post{leaf4},
+				Post{container},
+				Post{containerContainer},
+			})
 
-	tv.assertEquals(t, []step{
-		Pre{containerContainer},
-		Pre{container},
-		Pre{leaf1},
-		Post{leaf1},
-		Pre{leaf2},
-		Post{leaf2},
-		Pre{leaf3},
-		Post{leaf3},
-		Pre{leaf4},
-		Post{leaf4},
-		Post{container},
-		Post{containerContainer},
-	})
+		})
+	}
 }
 
 func TestRewriteVisitInterfaceSlice(t *testing.T) {
@@ -143,25 +226,49 @@ func TestRewriteVisitInterfaceSlice(t *testing.T) {
 		leaf1,
 		leaf2,
 	}
+	for i, s := range []string{"normal", "fast"} {
+		t.Run(s, func(t *testing.T) {
+			tv := &rewriteTestVisitor{}
 
-	tv := &rewriteTestVisitor{}
+			if i == 0 {
+				_ = Rewrite(ast, tv.pre, tv.post)
+			} else {
+				_ = RewriteP(ast, tv.preP, tv.postP)
+			}
 
-	_ = Rewrite(ast, tv.pre, tv.post)
+			tv.assertEquals(t, []step{
+				Pre{ast},
+				Pre{refContainer},
+				Pre{astType},
+				Post{astType},
+				Pre{implementationType},
+				Post{implementationType},
+				Post{refContainer},
+				Pre{leaf1},
+				Post{leaf1},
+				Pre{leaf2},
+				Post{leaf2},
+				Post{ast},
+			})
+		})
+	}
+}
 
-	tv.assertEquals(t, []step{
-		Pre{ast},
-		Pre{refContainer},
-		Pre{astType},
-		Post{astType},
-		Pre{implementationType},
-		Post{implementationType},
-		Post{refContainer},
-		Pre{leaf1},
-		Post{leaf1},
-		Pre{leaf2},
-		Post{leaf2},
-		Post{ast},
-	})
+type replacer struct {
+	replaceWith AST
+	tv          *rewriteTestVisitor
+}
+
+func (r *replacer) visit(cursor *Cursor) {
+	r.tv.pre(cursor)
+	switch cursor.node.(type) {
+	case InterfaceSlice:
+		if r.replaceWith != nil {
+			cursor.ReplaceAndRevisit(r.replaceWith)
+			r.replaceWith = nil
+		}
+	}
+
 }
 
 func TestRewriteAndRevisitInterfaceSlice(t *testing.T) {
@@ -176,32 +283,36 @@ func TestRewriteAndRevisitInterfaceSlice(t *testing.T) {
 		leaf1,
 	}
 
-	tv := &rewriteTestVisitor{}
-
-	a := false
-	_ = Rewrite(ast, func(cursor *Cursor) bool {
-		tv.pre(cursor)
-		switch cursor.node.(type) {
-		case InterfaceSlice:
-			if a {
-				break
+	for i, s := range []string{"normal", "fast"} {
+		t.Run(s, func(t *testing.T) {
+			tv := &rewriteTestVisitor{}
+			r := &replacer{
+				replaceWith: ast2,
+				tv:          tv,
 			}
-			a = true
-			cursor.ReplaceAndRevisit(ast2)
-		}
-		return true
-	}, tv.post)
 
-	tv.assertEquals(t, []step{
-		Pre{ast}, // when we visit ast, we want to replace and revisit,
-		// which means that we don't do a post on this node, or visit the children
-		Pre{ast2},
-		Pre{leaf2},
-		Post{leaf2},
-		Pre{leaf1},
-		Post{leaf1},
-		Post{ast2},
-	})
+			if i == 0 {
+				_ = Rewrite(ast, func(cursor *Cursor) bool {
+					r.visit(cursor)
+					return true
+				}, tv.post)
+			} else {
+				_ = RewriteP(ast, r.visit, tv.postP)
+			}
+
+			tv.assertEquals(t, []step{
+				Pre{ast}, // when we visit ast, we want to replace and revisit,
+				// which means that we don't do a post on this node, or visit the children
+				Pre{ast2},
+				Pre{leaf2},
+				Post{leaf2},
+				Pre{leaf1},
+				Post{leaf1},
+				Post{ast2},
+			})
+
+		})
+	}
 }
 
 func TestRewriteVisitRefContainerReplace(t *testing.T) {
@@ -348,12 +459,18 @@ type rewriteTestVisitor struct {
 }
 
 func (tv *rewriteTestVisitor) pre(cursor *Cursor) bool {
-	tv.walk = append(tv.walk, Pre{el: cursor.Node()})
+	tv.preP(cursor)
 	return true
 }
 func (tv *rewriteTestVisitor) post(cursor *Cursor) bool {
-	tv.walk = append(tv.walk, Post{el: cursor.Node()})
+	tv.postP(cursor)
 	return true
+}
+func (tv *rewriteTestVisitor) preP(cursor *Cursor) {
+	tv.walk = append(tv.walk, Pre{el: cursor.Node()})
+}
+func (tv *rewriteTestVisitor) postP(cursor *Cursor) {
+	tv.walk = append(tv.walk, Post{el: cursor.Node()})
 }
 func (tv *rewriteTestVisitor) assertEquals(t *testing.T, expected []step) {
 	t.Helper()

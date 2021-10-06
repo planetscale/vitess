@@ -52,6 +52,24 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	return parent.SQLNode
 }
 
+//func RewriteP(node SQLNode, pre, post ApplyFuncP) (result SQLNode) {
+//	parent := &RootNode{node}
+//
+//	// this is the root-replacer, used when the user replaces the root of the ast
+//	replacer := func(newNode SQLNode, _ SQLNode) {
+//		parent.SQLNode = newNode
+//	}
+//
+//	a := &applicationP{
+//		pre:  pre,
+//		post: post,
+//	}
+//
+//	a.rewriteSQLNode(parent, node, replacer)
+//
+//	return parent.SQLNode
+//}
+
 // RootNode is the root node of the AST when rewriting. It is the first element of the tree.
 type RootNode struct {
 	SQLNode
@@ -64,6 +82,11 @@ type RootNode struct {
 // The return value of ApplyFunc controls the syntax tree traversal.
 // See Rewrite for details.
 type ApplyFunc func(*Cursor) bool
+
+// An ApplyFuncP is invoked by RewriteP for each node n, even if n is nil,
+// before and/or after the node's children, using a Cursor describing
+// the current node and providing operations on it.
+type ApplyFuncP func(*Cursor) bool
 
 // A Cursor describes a node encountered during Apply.
 // Information about the node and its parent is available
@@ -112,5 +135,11 @@ type replacerFunc func(newNode, parent SQLNode)
 // application carries all the shared data so we can pass it around cheaply.
 type application struct {
 	pre, post ApplyFunc
+	cur       Cursor
+}
+
+// application carries all the shared data so we can pass it around cheaply.
+type applicationP struct {
+	pre, post ApplyFuncP
 	cur       Cursor
 }

@@ -178,3 +178,8 @@ type application struct {
 	pre, post ApplyFunc
 	cur       Cursor
 }
+
+type applicationP struct {
+	pre, post ApplyFuncP
+	cur       Cursor
+}
