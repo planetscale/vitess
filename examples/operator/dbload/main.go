@@ -13,9 +13,10 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-var insQuery = "INSERT into users (user_id, user_data) values (?, ?)"
-var selQuery = "SELECT user_data from users where user_id = ?"
-var rowsPer = 1000
+var insCustQuery = "INSERT into customer (email) values (?)"
+var insOrdQuery = "INSERT into corder (customer_id, sku, price) values (?, ?, ?, ?)"
+var selQuery = "select price from corder where order_id=?"
+var rowsPer = 50000
 
 func main() {
 
@@ -24,14 +25,17 @@ func main() {
 
 	flag.Parse()
 	if *mode != "read" && *mode != "write" {
+		fmt.Printf("Unknown mode: %v\n", *mode)
 		os.Exit(1)
 	}
 
 	if *numThreads < 1 {
+		fmt.Println("numThreads must be >= 1")
 		os.Exit(1)
 	}
 	dsn, ok := os.LookupEnv("DATABASE_URL")
 	if !ok {
+		fmt.Println("DATABASE_URL not specified")
 		os.Exit(2)
 	}
 
@@ -71,19 +75,37 @@ func insertLoop(dsn string, index int) error {
 		return err
 	}
 
-	q, err := db.Prepare(insQuery)
+	// first insert a customer record
+	q, err := db.Prepare(insCustQuery)
 	if err != nil {
-		fmt.Printf("error preparing query: %v\n", insQuery)
+		fmt.Printf("error preparing query: %v\n", insCustQuery)
+		return err
+	}
+	email := randData(10) + "@mydomain.com"
+	if _, err := q.Exec(email); err != nil {
+		fmt.Printf("error inserting data: %v\n", err)
+		return err
+	}
+	// allow enough time for all threads to finish inserting 1 customer
+	time.Sleep(time.Second)
+
+	q, err = db.Prepare(insOrdQuery)
+	if err != nil {
+		fmt.Printf("error preparing query: %v\n", insOrdQuery)
 		return err
 	}
 	for i := index * rowsPer; i < (index+1)*rowsPer; i++ {
-		data := randData(20)
-		fmt.Printf("inserting id=%v, data=%s\n", i, data)
-		if _, err := q.Exec(i, data); err != nil {
+		// generate a random id between 1 & 20
+		// TODO: this should be same as numThreads
+		customerId := rand.Int31n(20) + 1
+		fmt.Printf("inserting new order for customer_id=%v\n", customerId)
+		// sku = random 10-char string
+		// price = random number between 100 & 1100
+		if _, err := q.Exec(customerId, randData(10), rand.Int31n(1000)+100); err != nil {
 			fmt.Printf("error inserting data: %v\n", err)
 			return err
 		}
-		time.Sleep(time.Second)
+		time.Sleep(10 * time.Millisecond)
 	}
 	return nil
 }
@@ -112,7 +134,7 @@ func selectLoop(dsn string, index int) error {
 			fmt.Printf("error selecting data: %v", err)
 			return err
 		}
-		time.Sleep(10*time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

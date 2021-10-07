@@ -17,6 +17,7 @@ alias vtctlclient="vtctlclient -server localhost:15999 -logtostderr"
 vtctlclient ApplySchema -sql="$(cat create_user_schema.sql)" commerce
 vtctlclient ApplyVSchema -vschema="$(cat vschema_user_initial.json)" commerce
 
+
 # Insert and verify data
 mysql < ../common/insert_commerce_data.sql
 mysql --table < ../common/select_commerce_data.sql
@@ -28,8 +29,8 @@ kubectl apply -f 201_customer_tablets.yaml
 vtctlclient MoveTables -source commerce -tables 'customer,corder' Create customer.commerce2customer
 
 # Show Progress
-vtctlclient Workflow .... Show
-vtctlclient Workflow .... Progress
+vtctlclient Workflow customer.commerce2customer Show
+vtctlclient Workflow customer.commerce2customer Progress
 
 # Validate
 vtctlclient VDiff customer.commerce2customer

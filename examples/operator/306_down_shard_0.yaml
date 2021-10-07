@@ -40,6 +40,38 @@ spec:
         memory: 128Mi
 
   keyspaces:
+  - name: commerce
+    turndownPolicy: Immediate
+    partitionings:
+    - equal:
+        parts: 1
+        shardTemplate:
+          databaseInitScriptSecret:
+            name: example-cluster-config
+            key: init_db.sql
+          replication:
+            enforceSemiSync: false
+          tabletPools:
+          - cell: zone1
+            type: replica
+            replicas: 2
+            vttablet:
+              extraFlags:
+                db_charset: utf8mb4
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+            mysqld:
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+            dataVolumeClaimTemplate:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi
   - name: customer
     turndownPolicy: Immediate
     partitionings:
