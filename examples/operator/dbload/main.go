@@ -14,7 +14,7 @@ import (
 )
 
 var insCustQuery = "INSERT into customer (email) values (?)"
-var insOrdQuery = "INSERT into corder (customer_id, sku, price) values (?, ?, ?, ?)"
+var insOrdQuery = "INSERT into corder (customer_id, sku, price) values (?, ?, ?)"
 var selQuery = "select price from corder where order_id=?"
 var rowsPer = 50000
 

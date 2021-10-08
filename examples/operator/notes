@@ -1,33 +1,33 @@
-1. create a cluster (named demo) in GKE project vitess-kubecon
-2. requires at least 8 medium nodes for vitess + 4 for prom/grafana, start with 12
+1. Create a cluster (named demo) in GKE project vitess-kubecon
+2. Requires at least 8 medium nodes for vitess + 4 for prom/grafana, start with 12
 2a. gcloud container clusters get-credentials demo (to setup kubectl access)
 3. deploy cluster using operator example (101_initial_cluster.yaml)
 4. deploy prometheus and grafana
 - https://computingforgeeks.com/setup-prometheus-and-grafana-on-kubernetes/
 - create servicemonitor (example-vitess)
   - kubectl apply -f prom_service_monitor.yaml
-5. ./pf.sh&
-6. create schema with single table - columns user_id, user_data
-7. create vschema (unsharded)
+5. ./pf.sh &
+6. Follow through Operator examples until resharding is done. 
+7. Verify schema and sequences.
 alias mysql="mysql -h 127.0.0.1 -P 15306 -u user"
 alias vtctlclient="vtctlclient -server localhost:15999 -logtostderr"
-vtctlclient ApplySchema -sql="$(cat create_user_schema.sql)" customer
-vtctlclient ApplyVSchema -vschema="$(cat vschema_user_initial.json)" customer
 
-8. load 20k rows into table
+8. Test load 20k rows into table
  - export DATABASE_URL=user@tcp\(127.0.0.1:15306\)\/customer
  - cd dbload
  - go run main.go -mode=write
-9. run 20 threads selecting concurrently from the table (with different randomly generated ids)
+ - Control-C
+9. Run 20 threads selecting concurrently from the table (with different randomly generated ids)
   -- write go program with 20 goroutines
   -- Dockerfile
   -- build and upload docker image
-     docker build -f Dockerfile -t dsigireddi/dbload:latest .
+     docker build -f Dockerfile -t ayfondort/dbload:latest .
   -- test docker image
-     docker run -e DATABASE_URL=${DATABASE_URL} --network="host" dsigireddi/dbload:latest
+     docker run -e DATABASE_URL=${DATABASE_URL} --network="host" ayfondort/dbload:latest
   -- upload docker image
      docker push dsigireddi/dbload:latest
   -- create secret called database with url=vtgate service url (Cluster IP of the cell-specific service)
+  -- Find cluster ip from kubectl get pods,services --> example-zone1-vtgate-bc6cde92
 $ cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Secret
@@ -38,22 +38,11 @@ data:
   url: $(echo -n "user@tcp(10.48.7.45:3306)/customer" | base64 -w0)
 EOF
   -- deploy docker image using load_deploy.yaml with replicas:1
-10. graph query load etc. on vtgate for 5 minutes
-11. edit load_deploy.yaml with replicas:2
+10. Import vtgate_grafana_dashboard.json to Grafana and create a dashboard. 
+    Graph query load etc. on vtgate for 5 minutes http://localhost:3000/
+11. Edit load_deploy.yaml with replicas:2
 12. Let it run for a while
-13. stop query load
-14. reshard using hash on user_id
-  - vtctlclient ApplyVSchema -vschema="$(cat vschema_user_sharded.json)" customer
-  - kubectl apply -f 302_new_shards.yaml
-
-
-  - vtctlclient Reshard -source_shards '-' -target_shards '-80,80-' Create customer.one2two
-  - vtctlclient Reshard Progress customer.one2two
-  - vtctlclient Reshard -tablet_types=replica SwitchTraffic customer.one2two
-  - vtctlclient Reshard -tablet_types=primary SwitchTraffic customer.one2two
-
-15. run load_deploy.yaml with replicas:2
-16. graphs
-
-
-
+13. Stop query load
+14. Apply OnlineDDL to Customer table while it's runnig. 
+15. Perform Reparent
+16. Graphs
