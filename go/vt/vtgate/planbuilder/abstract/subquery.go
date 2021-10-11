@@ -17,7 +17,9 @@ limitations under the License.
 package abstract
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -32,10 +34,35 @@ var _ Operator = (*SubQuery)(nil)
 
 // SubQueryInner stores the subquery information for a select statement
 type SubQueryInner struct {
-	Inner           Operator
-	Type            engine.PulloutOpcode
+	// Inner is the Operator inside the parenthesis of the subquery.
+	// i.e: select (select 1 union select 1), the Inner here would be
+	// of type Concatenate since we have a Union.
+	Inner Operator
+
+	// Type represents the type of the subquery (value, in, not in, exists)
+	Type engine.PulloutOpcode
+
+	// SelectStatement is the inner's select
 	SelectStatement *sqlparser.Select
-	ArgName         string
+
+	// ArgName is the substitution argument string for the subquery.
+	// Subquery argument name looks like: `__sq1`, with `1` being an
+	// unique identifier. This is used when we wish to replace the
+	// subquery by an argument for PullOut subqueries.
+	ArgName string
+
+	// HasValues is a string of form `__sq_has_values1` with `1` being
+	// a unique identifier that matches the one used in ArgName.
+	// We use `__sq_has_values` for in and not in subqueries.
+	HasValues string
+
+	// ExprsNeedReplace is a slice of all the expressions that were
+	// introduced by the rewrite of the subquery and that potentially
+	// need to be re-replace if we can merge the subquery into a route.
+	// An expression that contains at least all of ExprsNeedReplace will
+	// be replaced by the expression in ReplaceBy.
+	ExprsNeedReplace []sqlparser.Expr
+	ReplaceBy        sqlparser.Expr
 }
 
 // TableID implements the Operator interface
@@ -48,8 +75,8 @@ func (s *SubQuery) TableID() semantics.TableSet {
 }
 
 // PushPredicate implements the Operator interface
-func (s *SubQuery) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	return semantics.Gen4NotSupportedF("pushing predicate on subquery")
+func (s *SubQuery) PushPredicate(sqlparser.Expr, *semantics.SemTable) error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push predicate on subquery")
 }
 
 // UnsolvedPredicates implements the Operator interface
@@ -58,18 +85,34 @@ func (s *SubQuery) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.
 	var result []sqlparser.Expr
 
 	for _, expr := range s.Outer.UnsolvedPredicates(semTable) {
-		deps := semTable.Dependencies(expr)
+		deps := semTable.DirectDeps(expr)
 		if !deps.IsSolvedBy(ts) {
 			result = append(result, expr)
 		}
 	}
 	for _, inner := range s.Inner {
 		for _, expr := range inner.Inner.UnsolvedPredicates(semTable) {
-			deps := semTable.Dependencies(expr)
+			deps := semTable.DirectDeps(expr)
 			if !deps.IsSolvedBy(ts) {
 				result = append(result, expr)
 			}
 		}
 	}
 	return result
+}
+
+// CheckValid implements the Operator interface
+func (s *SubQuery) CheckValid() error {
+	for _, inner := range s.Inner {
+		err := inner.Inner.CheckValid()
+		if err != nil {
+			return err
+		}
+	}
+	return s.Outer.CheckValid()
+}
+
+// Compact implements the Operator interface
+func (s *SubQuery) Compact(*semantics.SemTable) (Operator, error) {
+	return s, nil
 }

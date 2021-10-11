@@ -31,21 +31,21 @@ type joinTree struct {
 	// the children of this plan
 	lhs, rhs queryTree
 
-	outer bool
+	leftJoin bool
 }
 
 var _ queryTree = (*joinTree)(nil)
 
 func (jp *joinTree) tableID() semantics.TableSet {
-	return jp.lhs.tableID() | jp.rhs.tableID()
+	return jp.lhs.tableID().Merge(jp.rhs.tableID())
 }
 
 func (jp *joinTree) clone() queryTree {
 	result := &joinTree{
-		lhs:   jp.lhs.clone(),
-		rhs:   jp.rhs.clone(),
-		outer: jp.outer,
-		vars:  jp.vars,
+		lhs:      jp.lhs.clone(),
+		rhs:      jp.rhs.clone(),
+		leftJoin: jp.leftJoin,
+		vars:     jp.vars,
 	}
 	return result
 }
@@ -59,7 +59,7 @@ func (jp *joinTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 	var lhs, rhs []*sqlparser.ColName
 	for _, col := range columns {
 		col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
-		if semTable.BaseTableDependencies(col).IsSolvedBy(jp.lhs.tableID()) {
+		if semTable.RecursiveDeps(col).IsSolvedBy(jp.lhs.tableID()) {
 			lhs = append(lhs, col)
 			toTheLeft = append(toTheLeft, true)
 		} else {

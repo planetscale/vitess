@@ -17,15 +17,18 @@ limitations under the License.
 package abstract
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Derived represents a derived table in the query
 type Derived struct {
-	Sel   sqlparser.SelectStatement
-	Inner Operator
-	Alias string
+	Sel           sqlparser.SelectStatement
+	Inner         Operator
+	Alias         string
+	ColumnAliases sqlparser.Columns
 }
 
 var _ Operator = (*Derived)(nil)
@@ -39,6 +42,9 @@ func (d *Derived) TableID() semantics.TableSet {
 func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	tableInfo, err := semTable.TableInfoForExpr(expr)
 	if err != nil {
+		if err == semantics.ErrMultipleTables {
+			return semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+		}
 		return err
 	}
 
@@ -52,4 +58,14 @@ func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTabl
 // UnsolvedPredicates implements the Operator interface
 func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return d.Inner.UnsolvedPredicates(semTable)
+}
+
+// CheckValid implements the Operator interface
+func (d *Derived) CheckValid() error {
+	return d.Inner.CheckValid()
+}
+
+// Compact implements the Operator interface
+func (d *Derived) Compact(*semantics.SemTable) (Operator, error) {
+	return d, nil
 }

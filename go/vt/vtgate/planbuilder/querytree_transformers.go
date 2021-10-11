@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(ctx planningContext, tree queryTree) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *planningContext, tree queryTree) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routeTree:
 		return transformRoutePlan(ctx, n)
@@ -42,8 +42,6 @@ func transformToLogicalPlan(ctx planningContext, tree queryTree) (logicalPlan, e
 		return transformSubqueryTree(ctx, n)
 	case *concatenateTree:
 		return transformConcatenatePlan(ctx, n)
-	case *distinctTree:
-		return transformDistinctPlan(ctx, n)
 	case *vindexTree:
 		return transformVindexTree(n)
 	}
@@ -51,19 +49,15 @@ func transformToLogicalPlan(ctx planningContext, tree queryTree) (logicalPlan, e
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
 }
 
-func pushDistinct(plan logicalPlan) error {
+func pushDistinct(plan logicalPlan) {
 	switch n := plan.(type) {
 	case *route:
 		n.Select.MakeDistinct()
 	case *concatenateGen4:
 		for _, source := range n.sources {
-			err := pushDistinct(source)
-			if err != nil {
-				return err
-			}
+			pushDistinct(source)
 		}
 	}
-	return nil
 }
 
 func transformVindexTree(n *vindexTree) (logicalPlan, error) {
@@ -94,7 +88,7 @@ func transformVindexTree(n *vindexTree) (logicalPlan, error) {
 	return plan, nil
 }
 
-func transformSubqueryTree(ctx planningContext, n *subqueryTree) (logicalPlan, error) {
+func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, error) {
 	innerPlan, err := transformToLogicalPlan(ctx, n.inner)
 	if err != nil {
 		return nil, err
@@ -104,7 +98,7 @@ func transformSubqueryTree(ctx planningContext, n *subqueryTree) (logicalPlan, e
 		return nil, err
 	}
 
-	plan := newPulloutSubquery(n.opcode, n.argName, "", innerPlan)
+	plan := newPulloutSubquery(n.opcode, n.argName, n.hasValues, innerPlan)
 	outerPlan, err := transformToLogicalPlan(ctx, n.outer)
 	if err != nil {
 		return nil, err
@@ -113,7 +107,7 @@ func transformSubqueryTree(ctx planningContext, n *subqueryTree) (logicalPlan, e
 	return plan, err
 }
 
-func transformDerivedPlan(ctx planningContext, n *derivedTree) (logicalPlan, error) {
+func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, error) {
 	// transforming the inner part of the derived table into a logical plan
 	// so that we can do horizon planning on the inner. If the logical plan
 	// we've produced is a Route, we set its Select.From field to be an aliased
@@ -133,24 +127,72 @@ func transformDerivedPlan(ctx planningContext, n *derivedTree) (logicalPlan, err
 	if !isRoute {
 		return &simpleProjection{
 			logicalPlanCommon: newBuilderCommon(plan),
-			eSimpleProj:       &engine.SimpleProjection{},
+			eSimpleProj: &engine.SimpleProjection{
+				Cols: n.columnsOffset,
+			},
 		}, nil
 	}
 	innerSelect := rb.Select
 	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
 	tblExpr := &sqlparser.AliasedTableExpr{
-		Expr: derivedTable,
-		As:   sqlparser.NewTableIdent(n.alias),
+		Expr:    derivedTable,
+		As:      sqlparser.NewTableIdent(n.alias),
+		Columns: n.columnAliases,
+	}
+	selectExprs := sqlparser.SelectExprs{}
+	for _, colName := range n.columns {
+		selectExprs = append(selectExprs, &sqlparser.AliasedExpr{
+			Expr: colName,
+		})
 	}
 	rb.Select = &sqlparser.Select{
-		From: []sqlparser.TableExpr{tblExpr},
+		From:        []sqlparser.TableExpr{tblExpr},
+		SelectExprs: selectExprs,
 	}
 	return plan, nil
 }
 
-func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (logicalPlan, error) {
+func transformConcatenatePlan(ctx *planningContext, n *concatenateTree) (logicalPlan, error) {
 	var sources []logicalPlan
+	var err error
+	if n.distinct {
+		sources, err = transformAndMerge(ctx, n)
+	} else {
+		sources, err = transformAndMergeInOrder(ctx, n)
+	}
+	if err != nil {
+		return nil, err
+	}
 
+	if n.distinct {
+		for _, source := range sources {
+			pushDistinct(source)
+		}
+	}
+
+	var result logicalPlan
+	if len(sources) == 1 {
+		src := sources[0]
+		if rb, isRoute := src.(*route); isRoute && rb.isSingleShard() {
+			// if we have a single shard route, we don't need to do anything to make it distinct
+			rb.Select.SetLimit(n.limit)
+			rb.Select.SetOrderBy(n.ordering)
+			return src, nil
+		}
+		result = src
+	} else {
+		if len(n.ordering) > 0 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't do ORDER BY on top of UNION")
+		}
+		result = &concatenateGen4{sources: sources}
+	}
+	if n.distinct {
+		return newDistinct(result), nil
+	}
+	return result, nil
+}
+
+func transformAndMergeInOrder(ctx *planningContext, n *concatenateTree) (sources []logicalPlan, err error) {
 	for i, source := range n.sources {
 		plan, err := createLogicalPlan(ctx, source, n.selectStmts[i])
 		if err != nil {
@@ -168,17 +210,54 @@ func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (logicalP
 		}
 		sources = append(sources, plan)
 	}
-
-	if len(sources) == 1 {
-		return sources[0], nil
-	}
-
-	return &concatenateGen4{
-		sources: sources,
-	}, nil
+	return sources, nil
 }
 
-func mergeUnionLogicalPlans(ctx planningContext, left logicalPlan, right logicalPlan) logicalPlan {
+func transformAndMerge(ctx *planningContext, n *concatenateTree) ([]logicalPlan, error) {
+	var sources []logicalPlan
+	for i, source := range n.sources {
+		plan, err := createLogicalPlan(ctx, source, n.selectStmts[i])
+		if err != nil {
+			return nil, err
+		}
+		sources = append(sources, plan)
+	}
+
+	idx := 0
+	for idx < len(sources) {
+		keep := make([]bool, len(sources))
+		srcA := sources[idx]
+		merged := false
+		for j, srcB := range sources {
+			if j <= idx {
+				continue
+			}
+			newPlan := mergeUnionLogicalPlans(ctx, srcA, srcB)
+			if newPlan != nil {
+				sources[idx] = newPlan
+				srcA = newPlan
+				merged = true
+			} else {
+				keep[j] = true
+			}
+		}
+		if !merged {
+			return sources, nil
+		}
+		var phase []logicalPlan
+		for i, source := range sources {
+			if keep[i] || i <= idx {
+				phase = append(phase, source)
+			}
+		}
+		idx++
+		sources = phase
+	}
+
+	return sources, nil
+}
+
+func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logicalPlan) logicalPlan {
 	lroute, ok := left.(*route)
 	if !ok {
 		return nil
@@ -189,23 +268,13 @@ func mergeUnionLogicalPlans(ctx planningContext, left logicalPlan, right logical
 	}
 
 	if canMergePlans(ctx, lroute, rroute) {
-		elem := &sqlparser.UnionSelect{
-			Distinct:  false,
-			Statement: rroute.Select,
-		}
-		switch n := lroute.Select.(type) {
-		case *sqlparser.Union:
-			n.UnionSelects = append(n.UnionSelects, elem)
-		default:
-			lroute.Select = &sqlparser.Union{FirstStatement: lroute.Select, UnionSelects: []*sqlparser.UnionSelect{elem}}
-		}
-
+		lroute.Select = &sqlparser.Union{Left: lroute.Select, Distinct: false, Right: rroute.Select}
 		return lroute
 	}
 	return nil
 }
 
-func createLogicalPlan(ctx planningContext, source queryTree, selStmt *sqlparser.Select) (logicalPlan, error) {
+func createLogicalPlan(ctx *planningContext, source queryTree, selStmt *sqlparser.Select) (logicalPlan, error) {
 	plan, err := transformToLogicalPlan(ctx, source)
 	if err != nil {
 		return nil, err
@@ -222,7 +291,7 @@ func createLogicalPlan(ctx planningContext, source queryTree, selStmt *sqlparser
 	return plan, nil
 }
 
-func transformRoutePlan(ctx planningContext, n *routeTree) (*route, error) {
+func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
@@ -312,7 +381,7 @@ func transformRoutePlan(ctx planningContext, n *routeTree) (*route, error) {
 		Comments:    ctx.semTable.Comments,
 	}
 
-	replaceSubQuery(ctx.sqToReplace, sel)
+	replaceSubQuery(ctx.exprToReplaceBySqExpr, sel)
 
 	// TODO clean up when gen4 is the only planner
 	var condition sqlparser.Expr
@@ -335,23 +404,7 @@ func transformRoutePlan(ctx planningContext, n *routeTree) (*route, error) {
 	}, nil
 }
 
-func transformDistinctPlan(ctx planningContext, n *distinctTree) (logicalPlan, error) {
-	innerPlan, err := transformToLogicalPlan(ctx, n.source)
-	if err != nil {
-		return nil, err
-	}
-	err = pushDistinct(innerPlan)
-	if err != nil {
-		return nil, err
-	}
-	if rb, isRoute := innerPlan.(*route); isRoute && rb.isSingleShard() {
-		// if we have a single shard route, we don't need to do anything to make it distinct
-		return innerPlan, nil
-	}
-	return newDistinct(innerPlan), nil
-}
-
-func transformJoinPlan(ctx planningContext, n *joinTree) (logicalPlan, error) {
+func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 	lhs, err := transformToLogicalPlan(ctx, n.lhs)
 	if err != nil {
 		return nil, err
@@ -361,7 +414,7 @@ func transformJoinPlan(ctx planningContext, n *joinTree) (logicalPlan, error) {
 		return nil, err
 	}
 	opCode := engine.InnerJoin
-	if n.outer {
+	if n.leftJoin {
 		opCode = engine.LeftJoin
 	}
 	return &joinGen4{
@@ -443,39 +496,56 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 }
 
 type subQReplacer struct {
-	sqToReplace map[string]*sqlparser.Select
-	err         error
-	replaced    bool
+	exprToReplaceBySqExpr map[sqlparser.Expr]sqlparser.Expr
+	replaced              bool
 }
 
 func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
-	argName := argumentName(cursor.Node())
-	if argName == "" {
+	var exprs []sqlparser.Expr
+	switch node := cursor.Node().(type) {
+	case *sqlparser.AndExpr:
+		exprs = sqlparser.SplitAndExpression(nil, node)
+	case *sqlparser.OrExpr:
+		exprs = sqlparser.SplitOrExpression(nil, node)
+	case sqlparser.Argument:
+		exprs = append(exprs, node)
+	case sqlparser.ListArg:
+		exprs = append(exprs, node)
+	case *sqlparser.ExistsExpr:
+		exprs = append(exprs, node)
+	default:
 		return true
 	}
 
-	var node sqlparser.SQLNode
-	subqSelect, exists := sqr.sqToReplace[argName]
-	if !exists {
-		sqr.err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to find subquery with argument: %s", argName)
-		return false
+	var replaceBy sqlparser.Expr
+	var remainder sqlparser.Expr
+	for _, expr := range exprs {
+		found := false
+		for sqExprToReplace, replaceByExpr := range sqr.exprToReplaceBySqExpr {
+			if sqlparser.EqualsExpr(expr, sqExprToReplace) {
+				allReplaceByExprs := sqlparser.SplitAndExpression(nil, replaceBy)
+				allReplaceByExprs = append(allReplaceByExprs, replaceByExpr)
+				replaceBy = sqlparser.AndExpressions(allReplaceByExprs...)
+				found = true
+				break
+			}
+		}
+		if !found {
+			remainder = sqlparser.AndExpressions(remainder, expr)
+		}
 	}
-	sq := &sqlparser.Subquery{Select: subqSelect}
-	node = sq
-
-	// if the subquery is in an EXISTS, e.g. "__sq_has_values1"
-	// then we encapsulate the subquery in an exists expression.
-	if strings.HasPrefix(argName, string(sqlparser.HasValueSubQueryBaseName)) {
-		node = &sqlparser.ExistsExpr{Subquery: sq}
+	if replaceBy == nil {
+		return true
 	}
-	cursor.Replace(node)
+	newNode := sqlparser.AndExpressions(remainder, replaceBy)
+	cursor.Replace(newNode)
 	sqr.replaced = true
 	return false
 }
 
-func replaceSubQuery(sqToReplace map[string]*sqlparser.Select, sel *sqlparser.Select) {
-	if len(sqToReplace) > 0 {
-		sqr := &subQReplacer{sqToReplace: sqToReplace}
+func replaceSubQuery(exprToReplaceBySqExpr map[sqlparser.Expr]sqlparser.Expr, sel *sqlparser.Select) {
+	if len(exprToReplaceBySqExpr) > 0 {
+		sqr := &subQReplacer{exprToReplaceBySqExpr: exprToReplaceBySqExpr}
 		sqlparser.Rewrite(sel, sqr.replacer, nil)
 		for sqr.replaced {
 			// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left

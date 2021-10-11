@@ -70,32 +70,15 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *ParenSelect) formatFast(buf *TrackedBuffer) {
-	buf.WriteByte('(')
-	node.Select.formatFast(buf)
-	buf.WriteByte(')')
-}
-
-// formatFast formats the node.
 func (node *Union) formatFast(buf *TrackedBuffer) {
-	if _, isSel := node.FirstStatement.(*Select); isSel {
+	if requiresParen(node.Left) {
 		buf.WriteByte('(')
-		node.FirstStatement.formatFast(buf)
+		node.Left.formatFast(buf)
 		buf.WriteByte(')')
 	} else {
-		node.FirstStatement.formatFast(buf)
+		node.Left.formatFast(buf)
 	}
 
-	for _, us := range node.UnionSelects {
-		us.formatFast(buf)
-	}
-	node.OrderBy.formatFast(buf)
-	node.Limit.formatFast(buf)
-	buf.WriteString(node.Lock.ToString())
-}
-
-// formatFast formats the node.
-func (node *UnionSelect) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(" ")
 	if node.Distinct {
 		buf.WriteString(UnionStr)
@@ -104,13 +87,17 @@ func (node *UnionSelect) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteString(" ")
 
-	if _, isSel := node.Statement.(*Select); isSel {
+	if requiresParen(node.Right) {
 		buf.WriteByte('(')
-		node.Statement.formatFast(buf)
+		node.Right.formatFast(buf)
 		buf.WriteByte(')')
 	} else {
-		node.Statement.formatFast(buf)
+		node.Right.formatFast(buf)
 	}
+
+	node.OrderBy.formatFast(buf)
+	node.Limit.formatFast(buf)
+	buf.WriteString(node.Lock.ToString())
 }
 
 // formatFast formats the node.
@@ -941,7 +928,8 @@ func (node *Show) formatFast(buf *TrackedBuffer) {
 func (node *ShowLegacy) formatFast(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
 	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
-		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
+		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_replication_status" ||
+		nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		if node.Extended != "" {
 			buf.WriteString("show ")
@@ -1182,6 +1170,9 @@ func (node *AliasedTableExpr) formatFast(buf *TrackedBuffer) {
 	if !node.As.IsEmpty() {
 		buf.WriteString(" as ")
 		node.As.formatFast(buf)
+		if len(node.Columns) != 0 {
+			node.Columns.formatFast(buf)
+		}
 	}
 	if node.Hints != nil {
 		// Hint node provides the space padding.

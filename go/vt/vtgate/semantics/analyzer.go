@@ -21,6 +21,8 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -30,42 +32,37 @@ import (
 // analyzer controls the flow of the analysis.
 // It starts the tree walking and controls which part of the analysis sees which parts of the tree
 type analyzer struct {
-	scoper *scoper
-	tables *tableCollector
-	binder *binder
-	typer  *typer
+	scoper   *scoper
+	tables   *tableCollector
+	binder   *binder
+	typer    *typer
+	rewriter *earlyRewriter
 
 	err          error
 	inProjection int
 
 	projErr error
-
-	hasRewritten bool
 }
 
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
+	// TODO  dependencies between these components are a little tangled. We should try to clean up
 	s := newScoper()
 	a := &analyzer{
 		scoper: s,
 		tables: newTableCollector(s, si, dbName),
 		typer:  newTyper(),
 	}
-
+	s.org = a
+	a.tables.org = a
 	a.binder = newBinder(s, a, a.tables, a.typer)
+	a.rewriter = &earlyRewriter{scoper: s}
 
 	return a
 }
 
-type rewriteFunc = func(statement sqlparser.SelectStatement, semTable *SemTable) error
-
-// NoRewrite is a helper implementation for tests
-var NoRewrite = func(statement sqlparser.SelectStatement, semTable *SemTable) error {
-	return nil
-}
-
 // Analyze analyzes the parsed query.
-func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation, rewrite rewriteFunc) (*SemTable, error) {
+func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation) (*SemTable, error) {
 	analyzer := newAnalyzer(currentDb, si)
 
 	// Analysis for initial scope
@@ -77,41 +74,29 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	// Creation of the semantic table
 	semTable := analyzer.newSemTable(statement)
 
-	// Rewriting operation (expand star)
-	if err = rewrite(statement, semTable); err != nil {
-		return nil, err
-	}
-	analyzer.hasRewritten = true
-
-	// Analysis post rewriting
-	err = analyzer.analyze(statement)
-	if err != nil {
-		return nil, err
-	}
-
 	semTable.ProjectionErr = analyzer.projErr
 	return semTable, nil
 }
 
 func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
 	return &SemTable{
-		ExprBaseTableDeps: a.binder.exprRecursiveDeps,
-		ExprDeps:          a.binder.exprDeps,
-		exprTypes:         a.typer.exprTypes,
-		Tables:            a.tables.Tables,
-		selectScope:       a.scoper.rScope,
-		ProjectionErr:     a.projErr,
-		Comments:          statement.GetComments(),
-		SubqueryMap:       a.binder.subqueryMap,
-		SubqueryRef:       a.binder.subqueryRef,
-		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
+		Recursive:        a.binder.recursive,
+		Direct:           a.binder.direct,
+		exprTypes:        a.typer.exprTypes,
+		Tables:           a.tables.Tables,
+		selectScope:      a.scoper.rScope,
+		ProjectionErr:    a.projErr,
+		Comments:         statement.GetComments(),
+		SubqueryMap:      a.binder.subqueryMap,
+		SubqueryRef:      a.binder.subqueryRef,
+		ColumnEqualities: map[columnName][]sqlparser.Expr{},
 	}
 }
 
 func (a *analyzer) setError(err error) {
 	prErr, ok := err.(ProjError)
 	if ok {
-		a.projErr = prErr.inner
+		a.projErr = prErr.Inner
 		return
 	}
 
@@ -129,25 +114,21 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		return true
 	}
 
-	if !a.hasRewritten {
-		if err := checkForInvalidConstructs(cursor); err != nil {
-			a.setError(err)
-			return true
-		}
-
-		a.scoper.down(cursor)
-	} else { // after expand star
-		if err := checkUnionColumns(cursor); err != nil {
-			a.setError(err)
-			return true
-		}
-
-		a.scoper.downPost(cursor)
-
-		if err := a.binder.down(cursor); err != nil {
-			a.setError(err)
-			return true
-		}
+	if err := a.scoper.down(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+	if err := a.checkForInvalidConstructs(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+	if err := a.rewriter.down(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+	if err := a.binder.down(cursor); err != nil {
+		a.setError(err)
+		return true
 	}
 
 	a.enterProjection(cursor)
@@ -157,72 +138,57 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func checkForStar(s sqlparser.SelectExprs) error {
-	for _, expr := range s {
-		_, isStar := expr.(*sqlparser.StarExpr)
-		if isStar {
-			return ProjError{
-				inner: vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "can't handle * between UNIONs"),
-			}
-		}
-	}
-	return nil
-}
-
-func checkUnionColumns(cursor *sqlparser.Cursor) error {
-	union, isUnion := cursor.Node().(*sqlparser.Union)
-	if !isUnion {
-		return nil
-	}
-	firstProj := sqlparser.GetFirstSelect(union).SelectExprs
-	err := checkForStar(firstProj)
-	if err != nil {
-		return err
-	}
-
-	count := len(firstProj)
-
-	for _, unionSelect := range union.UnionSelects {
-		proj := sqlparser.GetFirstSelect(unionSelect.Statement).SelectExprs
-		err := checkForStar(proj)
-		if err != nil {
-			return err
-		}
-		if len(proj) != count {
-			return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
-		}
-	}
-
-	return nil
-}
-
 func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	if !a.shouldContinue() {
 		return false
 	}
 
-	if !a.hasRewritten {
-		if err := a.scoper.up(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
-		if err := a.tables.up(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
-	} else { // after expand star
-		if err := a.scoper.upPost(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
-		if err := a.typer.up(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
+	if err := a.scoper.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+	if err := a.tables.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+	if err := a.typer.up(cursor); err != nil {
+		a.setError(err)
+		return false
 	}
 
 	a.leaveProjection(cursor)
 	return a.shouldContinue()
+}
+
+func containsStar(s sqlparser.SelectExprs) bool {
+	for _, expr := range s {
+		_, isStar := expr.(*sqlparser.StarExpr)
+		if isStar {
+			return true
+		}
+	}
+	return false
+}
+
+func checkUnionColumns(union *sqlparser.Union) error {
+	firstProj := sqlparser.GetFirstSelect(union).SelectExprs
+	if containsStar(firstProj) {
+		// if we still have *, we can't figure out if the query is invalid or not
+		// we'll fail it at run time instead
+		return nil
+	}
+	count := len(firstProj)
+
+	secondProj := sqlparser.GetFirstSelect(union.Right).SelectExprs
+	if containsStar(secondProj) {
+		return nil
+	}
+
+	if len(secondProj) != count {
+		return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
+	}
+
+	return nil
 }
 
 /*
@@ -254,7 +220,7 @@ type originable interface {
 }
 
 func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
-	ts := a.binder.exprRecursiveDeps.Dependencies(expr)
+	ts := a.binder.recursive.Dependencies(expr)
 	qt, isFound := a.typer.exprTypes[expr]
 	if !isFound {
 		return ts, nil
@@ -262,49 +228,56 @@ func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
 	return ts, &qt
 }
 
-func (v *vTableInfo) checkForDuplicates() error {
-	for i, name := range v.columnNames {
-		for j, name2 := range v.columnNames {
-			if i == j {
-				continue
-			}
-			if name == name2 {
-				return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DupFieldName, "Duplicate column name '%s'", name)
-			}
-		}
-	}
-	return nil
-}
-
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
 }
 
-func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
+func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Select:
+		parent := cursor.Parent()
+		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS not supported with union")
+		}
+		if _, isRoot := parent.(*sqlparser.RootNode); !isRoot && node.SQLCalcFoundRows {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+		}
+		errMsg := "INTO"
+		nextVal := false
+		if len(node.SelectExprs) == 1 {
+			if _, isNextVal := node.SelectExprs[0].(*sqlparser.Nextval); isNextVal {
+				nextVal = true
+				errMsg = "NEXT"
+			}
+		}
+		if !nextVal && node.Into == nil {
+			return nil
+		}
+		if a.scoper.currentScope().parent != nil {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of '%s'", errMsg)
+		}
+	case *sqlparser.Nextval:
+		currScope := a.scoper.currentScope()
+		if currScope.parent != nil {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
+		}
+		if len(currScope.tables) != 1 {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Next statement should not contain multiple tables")
+		}
+		vindexTbl := currScope.tables[0].GetVindexTable()
+		if vindexTbl == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Table information is not provided in vschema")
+		}
+		if vindexTbl.Type != vindexes.TypeSequence {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NEXT used on a non-sequence table")
+		}
 	case *sqlparser.JoinTableExpr:
 		if node.Condition != nil && node.Condition.Using != nil {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
 		}
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
-		}
-	case *sqlparser.Subquery:
-		sel, ok := node.Select.(*sqlparser.Select)
-		if !ok {
-			return Gen4NotSupportedF("%T in subquery", node.Select)
-		}
-		if sel.Into != nil {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
-		}
-	case *sqlparser.DerivedTable:
-		sel, ok := node.Select.(*sqlparser.Select)
-		if !ok {
-			return nil
-		}
-		if sel.Into != nil {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
 		}
 	case *sqlparser.FuncExpr:
 		if sqlparser.IsLockingFunc(node) {
@@ -319,32 +292,28 @@ func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 				return err
 			}
 		}
+	case *sqlparser.Union:
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				if !node.Qualifier.IsEmpty() {
+					return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Table '%s' from one of the SELECTs cannot be used in global ORDER clause", node.Qualifier.Name)
+				}
+			case *sqlparser.Subquery:
+				return false, nil
+			}
+			return true, nil
+		}, node.OrderBy)
+		if err != nil {
+			return err
+		}
+		err = checkUnionColumns(node)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
-}
-
-func createVTableInfoForExpressions(expressions sqlparser.SelectExprs) *vTableInfo {
-	vTbl := &vTableInfo{}
-	for _, selectExpr := range expressions {
-		expr, ok := selectExpr.(*sqlparser.AliasedExpr)
-		if !ok {
-			continue
-		}
-		vTbl.cols = append(vTbl.cols, expr.Expr)
-		if expr.As.IsEmpty() {
-			switch expr := expr.Expr.(type) {
-			case *sqlparser.ColName:
-				// for projections, we strip out the qualifier and keep only the column name
-				vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
-			default:
-				vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
-			}
-		} else {
-			vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
-		}
-	}
-	return vTbl
 }
 
 func (a *analyzer) shouldContinue() bool {
@@ -369,9 +338,9 @@ func Gen4NotSupportedF(format string, args ...interface{}) error {
 // ProjError is used to mark an error as something that should only be returned
 // if the planner fails to merge everything down to a single route
 type ProjError struct {
-	inner error
+	Inner error
 }
 
 func (p ProjError) Error() string {
-	return p.inner.Error()
+	return p.Inner.Error()
 }

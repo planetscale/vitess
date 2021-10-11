@@ -22,19 +22,17 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgr/config"
-
-	"vitess.io/vitess/go/vt/vtgr/db"
-
-	"vitess.io/vitess/go/stats"
-
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgr/config"
+	"vitess.io/vitess/go/vt/vtgr/db"
+	"vitess.io/vitess/go/vt/vtgr/log"
 )
 
 var (
@@ -91,6 +89,10 @@ type GRShard struct {
 	lastDiagnoseResult DiagnoseType
 	lastDiagnoseSince  time.Time
 
+	isActive sync2.AtomicBool
+
+	logger *log.Logger
+
 	// lock prevents multiple go routine fights with each other
 	sync.Mutex
 }
@@ -126,8 +128,9 @@ func NewGRShard(
 	ts GRTopo,
 	dbAgent db.Agent,
 	config *config.VTGRConfig,
-	localDbPort int) *GRShard {
-	return &GRShard{
+	localDbPort int,
+	isActive bool) *GRShard {
+	grShard := &GRShard{
 		KeyspaceShard:             &topo.KeyspaceShard{Keyspace: keyspace, Shard: shard},
 		cells:                     cells,
 		shardStatusCollector:      newShardStatusCollector(keyspace, shard),
@@ -139,9 +142,12 @@ func NewGRShard(
 		minNumReplicas:            config.MinNumReplica,
 		disableReadOnlyProtection: config.DisableReadOnlyProtection,
 		localDbPort:               localDbPort,
+		logger:                    log.NewVTGRLogger(keyspace, shard),
 		transientErrorWaitTime:    time.Duration(config.BackoffErrorWaitTimeSeconds) * time.Second,
 		bootstrapWaitTime:         time.Duration(config.BootstrapWaitTimeSeconds) * time.Second,
 	}
+	grShard.isActive.Set(isActive)
+	return grShard
 }
 
 // refreshTabletsInShardLocked is called by repair to get a fresh view of the shard
@@ -169,7 +175,7 @@ func (shard *GRShard) refreshTabletsInShardInternal(ctx context.Context) ([]*grI
 	keyspace, shardName := shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard
 	tablets, err := shard.ts.GetTabletMapForShardByCell(ctx, keyspace, shardName, shard.cells)
 	if err != nil {
-		log.Errorf("Error fetching tablets for keyspace/shardName %v/%v: %v", keyspace, shardName, err)
+		shard.logger.Errorf("Error fetching tablets for keyspace/shardName %v/%v: %v", keyspace, shardName, err)
 		return nil, err
 	}
 	return parseTabletInfos(tablets), nil
@@ -229,7 +235,7 @@ func (shard *GRShard) UnlockShard() {
 	shard.unlockMu.Lock()
 	defer shard.unlockMu.Unlock()
 	if shard.unlock == nil {
-		log.Warningf("Shard %s/%s does not hold a lock", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
+		shard.logger.Warningf("Shard %s/%s does not hold a lock", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
 		return
 	}
 	var err error
@@ -277,6 +283,12 @@ func (shard *GRShard) GetUnlock() func(*error) {
 	shard.unlockMu.Lock()
 	defer shard.unlockMu.Unlock()
 	return shard.unlock
+}
+
+// SetIsActive sets isActive for the shard
+func (shard *GRShard) SetIsActive(isActive bool) {
+	shard.logger.Infof("Setting is active to %v", isActive)
+	shard.isActive.Set(isActive)
 }
 
 func (collector *shardStatusCollector) isUnreachable(instance *grInstance) bool {
