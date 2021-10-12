@@ -1743,7 +1743,7 @@ func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
 			// :__sq_has_values = 0 or other_side not in ::__sq
 			cmp.Right = NewListArg(node.ArgName)
 			hasValue := &ComparisonExpr{Left: NewArgument(node.HasValuesArg), Right: NewIntLiteral("0"), Operator: EqualOp}
-			expr = OrExpressions(hasValue, cmp)
+			expr = &OrExpr{hasValue, cmp}
 		}
 		buf.astPrintf(node, "%v", expr)
 	case *Subquery:

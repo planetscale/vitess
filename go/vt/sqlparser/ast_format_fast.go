@@ -2258,9 +2258,9 @@ func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
 	case *ComparisonExpr:
 		// other_side = :__sq
 		cmp := &ComparisonExpr{
-			Left:     node.OtherSide,
-			Right:    NewArgument(node.ArgName),
-			Operator: original.Operator,
+			Left:		node.OtherSide,
+			Right:		NewArgument(node.ArgName),
+			Operator:	original.Operator,
 		}
 		var expr Expr = cmp
 		switch original.Operator {
@@ -2273,7 +2273,7 @@ func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
 			// :__sq_has_values = 0 or other_side not in ::__sq
 			cmp.Right = NewListArg(node.ArgName)
 			hasValue := &ComparisonExpr{Left: NewArgument(node.HasValuesArg), Right: NewIntLiteral("0"), Operator: EqualOp}
-			expr = OrExpressions(hasValue, cmp)
+			expr = &OrExpr{hasValue, cmp}
 		}
 		buf.printExpr(node, expr, true)
 	case *Subquery:
