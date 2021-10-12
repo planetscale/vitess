@@ -129,7 +129,11 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
-	return &SemTable{Recursive: map[sqlparser.Expr]TableSet{}, ColumnEqualities: map[columnName][]sqlparser.Expr{}}
+	return &SemTable{
+		Recursive:        map[sqlparser.Expr]TableSet{},
+		Direct:           map[sqlparser.Expr]TableSet{},
+		ColumnEqualities: map[columnName][]sqlparser.Expr{},
+	}
 }
 
 // TableSetFor returns the bitmask for this particular table
@@ -255,10 +259,14 @@ func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			exp, err := vt.getExprFor(node.Name.String())
-			if err != nil {
-				return false
+			if err == nil {
+				cursor.Replace(exp)
+			} else {
+				// cloning the expression and removing the qualifier
+				col := *node
+				col.Qualifier = sqlparser.TableName{}
+				cursor.Replace(&col)
 			}
-			cursor.Replace(exp)
 			return false
 		}
 		return true
