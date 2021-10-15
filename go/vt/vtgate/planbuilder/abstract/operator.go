@@ -36,6 +36,9 @@ type (
 		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
 		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 
+		// RemoveUnsolvedPredicates the predicates that have dependencies
+		RemoveUnsolvedPredicates(semTable *semantics.SemTable)
+
 		// CheckValid checks if we have a valid operator tree, and returns an error if something is wrong
 		CheckValid() error
 

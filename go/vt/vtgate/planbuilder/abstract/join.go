@@ -92,6 +92,11 @@ func (j *Join) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 	return result
 }
 
+func (j *Join) RemoveUnsolvedPredicates(semTable *semantics.SemTable) {
+	panic("we'll get there")
+}
+
+
 // CheckValid implements the Operator interface
 func (j *Join) CheckValid() error {
 	err := j.LHS.CheckValid()

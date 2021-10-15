@@ -102,6 +102,11 @@ func (v *Vindex) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
 	return nil
 }
 
+func (v *Vindex) RemoveUnsolvedPredicates(semTable *semantics.SemTable) {
+	panic("we'll get there")
+}
+
+
 // CheckValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {

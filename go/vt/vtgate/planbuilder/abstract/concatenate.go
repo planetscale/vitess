@@ -53,6 +53,11 @@ func (c *Concatenate) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
 	return nil
 }
 
+func (c *Concatenate) RemoveUnsolvedPredicates(semTable *semantics.SemTable) {
+	panic("we'll get there")
+}
+
+
 // CheckValid implements the Operator interface
 func (c *Concatenate) CheckValid() error {
 	for _, source := range c.Sources {

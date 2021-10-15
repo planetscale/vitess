@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"io"
 	"sort"
 
@@ -153,7 +154,54 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 
 		if merged == nil {
 			if len(preds) > 0 {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+				// HACK that changes from correlated EXISTS to uncorrelated IN
+				if inner.ExtractedSubquery.OpCode != int(engine.PulloutExists) {
+					return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+				}
+				sel, ok := inner.ExtractedSubquery.Subquery.Select.(*sqlparser.Select)
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated EXISTS subquery with UNION")
+				}
+				fmt.Println(sel)
+				inner.Inner.RemoveUnsolvedPredicates(ctx.semTable)
+
+				if len(preds) > 1 {
+					return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated EXISTS subquery with complex predicate")
+
+				}
+				pred := preds[0]
+				var innerColumn sqlparser.Expr
+				cmp, ok := pred.(*sqlparser.ComparisonExpr)
+				if !ok || cmp.Operator != sqlparser.EqualOp {
+					return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated EXISTS subquery with complex predicate")
+				}
+
+				for _, expr := range []sqlparser.Expr{cmp.Left, cmp.Right} {
+					deps := ctx.semTable.RecursiveDeps(expr)
+					switch {
+					case deps.IsSolvedBy(op.Outer.TableID()):
+						e := &sqlparser.ComparisonExpr{
+							Operator: sqlparser.InOp,
+							Left:     expr,
+							Right:    inner.ExtractedSubquery,
+						}
+						err := op.Outer.PushPredicate(e, ctx.semTable)
+						if err != nil {
+							return nil, err
+						}
+					case deps.IsSolvedBy(inner.Inner.TableID()):
+						innerColumn = expr
+					}
+				}
+				inner.ExtractedSubquery.OpCode = int(engine.PulloutIn)
+				treeInner, err = optimizeQuery(ctx, inner.Inner)
+				if err != nil {
+					return nil, err
+				}
+				_, err = treeInner.pushOutputColumns([]*sqlparser.ColName{innerColumn.(*sqlparser.ColName)}, ctx.semTable)
+				if err != nil {
+					return nil, err
+				}
 			}
 			unmerged = append(unmerged, &subqueryTree{
 				extracted: inner.ExtractedSubquery,

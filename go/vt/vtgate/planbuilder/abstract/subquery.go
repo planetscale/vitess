@@ -78,6 +78,11 @@ func (s *SubQuery) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.
 	return result
 }
 
+func (s *SubQuery) RemoveUnsolvedPredicates(semTable *semantics.SemTable) {
+	panic("we'll get there")
+}
+
+
 // CheckValid implements the Operator interface
 func (s *SubQuery) CheckValid() error {
 	for _, inner := range s.Inner {

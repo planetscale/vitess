@@ -179,6 +179,17 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 	return result
 }
 
+func (qg *QueryGraph) RemoveUnsolvedPredicates(semTable *semantics.SemTable) {
+	var keep []*innerJoin
+	for _, join := range qg.innerJoins {
+		set := join.deps
+		if set.IsSolvedBy(qg.TableID()) {
+			keep = append(keep, join)
+		}
+	}
+	qg.innerJoins = keep
+}
+
 // CheckValid implements the Operator interface
 func (qg *QueryGraph) CheckValid() error {
 	return nil

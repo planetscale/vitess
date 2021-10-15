@@ -60,6 +60,11 @@ func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.E
 	return d.Inner.UnsolvedPredicates(semTable)
 }
 
+func (d *Derived) RemoveUnsolvedPredicates(semTable *semantics.SemTable) {
+	panic("we'll get there")
+}
+
+
 // CheckValid implements the Operator interface
 func (d *Derived) CheckValid() error {
 	return d.Inner.CheckValid()
