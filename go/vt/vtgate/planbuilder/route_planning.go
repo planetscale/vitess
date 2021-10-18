@@ -182,24 +182,16 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 					deps := ctx.semTable.RecursiveDeps(expr)
 					switch {
 					case deps.IsSolvedBy(op.Outer.TableID()):
-						e := &sqlparser.ComparisonExpr{
-							Operator: sqlparser.InOp,
-							Left:     expr,
-							Right:    inner.ExtractedSubquery,
-						}
-						err := op.Outer.PushPredicate(e, ctx.semTable)
-						if err != nil {
-							return nil, err
-						}
 						inner.ExtractedSubquery.Original = &sqlparser.ComparisonExpr{
 							Operator: sqlparser.InOp,
 							Left:     expr,
 							Right:    inner.ExtractedSubquery.Subquery,
 						}
+						inner.ExtractedSubquery.OtherSide = expr
 					case deps.IsSolvedBy(inner.Inner.TableID()):
 						innerColumn = expr
-						inner.ExtractedSubquery.HasValuesArg = inner.ExtractedSubquery.ArgName
-						inner.ExtractedSubquery.ArgName = ctx.reservedVars.ReserveSubQuery()
+						inner.ExtractedSubquery.SetHasValuesArg(inner.ExtractedSubquery.GetArgName())
+						inner.ExtractedSubquery.SetArgName(ctx.reservedVars.ReserveSubQuery())
 					}
 				}
 				inner.ExtractedSubquery.OpCode = int(engine.PulloutIn)
