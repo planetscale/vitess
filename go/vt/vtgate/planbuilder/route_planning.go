@@ -39,6 +39,8 @@ type planningContext struct {
 	reservedVars *sqlparser.ReservedVars
 	semTable     *semantics.SemTable
 	vschema      ContextVSchema
+
+	ignorePH map[*sqlparser.ExtractedSubquery]interface{}
 }
 
 func (c planningContext) isSubQueryToReplace(e sqlparser.Expr) bool {
@@ -189,11 +191,19 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 						if err != nil {
 							return nil, err
 						}
+						inner.ExtractedSubquery.Original = &sqlparser.ComparisonExpr{
+							Operator: sqlparser.InOp,
+							Left:     expr,
+							Right:    inner.ExtractedSubquery.Subquery,
+						}
 					case deps.IsSolvedBy(inner.Inner.TableID()):
 						innerColumn = expr
+						inner.ExtractedSubquery.HasValuesArg = inner.ExtractedSubquery.ArgName
+						inner.ExtractedSubquery.ArgName = ctx.reservedVars.ReserveSubQuery()
 					}
 				}
 				inner.ExtractedSubquery.OpCode = int(engine.PulloutIn)
+
 				treeInner, err = optimizeQuery(ctx, inner.Inner)
 				if err != nil {
 					return nil, err
@@ -202,6 +212,8 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 				if err != nil {
 					return nil, err
 				}
+
+				ctx.ignorePH[inner.ExtractedSubquery] = nil
 			}
 			unmerged = append(unmerged, &subqueryTree{
 				extracted: inner.ExtractedSubquery,

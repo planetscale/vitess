@@ -186,6 +186,7 @@ func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantic
 		reservedVars: reservedVars,
 		semTable:     semTable,
 		vschema:      vschema,
+		ignorePH: map[*sqlparser.ExtractedSubquery]interface{}{},
 	}
 	return ctx
 }
