@@ -92,7 +92,7 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
 		// stats from incrementing continually, and causing concern
-		pool: dbconnpool.NewConnectionPool("HeartbeatWritePool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
+		pool: dbconnpool.NewConnectionPool("HeartbeatWritePool", 2, *mysqlctl.DbaIdleTimeout),
 	}
 }
 
