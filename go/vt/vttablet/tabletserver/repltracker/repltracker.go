@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -123,13 +125,13 @@ func (rt *ReplTracker) Close() {
 }
 
 // Status reports the replication status.
-func (rt *ReplTracker) Status() (time.Duration, error) {
+func (rt *ReplTracker) Status() (time.Duration, mysql.Position, error) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
 	switch {
 	case rt.isPrimary || rt.mode == tabletenv.Disable:
-		return 0, nil
+		return 0, mysql.Position{}, nil
 	case rt.mode == tabletenv.Heartbeat:
 		return rt.hr.Status()
 	}

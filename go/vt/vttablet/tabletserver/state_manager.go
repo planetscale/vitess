@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sync2"
@@ -141,7 +143,7 @@ type (
 		MakePrimary()
 		MakeNonPrimary()
 		Close()
-		Status() (time.Duration, error)
+		Status() (time.Duration, mysql.Position, error)
 	}
 
 	queryEngine interface {
@@ -622,7 +624,7 @@ func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
 		sm.replHealthy = true
 		return 0, nil
 	}
-	lag, err := sm.rt.Status()
+	lag, _, err := sm.rt.Status()
 	if err != nil {
 		if sm.replHealthy {
 			log.Infof("Going unhealthy due to replication error: %v", err)

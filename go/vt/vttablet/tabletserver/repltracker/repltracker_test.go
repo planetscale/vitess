@@ -60,7 +60,7 @@ func TestReplTracker(t *testing.T) {
 	assert.False(t, rt.hr.isOpen)
 	assert.True(t, rt.isPrimary)
 
-	lag, err := rt.Status()
+	lag, _, err := rt.Status()
 	assert.NoError(t, err)
 	assert.Equal(t, time.Duration(0), lag)
 
@@ -70,7 +70,7 @@ func TestReplTracker(t *testing.T) {
 	assert.False(t, rt.isPrimary)
 
 	rt.hr.lastKnownLag = 1 * time.Second
-	lag, err = rt.Status()
+	lag, _, err = rt.Status()
 	assert.NoError(t, err)
 	assert.Equal(t, 1*time.Second, lag)
 
@@ -92,6 +92,6 @@ func TestReplTracker(t *testing.T) {
 	assert.False(t, rt.isPrimary)
 
 	mysqld.ReplicationStatusError = errors.New("err")
-	_, err = rt.Status()
+	_, _, err = rt.Status()
 	assert.Equal(t, "err", err.Error())
 }

@@ -21,6 +21,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/mysql"
 
 	"google.golang.org/protobuf/proto"
 
@@ -796,8 +797,8 @@ func (te *testReplTracker) Close() {
 	te.state = testStateClosed
 }
 
-func (te *testReplTracker) Status() (time.Duration, error) {
-	return te.lag, te.err
+func (te *testReplTracker) Status() (time.Duration, mysql.Position, error) {
+	return te.lag,, te.err
 }
 
 type testQueryEngine struct {

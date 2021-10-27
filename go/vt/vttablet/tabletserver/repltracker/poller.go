@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/stats"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -41,24 +43,24 @@ func (p *poller) InitDBConfig(mysqld mysqlctl.MysqlDaemon) {
 	p.mysqld = mysqld
 }
 
-func (p *poller) Status() (time.Duration, error) {
+func (p *poller) Status() (time.Duration, mysql.Position, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	status, err := p.mysqld.ReplicationStatus()
 	if err != nil {
-		return 0, err
+		return 0, mysql.Position{}, err
 	}
 
 	if !status.ReplicationRunning() {
 		if p.timeRecorded.IsZero() {
-			return 0, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "replication is not running")
+			return 0, mysql.Position{}, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "replication is not running")
 		}
-		return time.Since(p.timeRecorded) + p.lag, nil
+		return time.Since(p.timeRecorded) + p.lag, status.Position, nil
 	}
 
 	p.lag = time.Duration(status.ReplicationLagSeconds) * time.Second
 	p.timeRecorded = time.Now()
 	replicationLagSeconds.Set(int64(p.lag.Seconds()))
-	return p.lag, nil
+	return p.lag, status.Position, nil
 }
