@@ -19,12 +19,14 @@ package schema
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 
 	"github.com/google/shlex"
 )
 
 var (
-	strategyParserRegexp = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
+	strategyParserRegexp      = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
+	retainArtifactsFlagRegexp = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, retainArtifactsFlag))
 )
 
 const (
@@ -33,6 +35,7 @@ const (
 	singletonFlag         = "singleton"
 	singletonContextFlag  = "singleton-context"
 	allowZeroInDateFlag   = "allow-zero-in-date"
+	retainArtifactsFlag   = "retain-artifacts"
 	vreplicationTestSuite = "vreplication-test-suite"
 )
 
@@ -136,6 +139,32 @@ func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
 	return setting.hasFlag(allowZeroInDateFlag)
 }
 
+// isRetainArtifactsFlag returns true when given option denotes a `-retain-artifacts=[...]` flag
+func isRetainArtifactsFlag(opt string) (bool, string) {
+	submatch := retainArtifactsFlagRegexp.FindStringSubmatch(opt)
+	if len(submatch) == 0 {
+		return false, ""
+	}
+	return true, submatch[1]
+}
+
+// RetainArtifactsSeconds returns
+func (setting *DDLStrategySetting) RetainArtifactsSeconds() (int64, error) {
+	// We do some ugly manual parsing of -retain_artifacts value
+	opts, _ := shlex.Split(setting.Options)
+	for _, opt := range opts {
+		if isRetainArtifacts, val := isRetainArtifactsFlag(opt); isRetainArtifacts {
+			i, err := strconv.Atoi(val)
+			if err != nil {
+				return 0, err
+			}
+			return int64(i), nil
+		}
+	}
+	// Flag undefined
+	return 0, nil
+}
+
 // IsVreplicationTestSuite checks if strategy options include -vreplicatoin-test-suite
 func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
 	return setting.hasFlag(vreplicationTestSuite)
@@ -146,6 +175,9 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	opts, _ := shlex.Split(setting.Options)
 	validOpts := []string{}
 	for _, opt := range opts {
+		if b, _ := isRetainArtifactsFlag(opt); b {
+			continue
+		}
 		switch {
 		case isFlag(opt, declarativeFlag):
 		case isFlag(opt, skipTopoFlag):

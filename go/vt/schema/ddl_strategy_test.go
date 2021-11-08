@@ -36,13 +36,14 @@ func TestIsDirect(t *testing.T) {
 
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
-		strategyVariable string
-		strategy         DDLStrategy
-		options          string
-		isDeclarative    bool
-		isSingleton      bool
-		runtimeOptions   string
-		err              error
+		strategyVariable           string
+		strategy                   DDLStrategy
+		options                    string
+		isDeclarative              bool
+		isSingleton                bool
+		runtimeOptions             string
+		retainArtifacts            int64
+		retainArtifactsExpectError bool
 	}{
 		{
 			strategyVariable: "direct",
@@ -91,6 +92,21 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			isSingleton:      true,
 		},
+		{
+			strategyVariable: "online -retain-artifacts=17",
+			strategy:         DDLStrategyOnline,
+			options:          "-retain-artifacts=17",
+			runtimeOptions:   "",
+			retainArtifacts:  17,
+		},
+		{
+			strategyVariable:           "online -retain-artifacts=abc17",
+			strategy:                   DDLStrategyOnline,
+			options:                    "-retain-artifacts=abc17",
+			runtimeOptions:             "",
+			retainArtifacts:            0,
+			retainArtifactsExpectError: true,
+		},
 	}
 	for _, ts := range tt {
 		setting, err := ParseDDLStrategy(ts.strategyVariable)
@@ -102,9 +118,73 @@ func TestParseDDLStrategy(t *testing.T) {
 
 		runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
 		assert.Equal(t, ts.runtimeOptions, runtimeOptions)
+
+		retainArtifacts, retainArtifactsError := setting.RetainArtifactsSeconds()
+		assert.Equal(t, ts.retainArtifacts, retainArtifacts)
+		if ts.retainArtifactsExpectError {
+			assert.Error(t, retainArtifactsError)
+		} else {
+			assert.NoError(t, retainArtifactsError)
+		}
 	}
 	{
 		_, err := ParseDDLStrategy("other")
 		assert.Error(t, err)
+	}
+}
+
+func TestIsRetainArtifatcsFlag(t *testing.T) {
+	tt := []struct {
+		s      string
+		expect bool
+		parsed string
+		val    int64
+	}{
+		{
+			s: "something",
+		},
+		{
+			s: "-retain-artifacts",
+		},
+		{
+			s: "-retain-artifacts",
+		},
+		{
+			s:      "-retain-artifacts=",
+			expect: true,
+			parsed: "",
+			val:    0,
+		},
+		{
+			s:      "-retain-artifacts=0",
+			expect: true,
+			parsed: "0",
+			val:    0,
+		},
+		{
+			s:      "--retain-artifacts=0",
+			expect: true,
+			parsed: "0",
+			val:    0,
+		},
+		{
+			s:      "-retain-artifacts=17",
+			expect: true,
+			parsed: "17",
+			val:    17,
+		},
+		{
+			s:      "-retain-artifacts=a17",
+			expect: true,
+			parsed: "a17",
+			val:    0,
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.s, func(t *testing.T) {
+			isShards, parsed := isRetainArtifactsFlag((ts.s))
+			assert.Equal(t, ts.expect, isShards)
+			assert.Equal(t, ts.parsed, parsed)
+		})
 	}
 }
