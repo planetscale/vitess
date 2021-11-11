@@ -2545,6 +2545,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		errCh := make(chan error)
 		wfErrCh := make(chan []*wrangler.WorkflowError)
 		progressCh := make(chan *streamCount)
+		timeoutCh := make(chan error)
+
 		timedCtx, cancelTimedCtx := context.WithTimeout(ctx, *timeout)
 		defer cancelTimedCtx()
 
@@ -2554,7 +2556,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			for {
 				select {
 				case <-ctx.Done():
-					errCh <- fmt.Errorf("workflow did not start within %s", (*timeout).String())
+					timeoutCh <- nil
+					close(timeoutCh)
 					return
 				case <-ticker.C:
 					totalStreams, runningStreams, workflowErrors, err := wf.GetStreamCount()
@@ -2593,6 +2596,9 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 					wr.Logger().Printf("\tTablet: %d, Id: %d :: %s\n", wfErr.Tablet, wfErr.ID, wfErr.Description)
 				}
 				return fmt.Errorf("errors starting workflow")
+			case <- timeoutCh:
+				wr.Logger().Printf("No copy progress detected within %s: either due to data size or an error\n", (*timeout).String())
+				return nil
 			}
 		}
 	case vReplicationWorkflowActionSwitchTraffic:
