@@ -22,6 +22,7 @@ vtctlclient ApplyVSchema -vschema="$(cat vschema_user_initial.json)" customer
   -- write go program with 20 goroutines
   -- Dockerfile
   -- build and upload docker image
+     cd dbload
      docker build -f Dockerfile -t dsigireddi/dbload:latest .
   -- test docker image
      docker run -e DATABASE_URL=${DATABASE_URL} --network="host" dsigireddi/dbload:latest

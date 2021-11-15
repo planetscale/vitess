@@ -81,7 +81,6 @@ func insertLoop(dsn string, index int) error {
 		fmt.Printf("inserting id=%v, data=%s\n", i, data)
 		if _, err := q.Exec(i, data); err != nil {
 			fmt.Printf("error inserting data: %v\n", err)
-			return err
 		}
 		time.Sleep(time.Second)
 	}
@@ -110,9 +109,8 @@ func selectLoop(dsn string, index int) error {
 		fmt.Printf("selecting id=%v\n", id)
 		if _, err := q.Exec(id); err != nil {
 			fmt.Printf("error selecting data: %v", err)
-			return err
 		}
-		time.Sleep(10*time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
