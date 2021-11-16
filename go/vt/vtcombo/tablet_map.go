@@ -789,7 +789,7 @@ func (itmc *internalTabletManagerClient) Sleep(ctx context.Context, tablet *topo
 	return nil
 }
 
-func (itmc *internalTabletManagerClient) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hk *hook.Hook) (*hook.HookResult, error) {
+func (itmc *internalTabletManagerClient) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hk *hook.Hook) (*hook.Result, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

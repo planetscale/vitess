@@ -26,8 +26,8 @@ type regexpMap struct {
 	replacement string
 }
 
-func (this *regexpMap) process(text string) (result string) {
-	return this.r.ReplaceAllString(text, this.replacement)
+func (rm *regexpMap) process(text string) (result string) {
+	return rm.r.ReplaceAllString(text, rm.replacement)
 }
 
 func rmap(regexpExpression string, replacement string) regexpMap {

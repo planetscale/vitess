@@ -69,7 +69,7 @@ type TabletManagerClient interface {
 	Sleep(ctx context.Context, tablet *topodatapb.Tablet, duration time.Duration) error
 
 	// ExecuteHook executes the provided hook remotely
-	ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hk *hook.Hook) (*hook.HookResult, error)
+	ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hk *hook.Hook) (*hook.Result, error)
 
 	// RefreshState asks the remote tablet to reload its tablet record
 	RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error

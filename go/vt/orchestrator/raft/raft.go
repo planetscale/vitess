@@ -20,7 +20,7 @@ import (
 	"fmt"
 )
 
-var RaftNotRunning error = fmt.Errorf("raft is not configured/running")
+var RaftNotRunning = fmt.Errorf("raft is not configured/running")
 
 // PublishCommand will distribute a command across the group
 func PublishCommand(op string, value interface{}) (response interface{}, err error) {

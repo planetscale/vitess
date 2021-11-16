@@ -114,12 +114,12 @@ func TestOptionalTLS(t *testing.T) {
 	}
 
 	t.Run("Plain2TLS", func(t *testing.T) {
-		for i := 0; i < 5; i += 1 {
+		for i := 0; i < 5; i++ {
 			testFunc(t, grpc.WithInsecure())
 		}
 	})
 	t.Run("TLS2TLS", func(t *testing.T) {
-		for i := 0; i < 5; i += 1 {
+		for i := 0; i < 5; i++ {
 			testFunc(t, grpc.WithTransportCredentials(tc.client))
 		}
 	})

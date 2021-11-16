@@ -37,47 +37,46 @@ type RowMap map[string]CellData
 // Cell data is the result of a single (atomic) column in a single row
 type CellData sql.NullString
 
-func (this *CellData) MarshalJSON() ([]byte, error) {
-	if this.Valid {
-		return json.Marshal(this.String)
-	} else {
-		return json.Marshal(nil)
+func (cd *CellData) MarshalJSON() ([]byte, error) {
+	if cd.Valid {
+		return json.Marshal(cd.String)
 	}
+	return json.Marshal(nil)
 }
 
 // UnmarshalJSON reds this object from JSON
-func (this *CellData) UnmarshalJSON(b []byte) error {
+func (cd *CellData) UnmarshalJSON(b []byte) error {
 	var s string
 	if err := json.Unmarshal(b, &s); err != nil {
 		return err
 	}
-	(*this).String = s
-	(*this).Valid = true
+	(*cd).String = s
+	(*cd).Valid = true
 
 	return nil
 }
 
-func (this *CellData) NullString() *sql.NullString {
-	return (*sql.NullString)(this)
+func (cd *CellData) NullString() *sql.NullString {
+	return (*sql.NullString)(cd)
 }
 
 // RowData is the result of a single row, in positioned array format
 type RowData []CellData
 
 // MarshalJSON will marshal this map as JSON
-func (this *RowData) MarshalJSON() ([]byte, error) {
-	cells := make([](*CellData), len(*this))
-	for i, val := range *this {
-		d := CellData(val)
+func (rd *RowData) MarshalJSON() ([]byte, error) {
+	cells := make([]*CellData, len(*rd))
+	for i, val := range *rd {
+		d := val
 		cells[i] = &d
 	}
 	return json.Marshal(cells)
 }
 
-func (this *RowData) Args() []interface{} {
-	result := make([]interface{}, len(*this))
-	for i := range *this {
-		result[i] = (*(*this)[i].NullString())
+func (rd *RowData) Args() []interface{} {
+	result := make([]interface{}, len(*rd))
+	for i := range *rd {
+		result[i] = *(*rd)[i].NullString()
 	}
 	return result
 }
@@ -91,84 +90,83 @@ type NamedResultData struct {
 
 var EmptyResultData = ResultData{}
 
-func (this *RowMap) GetString(key string) string {
-	return (*this)[key].String
+func (rm *RowMap) GetString(key string) string {
+	return (*rm)[key].String
 }
 
 // GetStringD returns a string from the map, or a default value if the key does not exist
-func (this *RowMap) GetStringD(key string, def string) string {
-	if cell, ok := (*this)[key]; ok {
+func (rm *RowMap) GetStringD(key string, def string) string {
+	if cell, ok := (*rm)[key]; ok {
 		return cell.String
 	}
 	return def
 }
 
-func (this *RowMap) GetInt64(key string) int64 {
-	res, _ := strconv.ParseInt(this.GetString(key), 10, 0)
+func (rm *RowMap) GetInt64(key string) int64 {
+	res, _ := strconv.ParseInt(rm.GetString(key), 10, 0)
 	return res
 }
 
-func (this *RowMap) GetNullInt64(key string) sql.NullInt64 {
-	i, err := strconv.ParseInt(this.GetString(key), 10, 0)
+func (rm *RowMap) GetNullInt64(key string) sql.NullInt64 {
+	i, err := strconv.ParseInt(rm.GetString(key), 10, 0)
 	if err == nil {
 		return sql.NullInt64{Int64: i, Valid: true}
-	} else {
-		return sql.NullInt64{Valid: false}
 	}
+	return sql.NullInt64{Valid: false}
 }
 
-func (this *RowMap) GetInt(key string) int {
-	res, _ := strconv.Atoi(this.GetString(key))
+func (rm *RowMap) GetInt(key string) int {
+	res, _ := strconv.Atoi(rm.GetString(key))
 	return res
 }
 
-func (this *RowMap) GetIntD(key string, def int) int {
-	res, err := strconv.Atoi(this.GetString(key))
+func (rm *RowMap) GetIntD(key string, def int) int {
+	res, err := strconv.Atoi(rm.GetString(key))
 	if err != nil {
 		return def
 	}
 	return res
 }
 
-func (this *RowMap) GetUint(key string) uint {
-	res, _ := strconv.ParseUint(this.GetString(key), 10, 0)
+func (rm *RowMap) GetUint(key string) uint {
+	res, _ := strconv.ParseUint(rm.GetString(key), 10, 0)
 	return uint(res)
 }
 
-func (this *RowMap) GetUintD(key string, def uint) uint {
-	res, err := strconv.Atoi(this.GetString(key))
+func (rm *RowMap) GetUintD(key string, def uint) uint {
+	res, err := strconv.Atoi(rm.GetString(key))
 	if err != nil {
 		return def
 	}
 	return uint(res)
 }
 
-func (this *RowMap) GetUint64(key string) uint64 {
-	res, _ := strconv.ParseUint(this.GetString(key), 10, 0)
+func (rm *RowMap) GetUint64(key string) uint64 {
+	res, _ := strconv.ParseUint(rm.GetString(key), 10, 0)
 	return res
 }
 
-func (this *RowMap) GetUint64D(key string, def uint64) uint64 {
-	res, err := strconv.ParseUint(this.GetString(key), 10, 0)
+func (rm *RowMap) GetUint64D(key string, def uint64) uint64 {
+	res, err := strconv.ParseUint(rm.GetString(key), 10, 0)
 	if err != nil {
 		return def
 	}
-	return uint64(res)
+	return res
 }
 
-func (this *RowMap) GetBool(key string) bool {
-	return this.GetInt(key) != 0
+func (rm *RowMap) GetBool(key string) bool {
+	return rm.GetInt(key) != 0
 }
 
-func (this *RowMap) GetTime(key string) time.Time {
-	if t, err := time.Parse(DateTimeFormat, this.GetString(key)); err == nil {
+func (rm *RowMap) GetTime(key string) time.Time {
+	if t, err := time.Parse(DateTimeFormat, rm.GetString(key)); err == nil {
 		return t
 	}
 	return time.Time{}
 }
 
 // knownDBs is a DB cache by uri
-var knownDBs map[string]*sql.DB = make(map[string]*sql.DB)
+var knownDBs = make(map[string]*sql.DB)
 var knownDBsMutex = &sync.Mutex{}
 
 // GetDB returns a DB instance based on uri.
@@ -192,8 +190,8 @@ func GetGenericDB(driverName, dataSourceName string) (*sql.DB, bool, error) {
 
 // GetDB returns a MySQL DB instance based on uri.
 // bool result indicates whether the DB was returned from cache; err
-func GetDB(mysql_uri string) (*sql.DB, bool, error) {
-	return GetGenericDB("mysql", mysql_uri)
+func GetDB(mysqlUri string) (*sql.DB, bool, error) {
+	return GetGenericDB("mysql", mysqlUri)
 }
 
 // GetDB returns a SQLite DB instance based on DB file name.
@@ -230,8 +228,8 @@ func ScanRowsToArrays(rows *sql.Rows, on_row func([]CellData) error) error {
 
 func rowToMap(row []CellData, columns []string) map[string]CellData {
 	m := make(map[string]CellData)
-	for k, data_col := range row {
-		m[columns[k]] = data_col
+	for k, dataCol := range row {
+		m[columns[k]] = dataCol
 	}
 	return m
 }

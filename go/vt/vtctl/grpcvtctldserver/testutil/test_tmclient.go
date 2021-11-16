@@ -142,7 +142,7 @@ type TabletManagerClient struct {
 	ExecuteHookDelays map[string]time.Duration
 	// keyed by tablet alias.
 	ExecuteHookResults map[string]struct {
-		Response *hk.HookResult
+		Response *hk.Result
 		Error    error
 	}
 	// keyed by tablet alias.
@@ -296,7 +296,7 @@ func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topod
 }
 
 // ExecuteHook is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hook *hk.Hook) (*hk.HookResult, error) {
+func (fake *TabletManagerClient) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hook *hk.Hook) (*hk.Result, error) {
 	if fake.ExecuteHookResults == nil {
 		return nil, fmt.Errorf("%w: no ExecuteHook results on fake TabletManagerClient", assert.AnError)
 	}

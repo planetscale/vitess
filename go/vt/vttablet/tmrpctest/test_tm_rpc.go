@@ -422,13 +422,13 @@ var testExecuteHookHook = &hook.Hook{
 		"sea":  "red",
 	},
 }
-var testExecuteHookHookResult = &hook.HookResult{
+var testExecuteHookHookResult = &hook.Result{
 	ExitStatus: hook.HOOK_STAT_FAILED,
 	Stdout:     "out",
 	Stderr:     "err",
 }
 
-func (fra *fakeRPCTM) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult {
+func (fra *fakeRPCTM) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.Result {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

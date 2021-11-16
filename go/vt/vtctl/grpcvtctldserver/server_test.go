@@ -2806,11 +2806,11 @@ func TestExecuteHook(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				ExecuteHookResults: map[string]struct {
-					Response *hk.HookResult
+					Response *hk.Result
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Response: &hk.HookResult{},
+						Response: &hk.Result{},
 					},
 				},
 			},
@@ -2835,11 +2835,11 @@ func TestExecuteHook(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				ExecuteHookResults: map[string]struct {
-					Response *hk.HookResult
+					Response *hk.Result
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Response: &hk.HookResult{},
+						Response: &hk.Result{},
 					},
 				},
 			},
@@ -2865,11 +2865,11 @@ func TestExecuteHook(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				ExecuteHookResults: map[string]struct {
-					Response *hk.HookResult
+					Response *hk.Result
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Response: &hk.HookResult{},
+						Response: &hk.Result{},
 					},
 				},
 			},
@@ -2897,11 +2897,11 @@ func TestExecuteHook(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				ExecuteHookResults: map[string]struct {
-					Response *hk.HookResult
+					Response *hk.Result
 					Error    error
 				}{
 					"zone1-0000000100": {
-						Response: &hk.HookResult{},
+						Response: &hk.Result{},
 					},
 				},
 			},
@@ -2927,7 +2927,7 @@ func TestExecuteHook(t *testing.T) {
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				ExecuteHookResults: map[string]struct {
-					Response *hk.HookResult
+					Response *hk.Result
 					Error    error
 				}{
 					"zone1-0000000100": {

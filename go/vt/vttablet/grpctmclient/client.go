@@ -210,7 +210,7 @@ func (client *Client) Sleep(ctx context.Context, tablet *topodatapb.Tablet, dura
 }
 
 // ExecuteHook is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hk *hook.Hook) (*hook.HookResult, error) {
+func (client *Client) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hk *hook.Hook) (*hook.Result, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -224,7 +224,7 @@ func (client *Client) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet
 	if err != nil {
 		return nil, err
 	}
-	return &hook.HookResult{
+	return &hook.Result{
 		ExitStatus: int(hr.ExitStatus),
 		Stdout:     hr.Stdout,
 		Stderr:     hr.Stderr,

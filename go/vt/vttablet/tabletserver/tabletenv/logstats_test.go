@@ -205,7 +205,7 @@ func TestLogStatsFormatQuerySources(t *testing.T) {
 func TestLogStatsContextHTML(t *testing.T) {
 	html := "HtmlContext"
 	callInfo := &fakecallinfo.FakeCallInfo{
-		Html: html,
+		HTMLStr: html,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	logStats := NewLogStats(ctx, "test")

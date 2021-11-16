@@ -35,14 +35,13 @@ var (
 var mysqlURI string
 var dbMutex sync.Mutex
 
-type DummySqlResult struct {
-}
+type DummySQLResult struct{}
 
-func (this DummySqlResult) LastInsertId() (int64, error) {
+func (dsq DummySQLResult) LastInsertId() (int64, error) {
 	return 0, nil
 }
 
-func (this DummySqlResult) RowsAffected() (int64, error) {
+func (dsq DummySQLResult) RowsAffected() (int64, error) {
 	return 1, nil
 }
 
@@ -81,7 +80,7 @@ func OpenTopology(host string, port int) (*sql.DB, error) {
 }
 
 func openTopology(host string, port int, readTimeout int) (db *sql.DB, err error) {
-	mysql_uri := fmt.Sprintf("%s:%s@tcp(%s:%d)/?timeout=%ds&readTimeout=%ds&interpolateParams=true",
+	mysqlUri := fmt.Sprintf("%s:%s@tcp(%s:%d)/?timeout=%ds&readTimeout=%ds&interpolateParams=true",
 		config.Config.MySQLTopologyUser,
 		config.Config.MySQLTopologyPassword,
 		host, port,
@@ -90,12 +89,12 @@ func openTopology(host string, port int, readTimeout int) (db *sql.DB, err error
 	)
 
 	if config.Config.MySQLTopologyUseMutualTLS ||
-		(config.Config.MySQLTopologyUseMixedTLS && requiresTLS(host, port, mysql_uri)) {
-		if mysql_uri, err = SetupMySQLTopologyTLS(mysql_uri); err != nil {
+		(config.Config.MySQLTopologyUseMixedTLS && requiresTLS(host, port, mysqlUri)) {
+		if mysqlUri, err = SetupMySQLTopologyTLS(mysqlUri); err != nil {
 			return nil, err
 		}
 	}
-	if db, _, err = sqlutils.GetDB(mysql_uri); err != nil {
+	if db, _, err = sqlutils.GetDB(mysqlUri); err != nil {
 		return nil, err
 	}
 	if config.Config.MySQLConnectionLifetimeSeconds > 0 {
@@ -244,9 +243,9 @@ func deployStatements(db *sql.DB, queries []string) error {
 	// For purpose of backwards compatability, what we do is force sql_mode to be more relaxed, create the schemas
 	// along with the "invalid" definition, and then go ahead and fix those definitions via following ALTER statements.
 	// My bad.
-	originalSqlMode := ""
+	originalSQLMode := ""
 	if config.Config.IsMySQL() {
-		_ = tx.QueryRow(`select @@session.sql_mode`).Scan(&originalSqlMode)
+		_ = tx.QueryRow(`select @@session.sql_mode`).Scan(&originalSQLMode)
 		if _, err := tx.Exec(`set @@session.sql_mode=REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', '')`); err != nil {
 			log.Fatale(err)
 		}
@@ -276,7 +275,7 @@ func deployStatements(db *sql.DB, queries []string) error {
 		}
 	}
 	if config.Config.IsMySQL() {
-		if _, err := tx.Exec(`set session sql_mode=?`, originalSqlMode); err != nil {
+		if _, err := tx.Exec(`set session sql_mode=?`, originalSQLMode); err != nil {
 			log.Fatale(err)
 		}
 	}
@@ -339,7 +338,7 @@ func ExecOrchestrator(query string, args ...interface{}) (sql.Result, error) {
 }
 
 // QueryRowsMapOrchestrator
-func QueryOrchestratorRowsMap(query string, on_row func(sqlutils.RowMap) error) error {
+func QueryOrchestratorRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
 		return log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
@@ -349,11 +348,11 @@ func QueryOrchestratorRowsMap(query string, on_row func(sqlutils.RowMap) error) 
 		return err
 	}
 
-	return sqlutils.QueryRowsMap(db, query, on_row)
+	return sqlutils.QueryRowsMap(db, query, onRow)
 }
 
 // QueryOrchestrator
-func QueryOrchestrator(query string, argsArray []interface{}, on_row func(sqlutils.RowMap) error) error {
+func QueryOrchestrator(query string, argsArray []interface{}, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
 		return log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
@@ -363,11 +362,11 @@ func QueryOrchestrator(query string, argsArray []interface{}, on_row func(sqluti
 		return err
 	}
 
-	return log.Criticale(sqlutils.QueryRowsMap(db, query, on_row, argsArray...))
+	return log.Criticale(sqlutils.QueryRowsMap(db, query, onRow, argsArray...))
 }
 
 // QueryOrchestratorRowsMapBuffered
-func QueryOrchestratorRowsMapBuffered(query string, on_row func(sqlutils.RowMap) error) error {
+func QueryOrchestratorRowsMapBuffered(query string, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
 		return log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
@@ -377,7 +376,7 @@ func QueryOrchestratorRowsMapBuffered(query string, on_row func(sqlutils.RowMap)
 		return err
 	}
 
-	return sqlutils.QueryRowsMapBuffered(db, query, on_row)
+	return sqlutils.QueryRowsMapBuffered(db, query, onRow)
 }
 
 // QueryOrchestratorBuffered

@@ -57,7 +57,7 @@ func (this *Token) Short() string {
 	return this.Hash[0:shortTokenLength]
 }
 
-var ProcessToken *Token = NewToken()
+var ProcessToken = NewToken()
 
 func NewToken() *Token {
 	return &Token{

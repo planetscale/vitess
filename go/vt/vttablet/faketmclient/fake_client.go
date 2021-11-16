@@ -78,8 +78,8 @@ func (client *FakeTabletManagerClient) Sleep(ctx context.Context, tablet *topoda
 }
 
 // ExecuteHook is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hk *hook.Hook) (*hook.HookResult, error) {
-	var hr hook.HookResult
+func (client *FakeTabletManagerClient) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hk *hook.Hook) (*hook.Result, error) {
+	var hr hook.Result
 	return &hr, nil
 }
 

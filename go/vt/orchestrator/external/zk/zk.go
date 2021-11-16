@@ -80,7 +80,7 @@ func (zook *ZooKeeper) BuildACL(authScheme string, user string, pwd string, acls
 
 type infoLogger struct{}
 
-func (_ infoLogger) Printf(format string, a ...interface{}) {
+func (infoLogger) Printf(format string, a ...interface{}) {
 	log.Infof(format, a...)
 }
 
@@ -213,7 +213,7 @@ func (zook *ZooKeeper) createInternal(connection *zk.Conn, path string, data []b
 	log.Debugf("creating: %s", path)
 	attempts := 0
 	for {
-		attempts += 1
+		attempts++
 		returnValue, err := connection.Create(path, data, zook.flags, zook.acl)
 		log.Debugf("create status for %s: %s, %+v", path, returnValue, err)
 
@@ -237,7 +237,7 @@ func (zook *ZooKeeper) createInternalWithACL(connection *zk.Conn, path string, d
 	log.Debugf("creating: %s with acl ", path)
 	attempts := 0
 	for {
-		attempts += 1
+		attempts++
 		returnValue, err := connection.Create(path, data, zook.flags, perms)
 		log.Debugf("create status for %s: %s, %+v", path, returnValue, err)
 		if err != nil && force && attempts < 2 {

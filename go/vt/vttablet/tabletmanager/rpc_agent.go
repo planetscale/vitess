@@ -52,7 +52,7 @@ type RPCTM interface {
 
 	Sleep(ctx context.Context, duration time.Duration)
 
-	ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult
+	ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.Result
 
 	RefreshState(ctx context.Context) error
 

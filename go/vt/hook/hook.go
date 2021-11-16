@@ -40,8 +40,8 @@ type Hook struct {
 	ExtraEnv   map[string]string
 }
 
-// HookResult is returned by the Execute method.
-type HookResult struct {
+// Result is returned by the Execute method.
+type Result struct {
 	ExitStatus int // HOOK_SUCCESS if it succeeded
 	Stdout     string
 	Stderr     string
@@ -134,9 +134,9 @@ func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 	return cmd, HOOK_SUCCESS, nil
 }
 
-// ExecuteContext tries to execute the Hook with the given context and returns a HookResult.
-func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
-	result = &HookResult{}
+// ExecuteContext tries to execute the Hook with the given context and returns a Result.
+func (hook *Hook) ExecuteContext(ctx context.Context) (result *Result) {
+	result = &Result{}
 
 	// Find the hook.
 	cmd, status, err := hook.findHook(ctx)
@@ -193,8 +193,8 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 	return result
 }
 
-// Execute tries to execute the Hook and returns a HookResult.
-func (hook *Hook) Execute() (result *HookResult) {
+// Execute tries to execute the Hook and returns a Result.
+func (hook *Hook) Execute() (result *Result) {
 	return hook.ExecuteContext(context.Background())
 }
 
@@ -293,8 +293,8 @@ func (hook *Hook) ExecuteAsReadPipe(in io.Reader) (io.Reader, WaitFunc, int, err
 	}, HOOK_SUCCESS, nil
 }
 
-// String returns a printable version of the HookResult
-func (hr *HookResult) String() string {
+// String returns a printable version of the Result
+func (hr *Result) String() string {
 	result := "result: "
 	switch hr.ExitStatus {
 	case HOOK_SUCCESS:

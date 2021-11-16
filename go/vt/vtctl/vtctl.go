@@ -1460,7 +1460,7 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 
-	hr := hk.HookResult{
+	hr := hk.Result{
 		ExitStatus: int(resp.HookResult.ExitStatus),
 		Stdout:     resp.HookResult.Stdout,
 		Stderr:     resp.HookResult.Stderr,

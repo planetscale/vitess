@@ -29,11 +29,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// LogLevel indicates the severity of a log entry
-type LogLevel int
+// Level indicates the severity of a log entry
+type Level int
 
-func (this LogLevel) String() string {
-	switch this {
+func (l Level) String() string {
+	switch l {
 	case FATAL:
 		return "FATAL"
 	case CRITICAL:
@@ -52,7 +52,7 @@ func (this LogLevel) String() string {
 	return "unknown"
 }
 
-func LogLevelFromString(logLevelName string) (LogLevel, error) {
+func LogLevelFromString(logLevelName string) (Level, error) {
 	switch logLevelName {
 	case "FATAL":
 		return FATAL, nil
@@ -73,7 +73,7 @@ func LogLevelFromString(logLevelName string) (LogLevel, error) {
 }
 
 const (
-	FATAL LogLevel = iota
+	FATAL Level = iota
 	CRITICAL
 	ERROR
 	WARNING
@@ -86,11 +86,11 @@ const TimeFormat = "2006-01-02 15:04:05"
 
 // globalLogLevel indicates the global level filter for all logs (only entries with level equals or higher
 // than this value will be logged)
-var globalLogLevel LogLevel = DEBUG
-var printStackTrace bool = false
+var globalLogLevel = DEBUG
+var printStackTrace = false
 
 // syslogWriter is optional, and defaults to nil (disabled)
-var syslogLevel LogLevel = ERROR
+var syslogLevel = ERROR
 var syslogWriter *syslog.Writer
 
 // SetPrintStackTrace enables/disables dumping the stack upon error logging
@@ -100,12 +100,12 @@ func SetPrintStackTrace(shouldPrintStackTrace bool) {
 
 // SetLevel sets the global log level. Only entries with level equals or higher than
 // this value will be logged
-func SetLevel(logLevel LogLevel) {
+func SetLevel(logLevel Level) {
 	globalLogLevel = logLevel
 }
 
 // GetLevel returns current global log level
-func GetLevel() LogLevel {
+func GetLevel() Level {
 	return globalLogLevel
 }
 
@@ -121,17 +121,17 @@ func EnableSyslogWriter(tag string) (err error) {
 // SetSyslogLevel sets the minimal syslog level. Only entries with level equals or higher than
 // this value will be logged. However, this is also capped by the global log level. That is,
 // messages with lower level than global-log-level will be discarded at any case.
-func SetSyslogLevel(logLevel LogLevel) {
+func SetSyslogLevel(logLevel Level) {
 	syslogLevel = logLevel
 }
 
 // logFormattedEntry nicely formats and emits a log entry
-func logFormattedEntry(logLevel LogLevel, message string, args ...interface{}) string {
+func logFormattedEntry(logLevel Level, message string, args ...interface{}) string {
 	return logDepth(logLevel, 0, message, args...)
 }
 
 // logFormattedEntry nicely formats and emits a log entry
-func logDepth(logLevel LogLevel, depth int, message string, args ...interface{}) string {
+func logDepth(logLevel Level, depth int, message string, args ...interface{}) string {
 	if logLevel > globalLogLevel {
 		return ""
 	}
@@ -192,7 +192,7 @@ func callerPos(depth int) (string, int) {
 }
 
 // logEntry emits a formatted log entry
-func logEntry(logLevel LogLevel, message string, args ...interface{}) string {
+func logEntry(logLevel Level, message string, args ...interface{}) string {
 	entryString := message
 	for _, s := range args {
 		entryString += fmt.Sprintf(" %s", s)
@@ -201,7 +201,7 @@ func logEntry(logLevel LogLevel, message string, args ...interface{}) string {
 }
 
 // logErrorEntry emits a log entry based on given error object
-func logErrorEntry(logLevel LogLevel, err error) error {
+func logErrorEntry(logLevel Level, err error) error {
 	if err == nil {
 		// No error
 		return nil

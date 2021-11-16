@@ -107,10 +107,10 @@ func (tm *TabletManager) Sleep(ctx context.Context, duration time.Duration) {
 }
 
 // ExecuteHook executes the provided hook locally, and returns the result.
-func (tm *TabletManager) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult {
+func (tm *TabletManager) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.Result {
 	if err := tm.lock(ctx); err != nil {
 		// client gave up
-		return &hook.HookResult{}
+		return &hook.Result{}
 	}
 	defer tm.unlock()
 
