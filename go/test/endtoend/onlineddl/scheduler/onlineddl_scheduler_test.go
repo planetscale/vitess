@@ -55,6 +55,13 @@ var (
 			PRIMARY KEY (id)
 		) ENGINE=InnoDB
 	`
+	createT1v2Statement = `
+		CREATE TABLE t1_test (
+			id bigint(20) not null,
+			hint_col varchar(64) not null default 'modified',
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB
+	`
 	createT2Statement = `
 		CREATE TABLE t2_test (
 			id bigint(20) not null,
@@ -177,7 +184,7 @@ func TestSchemaChange(t *testing.T) {
 	}
 
 	// CREATE
-	t.Run("CREATE TABLEs t1, t1", func(t *testing.T) {
+	t.Run("CREATE TABLEs t1, t2", func(t *testing.T) {
 		{ // The table does not exist
 			t1uuid = testOnlineDDLStatement(t, createT1Statement, ddlStrategy, "vtgate", "just-created", "", false)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
@@ -481,6 +488,22 @@ func TestSchemaChange(t *testing.T) {
 		t.Run("complete t1", func(t *testing.T) {
 			// t1 should be still running!
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+			// Issue a complete and wait for successful completion
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			// This part may take a while, because we depend on vreplication polling
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+	})
+	t.Run("change t1 declaratively, postponed", func(t *testing.T) {
+		t1uuid := testOnlineDDLStatement(t, createT1v2Statement, ddlStrategy+" -declarative -postpone-completion", "vtgate", "modified", "", true) // skip wait
+		t.Run("expect t1 migration to run", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+		})
+		t.Run("complete t1", func(t *testing.T) {
 			// Issue a complete and wait for successful completion
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
 			// This part may take a while, because we depend on vreplication polling
