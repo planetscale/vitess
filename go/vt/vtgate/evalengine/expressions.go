@@ -154,6 +154,10 @@ func (e EvalResult) Value() sqltypes.Value {
 	return e.toSQLValue(e.typ)
 }
 
+func (e EvalResult) textual() bool {
+	return sqltypes.IsText(e.typ) || sqltypes.IsBinary(e.typ)
+}
+
 var collationNull = collations.TypedCollation{
 	Collation:    collations.CollationBinaryID,
 	Coercibility: collations.CoerceIgnorable,
