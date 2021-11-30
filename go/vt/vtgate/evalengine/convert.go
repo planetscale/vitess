@@ -279,7 +279,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case sqlparser.IntVal:
 			return NewLiteralIntFromBytes(node.Bytes())
 		case sqlparser.FloatVal:
-			return NewLiteralFloatFromBytes(node.Bytes())
+			return NewLiteralRealFromBytes(node.Bytes())
 		case sqlparser.StrVal:
 			collation := getCollation(e, lookup)
 			return NewLiteralString(node.Bytes(), collation), nil
