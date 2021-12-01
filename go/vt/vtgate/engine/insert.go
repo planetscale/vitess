@@ -54,6 +54,9 @@ type Insert struct {
 	// and Prefix, Mid and Suffix are used instead.
 	Query string
 
+	// insert into tbl (id, val) values (1, 2), (2, 3)
+	// insert into tbl (id, val) values (:id, :val),(:id2, :val2)
+
 	// VindexValues specifies values for all the vindex columns.
 	// This is a three-dimensional data structure:
 	// Insert.Values[i] represents the values to be inserted for the i'th colvindex (i < len(Insert.Table.ColumnVindexes))

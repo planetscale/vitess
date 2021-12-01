@@ -75,7 +75,7 @@ type Route struct {
 	FieldQuery string
 
 	// Vindex specifies the vindex to be used.
-	Vindex vindexes.SingleColumn
+	Vindex vindexes.Vindex
 	// Values specifies the vindex values to use for routing.
 	Values []sqltypes.PlanValue
 
@@ -631,7 +631,7 @@ func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]
 	return rss, multiBindVars, nil
 }
 
-func resolveShards(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func resolveShards(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	// Convert vindexKeys to []*querypb.Value
 	ids := make([]*querypb.Value, len(vindexKeys))
 	for i, vik := range vindexKeys {
@@ -639,7 +639,18 @@ func resolveShards(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vind
 	}
 
 	// Map using the Vindex
-	destinations, err := vindex.Map(vcursor, vindexKeys)
+	var mapFunc func() ([]key.Destination, error)
+	switch v := vindex.(type) {
+	case vindexes.SingleColumn:
+		mapFunc = func() ([]key.Destination, error) {
+			return v.Map(vcursor, vindexKeys)
+		}
+	case vindexes.MultiColumn:
+		panic("support me")
+	default:
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown vindex type: %T", vindex)
+	}
+	destinations, err := mapFunc()
 	if err != nil {
 		return nil, nil, err
 	}
