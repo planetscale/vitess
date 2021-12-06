@@ -126,10 +126,12 @@ func TestCellValuePadding(t *testing.T) {
 	execStatements(t, []string{
 		"create table t1(id int, val binary(4), primary key(val))",
 		"create table t2(id int, val char(4), primary key(val))",
+		"create table t3(id int, val char(4) collate utf8mb4_bin, primary key(val))",
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
 		"drop table t2",
+		"drop table t3",
 	})
 	engine.se.Reload(context.Background())
 	queries := []string{
@@ -140,6 +142,9 @@ func TestCellValuePadding(t *testing.T) {
 		"insert into t2 values (1, 'aaa')",
 		"insert into t2 values (2, 'bbb')",
 		"update t2 set id = 11 where val = 'aaa'",
+		"insert into t3 values (1, 'aaa')",
+		"insert into t3 values (2, 'bb')",
+		"update t3 set id = 11 where val = 'aaa'",
 		"commit",
 	}
 
@@ -155,6 +160,10 @@ func TestCellValuePadding(t *testing.T) {
 			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
 			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:3 values:"2bbb"}}}`,
 			`type:ROW row_event:{table_name:"t2" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:2 lengths:3 values:"11aaa"}}}`,
+			`type:FIELD field_event:{table_name:"t3" fields:{name:"id" type:INT32 table:"t3" org_table:"t3" database:"vttest" org_name:"id" column_length:11 charset:63} fields:{name:"val" type:BINARY table:"t3" org_table:"t3" database:"vttest" org_name:"val" column_length:16 charset:45}}`,
+			`type:ROW row_event:{table_name:"t3" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
+			`type:ROW row_event:{table_name:"t3" row_changes:{after:{lengths:1 lengths:2 values:"2bb"}}}`,
+			`type:ROW row_event:{table_name:"t3" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:2 lengths:3 values:"11aaa"}}}`,
 			`gtid`,
 			`commit`,
 		}},
@@ -2082,6 +2091,7 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 				if evs[i].Type == binlogdatapb.VEventType_FIELD {
 					for j := range evs[i].FieldEvent.Fields {
 						evs[i].FieldEvent.Fields[j].Flags = 0
+						evs[i].FieldEvent.Fields[j].ColumnType = ""
 						if ignoreKeyspaceShardInFieldAndRowEvents {
 							evs[i].FieldEvent.Keyspace = ""
 							evs[i].FieldEvent.Shard = ""

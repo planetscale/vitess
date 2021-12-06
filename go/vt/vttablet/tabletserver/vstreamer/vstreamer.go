@@ -731,11 +731,12 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	}
 	for _, field := range fields {
 		typ := strings.ToLower(field.Type.String())
-		if typ == "enum" || typ == "set" {
-			if extColInfo, ok := extColInfos[field.Name]; ok {
-				field.ColumnType = extColInfo.columnType
-			}
+		log.Infof("ZZZZZZ typ %d, columnType %+v", typ, extColInfos[field.Name])
+		//if typ == "enum" || typ == "set" {
+		if extColInfo, ok := extColInfos[field.Name]; ok {
+			field.ColumnType = extColInfo.columnType
 		}
+		//}
 	}
 	return fields, nil
 }
@@ -904,31 +905,46 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		// utf8[mb3] and 4 for utf8mb4 and trim the added null-byte padding as needed to accomodate
 		// for that
 		if value.IsBinary() && sqltypes.IsBinary(plan.Table.Fields[colNum].Type) {
-			maxBytesPerChar := uint32(1)
+			if strings.HasPrefix(plan.Table.Fields[colNum].ColumnType, "char") {
+				ovBytes, err := value.ToBytes()
+				if err != nil {
+					return false, nil, err
+				}
+				originalVal := ovBytes
+				firstNullBytePos := bytes.IndexByte(originalVal, byte(0))
+				log.Infof("TEMP: got char, firstNullBytePos %d", firstNullBytePos)
+				if uint32(firstNullBytePos) > 0 {
+					rightSizedVal := make([]byte, firstNullBytePos)
+					copy(rightSizedVal, originalVal)
+					value = sqltypes.MakeTrusted(querypb.Type_BINARY, rightSizedVal)
+				}
+			} else {
+				maxBytesPerChar := uint32(1)
 
-			// TODO: ensure that "Field.Charset" is set to those constants and not to any
-			//		collation ID belonging to either the utf8 or utf8mb4 charset.
-			if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetUtf8) {
-				maxBytesPerChar = 3
-			} else if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetUtf8mb4) {
-				maxBytesPerChar = 4
-			}
+				// TODO: ensure that "Field.Charset" is set to those constants and not to any
+				//		collation ID belonging to either the utf8 or utf8mb4 charset.
+				if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetUtf8) {
+					maxBytesPerChar = 3
+				} else if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetUtf8mb4) {
+					maxBytesPerChar = 4
+				}
 
-			if maxBytesPerChar > 1 {
-				maxCharLen := plan.Table.Fields[colNum].ColumnLength / maxBytesPerChar
-				if uint32(value.Len()) > maxCharLen {
-					ovBytes, err := value.ToBytes()
-					if err != nil {
-						return false, nil, err
-					}
-					originalVal := ovBytes
+				if maxBytesPerChar > 1 {
+					maxCharLen := plan.Table.Fields[colNum].ColumnLength / maxBytesPerChar
+					if uint32(value.Len()) > maxCharLen {
+						ovBytes, err := value.ToBytes()
+						if err != nil {
+							return false, nil, err
+						}
+						originalVal := ovBytes
 
-					// Let's be sure that we're not going to be trimming non-null bytes
-					firstNullBytePos := bytes.IndexByte(originalVal, byte(0))
-					if uint32(firstNullBytePos) <= maxCharLen {
-						rightSizedVal := make([]byte, maxCharLen)
-						copy(rightSizedVal, originalVal)
-						value = sqltypes.MakeTrusted(querypb.Type_BINARY, rightSizedVal)
+						// Let's be sure that we're not going to be trimming non-null bytes
+						firstNullBytePos := bytes.IndexByte(originalVal, byte(0))
+						if uint32(firstNullBytePos) <= maxCharLen {
+							rightSizedVal := make([]byte, maxCharLen)
+							copy(rightSizedVal, originalVal)
+							value = sqltypes.MakeTrusted(querypb.Type_BINARY, rightSizedVal)
+						}
 					}
 				}
 			}

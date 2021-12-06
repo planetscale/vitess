@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -894,6 +896,8 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		}
 		l := int(data[pos])
 		mdata := data[pos+1 : pos+1+l]
+		log.Infof("TEMP: typ %d, styp %d, metadata %d (%b), data length %d, max %d", typ, styp, metadata, metadata, l, max)
+		log.Flush()
 		if sqltypes.IsBinary(styp) {
 			// For binary(n) column types, mysql pads the data on the right with nulls. However the binlog event contains
 			// the data without this padding. This causes several issues:
