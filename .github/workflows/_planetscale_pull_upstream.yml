@@ -2,6 +2,9 @@
 name: Pull Upstream
 
 on:
+  # Enable manually trigger button in UI
+  workflow_dispatch:
+
   schedule:
     # Pull every hour at minute 50.
     # That way, build jobs that run at minute 0 will see the latest commits.
