@@ -712,6 +712,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 	defer reenableWritesOnce()
+	{
+		// Deny list is now in place. However, there may be some open transactions still working on the table, and unaffected
+		// by the imposed restrictions.
+		// We now issue a `LOCK TABLES`. This statement is forced by MySQL to blocked until the table is released by any pending
+		// transaction. So whenever the statement returns, that means deby list is fully in effect. We can immediately release the table...
+		parsed := sqlparser.BuildParsedQuery(sqlLockUnlockTable, onlineDDL.Table)
+		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+			return err
+		}
+	}
 
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
