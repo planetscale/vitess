@@ -1,11 +1,13 @@
 package plancontext
 
 import (
+	"strings"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -47,4 +49,23 @@ type VSchema interface {
 
 	// ForeignKeyMode returns the foreign_key flag value
 	ForeignKeyMode() string
+}
+
+// PlannerNameToVersion returns the numerical representation of the planner
+func PlannerNameToVersion(s string) (PlannerVersion, bool) {
+	switch strings.ToLower(s) {
+	case "v3":
+		return planbuilder.V3, true
+	case "gen4":
+		return planbuilder.Gen4, true
+	case "gen4greedy", "greedy":
+		return planbuilder.Gen4GreedyOnly, true
+	case "left2right":
+		return planbuilder.Gen4Left2Right, true
+	case "gen4fallback":
+		return planbuilder.Gen4WithFallback, true
+	case "gen4comparev3":
+		return planbuilder.Gen4CompareV3, true
+	}
+	return 0, false
 }
