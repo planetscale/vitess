@@ -44,53 +44,58 @@ type (
 	opCacheMap map[tableSetPair]abstract.PhysicalOperator
 )
 
-func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator) (abstract.PhysicalOperator, error) {
+func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator) (abstract.PhysicalOperator, bool, error) {
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
 		switch {
 		case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
 			return leftToRightSolve(ctx, op)
 		default:
-			return greedySolve(ctx, op)
+			operator, err := greedySolve(ctx, op)
+			return operator, false, err
 		}
 	case *abstract.Join:
-		opInner, err := CreatePhysicalOperator(ctx, op.LHS)
+		opInner, _, err := CreatePhysicalOperator(ctx, op.LHS)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		opOuter, err := CreatePhysicalOperator(ctx, op.RHS)
+		opOuter, _, err := CreatePhysicalOperator(ctx, op.RHS)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+		operator, err := mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+		return operator, false, err
 	case *abstract.Derived:
-		opInner, err := CreatePhysicalOperator(ctx, op.Inner)
+		opInner, _, err := CreatePhysicalOperator(ctx, op.Inner)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		return &Derived{
 			Source:        opInner,
 			Query:         op.Sel,
 			Alias:         op.Alias,
 			ColumnAliases: op.ColumnAliases,
-		}, nil
+		}, false, nil
 	case *abstract.SubQuery:
-		return optimizeSubQuery(ctx, op)
+		operator, err := optimizeSubQuery(ctx, op)
+		return operator, false, err
 	case *abstract.Vindex:
-		return optimizeVindex(ctx, op)
+		operator, err := optimizeVindex(ctx, op)
+		return operator, false, err
 	case *abstract.Concatenate:
-		return optimizeUnion(ctx, op)
+		operator, err := optimizeUnion(ctx, op)
+		return operator, false, err
 	case *abstract.Filter:
-		src, err := CreatePhysicalOperator(ctx, op.Source)
+		src, _, err := CreatePhysicalOperator(ctx, op.Source)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		return &Filter{
 			Source:     src,
 			Predicates: op.Predicates,
-		}, nil
+		}, false, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
 }
 
@@ -358,7 +363,7 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs abstra
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
 
 	merger := func(a, b *Route) (*Route, error) {
-		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)
+		return createRouteOperatorForJoin(a, b, joinPredicates, inner)
 	}
 
 	newPlan, _ := tryMerge(ctx, lhs, rhs, joinPredicates, merger)
@@ -376,7 +381,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOpe
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
-func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
+func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
 	// append system table names from both the routes.
 	sysTableName := aRoute.SysTableTableName
 	if sysTableName == nil {
@@ -734,7 +739,7 @@ func optimizeUnion(ctx *plancontext.PlanningContext, op *abstract.Concatenate) (
 	var sources []abstract.PhysicalOperator
 
 	for _, source := range op.Sources {
-		qt, err := CreatePhysicalOperator(ctx, source)
+		qt, _, err := CreatePhysicalOperator(ctx, source)
 		if err != nil {
 			return nil, err
 		}

@@ -163,7 +163,7 @@ func newBuildSelectPlan(
 		return nil, err
 	}
 
-	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
+	physOp, horizonAlreadyPlanned, err := physical.CreatePhysicalOperator(ctx, logical)
 	if err != nil {
 		return nil, err
 	}
@@ -173,9 +173,12 @@ func newBuildSelectPlan(
 		return nil, err
 	}
 
-	plan, err = planHorizon(ctx, plan, selStmt)
-	if err != nil {
-		return nil, err
+	if !horizonAlreadyPlanned {
+		// if we failed to plan the horizon on the operators, we have to do it now on the logical plan
+		plan, err = planHorizon(ctx, plan, selStmt)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sel, isSel := selStmt.(*sqlparser.Select)
