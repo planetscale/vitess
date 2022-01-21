@@ -58,6 +58,22 @@ type (
 	}
 )
 
+// CreateOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
+func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (op LogicalOperator, err error) {
+	switch node := selStmt.(type) {
+	case *sqlparser.Select:
+		op, err = createOperatorFromSelect(node, semTable)
+	case *sqlparser.Union:
+		op, err = createOperatorFromUnion(node, semTable)
+	default:
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return op.Compact(semTable)
+}
+
 func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
@@ -156,22 +172,6 @@ func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
 	default:
 		return nil
 	}
-}
-
-// CreateOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (op LogicalOperator, err error) {
-	switch node := selStmt.(type) {
-	case *sqlparser.Select:
-		op, err = createOperatorFromSelect(node, semTable)
-	case *sqlparser.Union:
-		op, err = createOperatorFromUnion(node, semTable)
-	default:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return op.Compact(semTable)
 }
 
 func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (LogicalOperator, error) {
