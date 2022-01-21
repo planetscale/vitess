@@ -199,39 +199,52 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 
 // createOperatorFromSelect creates an operator tree that represents the input SELECT query
 func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (LogicalOperator, error) {
-	var resultantOp *SubQuery
+	var subQuery *SubQuery
 	if len(semTable.SubqueryMap[sel]) > 0 {
-		resultantOp = &SubQuery{}
+		subQuery = &SubQuery{}
 		for _, sq := range semTable.SubqueryMap[sel] {
 			opInner, err := CreateOperatorFromAST(sq.Subquery.Select, semTable)
 			if err != nil {
 				return nil, err
 			}
-			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
+			subQuery.Inner = append(subQuery.Inner, &SubQueryInner{
 				ExtractedSubquery: sq,
 				Inner:             opInner,
 			})
 		}
 	}
-	op, err := crossJoin(sel.From, semTable)
+	var predicate sqlparser.Expr
+	if sel.Where != nil {
+		predicate = sel.Where.Expr
+	}
+	op, err := createOpsForFromAndWhere(semTable, sel.From, predicate)
 	if err != nil {
 		return nil, err
 	}
-	if sel.Where != nil {
-		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
-		for _, expr := range exprs {
-			op, err = op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(expr), semTable)
-			if err != nil {
-				return nil, err
-			}
-			addColumnEquality(semTable, expr)
+
+	if subQuery != nil {
+		// if we had a subquery, we just planned the FROM and WHERE of the outer query
+		subQuery.Outer = op
+		op = subQuery
+	}
+
+	return op, nil
+}
+
+func createOpsForFromAndWhere(semTable *semantics.SemTable, from []sqlparser.TableExpr, predicate sqlparser.Expr) (LogicalOperator, error) {
+	op, err := crossJoin(from, semTable)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, expr := range sqlparser.SplitAndExpression(nil, predicate) {
+		op, err = op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(expr), semTable)
+		if err != nil {
+			return nil, err
 		}
+		addColumnEquality(semTable, expr)
 	}
-	if resultantOp == nil {
-		return op, nil
-	}
-	resultantOp.Outer = op
-	return resultantOp, nil
+	return op, nil
 }
 
 func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
