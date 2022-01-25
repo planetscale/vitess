@@ -477,13 +477,13 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	if tm.isPrimarySideSemiSyncEnabled() {
 		// If using semi-sync, we need to disable primary-side.
-		if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionTrue); err != nil {
+		if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
 			return nil, err
 		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasPrimary {
 				// enable primary-side semi-sync again
-				if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionTrue); err != nil {
+				if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
 					log.Warningf("fixSemiSync(PRIMARY) failed during revert: %v", err)
 				}
 			}
@@ -885,9 +885,9 @@ func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
 }
 
 func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
-	if semiSync == SemiSyncActionTrue {
+	if semiSync == SemiSyncActionSet {
 		return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
-	} else if semiSync == SemiSyncActionFalse {
+	} else if semiSync == SemiSyncActionUnset {
 		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
 	}
 	return nil
