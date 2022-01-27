@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -226,7 +228,12 @@ func filterOutNilErrors(errs []error) []error {
 }
 
 // TryStreamExecute performs a streaming exec.
-func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) (err error) {
+	log.Errorf("Route TryStreamExecute called - %s", route.Query)
+
+	defer func() {
+		log.Errorf("Err returned from route TryStreamExecute - %v", err)
+	}()
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -253,6 +260,7 @@ func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 		if len(errs) > 0 {
+			log.Errorf("Errors after streamExecuteMulti - %v", errs)
 			if !route.ScatterErrorsAsWarnings || len(errs) == len(rss) {
 				return vterrors.Aggregate(errs)
 			}

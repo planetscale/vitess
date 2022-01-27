@@ -1212,6 +1212,7 @@ func (c *Conn) handleComPing() bool {
 var errEmptyStatement = NewSQLError(EREmptyQuery, SSClientError, "Query was empty")
 
 func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
+	log.Errorf("called handleComQuery with data - %s", string(data))
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
@@ -1256,11 +1257,13 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 }
 
 func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
+	log.Errorf("Executing query in conn - %s", query)
 	callbackCalled := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
 
 	err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+		log.Errorf("com Query callback called with res - %v", qr)
 		flag := c.StatusFlags
 		if more {
 			flag |= ServerMoreResultsExists

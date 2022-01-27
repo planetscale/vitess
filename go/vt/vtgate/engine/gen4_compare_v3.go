@@ -103,23 +103,30 @@ func (gc *Gen4CompareV3) TryStreamExecute(
 	if gc.Gen4 != nil {
 		gen4Err = gc.Gen4.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
 			gen4Result.AppendResult(result)
+			log.Errorf("called gen4Append")
 			return nil
 		})
+		log.Errorf("recevied gen4Err")
 	}
 	if gc.V3 != nil {
 		v3Err = gc.V3.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
+			log.Errorf("called v3Append")
 			v3Result.AppendResult(result)
 			return nil
 		})
+		log.Errorf("recevied v3Err")
 	}
 
 	if err := CompareV3AndGen4Errors(v3Err, gen4Err); err != nil {
+		log.Errorf("comparing errors, returning error - %v", err)
 		return err
 	}
 
 	if err := gc.compareResults(v3Result, gen4Result); err != nil {
+		log.Errorf("comparing results, returning error - %v", err)
 		return err
 	}
+	log.Errorf("now calling callback with result from gen4comaprev3 - %v", gen4Result)
 	return callback(gen4Result)
 }
 

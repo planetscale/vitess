@@ -491,6 +491,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	for {
 		kontinue := c.handleNextCommand(l.handler)
+		log.Errorf("returned %v from handleNextCommand", kontinue)
 		if !kontinue {
 			return
 		}

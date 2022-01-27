@@ -367,6 +367,7 @@ func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
 	}
+	log.Infof("plannerVersion - %s", *plannerVersion)
 	version, done := plancontext.PlannerNameToVersion(*plannerVersion)
 	if done {
 		return version

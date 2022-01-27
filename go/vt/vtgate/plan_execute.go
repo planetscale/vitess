@@ -18,7 +18,10 @@ package vtgate
 
 import (
 	"context"
+	"encoding/json"
 	"time"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -68,6 +71,8 @@ func (e *Executor) newExecute(
 		safeSession,
 		logStats,
 	)
+	bout, _ := json.MarshalIndent(plan.Instructions, "", "  ")
+	log.Errorf("plan to execute - %v", string(bout))
 	if err == planbuilder.ErrPlanNotSupported {
 		return err
 	}

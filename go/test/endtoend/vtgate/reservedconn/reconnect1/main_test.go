@@ -150,9 +150,9 @@ func TestServingChangeStreaming(t *testing.T) {
 
 	// to see rdonly is available and
 	// also this will create reserved connection on rdonly on -80 and 80- shards.
-	_, err = exec(t, conn, "select * from test")
+	_, err = exec(t, conn, "select id from test")
 	for err != nil {
-		_, err = exec(t, conn, "select * from test")
+		_, err = exec(t, conn, "select id as id1 from test")
 	}
 
 	// changing rdonly tablet to spare (non serving).
@@ -162,7 +162,7 @@ func TestServingChangeStreaming(t *testing.T) {
 	rdonlyTablet.Type = "replica"
 
 	// this should fail as there is no rdonly present
-	_, err = exec(t, conn, "select * from test")
+	_, err = exec(t, conn, "select id as id2 from test")
 	require.Error(t, err)
 
 	// changing replica tablet to rdonly to make rdonly available for serving.
@@ -176,7 +176,7 @@ func TestServingChangeStreaming(t *testing.T) {
 	require.NoError(t, err)
 
 	// this should pass now as there is rdonly present
-	_, err = exec(t, conn, "select * from test")
+	_, err = exec(t, conn, "select id as id3 from test")
 	assert.NoError(t, err)
 }
 

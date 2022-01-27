@@ -216,8 +216,12 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		}
 	}()
 
+	log.Errorf("starting comQuery - %s", query)
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		err := vh.vtg.StreamExecute(ctx, session, query, make(map[string]*querypb.BindVariable), callback)
+		if err != nil {
+			log.Errorf("error in StreamExecute - %v", err)
+		}
 		return mysql.NewSQLErrorFromError(err)
 	}
 	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))

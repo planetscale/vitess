@@ -231,6 +231,7 @@ func (e *Executor) StreamExecute(
 		result := &sqltypes.Result{}
 		if canReturnRows(plan.Type) {
 			srr.callback = func(qr *sqltypes.Result) error {
+				log.Errorf("callback in StreamExecute - %v", qr)
 				resultMu.Lock()
 				defer resultMu.Unlock()
 				// If the row has field info, send it separately.

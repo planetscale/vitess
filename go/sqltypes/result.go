@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -293,6 +295,7 @@ func (result *Result) StripMetadata(incl querypb.ExecuteOptions_IncludedFields) 
 // if two results have different fields.We will enhance this function.
 func (result *Result) AppendResult(src *Result) {
 	if src.RowsAffected == 0 && len(src.Rows) == 0 && len(src.Fields) == 0 {
+		log.Errorf("fields ignored")
 		return
 	}
 	if result.Fields == nil {
