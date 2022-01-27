@@ -1496,7 +1496,7 @@ func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Conte
 func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		ts.Logger().Infof("Deleting shard %s.%s\n", source.GetShard().Keyspace(), source.GetShard().ShardName())
-		err := ts.wr.DeleteShard(ctx, source.GetShard().Keyspace(), source.GetShard().ShardName(), true, false)
+		err := ts.wr.DeleteShard(ctx, source.GetShard().Keyspace(), source.GetShard().ShardName(), true, false, false)
 		if err != nil {
 			ts.Logger().Errorf("Error deleting shard %s: %v", source.GetShard().ShardName(), err)
 			return err
@@ -1567,7 +1567,7 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
 	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 		ts.Logger().Infof("Deleting shard %s.%s\n", target.GetShard().Keyspace(), target.GetShard().ShardName())
-		err := ts.wr.DeleteShard(ctx, target.GetShard().Keyspace(), target.GetShard().ShardName(), true, false)
+		err := ts.wr.DeleteShard(ctx, target.GetShard().Keyspace(), target.GetShard().ShardName(), true, false, false)
 		if err != nil {
 			ts.Logger().Errorf("Error deleting shard %s: %v", target.GetShard().ShardName(), err)
 			return err

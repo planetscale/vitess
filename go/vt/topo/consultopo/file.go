@@ -17,9 +17,9 @@ limitations under the License.
 package consultopo
 
 import (
-	"path"
-
 	"context"
+	"path"
+	"strings"
 
 	"github.com/hashicorp/consul/api"
 
@@ -98,6 +98,14 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 	return pair.Value, ConsulVersion(pair.ModifyIndex), nil
 }
 
+func isShardPath(path string) bool {
+	return strings.HasSuffix(path, "/"+topo.ShardFile)
+}
+
+func getShardLockPath(path string) string {
+	return strings.TrimSuffix(path, topo.ShardFile) + locksFilename
+}
+
 // Delete is part of the topo.Conn interface.
 func (s *Server) Delete(ctx context.Context, filePath string, version topo.Version) error {
 	nodePath := path.Join(s.root, filePath)
@@ -123,6 +131,20 @@ func (s *Server) Delete(ctx context.Context, filePath string, version topo.Versi
 		// if we have a version, the delete we use specifies it.
 		ops[1].Verb = api.KVDeleteCAS
 		ops[1].Index = uint64(version.(ConsulVersion))
+	}
+
+	// If we are deleting a Shard, blindly delete any lock path we
+	// have on it.  This avoids leaving the Lock and it's path orphaned
+	// Hacky, but other ways require changing the topo interface.
+	if isShardPath(nodePath) {
+		ops = append(ops, &api.KVTxnOp{
+			Verb: api.KVDelete,
+			Key:  getShardLockPath(nodePath),
+		})
+		if version != nil {
+			ops[2].Verb = api.KVDeleteCAS
+			ops[2].Index = uint64(version.(ConsulVersion))
+		}
 	}
 	ok, resp, _, err := s.kv.Txn(ops, nil)
 	if err != nil {

@@ -52,7 +52,7 @@ func (wr *Wrangler) UpdateSrvKeyspacePartitions(ctx context.Context, keyspace, s
 
 // DeleteShard will do all the necessary changes in the topology server
 // to entirely remove a shard.
-func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, recursive, evenIfServing bool) error {
+func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, recursive, evenIfServing, force bool) error {
 	// Read the Shard object. If it's not there, try to clean up
 	// the topology anyway.
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
@@ -77,6 +77,16 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 	cells, err := wr.ts.GetCellInfoNames(ctx)
 	if err != nil {
 		return err
+	}
+
+	if !force {
+		// Take a shard lock, just in case something is holding it
+		lockCtx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, fmt.Sprintf("DeleteShard(%v/%v)", keyspace, shard))
+		if lockErr != nil {
+			return fmt.Errorf("DeleteShard could not obtain lock for %v/%v: %v", keyspace, shard, lockErr)
+		}
+		defer unlock(&err)
+		ctx = lockCtx
 	}
 
 	// Go through all the cells.
