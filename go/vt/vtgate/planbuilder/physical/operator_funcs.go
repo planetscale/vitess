@@ -36,11 +36,22 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op abs
 		if err != nil {
 			return nil, err
 		}
-		newSrc, err := PushPredicate(ctx, expr, op.SourceOp)
-		if err != nil {
-			return nil, err
+		if op.SourceOp == nil {
+			sel, isSelect := op.SourceAST.(*sqlparser.Select)
+			if !isSelect {
+				panic("no select")
+			}
+			if sel.Where == nil {
+				sel.Where = &sqlparser.Where{}
+			}
+			sel.Where.Expr = sqlparser.AndExpressions(sel.Where.Expr, expr)
+		} else {
+			newSrc, err := PushPredicate(ctx, expr, op.SourceOp)
+			if err != nil {
+				return nil, err
+			}
+			op.SourceOp = newSrc
 		}
-		op.SourceOp = newSrc
 		return op, err
 	case *ApplyJoin:
 		deps := ctx.SemTable.RecursiveDeps(expr)

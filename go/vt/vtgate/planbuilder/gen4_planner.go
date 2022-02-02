@@ -154,12 +154,7 @@ func newBuildSelectPlan(
 	}
 
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
-	logical, err := abstract.CreateOperatorFromAST(selStmt, semTable, true)
-	horizonInLogical := true
-	if err == abstract.ErrNotReadyForHorizon {
-		logical, err = abstract.CreateOperatorFromAST(selStmt, semTable, false)
-		horizonInLogical = false
-	}
+	logical, err := abstract.CreateOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +164,15 @@ func newBuildSelectPlan(
 		return nil, err
 	}
 
-	physOp, horizonAlreadyPlanned, err := physical.CreatePhysicalOperator(ctx, logical, selStmt, horizonInLogical)
+	physOp, err := physical.CreatePhysicalOperator(ctx, logical, selStmt, true)
+	horizonAlreadyPlanned := true
+	if err == physical.ErrNotReadyForHorizon {
+		horizonAlreadyPlanned = false
+		physOp, err = physical.CreatePhysicalOperator(ctx, logical, selStmt, false)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

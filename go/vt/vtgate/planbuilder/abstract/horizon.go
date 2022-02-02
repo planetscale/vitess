@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,43 +21,43 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// Filter is an operator representing WHERE or HAVING
-type Filter struct {
-	Source     LogicalOperator
-	Predicates []sqlparser.Expr
+type Horizon struct {
+	Source    LogicalOperator
+	Statement sqlparser.SelectStatement
 }
 
-var _ LogicalOperator = (*Filter)(nil)
+var _ LogicalOperator = (*Horizon)(nil)
 
 // iLogical implements the LogicalOperator interface
-func (f *Filter) iLogical() {}
+func (p *Horizon) iLogical() {}
 
 // TableID implements the LogicalOperator interface
-func (f *Filter) TableID() semantics.TableSet {
-	return f.Source.TableID()
+func (p *Horizon) TableID() semantics.TableSet {
+	return p.Source.TableID()
 }
 
 // UnsolvedPredicates implements the LogicalOperator interface
-func (f *Filter) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return f.Source.UnsolvedPredicates(semTable)
+func (p *Horizon) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+	return p.Source.UnsolvedPredicates(semTable)
 }
 
 // CheckValid implements the LogicalOperator interface
-func (f *Filter) CheckValid() error {
-	return f.Source.CheckValid()
+func (p *Horizon) CheckValid() error {
+	return p.Source.CheckValid()
 }
 
 // PushPredicate implements the LogicalOperator interface
-func (f *Filter) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
-	f.Predicates = append(f.Predicates, expr)
-	return f, nil
+func (p *Horizon) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
+	newSrc, err := p.Source.PushPredicate(expr, semTable)
+	if err != nil {
+		return nil, err
+	}
+	p.Source = newSrc
+
+	return p, nil
 }
 
 // Compact implements the LogicalOperator interface
-func (f *Filter) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
-	if len(f.Predicates) == 0 {
-		return f.Source, nil
-	}
-
-	return f, nil
+func (p *Horizon) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
+	return p, nil
 }

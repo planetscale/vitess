@@ -40,7 +40,7 @@ func FuzzAnalyse(data []byte) int {
 		if err != nil {
 			return 0
 		}
-		_, _ = createOperatorFromSelect(stmt, semTable)
+		_, _ = createOperatorFromSelect(stmt, semTable, false)
 
 	default:
 		return 0

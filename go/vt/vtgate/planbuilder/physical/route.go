@@ -124,7 +124,9 @@ func (r *Route) Cost() int {
 // Clone implements the PhysicalOperator interface
 func (r *Route) Clone() abstract.PhysicalOperator {
 	cloneRoute := *r
-	cloneRoute.SourceOp = r.SourceOp.Clone()
+	if cloneRoute.SourceOp != nil {
+		cloneRoute.SourceOp = r.SourceOp.Clone()
+	}
 	cloneRoute.VindexPreds = make([]*VindexPlusPredicates, len(r.VindexPreds))
 	for i, pred := range r.VindexPreds {
 		// we do this to create a copy of the struct

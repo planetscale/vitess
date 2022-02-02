@@ -17,6 +17,8 @@ limitations under the License.
 package physical
 
 import (
+	"fmt"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -24,7 +26,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func planHorizon(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator, stmt sqlparser.SelectStatement) (abstract.PhysicalOperator, error) {
+var ErrNotReadyForHorizon = fmt.Errorf("oh noes")
+
+func checkIfWeCanShortCut(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator, stmt sqlparser.SelectStatement) (abstract.PhysicalOperator, error) {
 	route, isRoute := op.(*Route)
 	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
 		// If we got here, we don't have a single shard plan

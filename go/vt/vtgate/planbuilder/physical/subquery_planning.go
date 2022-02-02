@@ -10,8 +10,8 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (abstract.PhysicalOperator, error) {
-	outerOp, err := createOnePhysicalOperator(ctx, op.Outer)
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *abstract.SubQuery, withHorizon bool) (abstract.PhysicalOperator, error) {
+	outerOp, err := createOnePhysicalOperator(ctx, op.Outer, withHorizon)
 	if err != nil {
 		return nil, err
 	}
@@ -19,7 +19,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (
 
 	// first loop over the subqueries and try to merge them into the outer plan
 	for _, inner := range op.Inner {
-		innerOp, err := createOnePhysicalOperator(ctx, inner.Inner)
+		innerOp, err := createOnePhysicalOperator(ctx, inner.Inner, withHorizon)
 		if err != nil {
 			return nil, err
 		}

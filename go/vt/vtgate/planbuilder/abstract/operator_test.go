@@ -101,7 +101,7 @@ func TestOperator(t *testing.T) {
 			stmt := tree.(sqlparser.SelectStatement)
 			semTable, err := semantics.Analyze(stmt, "", si)
 			require.NoError(t, err)
-			optree, err := CreateOperatorFromAST(stmt, semTable, false)
+			optree, err := CreateOperatorFromAST(stmt, semTable)
 			require.NoError(t, err)
 			output := testString(optree)
 			if tc.expected != output {

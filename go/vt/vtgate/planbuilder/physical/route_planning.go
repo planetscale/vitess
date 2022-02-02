@@ -44,24 +44,38 @@ type (
 	opCacheMap map[tableSetPair]abstract.PhysicalOperator
 )
 
-func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator, stmt sqlparser.SelectStatement, withHorizon bool) (abstract.PhysicalOperator, bool, error) {
-	op, err := createOnePhysicalOperator(ctx, opTree)
+func CreatePhysicalOperator(
+	ctx *plancontext.PlanningContext,
+	opTree abstract.LogicalOperator,
+	stmt sqlparser.SelectStatement,
+	withHorizon bool,
+) (abstract.PhysicalOperator, error) {
+	op, err := createOnePhysicalOperator(ctx, opTree, withHorizon)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	newOp, err := planHorizon(ctx, op, stmt)
-	if err != nil {
-		return nil, false, err
-	}
-	if newOp != nil {
-		return newOp, true, nil
-	}
-	return op, false, nil
+	return op, nil
 }
 
-func createOnePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator) (abstract.PhysicalOperator, error) {
+func createOnePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator, withHorizon bool) (abstract.PhysicalOperator, error) {
 	switch op := opTree.(type) {
+	case *abstract.Horizon:
+		opSrc, err := createOnePhysicalOperator(ctx, op.Source, withHorizon)
+		if err != nil {
+			return nil, err
+		}
+		if !withHorizon {
+			return opSrc, nil
+		}
+		shortCut, err := checkIfWeCanShortCut(ctx, opSrc, op.Statement)
+		if err != nil {
+			return nil, err
+		}
+		if shortCut != nil {
+			return shortCut, nil
+		}
+		return nil, ErrNotReadyForHorizon
 	case *abstract.QueryGraph:
 		switch {
 		case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
@@ -70,17 +84,17 @@ func createOnePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract
 			return greedySolve(ctx, op)
 		}
 	case *abstract.Join:
-		opInner, err := createOnePhysicalOperator(ctx, op.LHS)
+		opInner, err := createOnePhysicalOperator(ctx, op.LHS, withHorizon)
 		if err != nil {
 			return nil, err
 		}
-		opOuter, err := createOnePhysicalOperator(ctx, op.RHS)
+		opOuter, err := createOnePhysicalOperator(ctx, op.RHS, withHorizon)
 		if err != nil {
 			return nil, err
 		}
 		return mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	case *abstract.Derived:
-		opInner, err := createOnePhysicalOperator(ctx, op.Inner)
+		opInner, err := createOnePhysicalOperator(ctx, op.Inner, withHorizon)
 		if err != nil {
 			return nil, err
 		}
@@ -91,13 +105,13 @@ func createOnePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract
 			ColumnAliases: op.ColumnAliases,
 		}, nil
 	case *abstract.SubQuery:
-		return optimizeSubQuery(ctx, op)
+		return optimizeSubQuery(ctx, op, withHorizon)
 	case *abstract.Vindex:
 		return optimizeVindex(ctx, op)
 	case *abstract.Concatenate:
 		return optimizeUnion(ctx, op)
 	case *abstract.Filter:
-		src, err := createOnePhysicalOperator(ctx, op.Source)
+		src, err := createOnePhysicalOperator(ctx, op.Source, withHorizon)
 		if err != nil {
 			return nil, err
 		}
@@ -753,7 +767,7 @@ func optimizeUnion(ctx *plancontext.PlanningContext, op *abstract.Concatenate) (
 	var sources []abstract.PhysicalOperator
 
 	for _, source := range op.Sources {
-		qt, err := createOnePhysicalOperator(ctx, source)
+		qt, err := createOnePhysicalOperator(ctx, source, false)
 		if err != nil {
 			return nil, err
 		}

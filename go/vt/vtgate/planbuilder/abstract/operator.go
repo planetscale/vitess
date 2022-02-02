@@ -17,8 +17,6 @@ limitations under the License.
 package abstract
 
 import (
-	"fmt"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -60,13 +58,8 @@ type (
 	}
 )
 
-var ErrNotReadyForHorizon = fmt.Errorf("oh noes")
-
 // CreateOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable, withHorizon bool) (op LogicalOperator, err error) {
-	if withHorizon {
-		return nil, ErrNotReadyForHorizon
-	}
+func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (op LogicalOperator, err error) {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
 		op, err = createOperatorFromSelect(node, semTable)
@@ -106,7 +99,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			qg.Tables = append(qg.Tables, qt)
 			return qg, nil
 		case *sqlparser.DerivedTable:
-			inner, err := CreateOperatorFromAST(tbl.Select, semTable, false)
+			inner, err := CreateOperatorFromAST(tbl.Select, semTable)
 			if err != nil {
 				return nil, err
 			}
@@ -182,7 +175,7 @@ func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
 }
 
 func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (LogicalOperator, error) {
-	opLHS, err := CreateOperatorFromAST(node.Left, semTable, false)
+	opLHS, err := CreateOperatorFromAST(node.Left, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +184,7 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 	if isRHSUnion {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
 	}
-	opRHS, err := CreateOperatorFromAST(node.Right, semTable, false)
+	opRHS, err := CreateOperatorFromAST(node.Right, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +203,7 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if len(semTable.SubqueryMap[sel]) > 0 {
 		subQuery = &SubQuery{}
 		for _, sq := range semTable.SubqueryMap[sel] {
-			opInner, err := CreateOperatorFromAST(sq.Subquery.Select, semTable, false)
+			opInner, err := CreateOperatorFromAST(sq.Subquery.Select, semTable)
 			if err != nil {
 				return nil, err
 			}
@@ -235,7 +228,10 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 		op = subQuery
 	}
 
-	return op, nil
+	return &Horizon{
+		Source:    op,
+		Statement: sel,
+	}, nil
 }
 
 func createOpsForFromAndWhere(semTable *semantics.SemTable, from []sqlparser.TableExpr, predicate sqlparser.Expr) (LogicalOperator, error) {
