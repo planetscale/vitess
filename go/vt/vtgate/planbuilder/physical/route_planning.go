@@ -44,7 +44,7 @@ type (
 	opCacheMap map[tableSetPair]abstract.PhysicalOperator
 )
 
-func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator, stmt sqlparser.SelectStatement) (abstract.PhysicalOperator, bool, error) {
+func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator, stmt sqlparser.SelectStatement, withHorizon bool) (abstract.PhysicalOperator, bool, error) {
 	op, err := createOnePhysicalOperator(ctx, opTree)
 	if err != nil {
 		return nil, false, err
@@ -753,7 +753,7 @@ func optimizeUnion(ctx *plancontext.PlanningContext, op *abstract.Concatenate) (
 	var sources []abstract.PhysicalOperator
 
 	for _, source := range op.Sources {
-		qt, _, err := CreatePhysicalOperator(ctx, source, nil)
+		qt, err := createOnePhysicalOperator(ctx, source)
 		if err != nil {
 			return nil, err
 		}
