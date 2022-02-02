@@ -25,17 +25,14 @@ import (
 )
 
 func planHorizon(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator, stmt sqlparser.SelectStatement) (abstract.PhysicalOperator, error) {
-	switch stmt.(type) {
-	case *sqlparser.Select:
-		route, isRoute := op.(*Route)
-		if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
-			// If we got here, we don't have a single shard plan
-			return nil, ctx.SemTable.NotSingleRouteErr
-		}
+	route, isRoute := op.(*Route)
+	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
+		// If we got here, we don't have a single shard plan
+		return nil, ctx.SemTable.NotSingleRouteErr
+	}
 
-		if isRoute && route.IsSingleShard() && stmt.GetLimit() == nil {
-			return planSingleShardRoute(ctx, route, stmt)
-		}
+	if isRoute && route.IsSingleShard() && stmt.GetLimit() == nil {
+		return planSingleShardRoute(ctx, route, stmt)
 	}
 	return nil, nil
 }
