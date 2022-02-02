@@ -60,6 +60,11 @@ var _ LogicalOperator = (*QueryGraph)(nil)
 
 func (*QueryGraph) iLogical() {}
 
+// Clone implements the Operator interface
+func (qg *QueryGraph) Clone() LogicalOperator {
+	return nil
+}
+
 // PushPredicate implements the Operator interface
 func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {

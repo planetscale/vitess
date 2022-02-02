@@ -35,6 +35,15 @@ var _ LogicalOperator = (*Derived)(nil)
 
 func (*Derived) iLogical() {}
 
+// Clone implements the Operator interface
+func (d *Derived) Clone() LogicalOperator {
+	newD := *d
+	newD.Sel = sqlparser.CloneSelectStatement(d.Sel)
+	newD.Inner = d.Inner.Clone()
+	newD.ColumnAliases = sqlparser.CloneColumns(d.ColumnAliases)
+	return &newD
+}
+
 // TableID implements the Operator interface
 func (d *Derived) TableID() semantics.TableSet {
 	return d.Inner.TableID()

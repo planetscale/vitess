@@ -35,6 +35,11 @@ var _ LogicalOperator = (*Join)(nil)
 // iLogical implements the LogicalOperator interface
 func (*Join) iLogical() {}
 
+// Clone implements the Operator interface
+func (j *Join) Clone() LogicalOperator {
+	return nil
+}
+
 // PushPredicate implements the Operator interface
 func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	deps := semTable.RecursiveDeps(expr)

@@ -32,6 +32,18 @@ var _ LogicalOperator = (*Filter)(nil)
 // iLogical implements the LogicalOperator interface
 func (f *Filter) iLogical() {}
 
+// Clone implements the Operator interface
+func (f *Filter) Clone() LogicalOperator {
+	newF := *f
+	newF.Source = f.Source.Clone()
+
+	newF.Predicates = nil
+	for _, predicate := range f.Predicates {
+		newF.Predicates = append(newF.Predicates, sqlparser.CloneExpr(predicate))
+	}
+	return &newF
+}
+
 // TableID implements the LogicalOperator interface
 func (f *Filter) TableID() semantics.TableSet {
 	return f.Source.TableID()

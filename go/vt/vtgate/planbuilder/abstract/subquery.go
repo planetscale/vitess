@@ -44,6 +44,11 @@ type SubQueryInner struct {
 	ExtractedSubquery *sqlparser.ExtractedSubquery
 }
 
+// Clone implements the Operator interface
+func (s *SubQuery) Clone() LogicalOperator {
+	return nil
+}
+
 // TableID implements the Operator interface
 func (s *SubQuery) TableID() semantics.TableSet {
 	ts := s.Outer.TableID()

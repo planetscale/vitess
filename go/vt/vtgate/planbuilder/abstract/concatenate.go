@@ -36,6 +36,22 @@ var _ LogicalOperator = (*Concatenate)(nil)
 
 func (*Concatenate) iLogical() {}
 
+// Clone implements the Operator interface
+func (c *Concatenate) Clone() LogicalOperator {
+	newC := *c
+	newC.Limit = sqlparser.CloneRefOfLimit(c.Limit)
+	newC.OrderBy = sqlparser.CloneOrderBy(c.OrderBy)
+	newC.Sources = nil
+	for _, source := range c.Sources {
+		newC.Sources = append(newC.Sources, source.Clone())
+	}
+	newC.SelectStmts = nil
+	for _, sel := range c.SelectStmts {
+		newC.SelectStmts = append(newC.SelectStmts, sqlparser.CloneRefOfSelect(sel))
+	}
+	return &newC
+}
+
 // TableID implements the Operator interface
 func (c *Concatenate) TableID() semantics.TableSet {
 	var tableSet semantics.TableSet

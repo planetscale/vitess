@@ -46,6 +46,8 @@ type (
 
 		// Compact will optimise the operator tree into a smaller but equivalent version
 		Compact(semTable *semantics.SemTable) (LogicalOperator, error)
+
+		Clone() LogicalOperator
 	}
 
 	PhysicalOperator interface {

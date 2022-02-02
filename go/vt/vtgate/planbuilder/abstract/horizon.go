@@ -31,6 +31,11 @@ var _ LogicalOperator = (*Horizon)(nil)
 // iLogical implements the LogicalOperator interface
 func (p *Horizon) iLogical() {}
 
+// Clone implements the Operator interface
+func (p *Horizon) Clone() LogicalOperator {
+	return nil
+}
+
 // TableID implements the LogicalOperator interface
 func (p *Horizon) TableID() semantics.TableSet {
 	return p.Source.TableID()
