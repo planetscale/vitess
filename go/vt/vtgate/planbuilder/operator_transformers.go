@@ -17,9 +17,10 @@ limitations under the License.
 package planbuilder
 
 import (
-	"sort"
 	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -131,18 +132,25 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 }
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (*routeGen4, error) {
-	tableNames, err := getAllTableNames(op)
-	if err != nil {
-		return nil, err
-	}
+	var err error
 	var vindex vindexes.Vindex
 	var values []evalengine.Expr
 	if op.SelectedVindex() != nil {
 		vindex = op.Selected.FoundVindex
 		values = op.Selected.Values
 	}
+	tableNames := op.TableNames
+	tables := semantics.SingleTableSet(0)
 	condition := getVindexPredicate(ctx, op)
-	sel := toSQL(ctx, op.Source)
+	sel := op.SourceAST
+	if sel == nil {
+		sel = physical.ToSQL(ctx, op.SourceOp)
+		tables = op.TableID()
+		tableNames, err = physical.GetAllTableNames(op)
+		if err != nil {
+			return nil, err
+		}
+	}
 	replaceSubQuery(ctx, sel)
 	return &routeGen4{
 		eroute: &engine.Route{
@@ -157,7 +165,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (*
 			},
 		},
 		Select:    sel,
-		tables:    op.TableID(),
+		tables:    tables,
 		condition: condition,
 	}, nil
 
@@ -208,32 +216,6 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *physical.Route) sq
 
 	}
 	return condition
-}
-
-func getAllTableNames(op *physical.Route) ([]string, error) {
-	tableNameMap := map[string]interface{}{}
-	err := physical.VisitOperators(op, func(op abstract.PhysicalOperator) (bool, error) {
-		tbl, isTbl := op.(*physical.Table)
-		var name string
-		if isTbl {
-			if tbl.QTable.IsInfSchema {
-				name = sqlparser.String(tbl.QTable.Table)
-			} else {
-				name = sqlparser.String(tbl.QTable.Table.Name)
-			}
-			tableNameMap[name] = nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	var tableNames []string
-	for name := range tableNameMap {
-		tableNames = append(tableNames, name)
-	}
-	sort.Strings(tableNames)
-	return tableNames, nil
 }
 
 func transformUnionPlan(ctx *plancontext.PlanningContext, op *physical.Union) (logicalPlan, error) {

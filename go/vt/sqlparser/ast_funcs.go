@@ -788,6 +788,11 @@ func (node *Select) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
 
+// GetLimit sets the limit clause
+func (node *Select) GetLimit() *Limit {
+	return node.Limit
+}
+
 // SetLock sets the lock clause
 func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
@@ -884,6 +889,11 @@ func (node *Union) SetOrderBy(orderBy OrderBy) {
 // SetLimit sets the limit clause
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
+}
+
+// GetLimit sets the limit clause
+func (node *Union) GetLimit() *Limit {
+	return node.Limit
 }
 
 // SetLock sets the lock clause

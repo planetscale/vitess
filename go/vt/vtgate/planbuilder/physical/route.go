@@ -17,6 +17,8 @@ limitations under the License.
 package physical
 
 import (
+	"sort"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -29,10 +31,14 @@ import (
 
 type (
 	Route struct {
-		Source abstract.PhysicalOperator
+		SourceOp  abstract.PhysicalOperator
+		SourceAST sqlparser.SelectStatement
 
 		RouteOpCode engine.Opcode
 		Keyspace    *vindexes.Keyspace
+
+		// TableNames contains a list of the table names in SourceOp
+		TableNames []string
 
 		// here we store the possible vindexes we can use so that when we add predicates to the plan,
 		// we can quickly check if the new predicates enables any new vindex Options
@@ -87,7 +93,7 @@ func (*Route) IPhysical() {}
 
 // TableID implements the Operator interface
 func (r *Route) TableID() semantics.TableSet {
-	return r.Source.TableID()
+	return r.SourceOp.TableID()
 }
 
 // Cost implements the Operator interface
@@ -118,7 +124,7 @@ func (r *Route) Cost() int {
 // Clone implements the PhysicalOperator interface
 func (r *Route) Clone() abstract.PhysicalOperator {
 	cloneRoute := *r
-	cloneRoute.Source = r.Source.Clone()
+	cloneRoute.SourceOp = r.SourceOp.Clone()
 	cloneRoute.VindexPreds = make([]*VindexPlusPredicates, len(r.VindexPreds))
 	for i, pred := range r.VindexPreds {
 		// we do this to create a copy of the struct
@@ -439,12 +445,12 @@ func (r *Route) canImprove() bool {
 
 // UnsolvedPredicates implements the Operator interface
 func (r *Route) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return r.Source.UnsolvedPredicates(semTable)
+	return r.SourceOp.UnsolvedPredicates(semTable)
 }
 
 // CheckValid implements the Operator interface
 func (r *Route) CheckValid() error {
-	return r.Source.CheckValid()
+	return r.SourceOp.CheckValid()
 }
 
 // Compact implements the Operator interface
@@ -702,4 +708,30 @@ func (r *Route) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsE
 	}
 
 	return r.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
+}
+
+func GetAllTableNames(op *Route) ([]string, error) {
+	tableNameMap := map[string]interface{}{}
+	err := VisitOperators(op, func(op abstract.PhysicalOperator) (bool, error) {
+		tbl, isTbl := op.(*Table)
+		var name string
+		if isTbl {
+			if tbl.QTable.IsInfSchema {
+				name = sqlparser.String(tbl.QTable.Table)
+			} else {
+				name = sqlparser.String(tbl.QTable.Table.Name)
+			}
+			tableNameMap[name] = nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	var tableNames []string
+	for name := range tableNameMap {
+		tableNames = append(tableNames, name)
+	}
+	sort.Strings(tableNames)
+	return tableNames, nil
 }

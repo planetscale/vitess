@@ -44,58 +44,147 @@ type (
 	opCacheMap map[tableSetPair]abstract.PhysicalOperator
 )
 
-func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator) (abstract.PhysicalOperator, bool, error) {
+func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator, stmt sqlparser.SelectStatement) (abstract.PhysicalOperator, bool, error) {
+	op, err := createOnePhysicalOperator(ctx, opTree)
+	if err != nil {
+		return nil, false, err
+	}
+
+	newOp, err := planHorizon(ctx, op, stmt)
+	if err != nil {
+		return nil, false, err
+	}
+	if newOp != nil {
+		return newOp, true, nil
+	}
+	return op, false, nil
+}
+
+func planHorizon(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator, stmt sqlparser.SelectStatement) (abstract.PhysicalOperator, error) {
+	switch stmt.(type) {
+	case *sqlparser.Select:
+		route, isRoute := op.(*Route)
+		if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
+			// If we got here, we don't have a single shard plan
+			return nil, ctx.SemTable.NotSingleRouteErr
+		}
+
+		if isRoute && route.IsSingleShard() && stmt.GetLimit() == nil {
+			tableNames, err := GetAllTableNames(route)
+			if err != nil {
+				return nil, err
+			}
+			route.TableNames = tableNames
+
+			route.SourceAST = ToSQL(ctx, route.SourceOp)
+			route.SourceOp = nil
+			err = stripDownQuery(stmt, route.SourceAST)
+			if err != nil {
+				return nil, err
+			}
+			sqlparser.Rewrite(route.SourceAST, func(cursor *sqlparser.Cursor) bool {
+				if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
+					removeKeyspaceFromSelectExpr(aliasedExpr)
+				}
+				return true
+			}, nil)
+			return route, nil
+		}
+	}
+	return nil, nil
+}
+
+func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
+	switch expr := expr.(type) {
+	case *sqlparser.AliasedExpr:
+		sqlparser.RemoveKeyspaceFromColName(expr.Expr)
+	case *sqlparser.StarExpr:
+		expr.TableName.Qualifier = sqlparser.NewTableIdent("")
+	}
+}
+
+func stripDownQuery(from, to sqlparser.SelectStatement) error {
+	var err error
+
+	switch node := from.(type) {
+	case *sqlparser.Select:
+		toNode, ok := to.(*sqlparser.Select)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+		}
+		toNode.Distinct = node.Distinct
+		toNode.GroupBy = node.GroupBy
+		toNode.Having = node.Having
+		toNode.OrderBy = node.OrderBy
+		toNode.Comments = node.Comments
+		toNode.SelectExprs = node.SelectExprs
+	case *sqlparser.Union:
+		toNode, ok := to.(*sqlparser.Union)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+		}
+		err = stripDownQuery(node.Left, toNode.Left)
+		if err != nil {
+			return err
+		}
+		err = stripDownQuery(node.Right, toNode.Right)
+		if err != nil {
+			return err
+		}
+		toNode.OrderBy = node.OrderBy
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: this should not happen - we have covered all implementations of SelectStatement %T", from)
+	}
+	return nil
+}
+
+func createOnePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.LogicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
 		switch {
 		case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
 			return leftToRightSolve(ctx, op)
 		default:
-			operator, err := greedySolve(ctx, op)
-			return operator, false, err
+			return greedySolve(ctx, op)
 		}
 	case *abstract.Join:
-		opInner, _, err := CreatePhysicalOperator(ctx, op.LHS)
+		opInner, err := createOnePhysicalOperator(ctx, op.LHS)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
-		opOuter, _, err := CreatePhysicalOperator(ctx, op.RHS)
+		opOuter, err := createOnePhysicalOperator(ctx, op.RHS)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
-		operator, err := mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
-		return operator, false, err
+		return mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	case *abstract.Derived:
-		opInner, _, err := CreatePhysicalOperator(ctx, op.Inner)
+		opInner, err := createOnePhysicalOperator(ctx, op.Inner)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		return &Derived{
 			Source:        opInner,
 			Query:         op.Sel,
 			Alias:         op.Alias,
 			ColumnAliases: op.ColumnAliases,
-		}, false, nil
+		}, nil
 	case *abstract.SubQuery:
-		operator, err := optimizeSubQuery(ctx, op)
-		return operator, false, err
+		return optimizeSubQuery(ctx, op)
 	case *abstract.Vindex:
-		operator, err := optimizeVindex(ctx, op)
-		return operator, false, err
+		return optimizeVindex(ctx, op)
 	case *abstract.Concatenate:
-		operator, err := optimizeUnion(ctx, op)
-		return operator, false, err
+		return optimizeUnion(ctx, op)
 	case *abstract.Filter:
-		src, _, err := CreatePhysicalOperator(ctx, op.Source)
+		src, err := createOnePhysicalOperator(ctx, op.Source)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		return &Filter{
 			Source:     src,
 			Predicates: op.Predicates,
-		}, false, nil
+		}, nil
 	default:
-		return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
 }
 
@@ -153,8 +242,8 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph)
 			return nil, err
 		}
 		if qg.NoDeps != nil {
-			plan.Source = &Filter{
-				Source:     plan.Source,
+			plan.SourceOp = &Filter{
+				Source:     plan.SourceOp,
 				Predicates: []sqlparser.Expr{qg.NoDeps},
 			}
 		}
@@ -187,7 +276,7 @@ func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, s
 		}
 	}
 	plan := &Route{
-		Source: &Table{
+		SourceOp: &Table{
 			QTable: table,
 			VTable: vschemaTable,
 		},
@@ -249,7 +338,7 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *abstract.Quer
 	}
 	r := &Route{
 		RouteOpCode: engine.DBA,
-		Source:      src,
+		SourceOp:    src,
 		Keyspace:    ks,
 	}
 	for _, pred := range table.Predicates {
@@ -398,9 +487,9 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 		VindexPreds:         append(aRoute.VindexPreds, bRoute.VindexPreds...),
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SysTableTableName:   sysTableName,
-		Source: &ApplyJoin{
-			LHS:       aRoute.Source,
-			RHS:       bRoute.Source,
+		SourceOp: &ApplyJoin{
+			LHS:       aRoute.SourceOp,
+			RHS:       bRoute.SourceOp,
 			Vars:      map[string]int{},
 			LeftJoin:  !inner,
 			Predicate: sqlparser.AndExpressions(joinPredicates...),
@@ -436,8 +525,8 @@ func makeRoute(j abstract.PhysicalOperator) *Route {
 		return nil
 	}
 
-	derived.Source = route.Source
-	route.Source = derived
+	derived.Source = route.SourceOp
+	route.SourceOp = derived
 	return route
 }
 
@@ -556,7 +645,7 @@ func leaves(op abstract.Operator) (sources []abstract.Operator) {
 	case *Filter:
 		return []abstract.Operator{op.Source}
 	case *Route:
-		return []abstract.Operator{op.Source}
+		return []abstract.Operator{op.SourceOp}
 	}
 
 	panic(fmt.Sprintf("leaves unknown type: %T", op))
@@ -681,7 +770,10 @@ func VisitOperators(op abstract.PhysicalOperator, f func(tbl abstract.PhysicalOp
 	case *Table, *Vindex:
 		// leaf - no children to visit
 	case *Route:
-		err := VisitOperators(op.Source, f)
+		if op.SourceOp == nil {
+			return nil
+		}
+		err := VisitOperators(op.SourceOp, f)
 		if err != nil {
 			return err
 		}
@@ -739,7 +831,7 @@ func optimizeUnion(ctx *plancontext.PlanningContext, op *abstract.Concatenate) (
 	var sources []abstract.PhysicalOperator
 
 	for _, source := range op.Sources {
-		qt, _, err := CreatePhysicalOperator(ctx, source)
+		qt, _, err := CreatePhysicalOperator(ctx, source, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -861,8 +953,8 @@ func pushJoinPredicateOnRoute(ctx *plancontext.PlanningContext, exprs []sqlparse
 			return nil, err
 		}
 	}
-	newSrc, err := pushJoinPredicates(ctx, exprs, op.Source)
-	op.Source = newSrc
+	newSrc, err := pushJoinPredicates(ctx, exprs, op.SourceOp)
+	op.SourceOp = newSrc
 	return op, err
 }
 

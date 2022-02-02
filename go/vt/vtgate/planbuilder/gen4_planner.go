@@ -163,7 +163,7 @@ func newBuildSelectPlan(
 		return nil, err
 	}
 
-	physOp, horizonAlreadyPlanned, err := physical.CreatePhysicalOperator(ctx, logical)
+	physOp, horizonAlreadyPlanned, err := physical.CreatePhysicalOperator(ctx, logical, selStmt)
 	if err != nil {
 		return nil, err
 	}

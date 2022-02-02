@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package physical
 
 import (
 	"fmt"
@@ -23,15 +23,13 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 )
 
-func toSQL(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
+func ToSQL(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
 	q := &queryBuilder{ctx: ctx}
 	buildQuery(op, q)
 	q.produce()
@@ -40,7 +38,7 @@ func toSQL(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) sqlpa
 
 func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 	switch op := op.(type) {
-	case *physical.Table:
+	case *Table:
 		dbName := ""
 
 		if op.QTable.IsInfSchema {
@@ -53,7 +51,7 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		for _, name := range op.Columns {
 			qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
 		}
-	case *physical.ApplyJoin:
+	case *ApplyJoin:
 		buildQuery(op.LHS, qb)
 		// If we are going to add the predicate used in join here
 		// We should not add the predicate's copy of when it was split into
@@ -68,12 +66,12 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		} else {
 			qb.joinInnerWith(qbR, op.Predicate)
 		}
-	case *physical.Filter:
+	case *Filter:
 		buildQuery(op.Source, qb)
 		for _, pred := range op.Predicates {
 			qb.addPredicate(pred)
 		}
-	case *physical.Derived:
+	case *Derived:
 		buildQuery(op.Source, qb)
 		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
 		qb.sel = nil

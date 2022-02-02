@@ -36,11 +36,11 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op abs
 		if err != nil {
 			return nil, err
 		}
-		newSrc, err := PushPredicate(ctx, expr, op.Source)
+		newSrc, err := PushPredicate(ctx, expr, op.SourceOp)
 		if err != nil {
 			return nil, err
 		}
-		op.Source = newSrc
+		op.SourceOp = newSrc
 		return op, err
 	case *ApplyJoin:
 		deps := ctx.SemTable.RecursiveDeps(expr)
@@ -150,8 +150,8 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op abs
 func PushOutputColumns(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator, columns ...*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
 	switch op := op.(type) {
 	case *Route:
-		retOp, offsets, err := PushOutputColumns(ctx, op.Source, columns...)
-		op.Source = retOp
+		retOp, offsets, err := PushOutputColumns(ctx, op.SourceOp, columns...)
+		op.SourceOp = retOp
 		return op, offsets, err
 	case *ApplyJoin:
 		var toTheLeft []bool
@@ -263,11 +263,11 @@ func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
 func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := op.(type) {
 	case *Route:
-		newSrc, err := RemovePredicate(ctx, expr, op.Source)
+		newSrc, err := RemovePredicate(ctx, expr, op.SourceOp)
 		if err != nil {
 			return nil, err
 		}
-		op.Source = newSrc
+		op.SourceOp = newSrc
 		return op, err
 	case *ApplyJoin:
 		isRemoved := false

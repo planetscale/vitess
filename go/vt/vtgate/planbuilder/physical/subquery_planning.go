@@ -11,7 +11,7 @@ import (
 )
 
 func optimizeSubQuery(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (abstract.PhysicalOperator, error) {
-	outerOp, _, err := CreatePhysicalOperator(ctx, op.Outer)
+	outerOp, _, err := CreatePhysicalOperator(ctx, op.Outer, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -19,7 +19,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (
 
 	// first loop over the subqueries and try to merge them into the outer plan
 	for _, inner := range op.Inner {
-		innerOp, _, err := CreatePhysicalOperator(ctx, inner.Inner)
+		innerOp, _, err := CreatePhysicalOperator(ctx, inner.Inner, nil)
 		if err != nil {
 			return nil, err
 		}

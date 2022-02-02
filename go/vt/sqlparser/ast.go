@@ -44,6 +44,7 @@ type (
 		iInsertRows()
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
+		GetLimit() *Limit
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
