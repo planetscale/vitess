@@ -1,1 +1,19 @@
 # Add your test case here for debugging and run go test -run=One.
+# union of information_schema
+"select * from information_schema.a union select * from information_schema.b"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from information_schema.a union select * from information_schema.b",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from information_schema.a where 1 != 1 union select * from information_schema.b where 1 != 1",
+    "Query": "select * from information_schema.a union select * from information_schema.b",
+    "Table": "information_schema.a"
+  }
+}
+Gen4 plan same as above

@@ -369,7 +369,7 @@ func getJoinFor(ctx *plancontext.PlanningContext, cm opCacheMap, lhs, rhs abstra
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
 
 	merger := func(a, b *Route) (*Route, error) {
-		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)
+		return createRouteOperatorForJoin(a, b, joinPredicates, inner), nil
 	}
 
 	newPlan, _ := tryMerge(ctx, lhs, rhs, joinPredicates, merger)
@@ -387,7 +387,20 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs abstract.PhysicalOpe
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
-func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
+func createRouteOperatorForJoin(
+	aRoute, bRoute *Route,
+	joinPredicates []sqlparser.Expr,
+	inner bool,
+) *Route {
+	return mergeRoutes2(aRoute, bRoute, func(aRoute *Route, bRoute *Route) abstract.PhysicalOperator {
+		return createApplyJoin(aRoute, bRoute, joinPredicates, inner)
+	})
+}
+
+func mergeRoutes2(
+	aRoute, bRoute *Route,
+	f func(aRoute *Route, bRoute *Route) abstract.PhysicalOperator,
+) *Route {
 	// append system table names from both the routes.
 	sysTableName := aRoute.SysTableTableName
 	if sysTableName == nil {
@@ -404,12 +417,47 @@ func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute
 		VindexPreds:         append(aRoute.VindexPreds, bRoute.VindexPreds...),
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SysTableTableName:   sysTableName,
-		Source: &ApplyJoin{
-			LHS:       aRoute.Source,
-			RHS:       bRoute.Source,
-			Vars:      map[string]int{},
-			LeftJoin:  !inner,
-			Predicate: sqlparser.AndExpressions(joinPredicates...),
+		Source:              f(aRoute, bRoute),
+	}
+
+	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {
+		r.Selected = aRoute.Selected
+	}
+
+	return r
+}
+
+func createApplyJoin(aRoute *Route, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) abstract.PhysicalOperator {
+	return &ApplyJoin{
+		LHS:       aRoute.Source,
+		RHS:       bRoute.Source,
+		Vars:      map[string]int{},
+		LeftJoin:  !inner,
+		Predicate: sqlparser.AndExpressions(joinPredicates...),
+	}
+}
+
+func createRouteOperatorForConcatenate(aRoute, bRoute *Route, aStmt, bStmt *sqlparser.Select, distinct bool) (*Route, error) {
+	// append system table names from both the routes.
+	sysTableName := aRoute.SysTableTableName
+	if sysTableName == nil {
+		sysTableName = bRoute.SysTableTableName
+	} else {
+		for k, v := range bRoute.SysTableTableName {
+			sysTableName[k] = v
+		}
+	}
+
+	r := &Route{
+		RouteOpCode:         aRoute.RouteOpCode,
+		Keyspace:            aRoute.Keyspace,
+		VindexPreds:         append(aRoute.VindexPreds, bRoute.VindexPreds...),
+		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
+		SysTableTableName:   sysTableName,
+		Source: &Union{
+			Sources:     []abstract.PhysicalOperator{aRoute.Source, bRoute.Source},
+			SelectStmts: []*sqlparser.Select{aStmt, bStmt},
+			Distinct:    distinct,
 		},
 	}
 
@@ -743,21 +791,69 @@ func VisitOperators(op abstract.PhysicalOperator, f func(tbl abstract.PhysicalOp
 
 func optimizeUnion(ctx *plancontext.PlanningContext, op *abstract.Concatenate) (abstract.PhysicalOperator, error) {
 	var sources []abstract.PhysicalOperator
+	var routeSources []*Route
 
-	for _, source := range op.Sources {
+	canMerge := true
+	for idx, source := range op.Sources {
 		qt, err := CreatePhysicalOperator(ctx, source)
 		if err != nil {
 			return nil, err
 		}
-
+		s := op.SelectStmts[idx]
+		if canMerge && !simpleStatement(s) {
+			canMerge = false
+		}
+		if idx > 0 && canMerge {
+			lastOp := sources[idx-1]
+			canMergeWithLastSelect := false
+			// here we are calling tryMerge, but we are not using it to actually merge anything, just to
+			// check if it is possible or not
+			_, _ = tryMerge(ctx, lastOp, qt, nil, func(a, b *Route) (*Route, error) {
+				routeSources = append(routeSources, b)
+				canMergeWithLastSelect = true
+				return nil, nil
+			})
+			canMerge = canMerge && canMergeWithLastSelect
+		}
 		sources = append(sources, qt)
 	}
+
+	if canMerge {
+		// we create a route with a union under, which means that the union as a whole will be sent down
+		union := &Union{
+			SelectStmts: op.SelectStmts,
+			Distinct:    op.Distinct,
+			Ordering:    op.OrderBy,
+		}
+		var acc *Route
+		for idx, src := range routeSources {
+			union.Sources = append(union.Sources, src.Source)
+			if idx == 0 {
+				acc = src
+			} else {
+				acc = mergeRoutes2(acc, src, func(aRoute *Route, bRoute *Route) abstract.PhysicalOperator {
+					return nil
+				})
+			}
+		}
+		acc.Source = union
+		return acc, nil
+	}
+
 	return &Union{
 		Sources:     sources,
 		SelectStmts: op.SelectStmts,
 		Distinct:    op.Distinct,
 		Ordering:    op.OrderBy,
 	}, nil
+}
+
+// simpleStatement returns true for queries that don't need vtgate horizon planning
+func simpleStatement(s *sqlparser.Select) bool {
+	return len(s.GroupBy) == 0 &&
+		s.Having == nil &&
+		s.OrderBy == nil &&
+		!sqlparser.ContainsAggregation(s.SelectExprs)
 }
 
 func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) bool {

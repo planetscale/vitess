@@ -81,6 +81,22 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		qb.addTableExpr(op.Alias, op.Alias, op.TableID(), &sqlparser.DerivedTable{
 			Select: sel,
 		}, nil)
+	case *physical.Union:
+		var last sqlparser.SelectStatement
+		for _, source := range op.Sources {
+			qbR := &queryBuilder{ctx: qb.ctx}
+			buildQuery(source, qbR)
+			if last == nil {
+				last = qbR.sel
+			} else {
+				last = &sqlparser.Union{
+					Left:     last,
+					Right:    qbR.sel,
+					Distinct: op.Distinct,
+				}
+			}
+		}
+		qb.sel = last
 	default:
 		panic(fmt.Sprintf("%T", op))
 	}

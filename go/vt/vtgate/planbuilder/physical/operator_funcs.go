@@ -242,7 +242,8 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op abstract.PhysicalOpe
 			}
 		}
 		return op, offsets, nil
-
+	case *Union:
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push output columns into %T", op)
 	default:
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push output columns into %T", op)
 	}
