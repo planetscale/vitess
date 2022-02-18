@@ -70,14 +70,15 @@ func (gc *Gen4CompareV3) TryExecute(
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 	wantfields bool,
+	_ *RoutingParameters,
 ) (*sqltypes.Result, error) {
 	var v3Err, gen4Err error
 	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
 	if gc.Gen4 != nil {
-		gen4Result, gen4Err = gc.Gen4.TryExecute(vcursor, bindVars, wantfields)
+		gen4Result, gen4Err = gc.Gen4.TryExecute(vcursor, bindVars, wantfields, nil)
 	}
 	if gc.V3 != nil {
-		v3Result, v3Err = gc.V3.TryExecute(vcursor, bindVars, wantfields)
+		v3Result, v3Err = gc.V3.TryExecute(vcursor, bindVars, wantfields, nil)
 	}
 
 	if err := CompareV3AndGen4Errors(v3Err, gen4Err); err != nil {

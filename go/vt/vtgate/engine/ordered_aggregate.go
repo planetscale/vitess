@@ -210,7 +210,7 @@ func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
 }
 
 // TryExecute is a Primitive function.
-func (oa *OrderedAggregate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (oa *OrderedAggregate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, _ *RoutingParameters) (*sqltypes.Result, error) {
 	qr, err := oa.execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err

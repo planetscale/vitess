@@ -191,7 +191,7 @@ func (ins *Insert) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, _ *RoutingParameters) (*sqltypes.Result, error) {
 	if ins.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(ins.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -210,7 +210,7 @@ func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 
 // TryStreamExecute performs a streaming exec.
 func (ins *Insert) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := ins.TryExecute(vcursor, bindVars, wantfields)
+	res, err := ins.TryExecute(vcursor, bindVars, wantfields, nil)
 	if err != nil {
 		return err
 	}

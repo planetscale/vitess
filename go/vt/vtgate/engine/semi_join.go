@@ -47,7 +47,7 @@ type SemiJoin struct {
 }
 
 // TryExecute performs a non-streaming exec.
-func (jn *SemiJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (jn *SemiJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, _ *RoutingParameters) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
 	lresult, err := vcursor.ExecutePrimitive(jn.Left, bindVars, wantfields)
 	if err != nil {

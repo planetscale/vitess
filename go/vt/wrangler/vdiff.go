@@ -1165,7 +1165,7 @@ func (vc *contextVCursor) ConnCollation() collations.ID {
 }
 
 func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(vc, bindVars, wantfields)
+	return primitive.TryExecute(vc, bindVars, wantfields, nil)
 }
 
 func (vc *contextVCursor) StreamExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {

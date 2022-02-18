@@ -52,8 +52,8 @@ func (f *Filter) GetTableName() string {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (f *Filter) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := f.Input.TryExecute(vcursor, bindVars, wantfields)
+func (f *Filter) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, _ *RoutingParameters) (*sqltypes.Result, error) {
+	result, err := f.Input.TryExecute(vcursor, bindVars, wantfields, nil)
 	if err != nil {
 		return nil, err
 	}

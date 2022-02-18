@@ -110,7 +110,7 @@ func (s *Set) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface method.
-func (s *Set) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (s *Set) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, _ *RoutingParameters) (*sqltypes.Result, error) {
 	input, err := vcursor.ExecutePrimitive(s.Input, bindVars, false)
 	if err != nil {
 		return nil, err
@@ -131,7 +131,7 @@ func (s *Set) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 
 // TryStreamExecute implements the Primitive interface method.
 func (s *Set) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	result, err := s.TryExecute(vcursor, bindVars, wantields)
+	result, err := s.TryExecute(vcursor, bindVars, wantields, nil)
 	if err != nil {
 		return err
 	}

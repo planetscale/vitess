@@ -65,7 +65,7 @@ func (f *fakePrimitive) GetTableName() string {
 	return "fakeTable"
 }
 
-func (f *fakePrimitive) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (f *fakePrimitive) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, _ *RoutingParameters) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {
 		return nil, f.sendErr
