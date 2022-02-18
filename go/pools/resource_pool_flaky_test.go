@@ -29,8 +29,6 @@ import (
 	"vitess.io/vitess/go/sync2"
 )
 
-// TODO:  test for refreshTimeout
-
 var lastID, count sync2.AtomicInt64
 var waitStarts []time.Time
 
@@ -215,7 +213,7 @@ func TestShrinking(t *testing.T) {
 		p.SetCapacity(3)
 		done <- true
 	}()
-	expected := `{"Capacity": 3, "Available": 0, "Active": 4, "InUse": 4, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 0}`
+	expected := `{"Capacity": 3, "Available": 0, "Active": 4, "InUse": 4, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 0}`
 	for i := 0; i < 10; i++ {
 		time.Sleep(10 * time.Millisecond)
 		stats := p.StatsJSON()
@@ -234,7 +232,7 @@ func TestShrinking(t *testing.T) {
 		p.Put(resources[i])
 	}
 	stats := p.StatsJSON()
-	expected = `{"Capacity": 3, "Available": 3, "Active": 3, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 0}`
+	expected = `{"Capacity": 3, "Available": 3, "Active": 3, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 0}`
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 3, count.Get())
 
@@ -332,7 +330,7 @@ func TestClosing(t *testing.T) {
 	// Wait for goroutine to call Close
 	time.Sleep(10 * time.Millisecond)
 	stats := p.StatsJSON()
-	expected := `{"Capacity": 0, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 1}`
+	expected := `{"Capacity": 0, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 
 	// Put is allowed when closing
@@ -344,7 +342,7 @@ func TestClosing(t *testing.T) {
 	<-ch
 
 	stats = p.StatsJSON()
-	expected = `{"Capacity": 0, "Available": 0, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 1}`
+	expected = `{"Capacity": 0, "Available": 0, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 5, lastID.Get())
 	assert.EqualValues(t, 0, count.Get())
@@ -367,7 +365,7 @@ func TestReopen(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 	stats := p.StatsJSON()
-	expected := `{"Capacity": 5, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 1}`
+	expected := `{"Capacity": 5, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 
 	time.Sleep(650 * time.Millisecond)
@@ -376,7 +374,7 @@ func TestReopen(t *testing.T) {
 	}
 	time.Sleep(50 * time.Millisecond)
 	stats = p.StatsJSON()
-	expected = `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 1}`
+	expected = `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 5, lastID.Get())
 	assert.EqualValues(t, 0, count.Get())
@@ -461,6 +459,53 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 	assert.Zero(t, p.Active())
 }
 
+func TestRefreshTimeout(t *testing.T) {
+	ctx := context.Background()
+	lastID.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 10*time.Millisecond, 0, logWait, nil, 0)
+	defer p.Close()
+
+	r, err := p.Get(ctx)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 0, p.RefreshClosed())
+
+	p.Put(r)
+	assert.EqualValues(t, 1, lastID.Get())
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 0, p.RefreshClosed())
+
+	time.Sleep(20 * time.Millisecond)
+	r, err = p.Get(ctx)
+	require.NoError(t, err)
+	p.Put(r)
+	assert.EqualValues(t, 2, count.Get())
+	assert.EqualValues(t, 1, p.RefreshClosed())
+
+	r, err = p.Get(ctx)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, lastID.Get())
+	assert.EqualValues(t, 2, count.Get())
+	assert.EqualValues(t, 1, p.RefreshClosed())
+
+	// sleep again to show that if we're not Put()-ing connections,
+	// they will not get closed
+	time.Sleep(20 * time.Millisecond)
+	assert.EqualValues(t, 2, lastID.Get())
+	assert.EqualValues(t, 2, count.Get())
+	assert.EqualValues(t, 1, p.RefreshClosed())
+
+	// But once we Put() now, we will get a refresh close
+	p.Put(r)
+	r, err = p.Get(ctx)
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, lastID.Get())
+	assert.EqualValues(t, 3, count.Get())
+	assert.EqualValues(t, 2, p.RefreshClosed())
+	p.Put(r)
+}
+
 func TestCreateFail(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
@@ -471,7 +516,7 @@ func TestCreateFail(t *testing.T) {
 		t.Errorf("Expecting Failed, received %v", err)
 	}
 	stats := p.StatsJSON()
-	expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 0}`
+	expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 0}`
 	assert.Equal(t, expected, stats)
 }
 
