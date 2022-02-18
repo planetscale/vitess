@@ -16,12 +16,20 @@ limitations under the License.
 
 package dbconnpool
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // PooledDBConnection re-exposes DBConnection to be used by ConnectionPool.
 type PooledDBConnection struct {
 	*DBConnection
-	pool *ConnectionPool
+	timeCreated time.Time
+	pool        *ConnectionPool
+}
+
+func (pc *PooledDBConnection) TimeCreated() time.Time {
+	return pc.timeCreated
 }
 
 // Recycle should be called to return the PooledDBConnection to the pool.
@@ -42,5 +50,6 @@ func (pc *PooledDBConnection) Reconnect(ctx context.Context) error {
 		return err
 	}
 	pc.DBConnection = newConn
+	pc.timeCreated = time.Now()
 	return nil
 }

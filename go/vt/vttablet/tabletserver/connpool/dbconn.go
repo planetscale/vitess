@@ -46,12 +46,13 @@ import (
 // its own queries and the underlying connection.
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
-	conn    *dbconnpool.DBConnection
-	info    dbconfigs.Connector
-	pool    *Pool
-	dbaPool *dbconnpool.ConnectionPool
-	stats   *tabletenv.Stats
-	current sync2.AtomicString
+	conn        *dbconnpool.DBConnection
+	info        dbconfigs.Connector
+	pool        *Pool
+	dbaPool     *dbconnpool.ConnectionPool
+	stats       *tabletenv.Stats
+	current     sync2.AtomicString
+	createdTime time.Time
 
 	// err will be set if a query is killed through a Kill.
 	errmu sync.Mutex
@@ -70,11 +71,12 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 		return nil, err
 	}
 	return &DBConn{
-		conn:    c,
-		info:    appParams,
-		pool:    cp,
-		dbaPool: cp.dbaPool,
-		stats:   cp.env.Stats(),
+		conn:        c,
+		info:        appParams,
+		pool:        cp,
+		dbaPool:     cp.dbaPool,
+		createdTime: time.Now(),
+		stats:       cp.env.Stats(),
 	}, nil
 }
 
@@ -85,11 +87,12 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 		return nil, err
 	}
 	return &DBConn{
-		conn:    c,
-		info:    params,
-		dbaPool: dbaPool,
-		pool:    nil,
-		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
+		conn:        c,
+		info:        params,
+		dbaPool:     dbaPool,
+		pool:        nil,
+		createdTime: time.Now(),
+		stats:       tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
 	}, nil
 }
 
@@ -312,6 +315,11 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) error {
 // Close closes the DBConn.
 func (dbc *DBConn) Close() {
 	dbc.conn.Close()
+}
+
+// TimeCreated returns when the connection was opened
+func (dbc *DBConn) TimeCreated() time.Time {
+	return dbc.createdTime
 }
 
 // IsClosed returns true if DBConn is closed.

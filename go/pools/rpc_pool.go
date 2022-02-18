@@ -44,7 +44,7 @@ type RPCPool struct {
 // will not be called).
 func NewRPCPool(size int, waitTimeout time.Duration, logWait func(time.Time)) *RPCPool {
 	return &RPCPool{
-		rp:          NewResourcePool(rpcResourceFactory, size, size, 0, size, logWait, nil, 0),
+		rp:          NewResourcePool(rpcResourceFactory, size, size, 0, 0, size, logWait, nil, 0),
 		waitTimeout: waitTimeout,
 	}
 }
@@ -85,8 +85,13 @@ type _rpc struct{}
 
 var rpc = &_rpc{}
 
+var _time = time.Now()
+
 // Close implements Resource for _rpc.
 func (*_rpc) Close() {}
+
+// TimeCreated does not matter in this case, just use startup time
+func (*_rpc) TimeCreated() time.Time { return _time }
 
 // we only ever return the same rpc pointer. it's used as a sentinel and is
 // only used internally so using the same one over and over doesn't matter.
