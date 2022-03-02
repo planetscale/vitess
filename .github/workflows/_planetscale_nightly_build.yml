@@ -25,7 +25,6 @@ jobs:
           - main
           - latest
         image:
-          - mysql57
           - mysql80
         include:
           # Default image is tagged as 'latest'
