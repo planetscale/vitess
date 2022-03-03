@@ -55,7 +55,7 @@
     "lint:stylelint:fix": "npm run lint:stylelint -- --fix",
     "analyze": "source-map-explorer 'build/static/js/*.js'",
     "eject": "react-scripts eject",
-    "build:npm": "tsc -p ./packageScripts/tsconfig.json --outDir ./package && tsc -p ./scripts/tsconfig.json && node ./scripts/createPackage.js"
+    "build:planetscale-vtadmin": "tsc -p ./planetscale-vtadmin-scripts/tsconfig.json --outDir ./planetscale-vtadmin && cp ./planetscale-vtadmin-scripts/README.md ./planetscale-vtadmin && tsc -p ./scripts/tsconfig.json && node ./scripts/createPlanetscaleVTAdmin.js"
   },
   "eslintConfig": {
     "extends": [

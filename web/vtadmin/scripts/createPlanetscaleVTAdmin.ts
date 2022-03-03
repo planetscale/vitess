@@ -3,9 +3,9 @@ import * as path from 'path'
 
 const packageJsonPath = path.join(__dirname, '..', 'package.json')
 const buildPath = path.join(__dirname, '..', 'build')
-const uiPackagePath = path.join(__dirname, '..', 'package')
-const indexJsPath = path.join(uiPackagePath, 'index.js')
-const indexDtsPath = path.join(uiPackagePath, 'index.d.ts')
+const planetscalePackagePath = path.join(__dirname, '..', 'planetscale-vtadmin')
+const indexJsPath = path.join(planetscalePackagePath, 'index.js')
+const indexDtsPath = path.join(planetscalePackagePath, 'index.d.ts')
 
 async function main() {
     console.log(`Verifying ${indexJsPath} exists`)
@@ -24,10 +24,10 @@ async function main() {
         throw new Error(`${indexDtsPath} did not exist.`)
     }
 
-    console.log(`Copy: ${buildPath} to ${uiPackagePath}`)
+    console.log(`Copy: ${buildPath} to ${planetscalePackagePath}`)
     try {
         await fs.ensureDir(buildPath)
-        await fs.copy(buildPath, uiPackagePath)
+        await fs.copy(buildPath, planetscalePackagePath)
     }
     catch (e) {
         throw e
@@ -40,7 +40,7 @@ async function main() {
         console.log(`Found name: ${name} version: ${version}`)
 
         const newPackageJson = {
-            name,
+            name: `@planetscale/${name}`,
             version,
             description,
             keywords,
@@ -53,7 +53,7 @@ async function main() {
             publishConfig
         }
 
-        const newPackageJsonFilePath = path.join(uiPackagePath, 'package.json')
+        const newPackageJsonFilePath = path.join(planetscalePackagePath, 'package.json')
         console.log(`Writing new package.json to ${newPackageJsonFilePath}`)
         await fs.writeJson(newPackageJsonFilePath, newPackageJson, { spaces: '  ' })
     }
