@@ -206,9 +206,11 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++
-		// Now that we've added the stream, increment wg.
+		// Now that we've added the stream, increment wg and potentially reload schema.
 		// This must be done before releasing the lock.
-		vse.wg.Add(1)
+		if err := vse.registerStreamer(); err != nil {
+			return nil, 0, err
+		}
 		return streamer, idx, nil
 	}()
 	if err != nil {
@@ -220,7 +222,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 		delete(vse.streamers, idx)
-		vse.wg.Done()
+		vse.unregisterStreamer()
 	}()
 
 	// No lock is held while streaming, but wg is incremented.
@@ -248,9 +250,11 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++
-		// Now that we've added the stream, increment wg.
+		// Now that we've added the stream, increment wg and potentially reload schema.
 		// This must be done before releasing the lock.
-		vse.wg.Add(1)
+		if err := vse.registerStreamer(); err != nil {
+			return nil, 0, err
+		}
 		return rowStreamer, idx, nil
 	}()
 	if err != nil {
@@ -262,7 +266,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 		delete(vse.rowStreamers, idx)
-		vse.wg.Done()
+		vse.unregisterStreamer()
 	}()
 
 	// No lock is held while streaming, but wg is incremented.
@@ -282,9 +286,11 @@ func (vse *Engine) StreamResults(ctx context.Context, query string, send func(*b
 		idx := vse.streamIdx
 		vse.resultStreamers[idx] = resultStreamer
 		vse.streamIdx++
-		// Now that we've added the stream, increment wg.
+		// Now that we've added the stream, increment wg and potentially reload schema.
 		// This must be done before releasing the lock.
-		vse.wg.Add(1)
+		if err := vse.registerStreamer(); err != nil {
+			return nil, 0, err
+		}
 		return resultStreamer, idx, nil
 	}()
 	if err != nil {
@@ -296,7 +302,7 @@ func (vse *Engine) StreamResults(ctx context.Context, query string, send func(*b
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 		delete(vse.resultStreamers, idx)
-		vse.wg.Done()
+		vse.unregisterStreamer()
 	}()
 
 	// No lock is held while streaming, but wg is incremented.
@@ -373,6 +379,27 @@ func (vse *Engine) setWatch() {
 		vse.vschemaUpdates.Add(1)
 		return true
 	})
+}
+
+// registerStreamer is called for every new streamer/rowstreamer/resultstreamer. Should be called with vse.mu locked.
+// If there are no currently running streamers it additionally reloads the schema. This is to avoid cases where this tablet's
+// schema is inconsistent because the schema changed externally.
+func (vse *Engine) registerStreamer() error {
+	if len(vse.streamers)+len(vse.rowStreamers)+len(vse.resultStreamers) == 0 {
+		if err := vse.se.Open(); err != nil {
+			return err
+		}
+		if err := vse.se.Reload(context.Background()); err != nil {
+			return err
+		}
+	}
+	vse.wg.Add(1)
+	return nil
+}
+
+// unregisterStreamer is called when a streamer exits. Should be called with vse.mu locked.
+func (vse *Engine) unregisterStreamer() {
+	vse.wg.Done()
 }
 
 func getPacketSize() int64 {
