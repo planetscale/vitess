@@ -1,7 +1,7 @@
 import * as fs from 'fs-extra'
 import * as path from 'path'
 
-const packageJsonPath = path.join(__dirname, '..', 'package.json')
+const packageJsonPath = path.join(__dirname, '..', 'planetscale-vtadmin-scripts', 'package.json')
 const buildPath = path.join(__dirname, '..', 'build')
 const planetscalePackagePath = path.join(__dirname, '..', 'planetscale-vtadmin')
 const indexJsPath = path.join(planetscalePackagePath, 'index.js')
@@ -40,7 +40,7 @@ async function main() {
         console.log(`Found name: ${name} version: ${version}`)
 
         const newPackageJson = {
-            name: `@planetscale/${name}`,
+            name,
             version,
             description,
             keywords,

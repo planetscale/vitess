@@ -1,28 +1,6 @@
 # VTAdmin Web
 VTAdmin Web is a user interface that allows Vitess users to easily manage and view state of their Vitess components. VTAdmin Web should be used with VTAdmin API (shipped within the Vitess monorepo).
 
-## Scripts
-```
-- vtadmin
-    - planetscale-vtadmin-scripts
-        - index.ts // Index file that is copied into package directory as the entrypoint of npm package
-    - scripts
-        - createPlanetscaleVTAdmin.ts // Script to copy vtadmin's package.json and build folder into package folder
-    - planetscale-vtadmin // Directory containing npm module @planetscale/vtadmin
-```
-
-`web/vtadmin/package.json` includes a build script run by `npm run build:planetscale-vtadmin` that:
-1. Compiles contents of `web/vtadmin/planetscale-vtadmin-scripts` to a new directory `web/vtadmin/planetscale-vtadmin`
-2. Copies some contents of `web/vtadmin/package.json` to `web/vtadmin/planetscale-vtadmin` as `web/vtadmin/planetscale-vtadmin/package.json`
-
-## Release NPM Package
-To release new versions of the vtadmin npm package:
-1. Bump the version of vtadmin at `web/vtadmin/package.json`
-2. Run `npm run build` to compile vtadmin-web into a minified `build` folder
-3. Run `npm run build:planetscale-vtadmin` to create package directory for `@planetscale/vtadmin` npm module
-4. `cd planetscale-vtadmin` to navigate into the folder for module `@planetscale/vtadmin`
-5. `npm publish` to publish new version to npm
-
 ## Usage
 ### Client-side (Rails example)
 You can directly import the .js files and .css files necessary to use in a Rails-Webpacker asset pipeline, like so:
@@ -61,3 +39,28 @@ app.listen(9000, () => {
     console.log(`Server started on http://localhost:9000`)
 })
 ```
+
+## Scripts
+**File structure**
+```
+- vtadmin
+    - planetscale-vtadmin-scripts
+        - index.ts // Index file that is copied into package directory as the entrypoint of npm package
+        - README.md // README for @planetscale/vtadmin npm package
+        - package.json // Base package.json for @planetscale/vtadmin npm package
+    - scripts
+        - createPlanetscaleVTAdmin.ts // Script to copy vtadmin's package.json and build folder into package folder
+    - planetscale-vtadmin // Directory containing npm module @planetscale/vtadmin
+```
+
+`web/vtadmin/package.json` includes a build script run by `npm run build:planetscale-vtadmin` that:
+1. Compiles contents of `web/vtadmin/planetscale-vtadmin-scripts` to a new directory `web/vtadmin/planetscale-vtadmin`
+
+## Release NPM Package
+To release new versions of the vtadmin npm package:
+1. Bump the version of vtadmin at `web/vtadmin/package.json`
+2. Run `npm run build` to compile vtadmin-web into a minified `build` folder
+3. Run `npm run build:planetscale-vtadmin` to create package directory for `@planetscale/vtadmin` npm module
+4. `cd planetscale-vtadmin` to navigate into the folder for module `@planetscale/vtadmin`
+5. `npm publish --access public` to publish new version to npm
+
