@@ -20,7 +20,7 @@ import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } fr
 import { HttpOkResponse } from './responseTypes';
 import { TabletDebugVars } from '../util/tabletDebugVars';
 import { isReadOnlyMode } from '../util/env';
-import cookies from 'js-cookie'
+import cookies from 'js-cookie';
 
 /**
  * vtfetch makes HTTP requests against the given vtadmin-api endpoint
@@ -47,8 +47,8 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
 
         // To support variable API endpoints, check if an api address is set as a cookie before
         // falling back to REACT_APP_VTADMIN_API_ADDRESS
-        const vtadmin_api_addr = cookies.get("vtadmin_api_addr")
-        const url = vtadmin_api_addr ?`${vtadmin_api_addr}${endpoint}` : `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
+        const vtadmin_api_addr = cookies.get('vtadmin_api_addr');
+        const url = vtadmin_api_addr ? `${vtadmin_api_addr}${endpoint}` : `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
 
         let response = null;
         try {
