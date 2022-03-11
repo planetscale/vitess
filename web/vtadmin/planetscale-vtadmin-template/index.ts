@@ -1,3 +1,4 @@
-import VtAdmin from './static/js/main'
+import VTAdmin from './static/js/main'
+import './static/css/main.css'
 
-export default VtAdmin;
+export default VTAdmin

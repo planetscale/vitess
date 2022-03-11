@@ -50,6 +50,7 @@ async function main() {
             homepage: "./",
             publishConfig
         }
+        console.log(newPackageJson)
 
         const newPackageJsonFilePath = path.join(planetscalePackagePath, 'package.json')
         console.log(`Writing new package.json to ${newPackageJsonFilePath}`)
