@@ -1,1 +1,23 @@
-# Add your test case here for debugging and run go test -run=One.
+# typeorm query
+"select 1 from (select * from information_schema.KEY_COLUMN_USAGE kcu where kcu.table_schema = 'user' and kcu.table_name = 'user' union select * from information_schema.KEY_COLUMN_USAGE kcu where kcu.table_schema = 'user' and kcu.table_name = 'user') kcu inner join (select * from information_schema.REFERENTIAL_CONSTRAINTS where CONSTRAINT_SCHEMA = 'user' and table_name = 'user' union select * from information_schema.REFERENTIAL_CONSTRAINTS where CONSTRAINT_SCHEMA = 'user' and table_name = 'user') rc on `rc`.`CONSTRAINT_SCHEMA` = `kcu`.`CONSTRAINT_SCHEMA` AND `rc`.`TABLE_NAME` = `kcu`.`TABLE_NAME` AND `rc`.`CONSTRAINT_NAME` = `kcu`.`CONSTRAINT_NAME`"
+"symbol rc.CONSTRAINT_SCHEMA not found in table or subquery"
+Gen4 error: we cannot push output columns into *physical.Union
+
+# type orm simplified query
+"select 0 from (select * from information_schema.KEY_COLUMN_USAGE as kcu union select 0 from information_schema.KEY_COLUMN_USAGE as kcu) as kcu join (select * from information_schema.REFERENTIAL_CONSTRAINTS) as rc on rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME"
+{
+  "QueryType": "SELECT",
+  "Original": "select 0 from (select * from information_schema.KEY_COLUMN_USAGE as kcu union select 0 from information_schema.KEY_COLUMN_USAGE as kcu) as kcu join (select * from information_schema.REFERENTIAL_CONSTRAINTS) as rc on rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 0 from (select * from information_schema.KEY_COLUMN_USAGE as kcu where 1 != 1 union select 0 from information_schema.KEY_COLUMN_USAGE as kcu where 1 != 1) as kcu join (select * from information_schema.REFERENTIAL_CONSTRAINTS where 1 != 1) as rc on rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME where 1 != 1",
+    "Query": "select 0 from (select * from information_schema.KEY_COLUMN_USAGE as kcu union select 0 from information_schema.KEY_COLUMN_USAGE as kcu) as kcu join (select * from information_schema.REFERENTIAL_CONSTRAINTS) as rc on rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME",
+    "Table": "information_schema.KEY_COLUMN_USAGE, information_schema.REFERENTIAL_CONSTRAINTS"
+  }
+}
+Gen4 error: we cannot push output columns into *physical.Union

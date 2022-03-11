@@ -36,7 +36,7 @@ import (
 // TestSimplifyBuggyQuery should be used to whenever we get a planner bug reported
 // It will try to minimize the query to make it easier to understand and work with the bug.
 func TestSimplifyBuggyQuery(t *testing.T) {
-	query := "(select id from unsharded union select id from unsharded_auto) union (select id from user union select name from unsharded)"
+	query := "select 1 from (select * from information_schema.KEY_COLUMN_USAGE kcu where kcu.table_schema = 'user' and kcu.table_name = 'user' union select * from information_schema.KEY_COLUMN_USAGE kcu where kcu.table_schema = 'user' and kcu.table_name = 'user') kcu inner join (select * from information_schema.REFERENTIAL_CONSTRAINTS where CONSTRAINT_SCHEMA = 'user' and table_name = 'user' union select * from information_schema.REFERENTIAL_CONSTRAINTS where CONSTRAINT_SCHEMA = 'user' and table_name = 'user') rc on `rc`.`CONSTRAINT_SCHEMA` = `kcu`.`CONSTRAINT_SCHEMA` AND `rc`.`TABLE_NAME` = `kcu`.`TABLE_NAME` AND `rc`.`CONSTRAINT_NAME` = `kcu`.`CONSTRAINT_NAME`"
 	vschema := &vschemaWrapper{
 		v:       loadSchema(t, "schema_test.json", true),
 		version: Gen4,
