@@ -27,4 +27,3 @@ yarn-error.log*
 # @planetscale/vtadmin
 /planetscale-vtadmin
 scripts/createPlanetscaleVTAdmin.js
-

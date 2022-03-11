@@ -1,5 +1,3 @@
-// import * as fs from 'fs-extra'
-// import * as path from 'path'
 const fs = require('fs-extra')
 const path = require('path')
 
