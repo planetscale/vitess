@@ -1,7 +1,9 @@
-import * as fs from 'fs-extra'
-import * as path from 'path'
+// import * as fs from 'fs-extra'
+// import * as path from 'path'
+const fs = require('fs-extra')
+const path = require('path')
 
-const packageJsonPath = path.join(__dirname, '..', 'planetscale-vtadmin-scripts', 'package.json')
+const packageJsonPath = path.join(__dirname, '..', 'planetscale-vtadmin-template', 'package.json')
 const buildPath = path.join(__dirname, '..', 'build')
 const planetscalePackagePath = path.join(__dirname, '..', 'planetscale-vtadmin')
 const indexJsPath = path.join(planetscalePackagePath, 'index.js')
@@ -47,8 +49,6 @@ async function main() {
             author,
             repository,
             license,
-            main: "index.js",
-            typings: "index.d.ts",
             homepage: "./",
             publishConfig
         }

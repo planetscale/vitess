@@ -55,7 +55,8 @@
     "lint:stylelint:fix": "npm run lint:stylelint -- --fix",
     "analyze": "source-map-explorer 'build/static/js/*.js'",
     "eject": "react-scripts eject",
-    "build:planetscale-vtadmin": "tsc -p ./planetscale-vtadmin-scripts/tsconfig.json --outDir ./planetscale-vtadmin && cp ./planetscale-vtadmin-scripts/README.md ./planetscale-vtadmin && tsc -p ./scripts/tsconfig.json && node ./scripts/createPlanetscaleVTAdmin.js"
+    "build:planetscale-vtadmin": "tsc -p ./planetscale-vtadmin-template/tsconfig.json --outDir ./planetscale-vtadmin && cp ./planetscale-vtadmin-template/README.md ./planetscale-vtadmin && node ./scripts/verify-pscale-build.ts",
+    "build:planetscale": "tsc -p ./planetscale-vtadmin-template/tsconfig.json --outDir ./planetscale-vtadmin && cp ./planetscale-vtadmin-template/README.md ./planetscale-vtadmin && node ./scripts/verify-pscale-build.ts"
   },
   "eslintConfig": {
     "extends": [
@@ -92,6 +93,7 @@
     "postcss": "^8.4.6",
     "prettier": "^2.2.1",
     "protobufjs": "^6.10.2",
+    "rewire": "^6.0.0",
     "stylelint": "^14.4.0",
     "stylelint-config-prettier": "^9.0.3",
     "stylelint-config-standard-scss": "^3.0.0",
