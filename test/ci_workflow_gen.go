@@ -97,6 +97,7 @@ var (
 		"vtgate_vschema",
 		"vtgate_queries",
 		"vtgate_schema_tracker",
+		"vtgate_tablet_healthcheck_cache",
 		"xb_recovery",
 		"resharding",
 		"resharding_bytes",

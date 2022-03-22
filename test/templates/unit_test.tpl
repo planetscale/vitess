@@ -1,14 +1,20 @@
 name: {{.Name}}
-on: [push, pull_request]
+on: [push]
 concurrency:
   group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
   cancel-in-progress: true
 
 jobs:
   test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
+    - name: Configure git private repo access
+      env:
+        GITHUB_TOKEN: ${{"{{"}} secrets.PLANETSCALE_ACTIONS_BOT_TOKEN {{"}}"}}
+      run: |
+        git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+
     - name: Set up Go
       uses: actions/setup-go@v2
       with:

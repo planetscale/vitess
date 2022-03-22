@@ -1,13 +1,8 @@
 name: {{.Name}}
-on: [push, pull_request]
+on: [push]
 concurrency:
   group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
   cancel-in-progress: true
-
-env:
-  LAUNCHABLE_ORGANIZATION: "vitess"
-  LAUNCHABLE_WORKSPACE: "vitess-app"
-  GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
 
 jobs:
   build:
@@ -15,6 +10,12 @@ jobs:
     {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
 
     steps:
+    - name: Configure git private repo access
+      env:
+        GITHUB_TOKEN: ${{"{{"}} secrets.PLANETSCALE_ACTIONS_BOT_TOKEN {{"}}"}}
+      run: |
+        git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
@@ -52,38 +53,6 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
-        # install JUnit report formatter
-        go get -u github.com/vitessio/go-junit-report@HEAD
-
-        {{if .InstallXtraBackup}}
-
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
-
-        {{end}}
-
-    {{if .MakeTools}}
-
-    - name: Installing zookeeper and consul
-      run: |
-          make tools
-
-    {{end}}
-
-    - name: Setup launchable dependencies
-      run: |
-        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
-        pip3 install --user launchable~=1.0 > /dev/null
-
-        # verify that launchable setup is all correct.
-        launchable verify || true
-
-        # Tell Launchable about the build you are producing and testing
-        launchable record build --name "$GITHUB_RUN_ID" --source .
-
     - name: Run cluster endtoend test
       timeout-minutes: 30
       run: |
@@ -91,14 +60,10 @@ jobs:
 
         set -x
 
-        # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}} | tee -a output.txt
 
-    - name: Print test output and Record test result in launchable
+    - name: Print test output
       run: |
-        # send recorded tests to launchable
-        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
-
         # print test output
         cat output.txt
       if: always()

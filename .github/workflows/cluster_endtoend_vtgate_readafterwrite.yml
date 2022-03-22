@@ -1,15 +1,10 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
 name: Cluster (vtgate_readafterwrite)
-on: [push, pull_request]
+on: [push]
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_readafterwrite)')
   cancel-in-progress: true
-
-env:
-  LAUNCHABLE_ORGANIZATION: "vitess"
-  LAUNCHABLE_WORKSPACE: "vitess-app"
-  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
 jobs:
   build:
@@ -17,6 +12,12 @@ jobs:
     runs-on: ubuntu-18.04
 
     steps:
+    - name: Configure git private repo access
+      env:
+        GITHUB_TOKEN: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+      run: |
+        git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
@@ -37,33 +38,22 @@ jobs:
 
     - name: Get dependencies
       run: |
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+
+        # Setup MySQL 8.0
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+
+        # Install everything else we need, and configure
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
-
-        # install JUnit report formatter
-        go get -u github.com/vitessio/go-junit-report@HEAD
-
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
-
-    - name: Setup launchable dependencies
-      run: |
-        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
-        pip3 install --user launchable~=1.0 > /dev/null
-
-        # verify that launchable setup is all correct.
-        launchable verify || true
-
-        # Tell Launchable about the build you are producing and testing
-        launchable record build --name "$GITHUB_RUN_ID" --source .
 
     - name: Run cluster endtoend test
       timeout-minutes: 30
@@ -72,14 +62,10 @@ jobs:
 
         set -x
 
-        # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard vtgate_readafterwrite | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard vtgate_readafterwrite | tee -a output.txt
 
-    - name: Print test output and Record test result in launchable
+    - name: Print test output
       run: |
-        # send recorded tests to launchable
-        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
-
         # print test output
         cat output.txt
       if: always()
