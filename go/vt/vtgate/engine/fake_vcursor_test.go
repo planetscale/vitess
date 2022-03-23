@@ -61,6 +61,11 @@ func newNoopVCursor(ctx context.Context) *noopVCursor {
 	return n
 }
 
+// SetContextWithValue implements VCursor interface.
+func (t *noopVCursor) SetContextWithValue(key, value interface{}) func() {
+	return func() {}
+}
+
 func (t *noopVCursor) CancelContext() {
 	t.cancel()
 }
