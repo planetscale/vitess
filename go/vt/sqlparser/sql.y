@@ -357,7 +357,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
-%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal bool_pri literal_or_null now predicate tuple_expression
+%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -425,7 +425,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <convertType> convert_type convert_type_weight_string
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt func_datetime_precision
+%type <literal> length_opt
+%type <expr> func_datetime_precision
 %type <str> charset_opt collate_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolean> unsigned_opt zero_fill_opt without_valid_opt
@@ -1624,6 +1625,25 @@ STRING
    {
    	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
    }
+
+text_literal_or_arg:
+STRING
+  {
+    $$ = NewStrLiteral($1)
+  }
+| NCHAR_STRING
+  {
+    $$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
+  }
+| underscore_charsets STRING %prec UNARY
+  {
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
+  }
+| VALUE_ARG
+  {
+    $$ = NewArgument($1[1:])
+    bindVariable(yylex, $1[1:])
+  }
 
 keys:
   PRIMARY KEY
@@ -3793,13 +3813,19 @@ distinct_opt:
   }
 
 prepare_statement:
-  PREPARE comment_opt sql_id FROM STRING
+  PREPARE comment_opt sql_id FROM text_literal_or_arg
   {
     $$ = &PrepareStmt{Name:$3, Comments: $2, Statement:$5}
   }
 | PREPARE comment_opt sql_id FROM AT_ID
   {
-    $$ = &PrepareStmt{Name:$3, Comments: $2, StatementIdentifier: NewColIdentWithAt(string($5), SingleAt)}
+    $$ = &PrepareStmt{
+    	Name:$3,
+    	Comments: $2,
+    	Statement: &ColName{
+    		Name: NewColIdentWithAt(string($5), SingleAt),
+    	},
+    }
   }
 
 execute_statement:
@@ -4500,13 +4526,13 @@ function_call_keyword
 	// will be non-trivial because of grammar conflicts.
 	$$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
-| column_name JSON_EXTRACT_OP STRING
+| column_name JSON_EXTRACT_OP text_literal_or_arg
   {
-	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: NewStrLiteral($3)}
+	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
   }
-| column_name JSON_UNQUOTE_EXTRACT_OP STRING
+| column_name JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
-	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: NewStrLiteral($3)}
+	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
   }
 
 
@@ -4826,6 +4852,11 @@ func_datetime_precision:
 | openb INTEGRAL closeb
   {
   	$$ = NewIntLiteral($2)
+  }
+| openb VALUE_ARG closeb
+  {
+    $$ = NewArgument($2[1:])
+    bindVariable(yylex, $2[1:])
   }
 
 /*
