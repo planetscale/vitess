@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
-	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -4835,6 +4834,7 @@ func TestServeHTTP(t *testing.T) {
 		enableDynamicClusters bool
 		clusters              []*cluster.Cluster
 		expected              []*vtadminpb.Cluster
+		repeat                bool
 	}{
 		{
 			name:                  "multiple clusters without dynamic clusters",
@@ -4892,6 +4892,30 @@ func TestServeHTTP(t *testing.T) {
 			},
 		},
 		{
+			name:                  "multiple clusters with dynamic clusters - no duplicates",
+			enableDynamicClusters: true,
+			cookie:                `{"name": "dynamiccluster1", "vtctlds": [{"host":{"fqdn": "localhost:15000", "hostname": "localhost:15999"}}], "vtgates": [{"host": {"hostname": "localhost:15991"}}]}`,
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "dynamiccluster1",
+					Name: "dynamiccluster1",
+				},
+			},
+			repeat: true,
+		},
+		{
 			name:                  "multiple clusters with invalid json cookie and dynamic clusters",
 			enableDynamicClusters: true,
 			cookie:                `{"name "dynamiccluster1", "vtctlds": [{"host":{"fqdn": "localhost:15000", "hostname": "localhost:15999"}}], "vtgates": [{"host": {"hostname": "localhost:15991"}}]}`,
@@ -4932,7 +4956,7 @@ func TestServeHTTP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			api := NewAPI(tt.clusters, Options{HTTPOpts: vtadminhttp.Options{EnableDynamicClusters: tt.enableDynamicClusters}})
+			api := NewAPI(tt.clusters, Options{EnableDynamicClusters: tt.enableDynamicClusters})
 
 			// Copy the Cookie over to a new Request
 			req := httptest.NewRequest(http.MethodGet, "/api/clusters", nil)
@@ -4941,6 +4965,10 @@ func TestServeHTTP(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			api.ServeHTTP(w, req)
+
+			if tt.repeat {
+				api.ServeHTTP(w, req)
+			}
 
 			res := w.Result()
 			defer res.Body.Close()
