@@ -384,12 +384,15 @@ func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr 
 		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "unsupported: pushing projection '%s' on %T", sqlparser.String(expr), rb.Select)
 	}
 
-	// if we are trying to push a projection that belongs to a DerivedTable
-	// we rewrite that expression, so it matches the column name used inside
-	// that derived table.
-	err := rewriteProjectionOfDerivedTable(expr, ctx.SemTable)
-	if err != nil {
-		return 0, false, err
+	_, isWeightStr := expr.Expr.(*sqlparser.WeightStringFuncExpr)
+	if !isWeightStr {
+		// if we are trying to push a projection that belongs to a DerivedTable
+		// we rewrite that expression, so it matches the column name used inside
+		// that derived table.
+		err := rewriteProjectionOfDerivedTable(expr, ctx.SemTable)
+		if err != nil {
+			return 0, false, err
+		}
 	}
 
 	offset := len(sel.SelectExprs)
@@ -398,6 +401,7 @@ func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr 
 }
 
 func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) error {
+
 	ti, err := semTable.TableInfoForExpr(expr.Expr)
 	if err != nil && err != semantics.ErrMultipleTables {
 		return err
@@ -989,15 +993,7 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 }
 
 func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
-	return &sqlparser.FuncExpr{
-		Name: sqlparser.NewColIdent("weight_string"),
-		Exprs: []sqlparser.SelectExpr{
-			&sqlparser.AliasedExpr{
-				Expr: expr,
-			},
-		},
-	}
-
+	return &sqlparser.WeightStringFuncExpr{Expr: expr}
 }
 
 func (hp *horizonPlanning) planOrderByForHashJoin(ctx *plancontext.PlanningContext, orderExprs []abstract.OrderBy, plan *hashJoin) (logicalPlan, error) {

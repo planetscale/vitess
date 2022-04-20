@@ -1,1 +1,163 @@
 # Add your test case here for debugging and run go test -run=One.
+"select col1, count(*) from (select colC+colD as col1 from user) as tbl group by col1"
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, count(*) from (select colC+colD as col1 from user) as tbl group by col1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, count(*), weight_string(col1) from (select colC + colD as col1 from `user` where 1 != 1) as tbl where 1 != 1 group by col1, weight_string(col1)",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select col1, count(*), weight_string(col1) from (select colC + colD as col1 from `user`) as tbl group by col1, weight_string(col1) order by col1 asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, count(*) from (select colC+colD as col1 from user) as tbl group by col1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "sum(1) AS count(*)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, count(*), weight_string(col1) from (select colC + colD as col1 from `user` where 1 != 1) as tbl where 1 != 1 group by col1, weight_string(col1)",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select col1, count(*), weight_string(col1) from (select colC + colD as col1 from `user`) as tbl group by col1, weight_string(col1) order by col1 asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+#"SELECT
+#    latest_error as `Latest Error`,
+#    count(*) AS `Count`,
+#    sum(if(latest_tried_at BETWEEN FROM_UNIXTIME(1648578304) AND FROM_UNIXTIME(1648664704), 1, 0)) AS `Last Errored in Period`
+# FROM (
+#    select
+#        JSON_UNQUOTE(JSON_EXTRACT(attributes, '$.latestError')) as latest_error,
+#        TIMESTAMP(JSON_EXTRACT(attributes, '$.latestTriedAt')) as latest_tried_at
+#    from user
+#    where time_next is not null
+#) as msgs_errors
+#WHERE latest_error IS NOT NULL
+#GROUP BY latest_error
+#ORDER BY `Count` desc
+#LIMIT 30;"
+##{
+##  "QueryType": "SELECT",
+##  "Original": "SELECT latest_error as `Latest Error`, count(*) AS `Count`, sum(if(latest_tried_at BETWEEN FROM_UNIXTIME(1648578304) AND FROM_UNIXTIME(1648664704), 1, 0)) AS `Last Errored in Period` FROM (select JSON_UNQUOTE(JSON_EXTRACT(attributes, '$.latestError')) as latest_error, TIMESTAMP(JSON_EXTRACT(attributes, '$.latestTriedAt')) as latest_tried_at from user where time_next is not null) as msgs_errors WHERE latest_error IS NOT NULL GROUP BY latest_error ORDER BY `Count` desc LIMIT 30;",
+##  "Instructions": {
+##    "OperatorType": "Limit",
+##    "Count": "INT64(30)",
+##    "Inputs": [
+##      {
+##        "OperatorType": "Sort",
+##        "Variant": "Memory",
+##        "OrderBy": "1 DESC",
+##        "Inputs": [
+##          {
+##            "OperatorType": "Aggregate",
+##            "Variant": "Ordered",
+##            "Aggregates": "count(1), sum(2)",
+##            "GroupBy": "0",
+##            "Inputs": [
+##              {
+##                "OperatorType": "Route",
+##                "Variant": "Scatter",
+##                "Keyspace": {
+#                  "Name": "user",
+#                  "Sharded": true
+#                },
+#                "FieldQuery": "select latest_error as `Latest Error`, count(*) as Count, sum(if(latest_tried_at between FROM_UNIXTIME(1648578304) and FROM_UNIXTIME(1648664704), 1, 0)) as `Last Errored in Period`, weight_string(latest_error) from (select json_unquote(json_extract(attributes, '$.latestError')) as latest_error, TIMESTAMP(json_extract(attributes, '$.latestTriedAt')) as latest_tried_at from `user` where 1 != 1) as msgs_errors where 1 != 1 group by latest_error, weight_string(latest_error)",
+#                "OrderBy": "(0|3) ASC",
+#                "Query": "select latest_error as `Latest Error`, count(*) as Count, sum(if(latest_tried_at between FROM_UNIXTIME(1648578304) and FROM_UNIXTIME(1648664704), 1, 0)) as `Last Errored in Period`, weight_string(latest_error) from (select json_unquote(json_extract(attributes, '$.latestError')) as latest_error, TIMESTAMP(json_extract(attributes, '$.latestTriedAt')) as latest_tried_at from `user` where time_next is not null) as msgs_errors where latest_error is not null group by latest_error, weight_string(latest_error) order by `Latest Error` asc",
+#                "ResultColumns": 3,
+#                "Table": "`user`"
+#              }
+#            ]
+#          }
+#        ]
+#      }
+#    ]
+#  }
+#}
+#{
+#  "QueryType": "SELECT",
+#  "Original": "SELECT latest_error as `Latest Error`, count(*) AS `Count`, sum(if(latest_tried_at BETWEEN FROM_UNIXTIME(1648578304) AND FROM_UNIXTIME(1648664704), 1, 0)) AS `Last Errored in Period` FROM (select JSON_UNQUOTE(JSON_EXTRACT(attributes, '$.latestError')) as latest_error, TIMESTAMP(JSON_EXTRACT(attributes, '$.latestTriedAt')) as latest_tried_at from user where time_next is not null) as msgs_errors WHERE latest_error IS NOT NULL GROUP BY latest_error ORDER BY `Count` desc LIMIT 30;",
+#  "Instructions": {
+#    "OperatorType": "Limit",
+#    "Count": "INT64(30)",
+#    "Inputs": [
+#      {
+#        "OperatorType": "Sort",
+#        "Variant": "Memory",
+#        "OrderBy": "1 DESC",
+#        "ResultColumns": 3,
+#        "Inputs": [
+#          {
+#            "OperatorType": "Aggregate",
+#            "Variant": "Ordered",
+#            "Aggregates": "sum(1) AS Count, sum(2) AS Last Errored in Period",
+#            "GroupBy": "(0|3)",
+#            "Inputs": [
+#              {
+#                "OperatorType": "Route",
+#                "Variant": "Scatter",
+#                "Keyspace": {
+#                  "Name": "user",
+#                  "Sharded": true
+#                },
+#                "FieldQuery": "select latest_error as `Latest Error`, count(*) as Count, sum(if(latest_tried_at between FROM_UNIXTIME(1648578304) and FROM_UNIXTIME(1648664704), 1, 0)) as `Last Errored in Period`, weight_string(json_unquote(json_extract(attributes, '$.latestError'))), weight_string(json_unquote(json_extract(attributes, '$.latestError'))) from (select json_unquote(json_extract(attributes, '$.latestError')) as latest_error, TIMESTAMP(json_extract(attributes, '$.latestTriedAt')) as latest_tried_at from `user` where 1 != 1) as msgs_errors where 1 != 1 group by latest_error, weight_string(latest_error)",
+#                "OrderBy": "(0|4) ASC",
+#                "Query": "select latest_error as `Latest Error`, count(*) as Count, sum(if(latest_tried_at between FROM_UNIXTIME(1648578304) and FROM_UNIXTIME(1648664704), 1, 0)) as `Last Errored in Period`, weight_string(json_unquote(json_extract(attributes, '$.latestError'))), weight_string(json_unquote(json_extract(attributes, '$.latestError'))) from (select json_unquote(json_extract(attributes, '$.latestError')) as latest_error, TIMESTAMP(json_extract(attributes, '$.latestTriedAt')) as latest_tried_at from `user` where time_next is not null and json_unquote(json_extract(attributes, '$.latestError')) is not null) as msgs_errors group by latest_error, weight_string(latest_error) order by latest_error asc",
+#                "Table": "`user`"
+#              }
+#            ]
+#          }
+#        ]
+#      }
+#    ]
+#  }
+#}
+#
+# select
+#     latest_error as `Latest Error`,
+#     count(*) as Count,
+#     sum(if(latest_tried_at between FROM_UNIXTIME(1648578304) and FROM_UNIXTIME(1648664704), 1, 0)) as `Last Errored in Period`,
+#     weight_string(JSON_UNQUOTE(json_extract(attributes, '$.latestError'))),
+#     weight_string(JSON_UNQUOTE(json_extract(attributes, '$.latestError')))
+# from (
+#     select
+#         JSON_UNQUOTE(json_extract(attributes, '$.latestError')) as latest_error,
+#         TIMESTAMP(json_extract(attributes, '$.latestTriedAt')) as latest_tried_at
+#     from `user`
+#         where time_next is not null and
+#             JSON_UNQUOTE(json_extract(attributes, '$.latestError')) is not null) as msgs_errors
+# group by
+#     latest_error,
+#     weight_string(latest_error)
+# order by
+#     latest_error asc
