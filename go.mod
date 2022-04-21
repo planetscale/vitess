@@ -88,32 +88,18 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.0
 	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
-<<<<<<< HEAD
 	golang.org/x/mod v0.5.1 // indirect
 	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 	golang.org/x/term v0.0.0-20210615171337-6886f2dfbf5b
-=======
-	golang.org/x/mod v0.4.2 // indirect
-	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
-	golang.org/x/oauth2 v0.0.0-20220309155454-6242fa91716a
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5 // indirect
-	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
->>>>>>> 4a157b946e... vt/mysqlctl: add gcsbackup (#535)
 	golang.org/x/text v0.3.7
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac
 	golang.org/x/tools v0.1.12
 	google.golang.org/api v0.45.0
-<<<<<<< HEAD
 	google.golang.org/genproto v0.0.0-20210701191553-46259e63a0a9 // indirect
 	google.golang.org/grpc v1.45.0
-=======
-	google.golang.org/genproto v0.0.0-20210728212813-7823e685a01f // indirect
-	google.golang.org/grpc v1.39.0
->>>>>>> 4a157b946e... vt/mysqlctl: add gcsbackup (#535)
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0
 	google.golang.org/grpc/examples v0.0.0-20210430044426-28078834f35b
 	google.golang.org/protobuf v1.28.0
@@ -131,11 +117,14 @@ require (
 	sigs.k8s.io/yaml v1.2.0
 )
 
-<<<<<<< HEAD
 require github.com/bndr/gotabulate v1.1.2
-=======
 require github.com/syndtr/goleveldb v1.0.0
->>>>>>> 4a157b946e... vt/mysqlctl: add gcsbackup (#535)
+
+require (
+	github.com/planetscale/psevents v0.0.0-20220415134050-eec288c0df27
+	github.com/segmentio/kafka-go v0.4.28
+	github.com/twmb/murmur3 v1.1.6
+)
 
 require (
 	cloud.google.com/go v0.81.0 // indirect
@@ -176,6 +165,7 @@ require (
 	github.com/onsi/ginkgo v1.12.1 // indirect
 	github.com/onsi/gomega v1.10.3 // indirect
 	github.com/pelletier/go-toml v1.9.3 // indirect
+	github.com/pierrec/lz4 v2.6.0+incompatible // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
@@ -187,6 +177,10 @@ require (
 	github.com/subosito/gotenv v1.2.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasttemplate v1.0.1 // indirect
+	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c // indirect
+	github.com/xdg/stringprep v1.0.0 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
