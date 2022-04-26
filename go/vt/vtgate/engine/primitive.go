@@ -115,6 +115,9 @@ type (
 		MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error
 
 		VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
+
+		// CanUseSetVar returns true if system_settings can use SET_VAR hint.
+		CanUseSetVar() bool
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -153,7 +156,6 @@ type (
 
 		SetSessionEnableSystemSettings(bool) error
 		GetSessionEnableSystemSettings() bool
-		GetEnableSetVar() bool
 
 		GetSystemVariables(func(k string, v string))
 		HasSystemVariables() bool

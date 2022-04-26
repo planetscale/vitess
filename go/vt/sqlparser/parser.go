@@ -314,3 +314,7 @@ func String(node SQLNode) string {
 	node.formatFast(buf)
 	return buf.String()
 }
+
+func IsMySQL80AndAbove() bool {
+	return MySQLVersion >= "80000"
+}

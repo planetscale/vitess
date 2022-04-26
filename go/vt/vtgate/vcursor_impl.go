@@ -757,11 +757,6 @@ func (vc *vcursorImpl) GetSessionEnableSystemSettings() bool {
 	return vc.safeSession.GetSessionEnableSystemSettings()
 }
 
-// GetEnableSetVar implements the SessionActions interface
-func (vc *vcursorImpl) GetEnableSetVar() bool {
-	return vc.safeSession.GetEnableSetVar()
-}
-
 // SetReadAfterWriteGTID implements the SessionActions interface
 func (vc *vcursorImpl) SetReadAfterWriteGTID(vtgtid string) {
 	vc.safeSession.SetReadAfterWriteGTID(vtgtid)
@@ -919,4 +914,8 @@ func (vc *vcursorImpl) MessageStream(rss []*srvtopo.ResolvedShard, tableName str
 
 func (vc *vcursorImpl) VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
 	return vc.executor.ExecuteVStream(vc.ctx, rss, filter, gtid, callback)
+}
+
+func (vc *vcursorImpl) CanUseSetVar() bool {
+	return sqlparser.IsMySQL80AndAbove() && *setVarEnabled
 }
