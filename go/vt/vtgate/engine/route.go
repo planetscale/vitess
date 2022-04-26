@@ -406,6 +406,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 		Fields:       in.Fields,
 		Rows:         in.Rows,
 		RowsAffected: in.RowsAffected,
+		RowsRead:     in.RowsRead,
 		InsertID:     in.InsertID,
 	}
 
