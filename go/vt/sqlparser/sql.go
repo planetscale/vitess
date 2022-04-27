@@ -9662,7 +9662,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2310
 		{
-			yyLOCAL = &TableOption{Name: (string(yyDollar[2].str)), String: yyDollar[4].str}
+			yyLOCAL = &TableOption{Name: (string(yyDollar[2].str)), String: yyDollar[4].str, CaseSensitive: true}
 		}
 		yyVAL.union = yyLOCAL
 	case 406:
@@ -9670,7 +9670,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2314
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[2].str), String: yyDollar[4].str}
+			yyLOCAL = &TableOption{Name: string(yyDollar[2].str), String: yyDollar[4].str, CaseSensitive: true}
 		}
 		yyVAL.union = yyLOCAL
 	case 407:
