@@ -1,7 +1,15 @@
 # VTAdmin at Planetscale
-VTAdmin a web UI and API that allows users to manage their Vitess clusters. At Planetscale, VTAdmin is deployed as two parts: VTAdmin API and VTAdmin Web.
+VTAdmin an open-sourced web UI and API that allows users to manage their Vitess clusters. At Planetscale, VTAdmin is deployed as two parts: VTAdmin API and VTAdmin Web.
 
 VTAdmin currently lives at `vtadmin.planetscale.com`, but must be accessed via a button on a branch's page in the admin portal, i.e. `https://admin.planetscale.com/admin/organizations/frances/databases/broccoli-biscuits/branches/main`. This is because nececessary cookies and url parameters must be set from a branch's page before redirecting to vtadmin.
+
+**Internal Slack Channel**: planetscale/#project-vtadmin 
+**Open Source Slack Channel**: vitess/#vtadmin
+**Internal Project**: https://app.shortcut.com/planetscale/epic/2332/vtadmin-planetscale?cf_workflow=500000050&ct_workflow=all
+**Open Source Project**: https://github.com/vitessio/vitess/projects/12
+
+## Open Source
+VTAdmin is an open-source project, a part of the Vitess project. As of May 2022, it will be GA. While there may not be a dedicated Planetscale engineer working on VTAdmin at all times, we will always be able to appreciate and use updates made to VTAdmin by the open-source community.
 ## Background & Context
 ### VTAdmin API
 VTAdmin was initially built to support a static list of clusters provided at initialization time, and also had a "list-all" structure, wherein resources across all clusters would be fetched at once.
