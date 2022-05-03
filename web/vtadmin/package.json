@@ -56,7 +56,7 @@
     "analyze": "source-map-explorer 'build/static/js/*.js'",
     "eject": "react-scripts eject",
     "build:planetscale-vtadmin": "tsc -p ./planetscale-vtadmin-template/tsconfig.json --outDir ./planetscale-vtadmin && cp ./planetscale-vtadmin-template/README.md ./planetscale-vtadmin && node ./scripts/verify-pscale-build.ts",
-    "build:planetscale": "node ./scripts/build-pscale-vtadmin.ts && REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS=\"true\" tsc -p ./planetscale-vtadmin-template/tsconfig.json --outDir ./planetscale-vtadmin && cp ./planetscale-vtadmin-template/README.md ./planetscale-vtadmin && node ./scripts/verify-pscale-build.ts"
+    "build:planetscale": "node ./scripts/build-pscale-vtadmin.ts && tsc -p ./planetscale-vtadmin-template/tsconfig.json --outDir ./planetscale-vtadmin && cp ./planetscale-vtadmin-template/README.md ./planetscale-vtadmin && node ./scripts/verify-pscale-build.ts"
   },
   "eslintConfig": {
     "extends": [
