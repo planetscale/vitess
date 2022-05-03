@@ -1,6 +1,7 @@
 # VTAdmin at Planetscale
 VTAdmin a web UI and API that allows users to manage their Vitess clusters. At Planetscale, VTAdmin is deployed as two parts: VTAdmin API and VTAdmin Web.
 
+VTAdmin currently lives at `vtadmin.planetscale.com`, but must be accessed via a button on a branch's page in the admin portal, i.e. `https://admin.planetscale.com/admin/organizations/frances/databases/broccoli-biscuits/branches/main`. This is because nececessary cookies and url parameters must be set from a branch's page before redirecting to vtadmin.
 ## Background & Context
 VTAdmin was initially built to support a static list of clusters provided at initialization time, and also had a "list-all" structure, wherein resources across all clusters would be fetched at once.
 
@@ -56,3 +57,20 @@ The E2E VTAdmin process looks like:
 9. `vtadmin-api`'s response is returned downstream, all the way back to api-bb's VTAdmin Controller.
 
 ![VTAdmin Infrastructure](vtadmin_final_1@2x.png)
+
+## Updating VTAdmin
+VTAdmin can be updated periodically to the latest version on vitess-private. 
+
+### VTAdmin API
+To update VTAdmin API:
+1. Search for the image you intend to update VTAdmin with [here](https://console.cloud.google.com/artifacts/docker/planetscale-registry/us/prod/vitess%2Flite).
+2. Copy the image's tag.
+3. Open a PR and replace [this line](https://github.com/planetscale/infra-config-kubernetes/blob/main/deploy/vtadmin-api/common/deployment.yaml#L23) with the new image's tag.
+4. VTAdmin API is autosynced once the PR is merged. You can check progress in Argo [here](https://argocd.silversurfer.planetscale.net/applications?proj=&sync=&health=&namespace=&cluster=&labels=application%253Dvtadmin-api). 
+
+### VTAdmin Web
+To update VTAdmin Web:
+1. Follow the steps outlined at [`web/vtadmin/planetscale-vtadmin.md`](https://github.com/planetscale/vitess-private/blob/latest/web/vtadmin/planetscale-vtadmin.md) to release a new version of `@planetscale/vtadmin`.
+2. Open a PR against `api-bb` to update the version of `@planetscale/vtadmin` [here](https://github.com/planetscale/api-bb/blob/main/package.json#L16).
+3. VTAdmin Web is automatically deployed once the PR is merged.
+
