@@ -29,11 +29,11 @@ Then in your .erb file, import the styles and js as a pack:
 
 `web/vtadmin/package.json` includes a build script run by `npm run build:planetscale-vtadmin` that:
 1. Compiles contents of `web/vtadmin/planetscale-vtadmin-template` to a new directory `web/vtadmin/planetscale-vtadmin`
-
+2. Builds vtadmin and copies its output to `web/vtadmin/planetscale-vtadmin`
 ## Release NPM Package
 To release new versions of the vtadmin npm package:
-1. Bump the version of vtadmin at `web/vtadmin/package.json`
-3. Run `npm run build:planetscale` to create package directory for `@planetscale/vtadmin` npm module
-4. `cd planetscale-vtadmin` to navigate into the folder for module `@planetscale/vtadmin`
-5. `npm publish --access public` to publish new version to npm
+1. Run `npm run build:planetscale` to create package directory for `@planetscale/vtadmin` npm module
+2. `cd planetscale-vtadmin` to navigate into the folder for module `@planetscale/vtadmin`
+3. Bump the version of vtadmin at `web/vtadmin/planetscale-vtadmin/package.json`
+4. `npm publish --access public` to publish new version to npm
 
