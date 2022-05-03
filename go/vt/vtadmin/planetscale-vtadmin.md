@@ -3,12 +3,15 @@ VTAdmin a web UI and API that allows users to manage their Vitess clusters. At P
 
 VTAdmin currently lives at `vtadmin.planetscale.com`, but must be accessed via a button on a branch's page in the admin portal, i.e. `https://admin.planetscale.com/admin/organizations/frances/databases/broccoli-biscuits/branches/main`. This is because nececessary cookies and url parameters must be set from a branch's page before redirecting to vtadmin.
 ## Background & Context
+### VTAdmin API
 VTAdmin was initially built to support a static list of clusters provided at initialization time, and also had a "list-all" structure, wherein resources across all clusters would be fetched at once.
 
 While this works for many of our customers, this was non-ideal for Planetscale as we have thousands of Planetscale Clusters (PSCs), whose addresses change dynamically. 
 
 We needed a solution to "filter down" to just one cluster at a time. While we explored different solutions, including dynamic cluster topology, we decided on **dynamic clusters** to help us use VTAdmin at Planetscale.
 
+### VTAdmin Web
+VTAdmin web is deployed within API-BB so we can utilize the same authorization flows as the admin portal, which uses Doorkeeper to handle auth.
 ### Dynamic Clusters
 Dynamic clusters are clusters whose configs are passed after VTAdmin is initialized, as opposed at initialization time. Dynamic cluster configurations can be passed in [gRPC metadata](https://github.com/grpc/grpc-go/blob/master/Documentation/grpc-metadata.md) or HTTP header cookies.
 
@@ -58,6 +61,62 @@ The E2E VTAdmin process looks like:
 
 ![VTAdmin Infrastructure](vtadmin_final_1@2x.png)
 
+### Components
+#### VTAdmin Web
+As mentioned before, VTAdmin Web is released as an NPM package, that is then imported by `api-bb`.
+- **Repository**: https://github.com/planetscale/vitess-private/tree/latest/web/vtadmin
+- **NPM Package**: https://www.npmjs.com/package/@planetscale/vtadmin
+- **DNS Records**: https://github.com/planetscale/infra/blob/main/dns/config/planetscale.com.yaml#L203-L208
+- **ACM Certs**: https://github.com/planetscale/infra/pull/873/files
+- **API BB Usage**
+    - **Controller**: https://github.com/planetscale/api-bb/blob/main/app/controllers/vtadmin/vtadmin_controller.rb
+    - **Routes**: https://github.com/planetscale/api-bb/blob/main/config/routes.rb#L293-L310
+
+#### VTAdmin API Envoy
+VTAdmin Envoy denotes two kinds of Envoys:
+1. VTAdmin Envoy instances deployed in Silversurfer
+2. VTAdmin Envoy instances deployed in the turtles (1 per turtle, ex. 1 in us-east-1)
+    - These are the "prod" envoys
+
+Every Envoy instance in Silversurfer has a counterpart in a turtle.
+
+- **Repository**: https://github.com/planetscale/infra-config-kubernetes/tree/main/deploy/vtadmin-api-envoy
+- **Argo**
+    - **Prod**: https://argocd.silversurfer.planetscale.net/applications?search=vtadmin-api-envoy-prod
+    - **Silversurfer**: https://argocd.silversurfer.planetscale.net/applications?search=vtadmin-api-envoy-silversurfer
+
+**Envoy Admin Page**
+Envoy instances have admin pages that might come in handy for debugging. To access an admin page, port-forward to an envoy pod:
+```
+pskube silversurfer port-forward -n vtadmin-api service/vtadmin-api-envoy-us-east-1 8090:8090
+```
+and access it locally at localhost:8090. Admin pages are always located at port 8090 for VTAdmin Envoy pods.
+
+**Logs**
+To access logs for a VTAdmin Envoy pod:
+```
+pskube silversurfer logs -n vtadmin-api service/vtadmin-api-envoy-us-east-1
+```
+#### VTAdmin API
+VTAdmin API is deployed 1 per turtle (ex. 1 in us-east-1).
+- **Repository**: https://github.com/planetscale/vitess-private/tree/latest/go/vt/vtadmin
+- **Deployment**: https://github.com/planetscale/infra-config-kubernetes/tree/main/deploy/vtadmin-api/common
+- **Images**: We use the [vitess-lite images.](https://console.cloud.google.com/artifacts/docker/planetscale-registry/us/prod/vitess%2Flite)
+- **Argo**: https://argocd.silversurfer.planetscale.net/applications?labels=application%253Dvtadmin-api
+
+**Access Pod**
+Extra permissions are needed to access a pod inside a turtle. Follow steps 1-4 of Thanos instructions [here](https://github.com/planetscale/api-bb/blob/main/docs/production-thanos.md) to set up pskube permissions locally.
+
+```
+> pskube us-east-1 port-forward -n vtadmin-api service/vtadmin-api 14200:14200 // Port forward
+> pskube us-east-1 logs -n vtadmin-api // Get logs
+> pskube silversurfer exec -n vtadmin-api --stdin --tty vtadmin-api-envoy-us-east-1-c8569fcfc-dxcd5 -- /bin/bash // Exec onto pod
+```
+
+## Debugging
+To debug VTAdmin, it would be useful to start at api-bb logs [here](https://grafana.silversurfer.planetscale.net/explore?orgId=1&left=%7B%22datasource%22:%22silversurfer-1-loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bapp%3D%5C%22api-bb-api%5C%22%7D%20%7C%3D%20%5C%22vtadmin%5C%22%22,%22queryType%22:%22range%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D).
+
+If that doesn't work, figure out the region in which the PSC is deployed, and look at the logs for VTAdmin API deployed in that region. For example, [us-east-1](https://grafana.silversurfer.planetscale.net/explore?orgId=1&left=%7B%22datasource%22:%22loki-prod-aws-useast1-2%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bapp%3D%5C%22vtadmin-api%5C%22%7D%20%22,%22queryType%22:%22range%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D).
 ## Updating VTAdmin
 VTAdmin can be updated periodically to the latest version on vitess-private. 
 
@@ -73,4 +132,5 @@ To update VTAdmin Web:
 1. Follow the steps outlined at [`web/vtadmin/planetscale-vtadmin.md`](https://github.com/planetscale/vitess-private/blob/latest/web/vtadmin/planetscale-vtadmin.md) to release a new version of `@planetscale/vtadmin`.
 2. Open a PR against `api-bb` to update the version of `@planetscale/vtadmin` [here](https://github.com/planetscale/api-bb/blob/main/package.json#L16).
 3. VTAdmin Web is automatically deployed once the PR is merged.
+
 
