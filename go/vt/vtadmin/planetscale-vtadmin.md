@@ -55,4 +55,4 @@ The E2E VTAdmin process looks like:
 8. Consequently, all API requests are fulfilled with only the filtered down cluster set.
 9. `vtadmin-api`'s response is returned downstream, all the way back to api-bb's VTAdmin Controller.
 
-
+![VTAdmin Infrastructure](vtadmin_final_1@2x.png)
