@@ -289,7 +289,7 @@ func (*filePosFlavor) disableBinlogPlaybackCommand() string {
 
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (*filePosFlavor) baseShowTablesWithSizes() string {
-	return TablesWithSize56
+	return TablesWithSize80
 }
 
 // supportsFastDropTable is part of the Flavor interface.

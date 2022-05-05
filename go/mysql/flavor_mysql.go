@@ -210,8 +210,6 @@ func parseMysqlPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error)
 }
 
 // waitUntilPositionCommand is part of the Flavor interface.
-
-// waitUntilPositionCommand is part of the Flavor interface.
 func (mysqlFlavor) waitUntilPositionCommand(ctx context.Context, pos Position) (string, error) {
 	// A timeout of 0 means wait indefinitely.
 	timeoutSeconds := 0

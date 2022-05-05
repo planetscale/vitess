@@ -88,6 +88,12 @@ create table orders(oid bigint, cid bigint, pid bigint, mname varchar(128), pric
       user: vt_app
     dba:
       user: vt_dba
+    filtered:
+      user: vt_filtered
+    repl:
+      user: vt_repl
+    allprivs:
+      user: vt_allprivs
   customer:
     flavor: FilePos
     socket: %s
@@ -96,6 +102,12 @@ create table orders(oid bigint, cid bigint, pid bigint, mname varchar(128), pric
       user: vt_app
     dba:
       user: vt_dba
+    filtered:
+      user: vt_filtered
+    repl:
+      user: vt_repl
+    allprivs:
+      user: vt_allprivs
 `
 )
 
@@ -199,6 +211,7 @@ func TestMigration(t *testing.T) {
 		result := execQuery(t, conn, tcase.query)
 		// nil out the fields because they're too detailed.
 		result.Fields = nil
+		result.StatusFlags = 0x0
 		tcase.result.Fields = nil
 		assert.Equal(t, tcase.result, result, tcase.query)
 	}
