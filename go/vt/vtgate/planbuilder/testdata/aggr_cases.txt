@@ -3947,3 +3947,64 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     ]
   }
 }
+
+"select count(*) from user left join user_extra on user.id=user_extra.id where user_extra.foo is null"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) from user left join user_extra on user.id=user_extra.id where user_extra.foo is null",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "sum(0) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 1] * COALESCE([COLUMN 2], INT64(1)) as count(*)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "user_extra.foo is null",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "R:0,L:1,R:1",
+                "JoinVars": {
+                  "user_id": 0
+                },
+                "TableName": "`user`_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.id, count(*), weight_string(`user`.id) from `user` where 1 != 1 group by `user`.id, weight_string(`user`.id)",
+                    "Query": "select `user`.id, count(*), weight_string(`user`.id) from `user` group by `user`.id, weight_string(`user`.id)",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select user_extra.foo, count(*) from user_extra where 1 != 1",
+                    "Query": "select user_extra.foo, count(*) from user_extra where user_extra.id = :user_id",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+Gen4 plan same as above

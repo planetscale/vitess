@@ -1,1 +1,57 @@
 # Add your test case here for debugging and run go test -run=One.
+"select count(*) from user left join user_extra on user.id = user_extra.apa"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) from user left join user_extra on user.id = user_extra.apa",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "sum(0) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "L:1,R:0",
+            "JoinVars": {
+              "user_id": 0
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, count(*), weight_string(`user`.id) from `user` where 1 != 1 group by `user`.id, weight_string(`user`.id)",
+                "Query": "select `user`.id, count(*), weight_string(`user`.id) from `user` group by `user`.id, weight_string(`user`.id)",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra where user_extra.apa = :user_id",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+
+}

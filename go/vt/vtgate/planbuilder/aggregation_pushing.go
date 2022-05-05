@@ -51,6 +51,14 @@ func (hp *horizonPlanning) pushAggregation(
 		groupingOffsets, outputAggrsOffset, err = hp.pushAggrOnSemiJoin(ctx, plan, grouping, aggregations, ignoreOutputOrder)
 		return
 
+	case *filter:
+		newPlan, grouping, aggrs, err := hp.pushAggregation(ctx, plan.input, grouping, aggregations, ignoreOutputOrder)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		plan.input = newPlan
+		return plan, grouping, aggrs, nil
+
 	case *simpleProjection:
 		// we just remove the simpleProjection. We are doing an OA on top anyway, so no need to clean up the output columns
 		return hp.pushAggregation(ctx, plan.input, grouping, aggregations, ignoreOutputOrder)
@@ -108,9 +116,9 @@ func pushAggrOnRoute(
 			if err != nil {
 				return nil, nil, err
 			}
-			pos = newOffset(col)
+			pos = newOffset(col, false)
 		} else {
-			pos = newOffset(groupingCols[idx])
+			pos = newOffset(groupingCols[idx], false)
 		}
 
 		if ctx.SemTable.NeedsWeightString(expr.Inner) {
@@ -165,12 +173,12 @@ func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) of
 			continue
 		}
 		if sqlparser.EqualsExpr(aliasedExpr.Expr, aggregation.Func) {
-			return newOffset(i)
+			return newOffset(i, false)
 		}
 	}
 
 	sel.SelectExprs = append(sel.SelectExprs, aggregation.Original)
-	return newOffset(len(sel.SelectExprs) - 1)
+	return newOffset(len(sel.SelectExprs)-1, false)
 }
 
 func countStarAggr() *abstract.Aggr {
@@ -244,6 +252,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	wsOutputGrpOffset := len(groupingOffsets) + len(join.Cols)
 	outputGroupings := make([]offsets, 0, len(groupingOffsets))
 	var wsOffsets []int
+	outerJoin := join.Opcode == engine.LeftJoin
 	for _, groupBy := range groupingOffsets {
 		var offset offsets
 		var f func(i int) int
@@ -253,8 +262,11 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 		} else {
 			offset = rhsOffsets[groupBy-1]
 			f = func(i int) int { return i + 1 }
+			if outerJoin {
+				return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "grouping on outer join columns not supported yet")
+			}
 		}
-		outputGrouping := newOffset(len(join.Cols))
+		outputGrouping := newOffset(len(join.Cols), false)
 		join.Cols = append(join.Cols, f(offset.col))
 		if offset.wsCol > -1 {
 			// we add the weight_string calls at the end of the join columns
@@ -270,11 +282,11 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 		l, r := lhsAggrOffsets[idx], rhsAggrOffsets[idx]
 		var offSlice []offsets
 		for _, off := range l {
-			offSlice = append(offSlice, newOffset(len(join.Cols)))
+			offSlice = append(offSlice, newOffset(len(join.Cols), false))
 			join.Cols = append(join.Cols, -(off.col + 1))
 		}
 		for _, off := range r {
-			offSlice = append(offSlice, newOffset(len(join.Cols)))
+			offSlice = append(offSlice, newOffset(len(join.Cols), outerJoin))
 			join.Cols = append(join.Cols, off.col+1)
 		}
 		outputAggrOffsets = append(outputAggrOffsets, offSlice)

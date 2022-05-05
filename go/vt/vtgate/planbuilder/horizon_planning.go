@@ -619,6 +619,15 @@ func passGroupingColumns(proj *projection, groupings []offsets, grouping []abstr
 	return projGrpOffsets, nil
 }
 
+func createCoalesceFunc(arg1, arg2 sqlparser.Expr) sqlparser.Expr {
+	return &sqlparser.FuncExpr{
+		Qualifier: sqlparser.TableIdent{},
+		Name:      sqlparser.NewColIdent("coalesce"),
+		Distinct:  false,
+		Exprs:     []sqlparser.SelectExpr{&sqlparser.AliasedExpr{Expr: arg1}, &sqlparser.AliasedExpr{Expr: arg2}},
+	}
+}
+
 func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets, proj *projection) ([]*engine.AggregateParams, error) {
 	aggrParams := make([]*engine.AggregateParams, len(aggrs))
 	for idx, paramOffset := range aggrParamOffsets {
@@ -628,7 +637,11 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 		if proj != nil {
 			var aggrExpr sqlparser.Expr
 			for _, ofs := range paramOffset {
-				curr := sqlparser.Offset(ofs.col)
+				var curr sqlparser.Expr
+				curr = sqlparser.Offset(ofs.col)
+				if ofs.nullable {
+					curr = createCoalesceFunc(curr, sqlparser.NewIntLiteral("1"))
+				}
 				if aggrExpr == nil {
 					aggrExpr = curr
 				} else {
@@ -791,10 +804,11 @@ func (hp *horizonPlanning) planAggregationWithoutOA(ctx *plancontext.PlanningCon
 
 type offsets struct {
 	col, wsCol int
+	nullable   bool
 }
 
-func newOffset(col int) offsets {
-	return offsets{col: col, wsCol: -1}
+func newOffset(col int, nullable bool) offsets {
+	return offsets{col: col, wsCol: -1, nullable: nullable}
 }
 
 func (hp *horizonPlanning) createGroupingsForColumns(
