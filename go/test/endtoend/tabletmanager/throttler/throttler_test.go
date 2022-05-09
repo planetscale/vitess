@@ -75,6 +75,7 @@ const (
 	accumulateLagWait            = 2 * time.Second
 	throttlerRefreshIntervalWait = 12 * time.Second
 	replicationCatchUpWait       = 5 * time.Second
+	onDemandHeartbeatDuration    = 5 * time.Second
 )
 
 func TestMain(m *testing.M) {
@@ -93,13 +94,14 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-lock_tables_timeout", "5s",
-			"-watch_replication_stream",
-			"-enable_replication_reporter",
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
+			"--lock_tables_timeout", "5s",
+			"--watch_replication_stream",
+			"--enable_replication_reporter",
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", onDemandHeartbeatDuration.String(),
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
@@ -150,12 +152,28 @@ func TestThrottlerBeforeMetricsCollected(t *testing.T) {
 	}
 }
 
+func warmUpHeartbeat(t *testing.T, expectErrorCode bool) {
+	//  because we run with -heartbeat_on_demand_duration=5s, the heartbeat is "cold" right now.
+	// Let's warm it up.
+	resp, err := throttleCheck(primaryTablet)
+	time.Sleep(time.Second)
+	assert.NoError(t, err)
+	if expectErrorCode {
+		assert.NotEqual(t, http.StatusOK, resp.StatusCode)
+	} else {
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	}
+}
+
 func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	time.Sleep(throttlerInitWait)
 	// By this time metrics will have been collected. We expect no lag, and something like:
 	// {"StatusCode":200,"Value":0.282278,"Threshold":1,"Message":""}
+	//
+	warmUpHeartbeat(t, true)
+	time.Sleep(time.Second)
 	{
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)
@@ -233,6 +251,7 @@ func TestNoReplicas(t *testing.T) {
 		time.Sleep(throttlerRefreshIntervalWait)
 		// This makes no REPLICA servers available. We expect something like:
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
+		warmUpHeartbeat(t, false)
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -243,6 +262,7 @@ func TestNoReplicas(t *testing.T) {
 
 		time.Sleep(throttlerRefreshIntervalWait)
 		// Restore valid replica
+		warmUpHeartbeat(t, true)
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
