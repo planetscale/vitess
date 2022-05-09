@@ -441,6 +441,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[sqlparser.FoundRowsName] = sqltypes.Uint64BindVariable(session.FoundRows)
 		case sqlparser.RowCountName:
 			bindVars[sqlparser.RowCountName] = sqltypes.Int64BindVariable(session.RowCount)
+		case sqlparser.MaxReplLag:
+			bindVars[sqlparser.MaxReplLag] = sqltypes.ValueBindVariable(e.getMaxReplicationLag(session))
 		}
 	}
 
@@ -1357,6 +1359,42 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
+}
+
+func (e *Executor) getMaxReplicationLag(session *SafeSession) sqltypes.Value {
+	status := e.scatterConn.GetHealthCheckCacheStatus()
+	replLag := 0
+	targetString := session.GetTargetString()
+	ks, tabletType, _, err := e.ParseDestinationTarget(targetString)
+	if err != nil {
+		return sqltypes.NULL
+	}
+	last := strings.LastIndexAny(targetString, "@")
+	if last == -1 {
+		tabletType = topodatapb.TabletType_UNKNOWN
+	}
+
+	for _, s := range status {
+		for _, ts := range s.TabletsStats {
+			// no stats available, ignore.
+			if ts.Stats == nil {
+				continue
+			}
+			// if keyspace is specified, only check replication status for that keyspace tablets
+			if ks != "" && ts.Tablet.Keyspace != ks {
+				continue
+			}
+			// if tablet type is specified, only check replication status for those tablets
+			if tabletType != topodatapb.TabletType_UNKNOWN && ts.Tablet.Type != tabletType {
+				continue
+			}
+			lagSeconds := int(ts.Stats.ReplicationLagSeconds)
+			if lagSeconds > replLag {
+				replLag = lagSeconds
+			}
+		}
+	}
+	return sqltypes.NewInt64(int64(replLag))
 }
 
 // MessageStream is part of the vtgate service API. This is a V2 level API that's sent
