@@ -1897,6 +1897,7 @@ type (
 func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
+func (*JSONTableExpr) iTableExpr()    {}
 
 type (
 	// SimpleTableExpr represents a simple table expression.
@@ -2222,60 +2223,321 @@ type (
 		alternative  Expr // this is what will be used to Format this struct
 	}
 
+	// JSONPrettyExpr represents the function and argument for JSON_PRETTY()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-pretty
+	JSONPrettyExpr struct {
+		JSONVal Expr
+	}
+
+	// JSONStorageFreeExpr represents the function and argument for JSON_STORAGE_FREE()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-storage-free
+	JSONStorageFreeExpr struct {
+		JSONVal Expr
+	}
+
+	// JSONStorageSizeExpr represents the function and argument for JSON_STORAGE_SIZE()
+	// https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html#function_json-storage-size
+	JSONStorageSizeExpr struct {
+		JSONVal Expr
+	}
+
 	// Offset is another AST type that is used during planning and never produced by the parser
 	Offset int
+
+	// JSONArrayExpr represents JSON_ARRAY()
+	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-array
+	JSONArrayExpr struct {
+		Params Exprs
+	}
+
+	// JSONObjectExpr represents JSON_OBJECT()
+	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-object
+	JSONObjectExpr struct {
+		Params []*JSONObjectParam
+	}
+
+	// JSONObjectParam defines a key/value parameter for a JSON_OBJECT expression
+	JSONObjectParam struct {
+		Key   Expr
+		Value Expr
+	}
+
+	// JSONQuoteExpr represents JSON_QUOTE()
+	// More information https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-quote
+	JSONQuoteExpr struct {
+		StringArg Expr
+	}
+
+	// JSONTableExpr describes the components of JSON_TABLE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table
+	JSONTableExpr struct {
+		Expr    Expr
+		Alias   TableIdent
+		Filter  Expr
+		Columns []*JtColumnDefinition
+	}
+
+	// JtOnResponseType describes the type of column: default, error or null
+	JtOnResponseType int
+
+	// JtColumnDefinition represents the structure of column definition in JSON_TABLE
+	JtColumnDefinition struct {
+		JtOrdinal    *JtOrdinalColDef
+		JtPath       *JtPathColDef
+		JtNestedPath *JtNestedPathColDef
+	}
+
+	// JtOrdinalColDef is a type of column definition similar to using AUTO_INCREMENT with a column
+	JtOrdinalColDef struct {
+		Name ColIdent
+	}
+
+	// JtPathColDef is a type of column definition specifying the path in JSON structure to extract values
+	JtPathColDef struct {
+		Name            ColIdent
+		Type            ColumnType
+		JtColExists     bool
+		Path            Expr
+		EmptyOnResponse *JtOnResponse
+		ErrorOnResponse *JtOnResponse
+	}
+
+	// JtNestedPathColDef is type of column definition with nested column definitions
+	JtNestedPathColDef struct {
+		Path    Expr
+		Columns []*JtColumnDefinition
+	}
+
+	// JtOnResponse specifies for a column the JtOnResponseType along with the expression for default and error
+	JtOnResponse struct {
+		ResponseType JtOnResponseType
+		Expr         Expr
+	}
+
+	// JSONPathParam is used to store the path used as arguments in different JSON functions
+	JSONPathParam Expr
+
+	// JSONContainsExpr represents the function and arguments for JSON_CONTAINS()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-contains
+	JSONContainsExpr struct {
+		Target    Expr
+		Candidate Expr
+		PathList  []JSONPathParam
+	}
+
+	// JSONContainsPathExpr represents the function and arguments for JSON_CONTAINS_PATH()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-contains-path
+	JSONContainsPathExpr struct {
+		JSONDoc  Expr
+		OneOrAll Expr
+		PathList []JSONPathParam
+	}
+
+	// JSONContainsPathType is an enum to get types of Trim
+	JSONContainsPathType int8
+
+	// JSONExtractExpr represents the function and arguments for JSON_EXTRACT()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-extract
+	JSONExtractExpr struct {
+		JSONDoc  Expr
+		PathList []JSONPathParam
+	}
+
+	// JSONKeysExpr represents the function and arguments for JSON_KEYS()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-keys
+	JSONKeysExpr struct {
+		JSONDoc  Expr
+		PathList []JSONPathParam
+	}
+
+	// JSONOverlapsExpr represents the function and arguments for JSON_OVERLAPS()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-overlaps
+	JSONOverlapsExpr struct {
+		JSONDoc1 Expr
+		JSONDoc2 Expr
+	}
+
+	// JSONSearchExpr represents the function and arguments for JSON_SEARCH()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-search
+	JSONSearchExpr struct {
+		JSONDoc    Expr
+		OneOrAll   Expr
+		SearchStr  Expr
+		EscapeChar Expr
+		PathList   []JSONPathParam
+	}
+
+	// JSONValueExpr represents the function and arguments for JSON_VALUE()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-value
+	JSONValueExpr struct {
+		JSONDoc         Expr
+		Path            JSONPathParam
+		ReturningType   *ConvertType
+		EmptyOnResponse *JtOnResponse
+		ErrorOnResponse *JtOnResponse
+	}
+
+	// MemberOf represents the function and arguments for MEMBER OF()
+	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#operator_member-of
+	MemberOfExpr struct {
+		Value   Expr
+		JSONArr Expr
+	}
+
+	// JSONSchemaValidFuncExpr represents the structure of JSON_SCHEMA_VALID()
+	// More information available on https://dev.mysql.com/doc/refman/8.0/en/json-validation-functions.html#function_json-schema-valid
+	JSONSchemaValidFuncExpr struct {
+		Schema   Expr
+		Document Expr
+	}
+
+	// JSONSchemaValidationReportFuncExpr represents the structure of JSON_SCHEMA_VALIDATION_REPORT()
+	// More information available on https://dev.mysql.com/doc/refman/8.0/en/json-validation-functions.html#function_json-schema-validation-report
+	JSONSchemaValidationReportFuncExpr struct {
+		Schema   Expr
+		Document Expr
+	}
+
+	// JSONAttributesExpr represents the argument and function for functions returning JSON value attributes
+	// More information available on https://dev.mysql.com/doc/refman/8.0/en/json-attribute-functions.html
+	JSONAttributesExpr struct {
+		Type    JSONAttributeType
+		JSONDoc Expr
+		Path    JSONPathParam
+	}
+
+	// JSONAttributeType is an enum to get types of TrimFunc.
+	// TrimFunc stand for one of the following: JSON_DEPTH JSON_TYPE JSON_VALID ENUM
+	JSONAttributeType int8
+
+	JSONValueModifierExpr struct {
+		Type    JSONValueModifierType
+		JSONDoc Expr
+		Params  []*JSONObjectParam
+	}
+
+	// JSONValueModifierType is an enum to get types of TrimFunc.
+	// TrimFunc stand for one of the following: JSON_DEPTH JSON_TYPE JSON_VALID ENUM
+	JSONValueModifierType int8
+
+	// JSONValueMergeExpr represents the json value modifier functions which merges documents.
+	// Functions falling under this class: JSON_MERGE, JSON_MERGE_PATCH, JSON_MERGE_PRESERVE
+	JSONValueMergeExpr struct {
+		Type        JSONValueMergeType
+		JSONDoc     Expr
+		JSONDocList Exprs
+	}
+
+	// JSONValueModifierType is an enum to get types of TrimFunc.
+	// TrimFunc stand for one of the following: JSON_DEPTH JSON_TYPE JSON_VALID ENUM
+	JSONValueMergeType int8
+
+	// JSONRemoveExpr represents the JSON_REMOVE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-modification-functions.html#function_json-remove
+	JSONRemoveExpr struct {
+		JSONDoc  Expr
+		PathList Exprs
+	}
+
+	// JSONRemoveExpr represents the JSON_UNQUOTE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-modification-functions.html#function_json-unquote
+	JSONUnquoteExpr struct {
+		JSONValue Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
-func (*AndExpr) iExpr()              {}
-func (*OrExpr) iExpr()               {}
-func (*XorExpr) iExpr()              {}
-func (*NotExpr) iExpr()              {}
-func (*ComparisonExpr) iExpr()       {}
-func (*BetweenExpr) iExpr()          {}
-func (*IsExpr) iExpr()               {}
-func (*ExistsExpr) iExpr()           {}
-func (*Literal) iExpr()              {}
-func (Argument) iExpr()              {}
-func (*NullVal) iExpr()              {}
-func (BoolVal) iExpr()               {}
-func (*ColName) iExpr()              {}
-func (ValTuple) iExpr()              {}
-func (*Subquery) iExpr()             {}
-func (ListArg) iExpr()               {}
-func (*BinaryExpr) iExpr()           {}
-func (*UnaryExpr) iExpr()            {}
-func (*IntroducerExpr) iExpr()       {}
-func (*IntervalExpr) iExpr()         {}
-func (*CollateExpr) iExpr()          {}
-func (*FuncExpr) iExpr()             {}
-func (*TimestampFuncExpr) iExpr()    {}
-func (*ExtractFuncExpr) iExpr()      {}
-func (*WeightStringFuncExpr) iExpr() {}
-func (*CurTimeFuncExpr) iExpr()      {}
-func (*CaseExpr) iExpr()             {}
-func (*ValuesFuncExpr) iExpr()       {}
-func (*ConvertExpr) iExpr()          {}
-func (*SubstrExpr) iExpr()           {}
-func (*ConvertUsingExpr) iExpr()     {}
-func (*MatchExpr) iExpr()            {}
-func (*GroupConcatExpr) iExpr()      {}
-func (*Default) iExpr()              {}
-func (*ExtractedSubquery) iExpr()    {}
-func (Offset) iExpr()                {}
+func (*AndExpr) iExpr()                            {}
+func (*OrExpr) iExpr()                             {}
+func (*XorExpr) iExpr()                            {}
+func (*NotExpr) iExpr()                            {}
+func (*ComparisonExpr) iExpr()                     {}
+func (*BetweenExpr) iExpr()                        {}
+func (*IsExpr) iExpr()                             {}
+func (*ExistsExpr) iExpr()                         {}
+func (*Literal) iExpr()                            {}
+func (Argument) iExpr()                            {}
+func (*NullVal) iExpr()                            {}
+func (BoolVal) iExpr()                             {}
+func (*ColName) iExpr()                            {}
+func (ValTuple) iExpr()                            {}
+func (*Subquery) iExpr()                           {}
+func (ListArg) iExpr()                             {}
+func (*BinaryExpr) iExpr()                         {}
+func (*UnaryExpr) iExpr()                          {}
+func (*IntroducerExpr) iExpr()                     {}
+func (*IntervalExpr) iExpr()                       {}
+func (*CollateExpr) iExpr()                        {}
+func (*FuncExpr) iExpr()                           {}
+func (*TimestampFuncExpr) iExpr()                  {}
+func (*ExtractFuncExpr) iExpr()                    {}
+func (*WeightStringFuncExpr) iExpr()               {}
+func (*CurTimeFuncExpr) iExpr()                    {}
+func (*CaseExpr) iExpr()                           {}
+func (*ValuesFuncExpr) iExpr()                     {}
+func (*ConvertExpr) iExpr()                        {}
+func (*SubstrExpr) iExpr()                         {}
+func (*ConvertUsingExpr) iExpr()                   {}
+func (*MatchExpr) iExpr()                          {}
+func (*GroupConcatExpr) iExpr()                    {}
+func (*Default) iExpr()                            {}
+func (*ExtractedSubquery) iExpr()                  {}
+func (*JSONSchemaValidFuncExpr) iExpr()            {}
+func (*JSONSchemaValidationReportFuncExpr) iExpr() {}
+func (Offset) iExpr()                              {}
+func (*JSONPrettyExpr) iExpr()                     {}
+func (*JSONStorageFreeExpr) iExpr()                {}
+func (*JSONStorageSizeExpr) iExpr()                {}
+func (*JSONContainsExpr) iExpr()                   {}
+func (*JSONContainsPathExpr) iExpr()               {}
+func (*JSONExtractExpr) iExpr()                    {}
+func (*JSONKeysExpr) iExpr()                       {}
+func (*JSONOverlapsExpr) iExpr()                   {}
+func (*JSONSearchExpr) iExpr()                     {}
+func (*JSONValueExpr) iExpr()                      {}
+func (*JSONArrayExpr) iExpr()                      {}
+func (*JSONObjectExpr) iExpr()                     {}
+func (*JSONQuoteExpr) iExpr()                      {}
+func (*JSONAttributesExpr) iExpr()                 {}
+func (*JSONValueModifierExpr) iExpr()              {}
+func (*JSONValueMergeExpr) iExpr()                 {}
+func (*JSONRemoveExpr) iExpr()                     {}
+func (*JSONUnquoteExpr) iExpr()                    {}
+func (*MemberOfExpr) iExpr()                       {}
 
 // iCallable marks all expressions that represent function calls
-func (*FuncExpr) iCallable()             {}
-func (*TimestampFuncExpr) iCallable()    {}
-func (*ExtractFuncExpr) iCallable()      {}
-func (*WeightStringFuncExpr) iCallable() {}
-func (*CurTimeFuncExpr) iCallable()      {}
-func (*ValuesFuncExpr) iCallable()       {}
-func (*ConvertExpr) iCallable()          {}
-func (*SubstrExpr) iCallable()           {}
-func (*ConvertUsingExpr) iCallable()     {}
-func (*MatchExpr) iCallable()            {}
-func (*GroupConcatExpr) iCallable()      {}
+func (*FuncExpr) iCallable()                           {}
+func (*TimestampFuncExpr) iCallable()                  {}
+func (*ExtractFuncExpr) iCallable()                    {}
+func (*WeightStringFuncExpr) iCallable()               {}
+func (*CurTimeFuncExpr) iCallable()                    {}
+func (*ValuesFuncExpr) iCallable()                     {}
+func (*ConvertExpr) iCallable()                        {}
+func (*SubstrExpr) iCallable()                         {}
+func (*ConvertUsingExpr) iCallable()                   {}
+func (*MatchExpr) iCallable()                          {}
+func (*GroupConcatExpr) iCallable()                    {}
+func (*JSONSchemaValidFuncExpr) iCallable()            {}
+func (*JSONSchemaValidationReportFuncExpr) iCallable() {}
+func (*JSONPrettyExpr) iCallable()                     {}
+func (*JSONStorageFreeExpr) iCallable()                {}
+func (*JSONStorageSizeExpr) iCallable()                {}
+func (*JSONArrayExpr) iCallable()                      {}
+func (*JSONObjectExpr) iCallable()                     {}
+func (*JSONQuoteExpr) iCallable()                      {}
+func (*JSONContainsExpr) iCallable()                   {}
+func (*JSONContainsPathExpr) iCallable()               {}
+func (*JSONExtractExpr) iCallable()                    {}
+func (*JSONKeysExpr) iCallable()                       {}
+func (*JSONValueExpr) iCallable()                      {}
+func (*JSONSearchExpr) iCallable()                     {}
+func (*JSONOverlapsExpr) iCallable()                   {}
+func (*JSONAttributesExpr) iCallable()                 {}
+func (*JSONValueModifierExpr) iCallable()              {}
+func (*JSONValueMergeExpr) iCallable()                 {}
+func (*JSONRemoveExpr) iCallable()                     {}
+func (*JSONUnquoteExpr) iCallable()                    {}
+func (*MemberOfExpr) iCallable()                       {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

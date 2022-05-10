@@ -295,6 +295,24 @@ const (
 	ForeignKeyTypeStr = "foreign key"
 	NormalKeyTypeStr  = "key"
 
+	// JSONAttributeType strings
+	DepthAttributeStr  = "json_depth"
+	ValidAttributeStr  = "json_valid"
+	TypeAttributeStr   = "json_type"
+	LengthAttributeStr = "json_length"
+
+	// JSONValueModifierType strings
+	JSONArrayAppendStr = "json_array_append"
+	JSONArrayInsertStr = "json_array_insert"
+	JSONInsertStr      = "json_insert"
+	JSONReplaceStr     = "json_replace"
+	JSONSetStr         = "json_set"
+
+	// JSONValueMergeType strings
+	JSONMergeStr         = "json_merge"
+	JSONMergePatchStr    = "json_merge_patch"
+	JSONMergePreserveStr = "json_merge_preserve"
+
 	// LockOptionType strings
 	NoneTypeStr      = "none"
 	SharedTypeStr    = "shared"
@@ -377,6 +395,30 @@ const (
 	NoLock Lock = iota
 	ForUpdateLock
 	ShareModeLock
+)
+
+// Constants for Enum Type - JSONAttributeType
+const (
+	DepthAttributeType JSONAttributeType = iota
+	ValidAttributeType
+	TypeAttributeType
+	LengthAttributeType
+)
+
+// Constants for Enum Type - JSONValueModifierType
+const (
+	JSONArrayAppendType JSONValueModifierType = iota
+	JSONArrayInsertType
+	JSONInsertType
+	JSONReplaceType
+	JSONSetType
+)
+
+// Constants for Enum Type - JSONValueMergeType
+const (
+	JSONMergeType JSONValueMergeType = iota
+	JSONMergePatchType
+	JSONMergePreserveType
 )
 
 // Constants for Enum Type - WhereType
@@ -533,6 +575,13 @@ const (
 const (
 	DeallocateType DeallocateStmtType = iota
 	DropType
+)
+
+// Constant for Enum Type - JtOnResponseType
+const (
+	ErrorJSONType JtOnResponseType = iota
+	NullJSONType
+	DefaultJSONType
 )
 
 // Constant for Enum Type - CollateAndCharsetType

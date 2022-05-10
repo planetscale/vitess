@@ -62,10 +62,12 @@ func bindVariable(yylex yyLexer, bvar string) {
   str           string
   strs          []string
   vindexParam   VindexParam
+  jsonObjectParam *JSONObjectParam
   colIdent      ColIdent
   joinCondition *JoinCondition
   collateAndCharset CollateAndCharset
   columnType    ColumnType
+  jsonPathParam JSONPathParam
 }
 
 %union {
@@ -130,6 +132,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
+  jsonPathParams []JSONPathParam
+  jsonObjectParams []*JSONObjectParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partitionEngine *PartitionEngine
@@ -175,7 +179,26 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionByType PartitionByType
   definer 	*Definer
   integer 	int
+
+  JSONTableExpr	*JSONTableExpr
+  jtColumnDefinition *JtColumnDefinition
+  jtColumnList	[]*JtColumnDefinition
+  jtOnResponse	*JtOnResponse
 }
+
+// These precedence rules are there to handle shift-reduce conflicts.
+%nonassoc <str> MEMBER
+// FUNCTION_CALL_NON_KEYWORD is used to resolve shift-reduce conflicts occuring due to function_call_generic symbol and
+// having special parsing for functions whose names are non-reserved keywords. The shift-reduce conflict occurrs because
+// after seeing a non-reserved keyword, if we see '(', then we can either shift to use the special parsing grammar rule or
+// reduce the non-reserved keyword into sql_id and eventually use a rule from function_call_generic.
+// The way to fix this conflict is to give shifting higher precedence than reducing.
+// Adding no precedence also works, since shifting is the default, but it reports a large number of conflicts
+// Shifting on '(' already has an assigned precedence.
+// All we need to add is a lower precedence to reducing the grammar symbol to non-reserved keywords.
+// In order to ensure lower precedence of reduction, this rule has to come before the precedence declaration of '('.
+// This precedence should not be used anywhere else other than with function names that are non-reserved-keywords.
+%nonassoc <str> FUNCTION_CALL_NON_KEYWORD
 
 %token LEX_ERROR
 %left <str> UNION
@@ -192,6 +215,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
@@ -260,7 +284,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> TIME TIMESTAMP DATETIME YEAR
 %token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
 %token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
-%token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
+%token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON JSON_SCHEMA_VALID JSON_SCHEMA_VALIDATION_REPORT ENUM
 %token <str> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 %token <str> ASCII UNICODE // used in CONVERT/CAST types
 
@@ -286,18 +310,21 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> GROUP_CONCAT SEPARATOR
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
+%token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
+%token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
+%token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
+%token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD
 %token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
 %token <str> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
-%token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
+%token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE RETURNING
 
 // Explain tokens
 %token <str> FORMAT TREE VITESS TRADITIONAL
@@ -337,7 +364,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
 %type <collateAndCharsets> create_options create_options_opt
-%type <boolean> default_optional first_opt linear_opt partition_storage_opt
+%type <boolean> default_optional first_opt linear_opt partition_storage_opt jt_exists_opt jt_path_opt
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -362,7 +389,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <definer> definer_opt user
 %type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression
 %type <tableExprs> from_opt table_references from_clause
-%type <tableExpr> table_reference table_factor join_table
+%type <tableExpr> table_reference table_factor join_table json_table_function
+%type <jtColumnDefinition> jt_column
+%type <jtColumnList> jt_columns_clause columns_list
+%type <jtOnResponse> on_error on_empty json_on_response
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <joinType> inner_join outer_join straight_join natural_join
@@ -425,7 +455,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
 %type <scope> set_session_or_global
-%type <convertType> convert_type convert_type_weight_string
+%type <convertType> convert_type returning_type_opt convert_type_weight_string
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt partition_comment partition_data_directory partition_index_directory
@@ -459,6 +489,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
+%type <jsonPathParam> json_path_param
+%type <jsonPathParams> json_path_param_list json_path_param_list_opt
+%type <jsonObjectParam> json_object_param
+%type <jsonObjectParams> json_object_param_list json_object_param_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
@@ -1022,6 +1056,31 @@ vindex_param:
   reserved_sql_id '=' table_opt_value
   {
     $$ = VindexParam{Key: $1, Val: $3}
+  }
+
+json_object_param_opt:
+  {
+    $$ = nil
+  }
+| json_object_param_list
+  {
+    $$ = $1
+  }
+
+json_object_param_list:
+  json_object_param
+  {
+    $$ = []*JSONObjectParam{$1}
+  }
+| json_object_param_list ',' json_object_param
+  {
+    $$ = append($$, $3)
+  }
+
+json_object_param:
+  expression ',' expression
+  {
+    $$ = &JSONObjectParam{Key:$1, Value:$3}
   }
 
 create_table_prefix:
@@ -1619,7 +1678,6 @@ INTEGRAL
     $$ = NewDecimalLiteral($1)
   }
 
-
 text_literal:
 STRING
   {
@@ -1635,17 +1693,9 @@ STRING
    }
 
 text_literal_or_arg:
-STRING
+  text_literal
   {
-    $$ = NewStrLiteral($1)
-  }
-| NCHAR_STRING
-  {
-    $$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
-  }
-| underscore_charsets STRING %prec UNARY
-  {
-    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
+    $$ = $1
   }
 | VALUE_ARG
   {
@@ -2913,6 +2963,106 @@ algorithm_opt:
     $$ = convertStringToInt($3)
   }
 
+json_table_function:
+  JSON_TABLE openb expression ',' text_literal_or_arg jt_columns_clause closeb as_opt_id
+  {
+    $$ = &JSONTableExpr{Expr: $3, Filter: $5, Columns: $6, Alias: $8}
+  }
+
+jt_columns_clause:
+  COLUMNS openb columns_list closeb
+  {
+    $$= $3
+  }
+
+columns_list:
+  jt_column
+  {
+    $$= []*JtColumnDefinition{$1}
+  }
+| columns_list ',' jt_column
+  {
+    $$ = append($1, $3)
+  }
+
+jt_column:
+ sql_id FOR ORDINALITY
+  {
+    $$ = &JtColumnDefinition{JtOrdinal: &JtOrdinalColDef{Name: $1}}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg on_empty
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, EmptyOnResponse: $7}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg on_error
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, ErrorOnResponse: $7}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_exists_opt PATH text_literal_or_arg on_empty on_error
+  {
+    $2.Options= &ColumnTypeOptions{Collate:$3}
+    jtPath := &JtPathColDef{Name: $1, Type: $2, JtColExists: $4, Path: $6, EmptyOnResponse: $7, ErrorOnResponse: $8}
+    $$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| NESTED jt_path_opt text_literal_or_arg jt_columns_clause
+  {
+    jtNestedPath := &JtNestedPathColDef{Path: $3, Columns: $4}
+    $$ = &JtColumnDefinition{JtNestedPath: jtNestedPath}
+  }
+
+jt_path_opt:
+  {
+    $$ = false
+  }
+| PATH
+  {
+    $$ = true
+  }
+jt_exists_opt:
+  {
+    $$=false
+  }
+| EXISTS
+  {
+    $$=true
+  }
+
+on_empty:
+  json_on_response ON EMPTY
+  {
+    $$= $1
+  }
+
+on_error:
+  json_on_response ON ERROR
+  {
+    $$= $1
+  }
+
+json_on_response:
+  ERROR
+  {
+    $$ = &JtOnResponse{ResponseType: ErrorJSONType}
+  }
+| NULL
+  {
+    $$ = &JtOnResponse{ResponseType: NullJSONType}
+  }
+| DEFAULT text_literal_or_arg
+  {
+    $$ = &JtOnResponse{ResponseType: DefaultJSONType, Expr: $2}
+  }
+
 range_or_list:
   RANGE
   {
@@ -4114,6 +4264,10 @@ table_factor:
   {
     $$ = &ParenTableExpr{Exprs: $2}
   }
+| json_table_function
+  {
+    $$ = $1
+  }
 
 derived_table:
   openb query_expression closeb
@@ -4423,6 +4577,10 @@ expression:
 | bool_pri %prec EXPRESSION_PREC_SETTER
   {
 	$$ = $1
+  }
+| expression MEMBER OF openb expression closeb
+  {
+    $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
   }
 
 
@@ -4859,6 +5017,180 @@ UTC_DATE func_paren_opt
 | WEIGHT_STRING openb expression convert_type_weight_string closeb
   {
     $$ = &WeightStringFuncExpr{Expr: $3, As: $4}
+  }
+| JSON_PRETTY openb expression closeb
+  {
+    $$ = &JSONPrettyExpr{JSONVal: $3}
+  }
+| JSON_STORAGE_FREE openb expression closeb
+  {
+    $$ = &JSONStorageFreeExpr{ JSONVal: $3}
+  }
+| JSON_STORAGE_SIZE openb expression closeb
+  {
+    $$ = &JSONStorageSizeExpr{ JSONVal: $3}
+  }
+| JSON_SCHEMA_VALID openb expression ',' expression closeb
+  {
+    $$ = &JSONSchemaValidFuncExpr{ Schema: $3, Document: $5}
+  }
+| JSON_SCHEMA_VALIDATION_REPORT openb expression ',' expression closeb
+  {
+    $$ = &JSONSchemaValidationReportFuncExpr{ Schema: $3, Document: $5}
+  }
+| JSON_ARRAY openb expression_list_opt closeb
+  {
+    $$ = &JSONArrayExpr{ Params:$3 }
+  }
+| JSON_OBJECT openb json_object_param_opt closeb
+  {
+    $$ = &JSONObjectExpr{ Params:$3 }
+  }
+| JSON_QUOTE openb expression closeb
+  {
+    $$ = &JSONQuoteExpr{ StringArg:$3 }
+  }
+| JSON_CONTAINS openb expression ',' expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONContainsExpr{Target: $3, Candidate: $5, PathList: $6}
+  }
+| JSON_CONTAINS_PATH openb expression ',' expression ',' json_path_param_list closeb
+  {
+    $$ = &JSONContainsPathExpr{JSONDoc: $3, OneOrAll: $5, PathList: $7}
+  }
+| JSON_EXTRACT openb expression ',' json_path_param_list closeb
+  {
+    $$ = &JSONExtractExpr{JSONDoc: $3, PathList: $5}
+  }
+| JSON_KEYS openb expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONKeysExpr{JSONDoc: $3, PathList: $4}
+  }
+| JSON_OVERLAPS openb expression ',' expression closeb
+  {
+    $$ = &JSONOverlapsExpr{JSONDoc1:$3, JSONDoc2:$5}
+  }
+| JSON_SEARCH openb expression ',' expression ',' expression closeb
+  {
+    $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7 }
+  }
+| JSON_SEARCH openb expression ',' expression ',' expression ',' expression json_path_param_list_opt closeb
+  {
+    $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7, EscapeChar: $9, PathList:$10 }
+  }
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6}
+  }
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_empty closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, EmptyOnResponse: $7}
+  }
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_error closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, ErrorOnResponse: $7}
+  }
+| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_empty on_error closeb
+  {
+    $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, EmptyOnResponse: $7, ErrorOnResponse: $8}
+  }
+| JSON_DEPTH openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:DepthAttributeType, JSONDoc:$3}
+  }
+| JSON_VALID openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:ValidAttributeType, JSONDoc:$3}
+  }
+| JSON_TYPE openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:TypeAttributeType, JSONDoc:$3}
+  }
+| JSON_LENGTH openb expression closeb
+  {
+    $$ = &JSONAttributesExpr{Type:LengthAttributeType, JSONDoc:$3 }
+  }
+| JSON_LENGTH openb expression ',' json_path_param closeb
+  {
+    $$ = &JSONAttributesExpr{Type:LengthAttributeType, JSONDoc:$3, Path: $5 }
+  }
+| JSON_ARRAY_APPEND openb expression ',' json_object_param_list closeb
+  {
+    $$ = &JSONValueModifierExpr{Type:JSONArrayAppendType ,JSONDoc:$3, Params:$5}
+  }
+| JSON_ARRAY_INSERT openb expression ',' json_object_param_list closeb
+  {
+    $$ = &JSONValueModifierExpr{Type:JSONArrayInsertType ,JSONDoc:$3, Params:$5}
+  }
+| JSON_INSERT openb expression ',' json_object_param_list closeb
+  {
+    $$ = &JSONValueModifierExpr{Type:JSONInsertType ,JSONDoc:$3, Params:$5}
+  }
+| JSON_REPLACE openb expression ',' json_object_param_list closeb
+  {
+    $$ = &JSONValueModifierExpr{Type:JSONReplaceType ,JSONDoc:$3, Params:$5}
+  }
+| JSON_SET openb expression ',' json_object_param_list closeb
+  {
+    $$ = &JSONValueModifierExpr{Type:JSONSetType ,JSONDoc:$3, Params:$5}
+  }
+| JSON_MERGE openb expression ',' expression_list closeb
+  {
+    $$ = &JSONValueMergeExpr{Type: JSONMergeType, JSONDoc: $3, JSONDocList: $5}
+  }
+| JSON_MERGE_PATCH openb expression ',' expression_list closeb
+  {
+    $$ = &JSONValueMergeExpr{Type: JSONMergePatchType, JSONDoc: $3, JSONDocList: $5}
+  }
+| JSON_MERGE_PRESERVE openb expression ',' expression_list closeb
+  {
+    $$ = &JSONValueMergeExpr{Type: JSONMergePreserveType, JSONDoc: $3, JSONDocList: $5}
+  }
+| JSON_REMOVE openb expression ',' expression_list closeb
+  {
+    $$ = &JSONRemoveExpr{JSONDoc:$3, PathList: $5}
+  }
+| JSON_UNQUOTE openb expression closeb
+  {
+    $$ = &JSONUnquoteExpr{JSONValue:$3}
+  }
+
+returning_type_opt:
+  {
+    $$ = nil
+  }
+| RETURNING convert_type
+  {
+    $$ = $2
+  }
+
+json_path_param_list_opt:
+  {
+    $$ = nil
+  }
+| ',' json_path_param_list
+  {
+    $$ = $2
+  }
+
+json_path_param_list:
+  json_path_param
+  {
+    $$ = []JSONPathParam{$1}
+  }
+| json_path_param_list ',' json_path_param
+  {
+    $$ = append($$, $3)
+  }
+
+json_path_param:
+  text_literal_or_arg
+  {
+    $$ = JSONPathParam($1)
+  }
+| column_name
+  {
+    $$ = JSONPathParam($1)
   }
 
 interval:
@@ -5859,6 +6191,7 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
+| ALL
 | ARRAY
 | AND
 | AS
@@ -5895,6 +6228,7 @@ reserved_keyword:
 | DIV
 | DROP
 | ELSE
+| EMPTY
 | ESCAPE
 | EXISTS
 | EXPLAIN
@@ -6118,6 +6452,34 @@ non_reserved_keyword:
 | INDEXES
 | ISOLATION
 | JSON
+| JSON_ARRAY %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_ARRAY_APPEND %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_ARRAY_INSERT %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_CONTAINS %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_CONTAINS_PATH %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_DEPTH %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_EXTRACT %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_INSERT %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_KEYS %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_MERGE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_MERGE_PATCH %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_MERGE_PRESERVE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_OBJECT %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_OVERLAPS %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_PRETTY %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_QUOTE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_REMOVE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_REPLACE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_SCHEMA_VALID %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_SCHEMA_VALIDATION_REPORT %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_SEARCH %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_SET %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_STORAGE_FREE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_STORAGE_SIZE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_TYPE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_VALID %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_VALUE %prec FUNCTION_CALL_NON_KEYWORD
+| JSON_UNQUOTE %prec FUNCTION_CALL_NON_KEYWORD
 | KEY_BLOCK_SIZE
 | KEYS
 | KEYSPACES
@@ -6213,6 +6575,7 @@ non_reserved_keyword:
 | RESTART
 | RETAIN
 | RETRY
+| RETURNING
 | REUSE
 | ROLE
 | ROLLBACK
@@ -6314,7 +6677,7 @@ non_reserved_keyword:
 | SECOND
 | SECOND_MICROSECOND
 | YEAR_MONTH
-| WEIGHT_STRING
+| WEIGHT_STRING %prec FUNCTION_CALL_NON_KEYWORD
 
 openb:
   '('

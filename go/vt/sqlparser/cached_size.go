@@ -1383,6 +1383,455 @@ func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *JSONArrayExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Params vitess.io/vitess/go/vt/sqlparser.Exprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Params)) * int64(16))
+		for _, elem := range cached.Params {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *JSONAttributesExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Path vitess.io/vitess/go/vt/sqlparser.JSONPathParam
+	if cc, ok := cached.Path.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONContainsExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Target vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Target.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Candidate vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Candidate.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PathList []vitess.io/vitess/go/vt/sqlparser.JSONPathParam
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PathList)) * int64(16))
+		for _, elem := range cached.PathList {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *JSONContainsPathExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field OneOrAll vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.OneOrAll.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PathList []vitess.io/vitess/go/vt/sqlparser.JSONPathParam
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PathList)) * int64(16))
+		for _, elem := range cached.PathList {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *JSONExtractExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PathList []vitess.io/vitess/go/vt/sqlparser.JSONPathParam
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PathList)) * int64(16))
+		for _, elem := range cached.PathList {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *JSONKeysExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PathList []vitess.io/vitess/go/vt/sqlparser.JSONPathParam
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PathList)) * int64(16))
+		for _, elem := range cached.PathList {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *JSONObjectExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Params []*vitess.io/vitess/go/vt/sqlparser.JSONObjectParam
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Params)) * int64(8))
+		for _, elem := range cached.Params {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
+func (cached *JSONObjectParam) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Key vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Key.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Value vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Value.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONOverlapsExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field JSONDoc1 vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc1.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field JSONDoc2 vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc2.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONPrettyExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field JSONVal vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONVal.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONQuoteExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field StringArg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.StringArg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONRemoveExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PathList vitess.io/vitess/go/vt/sqlparser.Exprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PathList)) * int64(16))
+		for _, elem := range cached.PathList {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *JSONSchemaValidFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Schema vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Schema.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Document vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Document.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONSchemaValidationReportFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Schema vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Schema.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Document vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Document.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONSearchExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(96)
+	}
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field OneOrAll vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.OneOrAll.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field SearchStr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.SearchStr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field EscapeChar vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.EscapeChar.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field PathList []vitess.io/vitess/go/vt/sqlparser.JSONPathParam
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PathList)) * int64(16))
+		for _, elem := range cached.PathList {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *JSONStorageFreeExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field JSONVal vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONVal.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONStorageSizeExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field JSONVal vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONVal.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONTableExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Alias vitess.io/vitess/go/vt/sqlparser.TableIdent
+	size += cached.Alias.CachedSize(false)
+	// field Filter vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Filter.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Columns []*vitess.io/vitess/go/vt/sqlparser.JtColumnDefinition
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(8))
+		for _, elem := range cached.Columns {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
+func (cached *JSONUnquoteExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field JSONValue vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONValue.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JSONValueExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Path vitess.io/vitess/go/vt/sqlparser.JSONPathParam
+	if cc, ok := cached.Path.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field ReturningType *vitess.io/vitess/go/vt/sqlparser.ConvertType
+	size += cached.ReturningType.CachedSize(true)
+	// field EmptyOnResponse *vitess.io/vitess/go/vt/sqlparser.JtOnResponse
+	size += cached.EmptyOnResponse.CachedSize(true)
+	// field ErrorOnResponse *vitess.io/vitess/go/vt/sqlparser.JtOnResponse
+	size += cached.ErrorOnResponse.CachedSize(true)
+	return size
+}
+func (cached *JSONValueMergeExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field JSONDocList vitess.io/vitess/go/vt/sqlparser.Exprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.JSONDocList)) * int64(16))
+		for _, elem := range cached.JSONDocList {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *JSONValueModifierExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field JSONDoc vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONDoc.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Params []*vitess.io/vitess/go/vt/sqlparser.JSONObjectParam
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Params)) * int64(8))
+		for _, elem := range cached.Params {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *JoinCondition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1422,6 +1871,91 @@ func (cached *JoinTableExpr) CachedSize(alloc bool) int64 {
 	}
 	// field Condition *vitess.io/vitess/go/vt/sqlparser.JoinCondition
 	size += cached.Condition.CachedSize(true)
+	return size
+}
+func (cached *JtColumnDefinition) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field JtOrdinal *vitess.io/vitess/go/vt/sqlparser.JtOrdinalColDef
+	size += cached.JtOrdinal.CachedSize(true)
+	// field JtPath *vitess.io/vitess/go/vt/sqlparser.JtPathColDef
+	size += cached.JtPath.CachedSize(true)
+	// field JtNestedPath *vitess.io/vitess/go/vt/sqlparser.JtNestedPathColDef
+	size += cached.JtNestedPath.CachedSize(true)
+	return size
+}
+func (cached *JtNestedPathColDef) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Path vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Path.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Columns []*vitess.io/vitess/go/vt/sqlparser.JtColumnDefinition
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(8))
+		for _, elem := range cached.Columns {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
+func (cached *JtOnResponse) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *JtOrdinalColDef) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	return size
+}
+func (cached *JtPathColDef) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(176)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field Type vitess.io/vitess/go/vt/sqlparser.ColumnType
+	size += cached.Type.CachedSize(false)
+	// field Path vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Path.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field EmptyOnResponse *vitess.io/vitess/go/vt/sqlparser.JtOnResponse
+	size += cached.EmptyOnResponse.CachedSize(true)
+	// field ErrorOnResponse *vitess.io/vitess/go/vt/sqlparser.JtOnResponse
+	size += cached.ErrorOnResponse.CachedSize(true)
 	return size
 }
 func (cached *KeyState) CachedSize(alloc bool) int64 {
@@ -1510,6 +2044,24 @@ func (cached *MatchExpr) CachedSize(alloc bool) int64 {
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *MemberOfExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Value vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Value.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field JSONArr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.JSONArr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size
