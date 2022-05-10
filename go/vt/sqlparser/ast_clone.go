@@ -2861,6 +2861,7 @@ func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	out := *n
 	out.Column = CloneColIdent(n.Column)
 	out.Length = CloneRefOfLiteral(n.Length)
+	out.Expression = CloneExpr(n.Expression)
 	return &out
 }
 
