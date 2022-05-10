@@ -188,6 +188,16 @@ func countStarAggr() *abstract.Aggr {
 	}
 }
 
+func t(in []*abstract.Aggr) []abstract.Aggr {
+	result := make([]abstract.Aggr, 0, len(in))
+	for _, aggr := range in {
+		if aggr != nil {
+			result = append(result, *aggr)
+		}
+	}
+	return result
+}
+
 /*
 We push down aggregations using the logic from the paper Orthogonal Optimization of Subqueries and Aggregation, by
 Cesar A. Galindo-Legaria and Milind M. Joshi from Microsoft Corp.
@@ -236,6 +246,41 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	if err != nil {
 		return nil, nil, err
 	}
+
+	if join.Opcode == engine.LeftJoin {
+		// this is an outer join - needs special handling
+		oa := &orderedAggregate{
+			groupByKeys: make([]*engine.GroupByParams, 0, len(grouping)),
+		}
+		oa.resultsBuilder = resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(newRHS),
+			weightStrings:     make(map[*resultColumn]int),
+		}
+
+		aggrParams, err := generateAggregateParams(t(rhsAggrs), rhsAggrOffsets, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		var distinctGroupBy []abstract.GroupBy = nil
+		var distinctOffsets []int = nil
+
+		var rhsGroupOffsets []offsets
+		for i, groupBy := range groupingOffsets {
+			if groupBy > 0 {
+				rhsGroupOffsets = append(rhsGroupOffsets, rhsOffsets[groupBy-1])
+				expr := grouping[i].Inner
+				oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
+					Expr:        expr,
+					FromGroupBy: true,
+					CollationID: ctx.SemTable.CollationForExpr(expr),
+				})
+			}
+		}
+
+		addColumnsToOA(ctx, oa, distinctGroupBy, aggrParams, distinctOffsets, rhsGroupOffsets, t(rhsAggrs))
+		newRHS = oa
+	}
+
 	join.Left, join.Right = newLHS, newRHS
 
 	// Next, we have to pass through the grouping values through the join and the projection we add on top
