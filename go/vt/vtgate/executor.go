@@ -914,7 +914,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 	}, nil
 }
 
-func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
+func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *logstats.LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
 	if destKeyspace == "" {
 		return nil, errNoKeyspace
 	}
