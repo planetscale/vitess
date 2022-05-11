@@ -3809,6 +3809,15 @@ func TestCreateTable(t *testing.T) {
 	unique index by_username3 (username)
 )`,
 		},
+		// test adding engine attributes
+		{
+			input: `create table t (
+	id int auto_increment,
+	username varchar,
+	unique key by_username (username) engine_attribute '{}' secondary_engine_attribute '{}',
+	unique index by_username3 (username)
+)`,
+		},
 		// test that indexes support USING <id>
 		{
 			input: `create table t (
@@ -3952,6 +3961,7 @@ func TestCreateTable(t *testing.T) {
 	id int auto_increment
 ) engine InnoDB,
   auto_increment 123,
+  autoextend_size 16,
   avg_row_length 1,
   charset utf8mb4,
   charset latin1,
@@ -3964,6 +3974,7 @@ func TestCreateTable(t *testing.T) {
   data directory 'absolute path to directory',
   delay_key_write 1,
   encryption 'n',
+  engine_attribute '{}',
   index directory 'absolute path to directory',
   insert_method no,
   key_block_size 1024,
@@ -3972,6 +3983,7 @@ func TestCreateTable(t *testing.T) {
   pack_keys 0,
   password 'sekret',
   row_format default,
+  secondary_engine_attribute '{}',
   stats_auto_recalc default,
   stats_persistent 0,
   stats_sample_pages 1,
