@@ -45,7 +45,10 @@ var (
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	totalTableCount       = 4
-	createTable           = `
+
+	normalMigrationWait = 20 * time.Second
+
+	createTable = `
 		CREATE TABLE %s (
 			id bigint(20) NOT NULL,
 			msg varchar(64),
@@ -160,6 +163,7 @@ func TestMain(m *testing.M) {
 			"-schema_change_dir", schemaChangeDirectory,
 			"-schema_change_controller", "local",
 			"-schema_change_check_interval", "1",
+			"--heartbeat_on_demand_duration", "5s",
 			"-online_ddl_check_interval", "3s",
 		}
 
@@ -260,7 +264,7 @@ func TestSchemaChange(t *testing.T) {
 		// Issue a complete and wait for successful completion
 		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
 		// This part may take a while, because we depend on vreplicatoin polling
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 
@@ -404,7 +408,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
