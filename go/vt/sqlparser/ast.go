@@ -1799,6 +1799,7 @@ type (
 	ReferenceDefinition struct {
 		ReferencedTable   TableName
 		ReferencedColumns Columns
+		Match             MatchAction
 		OnDelete          ReferenceAction
 		OnUpdate          ReferenceAction
 	}
