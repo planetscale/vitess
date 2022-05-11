@@ -3163,6 +3163,7 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	out.Invisible = CloneRefOfBool(n.Invisible)
 	out.EngineAttribute = CloneRefOfLiteral(n.EngineAttribute)
 	out.SecondaryEngineAttribute = CloneRefOfLiteral(n.SecondaryEngineAttribute)
+	out.SRID = CloneRefOfLiteral(n.SRID)
 	return &out
 }
 
