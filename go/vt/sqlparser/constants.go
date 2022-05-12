@@ -293,6 +293,7 @@ const (
 	PrimaryKeyTypeStr = "primary key"
 	ForeignKeyTypeStr = "foreign key"
 	NormalKeyTypeStr  = "key"
+	CheckKeyTypeStr   = "check"
 
 	// JSONAttributeType strings
 	DepthAttributeStr  = "json_depth"
@@ -639,6 +640,7 @@ const (
 	PrimaryKeyType DropKeyType = iota
 	ForeignKeyType
 	NormalKeyType
+	CheckKeyType
 )
 
 // LockOptionType constants

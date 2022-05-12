@@ -2790,6 +2790,14 @@ alter_option:
   {
     $$ = &DropKey{Type:ForeignKeyType, Name:$4}
   }
+| DROP CHECK id_or_var
+  {
+    $$ = &DropKey{Type:CheckKeyType, Name:$3}
+  }
+| DROP CONSTRAINT id_or_var
+  {
+    $$ = &DropKey{Type:CheckKeyType, Name:$3}
+  }
 | FORCE
   {
     $$ = &Force{}

@@ -1561,6 +1561,8 @@ func (key DropKeyType) ToString() string {
 		return ForeignKeyTypeStr
 	case NormalKeyType:
 		return NormalKeyTypeStr
+	case CheckKeyType:
+		return CheckKeyTypeStr
 	default:
 		return "Unknown DropKeyType"
 	}
