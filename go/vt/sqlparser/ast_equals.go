@@ -74,6 +74,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAlterCharset(a, b)
+	case *AlterCheck:
+		b, ok := inB.(*AlterCheck)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterCheck(a, b)
 	case *AlterColumn:
 		b, ok := inB.(*AlterColumn)
 		if !ok {
@@ -1262,6 +1268,18 @@ func EqualsRefOfAlterCharset(a, b *AlterCharset) bool {
 	}
 	return a.CharacterSet == b.CharacterSet &&
 		a.Collate == b.Collate
+}
+
+// EqualsRefOfAlterCheck does deep equals between the two objects.
+func EqualsRefOfAlterCheck(a, b *AlterCheck) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Enforced == b.Enforced &&
+		EqualsColIdent(a.Name, b.Name)
 }
 
 // EqualsRefOfAlterColumn does deep equals between the two objects.
@@ -3569,6 +3587,12 @@ func EqualsAlterOption(inA, inB AlterOption) bool {
 			return false
 		}
 		return EqualsRefOfAlterCharset(a, b)
+	case *AlterCheck:
+		b, ok := inB.(*AlterCheck)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterCheck(a, b)
 	case *AlterColumn:
 		b, ok := inB.(*AlterColumn)
 		if !ok {
