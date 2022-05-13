@@ -463,10 +463,6 @@ func (ii *Insights) sendAggregates() {
 		log.Infof("Too many patterns: reached limit of %v.  %v statements not aggregated.", ii.MaxPatterns, ii.LogPatternsExceeded)
 		ii.LogPatternsExceeded = 0
 	}
-	if ii.LogBufferExceeded > 0 {
-		log.Infof("Dropped %v Kafka message(s): InFlightCounter=%v, MaxInFlight=%v", ii.LogBufferExceeded, ii.InFlightCounter, ii.MaxInFlight)
-		ii.LogBufferExceeded = 0
-	}
 
 	for k, pa := range ii.Aggregations {
 		buf, err := ii.makeQueryPatternMessage(k.SQL, k.Keyspace, pa)
@@ -475,6 +471,11 @@ func (ii *Insights) sendAggregates() {
 		} else {
 			ii.reserveAndSend(buf, queryStatsBundleTopic, ii.makeKafkaKey(k.SQL))
 		}
+	}
+
+	if ii.LogBufferExceeded > 0 {
+		log.Infof("Dropped %v Kafka message(s): InFlightCounter=%v, MaxInFlight=%v", ii.LogBufferExceeded, ii.InFlightCounter, ii.MaxInFlight)
+		ii.LogBufferExceeded = 0
 	}
 
 	// remove all accumulated counters
