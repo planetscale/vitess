@@ -338,6 +338,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowLegacy(parent, node, replacer)
 	case *ShowMigrationLogs:
 		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
+	case *ShowThrottledApps:
+		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Stream:
@@ -706,12 +708,15 @@ func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigr
 			return true
 		}
 	}
+	if !a.rewriteRefOfLiteral(node, node.Ratio, func(newNode, parent SQLNode) {
+		parent.(*AlterMigration).Ratio = newNode.(*Literal)
+	}) {
+		return false
+	}
 	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -5242,6 +5247,33 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 	}
 	return true
 }
+func (a *application) rewriteRefOfShowThrottledApps(parent SQLNode, node *ShowThrottledApps, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*ShowThrottledApps).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7083,6 +7115,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfShow(parent, node, replacer)
 	case *ShowMigrationLogs:
 		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
+	case *ShowThrottledApps:
+		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
 	case *Stream:
 		return a.rewriteRefOfStream(parent, node, replacer)
 	case *TruncateTable:

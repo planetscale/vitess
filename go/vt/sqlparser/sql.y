@@ -278,7 +278,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE CLEANUP
+%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -299,7 +299,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 // SHOW tokens
 %token <str> CODE COLLATION COLUMNS DATABASES ENGINES EVENT EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
 %token <str> KEYSPACES OPEN PLUGINS PRIVILEGES PROCESSLIST SCHEMAS TABLES TRIGGERS USER
-%token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_REPLICATION_STATUS VITESS_SHARDS VITESS_TABLETS VSCHEMA
+%token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_REPLICATION_STATUS VITESS_SHARDS VITESS_TABLETS VSCHEMA VITESS_THROTTLED_APPS
 
 // SET tokens
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -515,6 +515,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
 %type <str> underscore_charsets
+%type <str> expire_opt
+%type <literal> ratio_opt
 %start any_command
 
 %%
@@ -2686,6 +2688,28 @@ after_opt:
     $$ = $2
   }
 
+expire_opt:
+  {
+    $$ = ""
+  }
+| EXPIRE STRING
+  {
+    $$ = string($2)
+  }
+
+ratio_opt:
+  {
+    $$ = nil
+  }
+| RATIO INTEGRAL
+  {
+    $$ = NewIntLiteral($2)
+  }
+| RATIO DECIMAL
+  {
+    $$ = NewDecimalLiteral($2)
+  }
+
 alter_commands_list:
   {
     $$ = nil
@@ -3031,6 +3055,36 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: CancelAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING THROTTLE expire_opt ratio_opt
+  {
+    $$ = &AlterMigration{
+      Type: ThrottleMigrationType,
+      UUID: string($4),
+      Expire: $6,
+      Ratio: $7,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION THROTTLE ALL expire_opt ratio_opt
+  {
+    $$ = &AlterMigration{
+      Type: ThrottleAllMigrationType,
+      Expire: $6,
+      Ratio: $7,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING UNTHROTTLE
+  {
+    $$ = &AlterMigration{
+      Type: UnthrottleMigrationType,
+      UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION UNTHROTTLE ALL
+  {
+    $$ = &AlterMigration{
+      Type: UnthrottleAllMigrationType,
     }
   }
 
@@ -3794,6 +3848,10 @@ show_statement:
 | SHOW VITESS_MIGRATION STRING LOGS
   {
     $$ = &ShowMigrationLogs{UUID: string($3)}
+  }
+| SHOW VITESS_THROTTLED_APPS
+  {
+    $$ = &ShowThrottledApps{}
   }
 | SHOW VITESS_REPLICATION_STATUS like_opt
   {
@@ -6656,6 +6714,7 @@ non_reserved_keyword:
 | EXCLUSIVE
 | EXECUTE
 | EXPANSION
+| EXPIRE
 | EXPORT
 | EXTENDED
 | FLOAT_TYPE
@@ -6797,6 +6856,7 @@ non_reserved_keyword:
 | PROCESSLIST
 | QUERY
 | RANDOM
+| RATIO
 | REAL
 | REBUILD
 | REDUNDANT
@@ -6856,6 +6916,7 @@ non_reserved_keyword:
 | TEXT
 | THAN
 | THREAD_PRIORITY
+| THROTTLE
 | TIES
 | TIME
 | TIMESTAMP
@@ -6872,6 +6933,7 @@ non_reserved_keyword:
 | UNDEFINED
 | UNICODE
 | UNSIGNED
+| UNTHROTTLE
 | UNUSED
 | UPGRADE
 | USER
@@ -6894,6 +6956,7 @@ non_reserved_keyword:
 | VITESS_REPLICATION_STATUS
 | VITESS_SHARDS
 | VITESS_TABLETS
+| VITESS_THROTTLED_APPS
 | VSCHEMA
 | WARNINGS
 | WITHOUT

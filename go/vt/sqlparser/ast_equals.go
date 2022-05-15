@@ -974,6 +974,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfShowMigrationLogs(a, b)
+	case *ShowThrottledApps:
+		b, ok := inB.(*ShowThrottledApps)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowThrottledApps(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -1318,7 +1324,9 @@ func EqualsRefOfAlterMigration(a, b *AlterMigration) bool {
 		return false
 	}
 	return a.UUID == b.UUID &&
-		a.Type == b.Type
+		a.Expire == b.Expire &&
+		a.Type == b.Type &&
+		EqualsRefOfLiteral(a.Ratio, b.Ratio)
 }
 
 // EqualsRefOfAlterTable does deep equals between the two objects.
@@ -3102,6 +3110,17 @@ func EqualsRefOfShowMigrationLogs(a, b *ShowMigrationLogs) bool {
 	}
 	return a.UUID == b.UUID &&
 		EqualsComments(a.Comments, b.Comments)
+}
+
+// EqualsRefOfShowThrottledApps does deep equals between the two objects.
+func EqualsRefOfShowThrottledApps(a, b *ShowThrottledApps) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfStarExpr does deep equals between the two objects.
@@ -5198,6 +5217,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfShowMigrationLogs(a, b)
+	case *ShowThrottledApps:
+		b, ok := inB.(*ShowThrottledApps)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowThrottledApps(a, b)
 	case *Stream:
 		b, ok := inB.(*Stream)
 		if !ok {

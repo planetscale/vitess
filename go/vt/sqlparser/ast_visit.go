@@ -338,6 +338,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowLegacy(in, f)
 	case *ShowMigrationLogs:
 		return VisitRefOfShowMigrationLogs(in, f)
+	case *ShowThrottledApps:
+		return VisitRefOfShowThrottledApps(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Stream:
@@ -548,6 +550,9 @@ func VisitRefOfAlterMigration(in *AlterMigration, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Ratio, f); err != nil {
 		return err
 	}
 	return nil
@@ -2604,6 +2609,18 @@ func VisitRefOfShowMigrationLogs(in *ShowMigrationLogs, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfShowThrottledApps(in *ShowThrottledApps, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3764,6 +3781,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfShow(in, f)
 	case *ShowMigrationLogs:
 		return VisitRefOfShowMigrationLogs(in, f)
+	case *ShowThrottledApps:
+		return VisitRefOfShowThrottledApps(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *TruncateTable:
