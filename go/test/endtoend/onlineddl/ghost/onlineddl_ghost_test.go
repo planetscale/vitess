@@ -164,7 +164,6 @@ func TestMain(m *testing.M) {
 			"-schema_change_controller", "local",
 			"-schema_change_check_interval", "1",
 			"--heartbeat_on_demand_duration", "5s",
-			"-online_ddl_check_interval", "3s",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
