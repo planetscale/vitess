@@ -107,6 +107,7 @@ var (
 		"vreplication_cellalias",
 		"vtorc",
 		"schemadiff_vrepl",
+		"topo_connection_cache",
 	}
 
 	clusterSelfHostedList []string
