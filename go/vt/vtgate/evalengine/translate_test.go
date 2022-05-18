@@ -88,6 +88,8 @@ func TestTranslateSimplification(t *testing.T) {
 		{"coalesce(NULL)", ok("COALESCE(NULL)"), ok("NULL")},
 		{"weight_string('foobar')", ok(`WEIGHT_STRING(VARCHAR("foobar"))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R")`)},
 		{"weight_string('foobar' as char(12))", ok(`WEIGHT_STRING(VARCHAR("foobar") AS CHAR(12))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R\x00 \x00 \x00 \x00 \x00 \x00 ")`)},
+		{"convert('a', char(2) character set utf8mb4)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET utf8mb4_0900_ai_ci)`), ok(`VARCHAR("a")`)},
+		{"convert('a', char(2) character set latin1 binary)", ok(`CONVERT(VARCHAR("a"), CHAR(2) CHARACTER SET latin1_bin)`), ok(`VARCHAR("a")`)},
 	}
 
 	for _, tc := range testCases {
