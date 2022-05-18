@@ -2051,6 +2051,22 @@ type Where struct {
 // WhereType is an enum for Where.Type
 type WhereType int8
 
+// TrimFuncExpr represents a TRIM function
+// More information available on https://dev.mysql.com/doc/refman/5.7/en/string-functions.html#function_trim
+type TrimFuncExpr struct {
+	TrimFuncType TrimFuncType
+	Type         TrimType
+	TrimArg      Expr
+	StringArg    Expr
+}
+
+// TrimFuncType is an enum to get types of TrimFunc.
+// TrimFunc stand for one of the following: LTRIM, RTRIM, TRIM
+type TrimFuncType int8
+
+// TrimType is an enum to get types of Trim
+type TrimType int8
+
 // *********** Expressions
 type (
 	// Expr represents an expression.
@@ -2568,6 +2584,7 @@ func (*MatchExpr) iExpr()                          {}
 func (*GroupConcatExpr) iExpr()                    {}
 func (*Default) iExpr()                            {}
 func (*ExtractedSubquery) iExpr()                  {}
+func (*TrimFuncExpr) iExpr()                       {}
 func (*JSONSchemaValidFuncExpr) iExpr()            {}
 func (*JSONSchemaValidationReportFuncExpr) iExpr() {}
 func (Offset) iExpr()                              {}
@@ -2599,6 +2616,7 @@ func (*WeightStringFuncExpr) iCallable()               {}
 func (*CurTimeFuncExpr) iCallable()                    {}
 func (*ValuesFuncExpr) iCallable()                     {}
 func (*ConvertExpr) iCallable()                        {}
+func (*TrimFuncExpr) iCallable()                       {}
 func (*SubstrExpr) iCallable()                         {}
 func (*ConvertUsingExpr) iCallable()                   {}
 func (*MatchExpr) iCallable()                          {}

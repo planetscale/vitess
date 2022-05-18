@@ -295,6 +295,16 @@ const (
 	NormalKeyTypeStr  = "key"
 	CheckKeyTypeStr   = "check"
 
+	// TrimType strings
+	BothTrimStr     = "both"
+	LeadingTrimStr  = "leading"
+	TrailingTrimStr = "trailing"
+
+	// TrimFuncType strings
+	NormalTrimStr = "trim"
+	LTrimStr      = "ltrim"
+	RTrimStr      = "rtrim"
+
 	// JSONAttributeType strings
 	DepthAttributeStr  = "json_depth"
 	ValidAttributeStr  = "json_valid"
@@ -395,6 +405,21 @@ const (
 	NoLock Lock = iota
 	ForUpdateLock
 	ShareModeLock
+)
+
+// Constants for Enum Type - TrimType
+const (
+	NoTrimType TrimType = iota
+	BothTrimType
+	LeadingTrimType
+	TrailingTrimType
+)
+
+// Constants for Enum Type - TrimFuncType
+const (
+	NormalTrimType TrimFuncType = iota
+	LTrimType
+	RTrimType
 )
 
 // Constants for Enum Type - JSONAttributeType

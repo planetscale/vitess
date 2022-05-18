@@ -1324,6 +1324,35 @@ func (ty IndexHintForType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty TrimFuncType) ToString() string {
+	switch ty {
+	case NormalTrimType:
+		return NormalTrimStr
+	case LTrimType:
+		return LTrimStr
+	case RTrimType:
+		return RTrimStr
+	default:
+		return "Unknown TrimFuncType"
+	}
+}
+
+func (ty TrimType) ToString() string {
+	switch ty {
+	case NoTrimType:
+		return ""
+	case BothTrimType:
+		return BothTrimStr
+	case LeadingTrimType:
+		return LeadingTrimStr
+	case TrailingTrimType:
+		return TrailingTrimStr
+	default:
+		return "Unknown TrimType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty JSONAttributeType) ToString() string {
 	switch ty {
 	case DepthAttributeType:
