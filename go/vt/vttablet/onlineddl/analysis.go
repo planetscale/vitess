@@ -37,6 +37,7 @@ type SpecialAlterPlan struct {
 	operation           specialAlterOperation
 	details             map[string]string
 	changesFoundInTable bool
+	isRevert            bool
 	alterTable          *sqlparser.AlterTable
 	createTable         *sqlparser.CreateTable
 }
@@ -254,6 +255,7 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 	switch specialOperation {
 	case addRangePartitionSpecialOperation:
 		plan := NewSpecialAlterPlan(dropRangePartitionSpecialOperation, nil, nil)
+		plan.isRevert = true
 		if err := plan.SetNewArtifact("partition_artifact"); err != nil {
 			return nil, err
 		}
@@ -274,6 +276,7 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 			return nil, err
 		}
 		plan := NewSpecialAlterPlan(addRangePartitionSpecialOperation, nil, nil)
+		plan.isRevert = true
 		plan.InheritDetail(details, "partition_name")
 		plan.InheritDetail(details, "partition_definition")
 		plan.InheritDetail(details, "partition_artifact")
