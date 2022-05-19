@@ -42,6 +42,12 @@ type SpecialAlterPlan struct {
 	createTable         *sqlparser.CreateTable
 }
 
+func readDetails(detailsText string) (map[string]string, error) {
+	var details map[string]string
+	err := json.Unmarshal([]byte(detailsText), &details)
+	return details, err
+}
+
 func NewSpecialAlterPlan(operation specialAlterOperation, alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable) *SpecialAlterPlan {
 	return &SpecialAlterPlan{
 		operation:   operation,
@@ -245,8 +251,7 @@ func (e *Executor) analyzeSpecialRevertAlterPlan(ctx context.Context, revertOnli
 	if revertPlanDetails == "" {
 		return nil, nil
 	}
-	var details map[string]string
-	err := json.Unmarshal([]byte(revertPlanDetails), &details)
+	details, err := readDetails(revertPlanDetails)
 	if err != nil {
 		return nil, err
 	}

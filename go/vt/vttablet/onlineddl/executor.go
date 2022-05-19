@@ -2718,6 +2718,37 @@ func (e *Executor) executeSpecialRevertAlterDDLActionMigrationIfApplicable(ctx c
 	return true, nil
 }
 
+func (e *Executor) recoverSpecialPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, planDetails string) error {
+	details, err := readDetails(planDetails)
+	if err != nil {
+		return err
+	}
+
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	switch specialAlterOperation(details["operation"]) {
+	case addRangePartitionSpecialOperation:
+		nextPartitionArtifactTableName := details["next_partition_artifact"]
+		nextPartitionName := details["next_partition_name"]
+		nextPartitionArtifactIsEmpty, err := e.tableIsEmpty(ctx, nextPartitionArtifactTableName)
+		if err != nil {
+			return err
+		}
+		if !nextPartitionArtifactIsEmpty {
+			// exchange next partition back into place
+			parsed := sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, nextPartitionName, nextPartitionArtifactTableName)
+			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // executeAlterDDLActionMigration
 func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
