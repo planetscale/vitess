@@ -1621,7 +1621,8 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 		dupCreateTable.OptLike = &d
 	}
 	if c.Comments != nil {
-		dupCreateTable.Comments = append(dupCreateTable.Comments, c.Comments...)
+		d := *c.Comments
+		dupCreateTable.Comments = &d
 	}
 	dup := &CreateTableEntity{CreateTable: *dupCreateTable}
 	for diff != nil {

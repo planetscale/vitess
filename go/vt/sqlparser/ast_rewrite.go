@@ -88,8 +88,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfColumnType(parent, node, replacer)
 	case Columns:
 		return a.rewriteColumns(parent, node, replacer)
-	case Comments:
-		return a.rewriteComments(parent, node, replacer)
 	case *Commit:
 		return a.rewriteRefOfCommit(parent, node, replacer)
 	case *CommonTableExpr:
@@ -276,6 +274,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfOtherRead(parent, node, replacer)
 	case *ParenTableExpr:
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
+	case *ParsedComments:
+		return a.rewriteRefOfParsedComments(parent, node, replacer)
 	case *PartitionDefinition:
 		return a.rewriteRefOfPartitionDefinition(parent, node, replacer)
 	case *PartitionDefinitionOptions:
@@ -790,8 +790,8 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*AlterTable).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterTable).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -837,8 +837,8 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*AlterView).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1368,36 +1368,6 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 	}
 	return true
 }
-func (a *application) rewriteComments(parent SQLNode, node Comments, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		kontinue := !a.pre(&a.cur)
-		if a.cur.revisit {
-			node = a.cur.node.(Comments)
-			a.cur.revisit = false
-			return a.rewriteComments(parent, node, replacer)
-		}
-		if kontinue {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1631,8 +1601,8 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*CreateDatabase).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateDatabase).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1678,8 +1648,8 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*CreateTable).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateTable).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1725,8 +1695,8 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*CreateView).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1784,8 +1754,8 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*DeallocateStmt).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DeallocateStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1869,8 +1839,8 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Delete).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Delete).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -1980,8 +1950,8 @@ func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabas
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*DropDatabase).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropDatabase).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -2044,8 +2014,8 @@ func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, rep
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*DropTable).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropTable).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -2076,8 +2046,8 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*DropView).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -2108,8 +2078,8 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*ExecuteStmt).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*ExecuteStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -2653,8 +2623,8 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Insert).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Insert).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -4230,6 +4200,30 @@ func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTabl
 	}
 	return true
 }
+func (a *application) rewriteRefOfParsedComments(parent SQLNode, node *ParsedComments, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *PartitionDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4516,8 +4510,8 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*PrepareStmt).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -4700,8 +4694,8 @@ func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMi
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*RevertMigration).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*RevertMigration).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -4838,8 +4832,8 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 			return false
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Select).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Select).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -4966,8 +4960,8 @@ func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Set).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Set).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -5072,8 +5066,8 @@ func (a *application) rewriteRefOfSetTransaction(parent SQLNode, node *SetTransa
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*SetTransaction).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*SetTransaction).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -5263,8 +5257,8 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*ShowMigrationLogs).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*ShowMigrationLogs).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -5290,15 +5284,12 @@ func (a *application) rewriteRefOfShowThrottledApps(parent SQLNode, node *ShowTh
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*ShowThrottledApps).Comments = newNode.(Comments)
-	}) {
-		return false
-	}
 	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -5344,8 +5335,8 @@ func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer 
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Stream).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Stream).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -6024,8 +6015,8 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*Update).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Update).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -6172,8 +6163,8 @@ func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replace
 			return true
 		}
 	}
-	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*VStream).Comments = newNode.(Comments)
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*VStream).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
