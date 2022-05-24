@@ -276,8 +276,8 @@ func KeyRangesIntersect(first, second *topodatapb.KeyRange) bool {
 	if first == nil || second == nil {
 		return true
 	}
-	return (len(first.End) == 0 || bytes.Compare(second.Start, first.End) < 0) &&
-		(len(second.End) == 0 || bytes.Compare(first.Start, second.End) < 0)
+	return (len(first.End) == 0 || bytes.Compare(addPadding(second.Start), addPadding(first.End)) < 0) &&
+		(len(second.End) == 0 || bytes.Compare(addPadding(first.Start), addPadding(second.End)) < 0)
 }
 
 // KeyRangesOverlap returns the overlap between two KeyRanges.
