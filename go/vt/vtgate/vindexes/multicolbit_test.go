@@ -125,3 +125,101 @@ func TestMultiColBitMap2(t *testing.T) {
 	}
 	assert.Equal(t, want, got)
 }
+
+func TestNewKeyRangeFromBitPrefix(t *testing.T) {
+	got := NewKeyRangeFromBitPrefix(0xffffffffffffffff, 8)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\xff"), End: nil}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0xffffffffffffffff, 15)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\xff\xfe"), End: nil}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0xffffffffffffffff, 16)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\xff\xff"), End: nil}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0xeeeeeeeeeeeeeeee, 16)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\xee\xee"), End: []byte("\xee\xef")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x0000000000000000, 16)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x00\x00"), End: []byte("\x00\x01")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x0000000000000000, 15)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x00\x00"), End: []byte("\x00\x02")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x0000000000000000, 14)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x00\x00"), End: []byte("\x00\x04")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x0000000000000000, 13)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x00\x00"), End: []byte("\x00\x08")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x0000000000000000, 12)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x00\x00"), End: []byte("\x00\x10")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x0000000000000000, 11)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x00\x00"), End: []byte("\x00\x20")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x0000000000000000, 10)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x00\x00"), End: []byte("\x00\x40")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x0000000000000000, 9)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x00\x00"), End: []byte("\x00\x80")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x0000000000000000, 8)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x00"), End: []byte("\x01")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x0000000000000000, 7)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x00"), End: []byte("\x02")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234000000000000, 15)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x34"), End: []byte("\x12\x36")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234000000000000, 14)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x34"), End: []byte("\x12\x38")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234000000000000, 13)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x30"), End: []byte("\x12\x38")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234000000000000, 12)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x30"), End: []byte("\x12\x40")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234000000000000, 11)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x20"), End: []byte("\x12\x40")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234000000000000, 10)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x00"), End: []byte("\x12\x40")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234000000000000, 9)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x00"), End: []byte("\x12\x80")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234000000000000, 8)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12"), End: []byte("\x13")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234000000000000, 7)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12"), End: []byte("\x14")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234567800000000, 16)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x34"), End: []byte("\x12\x35")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234567800000000, 17)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x34\x00"), End: []byte("\x12\x34\x80")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234567800000000, 18)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x34\x40"), End: []byte("\x12\x34\x80")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234567800000000, 19)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x34\x40"), End: []byte("\x12\x34\x60")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234567800000000, 20)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x34\x50"), End: []byte("\x12\x34\x60")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234567800000000, 21)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x34\x50"), End: []byte("\x12\x34\x58")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234567800000000, 22)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x34\x54"), End: []byte("\x12\x34\x58")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234567800000000, 23)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x34\x56"), End: []byte("\x12\x34\x58")}}, got)
+
+	got = NewKeyRangeFromBitPrefix(0x1234567800000000, 24)
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x12\x34\x56"), End: []byte("\x12\x34\x57")}}, got)
+}

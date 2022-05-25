@@ -93,19 +93,41 @@ func NewKeyRangeFromBitPrefix(beginPrefixUint uint64, length uint) key.Destinati
 	// that is [ keyspace_id, keyspace_id + 1 ).
 	// This code is a bit crazy, but it is to get the byte padding right
 	//   since ksIds in Vitess are expressed in byte arrays
-	// TODO:  optimizations possible?
-	byteLength := (length / 8) + 1
 	begin := make([]byte, 8)
 	end := make([]byte, 8)
+
+	// Determine how many bytes we need to hold the bits we are using
+	byteLength := (length / 8)
+	if (length % 8) > 0 {
+		byteLength++
+	}
+
+	// Shift over to least significant, so we can operate on it
 	beginPrefixUint = beginPrefixUint >> (64 - length)
-	endPrefixUint := (beginPrefixUint + 1) << (length % 8)
-	beginPrefixUint = beginPrefixUint << (length % 8)
+	// Add one for the end of the range
+	// if we overflow length bits, set to zero, will handle later
+	endPrefixUint := ((beginPrefixUint + 1) % (2 << (length - 1)))
+
+	// If not on a byte boundary, shift left to the closest one
+	if (length % 8) != 0 {
+		endPrefixUint = endPrefixUint << (8 - (length % 8))
+		beginPrefixUint = beginPrefixUint << (8 - (length % 8))
+	}
+
+	if endPrefixUint == 0 {
+		// Handle the overflow; we are at the end of the keyrange
+		end = nil
+	} else {
+		binary.BigEndian.PutUint64(end, endPrefixUint)
+		// Only want the significant bytes
+		end = end[8-byteLength : 8]
+	}
+
 	binary.BigEndian.PutUint64(begin, beginPrefixUint)
-	binary.BigEndian.PutUint64(end, endPrefixUint)
 	return key.DestinationKeyRange{
 		KeyRange: &topodatapb.KeyRange{
 			Start: begin[8-byteLength : 8],
-			End:   end[8-byteLength : 8],
+			End:   end,
 		},
 	}
 }

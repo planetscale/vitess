@@ -82,3 +82,8 @@ func TestMultiColMap(t *testing.T) {
 	}
 	assert.Equal(t, want, got)
 }
+
+func TestNewKeyRangeFromPrefix(t *testing.T) {
+	got := NewKeyRangeFromPrefix([]byte{255})
+	assert.Equal(t, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\xff"), End: nil}}, got)
+}
