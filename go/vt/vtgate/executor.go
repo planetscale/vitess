@@ -1076,6 +1076,7 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	if err != nil {
 		return nil, err
 	}
+	isNormalized := false
 	// Normalize if possible and retry.
 	if e.canNormalizeStatement(stmt, qo, setVarComment) {
 		parameterize := e.normalize // the public flag is called normalize
@@ -1095,10 +1096,14 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 		statement = result.AST
 		bindVarNeeds = result.BindVarNeeds
 		query = sqlparser.String(statement)
+		isNormalized = true
 	}
 
-	logStats.SQL = comments.Leading + query + comments.Trailing
-	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
+	if logStats != nil {
+		logStats.SQL = comments.Leading + query + comments.Trailing
+		logStats.IsNormalized = isNormalized
+		logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
+	}
 
 	planHash := sha256.New()
 	_, _ = planHash.Write([]byte(vcursor.planPrefixKey(ctx)))
