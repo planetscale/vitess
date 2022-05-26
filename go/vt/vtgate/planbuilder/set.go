@@ -49,8 +49,6 @@ type (
 	}
 )
 
-var sysVarPlanningFunc = map[string]planFunc{}
-
 func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (engine.Primitive, error) {
 	var setOps []engine.SetOp
 	var err error
@@ -80,9 +78,9 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (engine.Prim
 			}
 			setOps = append(setOps, setOp)
 		case sqlparser.SessionScope:
-			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
-			if !ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownSystemVariable, "Unknown system variable '%s'", sqlparser.String(expr))
+			planFunc, err := sysvarPlanningFuncs.Get(expr)
+			if err != nil {
+				return nil, err
 			}
 			setOp, err := planFunc(expr, vschema, ec)
 			if err != nil {
