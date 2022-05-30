@@ -415,7 +415,25 @@ func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) 
 }
 
 func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
-	return dbConn.ExecuteFetch(query, 10000, true)
+	var (
+		err    error
+		result *sqltypes.Result
+	)
+	retries := 10
+	retryDelay := 1 * time.Second
+	for i := 0; i < retries; i++ {
+		if i > 0 {
+			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
+			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
+		}
+		result, err = dbConn.ExecuteFetch(query, 10000, true)
+		if err == nil {
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+
+	return result, err
 }
 
 // GetDBVar returns first matching database variable's value
