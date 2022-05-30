@@ -255,7 +255,7 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT * FROM tbl WHERE id not regexp '%foobar'",
 	}, {
 		in:       "SELECT * FROM tbl WHERE not id not regexp '%foobar'",
-		expected: "SELECT * FROM tbl WHERE id regexp '%foobar'",
+		expected: "select * from tbl where id regexp '%foobar'",
 	}, {
 		in:                          "SHOW VARIABLES",
 		expected:                    "SHOW VARIABLES",
