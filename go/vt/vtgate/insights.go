@@ -20,16 +20,17 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
-	"github.com/segmentio/kafka-go"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/segmentio/kafka-go"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
+
+	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -552,7 +553,7 @@ func (ii *Insights) makeQueryMessage(ls *logstats.LogStats, sql string, tags []*
 		CommentTags:            tags,
 	}
 	if ls.Error != nil {
-		obj.Error = stringOrNil(normalizeError(ls.Error.Error()))
+		obj.Error = stringOrNil(errorsanitizer.NormalizeError(ls.Error.Error()))
 	}
 
 	var out []byte
@@ -655,28 +656,6 @@ func normalizeSQL(sql string) (string, error) {
 		}
 	})
 	return buf.WriteNode(stmt).String(), nil
-}
-
-// Remove any BindVars or Sql, and anything after it
-var reTruncateError = regexp.MustCompile(`[,:] BindVars:|[,:] Sql:`)
-
-// Keep code = foo, Duplicate entry, or syntax error, but remove anything after it
-var reTruncateErrorAfter = regexp.MustCompile(`code = \S+|Duplicate entry|syntax error at position \d+`)
-
-// Truncate errors longer than this
-const maxErrorLength = 256
-
-func normalizeError(str string) string {
-	if idx := reTruncateError.FindStringIndex(str); idx != nil {
-		str = str[0:idx[0]]
-	}
-	if idx := reTruncateErrorAfter.FindStringIndex(str); idx != nil {
-		str = str[0:idx[1]]
-	}
-	if len(str) > maxErrorLength {
-		return str[0:maxErrorLength]
-	}
-	return str
 }
 
 func stringOrNil(s string) *wrapperspb.StringValue {
