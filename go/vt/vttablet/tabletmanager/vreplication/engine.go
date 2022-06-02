@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -216,12 +217,18 @@ func (vre *Engine) Open(ctx context.Context) {
 // We plan to refactor so that we remove WithDDL, just define the list of DDLs required to reach the desired
 // and execute vreplication queries normally.
 func (vre *Engine) ensureValidSchema(ctx context.Context) error {
-	dbClient := vre.dbClientFactoryFiltered()
-	if err := dbClient.Connect(); err != nil {
+	f := func() error {
+		dbClient := vre.dbClientFactoryFiltered()
+		if err := dbClient.Connect(); err != nil {
+			return err
+		}
+		defer dbClient.Close()
+		_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+		return nil
+	}
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Init VReplication Schema", f, false); err != nil {
 		return err
 	}
-	defer dbClient.Close()
-	_, _ = withDDL.ExecIgnore(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch)
 	return nil
 }
 

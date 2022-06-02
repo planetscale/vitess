@@ -78,6 +78,7 @@ type healthStreamer struct {
 	conns                  *connpool.Pool
 	initSuccess            bool
 	signalWhenSchemaChange bool
+	schemaRegistered       bool
 }
 
 func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *healthStreamer {
@@ -328,9 +329,11 @@ func (hs *healthStreamer) reload() error {
 	if !hs.initSuccess {
 		hs.initSuccess, err = hs.InitSchemaLocked(conn)
 		if err != nil {
+			log.Infof("error is %s", err)
 			return err
 		}
 	}
+	log.Infof("InitSchemaLocked END: %t, %t", hs.schemaRegistered, hs.initSuccess)
 
 	var tables []string
 	var tableNames []string
@@ -393,12 +396,35 @@ func (hs *healthStreamer) reload() error {
 }
 
 func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
-	for _, query := range mysql.VTDatabaseInit {
-		_, err := conn.Exec(hs.ctx, query, 1, false)
+	log.Infof("InitSchemaLocked: %t, %t", hs.schemaRegistered, hs.initSuccess)
+	f := func() error {
+		ctx := context.Background()
+		conn2, err := hs.conns.Get(ctx)
 		if err != nil {
+			log.Infof(">>>>>>>>>>>")
+			return err
+		}
+		defer conn2.Recycle()
+		for _, query := range mysql.VTDatabaseInit {
+			_, err := conn2.Exec(ctx, query, 1, false)
+			if err != nil {
+				log.Infof(">>>>>>>>> error %s", err)
+				return err
+			}
+		}
+		return nil
+	}
+	if !hs.schemaRegistered {
+		if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Initial VT Schema", f, true); err != nil {
+			log.Infof("error is %s", err)
 			return false, err
 		}
+		hs.schemaRegistered = true
 	}
-
+	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+		log.Infof("error is %s", err)
+		return false, err
+	}
+	log.Infof("InitSchemaLocked END: %t, %t", hs.schemaRegistered, hs.initSuccess)
 	return true, nil
 }
