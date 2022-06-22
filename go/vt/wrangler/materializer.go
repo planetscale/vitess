@@ -345,7 +345,7 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if err != nil {
 		return nil, err
 	}
-	schema, err := wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
+	schema, err := wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -577,7 +577,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	if onesource.PrimaryAlias == nil {
 		return nil, nil, nil, fmt.Errorf("source shard has no primary: %v", onesource.ShardName())
 	}
-	tableSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, onesource.PrimaryAlias, []string{sourceTableName}, nil, false)
+	tableSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, onesource.PrimaryAlias, []string{sourceTableName}, nil, false, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -965,7 +965,7 @@ func (mz *materializer) getSourceTableDDLs(ctx context.Context) (map[string]stri
 	if err != nil {
 		return nil, err
 	}
-	sourceSchema, err := mz.wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
+	sourceSchema, err := mz.wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -984,7 +984,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
-		targetSchema, err := schematools.GetSchema(ctx, mz.wr.ts, mz.wr.tmc, target.PrimaryAlias, allTables, nil, false)
+		targetSchema, err := schematools.GetSchema(ctx, mz.wr.ts, mz.wr.tmc, target.PrimaryAlias, allTables, nil, false, false)
 		if err != nil {
 			return err
 		}
