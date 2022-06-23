@@ -244,6 +244,20 @@ func (vttablet *VttabletProcess) WaitForTabletTypes(expectedTypes []string) erro
 	return vttablet.WaitForTabletTypesForTimeout(expectedTypes, 10*time.Second)
 }
 
+func (vttablet *VttabletProcess) GetGlobalSuperReadOnlyValue() (string, error) {
+	res, err := vttablet.QueryTabletWithDB("SELECT @@global.super_read_only", "mysql")
+
+	if err == nil && len(res.Rows) == 1 {
+		sro := res.Rows[0][0].ToString()
+		if sro == "1" || sro == "ON" {
+			return "ON", nil
+		}
+		return "OFF", nil
+	}
+
+	return "OFF", nil
+}
+
 // WaitForTabletStatusesForTimeout waits till the tablet reaches to any of the provided statuses
 func (vttablet *VttabletProcess) WaitForTabletStatusesForTimeout(expectedStatuses []string, timeout time.Duration) error {
 	waitUntil := time.Now().Add(timeout)
