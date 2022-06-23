@@ -66,9 +66,14 @@ var (
 
 //region cluster setup/teardown
 
+// SetupReparentClusterLegacy with super-read-only flag
+func SetupReparentClusterLegacyWithSuperReadOnly(t *testing.T, enableSemiSync bool, superReadOnly bool) *cluster.LocalProcessCluster {
+	return setupClusterLegacy(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1}, enableSemiSync, superReadOnly)
+}
+
 // SetupReparentClusterLegacy is used to setup the reparent cluster
 func SetupReparentClusterLegacy(t *testing.T, enableSemiSync bool) *cluster.LocalProcessCluster {
-	return setupClusterLegacy(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1}, enableSemiSync)
+	return setupClusterLegacy(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1}, enableSemiSync, false)
 }
 
 // SetupReparentCluster is used to setup the reparent cluster
@@ -78,7 +83,7 @@ func SetupReparentCluster(t *testing.T, enableSemiSync bool) *cluster.LocalProce
 
 // SetupRangeBasedCluster sets up the range based cluster
 func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalProcessCluster {
-	return setupClusterLegacy(ctx, t, ShardName, []string{cell1}, []int{2}, true)
+	return setupClusterLegacy(ctx, t, ShardName, []string{cell1}, []int{2}, true, false)
 }
 
 // TeardownCluster is used to teardown the reparent cluster
@@ -204,7 +209,7 @@ func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.Loca
 	assert.Contains(t, strArray[0], "primary") // primary first
 }
 
-func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int, enableSemiSync bool) *cluster.LocalProcessCluster {
+func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int, enableSemiSync bool, enableSuperReadOnly bool) *cluster.LocalProcessCluster {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
@@ -213,6 +218,9 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
 		durability = "semi_sync"
+	}
+	if enableSuperReadOnly {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--use_super_read_only")
 	}
 
 	// Start topo server

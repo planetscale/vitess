@@ -80,6 +80,62 @@ func TestReparentGraceful(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[2], tablets[3]})
 }
 
+// This test verifes that demoted primary tablet sets super-read-only flag to false after restart. This
+// will allow DDL command to execute during table initialization after vttablet restart.
+func TestReparentGracefulWithSuperReadOnly(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	// Create cluster with super-read-only to true
+	clusterInstance := utils.SetupReparentClusterLegacyWithSuperReadOnly(t, true, true)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	// Confirm replication is setup and cluster is working as expected.
+	strArray := utils.GetShardReplicationPositions(t, clusterInstance, utils.KeyspaceName, utils.ShardName, false)
+	assert.Equal(t, 4, len(strArray))          // one primary, three replicas
+	assert.Contains(t, strArray[0], "primary") // primary first
+
+	// Primary super-read-only flag should be 'OFF' right now
+	val, err := tablets[0].VttabletProcess.GetGlobalSuperReadOnlyValue()
+	require.Equal(t, err, nil)
+	require.Equal(t, val, "OFF")
+
+	// Perform a graceful reparent operation
+	utils.Prs(t, clusterInstance, tablets[1])
+	utils.ValidateTopology(t, clusterInstance, false)
+	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+
+	// after reparent the super readonly golabal variable should set to "ON"
+	val, err = tablets[0].VttabletProcess.GetGlobalSuperReadOnlyValue()
+	require.Equal(t, err, nil)
+	require.Equal(t, val, "ON")
+
+	// Now shutdown vttabletprocess of old primary
+	err = tablets[0].VttabletProcess.TearDown()
+	require.Nil(t, err)
+
+	// Restart the vttabletprocess
+	if err := tablets[0].VttabletProcess.Setup(); err != nil {
+		require.ErrorContains(t, err, "process 'vttablet' timed out after")
+	}
+
+	// Confirm that everthing is working as expected even though the table gets restarted.
+	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[2], tablets[3]})
+
+	// after reparent the super readonly golabal variable should set to "OFF"
+	val, err = tablets[0].VttabletProcess.GetGlobalSuperReadOnlyValue()
+	require.Equal(t, err, nil)
+	require.Equal(t, val, "OFF")
+
+	// Check if DDL commands are working as expected
+	_, err = tablets[0].VttabletProcess.QueryTablet("CREATE DATABASE IF NOT EXISTS _vt", clusterInstance.Keyspaces[0].Name, true)
+	require.Nil(t, err)
+
+	// The new primary has super-read-only should set to 'OFF'
+	val, err = tablets[1].VttabletProcess.GetGlobalSuperReadOnlyValue()
+	require.Equal(t, err, nil)
+	require.Equal(t, val, "OFF")
+}
+
 // TestPRSWithDrainedLaggingTablet tests that PRS succeeds even if we have a lagging drained tablet
 func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 	defer cluster.PanicHandler(t)

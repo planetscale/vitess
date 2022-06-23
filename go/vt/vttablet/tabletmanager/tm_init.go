@@ -40,10 +40,12 @@ import (
 	"fmt"
 	"math/rand"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -396,6 +398,18 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		go tm.orc.DiscoverLoop(tm)
 	}
 	servenv.OnRun(tm.registerTabletManager)
+	// There are some edge cases where mysql is in super-read-only mode during tablet initialization.
+	// This will prevent us to run any DDLs during initialization. One scenario would be after PRS
+	// the demoted tablet restarts (just the tablet not the mysql instance of the tablet). During PRS
+	// we set super-read-only flag to 'True' on demoted primary. To resolve this issue we set super-read-only
+	// to 'false' to make sure DDLs get run without any issue.
+	if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
+		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+			log.Warningf("Server does not know about super_read_only, continuing anyway...")
+		} else {
+			return err
+		}
+	}
 
 	restoring, err := tm.handleRestore(tm.BatchCtx)
 	if err != nil {
