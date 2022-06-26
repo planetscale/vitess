@@ -396,12 +396,21 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	// the demoted tablet restarts (just the tablet not the mysql instance of the tablet). During PRS
 	// we set super-read-only flag to 'True' on demoted primary. To resolve this issue we set super-read-only
 	// to 'false' to make sure DDLs get run without any issue.
-	if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
-		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
-			log.Warningf("Server does not know about super_read_only, continuing anyway...")
-		} else {
-			return err
+	if *setSuperReadOnly {
+		if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
+			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+				log.Warningf("Server does not know about super_read_only, continuing anyway...")
+			} else {
+				return err
+			}
 		}
+
+		defer func() {
+			// setting read_only OFF will also set super_read_only OFF if it was set
+			if err := tm.MysqlDaemon.SetReadOnly(true); err != nil {
+				log.Warningf("SetReadOnly(true) failed during revert: %v", err)
+			}
+		}()
 	}
 
 	restoring, err := tm.handleRestore(tm.BatchCtx)
