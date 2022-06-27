@@ -404,13 +404,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 				return err
 			}
 		}
-
-		defer func() {
-			// setting read_only OFF will also set super_read_only OFF if it was set
-			if err := tm.MysqlDaemon.SetReadOnly(true); err != nil {
-				log.Warningf("SetReadOnly(true) failed during revert: %v", err)
-			}
-		}()
 	}
 
 	restoring, err := tm.handleRestore(tm.BatchCtx)
@@ -746,6 +739,16 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		go func() {
 			// Open the state manager after restore is done.
 			defer tm.tmState.Open()
+
+			// Every tablet starts as replica. Therefore we are setting it up as SuperReadOnly to true.
+			// If replica is primary somewhere down the stack we will switch-off this flag in order to
+			// execute DDLs
+			defer func() {
+				// setting read_only OFF will also set super_read_only OFF if it was set
+				if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
+					log.Warningf("SetSuperReadOnly(true) failed during revert: %v", err)
+				}
+			}()
 
 			// Zero date will cause us to use the latest, which is the default
 			backupTime := time.Time{}

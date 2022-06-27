@@ -125,11 +125,11 @@ func TestReparentGracefulWithSuperReadOnly(t *testing.T) {
 	// after reparent the super readonly golabal variable should set to "OFF"
 	val, err = tablets[0].VttabletProcess.GetGlobalSuperReadOnlyValue()
 	require.Equal(t, err, nil)
-	require.Equal(t, val, "OFF")
+	require.Equal(t, val, "ON")
 
 	// Check if DDL commands are working as expected
 	_, err = tablets[0].VttabletProcess.QueryTablet("CREATE DATABASE IF NOT EXISTS _vt", clusterInstance.Keyspaces[0].Name, true)
-	require.Nil(t, err)
+	require.ErrorContains(t, err, "running with the --super-read-only")
 
 	// The new primary has super-read-only should set to 'OFF'
 	val, err = tablets[1].VttabletProcess.GetGlobalSuperReadOnlyValue()
