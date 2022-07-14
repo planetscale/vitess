@@ -43,6 +43,7 @@ type LogStats struct {
 	TabletType     string
 	StmtType       string
 	SQL            string
+	RawSQL         string
 	IsNormalized   bool
 	BindVariables  map[string]*querypb.BindVariable
 	StartTime      time.Time
@@ -73,6 +74,7 @@ func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindV
 		Method:        methodName,
 		SQL:           sql,
 		SessionUUID:   sessionUUID,
+		RawSQL:        sql,
 		IsNormalized:  false, // may get set to true later when normalization happens
 		BindVariables: bindVars,
 		StartTime:     time.Now(),

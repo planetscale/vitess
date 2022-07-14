@@ -122,8 +122,8 @@ require github.com/syndtr/goleveldb v1.0.0
 
 require (
 	github.com/openark/golib v0.0.0-20210531070646-355f37940af8
-	github.com/planetscale/psevents v0.0.0-20220505072709-238f3799dfa0
 	github.com/segmentio/kafka-go v0.4.38
+	github.com/planetscale/psevents v0.0.0-20220711214803-98d881c120bf
 	github.com/twmb/murmur3 v1.1.6
 )
 
