@@ -274,13 +274,17 @@ All `online DDL show` commands can now be run with a few additional parameters
 
 The following is now supported:
 
+#### New syntax
+
+The following is now supported:
+
 ```sql
 ALTER VITESS_MIGRATION COMPLETE ALL
 ```
 
-This works on all pending migrations (`queued`, `ready`, `running`) and internally issues a `ALTER VITESS_MIGRATION '<uuid>' COMPLETE` for each one. The command is useful for completing multiple concurrent migrations (see above) that are open-ended (`--postpone-completion`).
+This works on all pending migrations (`queued`, `ready`, `running`) and internally issues a `ALTER VITESS_MIGRATION '<uuid>' COMPLETE` for each one. The command is useful for completing multiple concurrent migrations (see above) that are open ended (`--postpone-completion`).
 
-### <a id="tablet-throttler"/>Tablet Throttler
+### Tablet throttler
 
 #### <a id="api-changes"/>API changes
 
