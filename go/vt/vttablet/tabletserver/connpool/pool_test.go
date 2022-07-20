@@ -282,6 +282,39 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	}
 }
 
+func TestPoolWithSettingsConnection(t *testing.T) {
+	db := fakesqldb.New(t)
+	pool := newPool()
+	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+
+	ctx := context.Background()
+	connection, err := pool.GetWithSettings(ctx, "settings-1")
+	require.NoError(t, err)
+
+	pool.Put(connection)
+	connection2, err := pool.GetWithSettings(ctx, "settings-1")
+	require.NoError(t, err)
+
+	require.Equal(t, connection, connection2)
+	require.Equal(t, connection.ID(), connection2.ID())
+
+	connection3, err := pool.GetWithSettings(ctx, "settings-1")
+	require.NoError(t, err)
+	require.NotEqual(t, connection2.ID(), connection3.ID())
+
+	pool.Put(connection2)
+	pool.Put(connection3)
+
+	connection4, err := pool.GetWithSettings(ctx, "settings-2")
+	require.NoError(t, err)
+	require.NotEqual(t, connection2.ID(), connection4.ID())
+	require.NotEqual(t, connection3.ID(), connection4.ID())
+	pool.Put(connection4)
+
+	pool.Close()
+	require.Zero(t, pool.Capacity())
+}
+
 func newPool() *Pool {
 	return NewPool(tabletenv.NewEnv(nil, "PoolTest"), "TestPool", tabletenv.ConnPoolConfig{
 		Size:               100,
