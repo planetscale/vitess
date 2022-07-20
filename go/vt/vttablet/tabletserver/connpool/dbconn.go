@@ -46,12 +46,13 @@ import (
 // its own queries and the underlying connection.
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
-	conn    *dbconnpool.DBConnection
-	info    dbconfigs.Connector
-	pool    *Pool
-	dbaPool *dbconnpool.ConnectionPool
-	stats   *tabletenv.Stats
-	current sync2.AtomicString
+	conn     *dbconnpool.DBConnection
+	info     dbconfigs.Connector
+	pool     *Pool
+	dbaPool  *dbconnpool.ConnectionPool
+	stats    *tabletenv.Stats
+	current  sync2.AtomicString
+	settings string
 
 	// err will be set if a query is killed through a Kill.
 	errmu sync.Mutex
@@ -76,6 +77,16 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 		dbaPool: cp.dbaPool,
 		stats:   cp.env.Stats(),
 	}, nil
+}
+
+func (dbc *DBConn) ApplySettings(settings string) error {
+	// TODO: Apply settings for real
+	dbc.settings = settings
+	return nil
+}
+
+func (dbc *DBConn) GetSettings() string {
+	return dbc.settings
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
