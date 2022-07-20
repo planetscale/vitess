@@ -37,10 +37,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	lockRenewTimeout = 10 * time.Second // has to be a fraction of Topo's defaultLockTimeout (30sec at this time)
-)
-
 // TabletExecutor applies schema changes to all tablets.
 type TabletExecutor struct {
 	migrationContext     string

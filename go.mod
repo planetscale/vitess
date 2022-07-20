@@ -122,14 +122,15 @@ require github.com/syndtr/goleveldb v1.0.0
 
 require (
 	github.com/openark/golib v0.0.0-20210531070646-355f37940af8
-	github.com/segmentio/kafka-go v0.4.38
 	github.com/planetscale/psevents v0.0.0-20220711214803-98d881c120bf
+	github.com/segmentio/kafka-go v0.4.38
 	github.com/twmb/murmur3 v1.1.6
 )
 
 require (
 	cloud.google.com/go v0.81.0 // indirect
 	github.com/BurntSushi/toml v0.3.1 // indirect
+	github.com/GeertJohan/go.rice v1.0.2 // indirect
 	github.com/andybalholm/cascadia v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
