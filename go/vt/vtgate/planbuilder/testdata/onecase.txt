@@ -1,1 +1,7 @@
 # Add your test case here for debugging and run go test -run=One.
+"delete from mysql.t1"
+{
+}
+{
+}
+
