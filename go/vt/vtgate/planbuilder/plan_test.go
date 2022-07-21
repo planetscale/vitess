@@ -658,7 +658,11 @@ func (vw *vschemaWrapper) getActualKeyspace() string {
 }
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
-	return vw.v.Keyspaces["main"].Keyspace, nil
+	keyspaceName := "main"
+	if vw.keyspace != nil {
+		keyspaceName = vw.keyspace.Name
+	}
+	return vw.v.Keyspaces[keyspaceName].Keyspace, nil
 }
 
 func (vw *vschemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {
