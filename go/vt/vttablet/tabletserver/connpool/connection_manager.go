@@ -121,6 +121,7 @@ func (cm *ConnManager) Put(conn *DBConn) {
 			return
 		}
 		conn.Close()
+		conn = nil
 	}
 	globalPool := cm.GetGlobalPool()
 	if globalPool == nil {
