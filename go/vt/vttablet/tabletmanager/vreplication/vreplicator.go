@@ -67,11 +67,11 @@ var (
 	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
 	vreplicationMinimumHeartbeatUpdateInterval = 60
 
-	vreplicationExperimentalFlags = flag.Int64("vreplication_experimental_flags", 0x01, "(Bitmask) of experimental features in vreplication to enable")
-
-	vreplicationExperimentalFlagOptimizeInserts int64 = 1
-
-	vreplicationStoreCompressedGTID = flag.Bool("vreplication_store_compressed_gtid", false, "Store compressed gtids in the pos column of _vt.vreplication")
+	vreplicationExperimentalFlags                        = flag.Int64("vreplication_experimental_flags", 0x01, "(Bitmask) of experimental features in vreplication to enable")
+	vreplicationParallelBulkInserts                      = flag.Int64("vreplication_parallel_bulk_inserts", 4, "Concurrent bulk inserts during copy")
+	vreplicationExperimentalFlagOptimizeInserts    int64 = 1
+	vreplicationExperimentalParallelizeBulkInserts int64 = 0x02
+	vreplicationStoreCompressedGTID                      = flag.Bool("vreplication_store_compressed_gtid", false, "Store compressed gtids in the pos column of _vt.vreplication")
 )
 
 const (
