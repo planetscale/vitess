@@ -354,7 +354,52 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationLastCopyBandwidthBps",
+		"vreplication last copy's bytes copied per second per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.CopyBandwidth.Get()
+			}
+			return result
+		})
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationLastBatchCopyBandwidthBps",
+		"vreplication last batch copy's bytes copied per second per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.BatchCopyBandwidth.Get()
+			}
+			return result
+		})
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationCopyBatchCount",
+		"vreplication running count of batches in copy phase",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.BatchCopyLoopCount.Get()
+			}
+			return result
+		})
+	stats.NewGaugeFunc("VReplicationBulkInsertConcurrency", "Number of concurrent bulk inserts", st.bulkInsertConcurrency)
+}
 
+func (st *vrStats) bulkInsertConcurrency() int64 {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return int64(getCopyBatchConcurrency())
 }
 
 func (st *vrStats) numControllers() int64 {
@@ -402,6 +447,8 @@ func (st *vrStats) status() *EngineStatus {
 			CopyRowCount:          ct.blpStats.CopyRowCount.Get(),
 			CopyLoopCount:         ct.blpStats.CopyLoopCount.Get(),
 			NoopQueryCounts:       ct.blpStats.NoopQueryCount.Counts(),
+			CopyBandwidth:         ct.blpStats.CopyBandwidth.Get(),
+			BatchCopyLoopCount:    ct.blpStats.BatchCopyLoopCount.Get(),
 		}
 		i++
 	}
@@ -434,6 +481,8 @@ type ControllerStatus struct {
 	CopyRowCount          int64
 	CopyLoopCount         int64
 	NoopQueryCounts       map[string]int64
+	CopyBandwidth         int64
+	BatchCopyLoopCount    int64
 }
 
 var vreplicationTemplate = `

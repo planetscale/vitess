@@ -28,7 +28,7 @@ unset VTROOT # ensure that the examples can run without VTROOT now.
 source ./env.sh # Required so that "mysql" works from alias
 
 ./101_initial_cluster.sh
-
+exit
 sleep 5 # Give vtgate time to really start.
 
 mysql < ../common/insert_commerce_data.sql
@@ -83,5 +83,5 @@ mysql --table < ../common/select_customer80-_data.sql
 
 ./306_down_shard_0.sh
 
-./401_teardown.sh
+#./401_teardown.sh
 

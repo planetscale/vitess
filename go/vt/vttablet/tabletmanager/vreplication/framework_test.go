@@ -96,6 +96,12 @@ func TestMain(m *testing.M) {
 		}
 		defer env.Close()
 
+		oldVReplicationParallelBulkInserts := *vreplicationParallelBulkInserts
+		*vreplicationParallelBulkInserts = 1
+		defer func() {
+			*vreplicationParallelBulkInserts = oldVReplicationParallelBulkInserts
+		}()
+
 		*vreplicationExperimentalFlags = 0
 
 		// engines cannot be initialized in testenv because it introduces
@@ -686,4 +692,12 @@ func validateCopyRowCountStat(t *testing.T, want int64) {
 		count += ct.CopyRowCount
 	}
 	require.Equal(t, want, count, "CopyRowCount stat is incorrect")
+}
+
+func validateCopyBatchCountStat(t *testing.T, want int64) {
+	var count int64
+	for _, ct := range globalStats.status().Controllers {
+		count += ct.BatchCopyLoopCount
+	}
+	require.Equal(t, want, count, "BatchCopyLoopCount stat is incorrect")
 }
