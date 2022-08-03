@@ -98,7 +98,6 @@ func (vc *vdbClient) Execute(query string) (*sqltypes.Result, error) {
 }
 
 func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqltypes.Result, error) {
-	log.Infof("Calling ExecuteWithRetry for query %s", query)
 	qr, err := vc.Execute(query)
 	for err != nil {
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock || sqlErr.Number() == mysql.ERLockWaitTimeout {

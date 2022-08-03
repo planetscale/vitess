@@ -203,7 +203,6 @@ type TablePlan struct {
 	FieldsToSkip            map[string]bool
 	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
 	HasExtraSourcePkColumns bool
-	ColExprs                []*colExpr
 }
 
 // MarshalJSON performs a custom JSON Marshalling.

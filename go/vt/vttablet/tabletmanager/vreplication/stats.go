@@ -399,7 +399,7 @@ func (st *vrStats) register() {
 func (st *vrStats) bulkInsertConcurrency() int64 {
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	return int64(getCopyBatchConcurrency())
+	return int64(getCopyInsertConcurrency())
 }
 
 func (st *vrStats) numControllers() int64 {

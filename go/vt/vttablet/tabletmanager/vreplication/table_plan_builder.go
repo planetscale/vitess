@@ -358,8 +358,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		PKReferences:            pkrefs,
 		Stats:                   tpb.stats,
 		FieldsToSkip:            fieldsToSkip,
-		HasExtraSourcePkColumns: len(tpb.extraSourcePkCols) > 0,
-		ColExprs:                tpb.colExprs,
+		HasExtraSourcePkColumns: (len(tpb.extraSourcePkCols) > 0),
 	}
 }
 
