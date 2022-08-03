@@ -23,8 +23,6 @@ import (
 	"strings"
 	"time"
 
-	strings2 "k8s.io/utils/strings"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -172,7 +170,7 @@ func (ct *controller) run(ctx context.Context) {
 		}
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
-		log.Errorf("stream %v: %s, retrying after %v", ct.id, strings2.ShortenString(err.Error(), 200), *retryDelay)
+		binlogplayer.LogError(fmt.Sprintf("error in stream %v, retrying after %v", ct.id, *retryDelay), err)
 		timer := time.NewTimer(*retryDelay)
 		select {
 		case <-ctx.Done():
