@@ -84,7 +84,7 @@ type vcopierWorkerTask struct {
 
 func getCopyInsertConcurrency() int {
 	copyInsertConcurrency := int(*vreplicationParallelBulkInserts)
-	if isExperimentalParallelBulkInsertsEnabled() {
+	if !isExperimentalParallelBulkInsertsEnabled() {
 		copyInsertConcurrency = 1
 	}
 	return copyInsertConcurrency
@@ -268,8 +268,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())
 	defer vc.vr.stats.CopyLoopCount.Add(1)
 
-	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
-
 	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats)
 	if err != nil {
 		return err
@@ -283,9 +281,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	ctx, cancel := context.WithTimeout(ctx, *copyPhaseDuration)
 	defer cancel()
 
-	var currentLastPKpb *querypb.QueryResult
+	var lastpkpb *querypb.QueryResult
 	if lastpkqr := copyState[tableName]; lastpkqr != nil {
-		currentLastPKpb = sqltypes.ResultToProto3(lastpkqr)
+		lastpkpb = sqltypes.ResultToProto3(lastpkqr)
 	}
 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
@@ -316,7 +314,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var pkFields []*querypb.Field
 	var lastpk *querypb.Row
 
-	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, currentLastPKpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
 			case <-rowsCopiedTicker.C:
@@ -508,13 +506,9 @@ func (vcwp *vcopierWorkerPool) consume() {
 			// Copy rows asynchronously
 			go vcwp.doCopy(task)
 		case task := <-vcwp.doneQ:
-			// Unblock for the next commit.
+			// Unblock the next commit.
 			if task == nextCommitTask {
 				nextCommitTask = nil
-			}
-			if task.lastErr != nil {
-				vcwp.stats.ErrorCounts.Add([]string{"BulkCopy"}, 1)
-				vcwp.errorRecorder.RecordError(task.lastErr)
 			}
 		default:
 		}
@@ -601,6 +595,7 @@ func (vcwp *vcopierWorkerPool) doCopy(task *vcopierWorkerTask) {
 		worker = rs.(*vcopierWorker)
 	}
 
+	// Do actual work.
 	if err = worker.begin(); err != nil {
 		task.lastErr = fmt.Errorf("error beginning copy-update-state transaction: %s", err.Error())
 		goto DONE
@@ -622,12 +617,20 @@ func (vcwp *vcopierWorkerPool) doCopy(task *vcopierWorkerTask) {
 		goto DONE
 	}
 
+	// Update stats.
 	elapsedTime = float64(time.Now().UnixNano()-start.UnixNano()) / 1e9
 	bandwidth = int64(float64(numRows) / elapsedTime)
 	vcwp.stats.CopyBandwidth.Set(bandwidth)
 	vcwp.stats.CopyRowCount.Add(int64(numRows))
 	vcwp.stats.QueryCount.Add("copy", 1)
+
 DONE:
+	// Handle errors.
+	if task.lastErr != nil {
+		vcwp.stats.ErrorCounts.Add([]string{"BulkCopy"}, 1)
+		vcwp.errorRecorder.RecordError(task.lastErr)
+	}
+
 	vcwp.doneQ <- task
 }
 
@@ -669,7 +672,6 @@ func (vcwp *vcopierWorkerPool) start(
 		vcwp.size, /* initial capacity */
 		vcwp.size, /* max capacity */
 		0,         /* idle timeout */
-		0,         /* prefill parallelism */
 		nil,       /* log wait */
 		nil,       /* refresh check */
 		0,         /* refresh interval */
