@@ -1,14 +1,14 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (xb_backup)
+name: Cluster (vtorc_8.0)
 on: [push]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (xb_backup)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtorc_8.0)')
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (xb_backup)
+    name: Run endtoend tests on Cluster (vtorc_8.0)
     runs-on: ubuntu-20.04
 
     steps:
@@ -64,4 +64,4 @@ jobs:
 
         set -x
 
-        eatmydata -- go run test.go -docker=false -follow -shard xb_backup
+        eatmydata -- go run test.go -docker=false -follow -shard vtorc_8.0

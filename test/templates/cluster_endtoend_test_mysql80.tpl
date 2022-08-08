@@ -1,20 +1,18 @@
-# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
-
-name: Cluster (xb_backup)
+name: {{.Name}}
 on: [push]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (xb_backup)')
+  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (xb_backup)
+    name: Run endtoend tests on {{.Name}}
     runs-on: ubuntu-20.04
 
     steps:
     - name: Configure git private repo access
       env:
-        GITHUB_TOKEN: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+        GITHUB_TOKEN: ${{"{{"}} secrets.PLANETSCALE_ACTIONS_BOT_TOKEN {{"}}"}}
       run: |
         git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
@@ -64,4 +62,5 @@ jobs:
 
         set -x
 
-        eatmydata -- go run test.go -docker=false -follow -shard xb_backup
+        eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}}
+
