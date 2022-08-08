@@ -1,14 +1,14 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (xb_backup)
+name: Cluster (resharding)
 on: [push]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (xb_backup)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (resharding)')
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (xb_backup)
+    name: Run endtoend tests on Cluster (resharding)
     runs-on: ubuntu-20.04
 
     steps:
@@ -64,4 +64,4 @@ jobs:
 
         set -x
 
-        eatmydata -- go run test.go -docker=false -follow -shard xb_backup
+        eatmydata -- go run test.go -docker=false -follow -shard resharding
