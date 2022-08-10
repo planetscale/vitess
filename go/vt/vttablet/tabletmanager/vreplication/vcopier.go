@@ -25,8 +25,10 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -38,7 +40,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -50,36 +51,44 @@ type vcopier struct {
 	throttlerAppName string
 }
 
-type vcopierWorker struct {
-	ch              chan error
-	closeFunc       func()
+type vcopierBasicCopier struct {
+	*vdbClient
+
+	closeDbClient   bool
 	copyStateUpdate *sqlparser.ParsedQuery
-	dbClient        *vdbClient
-	pkFields        []*querypb.Field
+	hooks           map[string]*event.Hooks
+	isOpen          bool
+	lastCommittedPk *querypb.Row
+	pkfields        []*querypb.Field
 	sqlbuffer       bytes2.Buffer
+	stats           *binlogplayer.Stats
 	tablePlan       *TablePlan
 }
 
-type vcopierWorkerPool struct {
-	async           bool
-	commitQ         chan *vcopierWorkerTask
-	dbClientFactory func() (*vdbClient, func(), error)
-	doneQ           chan *vcopierWorkerTask
-	errorRecorder   concurrency.ErrorRecorder
-	inQ             chan *vcopierWorkerTask
-	resourcePool    *pools.ResourcePool
-	quitCh          chan bool
+type vcopierConcurrentCopier struct {
+	copierFactory   func() (vcopierCopier, error)
+	copierPool      *pools.ResourcePool
+	errors          concurrency.ErrorRecorder
+	isOpen          bool
+	lastCommitCh    chan bool
+	lastCommittedPk *querypb.Row
 	size            int
-	started         bool
-	stats           *binlogplayer.Stats
 }
 
-type vcopierWorkerTask struct {
-	commitCh chan bool
-	ctx      context.Context
-	lastErr  error
-	rows     *binlogdatapb.VStreamRowsResponse
-	worker   *vcopierWorker
+type vcopierCopier interface {
+	pools.Resource
+
+	BeforeUpdateCopyState() *event.Hooks
+
+	Copy(ctx context.Context, rows []*querypb.Row, lastpk *querypb.Row) error
+	Error() error
+	IsOpen() bool
+	LastCommittedPk() *querypb.Row
+	Open(
+		copyStateUpdate *sqlparser.ParsedQuery,
+		pkfields []*querypb.Field,
+		tablePlan *TablePlan,
+	)
 }
 
 func getCopyInsertConcurrency() int {
@@ -101,22 +110,32 @@ func newVCopier(vr *vreplicator) *vcopier {
 	}
 }
 
-func newVCopierWorkerPool(
-	async bool,
-	dbClientFactory func() (*vdbClient, func(), error),
+func newVCopierBasicCopier(
+	closeDbClient bool,
+	stats *binlogplayer.Stats,
+	vdbClient *vdbClient,
+) *vcopierBasicCopier {
+	hooks := make(map[string]*event.Hooks)
+	hooks["copy:after"] = &event.Hooks{}
+	hooks["updateCopyState:before"] = &event.Hooks{}
+
+	return &vcopierBasicCopier{
+		closeDbClient: closeDbClient,
+		hooks:         hooks,
+		stats:         stats,
+		vdbClient:     vdbClient,
+	}
+}
+
+func newVCopierConcurrentCopier(
+	copierFactory func() (vcopierCopier, error),
 	size int,
 	stats *binlogplayer.Stats,
-) *vcopierWorkerPool {
-	return &vcopierWorkerPool{
-		async:           async,
-		commitQ:         make(chan *vcopierWorkerTask, size),
-		doneQ:           make(chan *vcopierWorkerTask, size),
-		dbClientFactory: dbClientFactory,
-		errorRecorder:   &concurrency.AllErrorRecorder{},
-		inQ:             make(chan *vcopierWorkerTask, size),
-		quitCh:          make(chan bool),
-		size:            size,
-		stats:           stats,
+) *vcopierConcurrentCopier {
+	return &vcopierConcurrentCopier{
+		copierFactory: copierFactory,
+		errors:        &concurrency.AllErrorRecorder{},
+		size:          size,
 	}
 }
 
@@ -289,32 +308,12 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
 
-	async := isExperimentalParallelBulkInsertsEnabled()
-	copyInsertConcurrency := getCopyInsertConcurrency()
+	copier := vc.newCopier()
+	defer copier.Close()
 
-	dbClientFactory := func() (*vdbClient, func(), error) {
-		dbClient, err := vc.newClientConnection()
-		return dbClient, dbClient.Close, err
-	}
-	if !async {
-		dbClientFactory = func() (*vdbClient, func(), error) {
-			return vc.vr.dbClient, func() {}, nil
-		}
-	}
+	var pkfields []*querypb.Field
 
-	workerPool := newVCopierWorkerPool(
-		async,                 /* async */
-		dbClientFactory,       /* db client factory */
-		copyInsertConcurrency, /* pool size */
-		vc.vr.stats,           /* stats recorders */
-	)
-
-	defer workerPool.stop()
-
-	var pkFields []*querypb.Field
-	var lastpk *querypb.Row
-
-	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	serr := vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
 			case <-rowsCopiedTicker.C:
@@ -325,7 +324,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			default:
 			}
 			// Collect and return any async errors.
-			if err := workerPool.error(); err != nil {
+			if err := copier.Error(); err != nil {
 				return err
 			}
 			if rows.Throttled {
@@ -343,7 +342,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				_ = vc.vr.updateTimeThrottled(VCopierComponentName)
 			}
 		}
-		if !workerPool.started {
+		if !copier.IsOpen() {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
 			}
@@ -358,39 +357,62 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			if err != nil {
 				return err
 			}
-			pkFields = append(pkFields, rows.Pkfields...)
+			pkfields = append(pkfields, rows.Pkfields...)
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf(
 				"update _vt.copy_state set lastpk=%a where vrepl_id=%s and table_name=%s", ":lastpk",
 				strconv.Itoa(int(vc.vr.id)),
 				encodeString(tableName),
 			)
-			workerPool.start(buf.ParsedQuery(), pkFields, tablePlan)
+			copyStateUpdate := buf.ParsedQuery()
+			copier.Open(copyStateUpdate, pkfields, tablePlan)
 		}
 		if len(rows.Rows) == 0 {
 			return nil
 		}
-		return workerPool.copy(ctx, rows)
+
+		// Clone rows, since pointer values will change while async work is
+		// happening.
+		rows = proto.Clone(rows).(*binlogdatapb.VStreamRowsResponse)
+
+		return copier.Copy(ctx, rows.Rows, rows.Lastpk)
 	})
 
 	// Stop the worker pool, waiting for any inflight workers to finish.
 	// Return any uncollected errors.
-	workerPool.stop()
-	if err := workerPool.error(); err != nil {
-		return err
+	copier.Close()
+	if cerr := copier.Error(); cerr != nil {
+		return fmt.Errorf("encountered an error after closing copier: %s", cerr.Error())
+	}
+
+	// Get the last committed pk into a loggable form.
+	var lastpkbuf []byte
+	lastpkbuf, merr := prototext.Marshal(&querypb.QueryResult{
+		Fields: pkfields,
+		Rows:   []*querypb.Row{copier.LastCommittedPk()},
+	})
+	if merr != nil {
+		return fmt.Errorf("failed to marshal pk fields and value into query result: %s", merr.Error())
+	}
+	lastpkbv := map[string]*querypb.BindVariable{
+		"lastpk": {
+			Type:  sqltypes.VarBinary,
+			Value: lastpkbuf,
+		},
 	}
 
 	// If there was a timeout, return without an error.
 	select {
 	case <-ctx.Done():
-		log.Infof("Copy of %v stopped at lastpk: %v", tableName, lastpk)
+		log.Infof("Copy of %v stopped at lastpk: %v", tableName, lastpkbv)
 		return nil
 	default:
 	}
-	if err != nil {
-		return err
+	if serr != nil {
+		return serr
 	}
-	log.Infof("Copy of %v finished at lastpk: %v", tableName, lastpk)
+
+	log.Infof("Copy of %v finished at lastpk: %v", tableName, lastpkbv)
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf(
 		"delete from _vt.copy_state where vrepl_id=%s and table_name=%s",
@@ -400,6 +422,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -434,38 +457,132 @@ func (vc *vcopier) newClientConnection() (*vdbClient, error) {
 	return dbClient, nil
 }
 
-// Implement pools.Resource.
-func (vcw *vcopierWorker) Close() {
-	vcw.closeFunc()
+func (vc *vcopier) newCopier() vcopierCopier {
+	if isExperimentalParallelBulkInsertsEnabled() {
+		return newVCopierConcurrentCopier(
+			func() (vcopierCopier, error) {
+				dbClient, err := vc.newClientConnection()
+				if err != nil {
+					return nil, fmt.Errorf("failed to create new db client: %s", err.Error())
+				}
+				return newVCopierBasicCopier(true, vc.vr.dbClient.stats, dbClient), nil
+			},
+			getCopyInsertConcurrency(),
+			vc.vr.stats,
+		)
+	}
+	return newVCopierBasicCopier(false, vc.vr.dbClient.stats, vc.vr.dbClient)
 }
 
-func (vcw *vcopierWorker) begin() error {
-	if err := vcw.dbClient.Begin(); err != nil {
-		return err
+func (vbc *vcopierBasicCopier) BeforeUpdateCopyState() *event.Hooks {
+	return vbc.hooks["updateCopyState:before"]
+}
+
+func (vbc *vcopierBasicCopier) Copy(ctx context.Context, rows []*querypb.Row, lastpk *querypb.Row) error {
+	start := time.Now()
+
+	var err error
+
+	// Begin transaction and insert rows.
+	if err = vbc.vdbClient.Begin(); err != nil {
+		err = fmt.Errorf("error beginning copy-update-state transaction: %s", err.Error())
+		goto DONE
 	}
+
+	if _, err = vbc.insertRows(ctx, rows); err != nil {
+		err = fmt.Errorf("error inserting rows: %s", err.Error())
+		goto DONE
+	}
+
+	// Update copy state.
+	if err = vbc.updateCopyState(ctx, lastpk); err != nil {
+		err = fmt.Errorf("error updating _vt.copy_state: %s", err.Error())
+		goto DONE
+	}
+
+	// Commit.
+	if err = vbc.vdbClient.Commit(); err != nil {
+		err = fmt.Errorf("error commiting copy-update-state transaction: %s", err.Error())
+		goto DONE
+	}
+
+	vbc.lastCommittedPk = lastpk
+
+DONE:
+	// Update stats.
+	elapsedTime := float64(time.Now().UnixNano()-start.UnixNano()) / 1e9
+	bandwidth := int64(float64(len(rows)) / elapsedTime)
+	vbc.stats.CopyBandwidth.Set(bandwidth)
+	vbc.stats.CopyRowCount.Add(int64(len(rows)))
+	vbc.stats.QueryCount.Add("copy", 1)
+
+	// Handle errors.
+	if err != nil {
+		vbc.stats.ErrorCounts.Add([]string{"BulkCopy"}, 1)
+	}
+
+	return err
+}
+
+func (vbc *vcopierBasicCopier) Error() error {
 	return nil
 }
 
-func (vcw *vcopierWorker) commit() error {
-	return vcw.dbClient.Commit()
+func (vbc *vcopierBasicCopier) IsOpen() bool {
+	return vbc.isOpen
 }
 
-// Internal. Used by doCopy.
-func (vcw *vcopierWorker) insertRows(ctx context.Context, rows []*querypb.Row) (*sqltypes.Result, error) {
-	return vcw.tablePlan.applyBulkInsert(&vcw.sqlbuffer, rows, func(sql string) (*sqltypes.Result, error) {
-		qr, err := vcw.dbClient.ExecuteWithRetry(ctx, sql)
-		if err != nil {
-			return nil, err
-		}
-		return qr, nil
+func (vbc *vcopierBasicCopier) LastCommittedPk() *querypb.Row {
+	return vbc.lastCommittedPk
+}
+
+func (vbc *vcopierBasicCopier) Open(
+	copyStateUpdate *sqlparser.ParsedQuery,
+	pkfields []*querypb.Field,
+	tablePlan *TablePlan,
+) {
+	if vbc.isOpen {
+		return
+	}
+
+	vbc.copyStateUpdate = copyStateUpdate
+	vbc.isOpen = true
+	vbc.pkfields = pkfields
+	vbc.tablePlan = tablePlan
+}
+
+func (vbc *vcopierBasicCopier) Close() {
+	if !vbc.IsOpen() {
+		return
+	}
+
+	if vbc.closeDbClient {
+		vbc.vdbClient.Close()
+	}
+
+	vbc.isOpen = false
+}
+
+func (vbc *vcopierBasicCopier) insertRows(ctx context.Context, rows []*querypb.Row) (*sqltypes.Result, error) {
+	if !vbc.IsOpen() {
+		return nil, fmt.Errorf("failed to insert rows with vcopier basic copier: not open")
+	}
+
+	return vbc.tablePlan.applyBulkInsert(&vbc.sqlbuffer, rows, func(sql string) (*sqltypes.Result, error) {
+		return vbc.vdbClient.ExecuteWithRetry(ctx, sql)
 	})
 }
 
-// Internal. Used by doCopy.
-func (vcw *vcopierWorker) updateCopyState(ctx context.Context, lastpk *querypb.Row) error {
+func (vbc *vcopierBasicCopier) updateCopyState(ctx context.Context, lastpk *querypb.Row) error {
+	if !vbc.IsOpen() {
+		return fmt.Errorf("failed to update copy state with vcopioer basic copier: not open")
+	}
+
+	vbc.hooks["updateCopyState:before"].Fire()
+
 	var buf []byte
 	buf, err := prototext.Marshal(&querypb.QueryResult{
-		Fields: vcw.pkFields,
+		Fields: vbc.pkfields,
 		Rows:   []*querypb.Row{lastpk},
 	})
 	if err != nil {
@@ -477,225 +594,115 @@ func (vcw *vcopierWorker) updateCopyState(ctx context.Context, lastpk *querypb.R
 			Value: buf,
 		},
 	}
-	copyStateUpdate, err := vcw.copyStateUpdate.GenerateQuery(bv, nil)
+	copyStateUpdate, err := vbc.copyStateUpdate.GenerateQuery(bv, nil)
 	if err != nil {
 		return err
 	}
-	if _, err := vcw.dbClient.Execute(copyStateUpdate); err != nil {
+	if _, err := vbc.vdbClient.Execute(copyStateUpdate); err != nil {
 		return err
 	}
 	return nil
 }
 
-// Internal. Consume enqueued tasks in a loop. Move tasks from the inQ to the
-// commitQ to the doneQ. Inserts rows and updates copy state in a transaction.
-// Inserts may happen out-of-order, but commits happen in the order that tasks
-// were enqueued.
-func (vcwp *vcopierWorkerPool) consume() {
-	var nextCommitTask *vcopierWorkerTask
+func (vcc *vcopierConcurrentCopier) AfterCopy() *event.Hooks {
+	panic("not implemented")
+}
 
-	defer func() {
-		vcwp.quitCh <- true
+func (vcc *vcopierConcurrentCopier) BeforeUpdateCopyState() *event.Hooks {
+	panic("not implemented")
+}
+
+func (vcc *vcopierConcurrentCopier) Copy(ctx context.Context, rows []*querypb.Row, lastpk *querypb.Row) error {
+	if !vcc.IsOpen() {
+		return fmt.Errorf("concurrent copier is not open")
+	}
+
+	// Set up previous and next commit channels.
+	lastCommitCh := vcc.lastCommitCh
+	nextCommitCh := make(chan bool, 1)
+
+	// Get a worker from pool.
+	rs, err := vcc.copierPool.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to acquire worker from pool: %s", err.Error())
+	}
+	copier := rs.(vcopierCopier)
+
+	copier.BeforeUpdateCopyState().Clear()
+	copier.BeforeUpdateCopyState().Add(func() {
+		if lastCommitCh != nil {
+			// Wait for previous copy operation to commit.
+			<-lastCommitCh
+		}
+	})
+
+	vcc.lastCommitCh = nextCommitCh
+
+	go func() {
+		if err := copier.Copy(ctx, rows, lastpk); err != nil {
+			vcc.errors.RecordError(err)
+		}
+		// Save the lastpk.
+		vcc.lastCommittedPk = copier.LastCommittedPk()
+		// Signal the next copy operation to commit.
+		nextCommitCh <- true
+		// Return the copier to the pool.
+		vcc.copierPool.Put(copier)
 	}()
 
-	for {
-		select {
-		case task := <-vcwp.inQ:
-			// Get in line to commit.
-			vcwp.commitQ <- task
-			// Copy rows asynchronously
-			go vcwp.doCopy(task)
-		case task := <-vcwp.doneQ:
-			// Unblock the next commit.
-			if task == nextCommitTask {
-				nextCommitTask = nil
-			}
-		default:
-		}
-
-		if nextCommitTask != nil {
-			continue
-		}
-
-		select {
-		// Signal the next commit may proceed.
-		case nextCommitTask := <-vcwp.commitQ:
-			nextCommitTask.commitCh <- nextCommitTask.lastErr == nil
-		// Check the quitCh.
-		case <-vcwp.quitCh:
-			return
-		default:
-		}
-	}
+	return vcc.Error()
 }
 
-func (vcwp *vcopierWorkerPool) copy(ctx context.Context, rows *binlogdatapb.VStreamRowsResponse) error {
-	if !vcwp.started {
-		return fmt.Errorf("worker pool is not started")
-	}
-
-	// Prepare a task.
-	task := &vcopierWorkerTask{
-		commitCh: make(chan bool, 1),
-		ctx:      ctx,
-		rows:     rows,
-	}
-
-	// Copy (a)synchronously.
-	if vcwp.async {
-		// Clone rows, since pointer values will change while async work is
-		// happening.
-		task.rows = proto.Clone(task.rows).(*binlogdatapb.VStreamRowsResponse)
-		return vcwp.copyAsync(task)
-	}
-
-	return vcwp.copySync(task)
-}
-
-// Internal. Use copy instead.
-func (vcwp *vcopierWorkerPool) copyAsync(task *vcopierWorkerTask) error {
-	vcwp.inQ <- task
-	return nil
-}
-
-// Internal. Use copy instead.
-func (vcwp *vcopierWorkerPool) copySync(task *vcopierWorkerTask) error {
-	task.commitCh <- true
-	vcwp.doCopy(task)
-	select {
-	case <-vcwp.doneQ:
-	default:
-	}
-	return vcwp.error()
-}
-
-// Internal. Use copy instead.
-func (vcwp *vcopierWorkerPool) doCopy(task *vcopierWorkerTask) {
-	ctx := task.ctx
-	lastpk := task.rows.Lastpk
-	rows := task.rows.Rows
-	numRows := len(rows)
-
-	start := time.Now()
-
-	var bandwidth int64
-	var commit bool
-	var elapsedTime float64
-	var err error
-	var rs pools.Resource
-	var worker *vcopierWorker
-
-	// Get a worker from pool. Return worker to pool at func exit.
-	rs, err = vcwp.resourcePool.Get(ctx)
-	if err != nil {
-		task.lastErr = fmt.Errorf("failed to get vcopier worker: %s", err.Error())
-		goto DONE
-	} else {
-		defer vcwp.resourcePool.Put(rs)
-		worker = rs.(*vcopierWorker)
-	}
-
-	// Do actual work.
-	if err = worker.begin(); err != nil {
-		task.lastErr = fmt.Errorf("error beginning copy-update-state transaction: %s", err.Error())
-		goto DONE
-	}
-	if _, err = worker.insertRows(ctx, rows); err != nil {
-		task.lastErr = fmt.Errorf("error inserting rows: %s", err.Error())
-		goto DONE
-	}
-	if err = worker.updateCopyState(ctx, lastpk); err != nil {
-		task.lastErr = fmt.Errorf("error updating _vt.copy_state: %s", err.Error())
-		goto DONE
-	}
-	// Wait for our turn to commit.
-	if commit = <-task.commitCh; !commit {
-		goto DONE
-	}
-	if err = worker.commit(); err != nil {
-		task.lastErr = fmt.Errorf("error commiting copy-update-state transaction: %s", err.Error())
-		goto DONE
-	}
-
-	// Update stats.
-	elapsedTime = float64(time.Now().UnixNano()-start.UnixNano()) / 1e9
-	bandwidth = int64(float64(numRows) / elapsedTime)
-	vcwp.stats.CopyBandwidth.Set(bandwidth)
-	vcwp.stats.CopyRowCount.Add(int64(numRows))
-	vcwp.stats.QueryCount.Add("copy", 1)
-
-DONE:
-	// Handle errors.
-	if task.lastErr != nil {
-		vcwp.stats.ErrorCounts.Add([]string{"BulkCopy"}, 1)
-		vcwp.errorRecorder.RecordError(task.lastErr)
-	}
-
-	vcwp.doneQ <- task
-}
-
-func (vcwp *vcopierWorkerPool) error() error {
-	if vcwp.errorRecorder.HasErrors() {
-		return vcwp.errorRecorder.Error()
+func (vcc *vcopierConcurrentCopier) Error() error {
+	if vcc.errors.HasErrors() {
+		return vcc.errors.Error()
 	}
 	return nil
 }
 
-func (vcwp *vcopierWorkerPool) start(
+func (vcc *vcopierConcurrentCopier) IsOpen() bool {
+	return vcc.isOpen
+}
+
+func (vcc *vcopierConcurrentCopier) LastCommittedPk() *querypb.Row {
+	return vcc.lastCommittedPk
+}
+
+func (vcc *vcopierConcurrentCopier) Open(
 	copyStateUpdate *sqlparser.ParsedQuery,
-	pkFields []*querypb.Field,
+	pkfields []*querypb.Field,
 	tablePlan *TablePlan,
 ) {
-	if vcwp.started {
+	if vcc.IsOpen() {
 		return
 	}
 
-	vcwp.started = true
-
-	vcwp.resourcePool = pools.NewResourcePool(
+	vcc.copierPool = pools.NewResourcePool(
 		/* factory */
-		func(ctx context.Context) (pools.Resource, error) {
-			dbClient, closeFunc, err := vcwp.dbClientFactory()
+		func(_ context.Context) (pools.Resource, error) {
+			copier, err := vcc.copierFactory()
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to create copier for resource pool: %s", err.Error())
 			}
-			return &vcopierWorker{
-				ch:              make(chan error, 1),
-				copyStateUpdate: copyStateUpdate,
-				closeFunc:       closeFunc,
-				dbClient:        dbClient,
-				pkFields:        pkFields,
-				sqlbuffer:       bytes2.Buffer{},
-				tablePlan:       tablePlan,
-			}, nil
+			copier.Open(copyStateUpdate, pkfields, tablePlan)
+			return copier, nil
 		},
-		vcwp.size, /* initial capacity */
-		vcwp.size, /* max capacity */
-		0,         /* idle timeout */
-		nil,       /* log wait */
-		nil,       /* refresh check */
-		0,         /* refresh interval */
+		vcc.size, /* initial capacity */
+		vcc.size, /* max capacity */
+		0,        /* idle timeout */
+		nil,      /* log wait */
+		nil,      /* refresh check */
+		0,        /* refresh interval */
 	)
 
-	// Consume tasks from the inQ.
-	if vcwp.async {
-		go vcwp.consume()
-	}
+	vcc.isOpen = true
 }
 
-func (vcwp *vcopierWorkerPool) stop() {
-	if !vcwp.started {
+func (vcc *vcopierConcurrentCopier) Close() {
+	if !vcc.IsOpen() {
 		return
 	}
 
-	vcwp.started = false
-
-	vcwp.resourcePool.Close()
-
-	// Signal the quitCh to tell consume() to exit,
-	// and wait for consume() to signal back to us.
-	if vcwp.async {
-		vcwp.quitCh <- true
-		<-vcwp.quitCh
-	}
+	vcc.copierPool.Close()
+	vcc.isOpen = false
 }
