@@ -23,11 +23,11 @@ import (
 	"vitess.io/vitess/go/mathstats"
 )
 
-// DefaultPacketSize is the suggested packet size for VReplication streamer.
-var DefaultPacketSize = flag.Int("vstream_packet_size", 250000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
+// defaultPacketSize is the suggested packet size for VReplication streamer.
+var defaultPacketSize = flag.Int("vstream_packet_size", 250000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
 
-// UseDynamicPacketSize controls whether to use dynamic packet size adjustments to increase performance while streaming
-var UseDynamicPacketSize = flag.Bool("vstream_dynamic_packet_size", true, "Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance.")
+// useDynamicPacketSize controls whether to use dynamic packet size adjustments to increase performance while streaming
+var useDynamicPacketSize = flag.Bool("vstream_dynamic_packet_size", true, "Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance.")
 
 // PacketSizer is a controller that adjusts the size of the packets being sent by the vstreamer at runtime
 type PacketSizer interface {
@@ -39,25 +39,25 @@ type PacketSizer interface {
 // DefaultPacketSizer creates a new PacketSizer using the default settings.
 // If dynamic packet sizing is enabled, this will return a dynamicPacketSizer.
 func DefaultPacketSizer() PacketSizer {
-	if *UseDynamicPacketSize {
-		return newDynamicPacketSizer(*DefaultPacketSize)
+	if *useDynamicPacketSize {
+		return newDynamicPacketSizer(*defaultPacketSize)
 	}
-	return newFixedPacketSize(*DefaultPacketSize)
+	return newFixedPacketSize(*defaultPacketSize)
 }
 
 // AdjustPacketSize temporarily adjusts the default packet sizes to the given value.
 // Calling the returned cleanup function resets them to their original value.
 // This function is only used for testing.
 func AdjustPacketSize(size int) func() {
-	originalSize := *DefaultPacketSize
-	originalDyn := *UseDynamicPacketSize
+	originalSize := *defaultPacketSize
+	originalDyn := *useDynamicPacketSize
 
-	*DefaultPacketSize = size
-	*UseDynamicPacketSize = false
+	*defaultPacketSize = size
+	*useDynamicPacketSize = false
 
 	return func() {
-		*DefaultPacketSize = originalSize
-		*UseDynamicPacketSize = originalDyn
+		*defaultPacketSize = originalSize
+		*useDynamicPacketSize = originalDyn
 	}
 }
 
