@@ -19,6 +19,7 @@ package vreplication
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -135,7 +136,7 @@ func newVCopierConcurrentCopier(
 	return &vcopierConcurrentCopier{
 		copierFactory: copierFactory,
 		errors:        &concurrency.AllErrorRecorder{},
-		size:          size,
+		size:          int(math.Max(float64(size), 1)),
 	}
 }
 

@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
+	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 	"vitess.io/vitess/go/vt/withddl"
@@ -615,6 +616,60 @@ func expectNontxQueries(t *testing.T, queries []string) {
 		}
 	}
 }
+
+func expectNontxQueries2(t *testing.T, expectations []qh.Expectation) {
+	t.Helper()
+
+	failed := false
+
+	skipQueries := withDDLInitialQueries
+	skipQueries = append(skipQueries, withDDL.DDLs()...)
+	var history qh.History
+	for i := 0; i < len(expectations); i++ {
+		e := expectations[i]
+		if failed {
+			t.Errorf("no query received, expecting %s", e.Query)
+			continue
+		}
+		var got string
+	retry:
+		select {
+		case got = <-globalDBQueries:
+			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") || shouldIgnoreQuery(got) {
+				goto retry
+			}
+			for _, skipQuery := range skipQueries {
+				if got == skipQuery {
+					goto retry
+				}
+			}
+
+			// Use Clone() because the contents of memory region referenced by
+			// string can change because vcopier uses unsafe string methods.
+			history = append(history, strings.Clone(got))
+			ok, err := history.ValidateAt(expectations, len(history)-1)
+			require.True(t, ok, fmt.Sprintf("current query: %s\nquery history did not meet expectations: %v\nhistory: %s", got, err, history.String()))
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no query received, expecting: %s", e.Query)
+			failed = true
+		}
+	}
+	for {
+		select {
+		case got := <-globalDBQueries:
+			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "_vt.vreplication") {
+				continue
+			}
+			if shouldIgnoreQuery(got) {
+				continue
+			}
+			t.Errorf("unexpected query: %s", got)
+		default:
+			return
+		}
+	}
+}
+
 func expectData(t *testing.T, table string, values [][]string) {
 	t.Helper()
 	customExpectData(t, table, values, env.Mysqld.FetchSuperQuery)
