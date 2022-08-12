@@ -15,6 +15,7 @@ jobs:
   build:
     name: Run endtoend tests on Cluster (xb_recovery)
     runs-on: ubuntu-20.04
+    timeout-minutes: 60
 
     steps:
     - name: Check if workflow needs to be skipped
@@ -87,25 +88,9 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
-
         sudo apt-get install percona-xtrabackup-80 lz4
 
-    - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
-        pip3 install --user launchable~=1.0 > /dev/null
-
-        # verify that launchable setup is all correct.
-        launchable verify || true
-
-        # Tell Launchable about the build you are producing and testing
-        launchable record build --name "$GITHUB_RUN_ID" --source .
-
     - name: Run cluster endtoend test
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 45
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
