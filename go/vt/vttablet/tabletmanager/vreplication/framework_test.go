@@ -428,10 +428,10 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 
 func expectDeleteQueries(t *testing.T) {
 	t.Helper()
-	expectNontxQueries(t, []string{
+	expectNontxQueries(t, qh.Expect(
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
-	})
+	))
 }
 
 func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan any) {
@@ -490,33 +490,28 @@ func shouldIgnoreQuery(query string) bool {
 	return heartbeatRe.MatchString(query)
 }
 
-func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...string) {
+func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, skippableOnce ...string) {
 	extraQueries := withDDL.DDLs()
 	extraQueries = append(extraQueries, withDDLInitialQueries...)
 	// Either 'queries' or 'queriesWithDDLs' must match globalDBQueries
 	t.Helper()
 	failed := false
 	skippedOnce := false
+	validator := qh.NewVerifier(expectations)
 
-	queryMatch := func(query string, got string) bool {
-		if query[0] == '/' {
-			result, err := regexp.MatchString(query[1:], got)
-			if err != nil {
-				panic(err)
-			}
-			return result
-		}
-		return (got == query)
-	}
-	for i, query := range queries {
+	for len(validator.Pending()) > 0 {
 		if failed {
-			t.Errorf("no query received, expecting %s", query)
+			t.Errorf("no query received")
 			continue
 		}
 		var got string
 	retry:
 		select {
 		case got = <-globalDBQueries:
+			// Use Clone() because the contents of memory region referenced by
+			// string can change because vcopier uses unsafe string methods.
+			got = strings.Clone(got)
+
 			// We rule out heartbeat time update queries because otherwise our query list
 			// is indeterminable and varies with each test execution.
 			if shouldIgnoreQuery(got) {
@@ -528,20 +523,25 @@ func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...stri
 				}
 			}
 
-			if !queryMatch(query, got) {
+			result := validator.AcceptQuery(got)
+
+			if !result.Accepted {
 				if !skippedOnce {
 					// let's see if "got" is a skippable query
 					for _, skippable := range skippableOnce {
-						if queryMatch(skippable, got) {
+						if ok, _ := qh.MatchQueries(skippable, got); ok {
 							skippedOnce = true
 							goto retry
 						}
 					}
 				}
-				t.Errorf("query:\n%q, does not match expected query %d:\n%q", got, i, query)
+				require.True(t, result.Accepted, fmt.Sprintf(
+					"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
+					got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
+				))
 			}
 		case <-time.After(5 * time.Second):
-			t.Errorf("no query received, expecting %s", query)
+			t.Fatalf("no query received")
 			failed = true
 		}
 	}
@@ -553,6 +553,8 @@ func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...stri
 			}
 			t.Errorf("unexpected query: %s", got)
 		default:
+			// Assert there are no pending expectations.
+			require.Len(t, validator.Pending(), 0)
 			return
 		}
 	}
@@ -560,81 +562,28 @@ func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...stri
 
 // expectNontxQueries disregards transactional statements like begin and commit.
 // It also disregards updates to _vt.vreplication.
-func expectNontxQueries(t *testing.T, queries []string) {
-	t.Helper()
-	failed := false
-
-	skipQueries := withDDLInitialQueries
-	skipQueries = append(skipQueries, withDDL.DDLs()...)
-	for i, query := range queries {
-		if failed {
-			t.Errorf("no query received, expecting %s", query)
-			continue
-		}
-		var got string
-	retry:
-		select {
-		case got = <-globalDBQueries:
-			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") ||
-				shouldIgnoreQuery(got) {
-				goto retry
-			}
-			for _, skipQuery := range skipQueries {
-				if got == skipQuery {
-					goto retry
-				}
-			}
-
-			var match bool
-			if query[0] == '/' {
-				result, err := regexp.MatchString(query[1:], got)
-				if err != nil {
-					panic(err)
-				}
-				match = result
-			} else {
-				match = (got == query)
-			}
-			require.True(t, match, "query %d:: got:%s, want:%s", i, got, query)
-		case <-time.After(5 * time.Second):
-			t.Fatalf("no query received, expecting %s", query)
-			failed = true
-		}
-	}
-	for {
-		select {
-		case got := <-globalDBQueries:
-			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "_vt.vreplication") {
-				continue
-			}
-			if shouldIgnoreQuery(got) {
-				continue
-			}
-			t.Errorf("unexpected query: %s", got)
-		default:
-			return
-		}
-	}
-}
-
-func expectNontxQueries2(t *testing.T, expectations []qh.Expectation) {
+func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
 	t.Helper()
 
 	failed := false
 
 	skipQueries := withDDLInitialQueries
 	skipQueries = append(skipQueries, withDDL.DDLs()...)
-	var history qh.History
-	for i := 0; i < len(expectations); i++ {
-		e := expectations[i]
+	validator := qh.NewVerifier(expectations)
+
+	for len(validator.Pending()) > 0 {
 		if failed {
-			t.Errorf("no query received, expecting %s", e.Query)
+			t.Errorf("no query received")
 			continue
 		}
 		var got string
 	retry:
 		select {
 		case got = <-globalDBQueries:
+			// Use Clone() because the contents of memory region referenced by
+			// string can change because vcopier uses unsafe string methods.
+			got = strings.Clone(got)
+
 			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") || shouldIgnoreQuery(got) {
 				goto retry
 			}
@@ -644,13 +593,14 @@ func expectNontxQueries2(t *testing.T, expectations []qh.Expectation) {
 				}
 			}
 
-			// Use Clone() because the contents of memory region referenced by
-			// string can change because vcopier uses unsafe string methods.
-			history = append(history, strings.Clone(got))
-			ok, err := history.ValidateAt(expectations, len(history)-1)
-			require.True(t, ok, fmt.Sprintf("current query: %s\nquery history did not meet expectations: %v\nhistory: %s", got, err, history.String()))
+			result := validator.AcceptQuery(got)
+
+			require.True(t, result.Accepted, fmt.Sprintf(
+				"query:%q\nmessage:%s\nexpectation:%s\nmatched:%t\nerror:%v\nhistory:%s",
+				got, result.Message, result.Expectation, result.Matched, result.Error, validator.History(),
+			))
 		case <-time.After(5 * time.Second):
-			t.Fatalf("no query received, expecting: %s", e.Query)
+			t.Fatalf("no query received")
 			failed = true
 		}
 	}
@@ -665,6 +615,8 @@ func expectNontxQueries2(t *testing.T, expectations []qh.Expectation) {
 			}
 			t.Errorf("unexpected query: %s", got)
 		default:
+			// Assert there are no pending expectations.
+			require.Len(t, validator.Pending(), 0)
 			return
 		}
 	}
