@@ -19,6 +19,7 @@ package connpool
 import (
 	"context"
 	"fmt"
+	"github.com/cespare/xxhash/v2"
 	"strings"
 	"sync"
 	"time"
@@ -54,8 +55,9 @@ type DBConn struct {
 	current sync2.AtomicString
 
 	// err will be set if a query is killed through a Kill.
-	errmu sync.Mutex
-	err   error
+	errmu        sync.Mutex
+	err          error
+	settingsHash uint64
 }
 
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
@@ -79,18 +81,26 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
+func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, settings []string) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	return &DBConn{
+	dbconn := &DBConn{
 		conn:    c,
 		info:    params,
 		dbaPool: dbaPool,
 		pool:    nil,
 		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
-	}, nil
+	}
+	if len(settings) == 0 {
+		return dbconn, nil
+	}
+	err = dbconn.ApplySettings(ctx, settings)
+	if err != nil {
+		return nil, err
+	}
+	return dbconn, nil
 }
 
 // Err returns an error if there was a client initiated error
@@ -449,4 +459,20 @@ func (dbc *DBConn) CurrentForLogging() string {
 		queryToLog, _ = sqlparser.RedactSQLQuery(dbc.Current())
 	}
 	return sqlparser.TruncateForLog(queryToLog)
+}
+
+func (dbc *DBConn) ApplySettings(ctx context.Context, settings []string) error {
+	digest := xxhash.New()
+	for _, q := range settings {
+		_, err := dbc.execOnce(ctx, q, 1, false)
+		if err != nil {
+			return err
+		}
+		_, err = digest.WriteString(q)
+		if err != nil {
+			return err
+		}
+	}
+	dbc.settingsHash = digest.Sum64()
+	return nil
 }

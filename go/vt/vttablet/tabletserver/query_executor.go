@@ -59,6 +59,7 @@ type QueryExecutor struct {
 	logStats       *tabletenv.LogStats
 	tsv            *TabletServer
 	tabletType     topodatapb.TabletType
+	settings       []string
 }
 
 const (
@@ -696,7 +697,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.conns.Get(ctx)
+	conn, err := qre.tsv.qe.conns.Get(ctx, qre.settings)
 
 	switch err {
 	case nil:
@@ -713,7 +714,7 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.streamConns.Get(ctx)
+	conn, err := qre.tsv.qe.streamConns.Get(ctx, qre.settings)
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)

@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -38,7 +37,7 @@ type (
 	IResourcePool interface {
 		Close()
 		Name() string
-		Get(ctx context.Context) (resource Resource, err error)
+		Get(ctx context.Context, settings []string) (resource Resource, err error)
 		Put(resource Resource)
 		SetCapacity(capacity int) error
 		SetIdleTimeout(idleTimeout time.Duration)
@@ -121,7 +120,7 @@ var (
 // The value specifies how many resources can be opened in parallel.
 // refreshCheck is a function we consult at refreshInterval
 // intervals to determine if the pool should be drained and reopened
-func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int, logWait func(time.Time), refreshCheck RefreshCheck, refreshInterval time.Duration) *ResourcePool {
+func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, logWait func(time.Time), refreshCheck RefreshCheck, refreshInterval time.Duration) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -135,35 +134,6 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	}
 	for i := 0; i < capacity; i++ {
 		rp.resources <- resourceWrapper{}
-	}
-
-	ctx, cancel := context.WithTimeout(context.TODO(), prefillTimeout)
-	defer cancel()
-	if prefillParallelism != 0 {
-		sem := sync2.NewSemaphore(prefillParallelism, 0 /* timeout */)
-		var wg sync.WaitGroup
-		for i := 0; i < capacity; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				_ = sem.Acquire()
-				defer sem.Release()
-
-				// If context has expired, give up.
-				select {
-				case <-ctx.Done():
-					return
-				default:
-				}
-
-				r, err := rp.Get(ctx)
-				if err != nil {
-					return
-				}
-				rp.Put(r)
-			}()
-		}
-		wg.Wait()
 	}
 
 	if idleTimeout != 0 {
@@ -238,22 +208,14 @@ func (rp *ResourcePool) reopen() {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
 // A timeout of 0 is an indefinite wait.
-func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) {
-	span, ctx := trace.NewSpan(ctx, "ResourcePool.Get")
-	span.Annotate("capacity", rp.capacity.Get())
-	span.Annotate("in_use", rp.inUse.Get())
-	span.Annotate("available", rp.available.Get())
-	span.Annotate("active", rp.active.Get())
-	defer span.Finish()
+func (rp *ResourcePool) Get(ctx context.Context, settings []string) (resource Resource, err error) {
 	return rp.get(ctx)
 }
 
 func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) {
 	// If ctx has already expired, avoid racing with rp's resource channel.
-	select {
-	case <-ctx.Done():
+	if ctx.Err() != nil {
 		return nil, ErrCtxTimeout
-	default:
 	}
 
 	// Fetch
@@ -276,9 +238,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 
 	// Unwrap
 	if wrapper.resource == nil {
-		span, _ := trace.NewSpan(ctx, "ResourcePool.factory")
 		wrapper.resource, err = rp.factory(ctx)
-		span.Finish()
 		if err != nil {
 			rp.resources <- resourceWrapper{}
 			return nil, err

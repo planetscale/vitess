@@ -27,11 +27,8 @@ import (
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 )
-
-var useStats = true
 
 type (
 	// ResourcePool allows you to use a pool of resources.
@@ -162,16 +159,7 @@ func (rp *ResourcePool2) reopen() {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
 // A timeout of 0 is an indefinite wait.
-func (rp *ResourcePool2) Get(ctx context.Context) (resource Resource, err error) {
-	if useStats {
-		var span trace.Span
-		span, ctx = trace.NewSpan(ctx, "ResourcePool.Get")
-		span.Annotate("capacity", rp.capacity.Get())
-		span.Annotate("in_use", rp.inUse.Get())
-		span.Annotate("available", rp.available.Get())
-		span.Annotate("active", rp.active.Get())
-		defer span.Finish()
-	}
+func (rp *ResourcePool2) Get(ctx context.Context, settings []string) (resource Resource, err error) {
 	return rp.get(ctx)
 }
 
@@ -213,13 +201,7 @@ func (rp *ResourcePool2) get(ctx context.Context) (resource Resource, err error)
 
 	// Unwrap
 	if wrapper.resource == nil {
-		if useStats {
-			span, _ := trace.NewSpan(ctx, "ResourcePool.factory")
-			wrapper.resource, err = rp.factory(ctx)
-			span.Finish()
-		} else {
-			wrapper.resource, err = rp.factory(ctx)
-		}
+		wrapper.resource, err = rp.factory(ctx)
 		if err != nil {
 			rp.resources <- resourceWrapper{}
 			return nil, err

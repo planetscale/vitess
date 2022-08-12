@@ -277,6 +277,7 @@ type TabletConfig struct {
 
 	EnforceStrictTransTables bool `json:"-"`
 	EnableOnlineDDL          bool `json:"-"`
+	UseSettingsPool          bool `json:"-"`
 
 	RowStreamer RowStreamerConfig `json:"rowStreamer,omitempty"`
 }

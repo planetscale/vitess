@@ -23,11 +23,6 @@ import (
 )
 
 func BenchmarkGetPut(b *testing.B) {
-	useStats = false
-	defer func() {
-		useStats = true
-	}()
-
 	testResourceFactory := func(context.Context) (Resource, error) {
 		return &TestResource{}, nil
 	}
@@ -39,7 +34,7 @@ func BenchmarkGetPut(b *testing.B) {
 		{
 			name: "static",
 			pool: func(cap int) IResourcePool {
-				return NewResourcePool(testResourceFactory, cap, cap, 0, 0, nil, nil, 0)
+				return NewResourcePool(testResourceFactory, cap, cap, 0, nil, nil, 0)
 			},
 		},
 		{
@@ -48,10 +43,16 @@ func BenchmarkGetPut(b *testing.B) {
 				return NewResourcePool2(testResourceFactory, cap, cap, 0, nil, nil, 0)
 			},
 		},
+		{
+			name: "dynamic",
+			pool: func(cap int) IResourcePool {
+				return NewDynamicResourcePool(testResourceFactory, cap, 0)
+			},
+		},
 	}
 
-	for _, size := range []int{64, 512} {
-		for _, parallelism := range []int{8, 32, 128} {
+	for _, size := range []int{8, 64, 512} {
+		for _, parallelism := range []int{1, 2, 4, 8, 32, 64, 128} {
 			for _, tc := range tcases {
 				rName := fmt.Sprintf("%s/x%d-cap%d", tc.name, parallelism, size)
 				b.Run(rName, func(b *testing.B) {
@@ -62,7 +63,7 @@ func BenchmarkGetPut(b *testing.B) {
 					b.RunParallel(func(pb *testing.PB) {
 						var ctx = context.Background()
 						for pb.Next() {
-							if conn, err := pool.Get(ctx); err != nil {
+							if conn, err := pool.Get(ctx, nil); err != nil {
 								b.Error(err)
 							} else {
 								pool.Put(conn)
