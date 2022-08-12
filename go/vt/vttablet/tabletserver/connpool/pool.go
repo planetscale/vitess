@@ -123,7 +123,7 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 		refreshCheck = netutil.DNSTracker(appParams.Host())
 	}
 
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams)
@@ -164,7 +164,7 @@ func (cp *Pool) Close() {
 
 // Get returns a connection.
 // You must call Recycle on DBConn once done.
-func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
+func (cp *Pool) Get(ctx context.Context, settings []string) (*DBConn, error) {
 	span, ctx := trace.NewSpan(ctx, "Pool.Get")
 	defer span.Finish()
 
@@ -178,7 +178,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	}
 
 	if cp.isCallerIDAppDebug(ctx) {
-		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool)
+		return NewDBConnNoPool(ctx, cp.appDebugParams, cp.dbaPool, settings)
 	}
 	p := cp.pool()
 	if p == nil {
@@ -194,7 +194,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 		ctx, cancel = context.WithTimeout(ctx, cp.timeout)
 		defer cancel()
 	}
-	r, err := p.Get(ctx)
+	r, err := p.Get(ctx, settings)
 	if err != nil {
 		return nil, err
 	}

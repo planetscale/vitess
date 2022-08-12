@@ -21,6 +21,7 @@ package pools
 import (
 	"context"
 	"fmt"
+	"github.com/cespare/xxhash/v2"
 	"sync"
 	"time"
 
@@ -54,6 +55,8 @@ type DynamicResourcePool struct {
 	openerCh    chan struct{}
 	maxIdleTime time.Duration // maximum amount of time a resource may remain idle before being closed
 	idleTimer   *timer.Timer  // idleTimer periodically closes idle resources.
+
+	settingsConn map[uint64]chan resourceWrapper
 
 	waitCount         int64 // Total number of connections waited for.
 	maxIdleTimeClosed int64 // Total number of connections closed due to idle time.
@@ -132,20 +135,61 @@ func (dp *DynamicResourcePool) openNewResource(ctx context.Context) {
 	}
 }
 
-func (dp *DynamicResourcePool) Get(ctx context.Context) (resource Resource, err error) {
+func (dp *DynamicResourcePool) Get(ctx context.Context, settings []string) (Resource, error) {
+	// 1: Check if the context is expired.
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	// 2: Check if the pool is closed.
 	dp.mu.Lock()
 	if dp.closed {
 		// pool is closed, return error
 		dp.mu.Unlock()
 		return nil, ErrClosed
 	}
-	// 1: Check if the context is expired.
-	select {
-	default:
-	case <-ctx.Done():
-		dp.mu.Unlock()
-		return nil, ctx.Err()
+
+	if len(settings) == 0 {
+		// unlock happens inside it.
+		return dp.getLocked(ctx)
 	}
+
+	id, err := hash(settings)
+	if err != nil {
+		return nil, err
+	}
+
+	rChan, exists := dp.settingsConn[id]
+	if !exists {
+		return dp.getLocked(ctx)
+	}
+	// Fetch
+	var wrapper resourceWrapper
+	var ok bool
+
+	select {
+	case wrapper, ok = <-rChan:
+	case <-ctx.Done():
+		return nil, ErrTimeout
+	}
+	if !ok {
+		return nil, ErrClosed
+	}
+	return wrapper.resource, nil
+}
+
+func hash(settings []string) (uint64, error) {
+	digest := xxhash.New()
+	for _, q := range settings {
+		_, err := digest.WriteString(q)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return digest.Sum64(), nil
+}
+
+func (dp *DynamicResourcePool) getLocked(ctx context.Context) (resource Resource, err error) {
 	// 2: Check if there are resources available.
 	last := len(dp.rawConnection) - 1
 	if last >= 0 {

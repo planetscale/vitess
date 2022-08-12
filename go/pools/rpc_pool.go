@@ -44,7 +44,7 @@ type RPCPool struct {
 // will not be called).
 func NewRPCPool(size int, waitTimeout time.Duration, logWait func(time.Time)) *RPCPool {
 	return &RPCPool{
-		rp:          NewResourcePool(rpcResourceFactory, size, size, 0, size, logWait, nil, 0),
+		rp:          NewResourcePool(rpcResourceFactory, size, size, 0, logWait, nil, 0),
 		waitTimeout: waitTimeout,
 	}
 }
@@ -67,7 +67,7 @@ func (pool *RPCPool) Acquire(ctx context.Context) error {
 		defer cancel()
 	}
 
-	_, err := pool.rp.Get(ctx)
+	_, err := pool.rp.Get(ctx, nil)
 	return err
 }
 
