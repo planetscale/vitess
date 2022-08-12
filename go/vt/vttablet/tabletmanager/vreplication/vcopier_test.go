@@ -33,10 +33,62 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
+type vcopierTestCase struct {
+	vreplicationExperimentalFlags   int64
+	vreplicationParallelBulkInserts int64
+}
+
+func commonVcopierTestCases() []vcopierTestCase {
+	return []vcopierTestCase{
+		// Defult experimental flags.
+		{
+			vreplicationExperimentalFlags: *vreplicationExperimentalFlags,
+		},
+		// Parallel bulk inserts enabled.
+		{
+			vreplicationExperimentalFlags:   vreplicationExperimentalParallelizeBulkInserts,
+			vreplicationParallelBulkInserts: *vreplicationParallelBulkInserts,
+		},
+	}
+}
+
+func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTestCase) {
+	oldVreplicationExperimentalFlags := *vreplicationExperimentalFlags
+	oldVreplicationParallelBulkInserts := *vreplicationParallelBulkInserts
+	// Extra reset at the end in case we return prematurely.
+	defer func() {
+		*vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		*vreplicationParallelBulkInserts = oldVreplicationParallelBulkInserts
+	}()
+
+	for _, tc := range cases {
+		tc := tc // Avoid export loop bugs.
+		// Set test flags.
+		*vreplicationExperimentalFlags = tc.vreplicationExperimentalFlags
+		*vreplicationParallelBulkInserts = tc.vreplicationParallelBulkInserts
+		// Run test case.
+		t.Run(
+			fmt.Sprintf(
+				"vreplication_experimental_flags=%d,vreplication_parallel_bulk_inserts=%d",
+				tc.vreplicationExperimentalFlags, tc.vreplicationParallelBulkInserts,
+			),
+			test,
+		)
+		// Reset.
+		*vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		*vreplicationParallelBulkInserts = oldVreplicationParallelBulkInserts
+	}
+}
+
 func TestPlayerCopyCharPK(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyCharPK, commonVcopierTestCases())
+}
+
+func testPlayerCopyCharPK(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	reset := vstreamer.AdjustPacketSize(1)
@@ -138,8 +190,13 @@ func TestPlayerCopyCharPK(t *testing.T) {
 // TestPlayerCopyVarcharPKCaseInsensitive tests the copy/catchup phase for a table with a varchar primary key
 // which is case insensitive.
 func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyVarcharPKCaseInsensitive, commonVcopierTestCases())
+}
+
+func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
+	// Set packet size low so that we send one row at a time.
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
@@ -149,7 +206,7 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -217,21 +274,41 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set message='Picked source tablet.*",
-		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state='Copying'",
-		"insert into dst(idc,val) values ('a',1)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"a\\"}' where vrepl_id=.*`,
-		`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
-		"insert into dst(idc,val) values ('B',3)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"B\\"}' where vrepl_id=.*`,
-		"insert into dst(idc,val) values ('c',2)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"c\\"}' where vrepl_id=.*`,
-		"/delete from _vt.copy_state.*dst",
-		"/update _vt.vreplication set state='Running'",
+	expectNontxQueries2(t, []qh.Expectation{
+		{Query: "/insert into _vt.vreplication",
+			Ruleset: qh.Ruleset{qh.OccursFirst()}},
+		{Query: "/update _vt.vreplication set message='Picked source tablet.*",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.vreplication", true)}},
+		{Query: "/insert into _vt.copy_state",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set message='Picked source tablet.*", true)}},
+		{Query: "/update _vt.vreplication set state='Copying'",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.copy_state", true)}},
+		// Copy mode.
+		{Query: "insert into dst(idc,val) values ('a',1)",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set state='Copying'", true)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"a\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(idc,val) values ('a',1)", true)}},
+		// Copy-catchup mode.
+		{Query: `/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"a\\"}' where vrepl_id=.*`, true)}},
+		// Back to copy mode.
+		// Inserts can happen out of order.
+		// Updates must happen in order.
+		{Query: "insert into dst(idc,val) values ('B',3)",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`, false)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"B\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(idc,val) values ('B',3)", false)}},
+		{Query: "insert into dst(idc,val) values ('c',2)",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`, false)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"c\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(idc,val) values ('c',2)", false)}},
+		// Wrap-up.
+		{Query: "/delete from _vt.copy_state.*dst",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk='fields:{name:\\"idc\\" type:VARCHAR} rows:{lengths:1 values:\\"c\\"}' where vrepl_id=.*`, true)}},
+		{Query: "/update _vt.vreplication set state='Running'",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/delete from _vt.copy_state.*dst", true)}},
 	})
+
 	expectData(t, "dst", [][]string{
 		{"a", "1"},
 		{"B", "3"},
@@ -242,6 +319,10 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 // TestPlayerCopyVarcharPKCaseSensitiveCollation tests the copy/catchup phase for a table with varbinary columns
 // (which has a case sensitive collation with upper case alphabets below lower case in sort order)
 func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyVarcharCompositePKCaseSensitiveCollation, commonVcopierTestCases())
+}
+
+func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	reset := vstreamer.AdjustPacketSize(1)
@@ -321,18 +402,34 @@ func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set message='Picked source tablet.*",
-		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state='Copying'",
-		"insert into dst(id,idc,idc2,val) values (1,'a','a',1)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1aa\\"}' where vrepl_id=.*`,
-		`insert into dst(id,idc,idc2,val) select 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
-		"insert into dst(id,idc,idc2,val) values (1,'c','c',2)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}' where vrepl_id=.*`,
-		"/delete from _vt.copy_state.*dst",
-		"/update _vt.vreplication set state='Running'",
+	expectNontxQueries2(t, []qh.Expectation{
+		// Setup.
+		{Query: "/insert into _vt.vreplication",
+			Ruleset: qh.Ruleset{qh.OccursFirst()}},
+		{Query: "/update _vt.vreplication set message='Picked source tablet.*",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.vreplication", true)}},
+		{Query: "/insert into _vt.copy_state",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set message='Picked source tablet.*", true)}},
+		{Query: "/update _vt.vreplication set state='Copying'",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.copy_state", true)}},
+		// Copy mode.
+		{Query: "insert into dst(id,idc,idc2,val) values (1,'a','a',1)",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set state='Copying'", true)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1aa\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(id,idc,idc2,val) values (1,'a','a',1)", true)}},
+		// Copy-catchup mode.
+		{Query: `insert into dst(id,idc,idc2,val) select 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1aa\\"}' where vrepl_id=.*`, true)}},
+		// Copy mode.
+		{Query: "insert into dst(id,idc,idc2,val) values (1,'c','c',2)",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`insert into dst(id,idc,idc2,val) select 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`, true)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(id,idc,idc2,val) values (1,'c','c',2)", true)}},
+		// Wrap-up.
+		{Query: "/delete from _vt.copy_state.*dst",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}' where vrepl_id=.*`, true)}},
+		{Query: "/update _vt.vreplication set state='Running'",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/delete from _vt.copy_state.*dst", true)}},
 	})
 	expectData(t, "dst", [][]string{
 		{"1", "B", "B", "3"},
@@ -549,6 +646,10 @@ func TestPlayerCopyTables(t *testing.T) {
 
 // TestPlayerCopyBigTable ensures the copy-catchup back-and-forth loop works correctly.
 func TestPlayerCopyBigTable(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyBigTable, commonVcopierTestCases())
+}
+
+func testPlayerCopyBigTable(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	reset := vstreamer.AdjustPacketSize(1)
@@ -628,28 +729,44 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
+	expectNontxQueries2(t, []qh.Expectation{
 		// Create the list of tables to copy and transition to Copying state.
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set message='Picked source tablet.*",
-		"/insert into _vt.copy_state",
+		{Query: "/insert into _vt.vreplication",
+			Ruleset: qh.Ruleset{qh.OccursFirst()}},
+		{Query: "/update _vt.vreplication set message='Picked source tablet.*",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.vreplication", true)}},
+		{Query: "/insert into _vt.copy_state",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set message='Picked source tablet.*", true)}},
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"/update _vt.vreplication set state='Copying'",
-		"insert into dst(id,val) values (1,'aaa')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
+		{Query: "/update _vt.vreplication set state='Copying'",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.copy_state", true)}},
+		{Query: "insert into dst(id,val) values (1,'aaa')",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set state='Copying'", true)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(id,val) values (1,'aaa')", true)}},
 		// The next catchup executes the new row insert, but will be a no-op.
-		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
+		{Query: "insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`, true)}},
 		// fastForward has nothing to add. Just saves position.
-		// Second row gets copied.
-		"insert into dst(id,val) values (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		// Back to copy mode.
+		// Inserts can happen out-of-order.
+		// Updates happen in-order.
+		{Query: "insert into dst(id,val) values (2,'bbb')",
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)", false)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(id,val) values (2,'bbb')", false)}},
 		// Third row copied without going back to catchup state.
-		"insert into dst(id,val) values (3,'ccc')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
-		"/delete from _vt.copy_state.*dst",
+		{Query: "insert into dst(id,val) values (3,'ccc')",
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)", false)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(id,val) values (3,'ccc')", false)}},
+		// Wrap-up.
+		{Query: "/delete from _vt.copy_state.*dst",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`, true)}},
 		// Copy is done. Go into running state.
 		// All tables copied. Final catch up followed by Running state.
-		"/update _vt.vreplication set state='Running'",
+		{Query: "/update _vt.vreplication set state='Running'",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/delete from _vt.copy_state.*dst", true)}},
 	})
 	expectData(t, "dst", [][]string{
 		{"1", "aaa"},
@@ -665,6 +782,10 @@ func TestPlayerCopyBigTable(t *testing.T) {
 // TestPlayerCopyWildcardRule ensures the copy-catchup back-and-forth loop works correctly
 // when the filter uses a wildcard rule
 func TestPlayerCopyWildcardRule(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyWildcardRule, commonVcopierTestCases())
+}
+
+func testPlayerCopyWildcardRule(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	reset := vstreamer.AdjustPacketSize(1)
@@ -743,27 +864,43 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
+	expectNontxQueries2(t, []qh.Expectation{
 		// Create the list of tables to copy and transition to Copying state.
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set message='Picked source tablet.*",
-		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state='Copying'",
+		{Query: "/insert into _vt.vreplication",
+			Ruleset: qh.Ruleset{qh.OccursFirst()}},
+		{Query: "/update _vt.vreplication set message='Picked source tablet.*",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.vreplication", true)}},
+		{Query: "/insert into _vt.copy_state",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set message='Picked source tablet.*", true)}},
+		{Query: "/update _vt.vreplication set state='Copying'",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.copy_state", true)}},
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"insert into src(id,val) values (1,'aaa')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
+		{Query: "insert into src(id,val) values (1,'aaa')",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set state='Copying'", true)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into src(id,val) values (1,'aaa')", true)}},
 		// The next catchup executes the new row insert, but will be a no-op.
-		"insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
+		{Query: "insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"1\\"}' where vrepl_id=.*`, true)}},
 		// fastForward has nothing to add. Just saves position.
-		// Second row gets copied.
-		"insert into src(id,val) values (2,'bbb')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		// Return to copy mode.
+		// Inserts can happen out-of-order.
+		// Updates happen in-order.
+		{Query: "insert into src(id,val) values (2,'bbb')",
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)", false)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into src(id,val) values (2,'bbb')", false)}},
 		// Third row copied without going back to catchup state.
-		"insert into src(id,val) values (3,'ccc')",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
-		"/delete from _vt.copy_state.*src",
+		{Query: "insert into src(id,val) values (3,'ccc')",
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)", false)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into src(id,val) values (3,'ccc')", false)}},
+		// Wrap-up.
+		{Query: "/delete from _vt.copy_state.*src",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"3\\"}' where vrepl_id=.*`, true)}},
 		// Copy is done. Go into running state.
-		"/update _vt.vreplication set state='Running'",
+		{Query: "/update _vt.vreplication set state='Running'",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/delete from _vt.copy_state.*src", true)}},
 	})
 	expectData(t, "src", [][]string{
 		{"1", "aaa"},
@@ -931,97 +1068,23 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 	})
 }
 
-// TestPlayerCopyWildcardTableContinuation tests the copy workflow where tables have been partially copied.
+// TestPlayerCopyWildcardTableContinuation.
 func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
-	defer deleteTablet(addTablet(100))
-
-	execStatements(t, []string{
-		// src is initialized as partially copied.
-		// lastpk will be initialized at (6,6) later below.
-		"create table src(id int, val varbinary(128), primary key(id))",
-		"insert into src values(2,'copied'), (3,'uncopied')",
-		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
-		fmt.Sprintf("insert into %s.dst values(2,'copied')", vrepldb),
-	})
-	defer execStatements(t, []string{
-		"drop table src",
-		fmt.Sprintf("drop table %s.dst", vrepldb),
-	})
-	env.SchemaEngine.Reload(context.Background())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "dst",
-			Filter: "select * from src",
-		}},
-	}
-	pos := primaryPosition(t)
-	execStatements(t, []string{
-		"insert into src values(4,'new')",
-	})
-
-	bls := &binlogdatapb.BinlogSource{
-		Keyspace: env.KeyspaceName,
-		Shard:    env.ShardName,
-		Filter:   filter,
-		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
-	}
-	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName)
-	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// As mentioned above. lastpk cut-off is set at (6,6)
-	lastpk := sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id",
-		"int32"),
-		"2",
-	))
-	lastpk.RowsAffected = 0
-	execStatements(t, []string{
-		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
-	})
-	id := qr.InsertID
-	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", id)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
-		expectDeleteQueries(t)
-	}()
-
-	expectNontxQueries(t, []string{
-		// Catchup
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set state = 'Copying'",
-		"/update _vt.vreplication set message='Picked source tablet.*",
-		"insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)",
-		// Copy
-		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
-		`/update _vt.copy_state set lastpk.*`,
-		"/delete from _vt.copy_state.*dst",
-		"/update _vt.vreplication set state='Running'",
-	})
-	expectData(t, "dst", [][]string{
-		{"2", "copied"},
-		{"3", "uncopied"},
-		{"4", "new"},
+	testVcopierTestCases(t, testPlayerCopyWildcardTableContinuation, commonVcopierTestCases())
+	testVcopierTestCases(t, testPlayerCopyWildcardTableContinuation, []vcopierTestCase{
+		// Optimize inserts without parallel inserts.
+		{
+			vreplicationExperimentalFlags: vreplicationExperimentalFlagOptimizeInserts,
+		},
+		// Optimize inserts with parallel inserts.
+		{
+			vreplicationExperimentalFlags:   vreplicationExperimentalFlagOptimizeInserts | vreplicationExperimentalParallelizeBulkInserts,
+			vreplicationParallelBulkInserts: 4,
+		},
 	})
 }
 
-// TestPlayerCopyWildcardTableContinuationWithOptimizeInserts tests the copy workflow where tables have been partially copied
-// enabling the optimize inserts functionality
-func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
-	oldVreplicationExperimentalFlags := *vreplicationExperimentalFlags
-	*vreplicationExperimentalFlags = vreplicationExperimentalFlagOptimizeInserts
-	defer func() {
-		*vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
-	}()
-
+func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -1080,25 +1143,58 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
-		// Catchup
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set state = 'Copying'",
-		"/update _vt.vreplication set message='Picked source tablet.*",
-		// Copy
-		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
-		`/update _vt.copy_state set lastpk.*`,
-		"/delete from _vt.copy_state.*dst",
-		"/update _vt.vreplication set state='Running'",
-	})
+	replayInsertExpectations := []qh.Expectation{
+		{
+			Query:   "insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set message='Picked source tablet.*", true)},
+		},
+		{
+			Query:   "insert into dst(id,val) values (3,'uncopied'), (4,'new')",
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)", true)},
+		},
+	}
+
+	optimizeInsertsEnabled := *vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalFlagOptimizeInserts != 0
+
+	if optimizeInsertsEnabled {
+		replayInsertExpectations = []qh.Expectation{
+			{
+				Query:   "insert into dst(id,val) values (3,'uncopied'), (4,'new')",
+				Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set message='Picked source tablet.*", true)},
+			},
+		}
+	}
+
+	expectNontxQueries2(t, append(
+		append(
+			[]qh.Expectation{
+				// Setup.
+				{Query: "/insert into _vt.vreplication",
+					Ruleset: qh.Ruleset{qh.OccursFirst()}},
+				{Query: "/update _vt.vreplication set state = 'Copying'",
+					Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.vreplication", true)}},
+				{Query: "/update _vt.vreplication set message='Picked source tablet.*",
+					Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set state = 'Copying'", true)}},
+			},
+			replayInsertExpectations...,
+		),
+		qh.Expectation{Query: `/update _vt.copy_state set lastpk.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst(id,val) values (3,'uncopied'), (4,'new')", true)}},
+		qh.Expectation{Query: "/delete from _vt.copy_state.*dst",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk.*`, true)}},
+		qh.Expectation{Query: "/update _vt.vreplication set state='Running'",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/delete from _vt.copy_state.*dst", true)}},
+	))
 	expectData(t, "dst", [][]string{
 		{"2", "copied"},
 		{"3", "uncopied"},
 		{"4", "new"},
 	})
-	for _, ct := range playerEngine.controllers {
-		require.Equal(t, int64(1), ct.blpStats.NoopQueryCount.Counts()["insert"])
-		break
+	if optimizeInsertsEnabled {
+		for _, ct := range playerEngine.controllers {
+			require.Equal(t, int64(1), ct.blpStats.NoopQueryCount.Counts()["insert"])
+			break
+		}
 	}
 }
 
@@ -1286,6 +1382,10 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 }
 
 func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyTablesWithGeneratedColumn, commonVcopierTestCases())
+}
+
+func testPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 	flavor := strings.ToLower(env.Flavor)
 	// Disable tests on percona and mariadb platforms in CI since
 	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
@@ -1339,22 +1439,33 @@ func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
+	expectNontxQueries2(t, []qh.Expectation{
 		// Create the list of tables to copy and transition to Copying state.
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set message=",
-		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state",
+		{Query: "/insert into _vt.vreplication",
+			Ruleset: qh.Ruleset{qh.OccursFirst()}},
+		{Query: "/update _vt.vreplication set message=",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.vreplication", true)}},
+		{Query: "/insert into _vt.copy_state",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set message=", true)}},
+		{Query: "/update _vt.vreplication set state",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.copy_state", true)}},
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"insert into dst1(id,val,val3,id2) values (1,'aaa','aaa1',10), (2,'bbb','bbb2',20)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		{Query: "insert into dst1(id,val,val3,id2) values (1,'aaa','aaa1',10), (2,'bbb','bbb2',20)",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set state", true)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst1(id,val,val3,id2) values (1,'aaa','aaa1',10), (2,'bbb','bbb2',20)", true)}},
 		// copy of dst1 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst1",
-		"insert into dst2(val3,val,id2) values ('aaa1','aaa',10), ('bbb2','bbb',20)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		{Query: "/delete from _vt.copy_state.*dst1",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`, true)}},
+		{Query: "insert into dst2(val3,val,id2) values ('aaa1','aaa',10), ('bbb2','bbb',20)",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/delete from _vt.copy_state.*dst1", true)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst2(val3,val,id2) values ('aaa1','aaa',10), ('bbb2','bbb',20)", true)}},
 		// copy of dst2 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst2",
-		"/update _vt.vreplication set state",
+		{Query: "/delete from _vt.copy_state.*dst2",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`, true)}},
+		{Query: "/update _vt.vreplication set state",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/delete from _vt.copy_state.*dst2", true)}},
 	})
 	expectData(t, "dst1", [][]string{
 		{"1", "aaa", "1aaa", "aaa1", "10"},
@@ -1454,6 +1565,10 @@ func supportsInvisibleColumns() bool {
 }
 
 func TestCopyInvisibleColumns(t *testing.T) {
+	testVcopierTestCases(t, testCopyInvisibleColumns, commonVcopierTestCases())
+}
+
+func testCopyInvisibleColumns(t *testing.T) {
 	if !supportsInvisibleColumns() {
 		t.Skip()
 	}
@@ -1497,18 +1612,26 @@ func TestCopyInvisibleColumns(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	expectNontxQueries(t, []string{
+	expectNontxQueries2(t, []qh.Expectation{
 		// Create the list of tables to copy and transition to Copying state.
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set message=",
-		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state",
+		{Query: "/insert into _vt.vreplication",
+			Ruleset: qh.Ruleset{qh.OccursFirst()}},
+		{Query: "/update _vt.vreplication set message=",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.vreplication", true)}},
+		{Query: "/insert into _vt.copy_state",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set message=", true)}},
+		{Query: "/update _vt.vreplication set state='Copying'",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/insert into _vt.copy_state", true)}},
 		// The first fast-forward has no starting point. So, it just saves the current position.
-		"insert into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)",
-		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"inv1\\" type:INT32} rows:{lengths:1 lengths:3 values:\\"2200\\"}' where vrepl_id=.*`,
+		{Query: "insert into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/update _vt.vreplication set state", true)}},
+		{Query: `/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"inv1\\" type:INT32} rows:{lengths:1 lengths:3 values:\\"2200\\"}' where vrepl_id=.*`,
+			Ruleset: qh.Ruleset{qh.OccursAfter("insert into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)", true)}},
 		// copy of dst1 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst1",
-		"/update _vt.vreplication set state",
+		{Query: "/delete from _vt.copy_state.*dst1",
+			Ruleset: qh.Ruleset{qh.OccursAfter(`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"inv1\\" type:INT32} rows:{lengths:1 lengths:3 values:\\"2200\\"}' where vrepl_id=.*`, true)}},
+		{Query: "/update _vt.vreplication set state='Running'",
+			Ruleset: qh.Ruleset{qh.OccursAfter("/delete from _vt.copy_state.*dst1", true)}},
 	})
 	expectData(t, "dst1", [][]string{
 		{"1", "10"},
