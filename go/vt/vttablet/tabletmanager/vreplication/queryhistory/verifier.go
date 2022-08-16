@@ -38,7 +38,10 @@ func NewVerifier(sequence ExpectationSequence) *Verifier {
 	}
 }
 
-// Accept new query to internal history if it passes expectations.
+// AcceptQuery verifies that the provided query is valid according to the
+// internal ExpectationSequence and the internal History of preceeding queries.
+// Returns a *Result indicating whether the query was accepted and, if not,
+// diagnostic details indicating why.
 func (v *Verifier) AcceptQuery(query string) *Result {
 	history := append(v.history, query)
 	index := len(history) - 1
@@ -71,10 +74,13 @@ func (v *Verifier) AcceptQuery(query string) *Result {
 	return result
 }
 
+// History returns the internal History of accepted queries.
 func (v *Verifier) History() History {
 	return v.history
 }
 
+// Pending returns a list of Expectations that have not yet fully matched an
+// accepted query.
 func (v *Verifier) Pending() []Expectation {
 	pending := make([]Expectation, 0)
 	for e, p := range v.pending {

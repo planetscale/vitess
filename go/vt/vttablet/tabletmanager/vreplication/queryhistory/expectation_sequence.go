@@ -1,7 +1,10 @@
 package queryhistory
 
+// ExpectationSequence represents a temporal ordering of expectations.
 type ExpectationSequence interface {
 	Count() int
+	// Head returns the head of the sequence. A sequence may only have one
+	// head.
 	Head() SequencedExpectation
 	// Visit every expectation in the sequence, in any order.
 	Visit(ExpectationSequenceVisitor)
@@ -33,7 +36,6 @@ func (es *expectationSequence) Head() SequencedExpectation {
 	return es.head
 }
 
-// Visit distinct expectations.
 func (es *expectationSequence) Visit(visitor ExpectationSequenceVisitor) {
 	next := make([]SequencedExpectation, 0)
 	visited := make(map[SequencedExpectation]bool)

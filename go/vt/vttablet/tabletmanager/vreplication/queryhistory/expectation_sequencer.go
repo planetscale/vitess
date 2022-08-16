@@ -1,10 +1,30 @@
 package queryhistory
 
+// ExpectationSequencer is a convenient way to compose ExpectationSequences.
 type ExpectationSequencer interface {
 	ExpectationSequence
+	// Return the current SequencedExpectation.
 	Current() SequencedExpectation
+	// Eventually returns an ExpectationSequencerFn that can be used to compose
+	// this ExpectationSequencer with another.
+	//
+	// For example...
+	//	sequencer1.Then(sequencer2.Eventually()
+	//
+	// Produces an ExpectationSequence that starts with sequence1, and is
+	// eventually followed by the head of sequence2.
 	Eventually() ExpectationSequencerFn
+	// Immediately returns an ExpectationSequencerFn that can be used to
+	// compose this ExpectationSequencer with another.
+	//
+	// For example...
+	//	sequencer1.Then(sequencer2.Immediately()
+	//
+	// Produces an ExpectationSequence that starts with sequence1, and is
+	// immediately followed by the head of sequence2.
 	Immediately() ExpectationSequencerFn
+	// Then passes this ExpectationSequencer to ExpectationSequencerFn,
+	// and returns the resulting ExpectationSequencer.
 	Then(ExpectationSequencerFn) ExpectationSequencer
 }
 

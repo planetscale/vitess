@@ -22,6 +22,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -72,7 +73,7 @@ type vcopierConcurrentCopier struct {
 	errors          concurrency.ErrorRecorder
 	isOpen          bool
 	lastCommitCh    chan bool
-	lastCommittedPk *querypb.Row
+	lastCommittedPk *atomic.Value // stores *querypb.Row
 	size            int
 }
 
@@ -117,7 +118,6 @@ func newVCopierBasicCopier(
 	vdbClient *vdbClient,
 ) *vcopierBasicCopier {
 	hooks := make(map[string]*event.Hooks)
-	hooks["copy:after"] = &event.Hooks{}
 	hooks["updateCopyState:before"] = &event.Hooks{}
 
 	return &vcopierBasicCopier{
@@ -134,9 +134,10 @@ func newVCopierConcurrentCopier(
 	stats *binlogplayer.Stats,
 ) *vcopierConcurrentCopier {
 	return &vcopierConcurrentCopier{
-		copierFactory: copierFactory,
-		errors:        &concurrency.AllErrorRecorder{},
-		size:          int(math.Max(float64(size), 1)),
+		copierFactory:   copierFactory,
+		errors:          &concurrency.AllErrorRecorder{},
+		lastCommittedPk: &atomic.Value{},
+		size:            int(math.Max(float64(size), 1)),
 	}
 }
 
@@ -579,7 +580,7 @@ func (vbc *vcopierBasicCopier) updateCopyState(ctx context.Context, lastpk *quer
 		return fmt.Errorf("failed to update copy state with vcopioer basic copier: not open")
 	}
 
-	vbc.hooks["updateCopyState:before"].Fire()
+	vbc.BeforeUpdateCopyState().Fire()
 
 	var buf []byte
 	buf, err := prototext.Marshal(&querypb.QueryResult{
@@ -603,10 +604,6 @@ func (vbc *vcopierBasicCopier) updateCopyState(ctx context.Context, lastpk *quer
 		return err
 	}
 	return nil
-}
-
-func (vcc *vcopierConcurrentCopier) AfterCopy() *event.Hooks {
-	panic("not implemented")
 }
 
 func (vcc *vcopierConcurrentCopier) BeforeUpdateCopyState() *event.Hooks {
@@ -644,11 +641,11 @@ func (vcc *vcopierConcurrentCopier) Copy(ctx context.Context, rows []*querypb.Ro
 			vcc.errors.RecordError(err)
 		}
 		// Save the lastpk.
-		vcc.lastCommittedPk = copier.LastCommittedPk()
-		// Signal the next copy operation to commit.
-		nextCommitCh <- true
+		vcc.lastCommittedPk.Store(copier.LastCommittedPk())
 		// Return the copier to the pool.
 		vcc.copierPool.Put(copier)
+		// Signal the next copy operation to commit.
+		nextCommitCh <- true
 	}()
 
 	return vcc.Error()
@@ -666,7 +663,11 @@ func (vcc *vcopierConcurrentCopier) IsOpen() bool {
 }
 
 func (vcc *vcopierConcurrentCopier) LastCommittedPk() *querypb.Row {
-	return vcc.lastCommittedPk
+	lcpk := vcc.lastCommittedPk.Load()
+	if lcpk == nil {
+		return nil
+	}
+	return lcpk.(*querypb.Row)
 }
 
 func (vcc *vcopierConcurrentCopier) Open(

@@ -2,6 +2,7 @@ package queryhistory
 
 import "fmt"
 
+// Expectation represents an expectation about the contents of a query.
 type Expectation interface {
 	ExpectQuery(string)
 	MatchQuery(string) (bool, error)

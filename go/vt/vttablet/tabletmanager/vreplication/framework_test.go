@@ -410,6 +410,9 @@ func (dbc *realDBClient) Close() {
 }
 
 func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	// Use Clone() because the contents of memory region referenced by
+	// string can change when clients (e.g. vcopier) use unsafe string methods.
+	query = strings.Clone(query)
 	if strings.HasPrefix(query, "use") ||
 		query == withddl.QueryToTriggerWithDDL { // this query breaks unit tests since it errors out
 		return nil, nil
@@ -508,10 +511,6 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 	retry:
 		select {
 		case got = <-globalDBQueries:
-			// Use Clone() because the contents of memory region referenced by
-			// string can change because vcopier uses unsafe string methods.
-			got = strings.Clone(got)
-
 			// We rule out heartbeat time update queries because otherwise our query list
 			// is indeterminable and varies with each test execution.
 			if shouldIgnoreQuery(got) {
@@ -580,10 +579,6 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence) {
 	retry:
 		select {
 		case got = <-globalDBQueries:
-			// Use Clone() because the contents of memory region referenced by
-			// string can change because vcopier uses unsafe string methods.
-			got = strings.Clone(got)
-
 			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") || shouldIgnoreQuery(got) {
 				goto retry
 			}
