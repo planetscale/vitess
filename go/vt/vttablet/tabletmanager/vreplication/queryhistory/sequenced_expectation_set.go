@@ -1,5 +1,7 @@
 package queryhistory
 
+// SequencedExpectationSet provides a set-like interface over a Golang map of
+// SequencedExpectations.
 type SequencedExpectationSet interface {
 	Add(SequencedExpectation)
 	Contains(SequencedExpectation) bool
