@@ -153,6 +153,15 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	testBasicVreplicationWorkflow(t)
 }
 
+func TestVreplicationCopyParallel(t *testing.T) {
+	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
+	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	extraVTTabletArgs = []string{
+		"--vreplication_experimental_flags=3",
+	}
+	testBasicVreplicationWorkflow(t)
+}
+
 func testBasicVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}

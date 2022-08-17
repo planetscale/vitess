@@ -9,7 +9,7 @@ type ExpectationSequencer interface {
 	// this ExpectationSequencer with another.
 	//
 	// For example...
-	//	sequencer1.Then(sequencer2.Eventually()
+	//	sequencer1.Then(sequencer2.Eventually())
 	//
 	// Produces an ExpectationSequence that starts with sequence1, and is
 	// eventually followed by the head of sequence2.
@@ -18,7 +18,7 @@ type ExpectationSequencer interface {
 	// compose this ExpectationSequencer with another.
 	//
 	// For example...
-	//	sequencer1.Then(sequencer2.Immediately()
+	//	sequencer1.Then(sequencer2.Immediately())
 	//
 	// Produces an ExpectationSequence that starts with sequence1, and is
 	// immediately followed by the head of sequence2.

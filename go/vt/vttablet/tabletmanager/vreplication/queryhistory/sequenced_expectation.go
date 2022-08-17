@@ -2,7 +2,7 @@ package queryhistory
 
 // SequencedExpectation is an Expectation situated in an ExpectationSequence.
 // In other words, it is an Expectation with temporal relationships to other
-// SequencedExpectations.
+// Expectations.
 type SequencedExpectation interface {
 	Expectation
 
