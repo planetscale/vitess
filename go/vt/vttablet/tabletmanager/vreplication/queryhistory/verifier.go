@@ -13,6 +13,8 @@ type Result struct {
 	Message     string
 }
 
+// Verifier verifies that an actual history of queries matches an expected
+// sequence of queries.
 type Verifier struct {
 	matched  []SequencedExpectation
 	pending  map[SequencedExpectation]bool
@@ -41,7 +43,7 @@ func NewVerifier(sequence ExpectationSequence) *Verifier {
 // AcceptQuery verifies that the provided query is valid according to the
 // internal ExpectationSequence and the internal History of preceeding queries.
 // Returns a *Result indicating whether the query was accepted and, if not,
-// diagnostic details indicating why.
+// diagnostic details indicating why not.
 func (v *Verifier) AcceptQuery(query string) *Result {
 	history := append(v.history, query)
 	index := len(history) - 1

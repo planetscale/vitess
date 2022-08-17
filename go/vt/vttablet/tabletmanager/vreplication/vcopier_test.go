@@ -39,7 +39,7 @@ import (
 
 type vcopierTestCase struct {
 	vreplicationExperimentalFlags   int64
-	vreplicationParallelBulkInserts int64
+	vreplicationParallelBulkInserts string
 }
 
 func commonVcopierTestCases() []vcopierTestCase {
@@ -73,7 +73,7 @@ func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTe
 		// Run test case.
 		t.Run(
 			fmt.Sprintf(
-				"vreplication_experimental_flags=%d,vreplication_parallel_bulk_inserts=%d",
+				"vreplication_experimental_flags=%d,vreplication_parallel_bulk_inserts=%s",
 				tc.vreplicationExperimentalFlags, tc.vreplicationParallelBulkInserts,
 			),
 			test,
@@ -918,8 +918,7 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 // TODO(maxenglander): this test isn't repeatable, even with the same flags.
 func TestPlayerCopyTableContinuation(t *testing.T) {
 	testVcopierTestCases(t, testPlayerCopyTableContinuation, []vcopierTestCase{
-		{vreplicationExperimentalFlags: 0,
-			vreplicationParallelBulkInserts: 0},
+		{vreplicationExperimentalFlags: 0},
 	})
 }
 
@@ -1096,8 +1095,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		},
 		// Optimize inserts with parallel inserts.
 		{
-			vreplicationExperimentalFlags:   vreplicationExperimentalFlagOptimizeInserts | vreplicationExperimentalParallelizeBulkInserts,
-			vreplicationParallelBulkInserts: 4,
+			vreplicationExperimentalFlags: vreplicationExperimentalFlagOptimizeInserts | vreplicationExperimentalParallelizeBulkInserts,
 		},
 	})
 }
