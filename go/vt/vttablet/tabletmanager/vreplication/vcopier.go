@@ -64,6 +64,7 @@ type vcopierBasicCopier struct {
 	pkfields        []*querypb.Field
 	sqlbuffer       bytes2.Buffer
 	stats           *binlogplayer.Stats
+	tableName       string
 	tablePlan       *TablePlan
 }
 
@@ -103,6 +104,7 @@ func newVCopier(vr *vreplicator) *vcopier {
 func newVCopierBasicCopier(
 	closeDbClient bool,
 	stats *binlogplayer.Stats,
+	tableName string,
 	vdbClient *vdbClient,
 ) *vcopierBasicCopier {
 	hooks := make(map[string]*event.Hooks)
@@ -112,6 +114,7 @@ func newVCopierBasicCopier(
 		closeDbClient: closeDbClient,
 		hooks:         hooks,
 		stats:         stats,
+		tableName:     tableName,
 		vdbClient:     vdbClient,
 	}
 }
@@ -120,6 +123,7 @@ func newVCopierConcurrentCopier(
 	copierFactory func(ctx context.Context) (vcopierCopier, error),
 	size int,
 	stats *binlogplayer.Stats,
+	tableName string,
 ) *vcopierConcurrentCopier {
 	return &vcopierConcurrentCopier{
 		copierFactory:   copierFactory,
@@ -298,7 +302,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
 
-	copier := vc.newCopier()
+	copier := vc.newCopier(tableName)
 	defer copier.Close()
 
 	var pkfields []*querypb.Field
@@ -449,7 +453,7 @@ func (vc *vcopier) newClientConnection(ctx context.Context) (*vdbClient, error) 
 	return dbClient, nil
 }
 
-func (vc *vcopier) newCopier() vcopierCopier {
+func (vc *vcopier) newCopier(tableName string) vcopierCopier {
 	if isExperimentalParallelBulkInsertsEnabled() {
 		return newVCopierConcurrentCopier(
 			func(ctx context.Context) (vcopierCopier, error) {
@@ -457,13 +461,14 @@ func (vc *vcopier) newCopier() vcopierCopier {
 				if err != nil {
 					return nil, fmt.Errorf("failed to create new db client: %s", err.Error())
 				}
-				return newVCopierBasicCopier(true, vc.vr.dbClient.stats, dbClient), nil
+				return newVCopierBasicCopier(true, vc.vr.dbClient.stats, tableName, dbClient), nil
 			},
 			getCopyInsertConcurrency(),
 			vc.vr.stats,
+			tableName,
 		)
 	}
-	return newVCopierBasicCopier(false, vc.vr.dbClient.stats, vc.vr.dbClient)
+	return newVCopierBasicCopier(false, vc.vr.dbClient.stats, tableName, vc.vr.dbClient)
 }
 
 func (vbc *vcopierBasicCopier) BeforeUpdateCopyState() *event.Hooks {
@@ -502,15 +507,14 @@ func (vbc *vcopierBasicCopier) Copy(ctx context.Context, rows []*querypb.Row, la
 
 DONE:
 	// Update stats.
-	elapsedTime := float64(time.Now().UnixNano()-start.UnixNano()) / 1e9
-	bandwidth := int64(float64(len(rows)) / elapsedTime)
-	vbc.stats.CopyBandwidth.Set(bandwidth)
 	vbc.stats.CopyRowCount.Add(int64(len(rows)))
 	vbc.stats.QueryCount.Add("copy", 1)
+	vbc.stats.TableCopyRowCounts.Add(vbc.tableName, int64(len(rows)))
+	vbc.stats.TableCopyTimings.Add(vbc.tableName, time.Since(start))
 
 	// Handle errors.
 	if err != nil {
-		vbc.stats.ErrorCounts.Add([]string{"BulkCopy"}, 1)
+		vbc.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 	}
 
 	return err
