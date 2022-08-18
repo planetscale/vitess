@@ -354,45 +354,41 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+
 	stats.NewGaugesFuncWithMultiLabels(
-		"VReplicationLastCopyBandwidthBps",
-		"vreplication last copy's bytes copied per second per stream",
-		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
+		"VReplicationTableCopyRowCounts",
+		"vreplication rows copied in copy phase per table per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "table"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.CopyBandwidth.Get()
+				for table, count := range ct.blpStats.TableCopyRowCounts.Counts() {
+					if table == "" {
+						continue
+					}
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+table] = count
+				}
 			}
 			return result
 		})
 	stats.NewGaugesFuncWithMultiLabels(
-		"VReplicationLastBatchCopyBandwidthBps",
-		"vreplication last batch copy's bytes copied per second per stream",
-		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
+		"VReplicationTableCopyTimings",
+		"vreplication copy phase timings per table per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "table"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.BatchCopyBandwidth.Get()
+				for table, t := range ct.blpStats.TableCopyTimings.Histograms() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+table] = t.Total()
+				}
 			}
 			return result
 		})
-	stats.NewGaugesFuncWithMultiLabels(
-		"VReplicationCopyBatchCount",
-		"vreplication running count of batches in copy phase",
-		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
-		func() map[string]int64 {
-			st.mu.Lock()
-			defer st.mu.Unlock()
-			result := make(map[string]int64, len(st.controllers))
-			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.BatchCopyLoopCount.Get()
-			}
-			return result
-		})
+
 	stats.NewGaugeFunc("VReplicationBulkInsertConcurrency", "Number of concurrent bulk inserts", st.bulkInsertConcurrency)
 }
 
@@ -447,8 +443,7 @@ func (st *vrStats) status() *EngineStatus {
 			CopyRowCount:          ct.blpStats.CopyRowCount.Get(),
 			CopyLoopCount:         ct.blpStats.CopyLoopCount.Get(),
 			NoopQueryCounts:       ct.blpStats.NoopQueryCount.Counts(),
-			CopyBandwidth:         ct.blpStats.CopyBandwidth.Get(),
-			BatchCopyLoopCount:    ct.blpStats.BatchCopyLoopCount.Get(),
+			TableCopyTimings:      ct.blpStats.TableCopyTimings.Counts(),
 		}
 		i++
 	}
@@ -481,8 +476,7 @@ type ControllerStatus struct {
 	CopyRowCount          int64
 	CopyLoopCount         int64
 	NoopQueryCounts       map[string]int64
-	CopyBandwidth         int64
-	BatchCopyLoopCount    int64
+	TableCopyTimings      map[string]int64
 }
 
 var vreplicationTemplate = `
