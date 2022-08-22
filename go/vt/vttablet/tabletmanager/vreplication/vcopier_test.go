@@ -487,9 +487,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		// With parallel inserts, new db client connects are created on-the-fly.
 		if isExperimentalParallelBulkInsertsEnabled() {
-			for i := 0; i < getCopyInsertConcurrency(); i++ {
-				expect = expect.Then(qh.Immediately("set foreign_key_checks=0;"))
-			}
+			return expect.Then(qh.Eventually("set foreign_key_checks=0;"))
 		}
 		return expect
 	}).Then(qh.Eventually(
@@ -510,9 +508,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 	)).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		// With parallel inserts, new db client connects are created on-the-fly.
 		if isExperimentalParallelBulkInsertsEnabled() {
-			for i := 0; i < getCopyInsertConcurrency(); i++ {
-				expect = expect.Then(qh.Immediately("set foreign_key_checks=0;"))
-			}
+			return expect.Then(qh.Eventually("set foreign_key_checks=0;"))
 		}
 		return expect
 	}).Then(qh.Eventually(
