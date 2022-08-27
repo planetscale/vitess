@@ -691,18 +691,18 @@ func testPlayerCopyBigTable(t *testing.T) {
 	vstreamRowsSendHook = func(ctx context.Context) {
 		defer func() { count++ }()
 		// Allow the first two calls to go through: field info and one row.
-		if count <= 1 {
+		if (count+1)%3 != 0 {
 			return
 		}
-		// Insert a statement to test that catchup gets new events.
-		execStatements(t, []string{
-			"insert into src values(3, 'ccc')",
-		})
+		if (count + 1) == 3 {
+			// Insert a statement to test that catchup gets new events.
+			execStatements(t, []string{
+				"insert into src values(3, 'ccc')",
+			})
+		}
 		// Wait for context to expire and then send the row.
 		// This will cause the copier to abort and go back to catchup mode.
 		<-ctx.Done()
-		// Do this no more than once.
-		vstreamRowsSendHook = nil
 	}
 
 	vstreamHook = func(context.Context) {

@@ -34,13 +34,6 @@ func (h *Hooks) Add(f func()) {
 	h.funcs = append(h.funcs, f)
 }
 
-// Clear any functions in Hooks list.
-func (h *Hooks) Clear() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.funcs = h.funcs[:0]
-}
-
 // Fire calls all the functions in a given Hooks list. It launches a goroutine
 // for each function and then waits for all of them to finish before returning.
 // Concurrent calls to Fire() are serialized.
