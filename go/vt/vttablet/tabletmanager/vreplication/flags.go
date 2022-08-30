@@ -1,50 +1,91 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vreplication
 
 import (
-	"flag"
 	"runtime"
 	"strconv"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
-	// idleTimeout is set to slightly above 1s, compared to heartbeatTime
-	// set by VStreamer at slightly below 1s. This minimizes conflicts
-	// between the two timeouts.
-	idleTimeout = 1100 * time.Millisecond
+	retryDelay          = 5 * time.Second
+	maxTimeToRetryError time.Duration // default behavior is to keep retrying, for backward compatibility
 
-	dbLockRetryDelay = 1 * time.Second
+	tabletTypesStr = "in_order:REPLICA,PRIMARY"
 
-	relayLogMaxSize  = flag.Int("relay_log_max_size", 250000, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
-	relayLogMaxItems = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
+	relayLogMaxSize  = 250000
+	relayLogMaxItems = 5000
 
-	copyPhaseDuration   = flag.Duration("vreplication_copy_phase_duration", 1*time.Hour, "Duration for each copy phase loop (before running the next catchup: default 1h)")
-	replicaLagTolerance = flag.Duration("vreplication_replica_lag_tolerance", 1*time.Minute, "Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase")
+	copyPhaseDuration   = 1 * time.Hour
+	replicaLagTolerance = 1 * time.Minute
+
+	vreplicationHeartbeatUpdateInterval = 1
+	vreplicationExperimentalFlags       = int64(0x01) // enable vreplicationExperimentalFlagOptimizeInserts by default
+	vreplicationStoreCompressedGTID     = false
+	vreplicationParallelBulkInserts     = "auto"
+)
+
+func registerVReplicationFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&retryDelay, "vreplication_retry_delay", retryDelay, "delay before retrying a failed workflow event in the replication phase")
+	fs.DurationVar(&maxTimeToRetryError, "vreplication_max_time_to_retry_on_error", maxTimeToRetryError, "stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence")
+
+	// these are the default tablet_types that will be used by the tablet picker to find source tablets for a vreplication stream
+	// it can be overridden by passing a different list to the MoveTables or Reshard commands
+	fs.StringVar(&tabletTypesStr, "vreplication_tablet_type", tabletTypesStr, "comma separated list of tablet types used as a source")
+
+	fs.IntVar(&relayLogMaxSize, "relay_log_max_size", relayLogMaxSize, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
+	fs.IntVar(&relayLogMaxItems, "relay_log_max_items", relayLogMaxItems, "Maximum number of rows for VReplication target buffering.")
+
+	fs.DurationVar(&copyPhaseDuration, "vreplication_copy_phase_duration", copyPhaseDuration, "Duration for each copy phase loop (before running the next catchup: default 1h)")
+	fs.DurationVar(&replicaLagTolerance, "vreplication_replica_lag_tolerance", replicaLagTolerance, "Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase")
 
 	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source
 	// vstream is only sending heartbeats for this long. Keep this low if you expect high QPS and are monitoring this column to alert about potential
 	// outages. Keep this high if
 	// 		you have too many streams the extra write qps or cpu load due to these updates are unacceptable
 	//		you have too many streams and/or a large source field (lot of participating tables) which generates unacceptable increase in your binlog size
-	vreplicationHeartbeatUpdateInterval = flag.Int("vreplication_heartbeat_update_interval", 1, "Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling")
-	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
-	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
-	vreplicationMinimumHeartbeatUpdateInterval = 60
+	fs.IntVar(&vreplicationHeartbeatUpdateInterval, "vreplication_heartbeat_update_interval", vreplicationHeartbeatUpdateInterval, "Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling")
+	fs.Int64Var(&vreplicationExperimentalFlags, "vreplication_experimental_flags", vreplicationExperimentalFlags, "(Bitmask) of experimental features in vreplication to enable")
+	fs.BoolVar(&vreplicationStoreCompressedGTID, "vreplication_store_compressed_gtid", vreplicationStoreCompressedGTID, "Store compressed gtids in the pos column of _vt.vreplication")
 
-	vreplicationExperimentalFlags                        = flag.Int64("vreplication_experimental_flags", 0x01, "(Bitmask) of experimental features in vreplication to enable")
-	vreplicationParallelBulkInserts                      = flag.String("vreplication_parallel_bulk_inserts", "auto", "Number of parallel insertion workers to use during copy phase. Set to a number >= 1 or to \"auto\". \"auto\" uses GOMAXPROCS or 4, whichever is smaller.")
-	vreplicationExperimentalFlagOptimizeInserts    int64 = 1
-	vreplicationExperimentalParallelizeBulkInserts int64 = 0x02
-	vreplicationStoreCompressedGTID                      = flag.Bool("vreplication_store_compressed_gtid", false, "Store compressed gtids in the pos column of _vt.vreplication")
-)
+	// deprecated flags (7.0), however there are several e2e tests that still depend on them
+	fs.Duration("vreplication_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
+	fs.Duration("vreplication_healthcheck_retry_delay", 5*time.Second, "healthcheck retry delay")
+	fs.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
+
+	fs.StringVar(&vreplicationParallelBulkInserts, "vreplication_parallel_bulk_inserts", "auto", "Number of parallel insertion workers to use during copy phase. Set to a number >= 1 or to \"auto\". \"auto\" uses GOMAXPROCS or 4, whichever is smaller.")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerVReplicationFlags)
+	servenv.OnParseFor("vttablet", registerVReplicationFlags)
+}
 
 func getCopyInsertConcurrency() int {
 	if !isExperimentalParallelBulkInsertsEnabled() {
 		return 1
 	}
-	copyInsertConcurrency := string(*vreplicationParallelBulkInserts)
+	copyInsertConcurrency := string(vreplicationParallelBulkInserts)
 	if copyInsertConcurrency == "auto" {
 		gomaxprocs := runtime.GOMAXPROCS(0)
 		if gomaxprocs <= 4 {
@@ -58,12 +99,12 @@ func getCopyInsertConcurrency() int {
 		return 1
 	}
 	if i64 <= 0 {
-		log.Warningf("Invalid value %d for --vreplication_parallel_bulk_inserts. Defaulting to 1.", copyInsertConcurrency)
+		log.Warningf("Invalid value %d for --vreplication_parallel_bulk_inserts. Defaulting to 1.", i64)
 		return 1
 	}
 	return int(i64)
 }
 
 func isExperimentalParallelBulkInsertsEnabled() bool {
-	return *vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalParallelizeBulkInserts != 0
+	return vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalParallelizeBulkInserts != 0
 }
