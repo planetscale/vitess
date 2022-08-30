@@ -194,8 +194,6 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -431,8 +429,6 @@ func TestBackupRestoreLagged(t *testing.T) {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -654,8 +650,6 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
-		"RESET SLAVE ALL",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
