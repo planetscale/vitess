@@ -43,6 +43,22 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
+var (
+	// idleTimeout is set to slightly above 1s, compared to heartbeatTime
+	// set by VStreamer at slightly below 1s. This minimizes conflicts
+	// between the two timeouts.
+	idleTimeout = 1100 * time.Millisecond
+
+	dbLockRetryDelay = 1 * time.Second
+
+	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
+	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
+	vreplicationMinimumHeartbeatUpdateInterval = 60
+
+	vreplicationExperimentalFlagOptimizeInserts    int64 = 1
+	vreplicationExperimentalParallelizeBulkInserts int64 = 0x02
+)
+
 const (
 	getSQLModeQuery = `SELECT @@session.sql_mode AS sql_mode`
 	// SQLMode should be used whenever performing a schema change as part of a vreplication
@@ -112,9 +128,9 @@ type vreplicator struct {
 //	More advanced constructs can be used. Please see the table plan builder
 //	documentation for more info.
 func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
-	if *vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
+	if vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
 		log.Warningf("the supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
-			*vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
+			vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
 	return &vreplicator{
 		vre:             vre,

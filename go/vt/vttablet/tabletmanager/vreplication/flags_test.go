@@ -11,10 +11,10 @@ func TestGetCopyInsertConcurrency(t *testing.T) {
 	gomaxprocs := runtime.GOMAXPROCS(0)
 
 	defer func(experimentalFlags int64, parallelBulkInserts string, gomaxprocs int) {
-		*vreplicationExperimentalFlags = experimentalFlags
-		*vreplicationParallelBulkInserts = parallelBulkInserts
+		vreplicationExperimentalFlags = experimentalFlags
+		vreplicationParallelBulkInserts = parallelBulkInserts
 		runtime.GOMAXPROCS(gomaxprocs)
-	}(*vreplicationExperimentalFlags, *vreplicationParallelBulkInserts, gomaxprocs)
+	}(vreplicationExperimentalFlags, vreplicationParallelBulkInserts, gomaxprocs)
 
 	// Default, without experimental flag.
 	require.Equal(t, false, isExperimentalParallelBulkInsertsEnabled(),
@@ -23,7 +23,7 @@ func TestGetCopyInsertConcurrency(t *testing.T) {
 		"expected copy insert concurrency to default to 1 when experimental parallel bulk inserts is disabled")
 
 	// Default, with experimental flag.
-	*vreplicationExperimentalFlags = *vreplicationExperimentalFlags | vreplicationExperimentalParallelizeBulkInserts
+	vreplicationExperimentalFlags = vreplicationExperimentalFlags | vreplicationExperimentalParallelizeBulkInserts
 	expected := gomaxprocs
 	if expected > 4 {
 		expected = 4
@@ -62,7 +62,7 @@ func TestGetCopyInsertConcurrency(t *testing.T) {
 	// With invalid args.
 	invalidArgs := []string{"-1", "0", "foo"}
 	for _, v := range invalidArgs {
-		*vreplicationParallelBulkInserts = v
+		vreplicationParallelBulkInserts = v
 		require.Equalf(t, 1, getCopyInsertConcurrency(),
 			"expected copy insert concurrency to fall back to %d when set to invalid value=%s", 1, v)
 	}
@@ -70,14 +70,14 @@ func TestGetCopyInsertConcurrency(t *testing.T) {
 
 func TestIsExperimentalParallelBulkInsertsEnabled(t *testing.T) {
 	defer func(experimentalFlags int64) {
-		*vreplicationExperimentalFlags = experimentalFlags
-	}(*vreplicationExperimentalFlags)
+		vreplicationExperimentalFlags = experimentalFlags
+	}(vreplicationExperimentalFlags)
 
 	// Default, false
 	require.False(t, isExperimentalParallelBulkInsertsEnabled(),
 		"expected parallel bulk inserts disabled by default")
 
-	*vreplicationExperimentalFlags |= vreplicationExperimentalParallelizeBulkInserts
+	vreplicationExperimentalFlags |= vreplicationExperimentalParallelizeBulkInserts
 	require.True(t, isExperimentalParallelBulkInsertsEnabled(),
 		"expected parallel bulk inserts to be enabled")
 }

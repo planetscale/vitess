@@ -46,30 +46,30 @@ func commonVcopierTestCases() []vcopierTestCase {
 	return []vcopierTestCase{
 		// Defult experimental flags.
 		{
-			vreplicationExperimentalFlags: *vreplicationExperimentalFlags,
+			vreplicationExperimentalFlags: vreplicationExperimentalFlags,
 		},
 		// Parallel bulk inserts enabled.
 		{
 			vreplicationExperimentalFlags:   vreplicationExperimentalParallelizeBulkInserts,
-			vreplicationParallelBulkInserts: *vreplicationParallelBulkInserts,
+			vreplicationParallelBulkInserts: vreplicationParallelBulkInserts,
 		},
 	}
 }
 
 func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTestCase) {
-	oldVreplicationExperimentalFlags := *vreplicationExperimentalFlags
-	oldVreplicationParallelBulkInserts := *vreplicationParallelBulkInserts
+	oldVreplicationExperimentalFlags := vreplicationExperimentalFlags
+	oldVreplicationParallelBulkInserts := vreplicationParallelBulkInserts
 	// Extra reset at the end in case we return prematurely.
 	defer func() {
-		*vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
-		*vreplicationParallelBulkInserts = oldVreplicationParallelBulkInserts
+		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vreplicationParallelBulkInserts = oldVreplicationParallelBulkInserts
 	}()
 
 	for _, tc := range cases {
 		tc := tc // Avoid export loop bugs.
 		// Set test flags.
-		*vreplicationExperimentalFlags = tc.vreplicationExperimentalFlags
-		*vreplicationParallelBulkInserts = tc.vreplicationParallelBulkInserts
+		vreplicationExperimentalFlags = tc.vreplicationExperimentalFlags
+		vreplicationParallelBulkInserts = tc.vreplicationParallelBulkInserts
 		// Run test case.
 		t.Run(
 			fmt.Sprintf(
@@ -79,8 +79,8 @@ func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTe
 			test,
 		)
 		// Reset.
-		*vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
-		*vreplicationParallelBulkInserts = oldVreplicationParallelBulkInserts
+		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vreplicationParallelBulkInserts = oldVreplicationParallelBulkInserts
 	}
 }
 
@@ -94,10 +94,10 @@ func testPlayerCopyCharPK(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -201,10 +201,10 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -324,10 +324,10 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -666,10 +666,10 @@ func testPlayerCopyBigTable(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multiple times.
@@ -797,10 +797,10 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 	reset := vstreamer.AdjustPacketSize(1)
 	defer reset()
 
-	savedCopyPhaseDuration := *copyPhaseDuration
+	savedCopyPhaseDuration := copyPhaseDuration
 	// copyPhaseDuration should be low enough to have time to send one row.
-	*copyPhaseDuration = 500 * time.Millisecond
-	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
+	copyPhaseDuration = 500 * time.Millisecond
+	defer func() { copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
 	// waitRetry time should be very low to cause the wait loop to execute multipel times.
@@ -1155,7 +1155,7 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 		expectDeleteQueries(t)
 	}()
 
-	optimizeInsertsEnabled := *vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalFlagOptimizeInserts != 0
+	optimizeInsertsEnabled := vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalFlagOptimizeInserts != 0
 
 	expectNontxQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
@@ -1182,6 +1182,95 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 			require.Equal(t, int64(1), ct.blpStats.NoopQueryCount.Counts()["insert"])
 			break
 		}
+	}
+}
+
+// TestPlayerCopyWildcardTableContinuationWithOptimizeInserts tests the copy workflow where tables have been partially copied
+// enabling the optimize inserts functionality
+func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
+	oldVreplicationExperimentalFlags := vreplicationExperimentalFlags
+	vreplicationExperimentalFlags = vreplicationExperimentalFlagOptimizeInserts
+	defer func() {
+		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src(id int, val varbinary(128), primary key(id))",
+		"insert into src values(2,'copied'), (3,'uncopied')",
+		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("insert into %s.dst values(2,'copied')", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+	pos := primaryPosition(t)
+	execStatements(t, []string{
+		"insert into src values(4,'new')",
+	})
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lastpk := sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id",
+		"int32"),
+		"2",
+	))
+	lastpk.RowsAffected = 0
+	execStatements(t, []string{
+		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
+	})
+	id := qr.InsertID
+	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", id)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectNontxQueries(t, qh.Expect(
+		// Catchup
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set state = 'Copying'",
+		"/update _vt.vreplication set message='Picked source tablet.*",
+		// Copy
+		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
+		`/update _vt.copy_state set lastpk.*`,
+		"/delete from _vt.copy_state.*dst",
+		"/update _vt.vreplication set state='Running'",
+	))
+	expectData(t, "dst", [][]string{
+		{"2", "copied"},
+		{"3", "uncopied"},
+		{"4", "new"},
+	})
+	for _, ct := range playerEngine.controllers {
+		require.Equal(t, int64(1), ct.blpStats.NoopQueryCount.Counts()["insert"])
+		break
 	}
 }
 
@@ -1318,14 +1407,14 @@ func testPlayerCopyTableCancel(t *testing.T) {
 	})
 	env.SchemaEngine.Reload(context.Background())
 
-	saveTimeout := *copyPhaseDuration
-	*copyPhaseDuration = 1 * time.Millisecond
-	defer func() { *copyPhaseDuration = saveTimeout }()
+	saveTimeout := copyPhaseDuration
+	copyPhaseDuration = 1 * time.Millisecond
+	defer func() { copyPhaseDuration = saveTimeout }()
 
 	// Set a hook to reset the copy timeout after first call.
 	vstreamRowsHook = func(ctx context.Context) {
 		<-ctx.Done()
-		*copyPhaseDuration = saveTimeout
+		copyPhaseDuration = saveTimeout
 		vstreamRowsHook = nil
 	}
 
