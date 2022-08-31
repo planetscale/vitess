@@ -51,9 +51,10 @@ type vcopier struct {
 	throttlerAppName string
 }
 
-// vcopierCopyTaskArgs stores the input of a copy task.
+// vcopierCopyTask stores the args and lifecycle hooks of a copy task.
 type vcopierCopyTask struct {
-	args      *vcopierCopyTaskArgs
+	args *vcopierCopyTaskArgs
+	// id is purely informative. Useful for Println-driven development.
 	id        int
 	lifecycle *vcopierCopyTaskLifecycle
 }
@@ -64,16 +65,26 @@ type vcopierCopyTaskArgs struct {
 	rows   []*query.Row
 }
 
+// vcopierCopyTaskHooks contains callback functions to be triggered as a copy
+// task progresses through in-progress phases of its lifecycle.
 type vcopierCopyTaskHooks struct {
 	fns []func(context.Context, *vcopierCopyTaskArgs) error
 }
 
-// vcopierCopyTaskLifecycle can be used to inject additional behaviors into the vcopierCopyTask execution.
+// vcopierCopyTaskLifecycle can be used to inject additional behaviors into the
+// vcopierCopyTask execution.
+//
+// It contains two types of hooks. In-progress hooks (simply called "hooks")
+// which can be registered before of after various phases of the copy task,
+// such as "insert row", "commit", etc. Result hooks are used to register
+// callbacks to be triggered when a task is "done" (= canceled, completed,
+// failed).
 type vcopierCopyTaskLifecycle struct {
 	hooks       map[string]*vcopierCopyTaskHooks
 	resultHooks *vcopierCopyTaskResultHooks
 }
 
+// vcopierCopyTaskResult contains information about a task that is done.
 type vcopierCopyTaskResult struct {
 	args      *vcopierCopyTaskArgs
 	err       error
@@ -81,6 +92,8 @@ type vcopierCopyTaskResult struct {
 	state     vcopierCopyTaskState
 }
 
+// vcopierCopyTaskHooks contains callback functions to be triggered when a copy
+// reaches a "done" state (= canceled, completed, failed).
 type vcopierCopyTaskResultHooks struct {
 	fns []func(context.Context, *vcopierCopyTaskResult)
 }
@@ -147,7 +160,6 @@ func newVCopierCopyTask(id int, args *vcopierCopyTaskArgs) *vcopierCopyTask {
 	}
 }
 
-// newVCopierCopyTask returns a blank vcopierCopyTask.
 func newVCopierCopyTaskArgs(rows []*querypb.Row, lastpk *querypb.Row) *vcopierCopyTaskArgs {
 	return &vcopierCopyTaskArgs{
 		rows:   rows,
@@ -389,7 +401,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	var lastpk *querypb.Row
 	var pkfields []*querypb.Field
-	var prevT *vcopierCopyTask
+
+	// Use this for task sequencing.
+	var prevCh <-chan *vcopierCopyTaskResult
 
 	serr := vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
@@ -451,23 +465,32 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 		// Prepare a vcopierCopyTask for the current batch of work.
 		// TODO(maxeng) see if using a pre-allocated pool will speed things up.
+		currCh := make(chan *vcopierCopyTaskResult, 1)
 		currT := newVCopierCopyTask(taskID, newVCopierCopyTaskArgs(rows.Rows, rows.Lastpk))
 		taskID++
 
-		// Sequence the previous task with the current task so that:
-		// * The previous task is completed before we begin updating
-		//   _vt.copy_state for the current task.
-		// * If the previous task fails or is canceled, the current task is
+		// Send result to the global resultCh and currCh. resultCh is used by
+		// the loop to return results to VStreamRows. currCh will be used to
+		// sequence the start of the nextT.
+		currT.Lifecycle().OnResult().SendTo(currCh)
+		currT.Lifecycle().OnResult().SendTo(resultCh)
+
+		// Use prevCh to Sequence the prevT with the currT so that:
+		// * The prevT is completed before we begin updating
+		//   _vt.copy_state for currT.
+		// * If prevT fails or is canceled, the current task is
 		//   canceled.
-		if prevT != nil {
-			prevCh := make(chan *vcopierCopyTaskResult, 1)
-			prevT.Lifecycle().OnResult().SendTo(prevCh)
+		if prevCh != nil {
+			// prevT publishes to prevCh, and currT is the only thing that can
+			// consume from prevCh. If prevT is already done, then prevCh will
+			// have a value in it. If prevT isn't yet done, then prevCh will
+			// have a value later. Either way, AwaitCompletion should
+			// eventually get a value, unless there is a context expiry.
 			currT.Lifecycle().Before(vcopierCopyTaskUpdateCopyState).AwaitCompletion(prevCh)
 		}
 
-		// Store currT in prevT, because the next task will need to reference
-		// currT in order to set up sequencing logic like the above.
-		prevT = currT
+		// Store currCh in prevCh. The nextT will use this for sequencing.
+		prevCh = currCh
 
 		// Update stats after task is done.
 		currT.Lifecycle().OnResult().Do(func(_ context.Context, result *vcopierCopyTaskResult) {
@@ -482,9 +505,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			}
 		})
 
-		// Send result to resultCh.
-		currT.Lifecycle().OnResult().SendTo(resultCh)
-
 		if err := copyWorkQueue.Enqueue(ctx, currT); err != nil {
 			log.Warningf("failed to enqueue task: %s", err.Error())
 			return err
@@ -494,13 +514,14 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		// in the resultCh after each Enqueue, unless there was a queue state
 		// error (e.g. couldn't obtain a worker from pool).
 		//
-		// When async execution is enabled, it's still preferable to
-		// aggressively read from this channel so that:
+		// When async execution is enabled, results will show up in the channel
+		// eventually, possibly in a subsequent VStreamRows loop. It's still
+		// a good idea to check this channel on every pass so that:
 		//
-		// * resultCh doesn't fill up. If it does fill up then tasks won't be able to add their results to the channel,
-		//   and progress in this thread will be blocked.
-		// * We keep lastpk up-to-date, to minimize the likelihook that
-		//   VStreamRows selects a batch that's in the process of inserting.
+		// * resultCh doesn't fill up. If it does fill up then tasks won't be
+		//   able to add their results to the channel, and progress in this
+		//   thread will be blocked.
+		// * We keep lastpk up-to-date.
 		select {
 		case result := <-resultCh:
 			if result != nil {
@@ -523,11 +544,13 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return nil
 	})
 
+	// Close the work queue. This will prevent new tasks from being enqueued,
+	// and will wait until all workers are returned to the worker pool.
 	copyWorkQueue.Close()
 
-	// When tasks are executed async, there may be tasks that complete
-	// after the last VStreamRows callback. Get the lastpk from completed tasks,
-	// or errors from failed ones.
+	// When tasks are executed async, there may be tasks that complete (or fail)
+	// after the last VStreamRows callback exits. Get the lastpk from completed
+	// tasks, or errors from failed ones.
 	var empty bool
 	var terr error
 	for !empty {
@@ -658,6 +681,11 @@ func (vc *vcopier) newCopyWorkerFactory() func(context.Context) (*vcopierCopyWor
 	return workerFactory
 }
 
+// Enqueue a new copy task. This will obtain a worker from the pool, execute
+// the task with that worker, and afterwards return the worker to the pool. If
+// vcopierCopyWorkQueue is configured to operate concurrently, the task will be
+// executed in a separate goroutine. Otherwise the task will be executed in the
+// calling thread.
 func (vcq *vcopierCopyWorkQueue) Enqueue(ctx context.Context, currT *vcopierCopyTask) error {
 	if !vcq.IsOpen() {
 		return fmt.Errorf("work queue is not open")
@@ -688,18 +716,21 @@ func (vcq *vcopierCopyWorkQueue) Enqueue(ctx context.Context, currT *vcopierCopy
 	return nil
 }
 
+// Close waits for all workers to be returned to the worker pool.
 func (vcq *vcopierCopyWorkQueue) Close() {
 	if !vcq.IsOpen() {
 		return
 	}
-	vcq.workerPool.Close()
 	vcq.isOpen = false
+	vcq.workerPool.Close()
 }
 
 func (vcq *vcopierCopyWorkQueue) IsOpen() bool {
 	return vcq.isOpen
 }
 
+// Open the work queue. The provided arguments are used to generate INSERT and
+// UPDATE statements.
 func (vcq *vcopierCopyWorkQueue) Open(
 	copyStateUpdate *sqlparser.ParsedQuery,
 	pkfields []*querypb.Field,
@@ -756,6 +787,9 @@ func (vct *vcopierCopyTaskArgs) Rows() []*querypb.Row {
 	return vct.rows
 }
 
+// After returns a vcopierCopyTaskHooks that can be used to register callbacks
+// to be triggered after the task successfully advances past to the specified
+// vcopierCopyTaskState.
 func (vtl *vcopierCopyTaskLifecycle) After(state vcopierCopyTaskState) *vcopierCopyTaskHooks {
 	key := "after:" + state.String()
 	if _, ok := vtl.hooks[key]; !ok {
@@ -764,6 +798,9 @@ func (vtl *vcopierCopyTaskLifecycle) After(state vcopierCopyTaskState) *vcopierC
 	return vtl.hooks[key]
 }
 
+// Before returns a vcopierCopyTaskHooks that can be used to register callbacks
+// to be triggered before the task advances to the specified
+// vcopierCopyTaskState.
 func (vtl *vcopierCopyTaskLifecycle) Before(state vcopierCopyTaskState) *vcopierCopyTaskHooks {
 	key := "before:" + state.String()
 	if _, ok := vtl.hooks[key]; !ok {
@@ -772,6 +809,9 @@ func (vtl *vcopierCopyTaskLifecycle) Before(state vcopierCopyTaskState) *vcopier
 	return vtl.hooks[key]
 }
 
+// OnResult returns a vcopierCopyTaskResultHooks that can be used to register
+// callbacks to be triggered when a task advances to a "done" state (=
+// canceled, completed, failed).
 func (vtl *vcopierCopyTaskLifecycle) OnResult() *vcopierCopyTaskResultHooks {
 	return vtl.resultHooks
 }
@@ -779,19 +819,19 @@ func (vtl *vcopierCopyTaskLifecycle) OnResult() *vcopierCopyTaskResultHooks {
 // TryAdvance is a convenient way of wrapping up lifecycle hooks with task
 // execution steps. E.g.:
 //
-//	if err := task.Lifecycle().Before(nextState).Notify(ctx, args); err != nil {
+//	if _, err := task.Lifecycle().Before(nextState).Notify(ctx, args); err != nil {
 //		return err
 //	}
-//	if err := fn(ctx, args); err != nil {
+//	if _, err := fn(ctx, args); err != nil {
 //		return err
 //	}
-//	if err := task.Lifecycle().After(nextState).Notify(ctx, args); err != nil {
+//	if _, err := task.Lifecycle().After(nextState).Notify(ctx, args); err != nil {
 //		return err
 //	}
 //
-// Is equivalent to:
+// Is roughly equivalent to:
 //
-//	if err := task.Lifecycle.TryAdvance(ctx, args, nextState, fn); err != nil {
+//	if _, err := task.Lifecycle.TryAdvance(ctx, args, nextState, fn); err != nil {
 //	  return err
 //	}
 func (vtl *vcopierCopyTaskLifecycle) TryAdvance(
@@ -842,10 +882,13 @@ func (vtl *vcopierCopyTaskLifecycle) TryAdvance(
 	return
 }
 
+// Do registers a callback with the vcopierCopyTaskResultHooks, to be triggered
+// when a task advances to a "done" state (= canceled, completed, failed).
 func (vrh *vcopierCopyTaskResultHooks) Do(fn func(context.Context, *vcopierCopyTaskResult)) {
 	vrh.fns = append(vrh.fns, fn)
 }
 
+// Notify triggers all callbacks registered with this vcopierCopyTaskResultHooks.
 func (vrh *vcopierCopyTaskResultHooks) Notify(ctx context.Context, result *vcopierCopyTaskResult) {
 	for _, fn := range vrh.fns {
 		fn(ctx, result)
@@ -870,8 +913,8 @@ func (vrh *vcopierCopyTaskResultHooks) SendTo(ch chan<- *vcopierCopyTaskResult) 
 	})
 }
 
-// AwaitCompletion registers a hook that returns an error unless the provided
-// chan produces a vcopierTaskResult in a complete state.
+// AwaitCompletion registers a callback that returns an error unless the
+// provided chan produces a vcopierTaskResult in a complete state.
 //
 // This is useful for sequencing vcopierCopyTasks, e.g.:
 //
@@ -899,10 +942,13 @@ func (vth *vcopierCopyTaskHooks) AwaitCompletion(resultCh <-chan *vcopierCopyTas
 	})
 }
 
+// Do registers a callback with the vcopierCopyTaskResultHooks, to be triggered
+// when as a vcopierCopyTask advances up to or beyond a user-specified state.
 func (vth *vcopierCopyTaskHooks) Do(fn func(context.Context, *vcopierCopyTaskArgs) error) {
 	vth.fns = append(vth.fns, fn)
 }
 
+// Notify triggers all callbacks registered with this vcopierCopyTaskHooks.
 func (vth *vcopierCopyTaskHooks) Notify(ctx context.Context, args *vcopierCopyTaskArgs) error {
 	for _, fn := range vth.fns {
 		if err := fn(ctx, args); err != nil {
@@ -994,9 +1040,12 @@ func (vbc *vcopierCopyWorker) Execute(ctx context.Context, task *vcopierCopyTask
 
 	var err error
 
+	// As long as the current state is not done, keep trying to advance to the
+	// next state.
 	for nextState := state.Next(); !state.IsDone(); nextState = state.Next() {
 		var advanceFn func(context.Context, *vcopierCopyTaskArgs) error
 
+		// Get the advanceFn to use to advance the task to the nextState.
 		switch nextState {
 		case vcopierCopyTaskBegin:
 			advanceFn = func(context.Context, *vcopierCopyTaskArgs) error {
@@ -1036,19 +1085,31 @@ func (vbc *vcopierCopyWorker) Execute(ctx context.Context, task *vcopierCopyTask
 			advanceFn = func(context.Context, *vcopierCopyTaskArgs) error { return nil }
 		}
 
+		// Maybe we should panic here?
 		if advanceFn == nil {
 			err = fmt.Errorf("don't know how to advance from %s to %s", state, nextState)
 			state = vcopierCopyTaskFail
 			break
 		}
 
+		// TryAdvance tries to execute advanceFn, and also executes any
+		// lifecycle hooks surrounding the provided state.
+		//
+		// If all lifecycle hooks and advanceFn are successfully executed,
+		// TryAdvance will return state, which should be == the nextState that
+		// we provided.
+		//
+		// If there was a failure executing lifecycle hooks or advanceFn,
+		// TryAdvance will probably return a failure state (i.e. canceled or
+		// failed), along with a diagnostic error.
 		if state, err = task.Lifecycle().TryAdvance(ctx, task.Args(), nextState, advanceFn); err != nil {
 			break
 		}
 	}
 
+	// At this point, we're in a "done" state (= canceled, completed, failed).
+	// Notify any OnResult callbacks.
 	result := newVCopierCopyTaskResult(task.Args(), startedAt, state, err)
-
 	task.Lifecycle().OnResult().Notify(ctx, result)
 
 	return result
@@ -1068,6 +1129,8 @@ func (vbc *vcopierCopyWorker) IsSettingsApplied() bool {
 	return false
 }
 
+// Open the vcopierCopyWorker. The provided arguments are used to generate
+// INSERT and UPDATE statements.
 func (vbc *vcopierCopyWorker) Open(
 	copyStateUpdate *sqlparser.ParsedQuery,
 	pkfields []*querypb.Field,
@@ -1087,10 +1150,10 @@ func (vbc *vcopierCopyWorker) Close() {
 		return
 	}
 
+	vbc.isOpen = false
 	if vbc.closeDbClient {
 		vbc.vdbClient.Close()
 	}
-	vbc.isOpen = false
 }
 
 func (vbc *vcopierCopyWorker) insertRows(ctx context.Context, rows []*querypb.Row) (*sqltypes.Result, error) {
