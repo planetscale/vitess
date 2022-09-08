@@ -55,8 +55,7 @@ var (
 	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
 	vreplicationMinimumHeartbeatUpdateInterval = 60
 
-	vreplicationExperimentalFlagOptimizeInserts    int64 = 1
-	vreplicationExperimentalParallelizeBulkInserts int64 = 0x02
+	vreplicationExperimentalFlagOptimizeInserts int64 = 1
 )
 
 const (

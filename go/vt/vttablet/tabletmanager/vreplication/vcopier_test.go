@@ -58,11 +58,11 @@ func commonVcopierTestCases() []vcopierTestCase {
 
 func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTestCase) {
 	oldVreplicationExperimentalFlags := vreplicationExperimentalFlags
-	oldVreplicationParallelBulkInserts := vreplicationParallelInsertWorkers
+	oldVreplicationParallelInsertWorkers := vreplicationParallelInsertWorkers
 	// Extra reset at the end in case we return prematurely.
 	defer func() {
 		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
-		vreplicationParallelInsertWorkers = oldVreplicationParallelBulkInserts
+		vreplicationParallelInsertWorkers = oldVreplicationParallelInsertWorkers
 	}()
 
 	for _, tc := range cases {
@@ -80,7 +80,7 @@ func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTe
 		)
 		// Reset.
 		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
-		vreplicationParallelInsertWorkers = oldVreplicationParallelBulkInserts
+		vreplicationParallelInsertWorkers = oldVreplicationParallelInsertWorkers
 	}
 }
 
@@ -1093,7 +1093,8 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		},
 		// Optimize inserts with parallel inserts.
 		{
-			vreplicationExperimentalFlags: vreplicationExperimentalFlagOptimizeInserts | vreplicationExperimentalParallelizeBulkInserts,
+			vreplicationExperimentalFlags:     vreplicationExperimentalFlagOptimizeInserts,
+			vreplicationParallelInsertWorkers: 4,
 		},
 	})
 }
