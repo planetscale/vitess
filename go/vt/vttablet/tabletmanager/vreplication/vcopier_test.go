@@ -38,49 +38,49 @@ import (
 )
 
 type vcopierTestCase struct {
-	vreplicationExperimentalFlags   int64
-	vreplicationParallelBulkInserts string
+	vreplicationExperimentalFlags     int64
+	vreplicationParallelInsertWorkers int
 }
 
 func commonVcopierTestCases() []vcopierTestCase {
 	return []vcopierTestCase{
-		// Defult experimental flags.
+		// Default experimental flags.
 		{
 			vreplicationExperimentalFlags: vreplicationExperimentalFlags,
 		},
-		// Parallel bulk inserts enabled.
+		// Parallel bulk inserts enabled with 4 workers.
 		{
-			vreplicationExperimentalFlags:   vreplicationExperimentalParallelizeBulkInserts,
-			vreplicationParallelBulkInserts: vreplicationParallelBulkInserts,
+			vreplicationExperimentalFlags:     vreplicationExperimentalFlags,
+			vreplicationParallelInsertWorkers: 4,
 		},
 	}
 }
 
 func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTestCase) {
 	oldVreplicationExperimentalFlags := vreplicationExperimentalFlags
-	oldVreplicationParallelBulkInserts := vreplicationParallelBulkInserts
+	oldVreplicationParallelBulkInserts := vreplicationParallelInsertWorkers
 	// Extra reset at the end in case we return prematurely.
 	defer func() {
 		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
-		vreplicationParallelBulkInserts = oldVreplicationParallelBulkInserts
+		vreplicationParallelInsertWorkers = oldVreplicationParallelBulkInserts
 	}()
 
 	for _, tc := range cases {
 		tc := tc // Avoid export loop bugs.
 		// Set test flags.
 		vreplicationExperimentalFlags = tc.vreplicationExperimentalFlags
-		vreplicationParallelBulkInserts = tc.vreplicationParallelBulkInserts
+		vreplicationParallelInsertWorkers = tc.vreplicationParallelInsertWorkers
 		// Run test case.
 		t.Run(
 			fmt.Sprintf(
-				"vreplication_experimental_flags=%d,vreplication_parallel_bulk_inserts=%s",
-				tc.vreplicationExperimentalFlags, tc.vreplicationParallelBulkInserts,
+				"vreplication_experimental_flags=%d,vreplication_parallel_insert_workers=%d",
+				tc.vreplicationExperimentalFlags, tc.vreplicationParallelInsertWorkers,
 			),
 			test,
 		)
 		// Reset.
 		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
-		vreplicationParallelBulkInserts = oldVreplicationParallelBulkInserts
+		vreplicationParallelInsertWorkers = oldVreplicationParallelBulkInserts
 	}
 }
 
@@ -486,7 +486,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		// With parallel inserts, new db client connects are created on-the-fly.
-		if isExperimentalParallelBulkInsertsEnabled() {
+		if vreplicationParallelInsertWorkers > 1 {
 			return expect.Then(qh.Eventually("set foreign_key_checks=0;"))
 		}
 		return expect
@@ -507,7 +507,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		"commit",
 	)).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
 		// With parallel inserts, new db client connects are created on-the-fly.
-		if isExperimentalParallelBulkInsertsEnabled() {
+		if vreplicationParallelInsertWorkers > 1 {
 			return expect.Then(qh.Eventually("set foreign_key_checks=0;"))
 		}
 		return expect
@@ -914,7 +914,9 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 // TODO(maxenglander): this test isn't repeatable, even with the same flags.
 func TestPlayerCopyTableContinuation(t *testing.T) {
 	testVcopierTestCases(t, testPlayerCopyTableContinuation, []vcopierTestCase{
-		{vreplicationExperimentalFlags: 0},
+		{
+			vreplicationExperimentalFlags: 0,
+		},
 	})
 }
 

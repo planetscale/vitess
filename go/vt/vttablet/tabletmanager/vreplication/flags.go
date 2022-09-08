@@ -17,13 +17,10 @@ limitations under the License.
 package vreplication
 
 import (
-	"runtime"
-	"strconv"
 	"time"
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -42,7 +39,7 @@ var (
 	vreplicationHeartbeatUpdateInterval = 1
 	vreplicationExperimentalFlags       = int64(0x01) // enable vreplicationExperimentalFlagOptimizeInserts by default
 	vreplicationStoreCompressedGTID     = false
-	vreplicationParallelBulkInserts     = "auto"
+	vreplicationParallelInsertWorkers   = 1
 )
 
 func registerVReplicationFlags(fs *pflag.FlagSet) {
@@ -73,38 +70,10 @@ func registerVReplicationFlags(fs *pflag.FlagSet) {
 	fs.Duration("vreplication_healthcheck_retry_delay", 5*time.Second, "healthcheck retry delay")
 	fs.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
 
-	fs.StringVar(&vreplicationParallelBulkInserts, "vreplication_parallel_bulk_inserts", "auto", "Number of parallel insertion workers to use during copy phase. Set to a number >= 1 or to \"auto\". \"auto\" uses GOMAXPROCS or 4, whichever is smaller.")
+	fs.IntVar(&vreplicationParallelInsertWorkers, "vreplication_parallel_insert_workers", vreplicationParallelInsertWorkers, "Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 enable concurrent insertion during copy phase.")
 }
 
 func init() {
 	servenv.OnParseFor("vtcombo", registerVReplicationFlags)
 	servenv.OnParseFor("vttablet", registerVReplicationFlags)
-}
-
-func getCopyInsertConcurrency() int {
-	if !isExperimentalParallelBulkInsertsEnabled() {
-		return 1
-	}
-	copyInsertConcurrency := string(vreplicationParallelBulkInserts)
-	if copyInsertConcurrency == "auto" {
-		gomaxprocs := runtime.GOMAXPROCS(0)
-		if gomaxprocs <= 4 {
-			return gomaxprocs
-		}
-		return 4
-	}
-	i64, err := strconv.ParseInt(copyInsertConcurrency, 10, 32)
-	if err != nil {
-		log.Warningf("Invalid value %s for --vreplication_parallel_bulk_inserts: %s. Defaulting to 1.", copyInsertConcurrency, err.Error())
-		return 1
-	}
-	if i64 <= 0 {
-		log.Warningf("Invalid value %d for --vreplication_parallel_bulk_inserts. Defaulting to 1.", i64)
-		return 1
-	}
-	return int(i64)
-}
-
-func isExperimentalParallelBulkInsertsEnabled() bool {
-	return vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalParallelizeBulkInserts != 0
 }

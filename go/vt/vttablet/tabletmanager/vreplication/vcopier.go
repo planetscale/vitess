@@ -389,12 +389,13 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
 
-	copyWorkerFactory := vc.newCopyWorkerFactory()
-	copyWorkQueue := vc.newCopyWorkQueue(copyWorkerFactory)
+	parallelism := int(math.Max(1, float64(vreplicationParallelInsertWorkers)))
+	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
+	copyWorkQueue := vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
 	defer copyWorkQueue.Close()
 
 	// Allocate a result channel to collect results from tasks.
-	resultCh := make(chan *vcopierCopyTaskResult, getCopyInsertConcurrency()*4)
+	resultCh := make(chan *vcopierCopyTaskResult, parallelism*4)
 	defer close(resultCh)
 
 	taskID := 0
@@ -648,25 +649,21 @@ func (vc *vcopier) newClientConnection(ctx context.Context) (*vdbClient, error) 
 }
 
 func (vc *vcopier) newCopyWorkQueue(
+	parallelism int,
 	workerFactory func(context.Context) (*vcopierCopyWorker, error),
 ) *vcopierCopyWorkQueue {
-	concurrent := false
-	maxDepth := 1
-	if isExperimentalParallelBulkInsertsEnabled() {
-		concurrent = true
-		maxDepth = getCopyInsertConcurrency()
-	}
-	return newVCopierCopyWorkQueue(concurrent, maxDepth, workerFactory)
+	concurrent := parallelism > 1
+	return newVCopierCopyWorkQueue(concurrent, parallelism, workerFactory)
 }
 
-func (vc *vcopier) newCopyWorkerFactory() func(context.Context) (*vcopierCopyWorker, error) {
+func (vc *vcopier) newCopyWorkerFactory(parallelism int) func(context.Context) (*vcopierCopyWorker, error) {
 	workerFactory := func(_ context.Context) (*vcopierCopyWorker, error) {
 		return newVCopierCopyWorker(
 			false, /* close db client */
 			vc.vr.dbClient,
 		), nil
 	}
-	if isExperimentalParallelBulkInsertsEnabled() {
+	if parallelism > 1 {
 		workerFactory = func(ctx context.Context) (*vcopierCopyWorker, error) {
 			dbClient, err := vc.newClientConnection(ctx)
 			if err != nil {
