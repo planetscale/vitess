@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -812,47 +813,30 @@ func (vtl *vcopierCopyTaskLifecycle) tryAdvance(
 	args *vcopierCopyTaskArgs,
 	nextState vcopierCopyTaskState,
 	fn func(context.Context, *vcopierCopyTaskArgs) error,
-) (newState vcopierCopyTaskState, err error) {
-	// Canceling the task when there is a context error seems like a sensible
-	// thing to do. E.g. when copyPhaseDuration elapses it will cause task
-	// cancelation. However this is more aggressive cancelation behavior than
-	// the unit tests currently support. Will need to rework unit tests before
-	// we enable this.
+) (vcopierCopyTaskState, error) {
+	var err error
+	newState := nextState
 
-	//defer func() {
-	//	if err != nil {
-	//		//if errors.Is(err, context.Canceled) ||
-	//		//	errors.Is(err, context.DeadlineExceeded) {
-	//		//	newState = vcopierCopyTaskCancel
-	//		//} else {
-	//		//	newState = vcopierCopyTaskFail
-	//		//}
-	//	}
-	//}()
-
-	newState = nextState
-
-	// Checking for context errors seems like a sensible thing to do. E.g. when
-	// copyPhaseDuration elapses it will cause the task to be canceled. However
-	// this is more aggressive cancelation behavior than the unit tests
-	// currently support. Will need to rework unit tests before we enable this.
-
-	//if err = ctx.Err(); err != nil {
-	//	return
-	//}
 	if err = vtl.before(nextState).notify(ctx, args); err != nil {
-		newState = vcopierCopyTaskFail
-		return
+		goto END
 	}
 	if err = fn(ctx, args); err != nil {
-		newState = vcopierCopyTaskFail
-		return
+		goto END
 	}
 	if err = vtl.after(nextState).notify(ctx, args); err != nil {
-		newState = vcopierCopyTaskFail
-		return
+		goto END
 	}
-	return
+
+END:
+	if err != nil {
+		newState = vcopierCopyTaskFail
+		if errors.Is(err, context.Canceled) ||
+			errors.Is(err, context.DeadlineExceeded) {
+			newState = vcopierCopyTaskCancel
+		}
+	}
+
+	return newState, err
 }
 
 // do registers a callback with the vcopierCopyTaskResultHooks, to be triggered
