@@ -120,7 +120,6 @@ var (
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vreplication_basic",
-		"vreplication_copy_parallel",
 		"vreplication_v2",
 		"vtorc",
 		"vtorc_8.0",
@@ -181,8 +180,6 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	case clusterName == "vtorc_8.0":
 		return []mysqlVersion{mysql80}
 	case clusterName == "vreplication_across_db_versions":
-		return []mysqlVersion{mysql80}
-	case clusterName == "vreplication_copy_parallel":
 		return []mysqlVersion{mysql80}
 	case clusterName == "xb_backup":
 		return allMySQLVersions
