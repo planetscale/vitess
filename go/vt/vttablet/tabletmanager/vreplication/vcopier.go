@@ -909,8 +909,7 @@ func (vth *vcopierCopyTaskHooks) awaitCompletion(resultCh <-chan *vcopierCopyTas
 			}
 			return nil
 		case <-ctx.Done():
-			// Arguably we should return ctx.Err() here.
-			return nil
+			return ctx.Err()
 		}
 	})
 }
