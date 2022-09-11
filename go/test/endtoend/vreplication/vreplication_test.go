@@ -157,7 +157,7 @@ func TestVreplicationCopyParallel(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
 	extraVTTabletArgs = []string{
-		"--vreplication_experimental_flags=3",
+		"--vreplication-parallel-insert-workers=4",
 	}
 	testBasicVreplicationWorkflow(t)
 }
