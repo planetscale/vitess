@@ -559,9 +559,15 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		select {
 		case result := <-resultCh:
 			switch result.state {
+			case vcopierCopyTaskCancel:
+				// A task cancelation probably indicates an expired context due
+				// to a PlannedReparentShard or elapsed copy phase duration,
+				// neither of which are error conditions.
 			case vcopierCopyTaskComplete:
+				// Get the latest lastpk, purely for logging purposes.
 				lastpk = result.args.lastpk
 			case vcopierCopyTaskFail:
+				// Store the first non-nil error.
 				if terr == nil {
 					terr = result.err
 				}
@@ -590,7 +596,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		},
 	}
 
-	// If there was a timeout, return without an error.
+	// A context expiration was probably caused by a PlannedReparentShard or an
+	// elapsed copy phase duration. Those are normal, non-error interruptions
+	// of a copy phase.
 	select {
 	case <-ctx.Done():
 		log.Infof("Copy of %v stopped at lastpk: %v", tableName, lastpkbv)
@@ -865,7 +873,22 @@ func (vrh *vcopierCopyTaskResultHooks) sendTo(ch chan<- *vcopierCopyTaskResult) 
 		select {
 		case ch <- result:
 		case <-ctx.Done():
-			// Log a warning?
+			// Failure to send the result to the consumer on the other side of
+			// the channel before context expires will have the following
+			// consequences:
+			//
+			// * Subsequent tasks waiting for this task to complete won't run.
+			//   That's OK. They won't hang waiting on the channel because,
+			//   like this task they respond to context expiration.
+			// * The outermost loop managing task execution may not know that
+			//   this task failed or succeeded.
+			//   - In the case that this task succeeded, statistics and logging
+			//     will not indicate that this task completed. That's not great,
+			//     but shouldn't negatively impact the integrity of data or the
+			//     copy workflow.
+			//   - In the case that this task failed, there should be no adverse
+			//     impact: the outermost loop handles context expiration by
+			//     stopping the copy phase without completing it.
 		}
 	})
 }
@@ -885,7 +908,7 @@ func (vth *vcopierCopyTaskHooks) awaitCompletion(resultCh <-chan *vcopierCopyTas
 			if result == nil {
 				return fmt.Errorf("channel was closed before a result received")
 			}
-			if !result.state.isDone() {
+			if !vcopierCopyTaskStateIsDone(result.state) {
 				return fmt.Errorf("received result is not done")
 			}
 			if result.state != vcopierCopyTaskComplete {
@@ -893,6 +916,13 @@ func (vth *vcopierCopyTaskHooks) awaitCompletion(resultCh <-chan *vcopierCopyTas
 			}
 			return nil
 		case <-ctx.Done():
+			// A context expiration probably indicates a PlannedReparentShard
+			// or an elapsed copy phase duration. Those aren't treated as error
+			// conditions, but we'll return the context error here anyway.
+			//
+			// Task execution will detect the presence of the error, mark this
+			// task canceled, and abort. Subsequent tasks won't execute because
+			// this task didn't complete.
 			return ctx.Err()
 		}
 	})
@@ -937,36 +967,6 @@ func (vts vcopierCopyTaskState) String() string {
 	return fmt.Sprintf("undefined(%d)", int(vts))
 }
 
-// isDone returns true if the provided state is in one of these three states:
-//
-// * vcopierCopyTaskCancel
-// * vcopierCopyTaskComplete
-// * vcopierCopyTaskFail
-func (vts vcopierCopyTaskState) isDone() bool {
-	return vts == vcopierCopyTaskCancel ||
-		vts == vcopierCopyTaskComplete ||
-		vts == vcopierCopyTaskFail
-}
-
-// next returns the optimistic next state. The next state after
-// vcopierCopyTaskPending is vcopierCopyTaskInProgress, followed
-// by vcopierCopyTaskInsertRows, etc.
-func (vts vcopierCopyTaskState) next() vcopierCopyTaskState {
-	switch vts {
-	case vcopierCopyTaskPending:
-		return vcopierCopyTaskBegin
-	case vcopierCopyTaskBegin:
-		return vcopierCopyTaskInsertRows
-	case vcopierCopyTaskInsertRows:
-		return vcopierCopyTaskUpdateCopyState
-	case vcopierCopyTaskUpdateCopyState:
-		return vcopierCopyTaskCommit
-	case vcopierCopyTaskCommit:
-		return vcopierCopyTaskComplete
-	}
-	return vts
-}
-
 // ApplySettings implements pools.Resource.
 func (vbc *vcopierCopyWorker) ApplySettings(context.Context, []string) error {
 	return nil
@@ -1004,7 +1004,10 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 
 	// As long as the current state is not done, keep trying to advance to the
 	// next state.
-	for nextState := state.next(); !state.isDone(); nextState = state.next() {
+	for !vcopierCopyTaskStateIsDone(state) {
+		// Get the next state that we want to advance to.
+		nextState := vcopierCopyTaskGetNextState(state)
+
 		var advanceFn func(context.Context, *vcopierCopyTaskArgs) error
 
 		// Get the advanceFn to use to advance the task to the nextState.
@@ -1045,12 +1048,10 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 			}
 		case vcopierCopyTaskComplete:
 			advanceFn = func(context.Context, *vcopierCopyTaskArgs) error { return nil }
-		}
-
-		if advanceFn == nil {
+		default:
 			err = fmt.Errorf("don't know how to advance from %s to %s", state, nextState)
 			state = vcopierCopyTaskFail
-			break
+			goto END
 		}
 
 		// tryAdvance tries to execute advanceFn, and also executes any
@@ -1064,10 +1065,11 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 		// tryAdvance will probably return a failure state (i.e. canceled or
 		// failed), along with a diagnostic error.
 		if state, err = task.lifecycle.tryAdvance(ctx, task.args, nextState, advanceFn); err != nil {
-			break
+			goto END
 		}
 	}
 
+END:
 	// At this point, we're in a "done" state (= canceled, completed, failed).
 	// Notify any onResult callbacks.
 	result := newVCopierCopyTaskResult(task.args, startedAt, state, err)
@@ -1125,4 +1127,35 @@ func (vbc *vcopierCopyWorker) updateCopyState(ctx context.Context, lastpk *query
 		return err
 	}
 	return nil
+}
+
+// vcopierCopyTaskStateIsDone returns true if the provided state is in one of
+// these three states:
+//
+// * vcopierCopyTaskCancel
+// * vcopierCopyTaskComplete
+// * vcopierCopyTaskFail
+func vcopierCopyTaskStateIsDone(vts vcopierCopyTaskState) bool {
+	return vts == vcopierCopyTaskCancel ||
+		vts == vcopierCopyTaskComplete ||
+		vts == vcopierCopyTaskFail
+}
+
+// vcopierCopyTaskGetNextState returns the optimistic next state. The next
+// state after vcopierCopyTaskPending is vcopierCopyTaskInProgress, followed
+// by vcopierCopyTaskInsertRows, etc.
+func vcopierCopyTaskGetNextState(vts vcopierCopyTaskState) vcopierCopyTaskState {
+	switch vts {
+	case vcopierCopyTaskPending:
+		return vcopierCopyTaskBegin
+	case vcopierCopyTaskBegin:
+		return vcopierCopyTaskInsertRows
+	case vcopierCopyTaskInsertRows:
+		return vcopierCopyTaskUpdateCopyState
+	case vcopierCopyTaskUpdateCopyState:
+		return vcopierCopyTaskCommit
+	case vcopierCopyTaskCommit:
+		return vcopierCopyTaskComplete
+	}
+	return vts
 }
