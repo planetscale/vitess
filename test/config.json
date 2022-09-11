@@ -1005,7 +1005,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 2,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_copy_throttling": {
@@ -1014,7 +1014,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 2,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_copy_parallel": {
@@ -1023,7 +1023,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 2,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vstream_failover": {
