@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -29,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/log"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -838,8 +838,7 @@ func (vtl *vcopierCopyTaskLifecycle) tryAdvance(
 END:
 	if err != nil {
 		newState = vcopierCopyTaskFail
-		if errors.Is(err, context.Canceled) ||
-			errors.Is(err, context.DeadlineExceeded) {
+		if vterrors.Code(err) == vtrpcpb.Code_CANCELED {
 			newState = vcopierCopyTaskCancel
 		}
 	}
@@ -923,7 +922,7 @@ func (vth *vcopierCopyTaskHooks) awaitCompletion(resultCh <-chan *vcopierCopyTas
 			// Task execution will detect the presence of the error, mark this
 			// task canceled, and abort. Subsequent tasks won't execute because
 			// this task didn't complete.
-			return ctx.Err()
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		}
 	})
 }
