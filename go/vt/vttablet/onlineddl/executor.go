@@ -4073,7 +4073,7 @@ func (e *Executor) createAffectedUUIDsResultSet(uuid string, rowsAffected uint64
 			sqltypes.NewVarChar(uuid),
 			sqltypes.NewVarChar(e.shard),
 		})
-		result.RowsAffected++
+		result.RowsAffected = 1
 	}
 	return result
 }
@@ -4266,7 +4266,7 @@ func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Resul
 		}
 		result.AppendResult(res)
 	}
-	log.Infof("LaunchMigrations: done iterating %v migrations %s", len(uuids))
+	log.Infof("LaunchMigrations: done iterating %v migrations. Affected: %d", len(uuids), result.RowsAffected)
 	return result, nil
 }
 
