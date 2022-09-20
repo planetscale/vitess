@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/logutil"
@@ -314,6 +315,15 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 		return true, nil
 	case *sqlparser.AlterMigration:
 		exec.executeOnAllTablets(ctx, execResult, sql, true)
+		for _, shardResult := range execResult.SuccessShards {
+			rs := sqltypes.Proto3ToResult(shardResult.Result)
+			for _, row := range rs.Named().Rows {
+				if uuid := row.AsString("uuid", ""); uuid != "" {
+					shard := row.AsString("shard", "")
+					execResult.UUIDs = append(execResult.UUIDs, fmt.Sprintf("%s/%s", uuid, shard))
+				}
+			}
+		}
 		return true, nil
 	}
 	exec.executeOnAllTablets(ctx, execResult, sql, false)
