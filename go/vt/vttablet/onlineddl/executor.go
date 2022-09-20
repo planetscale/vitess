@@ -1874,7 +1874,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	switch onlineDDL.Status {
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
 		log.Infof("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status)
-		return &sqltypes.Result{RowsAffected: 1}, nil
+		return e.createAffectedUUIDsResultSet(uuid, 1), nil
 	}
 
 	migrationFound, err := e.terminateMigration(ctx, onlineDDL)
