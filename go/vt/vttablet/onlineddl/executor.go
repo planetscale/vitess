@@ -1888,10 +1888,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 		return result, err
 	}
 
-	result = &sqltypes.Result{
-		RowsAffected: rowsAffected,
-	}
-	return result, nil
+	return e.createAffectedUUIDsResultSet(uuid, rowsAffected), nil
 }
 
 // cancelMigrations attempts to abort a list of migrations
@@ -4055,6 +4052,32 @@ func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid st
 	return err
 }
 
+// createAffectedUUIDsResultSet is used to generate a result set for `ALTER VITESS_MIGRATION ...` commands. It lists the affected
+// migration's UUID and shard.
+func (e *Executor) createAffectedUUIDsResultSet(uuid string, rowsAffected uint64) *sqltypes.Result {
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "uuid",
+				Type: sqltypes.VarChar,
+			},
+			{
+				Name: "shard",
+				Type: sqltypes.VarChar,
+			},
+		},
+		Rows: [][]sqltypes.Value{},
+	}
+	if rowsAffected > 0 {
+		result.Rows = append(result.Rows, []sqltypes.Value{
+			sqltypes.NewVarChar(uuid),
+			sqltypes.NewVarChar(e.shard),
+		})
+		result.RowsAffected++
+	}
+	return result
+}
+
 // retryMigrationWhere retries a migration based on a given WHERE clause
 func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
@@ -4090,7 +4113,11 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 		return nil, err
 	}
 	defer e.triggerNextCheckInterval()
-	return e.execQuery(ctx, query)
+	rs, err := e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	return e.createAffectedUUIDsResultSet(uuid, rs.RowsAffected), nil
 }
 
 // CleanupMigration sets migration is ready for artifact cleanup. Artifacts are not immediately deleted:
@@ -4118,7 +4145,7 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 		return nil, err
 	}
 	log.Infof("CleanupMigration: migration %s marked as ready to clean up", uuid)
-	return rs, nil
+	return e.createAffectedUUIDsResultSet(uuid, rs.RowsAffected), nil
 }
 
 // CompleteMigration clears the postpone_completion flag for a given migration, assuming it was set in the first place
@@ -4151,7 +4178,7 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 		return nil, err
 	}
 	log.Infof("CompleteMigration: migration %s marked as unpostponed", uuid)
-	return rs, nil
+	return e.createAffectedUUIDsResultSet(uuid, rs.RowsAffected), nil
 }
 
 // CompletePendingMigrations completes all pending migrations (that are expected to run or are running)
@@ -4177,6 +4204,7 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqlty
 		result.AppendResult(res)
 	}
 	log.Infof("CompletePendingMigrations: done iterating %v migrations %s", len(uuids))
+
 	return result, nil
 }
 
@@ -4209,7 +4237,7 @@ func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg s
 		return nil, err
 	}
 	log.Infof("LaunchMigration: migration %s marked as unpostponed", uuid)
-	return rs, nil
+	return e.createAffectedUUIDsResultSet(uuid, rs.RowsAffected), nil
 }
 
 // LaunchMigrations launches all launch-postponed queued migrations for this keyspace
