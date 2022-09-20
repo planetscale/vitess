@@ -17,15 +17,17 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/callerid"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"github.com/pkg/errors"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -105,6 +107,7 @@ func TestInsightsSlowQuery(t *testing.T) {
 	insights.Sender = func(buf []byte, topic, key string) error {
 		messages++
 		assert.Contains(t, string(buf), "select sleep(:vtg1)")
+		assert.Contains(t, string(buf), "planetscale-reader")
 		assert.Contains(t, key, "mumblefoo/")
 		assert.Equal(t, queryTopic, topic)
 		return nil
@@ -839,8 +842,13 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 			StartTime:    now.Add(-q.responseTime),
 			EndTime:      now,
 			RowsRead:     uint64(q.rowsRead),
-			Ctx:          context.Background(),
-			Table:        options.tableString,
+			Ctx: callerid.NewContext(ctx, &vtrpcpb.CallerID{
+				// Principal must match the roles used for ACLs
+				Principal:    "planetscale-reader",
+				Component:    "127.0.0.1", // TODO
+				Subcomponent: "PSDB API",
+			}, nil),
+			Table: options.tableString,
 		}
 		if q.error != "" {
 			ls.Error = errors.New(q.error)
@@ -864,6 +872,11 @@ var (
 		IsNormalized: true,
 		StartTime:    time.Now().Add(-5 * time.Second),
 		EndTime:      time.Now(),
-		Ctx:          context.Background(),
+		Ctx: callerid.NewContext(ctx, &vtrpcpb.CallerID{
+			// Principal must match the roles used for ACLs
+			Principal:    "planetscale-reader",
+			Component:    "127.0.0.1", // TODO
+			Subcomponent: "PSDB API",
+		}, nil),
 	}
 )

@@ -644,6 +644,12 @@ func hostnameOrEmpty() string {
 
 func (ii *Insights) makeQueryMessage(ls *logstats.LogStats, sql string, tables []string, tags []*pbvtgate.Query_Tag) ([]byte, error) {
 	addr, user := ls.RemoteAddrUsername()
+	// use the effective caller id if its present.
+	// all queries sent to PlanetScale databases should have the effective caller-id set.
+	if effectiveCaller := ls.EffectiveCaller(); effectiveCaller != "" {
+		user = effectiveCaller
+	}
+
 	var port *wrapperspb.UInt32Value
 	if strings.Contains(addr, ":") {
 		tok := strings.SplitN(addr, ":", 2)
