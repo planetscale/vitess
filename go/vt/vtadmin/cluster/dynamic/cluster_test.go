@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/base32"
 	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/vtadmin/cluster"
 )
 
 func TestClusterFromString(t *testing.T) {
@@ -77,4 +80,44 @@ func TestClusterFromString(t *testing.T) {
 			assert.NotNil(t, c, "when err == nil, cluster should not be nil")
 		})
 	}
+
+	t.Run("vtsql credentials", func(t *testing.T) {
+		t.Parallel()
+
+		enc := base64.StdEncoding.EncodeToString([]byte(`{
+			"id": "dynamic_cluster",
+			"vtsql-credentials-username": "vtadmin-username",
+			"vtsql-credentials-password": "my-password",
+			"discovery": "dynamic",
+			"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"localhost:15991\" } } ] }"
+		}`))
+
+		cfg, id, err := cluster.LoadConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(enc)), "json")
+
+		require.NoError(t, err)
+		require.NotEmpty(t, id, "when err == nil, id must be non-empty")
+
+		assert.Equal(t, cfg.VtSQLFlags["credentials-username"], "vtadmin-username")
+		assert.Equal(t, cfg.VtSQLFlags["credentials-password"], "my-password")
+	})
+
+	t.Run("vtsql credentials - empty password string", func(t *testing.T) {
+		t.Parallel()
+
+		enc := base64.StdEncoding.EncodeToString([]byte(`{
+			"id": "dynamic_cluster",
+			"vtsql-credentials-username": "vtadmin-username",
+			"vtsql-credentials-password": "",
+			"discovery": "dynamic",
+			"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"localhost:15991\" } } ] }"
+		}`))
+
+		cfg, id, err := cluster.LoadConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(enc)), "json")
+
+		require.NoError(t, err)
+		require.NotEmpty(t, id, "when err == nil, id must be non-empty")
+
+		assert.Equal(t, cfg.VtSQLFlags["credentials-username"], "vtadmin-username")
+		assert.Equal(t, cfg.VtSQLFlags["credentials-password"], "")
+	})
 }
