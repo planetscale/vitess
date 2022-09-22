@@ -87,6 +87,12 @@ func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clus
 
 	if expectRetryPossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
+		assert.Equal(t, len(shards), len(r.Rows))
+		for _, row := range r.Named().Rows {
+			rowUUID := row.AsString("uuid", "")
+			require.NotEmpty(t, rowUUID)
+			assert.Equal(t, uuid, rowUUID)
+		}
 	} else {
 		assert.Equal(t, int(0), int(r.RowsAffected))
 	}
@@ -113,6 +119,12 @@ func CheckCancelMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 
 	if expectCancelPossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
+		assert.Equal(t, len(shards), len(r.Rows))
+		for _, row := range r.Named().Rows {
+			rowUUID := row.AsString("uuid", "")
+			require.NotEmpty(t, rowUUID)
+			assert.Equal(t, uuid, rowUUID)
+		}
 	} else {
 		assert.Equal(t, int(0), int(r.RowsAffected))
 	}
@@ -127,6 +139,12 @@ func CheckCleanupMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cl
 	r := VtgateExecQuery(t, vtParams, query, "")
 
 	assert.Equal(t, len(shards), int(r.RowsAffected))
+	assert.Equal(t, len(shards), len(r.Rows))
+	for _, row := range r.Named().Rows {
+		rowUUID := row.AsString("uuid", "")
+		require.NotEmpty(t, rowUUID)
+		assert.Equal(t, uuid, rowUUID)
+	}
 }
 
 // CheckCompleteMigration attempts to complete a migration, and expects success by counting affected rows
@@ -139,13 +157,19 @@ func CheckCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []c
 
 	if expectCompletePossible {
 		assert.Equal(t, len(shards), int(r.RowsAffected))
+		assert.Equal(t, len(shards), len(r.Rows))
+		for _, row := range r.Named().Rows {
+			rowUUID := row.AsString("uuid", "")
+			require.NotEmpty(t, rowUUID)
+			assert.Equal(t, uuid, rowUUID)
+		}
 	} else {
 		assert.Equal(t, int(0), int(r.RowsAffected))
 	}
 }
 
 // CheckLaunchMigration attempts to launch a migration, and expects success by counting affected rows
-func CheckLaunchMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, launchShards string, expectLaunchPossible bool) {
+func CheckLaunchMigration(t *testing.T, vtParams *mysql.ConnParams, uuid string, launchShards string, expectLaunchCount int) {
 	query, err := sqlparser.ParseAndBind("alter vitess_migration %a launch vitess_shards %a",
 		sqltypes.StringBindVariable(uuid),
 		sqltypes.StringBindVariable(launchShards),
@@ -153,10 +177,12 @@ func CheckLaunchMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 	require.NoError(t, err)
 	r := VtgateExecQuery(t, vtParams, query, "")
 
-	if expectLaunchPossible {
-		assert.Equal(t, len(shards), int(r.RowsAffected))
-	} else {
-		assert.Equal(t, int(0), int(r.RowsAffected))
+	assert.Equalf(t, expectLaunchCount, int(r.RowsAffected), "result: %v", r)
+	assert.Equalf(t, expectLaunchCount, len(r.Rows), "result: %v", r)
+	for _, row := range r.Named().Rows {
+		rowUUID := row.AsString("uuid", "")
+		require.NotEmpty(t, rowUUID)
+		assert.Equal(t, uuid, rowUUID)
 	}
 }
 
@@ -168,6 +194,7 @@ func CheckCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expect
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
+		assert.Equal(t, expectCount, len(r.Rows))
 	}
 }
 
@@ -179,6 +206,7 @@ func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
+		assert.Equal(t, expectCount, len(r.Rows))
 	}
 }
 
@@ -190,6 +218,7 @@ func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
+		assert.Equal(t, expectCount, len(r.Rows))
 	}
 }
 

@@ -227,7 +227,7 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
 
 		t.Run("launch all shards", func(t *testing.T) {
-			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "", true)
+			onlineddl.CheckLaunchMigration(t, &vtParams, t1uuid, "", len(shards))
 			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
@@ -252,7 +252,7 @@ func TestSchemaChange(t *testing.T) {
 
 		t.Run("launch irrelevant UUID", func(t *testing.T) {
 			someOtherUUID := "00000000_1111_2222_3333_444444444444"
-			onlineddl.CheckLaunchMigration(t, &vtParams, shards, someOtherUUID, "", false)
+			onlineddl.CheckLaunchMigration(t, &vtParams, someOtherUUID, "", 0)
 			time.Sleep(2 * time.Second)
 			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 			require.NotNil(t, rs)
@@ -263,7 +263,7 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
 		})
 		t.Run("launch irrelevant shards", func(t *testing.T) {
-			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "x,y,z", false)
+			onlineddl.CheckLaunchMigration(t, &vtParams, t1uuid, "x,y,z", 0)
 			time.Sleep(2 * time.Second)
 			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 			require.NotNil(t, rs)
@@ -274,7 +274,7 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
 		})
 		t.Run("launch relevant shard", func(t *testing.T) {
-			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "x, y, 1", true)
+			onlineddl.CheckLaunchMigration(t, &vtParams, t1uuid, "x, y, 1", 1)
 			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
