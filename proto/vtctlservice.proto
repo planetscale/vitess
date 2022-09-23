@@ -23,6 +23,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtctlservice";
 package vtctlservice;
 
 import "vtctldata.proto";
+import "vtboost.proto";
 
 // Service Vtctl allows you to call vt commands through gRPC.
 service Vtctl {
@@ -291,4 +292,10 @@ service Vtctld {
   rpc ValidateVersionShard(vtctldata.ValidateVersionShardRequest) returns (vtctldata.ValidateVersionShardResponse) {};
   // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
   rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
+
+  // PlanetScale Vitess private RPCs.
+
+  rpc BoostAddQuery(vtboost.AddQueryRequest) returns (vtboost.RecipeChangeResponse);
+  rpc BoostRemoveQuery(vtboost.RemoveQueryRequest) returns (vtboost.RecipeChangeResponse);
+  rpc BoostListQueries(vtboost.ListQueriesRequest) returns(vtboost.ListQueriesResponse);
 }
