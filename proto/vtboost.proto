@@ -15,10 +15,14 @@ message AddQueryRequest {
 };
 
 message RemoveQueryRequest {
-  oneof remove {
-    string name = 1;
-    string public_id = 2;
+  message Query {
+    oneof remove {
+      string name = 1;
+      string public_id = 2;
+    }
   };
+
+  repeated Query queries = 1;
 };
 
 message ListQueriesRequest {};
