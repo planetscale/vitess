@@ -1,0 +1,33 @@
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/vtboost";
+
+package vtboost;
+
+message CachedQuery {
+  string public_id = 1;
+  string name = 2;
+  string sql = 3;
+  string keyspace = 4;
+};
+
+message AddQueryRequest {
+  repeated CachedQuery queries = 1;
+};
+
+message RemoveQueryRequest {
+  oneof remove {
+    string name = 1;
+    string public_id = 2;
+  };
+};
+
+message ListQueriesRequest {};
+message ListQueriesResponse {
+  uint64 recipe_version = 1;
+  repeated CachedQuery queries = 2;
+};
+
+message RecipeChangeResponse {
+  int64 added = 1;
+  int64 removed = 2;
+};

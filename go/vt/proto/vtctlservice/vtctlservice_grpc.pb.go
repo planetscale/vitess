@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	vtboost "vitess.io/vitess/go/vt/proto/vtboost"
 	vtctldata "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -396,6 +397,9 @@ type VtctldClient interface {
 	ValidateVersionShard(ctx context.Context, in *vtctldata.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
+	BoostAddQuery(ctx context.Context, in *vtboost.AddQueryRequest, opts ...grpc.CallOption) (*vtboost.RecipeChangeResponse, error)
+	BoostRemoveQuery(ctx context.Context, in *vtboost.RemoveQueryRequest, opts ...grpc.CallOption) (*vtboost.RecipeChangeResponse, error)
+	BoostListQueries(ctx context.Context, in *vtboost.ListQueriesRequest, opts ...grpc.CallOption) (*vtboost.ListQueriesResponse, error)
 }
 
 type vtctldClient struct {
@@ -1222,6 +1226,33 @@ func (c *vtctldClient) ValidateVSchema(ctx context.Context, in *vtctldata.Valida
 	return out, nil
 }
 
+func (c *vtctldClient) BoostAddQuery(ctx context.Context, in *vtboost.AddQueryRequest, opts ...grpc.CallOption) (*vtboost.RecipeChangeResponse, error) {
+	out := new(vtboost.RecipeChangeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostAddQuery", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) BoostRemoveQuery(ctx context.Context, in *vtboost.RemoveQueryRequest, opts ...grpc.CallOption) (*vtboost.RecipeChangeResponse, error) {
+	out := new(vtboost.RecipeChangeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostRemoveQuery", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) BoostListQueries(ctx context.Context, in *vtboost.ListQueriesRequest, opts ...grpc.CallOption) (*vtboost.ListQueriesResponse, error) {
+	out := new(vtboost.ListQueriesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostListQueries", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VtctldServer is the server API for Vtctld service.
 // All implementations must embed UnimplementedVtctldServer
 // for forward compatibility
@@ -1486,6 +1517,9 @@ type VtctldServer interface {
 	ValidateVersionShard(context.Context, *vtctldata.ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
+	BoostAddQuery(context.Context, *vtboost.AddQueryRequest) (*vtboost.RecipeChangeResponse, error)
+	BoostRemoveQuery(context.Context, *vtboost.RemoveQueryRequest) (*vtboost.RecipeChangeResponse, error)
+	BoostListQueries(context.Context, *vtboost.ListQueriesRequest) (*vtboost.ListQueriesResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
 
@@ -1741,6 +1775,15 @@ func (UnimplementedVtctldServer) ValidateVersionShard(context.Context, *vtctldat
 }
 func (UnimplementedVtctldServer) ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVSchema not implemented")
+}
+func (UnimplementedVtctldServer) BoostAddQuery(context.Context, *vtboost.AddQueryRequest) (*vtboost.RecipeChangeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostAddQuery not implemented")
+}
+func (UnimplementedVtctldServer) BoostRemoveQuery(context.Context, *vtboost.RemoveQueryRequest) (*vtboost.RecipeChangeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostRemoveQuery not implemented")
+}
+func (UnimplementedVtctldServer) BoostListQueries(context.Context, *vtboost.ListQueriesRequest) (*vtboost.ListQueriesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostListQueries not implemented")
 }
 func (UnimplementedVtctldServer) mustEmbedUnimplementedVtctldServer() {}
 
@@ -3258,6 +3301,60 @@ func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_BoostAddQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.AddQueryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).BoostAddQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/BoostAddQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).BoostAddQuery(ctx, req.(*vtboost.AddQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_BoostRemoveQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.RemoveQueryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).BoostRemoveQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/BoostRemoveQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).BoostRemoveQuery(ctx, req.(*vtboost.RemoveQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_BoostListQueries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.ListQueriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).BoostListQueries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/BoostListQueries",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).BoostListQueries(ctx, req.(*vtboost.ListQueriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Vtctld_ServiceDesc is the grpc.ServiceDesc for Vtctld service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3584,6 +3681,18 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateVSchema",
 			Handler:    _Vtctld_ValidateVSchema_Handler,
+		},
+		{
+			MethodName: "BoostAddQuery",
+			Handler:    _Vtctld_BoostAddQuery_Handler,
+		},
+		{
+			MethodName: "BoostRemoveQuery",
+			Handler:    _Vtctld_BoostRemoveQuery_Handler,
+		},
+		{
+			MethodName: "BoostListQueries",
+			Handler:    _Vtctld_BoostListQueries_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
