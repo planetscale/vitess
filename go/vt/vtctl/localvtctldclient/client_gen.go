@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
 
+	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
@@ -154,6 +155,21 @@ func (client *localVtctldClient) BackupShard(ctx context.Context, in *vtctldatap
 	}()
 
 	return stream, nil
+}
+
+// BoostAddQuery is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostAddQuery(ctx context.Context, in *vtboostpb.AddQueryRequest, opts ...grpc.CallOption) (*vtboostpb.RecipeChangeResponse, error) {
+	return client.s.BoostAddQuery(ctx, in)
+}
+
+// BoostListQueries is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostListQueries(ctx context.Context, in *vtboostpb.ListQueriesRequest, opts ...grpc.CallOption) (*vtboostpb.ListQueriesResponse, error) {
+	return client.s.BoostListQueries(ctx, in)
+}
+
+// BoostRemoveQuery is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostRemoveQuery(ctx context.Context, in *vtboostpb.RemoveQueryRequest, opts ...grpc.CallOption) (*vtboostpb.RecipeChangeResponse, error) {
+	return client.s.BoostRemoveQuery(ctx, in)
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.

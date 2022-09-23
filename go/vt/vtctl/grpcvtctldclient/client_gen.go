@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
@@ -90,6 +91,33 @@ func (client *gRPCVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb
 	}
 
 	return client.c.BackupShard(ctx, in, opts...)
+}
+
+// BoostAddQuery is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BoostAddQuery(ctx context.Context, in *vtboostpb.AddQueryRequest, opts ...grpc.CallOption) (*vtboostpb.RecipeChangeResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BoostAddQuery(ctx, in, opts...)
+}
+
+// BoostListQueries is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BoostListQueries(ctx context.Context, in *vtboostpb.ListQueriesRequest, opts ...grpc.CallOption) (*vtboostpb.ListQueriesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BoostListQueries(ctx, in, opts...)
+}
+
+// BoostRemoveQuery is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BoostRemoveQuery(ctx context.Context, in *vtboostpb.RemoveQueryRequest, opts ...grpc.CallOption) (*vtboostpb.RecipeChangeResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BoostRemoveQuery(ctx, in, opts...)
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
