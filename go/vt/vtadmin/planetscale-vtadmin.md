@@ -137,7 +137,8 @@ Extra permissions are needed to access a pod inside a turtle. Follow steps 1-4 o
 ```
 
 ### PSDB Operator
-We have to enable `grpc-vtctld` service in all PSC's Vtctld pods. We added a [feature flag](https://admin.planetscale.com/admin/feature-flags/vitess_flag_enable_vtctld_grpc) [here](https://github.com/planetscale/psdb-operator/pull/765/files) that adds `grpc_vtctld` to all [Vtctld service maps](https://vitess.io/docs/12.0/reference/programs/vtctld/).
+
+The `grpc-vtctld` service is enabled by default for all PSC vtctld pods.
 
 ## Debugging
 To debug VTAdmin, it would be useful to start at api-bb logs [here](https://grafana.silversurfer.planetscale.net/explore?orgId=1&left=%7B%22datasource%22:%22silversurfer-1-loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bapp%3D%5C%22api-bb-api%5C%22%7D%20%7C%3D%20%5C%22vtadmin%5C%22%22,%22queryType%22:%22range%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D).
