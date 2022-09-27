@@ -23,7 +23,13 @@ import (
 	"flag"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -133,7 +139,7 @@ func (value StringMapValue) String() string {
 func (value StringMapValue) Type() string { return "StringMap" }
 
 // DualFormatStringListVar creates a flag which supports both dashes and underscores
-func DualFormatStringListVar(p *[]string, name string, value []string, usage string) {
+func DualFormatStringListVar(fs *pflag.FlagSet, p *[]string, name string, value []string, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -144,7 +150,7 @@ func DualFormatStringListVar(p *[]string, name string, value []string, usage str
 }
 
 // DualFormatStringVar creates a flag which supports both dashes and underscores
-func DualFormatStringVar(p *string, name string, value string, usage string) {
+func DualFormatStringVar(fs *pflag.FlagSet, p *string, name string, value string, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -155,7 +161,7 @@ func DualFormatStringVar(p *string, name string, value string, usage string) {
 }
 
 // DualFormatInt64Var creates a flag which supports both dashes and underscores
-func DualFormatInt64Var(p *int64, name string, value int64, usage string) {
+func DualFormatInt64Var(fs *pflag.FlagSet, p *int64, name string, value int64, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -166,7 +172,7 @@ func DualFormatInt64Var(p *int64, name string, value int64, usage string) {
 }
 
 // DualFormatIntVar creates a flag which supports both dashes and underscores
-func DualFormatIntVar(p *int, name string, value int, usage string) {
+func DualFormatIntVar(fs *pflag.FlagSet, p *int, name string, value int, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -177,7 +183,7 @@ func DualFormatIntVar(p *int, name string, value int, usage string) {
 }
 
 // DualFormatBoolVar creates a flag which supports both dashes and underscores
-func DualFormatBoolVar(p *bool, name string, value bool, usage string) {
+func DualFormatBoolVar(fs *pflag.FlagSet, p *bool, name string, value bool, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -186,3 +192,63 @@ func DualFormatBoolVar(p *bool, name string, value bool, usage string) {
 		flag.BoolVar(p, dashes, *p, fmt.Sprintf("Synonym to -%s", underscores))
 	}
 }
+
+// DurationOrIntVar implements pflag.Value for flags that have historically been
+// of type IntVar (and then converted to seconds or some other unit) but are
+// now transitioning to a proper DurationVar type.
+//
+// When parsing a command-line argument, it will first attempt to parse the
+// argument using time.ParseDuration; if this fails, it will fallback to
+// strconv.ParseInt and multiply that value by the `fallback` unit value to get
+// a duration. If the initial ParseDuration fails, it will also log a
+// deprecation warning.
+type DurationOrIntVar struct {
+	name     string
+	val      time.Duration
+	fallback time.Duration
+}
+
+// NewDurationOrIntVar returns a new DurationOrIntVar struct with the given name,
+// default value, and fallback unit.
+//
+// The name is used only when issuing a deprecation warning (so the user knows
+// which flag needs its argument format updated).
+//
+// The `fallback` argument is used when parsing an argument as an int (legacy behavior) as the multiplier
+// to get a time.Duration value. As an example, if a flag used to be "the amount
+// of time to wait in seconds" with a default of 60, you would do:
+//
+//	myFlag := flagutil.NewDurationOrIntVar("my-flag", time.Minute /* 60 second default */, time.Second /* fallback unit to multiply by */)
+func NewDurationOrIntVar(name string, val time.Duration, fallback time.Duration) *DurationOrIntVar {
+	return &DurationOrIntVar{name: name, val: val, fallback: fallback}
+}
+
+// Set is part of the pflag.Value interface.
+func (v *DurationOrIntVar) Set(s string) error {
+	d, derr := time.ParseDuration(s)
+	if derr != nil {
+		msg := &strings.Builder{}
+		fmt.Fprintf(msg, "non-duration value passed to %s (error: %s)", v.name, derr)
+
+		i, ierr := strconv.ParseInt(s, 10, 64)
+		if ierr != nil {
+			log.Warningf("%s; attempted to parse as int in %s, which failed with %s", msg.String(), v.fallback, ierr)
+			return ierr
+		}
+
+		d = time.Duration(i) * v.fallback
+		log.Warningf("%s; parsed as int to %s, which is deprecated behavior", d)
+	}
+
+	v.val = d
+	return nil
+}
+
+// String is part of the pflag.Value interface.
+func (v *DurationOrIntVar) String() string { return v.val.String() }
+
+// Type is part of the pflag.Type interface.
+func (v *DurationOrIntVar) Type() string { return "duration" }
+
+// Value returns the underlying Duration value passed to the flag.
+func (v *DurationOrIntVar) Value() time.Duration { return v.val }

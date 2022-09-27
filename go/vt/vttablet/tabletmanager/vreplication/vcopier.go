@@ -706,7 +706,7 @@ func (vcq *vcopierCopyWorkQueue) enqueue(ctx context.Context, currT *vcopierCopy
 	}
 
 	// Get a handle on an unused worker.
-	poolH, err := vcq.workerPool.Get(ctx, []string{})
+	poolH, err := vcq.workerPool.Get(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get a worker from pool: %s", err.Error())
 	}
@@ -966,8 +966,8 @@ func (vts vcopierCopyTaskState) String() string {
 	return fmt.Sprintf("undefined(%d)", int(vts))
 }
 
-// ApplySettings implements pools.Resource.
-func (vbc *vcopierCopyWorker) ApplySettings(context.Context, []string) error {
+// ApplySetting implements pools.Resource.
+func (vbc *vcopierCopyWorker) ApplySetting(context.Context, *pools.Setting) error {
 	return nil
 }
 
@@ -984,13 +984,18 @@ func (vbc *vcopierCopyWorker) Close() {
 }
 
 // IsSameSetting implements pools.Resource.
-func (vbc *vcopierCopyWorker) IsSameSetting([]string) bool {
+func (vbc *vcopierCopyWorker) IsSameSetting(string) bool {
 	return true
 }
 
-// IsSettingsApplied implements pools.Resource.
-func (vbc *vcopierCopyWorker) IsSettingsApplied() bool {
+// IsSettingApplied implements pools.Resource.
+func (vbc *vcopierCopyWorker) IsSettingApplied() bool {
 	return false
+}
+
+// ResetSetting implements pools.Resource.
+func (vbc *vcopierCopyWorker) ResetSetting(context.Context) error {
+	return nil
 }
 
 // execute advances a task through each state until it is canceled, completed
