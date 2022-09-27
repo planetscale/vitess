@@ -20,6 +20,8 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -30,20 +32,21 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// VtorcProcess is a test struct for running
+// VTOrcProcess is a test struct for running
 // vtorc as a separate process for testing
-type VtorcProcess struct {
+type VTOrcProcess struct {
 	VtctlProcess
+	Port       int
 	LogDir     string
 	ExtraArgs  []string
 	ConfigPath string
-	Config     VtorcConfiguration
+	Config     VTOrcConfiguration
 	WebPort    int
 	proc       *exec.Cmd
 	exit       chan error
 }
 
-type VtorcConfiguration struct {
+type VTOrcConfiguration struct {
 	Debug                                 bool
 	ListenAddress                         string
 	MySQLTopologyUser                     string
@@ -59,12 +62,12 @@ type VtorcConfiguration struct {
 }
 
 // ToJSONString will marshal this configuration as JSON
-func (config *VtorcConfiguration) ToJSONString() string {
+func (config *VTOrcConfiguration) ToJSONString() string {
 	b, _ := json.MarshalIndent(config, "", "\t")
 	return string(b)
 }
 
-func (config *VtorcConfiguration) AddDefaults(webPort int) {
+func (config *VTOrcConfiguration) AddDefaults(webPort int) {
 	config.Debug = true
 	config.MySQLTopologyUser = "orc_client_user"
 	config.MySQLTopologyPassword = "orc_client_user_password"
@@ -78,7 +81,7 @@ func (config *VtorcConfiguration) AddDefaults(webPort int) {
 }
 
 // Setup starts orc process with required arguements
-func (orc *VtorcProcess) Setup() (err error) {
+func (orc *VTOrcProcess) Setup() (err error) {
 
 	// create the configuration file
 	timeNow := time.Now().UnixNano()
@@ -98,8 +101,8 @@ func (orc *VtorcProcess) Setup() (err error) {
 	}
 
 	/* minimal command line arguments:
-	$ vtorc -topo_implementation etcd2 -topo_global_server_address localhost:2379 -topo_global_root /vitess/global
-	-config config/orchestrator/default.json -alsologtostderr http
+	$ vtorc --topo_implementation etcd2 --topo_global_server_address localhost:2379 --topo_global_root /vitess/global
+	--config config/vtorc/default.json --alsologtostderr
 	*/
 	orc.proc = exec.Command(
 		orc.Binary,
@@ -107,21 +110,22 @@ func (orc *VtorcProcess) Setup() (err error) {
 		"--topo_global_server_address", orc.TopoGlobalAddress,
 		"--topo_global_root", orc.TopoGlobalRoot,
 		"--config", orc.ConfigPath,
-		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "orchestrator"),
+		"--port", fmt.Sprintf("%d", orc.Port),
+		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))
 	}
 
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
-	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr", "http")
+	orc.proc.Args = append(orc.proc.Args, "--alsologtostderr")
 
 	errFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-stderr-%d.txt", timeNow)))
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
 
-	log.Infof("Running orc with command: %v", strings.Join(orc.proc.Args, " "))
+	log.Infof("Running vtorc with command: %v", strings.Join(orc.proc.Args, " "))
 
 	err = orc.proc.Start()
 	if err != nil {
@@ -139,7 +143,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 }
 
 // TearDown shuts down the running vtorc service
-func (orc *VtorcProcess) TearDown() error {
+func (orc *VTOrcProcess) TearDown() error {
 	if orc.proc == nil || orc.exit == nil {
 		return nil
 	}
@@ -156,4 +160,25 @@ func (orc *VtorcProcess) TearDown() error {
 		orc.proc = nil
 		return <-orc.exit
 	}
+}
+
+// GetVars gets the variables exported on the /debug/vars page of VTOrc
+func (orc *VTOrcProcess) GetVars() map[string]any {
+	varsURL := fmt.Sprintf("http://localhost:%d/debug/vars", orc.Port)
+	resp, err := http.Get(varsURL)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		resultMap := make(map[string]any)
+		respByte, _ := io.ReadAll(resp.Body)
+		err := json.Unmarshal(respByte, &resultMap)
+		if err != nil {
+			return nil
+		}
+		return resultMap
+	}
+	return nil
 }

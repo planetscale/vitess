@@ -29,7 +29,6 @@ limitations under the License.
 package servenv
 
 import (
-	"flag"
 	"net/url"
 	"os"
 	"os/signal"
@@ -94,6 +93,9 @@ func RegisterFlags() {
 		fs.DurationVar(&onTermTimeout, "onterm_timeout", onTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
 		fs.DurationVar(&onCloseTimeout, "onclose_timeout", onCloseTimeout, "wait no more than this for OnClose handlers before stopping")
 		fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
+
+		// pid_file.go
+		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
 	})
 }
 
@@ -263,7 +265,7 @@ var (
 	commandFlagHooks = map[string][]func(*pflag.FlagSet){}
 )
 
-// OnParse registers a callback function to register flags on the flagset that
+// OnParse registers a callback function to register flags on the flagset that are
 // used by any caller of servenv.Parse or servenv.ParseWithArgs.
 func OnParse(f func(fs *pflag.FlagSet)) {
 	flagHooksM.Lock()
@@ -311,14 +313,14 @@ func ParseFlags(cmd string) {
 
 	_flag.Parse(fs)
 
-	if *Version {
+	if version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
 
 	args := fs.Args()
 	if len(args) > 0 {
-		flag.Usage()
+		_flag.Usage()
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
 	}
 }
@@ -332,7 +334,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 
 	_flag.Parse(fs)
 
-	if *Version {
+	if version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
@@ -357,7 +359,6 @@ func init() {
 		"vtctl",
 		"vtctlclient",
 		"vtctld",
-		"vtctldclient",
 		"vtgate",
 		"vttablet",
 	} {
@@ -371,7 +372,6 @@ func init() {
 		"vtctl",
 		"vtctlclient",
 		"vtctld",
-		"vtctldclient",
 		"vtgate",
 		"vtgateclienttest",
 		"vtgr",

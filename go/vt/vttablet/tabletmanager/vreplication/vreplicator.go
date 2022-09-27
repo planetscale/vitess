@@ -98,7 +98,7 @@ type vreplicator struct {
 	originalFKCheckSetting int64
 	originalSQLMode        string
 
-	WorkflowType int64
+	WorkflowType int32
 	WorkflowName string
 
 	throttleUpdatesRateLimiter *timer.RateLimiter
@@ -354,7 +354,7 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
 	settings, numTablesToCopy, err = vr.readSettings(ctx, dbClient)
 	if err == nil {
-		vr.WorkflowType = settings.WorkflowType
+		vr.WorkflowType = int32(settings.WorkflowType)
 		vr.WorkflowName = settings.WorkflowName
 	}
 	return settings, numTablesToCopy, err
@@ -478,7 +478,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 	if err != nil {
 		return resetFunc, err
 	}
-	if settings.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+	if settings.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
 		vreplicationSQLMode = StrictSQLMode
 	}
 
@@ -503,7 +503,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 //     migrations as well as gh-ost migrations.
 func (vr *vreplicator) throttlerAppName() string {
 	names := []string{vr.WorkflowName, throttlerVReplicationAppName}
-	if vr.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+	if vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
 		names = append(names, throttlerOnlineDDLAppName)
 	}
 	return strings.Join(names, ":")
