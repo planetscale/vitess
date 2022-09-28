@@ -8,6 +8,7 @@ message CachedQuery {
   string name = 2;
   string sql = 3;
   string keyspace = 4;
+  int64 max_memory_usage = 5;
 };
 
 message AddQueryRequest {
