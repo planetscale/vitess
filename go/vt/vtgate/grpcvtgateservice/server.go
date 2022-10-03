@@ -18,19 +18,19 @@ limitations under the License.
 package grpcvtgateservice
 
 import (
+	"context"
 	"flag"
+
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 
-	"context"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -48,7 +48,8 @@ const (
 )
 
 var (
-	useEffective = flag.Bool("grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
+	useEffective       = flag.Bool("grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
+	useEffectiveGroups = flag.Bool("grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
 )
 
 // VTGate is the public structure that is exported via gRPC
@@ -88,16 +89,19 @@ func immediateCallerID(ctx context.Context) (string, []string) {
 // withCallerIDContext creates a context that extracts what we need
 // from the incoming call and can be forwarded for use when talking to vttablet.
 func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerID) context.Context {
-	immediate, dnsNames := immediateCallerID(ctx)
+	immediate, securityGroups := immediateCallerID(ctx)
 	if immediate == "" && *useEffective && effectiveCallerID != nil {
 		immediate = effectiveCallerID.Principal
+		if *useEffectiveGroups && len(effectiveCallerID.Groups) > 0 {
+			securityGroups = effectiveCallerID.Groups
+		}
 	}
 	if immediate == "" {
 		immediate = unsecureClient
 	}
 	return callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		effectiveCallerID,
-		&querypb.VTGateCallerID{Username: immediate, Groups: dnsNames})
+		&querypb.VTGateCallerID{Username: immediate, Groups: securityGroups})
 }
 
 // Execute is the RPC version of vtgateservice.VTGateService method
