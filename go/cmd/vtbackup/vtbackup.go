@@ -65,7 +65,6 @@ import (
 	"math"
 	"math/big"
 	"os"
-	"os/signal"
 	"strings"
 	"syscall"
 	"time"
@@ -123,12 +122,17 @@ var (
 	concurrency        = flag.Int("concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
 
 	// mysqlctld-like flags
-	mysqlPort     = flag.Int("mysql_port", 3306, "mysql port")
-	mysqlSocket   = flag.String("mysql_socket", "", "path to the mysql socket")
-	mysqlTimeout  = flag.Duration("mysql_timeout", 5*time.Minute, "how long to wait for mysqld startup")
-	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
-	detachedMode  = flag.Bool("detach", false, "detached mode - run backups detached from the terminal")
+	mysqlPort        = flag.Int("mysql_port", 3306, "mysql port")
+	mysqlSocket      = flag.String("mysql_socket", "", "path to the mysql socket")
+	mysqlTimeout     = flag.Duration("mysql_timeout", 5*time.Minute, "how long to wait for mysqld startup")
+	initDBSQLFile    = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
+	detachedMode     = flag.Bool("detach", false, "detached mode - run backups detached from the terminal")
+	keepAliveTimeout = flag.Duration("keep-alive-timeout", 0*time.Second, "Wait until timeout elapses after a successful backup before shutting down.")
 )
+
+func init() {
+	servenv.RegisterDefaultFlags()
+}
 
 func main() {
 	defer exit.Recover()
@@ -136,6 +140,19 @@ func main() {
 	mysqlctl.RegisterFlags()
 
 	servenv.ParseFlags("vtbackup")
+	servenv.Init()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	servenv.OnClose(func() {
+		cancel()
+	})
+
+	defer func() {
+		servenv.ExitChan <- syscall.SIGTERM
+		<-ctx.Done()
+	}()
+
+	go servenv.RunDefault()
 
 	if *detachedMode {
 		// this method will call os.Exit and kill this process
@@ -148,16 +165,6 @@ func main() {
 		log.Errorf("min_retention_count must be at least 1 to allow restores to succeed")
 		exit.Return(1)
 	}
-
-	// Catch SIGTERM and SIGINT so we get a chance to clean up.
-	ctx, cancel := context.WithCancel(context.Background())
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sig := <-sigChan
-		log.Infof("Cancelling due to signal: %v", sig)
-		cancel()
-	}()
 
 	// Open connection backup storage.
 	backupStorage, err := backupstorage.GetBackupStorage()
@@ -191,6 +198,15 @@ func main() {
 		log.Errorf("Couldn't prune old backups: %v", err)
 		exit.Return(1)
 	}
+
+	if *keepAliveTimeout > 0 {
+		log.Infof("Backup was successful, waiting %s before exiting (or until context expires).", *keepAliveTimeout)
+		select {
+		case <-time.After(*keepAliveTimeout):
+		case <-ctx.Done():
+		}
+	}
+	log.Info("Exiting.")
 }
 
 func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
