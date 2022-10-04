@@ -157,14 +157,39 @@ func (client *localVtctldClient) BackupShard(ctx context.Context, in *vtctldatap
 	return stream, nil
 }
 
+// BoostAddCluster is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostAddCluster(ctx context.Context, in *vtboostpb.AddClusterRequest, opts ...grpc.CallOption) (*vtboostpb.ClusterChangeResponse, error) {
+	return client.s.BoostAddCluster(ctx, in)
+}
+
 // BoostAddQuery is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) BoostAddQuery(ctx context.Context, in *vtboostpb.AddQueryRequest, opts ...grpc.CallOption) (*vtboostpb.RecipeChangeResponse, error) {
 	return client.s.BoostAddQuery(ctx, in)
 }
 
+// BoostDrainCluster is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostDrainCluster(ctx context.Context, in *vtboostpb.DrainClusterRequest, opts ...grpc.CallOption) (*vtboostpb.DrainClusterResponse, error) {
+	return client.s.BoostDrainCluster(ctx, in)
+}
+
+// BoostListClusters is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostListClusters(ctx context.Context, in *vtboostpb.ListClustersRequest, opts ...grpc.CallOption) (*vtboostpb.ClusterStates, error) {
+	return client.s.BoostListClusters(ctx, in)
+}
+
 // BoostListQueries is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) BoostListQueries(ctx context.Context, in *vtboostpb.ListQueriesRequest, opts ...grpc.CallOption) (*vtboostpb.ListQueriesResponse, error) {
 	return client.s.BoostListQueries(ctx, in)
+}
+
+// BoostMakePrimaryCluster is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostMakePrimaryCluster(ctx context.Context, in *vtboostpb.PrimaryClusterRequest, opts ...grpc.CallOption) (*vtboostpb.PrimaryClusterResponse, error) {
+	return client.s.BoostMakePrimaryCluster(ctx, in)
+}
+
+// BoostRemoveCluster is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostRemoveCluster(ctx context.Context, in *vtboostpb.RemoveClusterRequest, opts ...grpc.CallOption) (*vtboostpb.ClusterChangeResponse, error) {
+	return client.s.BoostRemoveCluster(ctx, in)
 }
 
 // BoostRemoveQuery is part of the vtctlservicepb.VtctldClient interface.
