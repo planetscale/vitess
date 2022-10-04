@@ -93,6 +93,15 @@ func (client *gRPCVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb
 	return client.c.BackupShard(ctx, in, opts...)
 }
 
+// BoostAddCluster is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BoostAddCluster(ctx context.Context, in *vtboostpb.AddClusterRequest, opts ...grpc.CallOption) (*vtboostpb.ClusterChangeResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BoostAddCluster(ctx, in, opts...)
+}
+
 // BoostAddQuery is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) BoostAddQuery(ctx context.Context, in *vtboostpb.AddQueryRequest, opts ...grpc.CallOption) (*vtboostpb.RecipeChangeResponse, error) {
 	if client.c == nil {
@@ -102,6 +111,24 @@ func (client *gRPCVtctldClient) BoostAddQuery(ctx context.Context, in *vtboostpb
 	return client.c.BoostAddQuery(ctx, in, opts...)
 }
 
+// BoostDrainCluster is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BoostDrainCluster(ctx context.Context, in *vtboostpb.DrainClusterRequest, opts ...grpc.CallOption) (*vtboostpb.DrainClusterResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BoostDrainCluster(ctx, in, opts...)
+}
+
+// BoostListClusters is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BoostListClusters(ctx context.Context, in *vtboostpb.ListClustersRequest, opts ...grpc.CallOption) (*vtboostpb.ClusterStates, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BoostListClusters(ctx, in, opts...)
+}
+
 // BoostListQueries is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) BoostListQueries(ctx context.Context, in *vtboostpb.ListQueriesRequest, opts ...grpc.CallOption) (*vtboostpb.ListQueriesResponse, error) {
 	if client.c == nil {
@@ -109,6 +136,24 @@ func (client *gRPCVtctldClient) BoostListQueries(ctx context.Context, in *vtboos
 	}
 
 	return client.c.BoostListQueries(ctx, in, opts...)
+}
+
+// BoostMakePrimaryCluster is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BoostMakePrimaryCluster(ctx context.Context, in *vtboostpb.PrimaryClusterRequest, opts ...grpc.CallOption) (*vtboostpb.PrimaryClusterResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BoostMakePrimaryCluster(ctx, in, opts...)
+}
+
+// BoostRemoveCluster is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BoostRemoveCluster(ctx context.Context, in *vtboostpb.RemoveClusterRequest, opts ...grpc.CallOption) (*vtboostpb.ClusterChangeResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BoostRemoveCluster(ctx, in, opts...)
 }
 
 // BoostRemoveQuery is part of the vtctlservicepb.VtctldClient interface.

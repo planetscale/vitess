@@ -399,6 +399,30 @@ type VtctldClient interface {
 	BoostAddQuery(ctx context.Context, in *vtboost.AddQueryRequest, opts ...grpc.CallOption) (*vtboost.RecipeChangeResponse, error)
 	BoostRemoveQuery(ctx context.Context, in *vtboost.RemoveQueryRequest, opts ...grpc.CallOption) (*vtboost.RecipeChangeResponse, error)
 	BoostListQueries(ctx context.Context, in *vtboost.ListQueriesRequest, opts ...grpc.CallOption) (*vtboost.ListQueriesResponse, error)
+	// BoostListClusters returns a list of all existing known clusters with their UUID
+	// that the system knows about. It also returns which cluster is currently marked as the primary.
+	// This can be used to detect which clusters are available, which are draining and which vtgates use
+	// which cluster currently.
+	BoostListClusters(ctx context.Context, in *vtboost.ListClustersRequest, opts ...grpc.CallOption) (*vtboost.ClusterStates, error)
+	// BoostAddCluster adds a new cluster to the list of known clusters. This can be called when
+	// a new cluster is added for a deployment and subsequent rollover.
+	// The new cluster will get warming traffic from vtgates without using them as the primary
+	// source for user facing replies.
+	BoostAddCluster(ctx context.Context, in *vtboost.AddClusterRequest, opts ...grpc.CallOption) (*vtboost.ClusterChangeResponse, error)
+	// BoostPrimaryCluster marks a specific cluster as the new primary cluster. This will end up triggering
+	// vtgates to start the process of checking if the hit rate on the new primary is already good
+	// enough.
+	// The primary cluster is also used for new vtgates that come up to use those as the ones for
+	// user facing replies.
+	BoostMakePrimaryCluster(ctx context.Context, in *vtboost.PrimaryClusterRequest, opts ...grpc.CallOption) (*vtboost.PrimaryClusterResponse, error)
+	// BoostDrainCluster marks a cluster for draining. Draining means that at the given timestamp the cluster
+	// can't be used anymore. It means that before the drained at time expires the vtgates need to
+	// fail over to the primary.
+	// Clusters marked as draining also won't see any warming traffic.
+	BoostDrainCluster(ctx context.Context, in *vtboost.DrainClusterRequest, opts ...grpc.CallOption) (*vtboost.DrainClusterResponse, error)
+	// BoostRemoveCluster removes the cluster from the known list and stops it from sending
+	// traffic to this cluster.
+	BoostRemoveCluster(ctx context.Context, in *vtboost.RemoveClusterRequest, opts ...grpc.CallOption) (*vtboost.ClusterChangeResponse, error)
 }
 
 type vtctldClient struct {
@@ -1234,6 +1258,51 @@ func (c *vtctldClient) BoostListQueries(ctx context.Context, in *vtboost.ListQue
 	return out, nil
 }
 
+func (c *vtctldClient) BoostListClusters(ctx context.Context, in *vtboost.ListClustersRequest, opts ...grpc.CallOption) (*vtboost.ClusterStates, error) {
+	out := new(vtboost.ClusterStates)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostListClusters", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) BoostAddCluster(ctx context.Context, in *vtboost.AddClusterRequest, opts ...grpc.CallOption) (*vtboost.ClusterChangeResponse, error) {
+	out := new(vtboost.ClusterChangeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostAddCluster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) BoostMakePrimaryCluster(ctx context.Context, in *vtboost.PrimaryClusterRequest, opts ...grpc.CallOption) (*vtboost.PrimaryClusterResponse, error) {
+	out := new(vtboost.PrimaryClusterResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostMakePrimaryCluster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) BoostDrainCluster(ctx context.Context, in *vtboost.DrainClusterRequest, opts ...grpc.CallOption) (*vtboost.DrainClusterResponse, error) {
+	out := new(vtboost.DrainClusterResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostDrainCluster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) BoostRemoveCluster(ctx context.Context, in *vtboost.RemoveClusterRequest, opts ...grpc.CallOption) (*vtboost.ClusterChangeResponse, error) {
+	out := new(vtboost.ClusterChangeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostRemoveCluster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VtctldServer is the server API for Vtctld service.
 // All implementations must embed UnimplementedVtctldServer
 // for forward compatibility
@@ -1500,6 +1569,30 @@ type VtctldServer interface {
 	BoostAddQuery(context.Context, *vtboost.AddQueryRequest) (*vtboost.RecipeChangeResponse, error)
 	BoostRemoveQuery(context.Context, *vtboost.RemoveQueryRequest) (*vtboost.RecipeChangeResponse, error)
 	BoostListQueries(context.Context, *vtboost.ListQueriesRequest) (*vtboost.ListQueriesResponse, error)
+	// BoostListClusters returns a list of all existing known clusters with their UUID
+	// that the system knows about. It also returns which cluster is currently marked as the primary.
+	// This can be used to detect which clusters are available, which are draining and which vtgates use
+	// which cluster currently.
+	BoostListClusters(context.Context, *vtboost.ListClustersRequest) (*vtboost.ClusterStates, error)
+	// BoostAddCluster adds a new cluster to the list of known clusters. This can be called when
+	// a new cluster is added for a deployment and subsequent rollover.
+	// The new cluster will get warming traffic from vtgates without using them as the primary
+	// source for user facing replies.
+	BoostAddCluster(context.Context, *vtboost.AddClusterRequest) (*vtboost.ClusterChangeResponse, error)
+	// BoostPrimaryCluster marks a specific cluster as the new primary cluster. This will end up triggering
+	// vtgates to start the process of checking if the hit rate on the new primary is already good
+	// enough.
+	// The primary cluster is also used for new vtgates that come up to use those as the ones for
+	// user facing replies.
+	BoostMakePrimaryCluster(context.Context, *vtboost.PrimaryClusterRequest) (*vtboost.PrimaryClusterResponse, error)
+	// BoostDrainCluster marks a cluster for draining. Draining means that at the given timestamp the cluster
+	// can't be used anymore. It means that before the drained at time expires the vtgates need to
+	// fail over to the primary.
+	// Clusters marked as draining also won't see any warming traffic.
+	BoostDrainCluster(context.Context, *vtboost.DrainClusterRequest) (*vtboost.DrainClusterResponse, error)
+	// BoostRemoveCluster removes the cluster from the known list and stops it from sending
+	// traffic to this cluster.
+	BoostRemoveCluster(context.Context, *vtboost.RemoveClusterRequest) (*vtboost.ClusterChangeResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
 
@@ -1758,6 +1851,21 @@ func (UnimplementedVtctldServer) BoostRemoveQuery(context.Context, *vtboost.Remo
 }
 func (UnimplementedVtctldServer) BoostListQueries(context.Context, *vtboost.ListQueriesRequest) (*vtboost.ListQueriesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BoostListQueries not implemented")
+}
+func (UnimplementedVtctldServer) BoostListClusters(context.Context, *vtboost.ListClustersRequest) (*vtboost.ClusterStates, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostListClusters not implemented")
+}
+func (UnimplementedVtctldServer) BoostAddCluster(context.Context, *vtboost.AddClusterRequest) (*vtboost.ClusterChangeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostAddCluster not implemented")
+}
+func (UnimplementedVtctldServer) BoostMakePrimaryCluster(context.Context, *vtboost.PrimaryClusterRequest) (*vtboost.PrimaryClusterResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostMakePrimaryCluster not implemented")
+}
+func (UnimplementedVtctldServer) BoostDrainCluster(context.Context, *vtboost.DrainClusterRequest) (*vtboost.DrainClusterResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostDrainCluster not implemented")
+}
+func (UnimplementedVtctldServer) BoostRemoveCluster(context.Context, *vtboost.RemoveClusterRequest) (*vtboost.ClusterChangeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostRemoveCluster not implemented")
 }
 func (UnimplementedVtctldServer) mustEmbedUnimplementedVtctldServer() {}
 
@@ -3293,6 +3401,96 @@ func _Vtctld_BoostListQueries_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_BoostListClusters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.ListClustersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).BoostListClusters(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/BoostListClusters",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).BoostListClusters(ctx, req.(*vtboost.ListClustersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_BoostAddCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.AddClusterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).BoostAddCluster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/BoostAddCluster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).BoostAddCluster(ctx, req.(*vtboost.AddClusterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_BoostMakePrimaryCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.PrimaryClusterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).BoostMakePrimaryCluster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/BoostMakePrimaryCluster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).BoostMakePrimaryCluster(ctx, req.(*vtboost.PrimaryClusterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_BoostDrainCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.DrainClusterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).BoostDrainCluster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/BoostDrainCluster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).BoostDrainCluster(ctx, req.(*vtboost.DrainClusterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_BoostRemoveCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.RemoveClusterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).BoostRemoveCluster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/BoostRemoveCluster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).BoostRemoveCluster(ctx, req.(*vtboost.RemoveClusterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Vtctld_ServiceDesc is the grpc.ServiceDesc for Vtctld service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3623,6 +3821,26 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BoostListQueries",
 			Handler:    _Vtctld_BoostListQueries_Handler,
+		},
+		{
+			MethodName: "BoostListClusters",
+			Handler:    _Vtctld_BoostListClusters_Handler,
+		},
+		{
+			MethodName: "BoostAddCluster",
+			Handler:    _Vtctld_BoostAddCluster_Handler,
+		},
+		{
+			MethodName: "BoostMakePrimaryCluster",
+			Handler:    _Vtctld_BoostMakePrimaryCluster_Handler,
+		},
+		{
+			MethodName: "BoostDrainCluster",
+			Handler:    _Vtctld_BoostDrainCluster_Handler,
+		},
+		{
+			MethodName: "BoostRemoveCluster",
+			Handler:    _Vtctld_BoostRemoveCluster_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
