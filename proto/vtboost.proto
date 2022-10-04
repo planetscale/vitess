@@ -1,6 +1,8 @@
 syntax = "proto3";
 option go_package = "vitess.io/vitess/go/vt/proto/vtboost";
 
+import "vttime.proto";
+
 package vtboost;
 
 message CachedQuery {
@@ -36,3 +38,45 @@ message RecipeChangeResponse {
   int64 added = 1;
   int64 removed = 2;
 };
+
+message Cluster {
+  enum State {
+    DISABLED = 0;
+    PRIMARY = 1;
+    DRAINING = 2;
+    WARMING = 3;
+  }
+  string uuid = 1;
+  State state = 2;
+  vttime.Time drained_at = 3;
+  map<string, bool> vtgates = 4;
+};
+
+message ClusterStates {
+  repeated Cluster clusters = 1;
+};
+
+message ListClustersRequest {}
+
+message AddClusterRequest {
+  string uuid = 1;
+};
+
+message RemoveClusterRequest {
+  string uuid = 1;
+};
+
+message ClusterChangeResponse {}
+
+message PrimaryClusterRequest {
+  string uuid = 1;
+}
+
+message PrimaryClusterResponse {}
+
+message DrainClusterRequest {
+  string uuid = 1;
+  vttime.Time drained_at = 2;
+}
+
+message DrainClusterResponse {}

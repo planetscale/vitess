@@ -298,4 +298,29 @@ service Vtctld {
   rpc BoostAddQuery(vtboost.AddQueryRequest) returns (vtboost.RecipeChangeResponse);
   rpc BoostRemoveQuery(vtboost.RemoveQueryRequest) returns (vtboost.RecipeChangeResponse);
   rpc BoostListQueries(vtboost.ListQueriesRequest) returns(vtboost.ListQueriesResponse);
+
+  // BoostListClusters returns a list of all existing known clusters with their UUID
+  // that the system knows about. It also returns which cluster is currently marked as the primary.
+  // This can be used to detect which clusters are available, which are draining and which vtgates use
+  // which cluster currently.
+  rpc BoostListClusters(vtboost.ListClustersRequest) returns (vtboost.ClusterStates);
+  // BoostAddCluster adds a new cluster to the list of known clusters. This can be called when
+  // a new cluster is added for a deployment and subsequent rollover.
+  // The new cluster will get warming traffic from vtgates without using them as the primary
+  // source for user facing replies.
+  rpc BoostAddCluster(vtboost.AddClusterRequest) returns (vtboost.ClusterChangeResponse);
+  // BoostPrimaryCluster marks a specific cluster as the new primary cluster. This will end up triggering
+  // vtgates to start the process of checking if the hit rate on the new primary is already good
+  // enough.
+  // The primary cluster is also used for new vtgates that come up to use those as the ones for
+  // user facing replies.
+  rpc BoostMakePrimaryCluster(vtboost.PrimaryClusterRequest) returns (vtboost.PrimaryClusterResponse);
+  // BoostDrainCluster marks a cluster for draining. Draining means that at the given timestamp the cluster
+  // can't be used anymore. It means that before the drained at time expires the vtgates need to
+  // fail over to the primary.
+  // Clusters marked as draining also won't see any warming traffic.
+  rpc BoostDrainCluster(vtboost.DrainClusterRequest) returns (vtboost.DrainClusterResponse);
+  // BoostRemoveCluster removes the cluster from the known list and stops it from sending
+  // traffic to this cluster.
+  rpc BoostRemoveCluster(vtboost.RemoveClusterRequest) returns (vtboost.ClusterChangeResponse);
 }
