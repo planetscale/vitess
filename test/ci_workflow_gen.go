@@ -126,6 +126,8 @@ var (
 		"schemadiff_vrepl",
 		"topo_connection_cache",
 		"vtgate_partial_keyspace",
+		"12",
+		"18",
 		"vttablet_prscomplex",
 	}
 
