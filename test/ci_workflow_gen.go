@@ -129,6 +129,7 @@ var (
 		"topo_connection_cache",
 		"12",
 		"18",
+		"vttablet_prscomplex",
 	}
 
 	clusterSelfHostedList       = []string{}
