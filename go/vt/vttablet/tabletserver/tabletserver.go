@@ -832,6 +832,8 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 			if transactionID != 0 {
 				connID = transactionID
 			}
+			logStats.ReservedID = reservedID
+			logStats.TransactionID = transactionID
 			qre := &QueryExecutor{
 				query:          query,
 				marginComments: comments,
