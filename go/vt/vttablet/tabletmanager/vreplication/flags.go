@@ -39,7 +39,7 @@ var (
 	vreplicationHeartbeatUpdateInterval = 1
 	vreplicationExperimentalFlags       = int64(0x01) // enable vreplicationExperimentalFlagOptimizeInserts by default
 	vreplicationStoreCompressedGTID     = false
-	vreplicationParallelInsertWorkers   = 1
+	vreplicationParallelInsertWorkers   = 4 // pre-release setting to develop confidence via E2E tests
 )
 
 func registerVReplicationFlags(fs *pflag.FlagSet) {
