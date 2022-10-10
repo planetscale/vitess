@@ -118,6 +118,7 @@ require (
 require (
 	github.com/bndr/gotabulate v1.1.2
 	github.com/openark/golib v0.0.0-20210531070646-355f37940af8
+	github.com/paulbellamy/ratecounter v0.2.0
 )
 
 require (
