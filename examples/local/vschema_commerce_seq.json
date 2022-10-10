@@ -6,6 +6,7 @@
         "order_seq": {
             "type": "sequence"
         },
-        "product": {}
+        "product": {},
+        "sales": {}
     }
 }

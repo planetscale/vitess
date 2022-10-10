@@ -29,6 +29,14 @@
                 "column": "order_id",
                 "sequence": "order_seq"
             }
+        },
+        "corder_facts": {
+            "column_vindexes": [
+                {
+                    "column": "customer_id",
+                    "name": "hash"
+                }
+            ]
         }
     }
 }

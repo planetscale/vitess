@@ -1,0 +1,1 @@
+CREATE FUNCTION total(price int, qty int)  RETURNS int  DETERMINISTIC  RETURN price * qty;
