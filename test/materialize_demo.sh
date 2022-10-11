@@ -18,9 +18,11 @@
 # It should be kept in sync with the steps in https://vitess.io/docs/get-started/local/
 # So we can detect if a regression affecting a tutorial is introduced.
 
+
+read -p "**************** Setting up initial cluster with commerce keyspace **************** "
 source build.env
 
-set -xe
+#set -xe
 
 cd "$VTROOT/examples/local"
 unset VTROOT # ensure that the examples can run without VTROOT now.
@@ -34,17 +36,26 @@ sleep 5 # Give vtgate time to really start.
 mysql < ../common/insert_commerce_data.sql
 mysql --table < ../common/select_commerce_data.sql
 
-./201_customer_tablets.sh
+echo
+read -p "**************** Setting up customer keyspace **************** "
 
+./201_customer_tablets.sh
+sleep 15
 for shard in "customer/0"; do
  while true; do
-  mysql "$shard" -e 'show tables' && break || echo "waiting for shard: $shard!"
-  sleep 1
+  mysql "$shard" -e 'show tables' && break
+  sleep 3
  done;
 done;
 
+echo
+read -p "**************** Running MoveTables to move customer and corder tables from product keyspace to customer keyspace **************** "
+
 ./202_move_tables.sh
 sleep 3 # required for now
+
+echo
+read -p "**************** Switching read and write traffic to customer keyspace **************** "
 
 ./203_switch_reads.sh
 
@@ -57,22 +68,30 @@ mysql --table < ../common/select_commerce_data.sql || echo "DenyList working as 
 # Expected to fail!
 mysql --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"
 
+echo
+read -p "**************** Setting up sharded customer keyspace **************** "
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh
-
+sleep 15
 # Wait for the schema to be targetable before proceeding
 # TODO: Eliminate this race in the examples' scripts
 for shard in "customer/-80" "customer/80-"; do
  while true; do
-  mysql "$shard" -e 'show tables' && break || echo "waiting for shard: $shard!"
-  sleep 1
+  mysql "$shard" -e 'show tables' && break
+  sleep 3
  done;
 done;
+
+echo
+read -p "**************** Resharding from unsharded to two shards -80/80- **************** "
 
 ./303_reshard.sh
 
 sleep 3 # TODO: Required for now!
+
+echo
+read -p "**************** Switching read and write traffic to sharded customer keyspace **************** "
 
 ./304_switch_reads.sh
 ./305_switch_writes.sh
@@ -80,9 +99,9 @@ sleep 3 # TODO: Required for now!
 mysql --table < ../common/select_customer-80_data.sql
 mysql --table < ../common/select_customer80-_data.sql
 
-#./306_down_shard_0.sh
-
 ./310_materialize_demo_setup.sh
+
+#./306_down_shard_0.sh
 
 #./401_teardown.sh
 
