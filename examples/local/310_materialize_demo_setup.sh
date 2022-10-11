@@ -20,9 +20,6 @@ source env.sh
 vtctlclient Workflow customer.cust2cust delete
 vtctlclient Workflow commerce.cust2cust_reverse delete
 
-vtctlclient InitShardPrimary -- --force customer/-80 zone1-300
-vtctlclient InitShardPrimary -- --force customer/80- zone1-400
-
 vtctlclient ExecuteFetchAsDba zone1-300 "CREATE FUNCTION total(price int, qty int)  RETURNS int  DETERMINISTIC  RETURN price * qty;"
 vtctlclient ExecuteFetchAsDba zone1-400 "CREATE FUNCTION total(price int, qty int)  RETURNS int  DETERMINISTIC  RETURN price * qty;"
 
