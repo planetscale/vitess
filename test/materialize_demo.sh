@@ -43,8 +43,8 @@ read -p "**************** Setting up customer keyspace **************** "
 sleep 15
 for shard in "customer/0"; do
  while true; do
-  mysql "$shard" -e 'show tables' && break
-  sleep 3
+  mysql "$shard" -e 'show tables' &>/dev/null && break
+  sleep 1
  done;
 done;
 
@@ -63,10 +63,10 @@ read -p "**************** Switching read and write traffic to customer keyspace 
 
 mysql --table < ../common/select_customer0_data.sql
 # Expected to fail!
-mysql --table < ../common/select_commerce_data.sql || echo "DenyList working as expected"
+mysql --table < ../common/select_commerce_data.sql &>/dev/null || echo "DenyList working as expected"
 ./205_clean_commerce.sh
 # Expected to fail!
-mysql --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"
+mysql --table < ../common/select_commerce_data.sql &>/dev/null || echo "Tables missing as expected"
 
 echo
 read -p "**************** Setting up sharded customer keyspace **************** "
@@ -78,8 +78,8 @@ sleep 15
 # TODO: Eliminate this race in the examples' scripts
 for shard in "customer/-80" "customer/80-"; do
  while true; do
-  mysql "$shard" -e 'show tables' && break
-  sleep 3
+  mysql "$shard" -e 'show tables' &>/dev/null && break
+  sleep 1
  done;
 done;
 
