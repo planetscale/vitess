@@ -20,8 +20,9 @@ source env.sh
 vtctlclient Workflow customer.cust2cust delete
 vtctlclient Workflow commerce.cust2cust_reverse delete
 
-vtctlclient ExecuteFetchAsDba zone1-300 "CREATE FUNCTION total(price int, qty int)  RETURNS int  DETERMINISTIC  RETURN price * qty;"
-vtctlclient ExecuteFetchAsDba zone1-400 "CREATE FUNCTION total(price int, qty int)  RETURNS int  DETERMINISTIC  RETURN price * qty;"
+for tablet in $(vtctlclient ListAllTablets -- --keyspace=customer --tablet_type=primary | awk '$3 == "-80" || $3 == "80-" {print $1}'); do
+ vtctlclient ExecuteFetchAsDba ${tablet} "CREATE FUNCTION total(price int, qty int)  RETURNS int  DETERMINISTIC  RETURN price * qty"
+done
 
 echo
 read -p "**************** Starting Materialize workflow wf_corder to denormalize corder **************** "
