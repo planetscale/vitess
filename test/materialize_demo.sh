@@ -31,7 +31,10 @@ source ./env.sh # Required so that "mysql" works from alias
 
 ./101_initial_cluster.sh
 
-sleep 5 # Give vtgate time to really start.
+while true; do
+ mysql -e 'show keyspaces' &>/dev/null && break
+ sleep 1
+done;
 
 mysql < ../common/insert_commerce_data.sql
 mysql --table < ../common/select_commerce_data.sql
@@ -40,7 +43,7 @@ echo
 read -p "**************** Setting up customer keyspace **************** "
 
 ./201_customer_tablets.sh
-sleep 15
+
 for shard in "customer/0"; do
  while true; do
   mysql "$shard" -e 'show tables' &>/dev/null && break
@@ -52,7 +55,11 @@ echo
 read -p "**************** Running MoveTables to move customer and corder tables from product keyspace to customer keyspace **************** "
 
 ./202_move_tables.sh
-sleep 3 # required for now
+
+while true; do
+ vtctlclient workflow customer.commerce2customer show | grep -q '"State": "Running"' && break
+ sleep 1
+done;
 
 echo
 read -p "**************** Switching read and write traffic to customer keyspace **************** "
@@ -63,19 +70,17 @@ read -p "**************** Switching read and write traffic to customer keyspace 
 
 mysql --table < ../common/select_customer0_data.sql
 # Expected to fail!
-mysql --table < ../common/select_commerce_data.sql &>/dev/null || echo "DenyList working as expected"
+mysql --table < ../common/select_commerce_data.sql &>/dev/null || echo "DenyList working, as expected"
 ./205_clean_commerce.sh
 # Expected to fail!
-mysql --table < ../common/select_commerce_data.sql &>/dev/null || echo "Tables missing as expected"
+mysql --table < ../common/select_commerce_data.sql &>/dev/null || echo "Tables missing, as expected"
 
 echo
 read -p "**************** Setting up sharded customer keyspace **************** "
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh
-sleep 15
-# Wait for the schema to be targetable before proceeding
-# TODO: Eliminate this race in the examples' scripts
+
 for shard in "customer/-80" "customer/80-"; do
  while true; do
   mysql "$shard" -e 'show tables' &>/dev/null && break
@@ -88,7 +93,10 @@ read -p "**************** Resharding from unsharded to two shards -80/80- ******
 
 ./303_reshard.sh
 
-sleep 3 # TODO: Required for now!
+while true; do
+ vtctlclient workflow customer.cust2cust show | grep -q '"State": "Running"' && break
+ sleep 1
+done;
 
 echo
 read -p "**************** Switching read and write traffic to sharded customer keyspace **************** "
