@@ -123,7 +123,7 @@ require (
 require (
 	github.com/bndr/gotabulate v1.1.2
 	github.com/planetscale/common-libs v0.1.0
-	github.com/planetscale/psevents v0.0.0-20220728161011-f14344da9f2c
+	github.com/planetscale/psevents v0.0.0-20221011221149-e2ac5cd3f8e2
 	github.com/segmentio/kafka-go v0.4.35
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/twmb/murmur3 v1.1.6

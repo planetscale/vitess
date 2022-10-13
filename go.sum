@@ -616,8 +616,8 @@ github.com/planetscale/common-libs v0.1.0 h1:oOAFbZYEImD5AuRBrl1EkAaWt6/HSHeaSjz
 github.com/planetscale/common-libs v0.1.0/go.mod h1:lNAhgiWOxLAcEkdSH8ukTjMCQ38sTYnmdFfknQVjtfU=
 github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a h1:y0OpQ4+5tKxeh9+H+2cVgASl9yMZYV9CILinKOiKafA=
 github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a/go.mod h1:GJFUzQuXIoB2Kjn1ZfDhJr/42D5nWOqRcIQVgCxTuIE=
-github.com/planetscale/psevents v0.0.0-20220728161011-f14344da9f2c h1:XlSxSzoO+ieDuLToWryexIK0tVKCsK31nDcvd8JYg8E=
-github.com/planetscale/psevents v0.0.0-20220728161011-f14344da9f2c/go.mod h1:2yqEdV/4PFyzfv/d4aA/0SNKfQ3e1zKZodDyNHZXLeA=
+github.com/planetscale/psevents v0.0.0-20221011221149-e2ac5cd3f8e2 h1:ZUdIuENLef0O8p/xEWN3gF45gFSR9sH1awwuodEgeE0=
+github.com/planetscale/psevents v0.0.0-20221011221149-e2ac5cd3f8e2/go.mod h1:2yqEdV/4PFyzfv/d4aA/0SNKfQ3e1zKZodDyNHZXLeA=
 github.com/planetscale/vtprotobuf v0.3.0 h1:oMrOdDFHS1ADc0dHtC2EApxiM5xd0cQkZeibm0WgXiQ=
 github.com/planetscale/vtprotobuf v0.3.0/go.mod h1:wm1N3qk9G/4+VM1WhpkLbvY/d8+0PbwYYpP5P5VhTks=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
