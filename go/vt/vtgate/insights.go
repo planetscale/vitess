@@ -87,11 +87,13 @@ type QueryPatternAggregation struct {
 
 	StatementType string
 	Tables        []string
+	TablesUsed    []string
 }
 
 type QueryPatternKey struct {
-	Keyspace string
-	SQL      string
+	Keyspace       string
+	ActiveKeyspace string
+	SQL            string
 }
 
 type Insights struct {
@@ -246,10 +248,11 @@ func argOrEnv(argVal, envKey string) string {
 	return os.Getenv(envKey)
 }
 
-func newPatternAggregation(statementType string, tables []string) *QueryPatternAggregation {
+func newPatternAggregation(statementType string, tables []string, tablesUsed []string) *QueryPatternAggregation {
 	return &QueryPatternAggregation{
 		StatementType: statementType,
 		Tables:        tables,
+		TablesUsed:    tablesUsed,
 	}
 }
 
@@ -563,7 +566,8 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, tables []
 
 	var pa *QueryPatternAggregation
 	key := QueryPatternKey{
-		Keyspace: ls.Keyspace,
+		Keyspace:       ls.Keyspace,
+		ActiveKeyspace: ls.ActiveKeyspace,
 	}
 
 	key.SQL = sql
@@ -574,10 +578,10 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, tables []
 			ii.LogPatternsExceeded++
 			return false
 		}
-		// ls.StmtType and ls.Table depend only on the contents of sql, so we don't separately make them
+		// ls.StmtType, ls.Table and ls.TablesUsed depend only on the contents of sql, so we don't separately make them
 		// part of the key, and we don't track them as separate values in the QueryPatternAggregation values.
 		// In other words, we assume they don't change, so we only need to track a single value for each.
-		pa = newPatternAggregation(ls.StmtType, tables)
+		pa = newPatternAggregation(ls.StmtType, tables, ls.TablesUsed)
 		ii.Aggregations[key] = pa
 	}
 
@@ -618,7 +622,7 @@ func (ii *Insights) sendAggregates() {
 	}
 
 	for k, pa := range ii.Aggregations {
-		buf, err := ii.makeQueryPatternMessage(k.SQL, k.Keyspace, pa)
+		buf, err := ii.makeQueryPatternMessage(k, pa)
 		if err != nil {
 			log.Warningf("Could not serialize %s message: %v", queryStatsBundleTopic, err)
 		} else {
@@ -671,7 +675,9 @@ func (ii *Insights) makeQueryMessage(ls *logstats.LogStats, sql string, tables [
 		NormalizedSql:          stringOrNil(sql),
 		StatementType:          stringOrNil(ls.StmtType),
 		Tables:                 tables,
+		TablesUsed:             ls.TablesUsed,
 		Keyspace:               stringOrNil(ls.Keyspace),
+		ActiveKeyspace:         stringOrNil(ls.ActiveKeyspace),
 		TabletType:             stringOrNil(ls.TabletType),
 		ShardQueries:           uint32(ls.ShardQueries),
 		RowsRead:               ls.RowsRead,
@@ -800,15 +806,17 @@ func shortenRawSQL(rawSQL string, maxLength uint) (string, error) {
 	return ret, nil
 }
 
-func (ii *Insights) makeQueryPatternMessage(sql, keyspace string, pa *QueryPatternAggregation) ([]byte, error) {
+func (ii *Insights) makeQueryPatternMessage(key QueryPatternKey, pa *QueryPatternAggregation) ([]byte, error) {
 	obj := pbvtgate.QueryStatsBundle{
 		PeriodStart:            timestamppb.New(ii.PeriodStart),
 		DatabaseBranchPublicId: ii.DatabaseBranchPublicID,
 		VtgateName:             hostnameOrEmpty(),
-		NormalizedSql:          stringOrNil(sql),
+		NormalizedSql:          stringOrNil(key.SQL),
 		StatementType:          pa.StatementType,
 		Tables:                 pa.Tables,
-		Keyspace:               stringOrNil(keyspace),
+		TablesUsed:             pa.TablesUsed,
+		Keyspace:               stringOrNil(key.Keyspace),
+		ActiveKeyspace:         stringOrNil(key.ActiveKeyspace),
 		QueryCount:             pa.QueryCount,
 		ErrorCount:             pa.ErrorCount,
 		SumShardQueries:        pa.SumShardQueries,

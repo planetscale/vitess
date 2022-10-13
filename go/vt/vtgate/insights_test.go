@@ -135,6 +135,23 @@ func TestInsightsSummaries(t *testing.T) {
 		})
 }
 
+func TestInsightsSummariesByKeyspace(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			{sql: "select * from foo", responseTime: 1 * time.Nanosecond, keyspace: "a", activeKeyspace: "1"},
+			{sql: "select * from foo", responseTime: 2 * time.Nanosecond, keyspace: "a", activeKeyspace: "1"},
+			{sql: "select * from foo", responseTime: 3 * time.Nanosecond, keyspace: "a", activeKeyspace: "2"},
+			{sql: "select * from foo", responseTime: 4 * time.Nanosecond, keyspace: "a", activeKeyspace: "2"},
+			{sql: "select * from foo", responseTime: 5 * time.Nanosecond, keyspace: "b", activeKeyspace: "1"},
+			{sql: "select * from foo", responseTime: 6 * time.Nanosecond, keyspace: "b", activeKeyspace: "1"},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryStatsBundleTopic, "select * from foo", "sum_total_duration:{nanos:3}", `keyspace:{value:\"a\"}`, `active_keyspace:{value:\"1\"}`),
+			expect(queryStatsBundleTopic, "select * from foo", "sum_total_duration:{nanos:7}", `keyspace:{value:\"a\"}`, `active_keyspace:{value:\"2\"}`),
+			expect(queryStatsBundleTopic, "select * from foo", "sum_total_duration:{nanos:11}", `keyspace:{value:\"b\"}`, `active_keyspace:{value:\"1\"}`),
+		})
+}
+
 func TestInsightsSchemaChanges(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
@@ -767,9 +784,9 @@ const (
 )
 
 type insightsQuery struct {
-	sql, error, rawSQL string
-	responseTime       time.Duration
-	rowsRead           int
+	sql, error, rawSQL, keyspace, activeKeyspace string
+	responseTime                                 time.Duration
+	rowsRead                                     int
 
 	// insightsTestHelper sets ls.IsNormalized to false for errors, true otherwise.
 	// Set normalized=YES or normalized=NO to override this, e.g., to simulate an error
@@ -849,7 +866,9 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 				Component:    "127.0.0.1", // TODO
 				Subcomponent: "PSDB API",
 			}, nil),
-			Table: options.tableString,
+			Table:          options.tableString,
+			Keyspace:       q.keyspace,
+			ActiveKeyspace: q.activeKeyspace,
 		}
 		if q.error != "" {
 			ls.Error = errors.New(q.error)
