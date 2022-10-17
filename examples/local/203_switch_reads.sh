@@ -18,5 +18,6 @@
 # tablets of types rdonly and replica
 
 source ./env.sh
-
+set -v
 vtctlclient MoveTables -- --tablet_types=rdonly,replica SwitchTraffic customer.commerce2customer
+set +v

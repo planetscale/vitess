@@ -18,6 +18,6 @@
 # keyspace
 
 source ./env.sh
-
+set -v
 vtctlclient MoveTables Complete customer.commerce2customer
-
+set +v
