@@ -18,5 +18,6 @@
 # new primary tablet
 
 source ./env.sh
-
+set -v
 vtctlclient MoveTables -- --tablet_types=primary SwitchTraffic customer.commerce2customer
+set +v

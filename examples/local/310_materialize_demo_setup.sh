@@ -26,9 +26,19 @@ done
 
 echo
 read -p "**************** Starting Materialize workflow wf_corder to denormalize corder **************** "
-
+set -v
 vtctlclient Materialize '{"workflow": "wf_corder", "source_keyspace": "customer", "target_keyspace": "customer", "table_settings": [ {"target_table": "corder_facts", "source_expression": "select order_id, customer_id, email, sku, CONCAT(\"xxxx-xxxx-xxxx-\", RIGHT(credit_card,4)) as credit_card, price, qty, total(price, qty) total_price, month(created) as created_month, year(created) as created_year from corder where sku <> \"SKU-1003\" and price >= 2"  }] }'
+sleep 5
+mysql -e "select * from corder_facts limit 10"
 
+
+set +v
 echo
 read -p "**************** Starting Materialize workflow wf_sales to aggregate sales **************** "
+
+set -v
 vtctlclient Materialize '{"workflow": "wf_sales", "source_keyspace": "customer", "target_keyspace": "commerce", "table_settings": [ {"target_table": "sales", "source_expression": "select sku, count(*) as num_orders,  sum(qty) as  total_qty, sum(total_price) as total_sales from corder_facts group by sku"  }] }'
+sleep 5
+mysql -e "select * from sales"
+
+set +v

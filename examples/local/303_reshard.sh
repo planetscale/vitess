@@ -18,5 +18,6 @@
 # each row will be copied to exactly one shard based on the vindex value
 
 source ./env.sh
-
+set -v
 vtctlclient Reshard -- --source_shards '0' --target_shards '-80,80-' Create customer.cust2cust
+set +v

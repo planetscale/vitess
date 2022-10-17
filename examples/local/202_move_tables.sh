@@ -19,4 +19,6 @@
 
 source ./env.sh
 
+set -v
 vtctlclient MoveTables -- --source commerce --tables 'customer,corder,corder_facts' Create customer.commerce2customer
+set +v
