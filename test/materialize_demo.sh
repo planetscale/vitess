@@ -32,12 +32,12 @@ source ./env.sh # Required so that "mysql" works from alias
 ./101_initial_cluster.sh
 
 while true; do
- mysql -e 'show keyspaces' &>/dev/null && break
+ mysql --binary-as-hex=false -e 'show keyspaces' &>/dev/null && break
  sleep 1
 done;
 
-mysql < ../common/insert_commerce_data.sql
-mysql --table < ../common/select_commerce_data.sql
+mysql --binary-as-hex=false < ../common/insert_commerce_data.sql
+mysql --table --binary-as-hex=false < ../common/select_commerce_data.sql
 
 echo
 read -p "**************** Setting up customer keyspace **************** "
@@ -46,7 +46,7 @@ read -p "**************** Setting up customer keyspace **************** "
 
 for shard in "customer/0"; do
  while true; do
-  mysql "$shard" -e 'show tables' &>/dev/null && break
+  mysql "$shard" --binary-as-hex=false -e 'show tables' &>/dev/null && break
   sleep 1
  done;
 done;
@@ -68,12 +68,12 @@ read -p "**************** Switching read and write traffic to customer keyspace 
 
 ./204_switch_writes.sh
 
-mysql --table < ../common/select_customer0_data.sql
+mysql --binary-as-hex=false --table < ../common/select_customer0_data.sql
 # Expected to fail!
-mysql --table < ../common/select_commerce_data.sql &>/dev/null || echo "DenyList working, as expected"
+mysql --binary-as-hex=false --table < ../common/select_commerce_data.sql &>/dev/null || echo "DenyList working, as expected"
 ./205_clean_commerce.sh
 # Expected to fail!
-mysql --table < ../common/select_commerce_data.sql &>/dev/null || echo "Tables missing, as expected"
+mysql --binary-as-hex=false --table < ../common/select_commerce_data.sql &>/dev/null || echo "Tables missing, as expected"
 
 echo
 read -p "**************** Setting up sharded customer keyspace **************** "
@@ -83,7 +83,7 @@ read -p "**************** Setting up sharded customer keyspace **************** 
 
 for shard in "customer/-80" "customer/80-"; do
  while true; do
-  mysql "$shard" -e 'show tables' &>/dev/null && break
+  mysql "$shard" --binary-as-hex=false -e 'show tables' &>/dev/null && break
   sleep 1
  done;
 done;
@@ -104,8 +104,8 @@ read -p "**************** Switching read and write traffic to sharded customer k
 ./304_switch_reads.sh
 ./305_switch_writes.sh
 
-mysql --table < ../common/select_customer-80_data.sql
-mysql --table < ../common/select_customer80-_data.sql
+mysql --binary-as-hex=false --table < ../common/select_customer-80_data.sql
+mysql --binary-as-hex=false --table < ../common/select_customer80-_data.sql
 
 ./310_materialize_demo_setup.sh
 
