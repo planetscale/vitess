@@ -52,7 +52,7 @@ for shard in "customer/0"; do
 done;
 
 echo
-read -p "**************** Running MoveTables to move customer and corder tables from product keyspace to customer keyspace **************** "
+read -p "**************** Running MoveTables to move customer and corder tables from commerce keyspace to customer keyspace **************** "
 
 ./202_move_tables.sh
 
