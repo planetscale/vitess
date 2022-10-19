@@ -771,6 +771,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	{
 		// we want to see whether MySQL supports the NO LOCK CHECK clause:
 		_, err := e.execQuery(ctx, sqlRenameTableNoLockCheck)
+		// the query should return an error! It's either a parse error (ie NO LOCK CHECK is not supported by the MySQL server)
+		// or a "table does not exist" or any other errors.
 		if err == nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected error for query: '%s'", sqlRenameTableNoLockCheck)
 		}
@@ -779,8 +781,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				renameNoLockCheckSupported = true
 			}
 		}
-		log.Infof("========= ZZZ renameNoLockCheckSupported=%v", renameNoLockCheckSupported)
-		fmt.Printf("========= ZZZ renameNoLockCheckSupported=%v\n", renameNoLockCheckSupported)
 	}
 
 	waitForPos := func(s *VReplStream, pos mysql.Position) error {
@@ -998,8 +998,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
 			defer cancel()
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "renaming tables")
-			renameQuery := sqlparser.BuildParsedQuery(sqlSwapTablesNoLockCheck, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
-			if _, err := lockConn.Exec(lockCtx, renameQuery.Query, 1, false); err != nil {
+			renameNoLockCheckQuery := sqlparser.BuildParsedQuery(sqlSwapTablesNoLockCheck, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
+			if _, err := lockConn.Exec(lockCtx, renameNoLockCheckQuery.Query, 1, false); err != nil {
 				return err
 			}
 		}
