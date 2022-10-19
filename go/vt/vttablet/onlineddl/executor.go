@@ -767,7 +767,21 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "starting cut-over")
 
-	var sentryTableName string
+	var renameNoLockCheckSupported bool
+	{
+		// we want to see whether MySQL supports the NO LOCK CHECK clause:
+		_, err := e.execQuery(ctx, sqlRenameTableNoLockCheck)
+		if err == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected error for query: '%s'", sqlRenameTableNoLockCheck)
+		}
+		if merr, ok := err.(*mysql.SQLError); ok {
+			if merr.Num != mysql.ERParseError {
+				renameNoLockCheckSupported = true
+			}
+		}
+		log.Infof("========= ZZZ renameNoLockCheckSupported=%v", renameNoLockCheckSupported)
+		fmt.Printf("========= ZZZ renameNoLockCheckSupported=%v\n", renameNoLockCheckSupported)
+	}
 
 	waitForPos := func(s *VReplStream, pos mysql.Position) error {
 		ctx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
@@ -780,20 +794,22 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return nil
 	}
 
-	if !isVreplicationTestSuite {
-		// A bit early on, we generate names for stowaway and temporary tables
-		// We do this here because right now we're in a safe place where nothing happened yet. If there's an error now, bail out
-		// and no harm done.
-		// Later on, when traffic is blocked and tables renamed, that's a more dangerous place to be in; we want as little logic
-		// in that place as possible.
-		sentryTableName, err = schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-		if err != nil {
-			return nil
-		}
+	// A bit early on, we generate names for stowaway and temporary tables
+	// We do this here because right now we're in a safe place where nothing happened yet. If there's an error now, bail out
+	// and no harm done.
+	// Later on, when traffic is blocked and tables renamed, that's a more dangerous place to be in; we want as little logic
+	// in that place as possible.
+	sentryTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return nil
+	}
 
+	switch {
+	case isVreplicationTestSuite:
+	case renameNoLockCheckSupported:
+	default:
 		// We create the sentry table before toggling writes, because this involves a WaitForPos, which takes some time. We
 		// don't want to overload the buffering time with this excessive wait.
-
 		if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryTableName); err != nil {
 			return err
 		}
@@ -893,7 +909,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "graceful wait for buffering")
 	time.Sleep(100 * time.Millisecond)
 
-	if isVreplicationTestSuite {
+	switch {
+	case isVreplicationTestSuite:
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
 		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
 		// We therefore hard-rename the table into an agreed upon name, and we won't swap it with
@@ -904,7 +921,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			return err
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "test suite 'before' table renamed")
-	} else {
+	case renameNoLockCheckSupported:
+		e.updateMigrationStage(ctx, onlineDDL.UUID, "locking table")
+		lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+		defer cancel()
+		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTableWrite, onlineDDL.Table)
+		if _, err := lockConn.Exec(lockCtx, lockTableQuery.Query, 1, false); err != nil {
+			return err
+		}
+		e.updateMigrationStage(ctx, onlineDDL.UUID, "table locked")
+	default:
 		// real production
 
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "locking tables")
@@ -958,50 +984,68 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 
 	// rename tables atomically (remember, writes on source tables are stopped)
-	{
-		if isVreplicationTestSuite {
-			// this is used in Vitess endtoend testing suite
-			testSuiteAfterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
-			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+	switch {
+	case isVreplicationTestSuite:
+		// this is used in Vitess endtoend testing suite
+		testSuiteAfterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
+		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
+		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+			return err
+		}
+		e.updateMigrationStage(ctx, onlineDDL.UUID, "test suite 'after' table renamed")
+	case renameNoLockCheckSupported:
+		{
+			lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+			defer cancel()
+			e.updateMigrationStage(ctx, onlineDDL.UUID, "renaming tables")
+			renameQuery := sqlparser.BuildParsedQuery(sqlSwapTablesNoLockCheck, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
+			if _, err := lockConn.Exec(lockCtx, renameQuery.Query, 1, false); err != nil {
 				return err
 			}
-			e.updateMigrationStage(ctx, onlineDDL.UUID, "test suite 'after' table renamed")
-		} else {
-			e.updateMigrationStage(ctx, onlineDDL.UUID, "validating rename is still in place")
-			if err := waitForRenameProcess(); err != nil {
+		}
+		{
+			lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+			defer cancel()
+			e.updateMigrationStage(ctx, onlineDDL.UUID, "unlocking tables")
+			if _, err := lockConn.Exec(lockCtx, sqlUnlockTables, 1, false); err != nil {
 				return err
 			}
+		}
+	default:
+		e.updateMigrationStage(ctx, onlineDDL.UUID, "validating rename is still in place")
+		if err := waitForRenameProcess(); err != nil {
+			return err
+		}
 
-			// Normal (non-testing) alter table
-			e.updateMigrationStage(ctx, onlineDDL.UUID, "dropping sentry table")
-			dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
+		// Normal (non-testing) alter table
+		e.updateMigrationStage(ctx, onlineDDL.UUID, "dropping sentry table")
+		dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
 
-			{
-				lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
-				defer cancel()
-				if _, err := lockConn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
-					return err
-				}
+		{
+			lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+			defer cancel()
+			if _, err := lockConn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
+				return err
 			}
-			{
-				lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
-				defer cancel()
-				e.updateMigrationStage(ctx, onlineDDL.UUID, "unlocking tables")
-				if _, err := lockConn.Exec(lockCtx, sqlUnlockTables, 1, false); err != nil {
-					return err
-				}
+		}
+		{
+			lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+			defer cancel()
+			e.updateMigrationStage(ctx, onlineDDL.UUID, "unlocking tables")
+			if _, err := lockConn.Exec(lockCtx, sqlUnlockTables, 1, false); err != nil {
+				return err
 			}
-			{
-				lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
-				defer cancel()
-				e.updateMigrationStage(lockCtx, onlineDDL.UUID, "waiting for RENAME to complete")
-				if err := <-renameCompleteChan; err != nil {
-					return err
-				}
+		}
+		{
+			lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+			defer cancel()
+			e.updateMigrationStage(lockCtx, onlineDDL.UUID, "waiting for RENAME to complete")
+			if err := <-renameCompleteChan; err != nil {
+				return err
 			}
 		}
 	}
+
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "cut-over complete")
 	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 
