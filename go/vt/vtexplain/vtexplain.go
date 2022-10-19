@@ -58,6 +58,9 @@ const (
 	// ModeMulti is the default mode with autocommit implemented at vtgate
 	ModeMulti = "multi"
 
+	// ModeSingle is a mode that will allow transactions only across a single shard
+	ModeSingle = "single"
+
 	// ModeTwoPC enables the twopc feature
 	ModeTwoPC = "twopc"
 )
@@ -80,6 +83,9 @@ type (
 
 		// Normalize controls whether or not vtgate does query normalization
 		Normalize bool
+
+		// Noscatter controls whether scatter queries are allowed
+		NoScatter bool
 
 		// ExecutionMode must be set to one of the modes above
 		ExecutionMode string
