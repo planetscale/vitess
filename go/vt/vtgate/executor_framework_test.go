@@ -127,6 +127,36 @@ var executorVSchema = `
       		},
       		"owner": "t2_lookup"
     	},
+		"t2_erl_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.erl_lu_idx",
+        		"from": "erl_lu_col",
+        		"to": "keyspace_id",
+        		"read_lock": "exclusive"
+      		},
+      		"owner": "t2_lookup"
+    	},
+		"t2_srl_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.srl_lu_idx",
+        		"from": "srl_lu_col",
+        		"to": "keyspace_id",
+        		"read_lock": "shared"
+      		},
+      		"owner": "t2_lookup"
+    	},
+		"t2_nrl_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.nrl_lu_idx",
+        		"from": "nrl_lu_col",
+        		"to": "keyspace_id",
+        		"read_lock": "none"
+      		},
+      		"owner": "t2_lookup"
+    	},
 		"t2_nv_lu_vdx": {
       		"type": "lookup_unique",
       		"params": {
@@ -319,6 +349,18 @@ var executorVSchema = `
 				  	"name": "t2_wo_lu_vdx"
 				},
 				{
+				  	"column": "erl_lu_col",
+				  	"name": "t2_erl_lu_vdx"
+				},
+				{
+				  	"column": "srl_lu_col",
+				  	"name": "t2_srl_lu_vdx"
+				},
+				{
+				  	"column": "nrl_lu_col",
+				  	"name": "t2_nrl_lu_vdx"
+				},
+				{
 				  	"column": "nv_lu_col",
 				  	"name": "t2_nv_lu_vdx"
 				},
@@ -368,6 +410,9 @@ var unshardedVSchema = `
 			}
 		},
 		"wo_lu_idx": {},
+		"erl_lu_idx": {},
+		"srl_lu_idx": {},
+		"nrl_lu_idx": {},
 		"nv_lu_idx": {},
 		"lu_idx": {},
 		"simple": {}
