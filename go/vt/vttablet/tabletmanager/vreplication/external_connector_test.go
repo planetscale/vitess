@@ -65,7 +65,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
 		"insert into tab1(id,val) values (1,'a'), (2,'b')",
-		"/update _vt.copy_state",
+		"/insert into _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
 		"/update _vt.vreplication set state='Running'",
@@ -97,7 +97,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
 		"insert into tab2(id,val) values (1,'a'), (2,'b')",
-		"/update _vt.copy_state",
+		"/insert into _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
 		"/update _vt.vreplication set state='Running'",
@@ -122,7 +122,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 	expectDBClientAndVreplicationQueries(t, []string{
 		"begin",
 		"insert into tab3(id,val) values (1,'a'), (2,'b')",
-		"/update _vt.copy_state",
+		"/insert into _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
 		"/update _vt.vreplication set state='Running'",
