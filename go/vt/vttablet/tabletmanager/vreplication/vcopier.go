@@ -105,7 +105,7 @@ type vcopierCopyTaskResultHooks struct {
 //  1. Pending
 //  2. Begin
 //  3. Insert rows
-//  4. Update copy state
+//  4. Insert copy state
 //  5. Commit
 //  6. One of:
 //     - Complete
@@ -117,7 +117,7 @@ const (
 	vcopierCopyTaskPending vcopierCopyTaskState = iota
 	vcopierCopyTaskBegin
 	vcopierCopyTaskInsertRows
-	vcopierCopyTaskUpdateCopyState
+	vcopierCopyTaskInsertCopyState
 	vcopierCopyTaskCommit
 	vcopierCopyTaskCancel
 	vcopierCopyTaskComplete
@@ -139,7 +139,7 @@ type vcopierCopyWorkQueue struct {
 type vcopierCopyWorker struct {
 	*vdbClient
 	closeDbClient   bool
-	copyStateUpdate *sqlparser.ParsedQuery
+	copyStateInsert *sqlparser.ParsedQuery
 	isOpen          bool
 	pkfields        []*querypb.Field
 	sqlbuffer       bytes2.Buffer
@@ -278,7 +278,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 // primary key that was copied. A nil Result means that nothing has been copied.
 // A table that was fully copied is removed from copyState.
 func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSettings) error {
-	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id=%d", vc.vr.id))
+	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state group by vrepl_id, table_name)", vc.vr.id))
 	if err != nil {
 		return err
 	}
@@ -389,6 +389,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
+	copyStateGCTicker := time.NewTicker(copyStateGCInterval)
+	defer copyStateGCTicker.Stop()
 
 	parallelism := int(math.Max(1, float64(vreplicationParallelInsertWorkers)))
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
@@ -413,6 +415,31 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			case <-rowsCopiedTicker.C:
 				update := binlogplayer.GenerateUpdateRowsCopied(vc.vr.id, vc.vr.stats.CopyRowCount.Get())
 				_, _ = vc.vr.dbClient.Execute(update)
+			case <-ctx.Done():
+				return io.EOF
+			default:
+			}
+			select {
+			case <-copyStateGCTicker.C:
+				// Garbage collect older copy_state rows:
+				//   - Using a goroutine so that we are not blocking the copy flow
+				//   - Using a new connection so that we do not change the transactional behavior of the copy itself
+				// This helps to ensure that the table does not grow too large and the
+				// number of rows does not have a big impact on the queries used for
+				// the workflow.
+				go func() {
+					gcQuery := fmt.Sprintf("delete from _vt.copy_state where vrepl_id = %d and table_name = %s and id < (select maxid from (select max(id) as maxid from _vt.copy_state where vrepl_id = %d and table_name = %s) as depsel)",
+						vc.vr.id, encodeString(tableName), vc.vr.id, encodeString(tableName))
+					dbClient := vc.vr.vre.getDBClient(false)
+					if err := dbClient.Connect(); err != nil {
+						log.Errorf("Error while garbage collecting older copy_state rows, could not connect to database: %v", err)
+						return
+					}
+					defer dbClient.Close()
+					if _, err := dbClient.ExecuteFetch(gcQuery, -1); err != nil {
+						log.Errorf("Error while garbage collecting older copy_state rows with query %q: %v", gcQuery, err)
+					}
+				}()
 			case <-ctx.Done():
 				return io.EOF
 			default:
@@ -450,12 +477,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			pkfields = append(pkfields, rows.Pkfields...)
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf(
-				"update _vt.copy_state set lastpk=%a where vrepl_id=%s and table_name=%s", ":lastpk",
+				"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",
 				strconv.Itoa(int(vc.vr.id)),
-				encodeString(tableName),
-			)
-			copyStateUpdate := buf.ParsedQuery()
-			copyWorkQueue.open(copyStateUpdate, pkfields, tablePlan)
+				encodeString(tableName))
+			addLatestCopyState := buf.ParsedQuery()
+			copyWorkQueue.open(addLatestCopyState, pkfields, tablePlan)
 		}
 		if len(rows.Rows) == 0 {
 			return nil
@@ -488,7 +514,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			// have a value in it. If prevT isn't yet done, then prevCh will
 			// have a value later. Either way, AwaitCompletion should
 			// eventually get a value, unless there is a context expiry.
-			currT.lifecycle.before(vcopierCopyTaskUpdateCopyState).awaitCompletion(prevCh)
+			currT.lifecycle.before(vcopierCopyTaskInsertCopyState).awaitCompletion(prevCh)
 		}
 
 		// Store currCh in prevCh. The nextT will use this for sequencing.
@@ -733,10 +759,10 @@ func (vcq *vcopierCopyWorkQueue) enqueue(ctx context.Context, currT *vcopierCopy
 	return nil
 }
 
-// open the work queue. The provided arguments are used to generate INSERT and
-// UPDATE statements.
+// open the work queue. The provided arguments are used to generate
+// statements for inserting rows and copy state.
 func (vcq *vcopierCopyWorkQueue) open(
-	copyStateUpdate *sqlparser.ParsedQuery,
+	copyStateInsert *sqlparser.ParsedQuery,
 	pkfields []*querypb.Field,
 	tablePlan *TablePlan,
 ) {
@@ -755,7 +781,7 @@ func (vcq *vcopierCopyWorkQueue) open(
 					err.Error(),
 				)
 			}
-			worker.open(copyStateUpdate, pkfields, tablePlan)
+			worker.open(copyStateInsert, pkfields, tablePlan)
 			return worker, nil
 		},
 		poolCapacity, /* initial capacity */
@@ -899,7 +925,7 @@ func (vrh *vcopierCopyTaskResultHooks) sendTo(ch chan<- *vcopierCopyTaskResult) 
 //
 //	resultCh := make(chan *vcopierCopyTaskResult, 1)
 //	prevT.lifecycle.onResult().sendTo(resultCh)
-//	currT.Lifecycle.before(vcopierCopyTaskUpdateCopyState).awaitCompletion(resultCh)
+//	currT.Lifecycle.before(vcopierCopyTaskInsertCopyState).awaitCompletion(resultCh)
 func (vth *vcopierCopyTaskHooks) awaitCompletion(resultCh <-chan *vcopierCopyTaskResult) {
 	vth.do(func(ctx context.Context, args *vcopierCopyTaskArgs) error {
 		select {
@@ -951,8 +977,8 @@ func (vts vcopierCopyTaskState) String() string {
 		return "begin"
 	case vcopierCopyTaskInsertRows:
 		return "insert-rows"
-	case vcopierCopyTaskUpdateCopyState:
-		return "update-copy-state"
+	case vcopierCopyTaskInsertCopyState:
+		return "insert-copy-state"
 	case vcopierCopyTaskCommit:
 		return "commit"
 	case vcopierCopyTaskCancel:
@@ -1035,9 +1061,9 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 				}
 				return nil
 			}
-		case vcopierCopyTaskUpdateCopyState:
+		case vcopierCopyTaskInsertCopyState:
 			advanceFn = func(ctx context.Context, args *vcopierCopyTaskArgs) error {
-				if err := vbc.updateCopyState(ctx, args.lastpk); err != nil {
+				if err := vbc.insertCopyState(ctx, args.lastpk); err != nil {
 					return fmt.Errorf("error updating _vt.copy_state: %s", err.Error())
 				}
 				return nil
@@ -1082,33 +1108,7 @@ END:
 	return result
 }
 
-// open the vcopierCopyWorker. The provided arguments are used to generate
-// INSERT and UPDATE statements.
-func (vbc *vcopierCopyWorker) open(
-	copyStateUpdate *sqlparser.ParsedQuery,
-	pkfields []*querypb.Field,
-	tablePlan *TablePlan,
-) {
-	if vbc.isOpen {
-		return
-	}
-	vbc.copyStateUpdate = copyStateUpdate
-	vbc.isOpen = true
-	vbc.pkfields = pkfields
-	vbc.tablePlan = tablePlan
-}
-
-func (vbc *vcopierCopyWorker) insertRows(ctx context.Context, rows []*querypb.Row) (*sqltypes.Result, error) {
-	return vbc.tablePlan.applyBulkInsert(
-		&vbc.sqlbuffer,
-		rows,
-		func(sql string) (*sqltypes.Result, error) {
-			return vbc.vdbClient.ExecuteWithRetry(ctx, sql)
-		},
-	)
-}
-
-func (vbc *vcopierCopyWorker) updateCopyState(ctx context.Context, lastpk *querypb.Row) error {
+func (vbc *vcopierCopyWorker) insertCopyState(ctx context.Context, lastpk *querypb.Row) error {
 	var buf []byte
 	buf, err := prototext.Marshal(&querypb.QueryResult{
 		Fields: vbc.pkfields,
@@ -1123,14 +1123,40 @@ func (vbc *vcopierCopyWorker) updateCopyState(ctx context.Context, lastpk *query
 			Value: buf,
 		},
 	}
-	copyStateUpdate, err := vbc.copyStateUpdate.GenerateQuery(bv, nil)
+	copyStateInsert, err := vbc.copyStateInsert.GenerateQuery(bv, nil)
 	if err != nil {
 		return err
 	}
-	if _, err := vbc.vdbClient.Execute(copyStateUpdate); err != nil {
+	if _, err := vbc.vdbClient.Execute(copyStateInsert); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (vbc *vcopierCopyWorker) insertRows(ctx context.Context, rows []*querypb.Row) (*sqltypes.Result, error) {
+	return vbc.tablePlan.applyBulkInsert(
+		&vbc.sqlbuffer,
+		rows,
+		func(sql string) (*sqltypes.Result, error) {
+			return vbc.vdbClient.ExecuteWithRetry(ctx, sql)
+		},
+	)
+}
+
+// open the vcopierCopyWorker. The provided arguments are used to generate
+// statements for inserting rows and copy state.
+func (vbc *vcopierCopyWorker) open(
+	copyStateInsert *sqlparser.ParsedQuery,
+	pkfields []*querypb.Field,
+	tablePlan *TablePlan,
+) {
+	if vbc.isOpen {
+		return
+	}
+	vbc.copyStateInsert = copyStateInsert
+	vbc.isOpen = true
+	vbc.pkfields = pkfields
+	vbc.tablePlan = tablePlan
 }
 
 // vcopierCopyTaskStateIsDone returns true if the provided state is in one of
@@ -1155,8 +1181,8 @@ func vcopierCopyTaskGetNextState(vts vcopierCopyTaskState) vcopierCopyTaskState 
 	case vcopierCopyTaskBegin:
 		return vcopierCopyTaskInsertRows
 	case vcopierCopyTaskInsertRows:
-		return vcopierCopyTaskUpdateCopyState
-	case vcopierCopyTaskUpdateCopyState:
+		return vcopierCopyTaskInsertCopyState
+	case vcopierCopyTaskInsertCopyState:
 		return vcopierCopyTaskCommit
 	case vcopierCopyTaskCommit:
 		return vcopierCopyTaskComplete
