@@ -361,6 +361,12 @@ func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) (
 			return nil, 0, err
 		}
 
+		/* potential fix
+		if entry.IsDir() {
+			continue
+		}
+		*/
+
 		fes = append(fes, FileEntry{
 			Base: base,
 			Name: path.Join(subDir, fi.Name()),

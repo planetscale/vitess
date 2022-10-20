@@ -22,6 +22,7 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"text/template"
 	"time"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -97,6 +98,69 @@ func TestTabletBackupOnly(t *testing.T) {
 	tearDown(t, false)
 }
 
+func TestBackupOnlyWithMySQLDefaults(t *testing.T) {
+	// We don't need the resources created in TestMain
+	tearDownKeyspace(t, false, false, keyspaceName, []*cluster.Vttablet{primary, replica1, replica2})
+	keyspaceName = "defaults_test"
+	shardName = "0"
+	shardKsName = fmt.Sprintf("%s/%s", keyspaceName, shardName)
+	primary = localCluster.NewVttabletInstance("primary", 0, "")
+	replica1 = localCluster.NewVttabletInstance("replica", 0, "")
+	replica2 = localCluster.NewVttabletInstance("replica", 0, "")
+	defaultsTablets := []*cluster.Vttablet{primary, replica1, replica2}
+	defer func() {
+		cluster.PanicHandler(t)
+		tearDownKeyspace(t, false, true, keyspaceName, defaultsTablets)
+	}()
+	localCluster.VtctlProcess.CreateKeyspace(keyspaceName)
+
+	extraCnfFile := "/tmp/defaults_test.cnf"
+	// Have mysqlctl use our extra cnf file so that we can override
+	// some default values.
+	os.Setenv("EXTRA_MY_CNF", extraCnfFile)
+	mysqlCtlExtraArgs := []string{"--db-credentials-file", dbCredentialFile}
+
+	for _, tablet := range defaultsTablets {
+		tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shardName, keyspaceName)
+		tablet.VttabletProcess.DbPassword = dbPassword
+		tablet.VttabletProcess.ExtraArgs = commonTabletArg
+		tablet.VttabletProcess.SupportsBackup = true
+		tablet.VttabletProcess.EnableSemiSync = false
+
+		// Create the extra mycnf file to override the InnoDB
+		// directories in the default mycnf file.
+		dataDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/data", tablet.TabletUID))
+		extraCnf, err := os.Create(extraCnfFile)
+		require.NoError(t, err)
+		extraCnfPathData := struct{ DataDir string }{
+			DataDir: dataDir,
+		}
+		template.Must(template.New(keyspaceName).Parse(`
+innodb_data_home_dir={{.DataDir}}
+innodb_log_group_home_dir={{.DataDir}}
+`)).Execute(extraCnf, extraCnfPathData)
+		require.NoError(t, extraCnf.Close())
+
+		tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
+		tablet.MysqlctlProcess.ExtraArgs = mysqlCtlExtraArgs
+		proc, err := tablet.MysqlctlProcess.StartProcess()
+		require.NoError(t, err)
+		require.NoError(t, proc.Wait())
+	}
+
+	os.Unsetenv("EXTRA_MY_CNF")
+
+	// Create database
+	for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
+		require.NoError(t, tablet.VttabletProcess.CreateDB(keyspaceName))
+	}
+
+	initTablets(t, true, true)
+
+	firstBackupTest(t, "replica")
+}
+
 func firstBackupTest(t *testing.T, tabletType string) {
 	// Test First Backup flow.
 	//
@@ -157,7 +221,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	require.NotNil(t, result)
 	require.NotEmpty(t, result.Rows)
 	assert.Equal(t, replica2.Alias, result.Rows[0][1].ToString(), "Alias")
-	assert.Equal(t, "ks.0", result.Rows[1][1].ToString(), "ClusterAlias")
+	assert.Equal(t, fmt.Sprintf("%s.0", keyspaceName), result.Rows[1][1].ToString(), "ClusterAlias")
 	assert.Equal(t, cell, result.Rows[2][1].ToString(), "DataCenter")
 	if tabletType == "replica" {
 		assert.Equal(t, "neutral", result.Rows[3][1].ToString(), "PromotionRule")
@@ -170,13 +234,17 @@ func firstBackupTest(t *testing.T, tabletType string) {
 }
 
 func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
+	vtBackupShard(t, initialBackup, restartBeforeBackup, keyspaceName, shardName, cell)
+}
+
+func vtBackupShard(t *testing.T, initialBackup bool, restartBeforeBackup bool, keyspace, shard, cell string) {
 	// Take the back using vtbackup executable
 	extraArgs := []string{"--allow_first_backup", "--db-credentials-file", dbCredentialFile}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
 	}
 	log.Infof("starting backup tablet %s", time.Now())
-	err := localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
+	err := localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspace, shard, cell, extraArgs...)
 	require.Nil(t, err)
 }
 
@@ -260,7 +328,6 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 }
 
 func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {
-
 	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 	tablet.MysqlctlProcess.ExtraArgs = extraArgs
 
@@ -284,30 +351,31 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 }
 
 func tearDown(t *testing.T, initMysql bool) {
+	tearDownKeyspace(t, initMysql, true, keyspaceName, []*cluster.Vttablet{primary, replica1, replica2})
+}
+
+func tearDownKeyspace(t *testing.T, initMysql, deleteTablets bool, keyspace string, tablets []*cluster.Vttablet) {
 	// reset replication
 	promoteCommands := "STOP SLAVE; RESET SLAVE ALL; RESET MASTER;"
 	disableSemiSyncCommands := "SET GLOBAL rpl_semi_sync_master_enabled = false; SET GLOBAL rpl_semi_sync_slave_enabled = false"
-	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-		_, err := tablet.VttabletProcess.QueryTablet(promoteCommands, keyspaceName, true)
-		require.Nil(t, err)
-		_, err = tablet.VttabletProcess.QueryTablet(disableSemiSyncCommands, keyspaceName, true)
-		require.Nil(t, err)
-		for _, db := range []string{"_vt", "vt_insert_test"} {
-			_, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("drop database if exists %s", db), keyspaceName, true)
+	for _, tablet := range tablets {
+		if deleteTablets { // not needed if you have not called InitTablet for them
+			_, err := tablet.VttabletProcess.QueryTablet(promoteCommands, keyspace, false)
 			require.Nil(t, err)
+			_, err = tablet.VttabletProcess.QueryTablet(disableSemiSyncCommands, keyspace, false)
+			require.Nil(t, err)
+			for _, db := range []string{"_vt", "vt_insert_test"} {
+				_, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("drop database if exists %s", db), keyspace, false)
+				require.Nil(t, err)
+			}
+
+			resetTabletDirectory(t, *tablet, initMysql)
+			// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
+			err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
+			require.Nil(t, err)
+		} else {
+			// only cleanup the mysqld instance
+			resetTabletDirectory(t, *tablet, initMysql)
 		}
-	}
-
-	// TODO: Ideally we should not be resetting the mysql.
-	// So in below code we will have to uncomment the commented code and remove resetTabletDirectory
-	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-		//Tear down Tablet
-		//err := tablet.VttabletProcess.TearDown()
-		//require.Nil(t, err)
-
-		resetTabletDirectory(t, tablet, initMysql)
-		// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
-		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
-		require.Nil(t, err)
 	}
 }
