@@ -36,17 +36,40 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Get dependencies
+      env: # Or as an environment variable
+        AWS_ACCESS_KEY_ID: ${{"{{"}} secrets.BUILDKITE_S3_ACCESS_KEY_ID {{"}}"}}
+        AWS_SECRET_ACCESS_KEY: ${{"{{"}} secrets.BUILDKITE_S3_SECRET_ACCESS_KEY {{"}}"}}
+        AWS_DEFAULT_REGION: us-east-1
       run: |
-        # Setup Percona Server for MySQL 8.0
         sudo apt-get update
-        sudo apt-get install -y lsb-release gnupg2 curl
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release setup ps80
-        sudo apt-get update
+        # stop any existing running instance of mysql
+        sudo service mysql stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+
+        # Uninstall any previously installed MySQL first
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo deluser mysql
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
+        # install necessary tools
+        sudo apt-get install -y make unzip g++ etcd curl git wget awscli
+        sudo service etcd stop
+
+        # Get latest version of mysql from s3 bucket
+        LATEST_BUILD=$(aws s3api list-objects-v2 --bucket "planetscale-mysql-server-private-ci-artifacts" --prefix mysql/main/dist --query 'reverse(sort_by(Contents[?contains(Key, `focal`)], &LastModified))[:1].Key' --output=text)
+        echo "latest build is $LATEST_BUILD"
+        # Pin this to 8.0.30
+        LAST_BUILD="mysql/main/dist/mysql-8.0.30.20221013-ps-87805bf371e-focal-linux-x86_64.tar.gz"
+        echo "installing psdb mysql $LAST_BUILD"
+        aws s3 cp "s3://planetscale-mysql-server-private-ci-artifacts/${LAST_BUILD}" .
+        sudo tar xf $(basename $LAST_BUILD) -v -C /usr --strip-components=1
 
         # Install everything else we need, and configure
-        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils
+        sudo apt-get install -y mysql-server mysql-client eatmydata xz-utils
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/

@@ -57,13 +57,19 @@ jobs:
         sudo sysctl -p /etc/sysctl.conf
 
     - name: Get dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      env: # Or as an environment variable
+        AWS_ACCESS_KEY_ID: ${{"{{"}} secrets.BUILDKITE_S3_ACCESS_KEY_ID {{"}}"}}
+        AWS_SECRET_ACCESS_KEY: ${{"{{"}} secrets.BUILDKITE_S3_SECRET_ACCESS_KEY {{"}}"}}
+        AWS_DEFAULT_REGION: us-east-1
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
+        # stop any existing running instance of mysql
+        sudo service mysql stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
         # Uninstall any previously installed MySQL first
-        sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
         sudo apt-get -y autoremove
         sudo apt-get -y autoclean
@@ -71,47 +77,19 @@ jobs:
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
-        {{if (eq .Platform "mysql57")}}
-        # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        # install necessary tools
+        sudo apt-get install -y make unzip g++ curl git wget awscli ant openjdk-8-jdk
 
-        # mysql57
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
-        # Bionic packages are still compatible for Focal since there's no MySQL 5.7
-        # packages for Focal.
-        echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7*
+        # Get latest version of mysql from s3 bucket
+        LATEST_BUILD=$(aws s3api list-objects-v2 --bucket "planetscale-mysql-server-private-ci-artifacts" --prefix mysql/main/dist --query 'reverse(sort_by(Contents[?contains(Key, `focal`)], &LastModified))[:1].Key' --output=text)
+        echo "latest build is $LATEST_BUILD"
+        # Pin this to 8.0.30
+        LAST_BUILD="mysql/main/dist/mysql-8.0.30.20221013-ps-87805bf371e-focal-linux-x86_64.tar.gz"
+        aws s3 cp "s3://planetscale-mysql-server-private-ci-artifacts/${LAST_BUILD}" .
+        sudo tar xf $(basename $LAST_BUILD) -v -C /usr --strip-components=1
 
-        {{end}}
-
-        {{if (eq .Platform "mysql80")}}
-        # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-
-        # mysql80
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
-
-        {{end}}
-
-        {{if (eq .Platform "mariadb103")}}
-
-        # mariadb103
-        sudo apt-get install -y software-properties-common
-        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] https://mirror.rackspace.com/mariadb/repo/10.3/ubuntu bionic main'
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
-
-        {{end}}
-
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
+        # Install everything else we need, and configure
+        sudo apt-get install -y mysql-server mysql-client eatmydata xz-utils
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
