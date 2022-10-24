@@ -16,7 +16,7 @@ jobs:
         git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: 1.18.4
 
@@ -28,7 +28,7 @@ jobs:
         sudo sysctl -p /etc/sysctl.conf
 
     - name: Check out code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Get dependencies
       env: # Or as an environment variable
