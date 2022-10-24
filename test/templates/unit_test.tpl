@@ -43,8 +43,7 @@ jobs:
             - '.github/workflows/{{.FileName}}'
 
     - name: Set up Go
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: 1.18.7
 
@@ -55,6 +54,9 @@ jobs:
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
+
+    - name: Check out code
+      uses: actions/checkout@v3
 
     - name: Get dependencies
       env: # Or as an environment variable
