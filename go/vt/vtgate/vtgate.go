@@ -19,10 +19,12 @@ limitations under the License.
 package vtgate
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -558,6 +560,12 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]any
 		statsKey[1],
 		statsKey[2],
 		ec.String(),
+	}
+
+	if *terseErrors {
+		regexpBv := regexp.MustCompile(`BindVars: \{.*\}`)
+		str := regexpBv.ReplaceAllString(err.Error(), "BindVars: {REDACTED}")
+		err = errors.New(str)
 	}
 
 	// Traverse the request structure and truncate any long values
