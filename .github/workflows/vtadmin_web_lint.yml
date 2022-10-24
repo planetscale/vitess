@@ -26,11 +26,9 @@ jobs:
           echo Skip ${skip}
           echo "::set-output name=skip-workflow::${skip}"
 
-      - uses: actions/checkout@v2
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      - uses: actions/checkout@v3
 
-      - uses: actions/setup-node@v2
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      - uses: actions/setup-node@v3
         with:
           # node-version should match package.json
           node-version: '16.13.0'
