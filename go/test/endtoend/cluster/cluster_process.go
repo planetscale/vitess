@@ -846,7 +846,7 @@ func (cluster *LocalProcessCluster) StartVtworker(cell string, extraArgs ...stri
 }
 
 // StartVtbackup starts a vtbackup
-func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initalBackup bool,
+func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialBackup bool,
 	keyspace string, shard string, cell string, extraArgs ...string) error {
 	log.Info("Starting vtbackup")
 	cluster.VtbackupProcess = *VtbackupProcessInstance(
@@ -859,7 +859,7 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initalBa
 		cluster.Hostname,
 		cluster.TmpDirectory,
 		cluster.TopoPort,
-		initalBackup)
+		initialBackup)
 	cluster.VtbackupProcess.ExtraArgs = extraArgs
 	return cluster.VtbackupProcess.Setup()
 
