@@ -1182,6 +1182,7 @@ func buildLdPaths() ([]string, error) {
 	ldPaths := []string{
 		fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot),
 		os.ExpandEnv("LD_PRELOAD=$LD_PRELOAD"),
+		os.ExpandEnv("MALLOC_CONF=$MALLOC_CONF"),
 	}
 
 	return ldPaths, nil
