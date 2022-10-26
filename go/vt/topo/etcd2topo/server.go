@@ -41,6 +41,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"go.etcd.io/etcd/client/pkg/v3/tlsutil"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -135,6 +136,8 @@ func newTLSConfig(certPath, keyPath, caPath string) (*tls.Config, error) {
 	return tlscfg, nil
 }
 
+var zapNop = zap.NewNop()
+
 // NewServerWithOpts creates a new server with the provided TLS options
 func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Server, error) {
 	// TODO: Rename this to NewServer and change NewServer to a name that signifies it uses the process-wide TLS settings.
@@ -142,6 +145,12 @@ func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Ser
 		Endpoints:   strings.Split(serverAddr, ","),
 		DialTimeout: 5 * time.Second,
 		DialOptions: []grpc.DialOption{grpc.WithBlock()},
+
+		// PlanetScale: discard logs from the etcdv3 client. Leaving the logger
+		// nil here results in allocating a new logger and its metadata each
+		// time we open a new topo connection. This is very expensive in
+		// psdb-operator.
+		Logger: zapNop,
 	}
 
 	tlscfg, err := newTLSConfig(certPath, keyPath, caPath)
