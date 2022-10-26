@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -143,4 +144,45 @@ func TestAssumeVersionString(t *testing.T) {
 		}
 	}
 
+}
+
+func TestBuildLdPathsMalloc(t *testing.T) {
+	os.Setenv("MALLOC_CONF", "blahblah")
+	envVals, err := buildLdPaths()
+	if err != nil {
+		t.Errorf("buildLdPaths() failed %#v", err)
+	}
+	for _, envVal := range envVals {
+		if envVal == "MALLOC_CONF=blahblah" {
+			return
+		}
+	}
+	t.Errorf("buildLdPaths() failed for MALLOC_CONF")
+}
+
+func TestBuildLdPathsLdPreload(t *testing.T) {
+	os.Setenv("LD_PRELOAD", "blahblah")
+	envVals, err := buildLdPaths()
+	if err != nil {
+		t.Errorf("buildLdPaths() failed %#v", err)
+	}
+	for _, envVal := range envVals {
+		if envVal == "LD_PRELOAD=blahblah" {
+			return
+		}
+	}
+	t.Errorf("buildLdPaths() failed for LD_PRELOAD")
+}
+
+func TestBuildLdPathsLdLibraryPath(t *testing.T) {
+	envVals, err := buildLdPaths()
+	if err != nil {
+		t.Errorf("buildLdPaths() failed %#v", err)
+	}
+	for _, envVal := range envVals {
+		if strings.HasPrefix(envVal, "LD_LIBRARY_PATH=") && strings.HasSuffix(envVal, "/lib/mysql") {
+			return
+		}
+	}
+	t.Errorf("buildLdPaths() failed for LD_LIBRARY_PATH")
 }
