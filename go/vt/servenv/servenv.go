@@ -30,16 +30,16 @@ package servenv
 
 import (
 	"flag"
+	// register the HTTP handlers for profiling
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
-
-	// register the HTTP handlers for profiling
-	_ "net/http/pprof"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
@@ -64,6 +64,7 @@ var (
 	_              = flag.Int("mem-profile-rate", 512*1024, "deprecated: use '-pprof=mem' instead")
 	_              = flag.Int("mutex-profile-fraction", 0, "deprecated: use '-pprof=mutex' instead")
 	catchSigpipe   = flag.Bool("catch-sigpipe", false, "catch and ignore SIGPIPE on stdout and stderr if specified")
+	maxStackSize   = flag.Int("max-stack-size", 64*1024*1024, "configure the maximum stack size in bytes")
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
@@ -120,6 +121,11 @@ func Init() {
 	}
 	fdl := stats.NewGauge("MaxFds", "File descriptor limit")
 	fdl.Set(int64(fdLimit.Cur))
+
+	// Limit the stack size. We don't need huge stacks and smaller limits mean
+	// any infinite recursion fires earlier and on low memory systems avoids
+	// out of memory issues in favor of a stack overflow error.
+	debug.SetMaxStack(*maxStackSize)
 
 	onInitHooks.Fire()
 }
