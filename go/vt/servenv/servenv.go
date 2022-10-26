@@ -32,6 +32,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -80,6 +81,7 @@ var (
 	onTermTimeout  = 10 * time.Second
 	onCloseTimeout = time.Nanosecond
 	catchSigpipe   bool
+	maxStackSize   = 64 * 1024 * 1024
 )
 
 // RegisterFlags installs the flags used by Init, Run, and RunDefault.
@@ -140,6 +142,11 @@ func Init() {
 	}
 	fdl := stats.NewGauge("MaxFds", "File descriptor limit")
 	fdl.Set(int64(fdLimit.Cur))
+
+	// Limit the stack size. We don't need huge stacks and smaller limits mean
+	// any infinite recursion fires earlier and on low memory systems avoids
+	// out of memory issues in favor of a stack overflow error.
+	debug.SetMaxStack(maxStackSize)
 
 	onInitHooks.Fire()
 }
