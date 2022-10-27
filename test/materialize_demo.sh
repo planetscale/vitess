@@ -19,7 +19,7 @@
 # So we can detect if a regression affecting a tutorial is introduced.
 
 
-read -p "**************** Setting up initial cluster with commerce keyspace **************** "
+echo "**************** Setting up initial cluster with commerce keyspace **************** "
 source build.env
 
 #set -xe
@@ -40,7 +40,7 @@ mysql --binary-as-hex=false < ../common/insert_commerce_data.sql
 mysql --table --binary-as-hex=false < ../common/select_commerce_data.sql
 
 echo
-read -p "**************** Setting up customer keyspace **************** "
+echo "**************** Setting up customer keyspace **************** "
 
 ./201_customer_tablets.sh
 
@@ -68,15 +68,11 @@ read -p "**************** Switching read and write traffic to customer keyspace 
 
 ./204_switch_writes.sh
 
-mysql --binary-as-hex=false --table < ../common/select_customer0_data.sql
-# Expected to fail!
-mysql --binary-as-hex=false --table < ../common/select_commerce_data.sql &>/dev/null || echo "DenyList working, as expected"
 ./205_clean_commerce.sh
-# Expected to fail!
-mysql --binary-as-hex=false --table < ../common/select_commerce_data.sql &>/dev/null || echo "Tables missing, as expected"
 
 echo
 read -p "**************** Setting up sharded customer keyspace **************** "
+
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh
@@ -103,9 +99,6 @@ read -p "**************** Switching read and write traffic to sharded customer k
 
 ./304_switch_reads.sh
 ./305_switch_writes.sh
-
-mysql --binary-as-hex=false --table < ../common/select_customer-80_data.sql
-mysql --binary-as-hex=false --table < ../common/select_customer80-_data.sql
 
 ./310_materialize_demo_setup.sh
 
