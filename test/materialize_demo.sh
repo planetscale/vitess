@@ -52,6 +52,7 @@ for shard in "customer/0"; do
 done;
 
 echo
+echo "**************** Before MoveTables: order tables in commerce"
 read -p "**************** Running MoveTables to move customer and corder tables from commerce keyspace to customer keyspace **************** "
 
 ./202_move_tables.sh
@@ -62,13 +63,15 @@ while true; do
 done;
 
 echo
-read -p "**************** Switching read and write traffic to customer keyspace **************** "
+echo "**************** Switching read and write traffic to customer keyspace **************** "
 
 ./203_switch_reads.sh
 
 ./204_switch_writes.sh
 
 ./205_clean_commerce.sh
+
+echo "**************** After MoveTables: order tables in customer"
 
 echo
 read -p "**************** Setting up sharded customer keyspace **************** "
@@ -85,6 +88,7 @@ for shard in "customer/-80" "customer/80-"; do
 done;
 
 echo
+echo "**************** Before Reshard: customer unsharded"
 read -p "**************** Resharding from unsharded to two shards -80/80- **************** "
 
 ./303_reshard.sh
@@ -95,12 +99,15 @@ while true; do
 done;
 
 echo
-read -p "**************** Switching read and write traffic to sharded customer keyspace **************** "
+echo "**************** Switching read and write traffic to sharded customer keyspace **************** "
 
 ./304_switch_reads.sh
 ./305_switch_writes.sh
 
+echo "**************** After Reshard: customer sharded"
 ./310_materialize_demo_setup.sh
+
+echo "**************** Demo completed"
 
 #./306_down_shard_0.sh
 
