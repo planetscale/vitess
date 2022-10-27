@@ -128,6 +128,7 @@ var (
 	initDBSQLFile    = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
 	detachedMode     = flag.Bool("detach", false, "detached mode - run backups detached from the terminal")
 	keepAliveTimeout = flag.Duration("keep-alive-timeout", 0*time.Second, "Wait until timeout elapses after a successful backup before shutting down.")
+	disableRedoLog   = flag.Bool("disable-redo-log", false, "Disable InnoDB redo log during replication-from-primary phase of backup.")
 )
 
 func init() {
@@ -337,10 +338,12 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 
 	// Disable redo logging (if we can) before we start replication.
 	disabledRedoLog := false
-	if err := mysqld.DisableRedoLog(ctx); err != nil {
-		log.Warningf("Error disabling redo logging: %v", err)
-	} else {
-		disabledRedoLog = true
+	if *disableRedoLog {
+		if err := mysqld.DisableRedoLog(ctx); err != nil {
+			log.Warningf("Error disabling redo logging: %v", err)
+		} else {
+			disabledRedoLog = true
+		}
 	}
 
 	// We have restored a backup. Now start replication.
