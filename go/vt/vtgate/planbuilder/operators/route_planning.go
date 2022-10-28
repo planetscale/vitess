@@ -258,7 +258,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]Opera
 			return nil, err
 		}
 		if qg.NoDeps != nil {
-			plan.Source, err = PushPredicate(ctx, qg.NoDeps, plan.Source)
+			plan, err = PushPredicate(ctx, qg.NoDeps, plan)
 			if err != nil {
 				return nil, err
 			}
@@ -333,7 +333,7 @@ func tryRewriteOrToIn(expr sqlparser.Expr) sqlparser.Expr {
 	return nil
 }
 
-func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (*Route, error) {
+func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (Operator, error) {
 	ks, err := ctx.VSchema.AnyKeyspace()
 	if err != nil {
 		return nil, err
@@ -369,7 +369,16 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (
 			r.SysTableTableName[bvName] = out
 		}
 	}
-	return r, nil
+	name, err := table.Alias.TableName()
+	col := &sqlparser.ColName{Qualifier: name, Name: sqlparser.NewIdentifierCI("TABLE_SCHEMA")}
+	lit := sqlparser.NewStrLiteral("_vt")
+	cmp := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.NotEqualOp,
+		Left:     col,
+		Right:    lit,
+	}
+
+	return PushPredicate(ctx, cmp, r)
 }
 
 func mergeRoutes(ctx *plancontext.PlanningContext, qg *QueryGraph, physicalOps []Operator, planCache opCacheMap, crossJoinsOK bool) (Operator, error) {

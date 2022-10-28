@@ -717,7 +717,7 @@ func (r *Route) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsE
 	return r.haveMatchingVindex(ctx, node, vdValue, column, val, opcodeF, justTheVindex)
 }
 
-func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves semantics.TableSet) (*Route, error) {
+func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves semantics.TableSet) (Operator, error) {
 	if table.IsInfSchema {
 		return createInfSchemaRoute(ctx, table)
 	}
