@@ -92,6 +92,13 @@ func TestInformationSchemaWithSubquery(t *testing.T) {
 	mcmp.AssertIsEmpty("SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = (SELECT SCHEMA()) AND TABLE_NAME = 'not_exists'")
 }
 
+func TestInformationSchemaTablesQuery(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.AssertIsEmpty("SELECT TABLE_NAME, TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_SCHEMA NOT IN ('sys', 'mysql', 'information_schema', 'performance_schema')")
+}
+
 func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T) {
 	t.Skip("flaky. skipping for now")
 	mcmp, closer := start(t)
