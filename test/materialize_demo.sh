@@ -56,7 +56,7 @@ echo "**************** Before MoveTables: order tables in commerce"
 read -p "**************** Running MoveTables to move customer and corder tables from commerce keyspace to customer keyspace **************** "
 
 ./202_move_tables.sh
-
+sleep 2
 while true; do
  vtctlclient workflow customer.commerce2customer show | grep -q '"State": "Running"' && break
  sleep 1
@@ -72,9 +72,7 @@ echo "**************** Switching read and write traffic to customer keyspace ***
 ./205_clean_commerce.sh
 
 echo "**************** After MoveTables: order tables in customer"
-
-echo
-read -p "**************** Setting up sharded customer keyspace **************** "
+read -p "**************** Setting up sharded customer keyspace in advance for Reshard **************** "
 
 
 ./301_customer_sharded.sh
@@ -92,7 +90,7 @@ echo "**************** Before Reshard: customer unsharded"
 read -p "**************** Resharding from unsharded to two shards -80/80- **************** "
 
 ./303_reshard.sh
-
+sleep 2
 while true; do
  vtctlclient workflow customer.cust2cust show | grep -q '"State": "Running"' && break
  sleep 1
