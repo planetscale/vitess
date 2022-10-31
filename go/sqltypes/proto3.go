@@ -100,11 +100,12 @@ func ResultToProto3(qr *Result) *querypb.QueryResult {
 		return nil
 	}
 	return &querypb.QueryResult{
-		Fields:       qr.Fields,
-		RowsAffected: qr.RowsAffected,
-		InsertId:     qr.InsertID,
-		Rows:         RowsToProto3(qr.Rows),
-		Info:         qr.Info,
+		Fields:              qr.Fields,
+		RowsAffected:        qr.RowsAffected,
+		InsertId:            qr.InsertID,
+		Rows:                RowsToProto3(qr.Rows),
+		Info:                qr.Info,
+		SessionStateChanges: qr.SessionStateChanges,
 	}
 }
 
@@ -116,11 +117,13 @@ func Proto3ToResult(qr *querypb.QueryResult) *Result {
 	}
 	infoJSON := parseOKInfoJSON(qr.Info)
 	return &Result{
-		Fields:       qr.Fields,
-		RowsAffected: qr.RowsAffected,
-		InsertID:     qr.InsertId,
-		Rows:         proto3ToRows(qr.Fields, qr.Rows),
-		RowsRead:     infoJSON.RowsRead,
+		Fields:              qr.Fields,
+		RowsAffected:        qr.RowsAffected,
+		InsertID:            qr.InsertId,
+		Rows:                proto3ToRows(qr.Fields, qr.Rows),
+		RowsRead:            infoJSON.RowsRead,
+		Info:                qr.Info,
+		SessionStateChanges: qr.SessionStateChanges,
 	}
 }
 
@@ -133,11 +136,13 @@ func CustomProto3ToResult(fields []*querypb.Field, qr *querypb.QueryResult) *Res
 	}
 	infoJSON := parseOKInfoJSON(qr.Info)
 	return &Result{
-		Fields:       qr.Fields,
-		RowsAffected: qr.RowsAffected,
-		InsertID:     qr.InsertId,
-		Rows:         proto3ToRows(fields, qr.Rows),
-		RowsRead:     infoJSON.RowsRead,
+		Fields:              qr.Fields,
+		RowsAffected:        qr.RowsAffected,
+		InsertID:            qr.InsertId,
+		Rows:                proto3ToRows(fields, qr.Rows),
+		RowsRead:            infoJSON.RowsRead,
+		Info:                qr.Info,
+		SessionStateChanges: qr.SessionStateChanges,
 	}
 }
 

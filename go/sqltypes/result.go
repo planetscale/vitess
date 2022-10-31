@@ -91,9 +91,11 @@ func (result *Result) ReplaceKeyspace(keyspace string) {
 // Copy creates a deep copy of Result.
 func (result *Result) Copy() *Result {
 	out := &Result{
-		InsertID:     result.InsertID,
-		RowsAffected: result.RowsAffected,
-		RowsRead:     result.RowsRead,
+		InsertID:            result.InsertID,
+		RowsAffected:        result.RowsAffected,
+		RowsRead:            result.RowsRead,
+		Info:                result.Info,
+		SessionStateChanges: result.SessionStateChanges,
 	}
 	if result.Fields != nil {
 		out.Fields = make([]*querypb.Field, len(result.Fields))
@@ -108,6 +110,31 @@ func (result *Result) Copy() *Result {
 		}
 	}
 	return out
+}
+
+// ShallowCopy creates a shallow copy of Result.
+func (result *Result) ShallowCopy() *Result {
+	return &Result{
+		Fields:              result.Fields,
+		InsertID:            result.InsertID,
+		RowsAffected:        result.RowsAffected,
+		RowsRead:            result.RowsRead,
+		Info:                result.Info,
+		SessionStateChanges: result.SessionStateChanges,
+		Rows:                result.Rows,
+	}
+}
+
+// Metadata creates a shallow copy of Result without the rows useful
+// for sending as a first packet in streaming results.
+func (result *Result) Metadata() *Result {
+	return &Result{
+		Fields:              result.Fields,
+		InsertID:            result.InsertID,
+		RowsAffected:        result.RowsAffected,
+		Info:                result.Info,
+		SessionStateChanges: result.SessionStateChanges,
+	}
 }
 
 // CopyRow makes a copy of the row.
@@ -127,9 +154,11 @@ func (result *Result) Truncate(l int) *Result {
 	}
 
 	out := &Result{
-		InsertID:     result.InsertID,
-		RowsAffected: result.RowsAffected,
-		RowsRead:     result.RowsRead,
+		InsertID:            result.InsertID,
+		RowsAffected:        result.RowsAffected,
+		RowsRead:            result.RowsRead,
+		Info:                result.Info,
+		SessionStateChanges: result.SessionStateChanges,
 	}
 	if result.Fields != nil {
 		out.Fields = result.Fields[:l]
