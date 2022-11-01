@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -32,6 +34,23 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
+
+// CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
+// installation that hasn't been set up yet.
+func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf, error) {
+	mycnf := mysqlctl.NewMycnf(tabletUID, mysqlPort)
+	if err := mycnf.RandomizeMysqlServerID(); err != nil {
+		return nil, nil, fmt.Errorf("couldn't generate random MySQL server_id: %v", err)
+	}
+	if mysqlSocket != "" {
+		mycnf.SocketFile = mysqlSocket
+	}
+	var cfg dbconfigs.DBConfigs
+	// ensure the DBA username is 'root' instead of the system's default username so that mysqladmin can shutdown
+	cfg.Dba.User = "root"
+	cfg.InitWithSocket(mycnf.SocketFile)
+	return mysqlctl.NewMysqld(&cfg), mycnf, nil
+}
 
 // NewMySQL creates a new MySQL server using the local mysqld binary. The name of the database
 // will be set to `dbName`. SQL queries that need to be executed on the new MySQL instance
@@ -50,7 +69,7 @@ func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...
 	}
 
 	mysqlPort := cluster.GetAndReservePort()
-	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(0, "", int32(mysqlPort))
+	mysqld, mycnf, err := CreateMysqldAndMycnf(0, "", int32(mysqlPort))
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}
