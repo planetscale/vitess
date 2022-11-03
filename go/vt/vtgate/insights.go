@@ -22,6 +22,7 @@ import (
 	"flag"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -62,6 +63,10 @@ const (
 	BrokersVar            = "INSIGHTS_KAFKA_BROKERS"
 	UsernameVar           = "INSIGHTS_KAFKA_USERNAME"
 	PasswordVar           = "INSIGHTS_KAFKA_PASSWORD"
+
+	// normalize more aggressively by alphabetizing INSERT columns if there are more than this many
+	// otherwise identical patterns in a single interval
+	ReorderColumnThreshold = 5
 )
 
 type QueryPatternAggregation struct {
@@ -112,14 +117,16 @@ type Insights struct {
 	MaxRawQueryLength      uint
 
 	// state
-	KafkaWriter         *kafka.Writer
-	Aggregations        map[QueryPatternKey]*QueryPatternAggregation
-	PeriodStart         time.Time
-	InFlightCounter     uint64
-	Timer               *time.Ticker
-	LogChan             chan interface{}
-	Workers             sync.WaitGroup
-	QueriesThisInterval uint
+	KafkaWriter          *kafka.Writer
+	Aggregations         map[QueryPatternKey]*QueryPatternAggregation
+	PeriodStart          time.Time
+	InFlightCounter      uint64
+	Timer                *time.Ticker
+	LogChan              chan interface{}
+	Workers              sync.WaitGroup
+	QueriesThisInterval  uint
+	ReorderInsertColumns bool
+	ColIndependentHashes map[uint32]int
 
 	// log state: we limit some log messages to once per 15s because they're caused by behavior the
 	// client controls
@@ -259,6 +266,7 @@ func (ii *Insights) startInterval() {
 	ii.QueriesThisInterval = 0
 	ii.Aggregations = make(map[QueryPatternKey]*QueryPatternAggregation)
 	ii.PeriodStart = time.Now()
+	ii.ColIndependentHashes = make(map[uint32]int)
 }
 
 func (ii *Insights) shouldSendToInsights(ls *logstats.LogStats) bool {
@@ -477,10 +485,11 @@ func (ii *Insights) handleMessage(record interface{}) {
 
 	var sql string
 	var comments []string
+	var ciHash *uint32
 	if ls.IsNormalized || ls.Error == nil {
 		var renormalizeError error
 		sql, comments = splitComments(ls.SQL)
-		sql, renormalizeError = normalizeSQL(sql)
+		sql, ciHash, renormalizeError = ii.normalizeSQL(sql, ls.StmtType == "INSERT")
 		if ls.Error == nil && renormalizeError != nil {
 			ls.Error = renormalizeError
 		}
@@ -494,7 +503,7 @@ func (ii *Insights) handleMessage(record interface{}) {
 
 	tables := splitTables(ls.Table)
 
-	ii.addToAggregates(ls, sql, tables)
+	ii.addToAggregates(ls, sql, ciHash, tables)
 
 	if !ii.shouldSendToInsights(ls) {
 		return
@@ -560,7 +569,7 @@ func maxDuration(a time.Duration, b time.Duration) time.Duration {
 	return b
 }
 
-func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, tables []string) bool {
+func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *uint32, tables []string) bool {
 	// no locks needed if all callers are on the same thread
 
 	var pa *QueryPatternAggregation
@@ -582,6 +591,14 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, tables []
 		// In other words, we assume they don't change, so we only need to track a single value for each.
 		pa = newPatternAggregation(ls.StmtType, tables, ls.TablesUsed)
 		ii.Aggregations[key] = pa
+
+		if ciHash != nil && !ii.ReorderInsertColumns {
+			ii.ColIndependentHashes[*ciHash]++
+			if ii.ColIndependentHashes[*ciHash] >= ReorderColumnThreshold {
+				log.Info("Enabling ReorderInsertColumns")
+				ii.ReorderInsertColumns = true
+			}
+		}
 	}
 
 	pa.QueryCount++
@@ -863,19 +880,47 @@ func (ii *Insights) makeEnvelope(contents []byte, topic string) ([]byte, error) 
 	return envelope.MarshalVT()
 }
 
-func normalizeSQL(sql string) (string, error) {
+func (ii *Insights) normalizeSQL(sql string, maybeReorderColumns bool) (string, *uint32, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		// should never happen since the SQL was already processed
-		return "<error>", err
+		return "<error>", nil, err
 	}
+
+	// We normalize queries that differ only by the orders of the columns in INSERT statements, but only for
+	// customers where we detect that's a problem.  We detect it's a problem by counting the number of
+	// query patterns that differ only in column order.  To do that, we calculate what the hash would be if
+	// we ignored the column list, then count the number of distinct patterns that have that same hash.
+	// Once it exceeds ReorderColumnThreshold, we set ReorderInsertColumns=true for this vtgate for as long
+	// as it runs.
+	//
+	// skipSpans is all the substrings (left and right byte offsets) of buf.String() that constitute column lists
+	// and should be skipped by the hash function.
+	type span struct {
+		left, right int
+	}
+	var skipSpans []span
 
 	buf := sqlparser.NewTrackedBuffer(func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		switch node := node.(type) {
+		case sqlparser.Columns:
+			if !maybeReorderColumns || len(node) == 0 {
+				node.Format(buf)
+			} else if ii.ReorderInsertColumns {
+				sort.Slice(node, func(i, j int) bool {
+					return node[i].Lowered() < node[j].Lowered()
+				})
+				node.Format(buf)
+			} else {
+				left := buf.Len()
+				node.Format(buf)
+				right := buf.Len()
+				skipSpans = append(skipSpans, span{left, right})
+			}
 		case *sqlparser.ComparisonExpr:
 			if node.Operator == sqlparser.InOp {
 				switch node.Right.(type) {
-				case *sqlparser.Subquery: // don't normalize subqueries
+				case *sqlparser.Subquery: // "IN <subquery>" is unmodified
 					node.Format(buf)
 				default:
 					buf.Myprintf("%l in (<elements>)", node.Left)
@@ -893,7 +938,19 @@ func normalizeSQL(sql string) (string, error) {
 			node.Format(buf)
 		}
 	})
-	return buf.WriteNode(stmt).String(), nil
+
+	ret := buf.WriteNode(stmt).String()
+	if skipSpans != nil {
+		var hash uint32
+		prev := 0
+		for _, sp := range skipSpans {
+			hash = murmur3.SeedStringSum32(hash, ret[prev:sp.left])
+			prev = sp.right
+		}
+		hash = murmur3.SeedStringSum32(hash, ret[prev:])
+		return ret, &hash, nil
+	}
+	return ret, nil, nil
 }
 
 // First capture group in pattern is replaced with `replacment`
