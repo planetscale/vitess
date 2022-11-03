@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -46,7 +47,7 @@ type setupOptions struct {
 }
 
 func setup(t *testing.T, brokers, publicID, username, password string, options setupOptions) (*Insights, error) {
-	logger = streamlog.New("tests", 10)
+	logger = streamlog.New("tests", 32)
 	dfl := func(x, y uint) uint {
 		if x != 0 {
 			return x
@@ -158,8 +159,8 @@ func TestInsightsSchemaChanges(t *testing.T) {
 			{sql: "alter table foo add column bar int"},
 			{sql: "drop table foo"},
 			{sql: "rename table foo to bar"},
-			{sql: "alter view foo as select * from bar"},
-			{sql: "create view foo as select * from bar"},
+			{sql: "alter view foo as select b,c from bar"},
+			{sql: "create view foo(x,y,z) as select a,b from bar"},
 			{sql: "drop view foo"},
 		},
 		[]insightsKafkaExpectation{
@@ -176,10 +177,10 @@ func TestInsightsSchemaChanges(t *testing.T) {
 			expect(schemaChangeTopic, "RENAME TABLE `foo` TO `bar`", "operation:RENAME_TABLE", "normalized:true"),
 
 			expect(queryStatsBundleTopic, "alter view foo"),
-			expect(schemaChangeTopic, "ALTER VIEW `foo` AS SELECT * FROM `bar`", "operation:ALTER_VIEW", "normalized:true"),
+			expect(schemaChangeTopic, "ALTER VIEW `foo` AS SELECT `b`, `c` FROM `bar`", "operation:ALTER_VIEW", "normalized:true"),
 
 			expect(queryStatsBundleTopic, "create view foo"),
-			expect(schemaChangeTopic, "CREATE VIEW `foo` AS SELECT * FROM `bar`", "operation:CREATE_VIEW", "normalized:true"),
+			expect(schemaChangeTopic, "CREATE VIEW `foo`(`x`, `y`, `z`) AS SELECT `a`, `b` FROM `bar`", "operation:CREATE_VIEW", "normalized:true"),
 
 			expect(queryStatsBundleTopic, "drop view foo"),
 			expect(schemaChangeTopic, "DROP VIEW `foo`", "operation:DROP_VIEW", "normalized:true"),
@@ -331,8 +332,11 @@ func TestInsightsSavepoints(t *testing.T) {
 func TestInsightsExtraNormalization(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
+			// IN (...) lists get collapsed
 			{sql: "select beam.`User`.id, beam.`User`.`name` from beam.`User` where beam.`User`.id in (:v1, :v2, :v3, :v4, :v5, :v6, :v7, :v8, :v9, :v10, :v11, :v12, :v13, :v14, :v15, :v16, :v17, :v18, :v19, :v20, :v21, :v22, :v23, :v24, :v25, :v26, :v27, :v28, :v29, :v30, :v31, :v32, :v33, :v34, :v35, :v36, :v37, :v38, :v39, :v40, :v41, :v42, :v43, :v44, :v45, :v46, :v47, :v48, :v49, :v50, :v51, :v52, :v53, :v54, :v55, :v56, :v57, :v58, :v59, :v60, :v61, :v62, :v63, :v64, :v65, :v66, :v67, :v68, :v69, :v70, :v71, :v72, :v73)", responseTime: 5 * time.Second},
 			{sql: "select * from users where foo in (:v1, :v2) and bar in (:v3, :v4) and baz in (:v5) and blarg in (:v6)", responseTime: 5 * time.Second},
+
+			// INSERT ... VALUES (...) lists get collapsed
 			{sql: "insert into foo values (:v1, :vtg2), (?, null), (:v3, :v4)", responseTime: 5 * time.Second},
 		},
 		[]insightsKafkaExpectation{
@@ -342,6 +346,64 @@ func TestInsightsExtraNormalization(t *testing.T) {
 			expect(queryStatsBundleTopic, "select * from users where foo in (<elements>) and bar in (<elements>) and baz in (<elements>) and blarg in (<elements>)").butNot(":v2", ":v4", ":v5"),
 			expect(queryTopic, "insert into foo values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
 			expect(queryStatsBundleTopic, "insert into foo values <values>", `statement_type:\"INSERT\"`).butNot(":v1", ":vtg1", "null", "?"),
+		})
+}
+
+func TestInsightsInsertColumnOrderNormalization(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			// filler statements that shouldn't count toward the ii.ReorderInsertColumns threshold
+			{sql: "select 1 from foo"},
+			{sql: "select 1 from foo"},
+			{sql: "select 1 from foo"},
+			{sql: "select 1 from foo"},
+			{sql: "select 1 from foo"},
+			{sql: "select 1 from foo"},
+			{sql: "select 1 from foo"},
+			{sql: "select 1 from bar"},
+
+			// INSERTs without a column list are unchanged
+			{sql: "insert into foo values (222, 333, 444, 555)", responseTime: 5 * time.Second},
+
+			// INSERT INTO table(...) VALUES (...) column lists get alphabetized, after a while
+			{sql: "insert into foo(d, c, b, a) values (111, 222, 333, 444)", responseTime: 5 * time.Second},
+			{sql: "insert into foo(d, c, a, b) values (555, 666, 777, 888)", responseTime: 5 * time.Second},
+			{sql: "insert into foo(d, c, a, b) values (555, 666, 777, 888)", responseTime: 5 * time.Second}, // same as above, doesn't count toward reorder threshold
+			{sql: "insert into foo(d, b, c, a) values (999, 111, 222, 333)", responseTime: 5 * time.Second},
+			{sql: "insert into foo(d, b, a, c) values (444, 555, 666, 777)", responseTime: 5 * time.Second},
+			{sql: "insert into foo(d, a, b, c) values (888, 999, 111, 222)", responseTime: 5 * time.Second},
+			// five (distinct) patterns above, so the two below get alphabetized
+			{sql: "insert into foo(d, a, c, b) values (333, 444, 555, 666)", responseTime: 5 * time.Second},
+			{sql: "insert into foo(c, d, b, a) values (777, 888, 999, 111)", responseTime: 5 * time.Second},
+
+			// Still unchanged, even after ReorderInsertColumns is enabled
+			{sql: "insert into foo values (222, 333, 444, 555)", responseTime: 5 * time.Second},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryStatsBundleTopic, "select 1 from foo", `statement_type:\"SELECT\"`),
+			expect(queryStatsBundleTopic, "select 1 from bar", `statement_type:\"SELECT\"`),
+
+			expect(queryTopic, "insert into foo(d, c, b, a) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
+			expect(queryStatsBundleTopic, "insert into foo(d, c, b, a) values <values>", `statement_type:\"INSERT\"`).butNot(":v1", ":vtg1", "null", "?"),
+
+			expect(queryTopic, "insert into foo(d, c, a, b) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?").count(2),
+			expect(queryStatsBundleTopic, "insert into foo(d, c, a, b) values <values>", `statement_type:\"INSERT\"`, `query_count:2`).butNot(":v1", ":vtg1", "null", "?"),
+
+			expect(queryTopic, "insert into foo(d, b, c, a) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
+			expect(queryStatsBundleTopic, "insert into foo(d, b, c, a) values <values>", `statement_type:\"INSERT\"`).butNot(":v1", ":vtg1", "null", "?"),
+
+			expect(queryTopic, "insert into foo(d, b, a, c) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
+			expect(queryStatsBundleTopic, "insert into foo(d, b, a, c) values <values>", `statement_type:\"INSERT\"`).butNot(":v1", ":vtg1", "null", "?"),
+
+			expect(queryTopic, "insert into foo(d, a, b, c) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
+			expect(queryStatsBundleTopic, "insert into foo(d, a, b, c) values <values>", `statement_type:\"INSERT\"`).butNot(":v1", ":vtg1", "null", "?"),
+
+			// final two get alphabetized
+			expect(queryTopic, "insert into foo(a, b, c, d) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?").count(2),
+			expect(queryStatsBundleTopic, "insert into foo(a, b, c, d) values <values>", `statement_type:\"INSERT\"`, `query_count:2`).butNot(":v1", ":vtg1", "null", "?"),
+
+			expect(queryTopic, "insert into foo values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?").count(2),
+			expect(queryStatsBundleTopic, "insert into foo values <values>", `statement_type:\"INSERT\"`, `query_count:2`).butNot(":v1", ":vtg1", "null", "?"),
 		})
 }
 
@@ -558,9 +620,10 @@ func TestNormalization(t *testing.T) {
 		// stuff within a subquery should be normalized
 		{"select 1 from x where xyz in (select distinct foo from bar where baz in (1,2,3))", "select 1 from x where xyz in (select distinct foo from bar where baz in (<elements>))"},
 	}
+	ii := Insights{}
 	for _, tc := range testCases {
 		t.Run(tc.input, func(t *testing.T) {
-			out, err := normalizeSQL(tc.input)
+			out, _, err := ii.normalizeSQL(tc.input, true)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.output, out)
 		})
@@ -859,7 +922,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 			StartTime:    now.Add(-q.responseTime),
 			EndTime:      now,
 			RowsRead:     uint64(q.rowsRead),
-			Ctx: callerid.NewContext(ctx, &vtrpcpb.CallerID{
+			Ctx: callerid.NewContext(context.Background(), &vtrpcpb.CallerID{
 				// Principal must match the roles used for ACLs
 				Principal:    "planetscale-reader",
 				Component:    "127.0.0.1", // TODO
@@ -891,7 +954,7 @@ var (
 		IsNormalized: true,
 		StartTime:    time.Now().Add(-5 * time.Second),
 		EndTime:      time.Now(),
-		Ctx: callerid.NewContext(ctx, &vtrpcpb.CallerID{
+		Ctx: callerid.NewContext(context.Background(), &vtrpcpb.CallerID{
 			// Principal must match the roles used for ACLs
 			Principal:    "planetscale-reader",
 			Component:    "127.0.0.1", // TODO
