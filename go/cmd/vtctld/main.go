@@ -17,6 +17,8 @@ limitations under the License.
 package main
 
 import (
+	boostclient "vitess.io/vitess/go/boost/topo/client"
+	boostwatcher "vitess.io/vitess/go/boost/topo/watcher"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -32,6 +34,9 @@ var (
 	ts *topo.Server
 )
 
+// PlanetScale internal: used by plug-ins that interact with boost
+var boost *boostclient.Client
+
 func main() {
 	servenv.ParseFlags("vtctld")
 	servenv.Init()
@@ -39,6 +44,10 @@ func main() {
 
 	ts = topo.Open()
 	defer ts.Close()
+
+	if *boostwatcher.EnableBoostIntegration {
+		boost = boostclient.NewClient(ts)
+	}
 
 	// Init the vtctld core
 	err := vtctld.InitVtctld(ts)

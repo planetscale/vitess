@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
@@ -460,20 +461,25 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.SystemVariables[name] = expr
 }
 
-// GetSystemVariables takes a visitor function that will save each system variables of the session
+// GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.
+// This function will only yield system variables which apply to MySQL itself; Vitess-aware system variables
+// will be skipped.
 func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	for k, v := range session.SystemVariables {
-		f(k, v)
+		if !sysvars.IsVitessAware(k) {
+			f(k, v)
+		}
 	}
 }
 
-// HasSystemVariables returns whether the session has system variables set or not.
-func (session *SafeSession) HasSystemVariables() bool {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	return len(session.SystemVariables) > 0
+// HasSystemVariables returns whether the session has system variables that would apply to MySQL
+func (session *SafeSession) HasSystemVariables() (found bool) {
+	session.GetSystemVariables(func(_ string, _ string) {
+		found = true
+	})
+	return
 }
 
 // SetOptions sets the options
@@ -505,16 +511,11 @@ func (session *SafeSession) SetReservedConn(reservedConn bool) {
 }
 
 // SetPreQueries returns the prequeries that need to be run when reserving a connection
-func (session *SafeSession) SetPreQueries() []string {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	result := make([]string, len(session.SystemVariables))
-	idx := 0
-	for k, v := range session.SystemVariables {
-		result[idx] = fmt.Sprintf("set @@%s = %s", k, v)
-		idx++
-	}
-	return result
+func (session *SafeSession) SetPreQueries() (result []string) {
+	session.GetSystemVariables(func(k string, v string) {
+		result = append(result, fmt.Sprintf("set @@%s = %s", k, v))
+	})
+	return
 }
 
 // SetLockSession sets the lock session.

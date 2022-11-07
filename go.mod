@@ -26,7 +26,7 @@ require (
 	github.com/golang/mock v1.5.0
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.3
-	github.com/google/go-cmp v0.5.8
+	github.com/google/go-cmp v0.5.9
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.3.0
 	github.com/googleapis/gnostic v0.4.1 // indirect
@@ -101,7 +101,7 @@ require (
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac
 	golang.org/x/tools v0.1.12
 	google.golang.org/api v0.45.0
-	google.golang.org/genproto v0.0.0-20210701191553-46259e63a0a9 // indirect
+	google.golang.org/genproto v0.0.0-20210701191553-46259e63a0a9
 	google.golang.org/grpc v1.45.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0
 	google.golang.org/grpc/examples v0.0.0-20210430044426-28078834f35b
@@ -122,14 +122,31 @@ require (
 
 require (
 	github.com/bndr/gotabulate v1.1.2
+	github.com/cespare/xxhash v1.1.0
+	github.com/gogo/protobuf v1.3.2
+	github.com/hashicorp/golang-lru v0.5.1
+	github.com/lestrrat-go/strftime v1.0.6
+	github.com/mitchellh/hashstructure v1.1.0
+	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
 	github.com/planetscale/common-libs v0.1.0
 	github.com/planetscale/psevents v0.0.0-20221011221149-e2ac5cd3f8e2
+	github.com/pmezard/go-difflib v1.0.0
+	github.com/segmentio/fasthash v1.0.3
 	github.com/segmentio/kafka-go v0.4.35
+	github.com/shopspring/decimal v1.3.1
 	github.com/syndtr/goleveldb v1.0.0
+	github.com/tidwall/btree v1.4.4
 	github.com/twmb/murmur3 v1.1.6
+	go.opentelemetry.io/otel v1.11.1
+	go.opentelemetry.io/otel/trace v1.11.1
+	go.uber.org/atomic v1.7.0
+	go.uber.org/goleak v1.2.0
+	go.uber.org/multierr v1.6.0
 	go.uber.org/zap v1.17.0
 	golang.org/x/exp v0.0.0-20221025133541-111beb427cde
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
+	gopkg.in/src-d/go-errors.v1 v1.0.0
+	storj.io/drpc v0.0.32
 )
 
 require (
@@ -146,14 +163,12 @@ require (
 	github.com/felixge/httpsnoop v1.0.1 // indirect
 	github.com/frankban/quicktest v1.14.3 // indirect
 	github.com/go-logr/logr v0.2.0 // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.1 // indirect
 	github.com/hashicorp/go-hclog v0.12.0 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
-	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.11 // indirect
@@ -171,7 +186,6 @@ require (
 	github.com/onsi/gomega v1.10.3 // indirect
 	github.com/pelletier/go-toml v1.9.3 // indirect
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect
@@ -183,9 +197,8 @@ require (
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/xdg/scram v1.0.5 // indirect
 	github.com/xdg/stringprep v1.0.3 // indirect
+	github.com/zeebo/errs v1.2.2 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	go.uber.org/atomic v1.7.0 // indirect
-	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
@@ -200,3 +213,7 @@ require (
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.0.3 // indirect
 )
+
+replace github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474
+
+exclude github.com/go-logr/logr v1.2.3

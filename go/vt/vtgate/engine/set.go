@@ -438,6 +438,15 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env *evalengine.ExpressionE
 		err = svss.setBoolSysVar(env, vcursor.Session().SetClientFoundRows)
 	case sysvars.SkipQueryPlanCache.Name:
 		err = svss.setBoolSysVar(env, vcursor.Session().SetSkipQueryPlanCache)
+	case sysvars.BoostCachedQueries.Name:
+		err = svss.setBoolSysVar(env, func(b bool) error {
+			var bstr = "0"
+			if b {
+				bstr = "1"
+			}
+			vcursor.Session().SetSysVar(sysvars.BoostCachedQueries.Name, bstr)
+			return nil
+		})
 	case sysvars.TxReadOnly.Name,
 		sysvars.TransactionReadOnly.Name:
 		// TODO (4127): This is a dangerous NOP.

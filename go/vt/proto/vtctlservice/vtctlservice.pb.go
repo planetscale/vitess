@@ -53,7 +53,7 @@ var file_vtctlservice_proto_rawDesc = []byte{
 	0x6e, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x26, 0x2e, 0x76, 0x74, 0x63, 0x74,
 	0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x65, 0x56, 0x74, 0x63,
 	0x74, 0x6c, 0x43, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
-	0x65, 0x22, 0x00, 0x30, 0x01, 0x32, 0xe8, 0x3f, 0x0a, 0x06, 0x56, 0x74, 0x63, 0x74, 0x6c, 0x64,
+	0x65, 0x22, 0x00, 0x30, 0x01, 0x32, 0xf9, 0x40, 0x0a, 0x06, 0x56, 0x74, 0x63, 0x74, 0x6c, 0x64,
 	0x12, 0x4e, 0x0a, 0x0b, 0x41, 0x64, 0x64, 0x43, 0x65, 0x6c, 0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x12,
 	0x1d, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x41, 0x64, 0x64, 0x43,
 	0x65, 0x6c, 0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1e,
@@ -523,51 +523,60 @@ var file_vtctlservice_proto_rawDesc = []byte{
 	0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65, 0x71,
 	0x75, 0x65, 0x73, 0x74, 0x1a, 0x22, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61,
 	0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x56, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x48, 0x0a, 0x0d, 0x42, 0x6f,
-	0x6f, 0x73, 0x74, 0x41, 0x64, 0x64, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12, 0x18, 0x2e, 0x76, 0x74,
-	0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x41, 0x64, 0x64, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1d, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
-	0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x4e, 0x0a, 0x10, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x52, 0x65, 0x6d,
-	0x6f, 0x76, 0x65, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12, 0x1b, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f,
-	0x73, 0x74, 0x2e, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1d, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
-	0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x4d, 0x0a, 0x10, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x4c, 0x69, 0x73,
-	0x74, 0x51, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x12, 0x1b, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f,
-	0x73, 0x74, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x51, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1c, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
-	0x4c, 0x69, 0x73, 0x74, 0x51, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f,
-	0x6e, 0x73, 0x65, 0x12, 0x49, 0x0a, 0x11, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x4c, 0x69, 0x73, 0x74,
-	0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x73, 0x12, 0x1c, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f,
-	0x73, 0x74, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x73, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74,
-	0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x73, 0x12, 0x4d,
-	0x0a, 0x0f, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x41, 0x64, 0x64, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65,
-	0x72, 0x12, 0x1a, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x41, 0x64, 0x64, 0x43,
-	0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1e, 0x2e,
-	0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x43,
-	0x68, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5a, 0x0a,
-	0x17, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x4d, 0x61, 0x6b, 0x65, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72,
-	0x79, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x12, 0x1e, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f,
-	0x73, 0x74, 0x2e, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65,
-	0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1f, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f,
-	0x73, 0x74, 0x2e, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65,
-	0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x50, 0x0a, 0x11, 0x42, 0x6f, 0x6f,
-	0x73, 0x74, 0x44, 0x72, 0x61, 0x69, 0x6e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x12, 0x1c,
-	0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x44, 0x72, 0x61, 0x69, 0x6e, 0x43, 0x6c,
-	0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1d, 0x2e, 0x76,
-	0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x44, 0x72, 0x61, 0x69, 0x6e, 0x43, 0x6c, 0x75, 0x73,
-	0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x53, 0x0a, 0x12, 0x42,
-	0x6f, 0x6f, 0x73, 0x74, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65,
-	0x72, 0x12, 0x1d, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x52, 0x65, 0x6d, 0x6f,
-	0x76, 0x65, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x1a, 0x1e, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74,
-	0x65, 0x72, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x42, 0x2b, 0x5a, 0x29, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69,
-	0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x2f, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x62, 0x06, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x47, 0x0a, 0x0e, 0x42, 0x6f,
+	0x6f, 0x73, 0x74, 0x50, 0x75, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x12, 0x19, 0x2e, 0x76,
+	0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x50, 0x75, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73,
+	0x74, 0x2e, 0x50, 0x75, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x12, 0x47, 0x0a, 0x0e, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x47, 0x65, 0x74, 0x52,
+	0x65, 0x63, 0x69, 0x70, 0x65, 0x12, 0x19, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
+	0x47, 0x65, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x1a, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47, 0x65, 0x74, 0x52, 0x65,
+	0x63, 0x69, 0x70, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x56, 0x0a, 0x13,
+	0x42, 0x6f, 0x6f, 0x73, 0x74, 0x44, 0x65, 0x73, 0x63, 0x72, 0x69, 0x62, 0x65, 0x52, 0x65, 0x63,
+	0x69, 0x70, 0x65, 0x12, 0x1e, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x44, 0x65,
+	0x73, 0x63, 0x72, 0x69, 0x62, 0x65, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x1a, 0x1f, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x44, 0x65,
+	0x73, 0x63, 0x72, 0x69, 0x62, 0x65, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x4a, 0x0a, 0x0f, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x47, 0x65, 0x74,
+	0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x12, 0x1a, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73,
+	0x74, 0x2e, 0x47, 0x65, 0x74, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x1a, 0x1b, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47, 0x65,
+	0x74, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x50, 0x0a, 0x11, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x4c, 0x69, 0x73, 0x74, 0x43, 0x6c, 0x75,
+	0x73, 0x74, 0x65, 0x72, 0x73, 0x12, 0x1c, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
+	0x4c, 0x69, 0x73, 0x74, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x1a, 0x1d, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x4c, 0x69,
+	0x73, 0x74, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x12, 0x4d, 0x0a, 0x0f, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x41, 0x64, 0x64, 0x43, 0x6c,
+	0x75, 0x73, 0x74, 0x65, 0x72, 0x12, 0x1a, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
+	0x41, 0x64, 0x64, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x1a, 0x1e, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6c, 0x75, 0x73,
+	0x74, 0x65, 0x72, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x12, 0x5a, 0x0a, 0x17, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x4d, 0x61, 0x6b, 0x65, 0x50, 0x72,
+	0x69, 0x6d, 0x61, 0x72, 0x79, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x12, 0x1e, 0x2e, 0x76,
+	0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x43, 0x6c,
+	0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1f, 0x2e, 0x76,
+	0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x43, 0x6c,
+	0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x50, 0x0a,
+	0x11, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x44, 0x72, 0x61, 0x69, 0x6e, 0x43, 0x6c, 0x75, 0x73, 0x74,
+	0x65, 0x72, 0x12, 0x1c, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x44, 0x72, 0x61,
+	0x69, 0x6e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x1d, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x44, 0x72, 0x61, 0x69, 0x6e,
+	0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x53, 0x0a, 0x12, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x43, 0x6c,
+	0x75, 0x73, 0x74, 0x65, 0x72, 0x12, 0x1d, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
+	0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x1a, 0x1e, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43,
+	0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x3b, 0x0a, 0x0a, 0x42, 0x6f, 0x6f, 0x73, 0x74, 0x50, 0x75, 0x72,
+	0x67, 0x65, 0x12, 0x15, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x50, 0x75, 0x72,
+	0x67, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x76, 0x74, 0x62, 0x6f,
+	0x6f, 0x73, 0x74, 0x2e, 0x50, 0x75, 0x72, 0x67, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x42, 0x2b, 0x5a, 0x29, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76,
+	0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x2f, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x62, 0x06,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var file_vtctlservice_proto_goTypes = []interface{}{
@@ -653,101 +662,106 @@ var file_vtctlservice_proto_goTypes = []interface{}{
 	(*vtctldata.ValidateShardRequest)(nil),                // 79: vtctldata.ValidateShardRequest
 	(*vtctldata.ValidateVersionKeyspaceRequest)(nil),      // 80: vtctldata.ValidateVersionKeyspaceRequest
 	(*vtctldata.ValidateVSchemaRequest)(nil),              // 81: vtctldata.ValidateVSchemaRequest
-	(*vtboost.AddQueryRequest)(nil),                       // 82: vtboost.AddQueryRequest
-	(*vtboost.RemoveQueryRequest)(nil),                    // 83: vtboost.RemoveQueryRequest
-	(*vtboost.ListQueriesRequest)(nil),                    // 84: vtboost.ListQueriesRequest
-	(*vtboost.ListClustersRequest)(nil),                   // 85: vtboost.ListClustersRequest
-	(*vtboost.AddClusterRequest)(nil),                     // 86: vtboost.AddClusterRequest
-	(*vtboost.PrimaryClusterRequest)(nil),                 // 87: vtboost.PrimaryClusterRequest
-	(*vtboost.DrainClusterRequest)(nil),                   // 88: vtboost.DrainClusterRequest
-	(*vtboost.RemoveClusterRequest)(nil),                  // 89: vtboost.RemoveClusterRequest
-	(*vtctldata.ExecuteVtctlCommandResponse)(nil),         // 90: vtctldata.ExecuteVtctlCommandResponse
-	(*vtctldata.AddCellInfoResponse)(nil),                 // 91: vtctldata.AddCellInfoResponse
-	(*vtctldata.AddCellsAliasResponse)(nil),               // 92: vtctldata.AddCellsAliasResponse
-	(*vtctldata.ApplyRoutingRulesResponse)(nil),           // 93: vtctldata.ApplyRoutingRulesResponse
-	(*vtctldata.ApplySchemaResponse)(nil),                 // 94: vtctldata.ApplySchemaResponse
-	(*vtctldata.ApplyVSchemaResponse)(nil),                // 95: vtctldata.ApplyVSchemaResponse
-	(*vtctldata.BackupResponse)(nil),                      // 96: vtctldata.BackupResponse
-	(*vtctldata.ChangeTabletTypeResponse)(nil),            // 97: vtctldata.ChangeTabletTypeResponse
-	(*vtctldata.CreateKeyspaceResponse)(nil),              // 98: vtctldata.CreateKeyspaceResponse
-	(*vtctldata.CreateShardResponse)(nil),                 // 99: vtctldata.CreateShardResponse
-	(*vtctldata.DeleteCellInfoResponse)(nil),              // 100: vtctldata.DeleteCellInfoResponse
-	(*vtctldata.DeleteCellsAliasResponse)(nil),            // 101: vtctldata.DeleteCellsAliasResponse
-	(*vtctldata.DeleteKeyspaceResponse)(nil),              // 102: vtctldata.DeleteKeyspaceResponse
-	(*vtctldata.DeleteShardsResponse)(nil),                // 103: vtctldata.DeleteShardsResponse
-	(*vtctldata.DeleteSrvVSchemaResponse)(nil),            // 104: vtctldata.DeleteSrvVSchemaResponse
-	(*vtctldata.DeleteTabletsResponse)(nil),               // 105: vtctldata.DeleteTabletsResponse
-	(*vtctldata.EmergencyReparentShardResponse)(nil),      // 106: vtctldata.EmergencyReparentShardResponse
-	(*vtctldata.ExecuteFetchAsAppResponse)(nil),           // 107: vtctldata.ExecuteFetchAsAppResponse
-	(*vtctldata.ExecuteFetchAsDBAResponse)(nil),           // 108: vtctldata.ExecuteFetchAsDBAResponse
-	(*vtctldata.ExecuteHookResponse)(nil),                 // 109: vtctldata.ExecuteHookResponse
-	(*vtctldata.FindAllShardsInKeyspaceResponse)(nil),     // 110: vtctldata.FindAllShardsInKeyspaceResponse
-	(*vtctldata.GetBackupsResponse)(nil),                  // 111: vtctldata.GetBackupsResponse
-	(*vtctldata.GetCellInfoResponse)(nil),                 // 112: vtctldata.GetCellInfoResponse
-	(*vtctldata.GetCellInfoNamesResponse)(nil),            // 113: vtctldata.GetCellInfoNamesResponse
-	(*vtctldata.GetCellsAliasesResponse)(nil),             // 114: vtctldata.GetCellsAliasesResponse
-	(*vtctldata.GetFullStatusResponse)(nil),               // 115: vtctldata.GetFullStatusResponse
-	(*vtctldata.GetKeyspaceResponse)(nil),                 // 116: vtctldata.GetKeyspaceResponse
-	(*vtctldata.GetKeyspacesResponse)(nil),                // 117: vtctldata.GetKeyspacesResponse
-	(*vtctldata.GetPermissionsResponse)(nil),              // 118: vtctldata.GetPermissionsResponse
-	(*vtctldata.GetRoutingRulesResponse)(nil),             // 119: vtctldata.GetRoutingRulesResponse
-	(*vtctldata.GetSchemaResponse)(nil),                   // 120: vtctldata.GetSchemaResponse
-	(*vtctldata.GetShardResponse)(nil),                    // 121: vtctldata.GetShardResponse
-	(*vtctldata.GetSrvKeyspaceNamesResponse)(nil),         // 122: vtctldata.GetSrvKeyspaceNamesResponse
-	(*vtctldata.GetSrvKeyspacesResponse)(nil),             // 123: vtctldata.GetSrvKeyspacesResponse
-	(*vtctldata.GetSrvVSchemaResponse)(nil),               // 124: vtctldata.GetSrvVSchemaResponse
-	(*vtctldata.GetSrvVSchemasResponse)(nil),              // 125: vtctldata.GetSrvVSchemasResponse
-	(*vtctldata.GetTabletResponse)(nil),                   // 126: vtctldata.GetTabletResponse
-	(*vtctldata.GetTabletsResponse)(nil),                  // 127: vtctldata.GetTabletsResponse
-	(*vtctldata.GetVersionResponse)(nil),                  // 128: vtctldata.GetVersionResponse
-	(*vtctldata.GetVSchemaResponse)(nil),                  // 129: vtctldata.GetVSchemaResponse
-	(*vtctldata.GetWorkflowsResponse)(nil),                // 130: vtctldata.GetWorkflowsResponse
-	(*vtctldata.InitShardPrimaryResponse)(nil),            // 131: vtctldata.InitShardPrimaryResponse
-	(*vtctldata.PingTabletResponse)(nil),                  // 132: vtctldata.PingTabletResponse
-	(*vtctldata.PlannedReparentShardResponse)(nil),        // 133: vtctldata.PlannedReparentShardResponse
-	(*vtctldata.RebuildKeyspaceGraphResponse)(nil),        // 134: vtctldata.RebuildKeyspaceGraphResponse
-	(*vtctldata.RebuildVSchemaGraphResponse)(nil),         // 135: vtctldata.RebuildVSchemaGraphResponse
-	(*vtctldata.RefreshStateResponse)(nil),                // 136: vtctldata.RefreshStateResponse
-	(*vtctldata.RefreshStateByShardResponse)(nil),         // 137: vtctldata.RefreshStateByShardResponse
-	(*vtctldata.ReloadSchemaResponse)(nil),                // 138: vtctldata.ReloadSchemaResponse
-	(*vtctldata.ReloadSchemaKeyspaceResponse)(nil),        // 139: vtctldata.ReloadSchemaKeyspaceResponse
-	(*vtctldata.ReloadSchemaShardResponse)(nil),           // 140: vtctldata.ReloadSchemaShardResponse
-	(*vtctldata.RemoveBackupResponse)(nil),                // 141: vtctldata.RemoveBackupResponse
-	(*vtctldata.RemoveKeyspaceCellResponse)(nil),          // 142: vtctldata.RemoveKeyspaceCellResponse
-	(*vtctldata.RemoveShardCellResponse)(nil),             // 143: vtctldata.RemoveShardCellResponse
-	(*vtctldata.ReparentTabletResponse)(nil),              // 144: vtctldata.ReparentTabletResponse
-	(*vtctldata.RestoreFromBackupResponse)(nil),           // 145: vtctldata.RestoreFromBackupResponse
-	(*vtctldata.RunHealthCheckResponse)(nil),              // 146: vtctldata.RunHealthCheckResponse
-	(*vtctldata.SetKeyspaceDurabilityPolicyResponse)(nil), // 147: vtctldata.SetKeyspaceDurabilityPolicyResponse
-	(*vtctldata.SetKeyspaceServedFromResponse)(nil),       // 148: vtctldata.SetKeyspaceServedFromResponse
-	(*vtctldata.SetKeyspaceShardingInfoResponse)(nil),     // 149: vtctldata.SetKeyspaceShardingInfoResponse
-	(*vtctldata.SetShardIsPrimaryServingResponse)(nil),    // 150: vtctldata.SetShardIsPrimaryServingResponse
-	(*vtctldata.SetShardTabletControlResponse)(nil),       // 151: vtctldata.SetShardTabletControlResponse
-	(*vtctldata.SetWritableResponse)(nil),                 // 152: vtctldata.SetWritableResponse
-	(*vtctldata.ShardReplicationAddResponse)(nil),         // 153: vtctldata.ShardReplicationAddResponse
-	(*vtctldata.ShardReplicationFixResponse)(nil),         // 154: vtctldata.ShardReplicationFixResponse
-	(*vtctldata.ShardReplicationPositionsResponse)(nil),   // 155: vtctldata.ShardReplicationPositionsResponse
-	(*vtctldata.ShardReplicationRemoveResponse)(nil),      // 156: vtctldata.ShardReplicationRemoveResponse
-	(*vtctldata.SleepTabletResponse)(nil),                 // 157: vtctldata.SleepTabletResponse
-	(*vtctldata.SourceShardAddResponse)(nil),              // 158: vtctldata.SourceShardAddResponse
-	(*vtctldata.SourceShardDeleteResponse)(nil),           // 159: vtctldata.SourceShardDeleteResponse
-	(*vtctldata.StartReplicationResponse)(nil),            // 160: vtctldata.StartReplicationResponse
-	(*vtctldata.StopReplicationResponse)(nil),             // 161: vtctldata.StopReplicationResponse
-	(*vtctldata.TabletExternallyReparentedResponse)(nil),  // 162: vtctldata.TabletExternallyReparentedResponse
-	(*vtctldata.UpdateCellInfoResponse)(nil),              // 163: vtctldata.UpdateCellInfoResponse
-	(*vtctldata.UpdateCellsAliasResponse)(nil),            // 164: vtctldata.UpdateCellsAliasResponse
-	(*vtctldata.ValidateResponse)(nil),                    // 165: vtctldata.ValidateResponse
-	(*vtctldata.ValidateKeyspaceResponse)(nil),            // 166: vtctldata.ValidateKeyspaceResponse
-	(*vtctldata.ValidateSchemaKeyspaceResponse)(nil),      // 167: vtctldata.ValidateSchemaKeyspaceResponse
-	(*vtctldata.ValidateShardResponse)(nil),               // 168: vtctldata.ValidateShardResponse
-	(*vtctldata.ValidateVersionKeyspaceResponse)(nil),     // 169: vtctldata.ValidateVersionKeyspaceResponse
-	(*vtctldata.ValidateVSchemaResponse)(nil),             // 170: vtctldata.ValidateVSchemaResponse
-	(*vtboost.RecipeChangeResponse)(nil),                  // 171: vtboost.RecipeChangeResponse
-	(*vtboost.ListQueriesResponse)(nil),                   // 172: vtboost.ListQueriesResponse
-	(*vtboost.ClusterStates)(nil),                         // 173: vtboost.ClusterStates
-	(*vtboost.ClusterChangeResponse)(nil),                 // 174: vtboost.ClusterChangeResponse
-	(*vtboost.PrimaryClusterResponse)(nil),                // 175: vtboost.PrimaryClusterResponse
-	(*vtboost.DrainClusterResponse)(nil),                  // 176: vtboost.DrainClusterResponse
+	(*vtboost.PutRecipeRequest)(nil),                      // 82: vtboost.PutRecipeRequest
+	(*vtboost.GetRecipeRequest)(nil),                      // 83: vtboost.GetRecipeRequest
+	(*vtboost.DescribeRecipeRequest)(nil),                 // 84: vtboost.DescribeRecipeRequest
+	(*vtboost.GetClusterRequest)(nil),                     // 85: vtboost.GetClusterRequest
+	(*vtboost.ListClustersRequest)(nil),                   // 86: vtboost.ListClustersRequest
+	(*vtboost.AddClusterRequest)(nil),                     // 87: vtboost.AddClusterRequest
+	(*vtboost.PrimaryClusterRequest)(nil),                 // 88: vtboost.PrimaryClusterRequest
+	(*vtboost.DrainClusterRequest)(nil),                   // 89: vtboost.DrainClusterRequest
+	(*vtboost.RemoveClusterRequest)(nil),                  // 90: vtboost.RemoveClusterRequest
+	(*vtboost.PurgeRequest)(nil),                          // 91: vtboost.PurgeRequest
+	(*vtctldata.ExecuteVtctlCommandResponse)(nil),         // 92: vtctldata.ExecuteVtctlCommandResponse
+	(*vtctldata.AddCellInfoResponse)(nil),                 // 93: vtctldata.AddCellInfoResponse
+	(*vtctldata.AddCellsAliasResponse)(nil),               // 94: vtctldata.AddCellsAliasResponse
+	(*vtctldata.ApplyRoutingRulesResponse)(nil),           // 95: vtctldata.ApplyRoutingRulesResponse
+	(*vtctldata.ApplySchemaResponse)(nil),                 // 96: vtctldata.ApplySchemaResponse
+	(*vtctldata.ApplyVSchemaResponse)(nil),                // 97: vtctldata.ApplyVSchemaResponse
+	(*vtctldata.BackupResponse)(nil),                      // 98: vtctldata.BackupResponse
+	(*vtctldata.ChangeTabletTypeResponse)(nil),            // 99: vtctldata.ChangeTabletTypeResponse
+	(*vtctldata.CreateKeyspaceResponse)(nil),              // 100: vtctldata.CreateKeyspaceResponse
+	(*vtctldata.CreateShardResponse)(nil),                 // 101: vtctldata.CreateShardResponse
+	(*vtctldata.DeleteCellInfoResponse)(nil),              // 102: vtctldata.DeleteCellInfoResponse
+	(*vtctldata.DeleteCellsAliasResponse)(nil),            // 103: vtctldata.DeleteCellsAliasResponse
+	(*vtctldata.DeleteKeyspaceResponse)(nil),              // 104: vtctldata.DeleteKeyspaceResponse
+	(*vtctldata.DeleteShardsResponse)(nil),                // 105: vtctldata.DeleteShardsResponse
+	(*vtctldata.DeleteSrvVSchemaResponse)(nil),            // 106: vtctldata.DeleteSrvVSchemaResponse
+	(*vtctldata.DeleteTabletsResponse)(nil),               // 107: vtctldata.DeleteTabletsResponse
+	(*vtctldata.EmergencyReparentShardResponse)(nil),      // 108: vtctldata.EmergencyReparentShardResponse
+	(*vtctldata.ExecuteFetchAsAppResponse)(nil),           // 109: vtctldata.ExecuteFetchAsAppResponse
+	(*vtctldata.ExecuteFetchAsDBAResponse)(nil),           // 110: vtctldata.ExecuteFetchAsDBAResponse
+	(*vtctldata.ExecuteHookResponse)(nil),                 // 111: vtctldata.ExecuteHookResponse
+	(*vtctldata.FindAllShardsInKeyspaceResponse)(nil),     // 112: vtctldata.FindAllShardsInKeyspaceResponse
+	(*vtctldata.GetBackupsResponse)(nil),                  // 113: vtctldata.GetBackupsResponse
+	(*vtctldata.GetCellInfoResponse)(nil),                 // 114: vtctldata.GetCellInfoResponse
+	(*vtctldata.GetCellInfoNamesResponse)(nil),            // 115: vtctldata.GetCellInfoNamesResponse
+	(*vtctldata.GetCellsAliasesResponse)(nil),             // 116: vtctldata.GetCellsAliasesResponse
+	(*vtctldata.GetFullStatusResponse)(nil),               // 117: vtctldata.GetFullStatusResponse
+	(*vtctldata.GetKeyspaceResponse)(nil),                 // 118: vtctldata.GetKeyspaceResponse
+	(*vtctldata.GetKeyspacesResponse)(nil),                // 119: vtctldata.GetKeyspacesResponse
+	(*vtctldata.GetPermissionsResponse)(nil),              // 120: vtctldata.GetPermissionsResponse
+	(*vtctldata.GetRoutingRulesResponse)(nil),             // 121: vtctldata.GetRoutingRulesResponse
+	(*vtctldata.GetSchemaResponse)(nil),                   // 122: vtctldata.GetSchemaResponse
+	(*vtctldata.GetShardResponse)(nil),                    // 123: vtctldata.GetShardResponse
+	(*vtctldata.GetSrvKeyspaceNamesResponse)(nil),         // 124: vtctldata.GetSrvKeyspaceNamesResponse
+	(*vtctldata.GetSrvKeyspacesResponse)(nil),             // 125: vtctldata.GetSrvKeyspacesResponse
+	(*vtctldata.GetSrvVSchemaResponse)(nil),               // 126: vtctldata.GetSrvVSchemaResponse
+	(*vtctldata.GetSrvVSchemasResponse)(nil),              // 127: vtctldata.GetSrvVSchemasResponse
+	(*vtctldata.GetTabletResponse)(nil),                   // 128: vtctldata.GetTabletResponse
+	(*vtctldata.GetTabletsResponse)(nil),                  // 129: vtctldata.GetTabletsResponse
+	(*vtctldata.GetVersionResponse)(nil),                  // 130: vtctldata.GetVersionResponse
+	(*vtctldata.GetVSchemaResponse)(nil),                  // 131: vtctldata.GetVSchemaResponse
+	(*vtctldata.GetWorkflowsResponse)(nil),                // 132: vtctldata.GetWorkflowsResponse
+	(*vtctldata.InitShardPrimaryResponse)(nil),            // 133: vtctldata.InitShardPrimaryResponse
+	(*vtctldata.PingTabletResponse)(nil),                  // 134: vtctldata.PingTabletResponse
+	(*vtctldata.PlannedReparentShardResponse)(nil),        // 135: vtctldata.PlannedReparentShardResponse
+	(*vtctldata.RebuildKeyspaceGraphResponse)(nil),        // 136: vtctldata.RebuildKeyspaceGraphResponse
+	(*vtctldata.RebuildVSchemaGraphResponse)(nil),         // 137: vtctldata.RebuildVSchemaGraphResponse
+	(*vtctldata.RefreshStateResponse)(nil),                // 138: vtctldata.RefreshStateResponse
+	(*vtctldata.RefreshStateByShardResponse)(nil),         // 139: vtctldata.RefreshStateByShardResponse
+	(*vtctldata.ReloadSchemaResponse)(nil),                // 140: vtctldata.ReloadSchemaResponse
+	(*vtctldata.ReloadSchemaKeyspaceResponse)(nil),        // 141: vtctldata.ReloadSchemaKeyspaceResponse
+	(*vtctldata.ReloadSchemaShardResponse)(nil),           // 142: vtctldata.ReloadSchemaShardResponse
+	(*vtctldata.RemoveBackupResponse)(nil),                // 143: vtctldata.RemoveBackupResponse
+	(*vtctldata.RemoveKeyspaceCellResponse)(nil),          // 144: vtctldata.RemoveKeyspaceCellResponse
+	(*vtctldata.RemoveShardCellResponse)(nil),             // 145: vtctldata.RemoveShardCellResponse
+	(*vtctldata.ReparentTabletResponse)(nil),              // 146: vtctldata.ReparentTabletResponse
+	(*vtctldata.RestoreFromBackupResponse)(nil),           // 147: vtctldata.RestoreFromBackupResponse
+	(*vtctldata.RunHealthCheckResponse)(nil),              // 148: vtctldata.RunHealthCheckResponse
+	(*vtctldata.SetKeyspaceDurabilityPolicyResponse)(nil), // 149: vtctldata.SetKeyspaceDurabilityPolicyResponse
+	(*vtctldata.SetKeyspaceServedFromResponse)(nil),       // 150: vtctldata.SetKeyspaceServedFromResponse
+	(*vtctldata.SetKeyspaceShardingInfoResponse)(nil),     // 151: vtctldata.SetKeyspaceShardingInfoResponse
+	(*vtctldata.SetShardIsPrimaryServingResponse)(nil),    // 152: vtctldata.SetShardIsPrimaryServingResponse
+	(*vtctldata.SetShardTabletControlResponse)(nil),       // 153: vtctldata.SetShardTabletControlResponse
+	(*vtctldata.SetWritableResponse)(nil),                 // 154: vtctldata.SetWritableResponse
+	(*vtctldata.ShardReplicationAddResponse)(nil),         // 155: vtctldata.ShardReplicationAddResponse
+	(*vtctldata.ShardReplicationFixResponse)(nil),         // 156: vtctldata.ShardReplicationFixResponse
+	(*vtctldata.ShardReplicationPositionsResponse)(nil),   // 157: vtctldata.ShardReplicationPositionsResponse
+	(*vtctldata.ShardReplicationRemoveResponse)(nil),      // 158: vtctldata.ShardReplicationRemoveResponse
+	(*vtctldata.SleepTabletResponse)(nil),                 // 159: vtctldata.SleepTabletResponse
+	(*vtctldata.SourceShardAddResponse)(nil),              // 160: vtctldata.SourceShardAddResponse
+	(*vtctldata.SourceShardDeleteResponse)(nil),           // 161: vtctldata.SourceShardDeleteResponse
+	(*vtctldata.StartReplicationResponse)(nil),            // 162: vtctldata.StartReplicationResponse
+	(*vtctldata.StopReplicationResponse)(nil),             // 163: vtctldata.StopReplicationResponse
+	(*vtctldata.TabletExternallyReparentedResponse)(nil),  // 164: vtctldata.TabletExternallyReparentedResponse
+	(*vtctldata.UpdateCellInfoResponse)(nil),              // 165: vtctldata.UpdateCellInfoResponse
+	(*vtctldata.UpdateCellsAliasResponse)(nil),            // 166: vtctldata.UpdateCellsAliasResponse
+	(*vtctldata.ValidateResponse)(nil),                    // 167: vtctldata.ValidateResponse
+	(*vtctldata.ValidateKeyspaceResponse)(nil),            // 168: vtctldata.ValidateKeyspaceResponse
+	(*vtctldata.ValidateSchemaKeyspaceResponse)(nil),      // 169: vtctldata.ValidateSchemaKeyspaceResponse
+	(*vtctldata.ValidateShardResponse)(nil),               // 170: vtctldata.ValidateShardResponse
+	(*vtctldata.ValidateVersionKeyspaceResponse)(nil),     // 171: vtctldata.ValidateVersionKeyspaceResponse
+	(*vtctldata.ValidateVSchemaResponse)(nil),             // 172: vtctldata.ValidateVSchemaResponse
+	(*vtboost.PutRecipeResponse)(nil),                     // 173: vtboost.PutRecipeResponse
+	(*vtboost.GetRecipeResponse)(nil),                     // 174: vtboost.GetRecipeResponse
+	(*vtboost.DescribeRecipeResponse)(nil),                // 175: vtboost.DescribeRecipeResponse
+	(*vtboost.GetClusterResponse)(nil),                    // 176: vtboost.GetClusterResponse
+	(*vtboost.ListClustersResponse)(nil),                  // 177: vtboost.ListClustersResponse
+	(*vtboost.ClusterChangeResponse)(nil),                 // 178: vtboost.ClusterChangeResponse
+	(*vtboost.PrimaryClusterResponse)(nil),                // 179: vtboost.PrimaryClusterResponse
+	(*vtboost.DrainClusterResponse)(nil),                  // 180: vtboost.DrainClusterResponse
+	(*vtboost.PurgeResponse)(nil),                         // 181: vtboost.PurgeResponse
 }
 var file_vtctlservice_proto_depIdxs = []int32{
 	0,   // 0: vtctlservice.Vtctl.ExecuteVtctlCommand:input_type -> vtctldata.ExecuteVtctlCommandRequest
@@ -832,106 +846,110 @@ var file_vtctlservice_proto_depIdxs = []int32{
 	79,  // 79: vtctlservice.Vtctld.ValidateShard:input_type -> vtctldata.ValidateShardRequest
 	80,  // 80: vtctlservice.Vtctld.ValidateVersionKeyspace:input_type -> vtctldata.ValidateVersionKeyspaceRequest
 	81,  // 81: vtctlservice.Vtctld.ValidateVSchema:input_type -> vtctldata.ValidateVSchemaRequest
-	82,  // 82: vtctlservice.Vtctld.BoostAddQuery:input_type -> vtboost.AddQueryRequest
-	83,  // 83: vtctlservice.Vtctld.BoostRemoveQuery:input_type -> vtboost.RemoveQueryRequest
-	84,  // 84: vtctlservice.Vtctld.BoostListQueries:input_type -> vtboost.ListQueriesRequest
-	85,  // 85: vtctlservice.Vtctld.BoostListClusters:input_type -> vtboost.ListClustersRequest
-	86,  // 86: vtctlservice.Vtctld.BoostAddCluster:input_type -> vtboost.AddClusterRequest
-	87,  // 87: vtctlservice.Vtctld.BoostMakePrimaryCluster:input_type -> vtboost.PrimaryClusterRequest
-	88,  // 88: vtctlservice.Vtctld.BoostDrainCluster:input_type -> vtboost.DrainClusterRequest
-	89,  // 89: vtctlservice.Vtctld.BoostRemoveCluster:input_type -> vtboost.RemoveClusterRequest
-	90,  // 90: vtctlservice.Vtctl.ExecuteVtctlCommand:output_type -> vtctldata.ExecuteVtctlCommandResponse
-	91,  // 91: vtctlservice.Vtctld.AddCellInfo:output_type -> vtctldata.AddCellInfoResponse
-	92,  // 92: vtctlservice.Vtctld.AddCellsAlias:output_type -> vtctldata.AddCellsAliasResponse
-	93,  // 93: vtctlservice.Vtctld.ApplyRoutingRules:output_type -> vtctldata.ApplyRoutingRulesResponse
-	94,  // 94: vtctlservice.Vtctld.ApplySchema:output_type -> vtctldata.ApplySchemaResponse
-	95,  // 95: vtctlservice.Vtctld.ApplyVSchema:output_type -> vtctldata.ApplyVSchemaResponse
-	96,  // 96: vtctlservice.Vtctld.Backup:output_type -> vtctldata.BackupResponse
-	96,  // 97: vtctlservice.Vtctld.BackupShard:output_type -> vtctldata.BackupResponse
-	97,  // 98: vtctlservice.Vtctld.ChangeTabletType:output_type -> vtctldata.ChangeTabletTypeResponse
-	98,  // 99: vtctlservice.Vtctld.CreateKeyspace:output_type -> vtctldata.CreateKeyspaceResponse
-	99,  // 100: vtctlservice.Vtctld.CreateShard:output_type -> vtctldata.CreateShardResponse
-	100, // 101: vtctlservice.Vtctld.DeleteCellInfo:output_type -> vtctldata.DeleteCellInfoResponse
-	101, // 102: vtctlservice.Vtctld.DeleteCellsAlias:output_type -> vtctldata.DeleteCellsAliasResponse
-	102, // 103: vtctlservice.Vtctld.DeleteKeyspace:output_type -> vtctldata.DeleteKeyspaceResponse
-	103, // 104: vtctlservice.Vtctld.DeleteShards:output_type -> vtctldata.DeleteShardsResponse
-	104, // 105: vtctlservice.Vtctld.DeleteSrvVSchema:output_type -> vtctldata.DeleteSrvVSchemaResponse
-	105, // 106: vtctlservice.Vtctld.DeleteTablets:output_type -> vtctldata.DeleteTabletsResponse
-	106, // 107: vtctlservice.Vtctld.EmergencyReparentShard:output_type -> vtctldata.EmergencyReparentShardResponse
-	107, // 108: vtctlservice.Vtctld.ExecuteFetchAsApp:output_type -> vtctldata.ExecuteFetchAsAppResponse
-	108, // 109: vtctlservice.Vtctld.ExecuteFetchAsDBA:output_type -> vtctldata.ExecuteFetchAsDBAResponse
-	109, // 110: vtctlservice.Vtctld.ExecuteHook:output_type -> vtctldata.ExecuteHookResponse
-	110, // 111: vtctlservice.Vtctld.FindAllShardsInKeyspace:output_type -> vtctldata.FindAllShardsInKeyspaceResponse
-	111, // 112: vtctlservice.Vtctld.GetBackups:output_type -> vtctldata.GetBackupsResponse
-	112, // 113: vtctlservice.Vtctld.GetCellInfo:output_type -> vtctldata.GetCellInfoResponse
-	113, // 114: vtctlservice.Vtctld.GetCellInfoNames:output_type -> vtctldata.GetCellInfoNamesResponse
-	114, // 115: vtctlservice.Vtctld.GetCellsAliases:output_type -> vtctldata.GetCellsAliasesResponse
-	115, // 116: vtctlservice.Vtctld.GetFullStatus:output_type -> vtctldata.GetFullStatusResponse
-	116, // 117: vtctlservice.Vtctld.GetKeyspace:output_type -> vtctldata.GetKeyspaceResponse
-	117, // 118: vtctlservice.Vtctld.GetKeyspaces:output_type -> vtctldata.GetKeyspacesResponse
-	118, // 119: vtctlservice.Vtctld.GetPermissions:output_type -> vtctldata.GetPermissionsResponse
-	119, // 120: vtctlservice.Vtctld.GetRoutingRules:output_type -> vtctldata.GetRoutingRulesResponse
-	120, // 121: vtctlservice.Vtctld.GetSchema:output_type -> vtctldata.GetSchemaResponse
-	121, // 122: vtctlservice.Vtctld.GetShard:output_type -> vtctldata.GetShardResponse
-	122, // 123: vtctlservice.Vtctld.GetSrvKeyspaceNames:output_type -> vtctldata.GetSrvKeyspaceNamesResponse
-	123, // 124: vtctlservice.Vtctld.GetSrvKeyspaces:output_type -> vtctldata.GetSrvKeyspacesResponse
-	124, // 125: vtctlservice.Vtctld.GetSrvVSchema:output_type -> vtctldata.GetSrvVSchemaResponse
-	125, // 126: vtctlservice.Vtctld.GetSrvVSchemas:output_type -> vtctldata.GetSrvVSchemasResponse
-	126, // 127: vtctlservice.Vtctld.GetTablet:output_type -> vtctldata.GetTabletResponse
-	127, // 128: vtctlservice.Vtctld.GetTablets:output_type -> vtctldata.GetTabletsResponse
-	128, // 129: vtctlservice.Vtctld.GetVersion:output_type -> vtctldata.GetVersionResponse
-	129, // 130: vtctlservice.Vtctld.GetVSchema:output_type -> vtctldata.GetVSchemaResponse
-	130, // 131: vtctlservice.Vtctld.GetWorkflows:output_type -> vtctldata.GetWorkflowsResponse
-	131, // 132: vtctlservice.Vtctld.InitShardPrimary:output_type -> vtctldata.InitShardPrimaryResponse
-	132, // 133: vtctlservice.Vtctld.PingTablet:output_type -> vtctldata.PingTabletResponse
-	133, // 134: vtctlservice.Vtctld.PlannedReparentShard:output_type -> vtctldata.PlannedReparentShardResponse
-	134, // 135: vtctlservice.Vtctld.RebuildKeyspaceGraph:output_type -> vtctldata.RebuildKeyspaceGraphResponse
-	135, // 136: vtctlservice.Vtctld.RebuildVSchemaGraph:output_type -> vtctldata.RebuildVSchemaGraphResponse
-	136, // 137: vtctlservice.Vtctld.RefreshState:output_type -> vtctldata.RefreshStateResponse
-	137, // 138: vtctlservice.Vtctld.RefreshStateByShard:output_type -> vtctldata.RefreshStateByShardResponse
-	138, // 139: vtctlservice.Vtctld.ReloadSchema:output_type -> vtctldata.ReloadSchemaResponse
-	139, // 140: vtctlservice.Vtctld.ReloadSchemaKeyspace:output_type -> vtctldata.ReloadSchemaKeyspaceResponse
-	140, // 141: vtctlservice.Vtctld.ReloadSchemaShard:output_type -> vtctldata.ReloadSchemaShardResponse
-	141, // 142: vtctlservice.Vtctld.RemoveBackup:output_type -> vtctldata.RemoveBackupResponse
-	142, // 143: vtctlservice.Vtctld.RemoveKeyspaceCell:output_type -> vtctldata.RemoveKeyspaceCellResponse
-	143, // 144: vtctlservice.Vtctld.RemoveShardCell:output_type -> vtctldata.RemoveShardCellResponse
-	144, // 145: vtctlservice.Vtctld.ReparentTablet:output_type -> vtctldata.ReparentTabletResponse
-	145, // 146: vtctlservice.Vtctld.RestoreFromBackup:output_type -> vtctldata.RestoreFromBackupResponse
-	146, // 147: vtctlservice.Vtctld.RunHealthCheck:output_type -> vtctldata.RunHealthCheckResponse
-	147, // 148: vtctlservice.Vtctld.SetKeyspaceDurabilityPolicy:output_type -> vtctldata.SetKeyspaceDurabilityPolicyResponse
-	148, // 149: vtctlservice.Vtctld.SetKeyspaceServedFrom:output_type -> vtctldata.SetKeyspaceServedFromResponse
-	149, // 150: vtctlservice.Vtctld.SetKeyspaceShardingInfo:output_type -> vtctldata.SetKeyspaceShardingInfoResponse
-	150, // 151: vtctlservice.Vtctld.SetShardIsPrimaryServing:output_type -> vtctldata.SetShardIsPrimaryServingResponse
-	151, // 152: vtctlservice.Vtctld.SetShardTabletControl:output_type -> vtctldata.SetShardTabletControlResponse
-	152, // 153: vtctlservice.Vtctld.SetWritable:output_type -> vtctldata.SetWritableResponse
-	153, // 154: vtctlservice.Vtctld.ShardReplicationAdd:output_type -> vtctldata.ShardReplicationAddResponse
-	154, // 155: vtctlservice.Vtctld.ShardReplicationFix:output_type -> vtctldata.ShardReplicationFixResponse
-	155, // 156: vtctlservice.Vtctld.ShardReplicationPositions:output_type -> vtctldata.ShardReplicationPositionsResponse
-	156, // 157: vtctlservice.Vtctld.ShardReplicationRemove:output_type -> vtctldata.ShardReplicationRemoveResponse
-	157, // 158: vtctlservice.Vtctld.SleepTablet:output_type -> vtctldata.SleepTabletResponse
-	158, // 159: vtctlservice.Vtctld.SourceShardAdd:output_type -> vtctldata.SourceShardAddResponse
-	159, // 160: vtctlservice.Vtctld.SourceShardDelete:output_type -> vtctldata.SourceShardDeleteResponse
-	160, // 161: vtctlservice.Vtctld.StartReplication:output_type -> vtctldata.StartReplicationResponse
-	161, // 162: vtctlservice.Vtctld.StopReplication:output_type -> vtctldata.StopReplicationResponse
-	162, // 163: vtctlservice.Vtctld.TabletExternallyReparented:output_type -> vtctldata.TabletExternallyReparentedResponse
-	163, // 164: vtctlservice.Vtctld.UpdateCellInfo:output_type -> vtctldata.UpdateCellInfoResponse
-	164, // 165: vtctlservice.Vtctld.UpdateCellsAlias:output_type -> vtctldata.UpdateCellsAliasResponse
-	165, // 166: vtctlservice.Vtctld.Validate:output_type -> vtctldata.ValidateResponse
-	166, // 167: vtctlservice.Vtctld.ValidateKeyspace:output_type -> vtctldata.ValidateKeyspaceResponse
-	167, // 168: vtctlservice.Vtctld.ValidateSchemaKeyspace:output_type -> vtctldata.ValidateSchemaKeyspaceResponse
-	168, // 169: vtctlservice.Vtctld.ValidateShard:output_type -> vtctldata.ValidateShardResponse
-	169, // 170: vtctlservice.Vtctld.ValidateVersionKeyspace:output_type -> vtctldata.ValidateVersionKeyspaceResponse
-	170, // 171: vtctlservice.Vtctld.ValidateVSchema:output_type -> vtctldata.ValidateVSchemaResponse
-	171, // 172: vtctlservice.Vtctld.BoostAddQuery:output_type -> vtboost.RecipeChangeResponse
-	171, // 173: vtctlservice.Vtctld.BoostRemoveQuery:output_type -> vtboost.RecipeChangeResponse
-	172, // 174: vtctlservice.Vtctld.BoostListQueries:output_type -> vtboost.ListQueriesResponse
-	173, // 175: vtctlservice.Vtctld.BoostListClusters:output_type -> vtboost.ClusterStates
-	174, // 176: vtctlservice.Vtctld.BoostAddCluster:output_type -> vtboost.ClusterChangeResponse
-	175, // 177: vtctlservice.Vtctld.BoostMakePrimaryCluster:output_type -> vtboost.PrimaryClusterResponse
-	176, // 178: vtctlservice.Vtctld.BoostDrainCluster:output_type -> vtboost.DrainClusterResponse
-	174, // 179: vtctlservice.Vtctld.BoostRemoveCluster:output_type -> vtboost.ClusterChangeResponse
-	90,  // [90:180] is the sub-list for method output_type
-	0,   // [0:90] is the sub-list for method input_type
+	82,  // 82: vtctlservice.Vtctld.BoostPutRecipe:input_type -> vtboost.PutRecipeRequest
+	83,  // 83: vtctlservice.Vtctld.BoostGetRecipe:input_type -> vtboost.GetRecipeRequest
+	84,  // 84: vtctlservice.Vtctld.BoostDescribeRecipe:input_type -> vtboost.DescribeRecipeRequest
+	85,  // 85: vtctlservice.Vtctld.BoostGetCluster:input_type -> vtboost.GetClusterRequest
+	86,  // 86: vtctlservice.Vtctld.BoostListClusters:input_type -> vtboost.ListClustersRequest
+	87,  // 87: vtctlservice.Vtctld.BoostAddCluster:input_type -> vtboost.AddClusterRequest
+	88,  // 88: vtctlservice.Vtctld.BoostMakePrimaryCluster:input_type -> vtboost.PrimaryClusterRequest
+	89,  // 89: vtctlservice.Vtctld.BoostDrainCluster:input_type -> vtboost.DrainClusterRequest
+	90,  // 90: vtctlservice.Vtctld.BoostRemoveCluster:input_type -> vtboost.RemoveClusterRequest
+	91,  // 91: vtctlservice.Vtctld.BoostPurge:input_type -> vtboost.PurgeRequest
+	92,  // 92: vtctlservice.Vtctl.ExecuteVtctlCommand:output_type -> vtctldata.ExecuteVtctlCommandResponse
+	93,  // 93: vtctlservice.Vtctld.AddCellInfo:output_type -> vtctldata.AddCellInfoResponse
+	94,  // 94: vtctlservice.Vtctld.AddCellsAlias:output_type -> vtctldata.AddCellsAliasResponse
+	95,  // 95: vtctlservice.Vtctld.ApplyRoutingRules:output_type -> vtctldata.ApplyRoutingRulesResponse
+	96,  // 96: vtctlservice.Vtctld.ApplySchema:output_type -> vtctldata.ApplySchemaResponse
+	97,  // 97: vtctlservice.Vtctld.ApplyVSchema:output_type -> vtctldata.ApplyVSchemaResponse
+	98,  // 98: vtctlservice.Vtctld.Backup:output_type -> vtctldata.BackupResponse
+	98,  // 99: vtctlservice.Vtctld.BackupShard:output_type -> vtctldata.BackupResponse
+	99,  // 100: vtctlservice.Vtctld.ChangeTabletType:output_type -> vtctldata.ChangeTabletTypeResponse
+	100, // 101: vtctlservice.Vtctld.CreateKeyspace:output_type -> vtctldata.CreateKeyspaceResponse
+	101, // 102: vtctlservice.Vtctld.CreateShard:output_type -> vtctldata.CreateShardResponse
+	102, // 103: vtctlservice.Vtctld.DeleteCellInfo:output_type -> vtctldata.DeleteCellInfoResponse
+	103, // 104: vtctlservice.Vtctld.DeleteCellsAlias:output_type -> vtctldata.DeleteCellsAliasResponse
+	104, // 105: vtctlservice.Vtctld.DeleteKeyspace:output_type -> vtctldata.DeleteKeyspaceResponse
+	105, // 106: vtctlservice.Vtctld.DeleteShards:output_type -> vtctldata.DeleteShardsResponse
+	106, // 107: vtctlservice.Vtctld.DeleteSrvVSchema:output_type -> vtctldata.DeleteSrvVSchemaResponse
+	107, // 108: vtctlservice.Vtctld.DeleteTablets:output_type -> vtctldata.DeleteTabletsResponse
+	108, // 109: vtctlservice.Vtctld.EmergencyReparentShard:output_type -> vtctldata.EmergencyReparentShardResponse
+	109, // 110: vtctlservice.Vtctld.ExecuteFetchAsApp:output_type -> vtctldata.ExecuteFetchAsAppResponse
+	110, // 111: vtctlservice.Vtctld.ExecuteFetchAsDBA:output_type -> vtctldata.ExecuteFetchAsDBAResponse
+	111, // 112: vtctlservice.Vtctld.ExecuteHook:output_type -> vtctldata.ExecuteHookResponse
+	112, // 113: vtctlservice.Vtctld.FindAllShardsInKeyspace:output_type -> vtctldata.FindAllShardsInKeyspaceResponse
+	113, // 114: vtctlservice.Vtctld.GetBackups:output_type -> vtctldata.GetBackupsResponse
+	114, // 115: vtctlservice.Vtctld.GetCellInfo:output_type -> vtctldata.GetCellInfoResponse
+	115, // 116: vtctlservice.Vtctld.GetCellInfoNames:output_type -> vtctldata.GetCellInfoNamesResponse
+	116, // 117: vtctlservice.Vtctld.GetCellsAliases:output_type -> vtctldata.GetCellsAliasesResponse
+	117, // 118: vtctlservice.Vtctld.GetFullStatus:output_type -> vtctldata.GetFullStatusResponse
+	118, // 119: vtctlservice.Vtctld.GetKeyspace:output_type -> vtctldata.GetKeyspaceResponse
+	119, // 120: vtctlservice.Vtctld.GetKeyspaces:output_type -> vtctldata.GetKeyspacesResponse
+	120, // 121: vtctlservice.Vtctld.GetPermissions:output_type -> vtctldata.GetPermissionsResponse
+	121, // 122: vtctlservice.Vtctld.GetRoutingRules:output_type -> vtctldata.GetRoutingRulesResponse
+	122, // 123: vtctlservice.Vtctld.GetSchema:output_type -> vtctldata.GetSchemaResponse
+	123, // 124: vtctlservice.Vtctld.GetShard:output_type -> vtctldata.GetShardResponse
+	124, // 125: vtctlservice.Vtctld.GetSrvKeyspaceNames:output_type -> vtctldata.GetSrvKeyspaceNamesResponse
+	125, // 126: vtctlservice.Vtctld.GetSrvKeyspaces:output_type -> vtctldata.GetSrvKeyspacesResponse
+	126, // 127: vtctlservice.Vtctld.GetSrvVSchema:output_type -> vtctldata.GetSrvVSchemaResponse
+	127, // 128: vtctlservice.Vtctld.GetSrvVSchemas:output_type -> vtctldata.GetSrvVSchemasResponse
+	128, // 129: vtctlservice.Vtctld.GetTablet:output_type -> vtctldata.GetTabletResponse
+	129, // 130: vtctlservice.Vtctld.GetTablets:output_type -> vtctldata.GetTabletsResponse
+	130, // 131: vtctlservice.Vtctld.GetVersion:output_type -> vtctldata.GetVersionResponse
+	131, // 132: vtctlservice.Vtctld.GetVSchema:output_type -> vtctldata.GetVSchemaResponse
+	132, // 133: vtctlservice.Vtctld.GetWorkflows:output_type -> vtctldata.GetWorkflowsResponse
+	133, // 134: vtctlservice.Vtctld.InitShardPrimary:output_type -> vtctldata.InitShardPrimaryResponse
+	134, // 135: vtctlservice.Vtctld.PingTablet:output_type -> vtctldata.PingTabletResponse
+	135, // 136: vtctlservice.Vtctld.PlannedReparentShard:output_type -> vtctldata.PlannedReparentShardResponse
+	136, // 137: vtctlservice.Vtctld.RebuildKeyspaceGraph:output_type -> vtctldata.RebuildKeyspaceGraphResponse
+	137, // 138: vtctlservice.Vtctld.RebuildVSchemaGraph:output_type -> vtctldata.RebuildVSchemaGraphResponse
+	138, // 139: vtctlservice.Vtctld.RefreshState:output_type -> vtctldata.RefreshStateResponse
+	139, // 140: vtctlservice.Vtctld.RefreshStateByShard:output_type -> vtctldata.RefreshStateByShardResponse
+	140, // 141: vtctlservice.Vtctld.ReloadSchema:output_type -> vtctldata.ReloadSchemaResponse
+	141, // 142: vtctlservice.Vtctld.ReloadSchemaKeyspace:output_type -> vtctldata.ReloadSchemaKeyspaceResponse
+	142, // 143: vtctlservice.Vtctld.ReloadSchemaShard:output_type -> vtctldata.ReloadSchemaShardResponse
+	143, // 144: vtctlservice.Vtctld.RemoveBackup:output_type -> vtctldata.RemoveBackupResponse
+	144, // 145: vtctlservice.Vtctld.RemoveKeyspaceCell:output_type -> vtctldata.RemoveKeyspaceCellResponse
+	145, // 146: vtctlservice.Vtctld.RemoveShardCell:output_type -> vtctldata.RemoveShardCellResponse
+	146, // 147: vtctlservice.Vtctld.ReparentTablet:output_type -> vtctldata.ReparentTabletResponse
+	147, // 148: vtctlservice.Vtctld.RestoreFromBackup:output_type -> vtctldata.RestoreFromBackupResponse
+	148, // 149: vtctlservice.Vtctld.RunHealthCheck:output_type -> vtctldata.RunHealthCheckResponse
+	149, // 150: vtctlservice.Vtctld.SetKeyspaceDurabilityPolicy:output_type -> vtctldata.SetKeyspaceDurabilityPolicyResponse
+	150, // 151: vtctlservice.Vtctld.SetKeyspaceServedFrom:output_type -> vtctldata.SetKeyspaceServedFromResponse
+	151, // 152: vtctlservice.Vtctld.SetKeyspaceShardingInfo:output_type -> vtctldata.SetKeyspaceShardingInfoResponse
+	152, // 153: vtctlservice.Vtctld.SetShardIsPrimaryServing:output_type -> vtctldata.SetShardIsPrimaryServingResponse
+	153, // 154: vtctlservice.Vtctld.SetShardTabletControl:output_type -> vtctldata.SetShardTabletControlResponse
+	154, // 155: vtctlservice.Vtctld.SetWritable:output_type -> vtctldata.SetWritableResponse
+	155, // 156: vtctlservice.Vtctld.ShardReplicationAdd:output_type -> vtctldata.ShardReplicationAddResponse
+	156, // 157: vtctlservice.Vtctld.ShardReplicationFix:output_type -> vtctldata.ShardReplicationFixResponse
+	157, // 158: vtctlservice.Vtctld.ShardReplicationPositions:output_type -> vtctldata.ShardReplicationPositionsResponse
+	158, // 159: vtctlservice.Vtctld.ShardReplicationRemove:output_type -> vtctldata.ShardReplicationRemoveResponse
+	159, // 160: vtctlservice.Vtctld.SleepTablet:output_type -> vtctldata.SleepTabletResponse
+	160, // 161: vtctlservice.Vtctld.SourceShardAdd:output_type -> vtctldata.SourceShardAddResponse
+	161, // 162: vtctlservice.Vtctld.SourceShardDelete:output_type -> vtctldata.SourceShardDeleteResponse
+	162, // 163: vtctlservice.Vtctld.StartReplication:output_type -> vtctldata.StartReplicationResponse
+	163, // 164: vtctlservice.Vtctld.StopReplication:output_type -> vtctldata.StopReplicationResponse
+	164, // 165: vtctlservice.Vtctld.TabletExternallyReparented:output_type -> vtctldata.TabletExternallyReparentedResponse
+	165, // 166: vtctlservice.Vtctld.UpdateCellInfo:output_type -> vtctldata.UpdateCellInfoResponse
+	166, // 167: vtctlservice.Vtctld.UpdateCellsAlias:output_type -> vtctldata.UpdateCellsAliasResponse
+	167, // 168: vtctlservice.Vtctld.Validate:output_type -> vtctldata.ValidateResponse
+	168, // 169: vtctlservice.Vtctld.ValidateKeyspace:output_type -> vtctldata.ValidateKeyspaceResponse
+	169, // 170: vtctlservice.Vtctld.ValidateSchemaKeyspace:output_type -> vtctldata.ValidateSchemaKeyspaceResponse
+	170, // 171: vtctlservice.Vtctld.ValidateShard:output_type -> vtctldata.ValidateShardResponse
+	171, // 172: vtctlservice.Vtctld.ValidateVersionKeyspace:output_type -> vtctldata.ValidateVersionKeyspaceResponse
+	172, // 173: vtctlservice.Vtctld.ValidateVSchema:output_type -> vtctldata.ValidateVSchemaResponse
+	173, // 174: vtctlservice.Vtctld.BoostPutRecipe:output_type -> vtboost.PutRecipeResponse
+	174, // 175: vtctlservice.Vtctld.BoostGetRecipe:output_type -> vtboost.GetRecipeResponse
+	175, // 176: vtctlservice.Vtctld.BoostDescribeRecipe:output_type -> vtboost.DescribeRecipeResponse
+	176, // 177: vtctlservice.Vtctld.BoostGetCluster:output_type -> vtboost.GetClusterResponse
+	177, // 178: vtctlservice.Vtctld.BoostListClusters:output_type -> vtboost.ListClustersResponse
+	178, // 179: vtctlservice.Vtctld.BoostAddCluster:output_type -> vtboost.ClusterChangeResponse
+	179, // 180: vtctlservice.Vtctld.BoostMakePrimaryCluster:output_type -> vtboost.PrimaryClusterResponse
+	180, // 181: vtctlservice.Vtctld.BoostDrainCluster:output_type -> vtboost.DrainClusterResponse
+	178, // 182: vtctlservice.Vtctld.BoostRemoveCluster:output_type -> vtboost.ClusterChangeResponse
+	181, // 183: vtctlservice.Vtctld.BoostPurge:output_type -> vtboost.PurgeResponse
+	92,  // [92:184] is the sub-list for method output_type
+	0,   // [0:92] is the sub-list for method input_type
 	0,   // [0:0] is the sub-list for extension type_name
 	0,   // [0:0] is the sub-list for extension extendee
 	0,   // [0:0] is the sub-list for field type_name

@@ -310,7 +310,7 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 // We need `foo` to be translated to `id+42` on the inside of the derived table
 func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
 	newExpr := sqlparser.CloneExpr(expr)
-	sqlparser.Rewrite(newExpr, func(cursor *sqlparser.Cursor) bool {
+	newExpr = sqlparser.Rewrite(newExpr, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			exp, err := vt.getExprFor(node.Name.String())
@@ -325,7 +325,7 @@ func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr
 			return false
 		}
 		return true
-	}, nil)
+	}, nil).(sqlparser.Expr)
 	return newExpr, nil
 }
 
@@ -406,4 +406,9 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 		tables = append(tables, vindexTable)
 	}
 	return ks, tables
+}
+
+func (st *SemTable) GetNextTableSet() TableSet {
+	st.Tables = append(st.Tables, nil)
+	return SingleTableSet(len(st.Tables) - 1)
 }

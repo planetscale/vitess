@@ -35,6 +35,15 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
+// NewMySQL creates a new MySQL server using the local mysqld binary. The name of the database
+// will be set to `dbName`. SQL queries that need to be executed on the new MySQL instance
+// can be passed through the `schemaSQL` argument.
+// The mysql.ConnParams to connect to the new database is returned, along with a function to
+// teardown the database.
+func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
+	return NewMySQLWithDetails(cluster.GetAndReservePort(), cluster.Hostname, dbName, schemaSQL...)
+}
+
 // CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
 // installation that hasn't been set up yet.
 func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf, error) {
@@ -52,28 +61,21 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int32)
 	return mysqlctl.NewMysqld(&cfg), mycnf, nil
 }
 
-// NewMySQL creates a new MySQL server using the local mysqld binary. The name of the database
-// will be set to `dbName`. SQL queries that need to be executed on the new MySQL instance
-// can be passed through the `schemaSQL` argument.
-// The mysql.ConnParams to connect to the new database is returned, along with a function to
-// teardown the database.
-func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
+func NewMySQLWithDetails(port int, hostname, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
 	mysqlDir, err := createMySQLDir()
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}
-
 	initMySQLFile, err := createInitSQLFile(mysqlDir, dbName)
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}
 
-	mysqlPort := cluster.GetAndReservePort()
+	mysqlPort := port
 	mysqld, mycnf, err := CreateMysqldAndMycnf(0, "", int32(mysqlPort))
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}
-
 	err = initMysqld(mysqld, mycnf, initMySQLFile)
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
@@ -81,21 +83,20 @@ func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...
 
 	params := mysql.ConnParams{
 		UnixSocket: mycnf.SocketFile,
-		Host:       cluster.Hostname,
+		Host:       hostname,
 		Uname:      "root",
 		DbName:     dbName,
 	}
-
 	for _, sql := range schemaSQL {
 		err = prepareMySQLWithSchema(params, sql)
 		if err != nil {
 			return mysql.ConnParams{}, nil, err
 		}
 	}
-
 	return params, func() {
 		ctx := context.Background()
 		_ = mysqld.Teardown(ctx, mycnf, true)
+		mysqld.Close()
 	}, nil
 }
 

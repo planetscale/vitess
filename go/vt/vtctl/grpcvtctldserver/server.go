@@ -30,9 +30,11 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	boostclient "vitess.io/vitess/go/boost/topo/client"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
@@ -71,6 +73,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vtboost"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -86,12 +89,14 @@ type VtctldServer struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 	ws  *workflow.Server
+
+	// PlanetScale Boost implementation
+	boost *boostclient.Client
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
 func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
-
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
@@ -3930,8 +3935,11 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
-func StartServer(s *grpc.Server, ts *topo.Server) {
-	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts))
+func StartServer(s *grpc.Server, ts *topo.Server, boost *boostclient.Client) {
+	srv := NewVtctldServer(ts)
+	srv.SetBoostClient(boost)
+
+	vtctlservicepb.RegisterVtctldServer(s, srv)
 }
 
 // Helper function to get version of a tablet from its debug vars
@@ -3962,3 +3970,66 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 }
 
 var getVersionFromTablet = getVersionFromTabletDebugVars
+
+// PlanetScale Vitess private RPCs.
+
+func (s *VtctldServer) SetBoostClient(boost *boostclient.Client) {
+	s.boost = boost
+}
+
+func (s *VtctldServer) BoostPutRecipe(ctx context.Context, request *vtboost.PutRecipeRequest) (*vtboost.PutRecipeResponse, error) {
+	return boostDo(s.boost.PutRecipe(ctx, request))
+}
+
+func (s *VtctldServer) BoostGetRecipe(ctx context.Context, request *vtboost.GetRecipeRequest) (*vtboost.GetRecipeResponse, error) {
+	return boostDo(s.boost.GetRecipe(ctx, request))
+}
+
+func (s *VtctldServer) BoostDescribeRecipe(ctx context.Context, request *vtboost.DescribeRecipeRequest) (*vtboost.DescribeRecipeResponse, error) {
+	return boostDo(s.boost.DescribeRecipe(ctx, request))
+}
+
+func (s *VtctldServer) BoostAddCluster(ctx context.Context, request *vtboost.AddClusterRequest) (*vtboost.ClusterChangeResponse, error) {
+	return boostDo(s.boost.AddCluster(ctx, request))
+}
+
+func (s *VtctldServer) BoostRemoveCluster(ctx context.Context, request *vtboost.RemoveClusterRequest) (*vtboost.ClusterChangeResponse, error) {
+	return boostDo(s.boost.RemoveCluster(ctx, request))
+}
+
+func (s *VtctldServer) BoostMakePrimaryCluster(ctx context.Context, request *vtboost.PrimaryClusterRequest) (*vtboost.PrimaryClusterResponse, error) {
+	return boostDo(s.boost.MakePrimaryCluster(ctx, request))
+}
+
+func (s *VtctldServer) BoostDrainCluster(ctx context.Context, request *vtboost.DrainClusterRequest) (*vtboost.DrainClusterResponse, error) {
+	return boostDo(s.boost.DrainCluster(ctx, request))
+}
+
+func (s *VtctldServer) BoostGetCluster(ctx context.Context, request *vtboost.GetClusterRequest) (*vtboost.GetClusterResponse, error) {
+	return boostDo(s.boost.GetCluster(ctx, request))
+}
+
+func (s *VtctldServer) BoostListClusters(ctx context.Context, request *vtboost.ListClustersRequest) (*vtboost.ListClustersResponse, error) {
+	return boostDo(s.boost.ListClusters(ctx, request))
+}
+
+func (s *VtctldServer) BoostPurge(ctx context.Context, request *vtboost.PurgeRequest) (*vtboost.PurgeResponse, error) {
+	return boostDo(s.boost.Purge(ctx, request))
+}
+
+// boostDo captures the results of boost RPC calls and unpacks any
+// boostclient.Error to produce a matching gRPC status code error.
+func boostDo[T any](t T, err error) (T, error) {
+	if err == nil {
+		// Happy path.
+		return t, nil
+	}
+
+	var berr *boostclient.Error
+	if !errors.As(err, &berr) {
+		// Opaque error.
+		return *new(T), err
+	}
+
+	return *new(T), status.Error(berr.Code.GRPCCode(), err.Error())
+}

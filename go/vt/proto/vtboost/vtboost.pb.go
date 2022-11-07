@@ -11,6 +11,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
+	query "vitess.io/vitess/go/vt/proto/query"
 	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
 
@@ -21,24 +22,73 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type Cluster_State int32
+type GraphvizRequest_Clustering int32
 
 const (
-	Cluster_DISABLED Cluster_State = 0
-	Cluster_PRIMARY  Cluster_State = 1
-	Cluster_DRAINING Cluster_State = 2
-	Cluster_WARMING  Cluster_State = 3
+	GraphvizRequest_NONE   GraphvizRequest_Clustering = 0
+	GraphvizRequest_DOMAIN GraphvizRequest_Clustering = 1
+	GraphvizRequest_QUERY  GraphvizRequest_Clustering = 2
 )
 
-// Enum value maps for Cluster_State.
+// Enum value maps for GraphvizRequest_Clustering.
 var (
-	Cluster_State_name = map[int32]string{
+	GraphvizRequest_Clustering_name = map[int32]string{
+		0: "NONE",
+		1: "DOMAIN",
+		2: "QUERY",
+	}
+	GraphvizRequest_Clustering_value = map[string]int32{
+		"NONE":   0,
+		"DOMAIN": 1,
+		"QUERY":  2,
+	}
+)
+
+func (x GraphvizRequest_Clustering) Enum() *GraphvizRequest_Clustering {
+	p := new(GraphvizRequest_Clustering)
+	*p = x
+	return p
+}
+
+func (x GraphvizRequest_Clustering) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GraphvizRequest_Clustering) Descriptor() protoreflect.EnumDescriptor {
+	return file_vtboost_proto_enumTypes[0].Descriptor()
+}
+
+func (GraphvizRequest_Clustering) Type() protoreflect.EnumType {
+	return &file_vtboost_proto_enumTypes[0]
+}
+
+func (x GraphvizRequest_Clustering) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GraphvizRequest_Clustering.Descriptor instead.
+func (GraphvizRequest_Clustering) EnumDescriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{3, 0}
+}
+
+type ClusterState_State int32
+
+const (
+	ClusterState_DISABLED ClusterState_State = 0
+	ClusterState_PRIMARY  ClusterState_State = 1
+	ClusterState_DRAINING ClusterState_State = 2
+	ClusterState_WARMING  ClusterState_State = 3
+)
+
+// Enum value maps for ClusterState_State.
+var (
+	ClusterState_State_name = map[int32]string{
 		0: "DISABLED",
 		1: "PRIMARY",
 		2: "DRAINING",
 		3: "WARMING",
 	}
-	Cluster_State_value = map[string]int32{
+	ClusterState_State_value = map[string]int32{
 		"DISABLED": 0,
 		"PRIMARY":  1,
 		"DRAINING": 2,
@@ -46,31 +96,141 @@ var (
 	}
 )
 
-func (x Cluster_State) Enum() *Cluster_State {
-	p := new(Cluster_State)
+func (x ClusterState_State) Enum() *ClusterState_State {
+	p := new(ClusterState_State)
 	*p = x
 	return p
 }
 
-func (x Cluster_State) String() string {
+func (x ClusterState_State) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (Cluster_State) Descriptor() protoreflect.EnumDescriptor {
-	return file_vtboost_proto_enumTypes[0].Descriptor()
+func (ClusterState_State) Descriptor() protoreflect.EnumDescriptor {
+	return file_vtboost_proto_enumTypes[1].Descriptor()
 }
 
-func (Cluster_State) Type() protoreflect.EnumType {
-	return &file_vtboost_proto_enumTypes[0]
+func (ClusterState_State) Type() protoreflect.EnumType {
+	return &file_vtboost_proto_enumTypes[1]
 }
 
-func (x Cluster_State) Number() protoreflect.EnumNumber {
+func (x ClusterState_State) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use Cluster_State.Descriptor instead.
-func (Cluster_State) EnumDescriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{6, 0}
+// Deprecated: Use ClusterState_State.Descriptor instead.
+func (ClusterState_State) EnumDescriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{15, 0}
+}
+
+type ControllerState_RecipeStatus_Progress int32
+
+const (
+	ControllerState_RecipeStatus_UNKNOWN  ControllerState_RecipeStatus_Progress = 0
+	ControllerState_RecipeStatus_APPLYING ControllerState_RecipeStatus_Progress = 1
+	ControllerState_RecipeStatus_FAILED   ControllerState_RecipeStatus_Progress = 2
+	ControllerState_RecipeStatus_READY    ControllerState_RecipeStatus_Progress = 3
+	ControllerState_RecipeStatus_REMOVING ControllerState_RecipeStatus_Progress = 4
+)
+
+// Enum value maps for ControllerState_RecipeStatus_Progress.
+var (
+	ControllerState_RecipeStatus_Progress_name = map[int32]string{
+		0: "UNKNOWN",
+		1: "APPLYING",
+		2: "FAILED",
+		3: "READY",
+		4: "REMOVING",
+	}
+	ControllerState_RecipeStatus_Progress_value = map[string]int32{
+		"UNKNOWN":  0,
+		"APPLYING": 1,
+		"FAILED":   2,
+		"READY":    3,
+		"REMOVING": 4,
+	}
+)
+
+func (x ControllerState_RecipeStatus_Progress) Enum() *ControllerState_RecipeStatus_Progress {
+	p := new(ControllerState_RecipeStatus_Progress)
+	*p = x
+	return p
+}
+
+func (x ControllerState_RecipeStatus_Progress) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ControllerState_RecipeStatus_Progress) Descriptor() protoreflect.EnumDescriptor {
+	return file_vtboost_proto_enumTypes[2].Descriptor()
+}
+
+func (ControllerState_RecipeStatus_Progress) Type() protoreflect.EnumType {
+	return &file_vtboost_proto_enumTypes[2]
+}
+
+func (x ControllerState_RecipeStatus_Progress) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ControllerState_RecipeStatus_Progress.Descriptor instead.
+func (ControllerState_RecipeStatus_Progress) EnumDescriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{30, 0, 0}
+}
+
+type Recipe struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Queries []*CachedQuery `protobuf:"bytes,1,rep,name=queries,proto3" json:"queries,omitempty"`
+	Version int64          `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+}
+
+func (x *Recipe) Reset() {
+	*x = Recipe{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[0]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Recipe) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Recipe) ProtoMessage() {}
+
+func (x *Recipe) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[0]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Recipe.ProtoReflect.Descriptor instead.
+func (*Recipe) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Recipe) GetQueries() []*CachedQuery {
+	if x != nil {
+		return x.Queries
+	}
+	return nil
+}
+
+func (x *Recipe) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
 }
 
 type CachedQuery struct {
@@ -88,7 +248,7 @@ type CachedQuery struct {
 func (x *CachedQuery) Reset() {
 	*x = CachedQuery{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[0]
+		mi := &file_vtboost_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -101,7 +261,7 @@ func (x *CachedQuery) String() string {
 func (*CachedQuery) ProtoMessage() {}
 
 func (x *CachedQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[0]
+	mi := &file_vtboost_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -114,7 +274,7 @@ func (x *CachedQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CachedQuery.ProtoReflect.Descriptor instead.
 func (*CachedQuery) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{0}
+	return file_vtboost_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CachedQuery) GetPublicId() string {
@@ -152,63 +312,20 @@ func (x *CachedQuery) GetMaxMemoryUsage() int64 {
 	return 0
 }
 
-type AddQueryRequest struct {
+type Materialization struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Queries []*CachedQuery `protobuf:"bytes,1,rep,name=queries,proto3" json:"queries,omitempty"`
+	Query             *CachedQuery                    `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	NormalizedSql     string                          `protobuf:"bytes,2,opt,name=normalized_sql,json=normalizedSql,proto3" json:"normalized_sql,omitempty"`
+	Bounds            []*Materialization_Bound        `protobuf:"bytes,3,rep,name=bounds,proto3" json:"bounds,omitempty"`
+	View              *Materialization_ViewDescriptor `protobuf:"bytes,4,opt,name=view,proto3" json:"view,omitempty"`
+	FullyMaterialized bool                            `protobuf:"varint,5,opt,name=fully_materialized,json=fullyMaterialized,proto3" json:"fully_materialized,omitempty"`
 }
 
-func (x *AddQueryRequest) Reset() {
-	*x = AddQueryRequest{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[1]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *AddQueryRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AddQueryRequest) ProtoMessage() {}
-
-func (x *AddQueryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[1]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AddQueryRequest.ProtoReflect.Descriptor instead.
-func (*AddQueryRequest) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *AddQueryRequest) GetQueries() []*CachedQuery {
-	if x != nil {
-		return x.Queries
-	}
-	return nil
-}
-
-type RemoveQueryRequest struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Queries []*RemoveQueryRequest_Query `protobuf:"bytes,1,rep,name=queries,proto3" json:"queries,omitempty"`
-}
-
-func (x *RemoveQueryRequest) Reset() {
-	*x = RemoveQueryRequest{}
+func (x *Materialization) Reset() {
+	*x = Materialization{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtboost_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -216,13 +333,13 @@ func (x *RemoveQueryRequest) Reset() {
 	}
 }
 
-func (x *RemoveQueryRequest) String() string {
+func (x *Materialization) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RemoveQueryRequest) ProtoMessage() {}
+func (*Materialization) ProtoMessage() {}
 
-func (x *RemoveQueryRequest) ProtoReflect() protoreflect.Message {
+func (x *Materialization) ProtoReflect() protoreflect.Message {
 	mi := &file_vtboost_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -234,26 +351,58 @@ func (x *RemoveQueryRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RemoveQueryRequest.ProtoReflect.Descriptor instead.
-func (*RemoveQueryRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use Materialization.ProtoReflect.Descriptor instead.
+func (*Materialization) Descriptor() ([]byte, []int) {
 	return file_vtboost_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *RemoveQueryRequest) GetQueries() []*RemoveQueryRequest_Query {
+func (x *Materialization) GetQuery() *CachedQuery {
 	if x != nil {
-		return x.Queries
+		return x.Query
 	}
 	return nil
 }
 
-type ListQueriesRequest struct {
+func (x *Materialization) GetNormalizedSql() string {
+	if x != nil {
+		return x.NormalizedSql
+	}
+	return ""
+}
+
+func (x *Materialization) GetBounds() []*Materialization_Bound {
+	if x != nil {
+		return x.Bounds
+	}
+	return nil
+}
+
+func (x *Materialization) GetView() *Materialization_ViewDescriptor {
+	if x != nil {
+		return x.View
+	}
+	return nil
+}
+
+func (x *Materialization) GetFullyMaterialized() bool {
+	if x != nil {
+		return x.FullyMaterialized
+	}
+	return false
+}
+
+type GraphvizRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
+
+	Clustering        GraphvizRequest_Clustering `protobuf:"varint,1,opt,name=clustering,proto3,enum=vtboost.GraphvizRequest_Clustering" json:"clustering,omitempty"`
+	MemoryStats       bool                       `protobuf:"varint,2,opt,name=memory_stats,json=memoryStats,proto3" json:"memory_stats,omitempty"`
+	ForceMemoryLimits map[string]int64           `protobuf:"bytes,3,rep,name=force_memory_limits,json=forceMemoryLimits,proto3" json:"force_memory_limits,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 }
 
-func (x *ListQueriesRequest) Reset() {
-	*x = ListQueriesRequest{}
+func (x *GraphvizRequest) Reset() {
+	*x = GraphvizRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtboost_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -261,13 +410,13 @@ func (x *ListQueriesRequest) Reset() {
 	}
 }
 
-func (x *ListQueriesRequest) String() string {
+func (x *GraphvizRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListQueriesRequest) ProtoMessage() {}
+func (*GraphvizRequest) ProtoMessage() {}
 
-func (x *ListQueriesRequest) ProtoReflect() protoreflect.Message {
+func (x *GraphvizRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_vtboost_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -279,22 +428,42 @@ func (x *ListQueriesRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListQueriesRequest.ProtoReflect.Descriptor instead.
-func (*ListQueriesRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GraphvizRequest.ProtoReflect.Descriptor instead.
+func (*GraphvizRequest) Descriptor() ([]byte, []int) {
 	return file_vtboost_proto_rawDescGZIP(), []int{3}
 }
 
-type ListQueriesResponse struct {
+func (x *GraphvizRequest) GetClustering() GraphvizRequest_Clustering {
+	if x != nil {
+		return x.Clustering
+	}
+	return GraphvizRequest_NONE
+}
+
+func (x *GraphvizRequest) GetMemoryStats() bool {
+	if x != nil {
+		return x.MemoryStats
+	}
+	return false
+}
+
+func (x *GraphvizRequest) GetForceMemoryLimits() map[string]int64 {
+	if x != nil {
+		return x.ForceMemoryLimits
+	}
+	return nil
+}
+
+type GraphvizResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	RecipeVersion uint64         `protobuf:"varint,1,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
-	Queries       []*CachedQuery `protobuf:"bytes,2,rep,name=queries,proto3" json:"queries,omitempty"`
+	Dot string `protobuf:"bytes,1,opt,name=dot,proto3" json:"dot,omitempty"`
 }
 
-func (x *ListQueriesResponse) Reset() {
-	*x = ListQueriesResponse{}
+func (x *GraphvizResponse) Reset() {
+	*x = GraphvizResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtboost_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -302,13 +471,13 @@ func (x *ListQueriesResponse) Reset() {
 	}
 }
 
-func (x *ListQueriesResponse) String() string {
+func (x *GraphvizResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListQueriesResponse) ProtoMessage() {}
+func (*GraphvizResponse) ProtoMessage() {}
 
-func (x *ListQueriesResponse) ProtoReflect() protoreflect.Message {
+func (x *GraphvizResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_vtboost_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -320,36 +489,26 @@ func (x *ListQueriesResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListQueriesResponse.ProtoReflect.Descriptor instead.
-func (*ListQueriesResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GraphvizResponse.ProtoReflect.Descriptor instead.
+func (*GraphvizResponse) Descriptor() ([]byte, []int) {
 	return file_vtboost_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *ListQueriesResponse) GetRecipeVersion() uint64 {
+func (x *GraphvizResponse) GetDot() string {
 	if x != nil {
-		return x.RecipeVersion
+		return x.Dot
 	}
-	return 0
+	return ""
 }
 
-func (x *ListQueriesResponse) GetQueries() []*CachedQuery {
-	if x != nil {
-		return x.Queries
-	}
-	return nil
-}
-
-type RecipeChangeResponse struct {
+type ReadyRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
-
-	Added   int64 `protobuf:"varint,1,opt,name=added,proto3" json:"added,omitempty"`
-	Removed int64 `protobuf:"varint,2,opt,name=removed,proto3" json:"removed,omitempty"`
 }
 
-func (x *RecipeChangeResponse) Reset() {
-	*x = RecipeChangeResponse{}
+func (x *ReadyRequest) Reset() {
+	*x = ReadyRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtboost_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -357,13 +516,13 @@ func (x *RecipeChangeResponse) Reset() {
 	}
 }
 
-func (x *RecipeChangeResponse) String() string {
+func (x *ReadyRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RecipeChangeResponse) ProtoMessage() {}
+func (*ReadyRequest) ProtoMessage() {}
 
-func (x *RecipeChangeResponse) ProtoReflect() protoreflect.Message {
+func (x *ReadyRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_vtboost_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -375,38 +534,21 @@ func (x *RecipeChangeResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RecipeChangeResponse.ProtoReflect.Descriptor instead.
-func (*RecipeChangeResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ReadyRequest.ProtoReflect.Descriptor instead.
+func (*ReadyRequest) Descriptor() ([]byte, []int) {
 	return file_vtboost_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *RecipeChangeResponse) GetAdded() int64 {
-	if x != nil {
-		return x.Added
-	}
-	return 0
-}
-
-func (x *RecipeChangeResponse) GetRemoved() int64 {
-	if x != nil {
-		return x.Removed
-	}
-	return 0
-}
-
-type Cluster struct {
+type ReadyResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Uuid      string          `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	State     Cluster_State   `protobuf:"varint,2,opt,name=state,proto3,enum=vtboost.Cluster_State" json:"state,omitempty"`
-	DrainedAt *vttime.Time    `protobuf:"bytes,3,opt,name=drained_at,json=drainedAt,proto3" json:"drained_at,omitempty"`
-	Vtgates   map[string]bool `protobuf:"bytes,4,rep,name=vtgates,proto3" json:"vtgates,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
+	Ready bool `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
 }
 
-func (x *Cluster) Reset() {
-	*x = Cluster{}
+func (x *ReadyResponse) Reset() {
+	*x = ReadyResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_vtboost_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -414,13 +556,13 @@ func (x *Cluster) Reset() {
 	}
 }
 
-func (x *Cluster) String() string {
+func (x *ReadyResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Cluster) ProtoMessage() {}
+func (*ReadyResponse) ProtoMessage() {}
 
-func (x *Cluster) ProtoReflect() protoreflect.Message {
+func (x *ReadyResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_vtboost_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -432,37 +574,507 @@ func (x *Cluster) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Cluster.ProtoReflect.Descriptor instead.
-func (*Cluster) Descriptor() ([]byte, []int) {
+// Deprecated: Use ReadyResponse.ProtoReflect.Descriptor instead.
+func (*ReadyResponse) Descriptor() ([]byte, []int) {
 	return file_vtboost_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *Cluster) GetUuid() string {
+func (x *ReadyResponse) GetReady() bool {
+	if x != nil {
+		return x.Ready
+	}
+	return false
+}
+
+type MaterializationsRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *MaterializationsRequest) Reset() {
+	*x = MaterializationsRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *MaterializationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MaterializationsRequest) ProtoMessage() {}
+
+func (x *MaterializationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MaterializationsRequest.ProtoReflect.Descriptor instead.
+func (*MaterializationsRequest) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{7}
+}
+
+type MaterializationsResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Materializations []*Materialization `protobuf:"bytes,1,rep,name=materializations,proto3" json:"materializations,omitempty"`
+}
+
+func (x *MaterializationsResponse) Reset() {
+	*x = MaterializationsResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *MaterializationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MaterializationsResponse) ProtoMessage() {}
+
+func (x *MaterializationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MaterializationsResponse.ProtoReflect.Descriptor instead.
+func (*MaterializationsResponse) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *MaterializationsResponse) GetMaterializations() []*Materialization {
+	if x != nil {
+		return x.Materializations
+	}
+	return nil
+}
+
+type PutRecipeRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Recipe *Recipe `protobuf:"bytes,1,opt,name=recipe,proto3" json:"recipe,omitempty"`
+}
+
+func (x *PutRecipeRequest) Reset() {
+	*x = PutRecipeRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[9]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PutRecipeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PutRecipeRequest) ProtoMessage() {}
+
+func (x *PutRecipeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[9]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PutRecipeRequest.ProtoReflect.Descriptor instead.
+func (*PutRecipeRequest) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *PutRecipeRequest) GetRecipe() *Recipe {
+	if x != nil {
+		return x.Recipe
+	}
+	return nil
+}
+
+type PutRecipeResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	RecipeVersion int64 `protobuf:"varint,1,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
+}
+
+func (x *PutRecipeResponse) Reset() {
+	*x = PutRecipeResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PutRecipeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PutRecipeResponse) ProtoMessage() {}
+
+func (x *PutRecipeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PutRecipeResponse.ProtoReflect.Descriptor instead.
+func (*PutRecipeResponse) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *PutRecipeResponse) GetRecipeVersion() int64 {
+	if x != nil {
+		return x.RecipeVersion
+	}
+	return 0
+}
+
+type GetRecipeRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *GetRecipeRequest) Reset() {
+	*x = GetRecipeRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[11]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetRecipeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRecipeRequest) ProtoMessage() {}
+
+func (x *GetRecipeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[11]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRecipeRequest.ProtoReflect.Descriptor instead.
+func (*GetRecipeRequest) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{11}
+}
+
+type GetRecipeResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Recipe *Recipe `protobuf:"bytes,1,opt,name=recipe,proto3" json:"recipe,omitempty"`
+}
+
+func (x *GetRecipeResponse) Reset() {
+	*x = GetRecipeResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[12]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetRecipeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRecipeResponse) ProtoMessage() {}
+
+func (x *GetRecipeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[12]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRecipeResponse.ProtoReflect.Descriptor instead.
+func (*GetRecipeResponse) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *GetRecipeResponse) GetRecipe() *Recipe {
+	if x != nil {
+		return x.Recipe
+	}
+	return nil
+}
+
+type DescribeRecipeRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Uuid string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	// Types that are assignable to Request:
+	//	*DescribeRecipeRequest_Graphviz
+	Request isDescribeRecipeRequest_Request `protobuf_oneof:"request"`
+}
+
+func (x *DescribeRecipeRequest) Reset() {
+	*x = DescribeRecipeRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *DescribeRecipeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DescribeRecipeRequest) ProtoMessage() {}
+
+func (x *DescribeRecipeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DescribeRecipeRequest.ProtoReflect.Descriptor instead.
+func (*DescribeRecipeRequest) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *DescribeRecipeRequest) GetUuid() string {
 	if x != nil {
 		return x.Uuid
 	}
 	return ""
 }
 
-func (x *Cluster) GetState() Cluster_State {
+func (m *DescribeRecipeRequest) GetRequest() isDescribeRecipeRequest_Request {
+	if m != nil {
+		return m.Request
+	}
+	return nil
+}
+
+func (x *DescribeRecipeRequest) GetGraphviz() *GraphvizRequest {
+	if x, ok := x.GetRequest().(*DescribeRecipeRequest_Graphviz); ok {
+		return x.Graphviz
+	}
+	return nil
+}
+
+type isDescribeRecipeRequest_Request interface {
+	isDescribeRecipeRequest_Request()
+}
+
+type DescribeRecipeRequest_Graphviz struct {
+	Graphviz *GraphvizRequest `protobuf:"bytes,2,opt,name=graphviz,proto3,oneof"`
+}
+
+func (*DescribeRecipeRequest_Graphviz) isDescribeRecipeRequest_Request() {}
+
+type DescribeRecipeResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Types that are assignable to Response:
+	//	*DescribeRecipeResponse_Graphviz
+	Response isDescribeRecipeResponse_Response `protobuf_oneof:"response"`
+}
+
+func (x *DescribeRecipeResponse) Reset() {
+	*x = DescribeRecipeResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *DescribeRecipeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DescribeRecipeResponse) ProtoMessage() {}
+
+func (x *DescribeRecipeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DescribeRecipeResponse.ProtoReflect.Descriptor instead.
+func (*DescribeRecipeResponse) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{14}
+}
+
+func (m *DescribeRecipeResponse) GetResponse() isDescribeRecipeResponse_Response {
+	if m != nil {
+		return m.Response
+	}
+	return nil
+}
+
+func (x *DescribeRecipeResponse) GetGraphviz() *GraphvizResponse {
+	if x, ok := x.GetResponse().(*DescribeRecipeResponse_Graphviz); ok {
+		return x.Graphviz
+	}
+	return nil
+}
+
+type isDescribeRecipeResponse_Response interface {
+	isDescribeRecipeResponse_Response()
+}
+
+type DescribeRecipeResponse_Graphviz struct {
+	Graphviz *GraphvizResponse `protobuf:"bytes,1,opt,name=graphviz,proto3,oneof"`
+}
+
+func (*DescribeRecipeResponse_Graphviz) isDescribeRecipeResponse_Response() {}
+
+type ClusterState struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Uuid                string             `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	State               ClusterState_State `protobuf:"varint,2,opt,name=state,proto3,enum=vtboost.ClusterState_State" json:"state,omitempty"`
+	DrainedAt           *vttime.Time       `protobuf:"bytes,3,opt,name=drained_at,json=drainedAt,proto3" json:"drained_at,omitempty"`
+	Vtgates             map[string]bool    `protobuf:"bytes,4,rep,name=vtgates,proto3" json:"vtgates,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
+	CreatedAt           *vttime.Time       `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ExpectedWorkerCount uint32             `protobuf:"varint,6,opt,name=expected_worker_count,json=expectedWorkerCount,proto3" json:"expected_worker_count,omitempty"`
+}
+
+func (x *ClusterState) Reset() {
+	*x = ClusterState{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[15]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ClusterState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClusterState) ProtoMessage() {}
+
+func (x *ClusterState) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[15]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClusterState.ProtoReflect.Descriptor instead.
+func (*ClusterState) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ClusterState) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+func (x *ClusterState) GetState() ClusterState_State {
 	if x != nil {
 		return x.State
 	}
-	return Cluster_DISABLED
+	return ClusterState_DISABLED
 }
 
-func (x *Cluster) GetDrainedAt() *vttime.Time {
+func (x *ClusterState) GetDrainedAt() *vttime.Time {
 	if x != nil {
 		return x.DrainedAt
 	}
 	return nil
 }
 
-func (x *Cluster) GetVtgates() map[string]bool {
+func (x *ClusterState) GetVtgates() map[string]bool {
 	if x != nil {
 		return x.Vtgates
 	}
 	return nil
+}
+
+func (x *ClusterState) GetCreatedAt() *vttime.Time {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *ClusterState) GetExpectedWorkerCount() uint32 {
+	if x != nil {
+		return x.ExpectedWorkerCount
+	}
+	return 0
 }
 
 type ClusterStates struct {
@@ -470,13 +1082,13 @@ type ClusterStates struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Clusters []*Cluster `protobuf:"bytes,1,rep,name=clusters,proto3" json:"clusters,omitempty"`
+	Clusters []*ClusterState `protobuf:"bytes,1,rep,name=clusters,proto3" json:"clusters,omitempty"`
 }
 
 func (x *ClusterStates) Reset() {
 	*x = ClusterStates{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[7]
+		mi := &file_vtboost_proto_msgTypes[16]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -489,7 +1101,7 @@ func (x *ClusterStates) String() string {
 func (*ClusterStates) ProtoMessage() {}
 
 func (x *ClusterStates) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[7]
+	mi := &file_vtboost_proto_msgTypes[16]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -502,12 +1114,114 @@ func (x *ClusterStates) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClusterStates.ProtoReflect.Descriptor instead.
 func (*ClusterStates) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{7}
+	return file_vtboost_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *ClusterStates) GetClusters() []*Cluster {
+func (x *ClusterStates) GetClusters() []*ClusterState {
 	if x != nil {
 		return x.Clusters
+	}
+	return nil
+}
+
+type GetClusterRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Uuid string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+}
+
+func (x *GetClusterRequest) Reset() {
+	*x = GetClusterRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[17]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetClusterRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetClusterRequest) ProtoMessage() {}
+
+func (x *GetClusterRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[17]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetClusterRequest.ProtoReflect.Descriptor instead.
+func (*GetClusterRequest) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetClusterRequest) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+type GetClusterResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Cluster    *ClusterState    `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Controller *ControllerState `protobuf:"bytes,2,opt,name=controller,proto3" json:"controller,omitempty"`
+}
+
+func (x *GetClusterResponse) Reset() {
+	*x = GetClusterResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[18]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetClusterResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetClusterResponse) ProtoMessage() {}
+
+func (x *GetClusterResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[18]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetClusterResponse.ProtoReflect.Descriptor instead.
+func (*GetClusterResponse) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetClusterResponse) GetCluster() *ClusterState {
+	if x != nil {
+		return x.Cluster
+	}
+	return nil
+}
+
+func (x *GetClusterResponse) GetController() *ControllerState {
+	if x != nil {
+		return x.Controller
 	}
 	return nil
 }
@@ -521,7 +1235,7 @@ type ListClustersRequest struct {
 func (x *ListClustersRequest) Reset() {
 	*x = ListClustersRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[8]
+		mi := &file_vtboost_proto_msgTypes[19]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -534,7 +1248,7 @@ func (x *ListClustersRequest) String() string {
 func (*ListClustersRequest) ProtoMessage() {}
 
 func (x *ListClustersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[8]
+	mi := &file_vtboost_proto_msgTypes[19]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -547,7 +1261,54 @@ func (x *ListClustersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListClustersRequest.ProtoReflect.Descriptor instead.
 func (*ListClustersRequest) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{8}
+	return file_vtboost_proto_rawDescGZIP(), []int{19}
+}
+
+type ListClustersResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Clusters []*ListClustersResponse_State `protobuf:"bytes,1,rep,name=clusters,proto3" json:"clusters,omitempty"`
+}
+
+func (x *ListClustersResponse) Reset() {
+	*x = ListClustersResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[20]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ListClustersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListClustersResponse) ProtoMessage() {}
+
+func (x *ListClustersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[20]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListClustersResponse.ProtoReflect.Descriptor instead.
+func (*ListClustersResponse) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ListClustersResponse) GetClusters() []*ListClustersResponse_State {
+	if x != nil {
+		return x.Clusters
+	}
+	return nil
 }
 
 type AddClusterRequest struct {
@@ -555,13 +1316,15 @@ type AddClusterRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Uuid string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Uuid                string       `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	CreatedAt           *vttime.Time `protobuf:"bytes,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ExpectedWorkerCount uint32       `protobuf:"varint,3,opt,name=expected_worker_count,json=expectedWorkerCount,proto3" json:"expected_worker_count,omitempty"`
 }
 
 func (x *AddClusterRequest) Reset() {
 	*x = AddClusterRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[9]
+		mi := &file_vtboost_proto_msgTypes[21]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -574,7 +1337,7 @@ func (x *AddClusterRequest) String() string {
 func (*AddClusterRequest) ProtoMessage() {}
 
 func (x *AddClusterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[9]
+	mi := &file_vtboost_proto_msgTypes[21]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -587,7 +1350,7 @@ func (x *AddClusterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddClusterRequest.ProtoReflect.Descriptor instead.
 func (*AddClusterRequest) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{9}
+	return file_vtboost_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *AddClusterRequest) GetUuid() string {
@@ -597,18 +1360,32 @@ func (x *AddClusterRequest) GetUuid() string {
 	return ""
 }
 
+func (x *AddClusterRequest) GetCreatedAt() *vttime.Time {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *AddClusterRequest) GetExpectedWorkerCount() uint32 {
+	if x != nil {
+		return x.ExpectedWorkerCount
+	}
+	return 0
+}
+
 type RemoveClusterRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Uuid string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Uuids []string `protobuf:"bytes,2,rep,name=uuids,proto3" json:"uuids,omitempty"`
 }
 
 func (x *RemoveClusterRequest) Reset() {
 	*x = RemoveClusterRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[10]
+		mi := &file_vtboost_proto_msgTypes[22]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -621,7 +1398,7 @@ func (x *RemoveClusterRequest) String() string {
 func (*RemoveClusterRequest) ProtoMessage() {}
 
 func (x *RemoveClusterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[10]
+	mi := &file_vtboost_proto_msgTypes[22]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -634,14 +1411,14 @@ func (x *RemoveClusterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveClusterRequest.ProtoReflect.Descriptor instead.
 func (*RemoveClusterRequest) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{10}
+	return file_vtboost_proto_rawDescGZIP(), []int{22}
 }
 
-func (x *RemoveClusterRequest) GetUuid() string {
+func (x *RemoveClusterRequest) GetUuids() []string {
 	if x != nil {
-		return x.Uuid
+		return x.Uuids
 	}
-	return ""
+	return nil
 }
 
 type ClusterChangeResponse struct {
@@ -653,7 +1430,7 @@ type ClusterChangeResponse struct {
 func (x *ClusterChangeResponse) Reset() {
 	*x = ClusterChangeResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[11]
+		mi := &file_vtboost_proto_msgTypes[23]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -666,7 +1443,7 @@ func (x *ClusterChangeResponse) String() string {
 func (*ClusterChangeResponse) ProtoMessage() {}
 
 func (x *ClusterChangeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[11]
+	mi := &file_vtboost_proto_msgTypes[23]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -679,7 +1456,7 @@ func (x *ClusterChangeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClusterChangeResponse.ProtoReflect.Descriptor instead.
 func (*ClusterChangeResponse) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{11}
+	return file_vtboost_proto_rawDescGZIP(), []int{23}
 }
 
 type PrimaryClusterRequest struct {
@@ -693,7 +1470,7 @@ type PrimaryClusterRequest struct {
 func (x *PrimaryClusterRequest) Reset() {
 	*x = PrimaryClusterRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[12]
+		mi := &file_vtboost_proto_msgTypes[24]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -706,7 +1483,7 @@ func (x *PrimaryClusterRequest) String() string {
 func (*PrimaryClusterRequest) ProtoMessage() {}
 
 func (x *PrimaryClusterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[12]
+	mi := &file_vtboost_proto_msgTypes[24]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -719,7 +1496,7 @@ func (x *PrimaryClusterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrimaryClusterRequest.ProtoReflect.Descriptor instead.
 func (*PrimaryClusterRequest) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{12}
+	return file_vtboost_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *PrimaryClusterRequest) GetUuid() string {
@@ -738,7 +1515,7 @@ type PrimaryClusterResponse struct {
 func (x *PrimaryClusterResponse) Reset() {
 	*x = PrimaryClusterResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[13]
+		mi := &file_vtboost_proto_msgTypes[25]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -751,7 +1528,7 @@ func (x *PrimaryClusterResponse) String() string {
 func (*PrimaryClusterResponse) ProtoMessage() {}
 
 func (x *PrimaryClusterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[13]
+	mi := &file_vtboost_proto_msgTypes[25]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -764,7 +1541,7 @@ func (x *PrimaryClusterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrimaryClusterResponse.ProtoReflect.Descriptor instead.
 func (*PrimaryClusterResponse) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{13}
+	return file_vtboost_proto_rawDescGZIP(), []int{25}
 }
 
 type DrainClusterRequest struct {
@@ -779,7 +1556,7 @@ type DrainClusterRequest struct {
 func (x *DrainClusterRequest) Reset() {
 	*x = DrainClusterRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[14]
+		mi := &file_vtboost_proto_msgTypes[26]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -792,7 +1569,7 @@ func (x *DrainClusterRequest) String() string {
 func (*DrainClusterRequest) ProtoMessage() {}
 
 func (x *DrainClusterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[14]
+	mi := &file_vtboost_proto_msgTypes[26]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -805,7 +1582,7 @@ func (x *DrainClusterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainClusterRequest.ProtoReflect.Descriptor instead.
 func (*DrainClusterRequest) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{14}
+	return file_vtboost_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *DrainClusterRequest) GetUuid() string {
@@ -831,7 +1608,7 @@ type DrainClusterResponse struct {
 func (x *DrainClusterResponse) Reset() {
 	*x = DrainClusterResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[15]
+		mi := &file_vtboost_proto_msgTypes[27]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -844,7 +1621,7 @@ func (x *DrainClusterResponse) String() string {
 func (*DrainClusterResponse) ProtoMessage() {}
 
 func (x *DrainClusterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[15]
+	mi := &file_vtboost_proto_msgTypes[27]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -857,37 +1634,32 @@ func (x *DrainClusterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainClusterResponse.ProtoReflect.Descriptor instead.
 func (*DrainClusterResponse) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{15}
+	return file_vtboost_proto_rawDescGZIP(), []int{27}
 }
 
-type RemoveQueryRequest_Query struct {
+type PurgeRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
-
-	// Types that are assignable to Remove:
-	//	*RemoveQueryRequest_Query_Name
-	//	*RemoveQueryRequest_Query_PublicId
-	Remove isRemoveQueryRequest_Query_Remove `protobuf_oneof:"remove"`
 }
 
-func (x *RemoveQueryRequest_Query) Reset() {
-	*x = RemoveQueryRequest_Query{}
+func (x *PurgeRequest) Reset() {
+	*x = PurgeRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtboost_proto_msgTypes[16]
+		mi := &file_vtboost_proto_msgTypes[28]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
 }
 
-func (x *RemoveQueryRequest_Query) String() string {
+func (x *PurgeRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RemoveQueryRequest_Query) ProtoMessage() {}
+func (*PurgeRequest) ProtoMessage() {}
 
-func (x *RemoveQueryRequest_Query) ProtoReflect() protoreflect.Message {
-	mi := &file_vtboost_proto_msgTypes[16]
+func (x *PurgeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[28]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -898,136 +1670,796 @@ func (x *RemoveQueryRequest_Query) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RemoveQueryRequest_Query.ProtoReflect.Descriptor instead.
-func (*RemoveQueryRequest_Query) Descriptor() ([]byte, []int) {
-	return file_vtboost_proto_rawDescGZIP(), []int{2, 0}
+// Deprecated: Use PurgeRequest.ProtoReflect.Descriptor instead.
+func (*PurgeRequest) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{28}
 }
 
-func (m *RemoveQueryRequest_Query) GetRemove() isRemoveQueryRequest_Query_Remove {
-	if m != nil {
-		return m.Remove
+type PurgeResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *PurgeResponse) Reset() {
+	*x = PurgeResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[29]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PurgeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PurgeResponse) ProtoMessage() {}
+
+func (x *PurgeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[29]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PurgeResponse.ProtoReflect.Descriptor instead.
+func (*PurgeResponse) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{29}
+}
+
+type ControllerState struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Leader              string                                  `protobuf:"bytes,1,opt,name=leader,proto3" json:"leader,omitempty"`
+	Epoch               int64                                   `protobuf:"varint,2,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	RecipeVersion       int64                                   `protobuf:"varint,3,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
+	RecipeVersionStatus map[int64]*ControllerState_RecipeStatus `protobuf:"bytes,4,rep,name=recipe_version_status,json=recipeVersionStatus,proto3" json:"recipe_version_status,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+}
+
+func (x *ControllerState) Reset() {
+	*x = ControllerState{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[30]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ControllerState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ControllerState) ProtoMessage() {}
+
+func (x *ControllerState) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[30]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ControllerState.ProtoReflect.Descriptor instead.
+func (*ControllerState) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ControllerState) GetLeader() string {
+	if x != nil {
+		return x.Leader
+	}
+	return ""
+}
+
+func (x *ControllerState) GetEpoch() int64 {
+	if x != nil {
+		return x.Epoch
+	}
+	return 0
+}
+
+func (x *ControllerState) GetRecipeVersion() int64 {
+	if x != nil {
+		return x.RecipeVersion
+	}
+	return 0
+}
+
+func (x *ControllerState) GetRecipeVersionStatus() map[int64]*ControllerState_RecipeStatus {
+	if x != nil {
+		return x.RecipeVersionStatus
 	}
 	return nil
 }
 
-func (x *RemoveQueryRequest_Query) GetName() string {
-	if x, ok := x.GetRemove().(*RemoveQueryRequest_Query_Name); ok {
+type TopoWorkerEntry struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Uuid       string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	AdminAddr  string `protobuf:"bytes,2,opt,name=admin_addr,json=adminAddr,proto3" json:"admin_addr,omitempty"`
+	ReaderAddr string `protobuf:"bytes,3,opt,name=reader_addr,json=readerAddr,proto3" json:"reader_addr,omitempty"`
+}
+
+func (x *TopoWorkerEntry) Reset() {
+	*x = TopoWorkerEntry{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[31]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TopoWorkerEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TopoWorkerEntry) ProtoMessage() {}
+
+func (x *TopoWorkerEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[31]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TopoWorkerEntry.ProtoReflect.Descriptor instead.
+func (*TopoWorkerEntry) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *TopoWorkerEntry) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+func (x *TopoWorkerEntry) GetAdminAddr() string {
+	if x != nil {
+		return x.AdminAddr
+	}
+	return ""
+}
+
+func (x *TopoWorkerEntry) GetReaderAddr() string {
+	if x != nil {
+		return x.ReaderAddr
+	}
+	return ""
+}
+
+type Materialization_Bound struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name       string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type       int64  `protobuf:"varint,2,opt,name=type,proto3" json:"type,omitempty"`
+	BoundValue []byte `protobuf:"bytes,3,opt,name=bound_value,json=boundValue,proto3" json:"bound_value,omitempty"`
+	Pos        int64  `protobuf:"varint,4,opt,name=pos,proto3" json:"pos,omitempty"`
+}
+
+func (x *Materialization_Bound) Reset() {
+	*x = Materialization_Bound{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[32]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Materialization_Bound) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Materialization_Bound) ProtoMessage() {}
+
+func (x *Materialization_Bound) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[32]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Materialization_Bound.ProtoReflect.Descriptor instead.
+func (*Materialization_Bound) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{2, 0}
+}
+
+func (x *Materialization_Bound) GetName() string {
+	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *RemoveQueryRequest_Query) GetPublicId() string {
-	if x, ok := x.GetRemove().(*RemoveQueryRequest_Query_PublicId); ok {
-		return x.PublicId
+func (x *Materialization_Bound) GetType() int64 {
+	if x != nil {
+		return x.Type
+	}
+	return 0
+}
+
+func (x *Materialization_Bound) GetBoundValue() []byte {
+	if x != nil {
+		return x.BoundValue
+	}
+	return nil
+}
+
+func (x *Materialization_Bound) GetPos() int64 {
+	if x != nil {
+		return x.Pos
+	}
+	return 0
+}
+
+type Materialization_ViewDescriptor struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name      string         `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Node      uint32         `protobuf:"varint,2,opt,name=node,proto3" json:"node,omitempty"`
+	Schema    []*query.Field `protobuf:"bytes,3,rep,name=schema,proto3" json:"schema,omitempty"`
+	KeySchema []*query.Field `protobuf:"bytes,4,rep,name=key_schema,json=keySchema,proto3" json:"key_schema,omitempty"`
+	Shards    []string       `protobuf:"bytes,5,rep,name=shards,proto3" json:"shards,omitempty"`
+}
+
+func (x *Materialization_ViewDescriptor) Reset() {
+	*x = Materialization_ViewDescriptor{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[33]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Materialization_ViewDescriptor) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Materialization_ViewDescriptor) ProtoMessage() {}
+
+func (x *Materialization_ViewDescriptor) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[33]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Materialization_ViewDescriptor.ProtoReflect.Descriptor instead.
+func (*Materialization_ViewDescriptor) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{2, 1}
+}
+
+func (x *Materialization_ViewDescriptor) GetName() string {
+	if x != nil {
+		return x.Name
 	}
 	return ""
 }
 
-type isRemoveQueryRequest_Query_Remove interface {
-	isRemoveQueryRequest_Query_Remove()
+func (x *Materialization_ViewDescriptor) GetNode() uint32 {
+	if x != nil {
+		return x.Node
+	}
+	return 0
 }
 
-type RemoveQueryRequest_Query_Name struct {
-	Name string `protobuf:"bytes,1,opt,name=name,proto3,oneof"`
+func (x *Materialization_ViewDescriptor) GetSchema() []*query.Field {
+	if x != nil {
+		return x.Schema
+	}
+	return nil
 }
 
-type RemoveQueryRequest_Query_PublicId struct {
-	PublicId string `protobuf:"bytes,2,opt,name=public_id,json=publicId,proto3,oneof"`
+func (x *Materialization_ViewDescriptor) GetKeySchema() []*query.Field {
+	if x != nil {
+		return x.KeySchema
+	}
+	return nil
 }
 
-func (*RemoveQueryRequest_Query_Name) isRemoveQueryRequest_Query_Remove() {}
+func (x *Materialization_ViewDescriptor) GetShards() []string {
+	if x != nil {
+		return x.Shards
+	}
+	return nil
+}
 
-func (*RemoveQueryRequest_Query_PublicId) isRemoveQueryRequest_Query_Remove() {}
+type ListClustersResponse_State struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Cluster    *ClusterState    `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Controller *ControllerState `protobuf:"bytes,2,opt,name=controller,proto3" json:"controller,omitempty"`
+}
+
+func (x *ListClustersResponse_State) Reset() {
+	*x = ListClustersResponse_State{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[36]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ListClustersResponse_State) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListClustersResponse_State) ProtoMessage() {}
+
+func (x *ListClustersResponse_State) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[36]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListClustersResponse_State.ProtoReflect.Descriptor instead.
+func (*ListClustersResponse_State) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{20, 0}
+}
+
+func (x *ListClustersResponse_State) GetCluster() *ClusterState {
+	if x != nil {
+		return x.Cluster
+	}
+	return nil
+}
+
+func (x *ListClustersResponse_State) GetController() *ControllerState {
+	if x != nil {
+		return x.Controller
+	}
+	return nil
+}
+
+type ControllerState_RecipeStatus struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Version      int64                                 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	Progress     ControllerState_RecipeStatus_Progress `protobuf:"varint,2,opt,name=progress,proto3,enum=vtboost.ControllerState_RecipeStatus_Progress" json:"progress,omitempty"`
+	Queries      []*ControllerState_RecipeStatus_Query `protobuf:"bytes,4,rep,name=queries,proto3" json:"queries,omitempty"`
+	SystemErrors []string                              `protobuf:"bytes,5,rep,name=system_errors,json=systemErrors,proto3" json:"system_errors,omitempty"`
+}
+
+func (x *ControllerState_RecipeStatus) Reset() {
+	*x = ControllerState_RecipeStatus{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[37]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ControllerState_RecipeStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ControllerState_RecipeStatus) ProtoMessage() {}
+
+func (x *ControllerState_RecipeStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[37]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ControllerState_RecipeStatus.ProtoReflect.Descriptor instead.
+func (*ControllerState_RecipeStatus) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{30, 0}
+}
+
+func (x *ControllerState_RecipeStatus) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *ControllerState_RecipeStatus) GetProgress() ControllerState_RecipeStatus_Progress {
+	if x != nil {
+		return x.Progress
+	}
+	return ControllerState_RecipeStatus_UNKNOWN
+}
+
+func (x *ControllerState_RecipeStatus) GetQueries() []*ControllerState_RecipeStatus_Query {
+	if x != nil {
+		return x.Queries
+	}
+	return nil
+}
+
+func (x *ControllerState_RecipeStatus) GetSystemErrors() []string {
+	if x != nil {
+		return x.SystemErrors
+	}
+	return nil
+}
+
+type ControllerState_RecipeStatus_Query struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	QueryPublicId string                                `protobuf:"bytes,1,opt,name=query_public_id,json=queryPublicId,proto3" json:"query_public_id,omitempty"`
+	Progress      ControllerState_RecipeStatus_Progress `protobuf:"varint,2,opt,name=progress,proto3,enum=vtboost.ControllerState_RecipeStatus_Progress" json:"progress,omitempty"`
+	Error         string                                `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+}
+
+func (x *ControllerState_RecipeStatus_Query) Reset() {
+	*x = ControllerState_RecipeStatus_Query{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[39]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ControllerState_RecipeStatus_Query) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ControllerState_RecipeStatus_Query) ProtoMessage() {}
+
+func (x *ControllerState_RecipeStatus_Query) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[39]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ControllerState_RecipeStatus_Query.ProtoReflect.Descriptor instead.
+func (*ControllerState_RecipeStatus_Query) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{30, 0, 0}
+}
+
+func (x *ControllerState_RecipeStatus_Query) GetQueryPublicId() string {
+	if x != nil {
+		return x.QueryPublicId
+	}
+	return ""
+}
+
+func (x *ControllerState_RecipeStatus_Query) GetProgress() ControllerState_RecipeStatus_Progress {
+	if x != nil {
+		return x.Progress
+	}
+	return ControllerState_RecipeStatus_UNKNOWN
+}
+
+func (x *ControllerState_RecipeStatus_Query) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
 
 var File_vtboost_proto protoreflect.FileDescriptor
 
 var file_vtboost_proto_rawDesc = []byte{
 	0x0a, 0x0d, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12,
-	0x07, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x1a, 0x0c, 0x76, 0x74, 0x74, 0x69, 0x6d, 0x65,
-	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x96, 0x01, 0x0a, 0x0b, 0x43, 0x61, 0x63, 0x68, 0x65,
-	0x64, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63,
-	0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x75, 0x62, 0x6c, 0x69,
-	0x63, 0x49, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x71, 0x6c, 0x18, 0x03,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x71, 0x6c, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79,
-	0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79,
-	0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x28, 0x0a, 0x10, 0x6d, 0x61, 0x78, 0x5f, 0x6d, 0x65, 0x6d,
-	0x6f, 0x72, 0x79, 0x5f, 0x75, 0x73, 0x61, 0x67, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x03, 0x52,
-	0x0e, 0x6d, 0x61, 0x78, 0x4d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x55, 0x73, 0x61, 0x67, 0x65, 0x22,
-	0x41, 0x0a, 0x0f, 0x41, 0x64, 0x64, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x12, 0x2e, 0x0a, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x18, 0x01, 0x20,
-	0x03, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x61,
-	0x63, 0x68, 0x65, 0x64, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69,
-	0x65, 0x73, 0x22, 0x99, 0x01, 0x0a, 0x12, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x51, 0x75, 0x65,
-	0x72, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x3b, 0x0a, 0x07, 0x71, 0x75, 0x65,
-	0x72, 0x69, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x21, 0x2e, 0x76, 0x74, 0x62,
-	0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x51, 0x75, 0x65, 0x72, 0x79,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x2e, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x07, 0x71,
-	0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x1a, 0x46, 0x0a, 0x05, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12,
-	0x14, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52,
-	0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x1d, 0x0a, 0x09, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0x5f,
-	0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x08, 0x70, 0x75, 0x62, 0x6c,
-	0x69, 0x63, 0x49, 0x64, 0x42, 0x08, 0x0a, 0x06, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x22, 0x14,
-	0x0a, 0x12, 0x4c, 0x69, 0x73, 0x74, 0x51, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x22, 0x6c, 0x0a, 0x13, 0x4c, 0x69, 0x73, 0x74, 0x51, 0x75, 0x65, 0x72,
-	0x69, 0x65, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a, 0x0e, 0x72,
-	0x65, 0x63, 0x69, 0x70, 0x65, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x04, 0x52, 0x0d, 0x72, 0x65, 0x63, 0x69, 0x70, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69,
-	0x6f, 0x6e, 0x12, 0x2e, 0x0a, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x18, 0x02, 0x20,
-	0x03, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x61,
-	0x63, 0x68, 0x65, 0x64, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69,
-	0x65, 0x73, 0x22, 0x46, 0x0a, 0x14, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x43, 0x68, 0x61, 0x6e,
-	0x67, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x61, 0x64,
-	0x64, 0x65, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x61, 0x64, 0x64, 0x65, 0x64,
-	0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x03, 0x52, 0x07, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x64, 0x22, 0xac, 0x02, 0x0a, 0x07, 0x43,
-	0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x2c, 0x0a, 0x05, 0x73, 0x74,
-	0x61, 0x74, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x16, 0x2e, 0x76, 0x74, 0x62, 0x6f,
-	0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x2e, 0x53, 0x74, 0x61, 0x74,
-	0x65, 0x52, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x12, 0x2b, 0x0a, 0x0a, 0x64, 0x72, 0x61, 0x69,
-	0x6e, 0x65, 0x64, 0x5f, 0x61, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x76,
-	0x74, 0x74, 0x69, 0x6d, 0x65, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x52, 0x09, 0x64, 0x72, 0x61, 0x69,
-	0x6e, 0x65, 0x64, 0x41, 0x74, 0x12, 0x37, 0x0a, 0x07, 0x76, 0x74, 0x67, 0x61, 0x74, 0x65, 0x73,
-	0x18, 0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74,
-	0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x2e, 0x56, 0x74, 0x67, 0x61, 0x74, 0x65, 0x73,
-	0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x07, 0x76, 0x74, 0x67, 0x61, 0x74, 0x65, 0x73, 0x1a, 0x3a,
-	0x0a, 0x0c, 0x56, 0x74, 0x67, 0x61, 0x74, 0x65, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10,
-	0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79,
-	0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52,
-	0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x3d, 0x0a, 0x05, 0x53, 0x74,
-	0x61, 0x74, 0x65, 0x12, 0x0c, 0x0a, 0x08, 0x44, 0x49, 0x53, 0x41, 0x42, 0x4c, 0x45, 0x44, 0x10,
-	0x00, 0x12, 0x0b, 0x0a, 0x07, 0x50, 0x52, 0x49, 0x4d, 0x41, 0x52, 0x59, 0x10, 0x01, 0x12, 0x0c,
-	0x0a, 0x08, 0x44, 0x52, 0x41, 0x49, 0x4e, 0x49, 0x4e, 0x47, 0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07,
-	0x57, 0x41, 0x52, 0x4d, 0x49, 0x4e, 0x47, 0x10, 0x03, 0x22, 0x3d, 0x0a, 0x0d, 0x43, 0x6c, 0x75,
-	0x73, 0x74, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x73, 0x12, 0x2c, 0x0a, 0x08, 0x63, 0x6c,
-	0x75, 0x73, 0x74, 0x65, 0x72, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x76,
-	0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x08,
-	0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x73, 0x22, 0x15, 0x0a, 0x13, 0x4c, 0x69, 0x73, 0x74,
+	0x07, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x1a, 0x0b, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x1a, 0x0c, 0x76, 0x74, 0x74, 0x69, 0x6d, 0x65, 0x2e, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x22, 0x52, 0x0a, 0x06, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x12, 0x2e, 0x0a,
+	0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x14,
+	0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x61, 0x63, 0x68, 0x65, 0x64, 0x51,
+	0x75, 0x65, 0x72, 0x79, 0x52, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x12, 0x18, 0x0a,
+	0x07, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x07,
+	0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x22, 0x96, 0x01, 0x0a, 0x0b, 0x43, 0x61, 0x63, 0x68,
+	0x65, 0x64, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x75, 0x62, 0x6c, 0x69,
+	0x63, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x75, 0x62, 0x6c,
+	0x69, 0x63, 0x49, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x71, 0x6c, 0x18,
+	0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x71, 0x6c, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65,
+	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65,
+	0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x28, 0x0a, 0x10, 0x6d, 0x61, 0x78, 0x5f, 0x6d, 0x65,
+	0x6d, 0x6f, 0x72, 0x79, 0x5f, 0x75, 0x73, 0x61, 0x67, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x03,
+	0x52, 0x0e, 0x6d, 0x61, 0x78, 0x4d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x55, 0x73, 0x61, 0x67, 0x65,
+	0x22, 0x92, 0x04, 0x0a, 0x0f, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61,
+	0x74, 0x69, 0x6f, 0x6e, 0x12, 0x2a, 0x0a, 0x05, 0x71, 0x75, 0x65, 0x72, 0x79, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x61,
+	0x63, 0x68, 0x65, 0x64, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x05, 0x71, 0x75, 0x65, 0x72, 0x79,
+	0x12, 0x25, 0x0a, 0x0e, 0x6e, 0x6f, 0x72, 0x6d, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64, 0x5f, 0x73,
+	0x71, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0d, 0x6e, 0x6f, 0x72, 0x6d, 0x61, 0x6c,
+	0x69, 0x7a, 0x65, 0x64, 0x53, 0x71, 0x6c, 0x12, 0x36, 0x0a, 0x06, 0x62, 0x6f, 0x75, 0x6e, 0x64,
+	0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1e, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73,
+	0x74, 0x2e, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f,
+	0x6e, 0x2e, 0x42, 0x6f, 0x75, 0x6e, 0x64, 0x52, 0x06, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x73, 0x12,
+	0x3b, 0x0a, 0x04, 0x76, 0x69, 0x65, 0x77, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x27, 0x2e,
+	0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c,
+	0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x2e, 0x56, 0x69, 0x65, 0x77, 0x44, 0x65, 0x73, 0x63,
+	0x72, 0x69, 0x70, 0x74, 0x6f, 0x72, 0x52, 0x04, 0x76, 0x69, 0x65, 0x77, 0x12, 0x2d, 0x0a, 0x12,
+	0x66, 0x75, 0x6c, 0x6c, 0x79, 0x5f, 0x6d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a,
+	0x65, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x11, 0x66, 0x75, 0x6c, 0x6c, 0x79, 0x4d,
+	0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64, 0x1a, 0x62, 0x0a, 0x05, 0x42,
+	0x6f, 0x75, 0x6e, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12, 0x1f, 0x0a, 0x0b,
+	0x62, 0x6f, 0x75, 0x6e, 0x64, 0x5f, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x0c, 0x52, 0x0a, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x12, 0x10, 0x0a,
+	0x03, 0x70, 0x6f, 0x73, 0x18, 0x04, 0x20, 0x01, 0x28, 0x03, 0x52, 0x03, 0x70, 0x6f, 0x73, 0x1a,
+	0xa3, 0x01, 0x0a, 0x0e, 0x56, 0x69, 0x65, 0x77, 0x44, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74,
+	0x6f, 0x72, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x6f, 0x64, 0x65, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x6e, 0x6f, 0x64, 0x65, 0x12, 0x24, 0x0a, 0x06, 0x73, 0x63,
+	0x68, 0x65, 0x6d, 0x61, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x71, 0x75, 0x65,
+	0x72, 0x79, 0x2e, 0x46, 0x69, 0x65, 0x6c, 0x64, 0x52, 0x06, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61,
+	0x12, 0x2b, 0x0a, 0x0a, 0x6b, 0x65, 0x79, 0x5f, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x18, 0x04,
+	0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x46, 0x69, 0x65,
+	0x6c, 0x64, 0x52, 0x09, 0x6b, 0x65, 0x79, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x12, 0x16, 0x0a,
+	0x06, 0x73, 0x68, 0x61, 0x72, 0x64, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x09, 0x52, 0x06, 0x73,
+	0x68, 0x61, 0x72, 0x64, 0x73, 0x22, 0xcf, 0x02, 0x0a, 0x0f, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76,
+	0x69, 0x7a, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x43, 0x0a, 0x0a, 0x63, 0x6c, 0x75,
+	0x73, 0x74, 0x65, 0x72, 0x69, 0x6e, 0x67, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x23, 0x2e,
+	0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69, 0x7a,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x69,
+	0x6e, 0x67, 0x52, 0x0a, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x69, 0x6e, 0x67, 0x12, 0x21,
+	0x0a, 0x0c, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x73, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x08, 0x52, 0x0b, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x53, 0x74, 0x61, 0x74,
+	0x73, 0x12, 0x5f, 0x0a, 0x13, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x5f, 0x6d, 0x65, 0x6d, 0x6f, 0x72,
+	0x79, 0x5f, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x2f,
+	0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69,
+	0x7a, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x2e, 0x46, 0x6f, 0x72, 0x63, 0x65, 0x4d, 0x65,
+	0x6d, 0x6f, 0x72, 0x79, 0x4c, 0x69, 0x6d, 0x69, 0x74, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52,
+	0x11, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x4d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x4c, 0x69, 0x6d, 0x69,
+	0x74, 0x73, 0x1a, 0x44, 0x0a, 0x16, 0x46, 0x6f, 0x72, 0x63, 0x65, 0x4d, 0x65, 0x6d, 0x6f, 0x72,
+	0x79, 0x4c, 0x69, 0x6d, 0x69, 0x74, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03,
+	0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14,
+	0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x76,
+	0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x2d, 0x0a, 0x0a, 0x43, 0x6c, 0x75, 0x73,
+	0x74, 0x65, 0x72, 0x69, 0x6e, 0x67, 0x12, 0x08, 0x0a, 0x04, 0x4e, 0x4f, 0x4e, 0x45, 0x10, 0x00,
+	0x12, 0x0a, 0x0a, 0x06, 0x44, 0x4f, 0x4d, 0x41, 0x49, 0x4e, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05,
+	0x51, 0x55, 0x45, 0x52, 0x59, 0x10, 0x02, 0x22, 0x24, 0x0a, 0x10, 0x47, 0x72, 0x61, 0x70, 0x68,
+	0x76, 0x69, 0x7a, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x10, 0x0a, 0x03, 0x64,
+	0x6f, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x64, 0x6f, 0x74, 0x22, 0x0e, 0x0a,
+	0x0c, 0x52, 0x65, 0x61, 0x64, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x25, 0x0a,
+	0x0d, 0x52, 0x65, 0x61, 0x64, 0x79, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x14,
+	0x0a, 0x05, 0x72, 0x65, 0x61, 0x64, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x05, 0x72,
+	0x65, 0x61, 0x64, 0x79, 0x22, 0x19, 0x0a, 0x17, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c,
+	0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22,
+	0x60, 0x0a, 0x18, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69,
+	0x6f, 0x6e, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x44, 0x0a, 0x10, 0x6d,
+	0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x18,
+	0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x18, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
+	0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52,
+	0x10, 0x6d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e,
+	0x73, 0x22, 0x3b, 0x0a, 0x10, 0x50, 0x75, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x27, 0x0a, 0x06, 0x72, 0x65, 0x63, 0x69, 0x70, 0x65, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
+	0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x06, 0x72, 0x65, 0x63, 0x69, 0x70, 0x65, 0x22, 0x3a,
+	0x0a, 0x11, 0x50, 0x75, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a, 0x0e, 0x72, 0x65, 0x63, 0x69, 0x70, 0x65, 0x5f, 0x76, 0x65,
+	0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0d, 0x72, 0x65, 0x63,
+	0x69, 0x70, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x22, 0x12, 0x0a, 0x10, 0x47, 0x65,
+	0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x3c,
+	0x0a, 0x11, 0x47, 0x65, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x12, 0x27, 0x0a, 0x06, 0x72, 0x65, 0x63, 0x69, 0x70, 0x65, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x52, 0x65,
+	0x63, 0x69, 0x70, 0x65, 0x52, 0x06, 0x72, 0x65, 0x63, 0x69, 0x70, 0x65, 0x22, 0x6e, 0x0a, 0x15,
+	0x44, 0x65, 0x73, 0x63, 0x72, 0x69, 0x62, 0x65, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x36, 0x0a, 0x08, 0x67, 0x72, 0x61,
+	0x70, 0x68, 0x76, 0x69, 0x7a, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x18, 0x2e, 0x76, 0x74,
+	0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69, 0x7a, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x48, 0x00, 0x52, 0x08, 0x67, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69,
+	0x7a, 0x42, 0x09, 0x0a, 0x07, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x5d, 0x0a, 0x16,
+	0x44, 0x65, 0x73, 0x63, 0x72, 0x69, 0x62, 0x65, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x37, 0x0a, 0x08, 0x67, 0x72, 0x61, 0x70, 0x68, 0x76,
+	0x69, 0x7a, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f,
+	0x73, 0x74, 0x2e, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69, 0x7a, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x48, 0x00, 0x52, 0x08, 0x67, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69, 0x7a, 0x42,
+	0x0a, 0x0a, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x9c, 0x03, 0x0a, 0x0c,
+	0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x12, 0x0a, 0x04,
+	0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64,
+	0x12, 0x31, 0x0a, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0e, 0x32,
+	0x1b, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65,
+	0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x2e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x05, 0x73, 0x74,
+	0x61, 0x74, 0x65, 0x12, 0x2b, 0x0a, 0x0a, 0x64, 0x72, 0x61, 0x69, 0x6e, 0x65, 0x64, 0x5f, 0x61,
+	0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x76, 0x74, 0x74, 0x69, 0x6d, 0x65,
+	0x2e, 0x54, 0x69, 0x6d, 0x65, 0x52, 0x09, 0x64, 0x72, 0x61, 0x69, 0x6e, 0x65, 0x64, 0x41, 0x74,
+	0x12, 0x3c, 0x0a, 0x07, 0x76, 0x74, 0x67, 0x61, 0x74, 0x65, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x22, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6c, 0x75, 0x73,
+	0x74, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x2e, 0x56, 0x74, 0x67, 0x61, 0x74, 0x65, 0x73,
+	0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x07, 0x76, 0x74, 0x67, 0x61, 0x74, 0x65, 0x73, 0x12, 0x2b,
+	0x0a, 0x0a, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x5f, 0x61, 0x74, 0x18, 0x05, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x76, 0x74, 0x74, 0x69, 0x6d, 0x65, 0x2e, 0x54, 0x69, 0x6d, 0x65,
+	0x52, 0x09, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74, 0x12, 0x32, 0x0a, 0x15, 0x65,
+	0x78, 0x70, 0x65, 0x63, 0x74, 0x65, 0x64, 0x5f, 0x77, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x5f, 0x63,
+	0x6f, 0x75, 0x6e, 0x74, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x13, 0x65, 0x78, 0x70, 0x65,
+	0x63, 0x74, 0x65, 0x64, 0x57, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x1a,
+	0x3a, 0x0a, 0x0c, 0x56, 0x74, 0x67, 0x61, 0x74, 0x65, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12,
+	0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65,
+	0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08,
+	0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x3d, 0x0a, 0x05, 0x53,
+	0x74, 0x61, 0x74, 0x65, 0x12, 0x0c, 0x0a, 0x08, 0x44, 0x49, 0x53, 0x41, 0x42, 0x4c, 0x45, 0x44,
+	0x10, 0x00, 0x12, 0x0b, 0x0a, 0x07, 0x50, 0x52, 0x49, 0x4d, 0x41, 0x52, 0x59, 0x10, 0x01, 0x12,
+	0x0c, 0x0a, 0x08, 0x44, 0x52, 0x41, 0x49, 0x4e, 0x49, 0x4e, 0x47, 0x10, 0x02, 0x12, 0x0b, 0x0a,
+	0x07, 0x57, 0x41, 0x52, 0x4d, 0x49, 0x4e, 0x47, 0x10, 0x03, 0x22, 0x42, 0x0a, 0x0d, 0x43, 0x6c,
+	0x75, 0x73, 0x74, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x73, 0x12, 0x31, 0x0a, 0x08, 0x63,
+	0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x15, 0x2e,
+	0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x53,
+	0x74, 0x61, 0x74, 0x65, 0x52, 0x08, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x73, 0x22, 0x27,
+	0x0a, 0x11, 0x47, 0x65, 0x74, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x22, 0x7f, 0x0a, 0x12, 0x47, 0x65, 0x74, 0x43, 0x6c,
+	0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2f, 0x0a,
+	0x07, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15,
+	0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72,
+	0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x07, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x12, 0x38,
+	0x0a, 0x0a, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x18, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6f, 0x6e,
+	0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x0a, 0x63, 0x6f,
+	0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x22, 0x15, 0x0a, 0x13, 0x4c, 0x69, 0x73, 0x74,
 	0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22,
-	0x27, 0x0a, 0x11, 0x41, 0x64, 0x64, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x22, 0x2a, 0x0a, 0x14, 0x52, 0x65, 0x6d, 0x6f,
+	0xcb, 0x01, 0x0a, 0x14, 0x4c, 0x69, 0x73, 0x74, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x73,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x3f, 0x0a, 0x08, 0x63, 0x6c, 0x75, 0x73,
+	0x74, 0x65, 0x72, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x23, 0x2e, 0x76, 0x74, 0x62,
+	0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x4c, 0x69, 0x73, 0x74, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72,
+	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52,
+	0x08, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x73, 0x1a, 0x72, 0x0a, 0x05, 0x53, 0x74, 0x61,
+	0x74, 0x65, 0x12, 0x2f, 0x0a, 0x07, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6c,
+	0x75, 0x73, 0x74, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x07, 0x63, 0x6c, 0x75, 0x73,
+	0x74, 0x65, 0x72, 0x12, 0x38, 0x0a, 0x0a, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65,
+	0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x18, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73,
+	0x74, 0x2e, 0x43, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74,
+	0x65, 0x52, 0x0a, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x22, 0x88, 0x01,
+	0x0a, 0x11, 0x41, 0x64, 0x64, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x2b, 0x0a, 0x0a, 0x63, 0x72, 0x65, 0x61, 0x74,
+	0x65, 0x64, 0x5f, 0x61, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x76, 0x74,
+	0x74, 0x69, 0x6d, 0x65, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x52, 0x09, 0x63, 0x72, 0x65, 0x61, 0x74,
+	0x65, 0x64, 0x41, 0x74, 0x12, 0x32, 0x0a, 0x15, 0x65, 0x78, 0x70, 0x65, 0x63, 0x74, 0x65, 0x64,
+	0x5f, 0x77, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x5f, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x0d, 0x52, 0x13, 0x65, 0x78, 0x70, 0x65, 0x63, 0x74, 0x65, 0x64, 0x57, 0x6f, 0x72,
+	0x6b, 0x65, 0x72, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x22, 0x32, 0x0a, 0x14, 0x52, 0x65, 0x6d, 0x6f,
 	0x76, 0x65, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04,
-	0x75, 0x75, 0x69, 0x64, 0x22, 0x17, 0x0a, 0x15, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x43,
-	0x68, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x2b, 0x0a,
-	0x15, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x22, 0x18, 0x0a, 0x16, 0x50, 0x72,
-	0x69, 0x6d, 0x61, 0x72, 0x79, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x56, 0x0a, 0x13, 0x44, 0x72, 0x61, 0x69, 0x6e, 0x43, 0x6c, 0x75,
-	0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x75,
-	0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12,
-	0x2b, 0x0a, 0x0a, 0x64, 0x72, 0x61, 0x69, 0x6e, 0x65, 0x64, 0x5f, 0x61, 0x74, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x76, 0x74, 0x74, 0x69, 0x6d, 0x65, 0x2e, 0x54, 0x69, 0x6d,
-	0x65, 0x52, 0x09, 0x64, 0x72, 0x61, 0x69, 0x6e, 0x65, 0x64, 0x41, 0x74, 0x22, 0x16, 0x0a, 0x14,
-	0x44, 0x72, 0x61, 0x69, 0x6e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x42, 0x26, 0x5a, 0x24, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69,
-	0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x62, 0x06, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x33,
+	0x12, 0x14, 0x0a, 0x05, 0x75, 0x75, 0x69, 0x64, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52,
+	0x05, 0x75, 0x75, 0x69, 0x64, 0x73, 0x4a, 0x04, 0x08, 0x01, 0x10, 0x02, 0x22, 0x17, 0x0a, 0x15,
+	0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x2b, 0x0a, 0x15, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79,
+	0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12,
+	0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75,
+	0x69, 0x64, 0x22, 0x18, 0x0a, 0x16, 0x50, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x43, 0x6c, 0x75,
+	0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x56, 0x0a, 0x13,
+	0x44, 0x72, 0x61, 0x69, 0x6e, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x2b, 0x0a, 0x0a, 0x64, 0x72, 0x61, 0x69, 0x6e,
+	0x65, 0x64, 0x5f, 0x61, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x76, 0x74,
+	0x74, 0x69, 0x6d, 0x65, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x52, 0x09, 0x64, 0x72, 0x61, 0x69, 0x6e,
+	0x65, 0x64, 0x41, 0x74, 0x22, 0x16, 0x0a, 0x14, 0x44, 0x72, 0x61, 0x69, 0x6e, 0x43, 0x6c, 0x75,
+	0x73, 0x74, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x0e, 0x0a, 0x0c,
+	0x50, 0x75, 0x72, 0x67, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x0f, 0x0a, 0x0d,
+	0x50, 0x75, 0x72, 0x67, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x85, 0x06,
+	0x0a, 0x0f, 0x43, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74,
+	0x65, 0x12, 0x16, 0x0a, 0x06, 0x6c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x06, 0x6c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x70, 0x6f,
+	0x63, 0x68, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x65, 0x70, 0x6f, 0x63, 0x68, 0x12,
+	0x25, 0x0a, 0x0e, 0x72, 0x65, 0x63, 0x69, 0x70, 0x65, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f,
+	0x6e, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0d, 0x72, 0x65, 0x63, 0x69, 0x70, 0x65, 0x56,
+	0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x65, 0x0a, 0x15, 0x72, 0x65, 0x63, 0x69, 0x70, 0x65,
+	0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18,
+	0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x31, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
+	0x43, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x2e,
+	0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61,
+	0x74, 0x75, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x13, 0x72, 0x65, 0x63, 0x69, 0x70, 0x65,
+	0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x1a, 0xc6, 0x03,
+	0x0a, 0x0c, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x18,
+	0x0a, 0x07, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52,
+	0x07, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x4a, 0x0a, 0x08, 0x70, 0x72, 0x6f, 0x67,
+	0x72, 0x65, 0x73, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x2e, 0x2e, 0x76, 0x74, 0x62,
+	0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x53,
+	0x74, 0x61, 0x74, 0x65, 0x2e, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x53, 0x74, 0x61, 0x74, 0x75,
+	0x73, 0x2e, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x52, 0x08, 0x70, 0x72, 0x6f, 0x67,
+	0x72, 0x65, 0x73, 0x73, 0x12, 0x45, 0x0a, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x18,
+	0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x2b, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
+	0x43, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x2e,
+	0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x2e, 0x51, 0x75, 0x65,
+	0x72, 0x79, 0x52, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x12, 0x23, 0x0a, 0x0d, 0x73,
+	0x79, 0x73, 0x74, 0x65, 0x6d, 0x5f, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x73, 0x18, 0x05, 0x20, 0x03,
+	0x28, 0x09, 0x52, 0x0c, 0x73, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x45, 0x72, 0x72, 0x6f, 0x72, 0x73,
+	0x1a, 0x91, 0x01, 0x0a, 0x05, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12, 0x26, 0x0a, 0x0f, 0x71, 0x75,
+	0x65, 0x72, 0x79, 0x5f, 0x70, 0x75, 0x62, 0x6c, 0x69, 0x63, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x0d, 0x71, 0x75, 0x65, 0x72, 0x79, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x63,
+	0x49, 0x64, 0x12, 0x4a, 0x0a, 0x08, 0x70, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x0e, 0x32, 0x2e, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43,
+	0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x2e, 0x52,
+	0x65, 0x63, 0x69, 0x70, 0x65, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x2e, 0x50, 0x72, 0x6f, 0x67,
+	0x72, 0x65, 0x73, 0x73, 0x52, 0x08, 0x70, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x12, 0x14,
+	0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65,
+	0x72, 0x72, 0x6f, 0x72, 0x22, 0x4a, 0x0a, 0x08, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73,
+	0x12, 0x0b, 0x0a, 0x07, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x10, 0x00, 0x12, 0x0c, 0x0a,
+	0x08, 0x41, 0x50, 0x50, 0x4c, 0x59, 0x49, 0x4e, 0x47, 0x10, 0x01, 0x12, 0x0a, 0x0a, 0x06, 0x46,
+	0x41, 0x49, 0x4c, 0x45, 0x44, 0x10, 0x02, 0x12, 0x09, 0x0a, 0x05, 0x52, 0x45, 0x41, 0x44, 0x59,
+	0x10, 0x03, 0x12, 0x0c, 0x0a, 0x08, 0x52, 0x45, 0x4d, 0x4f, 0x56, 0x49, 0x4e, 0x47, 0x10, 0x04,
+	0x4a, 0x04, 0x08, 0x03, 0x10, 0x04, 0x1a, 0x6d, 0x0a, 0x18, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65,
+	0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x45, 0x6e, 0x74,
+	0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52,
+	0x03, 0x6b, 0x65, 0x79, 0x12, 0x3b, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x25, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6f,
+	0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x2e, 0x52, 0x65,
+	0x63, 0x69, 0x70, 0x65, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75,
+	0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x65, 0x0a, 0x0f, 0x54, 0x6f, 0x70, 0x6f, 0x57, 0x6f, 0x72,
+	0x6b, 0x65, 0x72, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x1d, 0x0a, 0x0a,
+	0x61, 0x64, 0x6d, 0x69, 0x6e, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x09, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x41, 0x64, 0x64, 0x72, 0x12, 0x1f, 0x0a, 0x0b, 0x72,
+	0x65, 0x61, 0x64, 0x65, 0x72, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x0a, 0x72, 0x65, 0x61, 0x64, 0x65, 0x72, 0x41, 0x64, 0x64, 0x72, 0x32, 0xb1, 0x02, 0x0a,
+	0x11, 0x43, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x53, 0x65, 0x72, 0x76, 0x69,
+	0x63, 0x65, 0x12, 0x42, 0x0a, 0x09, 0x47, 0x65, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x12,
+	0x19, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47, 0x65, 0x74, 0x52, 0x65, 0x63,
+	0x69, 0x70, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x76, 0x74, 0x62,
+	0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47, 0x65, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x3b, 0x0a, 0x0a, 0x52, 0x65, 0x61, 0x64, 0x79, 0x43,
+	0x68, 0x65, 0x63, 0x6b, 0x12, 0x15, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x52,
+	0x65, 0x61, 0x64, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x76, 0x74,
+	0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x52, 0x65, 0x61, 0x64, 0x79, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x12, 0x3f, 0x0a, 0x08, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69, 0x7a, 0x12,
+	0x18, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76,
+	0x69, 0x7a, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x76, 0x74, 0x62, 0x6f,
+	0x6f, 0x73, 0x74, 0x2e, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69, 0x7a, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5a, 0x0a, 0x13, 0x47, 0x65, 0x74, 0x4d, 0x61, 0x74, 0x65, 0x72,
+	0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x20, 0x2e, 0x76, 0x74,
+	0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x21, 0x2e,
+	0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c,
+	0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x42, 0x26, 0x5a, 0x24, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69,
+	0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x2f, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1042,44 +2474,99 @@ func file_vtboost_proto_rawDescGZIP() []byte {
 	return file_vtboost_proto_rawDescData
 }
 
-var file_vtboost_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_vtboost_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_vtboost_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_vtboost_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
 var file_vtboost_proto_goTypes = []interface{}{
-	(Cluster_State)(0),               // 0: vtboost.Cluster.State
-	(*CachedQuery)(nil),              // 1: vtboost.CachedQuery
-	(*AddQueryRequest)(nil),          // 2: vtboost.AddQueryRequest
-	(*RemoveQueryRequest)(nil),       // 3: vtboost.RemoveQueryRequest
-	(*ListQueriesRequest)(nil),       // 4: vtboost.ListQueriesRequest
-	(*ListQueriesResponse)(nil),      // 5: vtboost.ListQueriesResponse
-	(*RecipeChangeResponse)(nil),     // 6: vtboost.RecipeChangeResponse
-	(*Cluster)(nil),                  // 7: vtboost.Cluster
-	(*ClusterStates)(nil),            // 8: vtboost.ClusterStates
-	(*ListClustersRequest)(nil),      // 9: vtboost.ListClustersRequest
-	(*AddClusterRequest)(nil),        // 10: vtboost.AddClusterRequest
-	(*RemoveClusterRequest)(nil),     // 11: vtboost.RemoveClusterRequest
-	(*ClusterChangeResponse)(nil),    // 12: vtboost.ClusterChangeResponse
-	(*PrimaryClusterRequest)(nil),    // 13: vtboost.PrimaryClusterRequest
-	(*PrimaryClusterResponse)(nil),   // 14: vtboost.PrimaryClusterResponse
-	(*DrainClusterRequest)(nil),      // 15: vtboost.DrainClusterRequest
-	(*DrainClusterResponse)(nil),     // 16: vtboost.DrainClusterResponse
-	(*RemoveQueryRequest_Query)(nil), // 17: vtboost.RemoveQueryRequest.Query
-	nil,                              // 18: vtboost.Cluster.VtgatesEntry
-	(*vttime.Time)(nil),              // 19: vttime.Time
+	(GraphvizRequest_Clustering)(0),            // 0: vtboost.GraphvizRequest.Clustering
+	(ClusterState_State)(0),                    // 1: vtboost.ClusterState.State
+	(ControllerState_RecipeStatus_Progress)(0), // 2: vtboost.ControllerState.RecipeStatus.Progress
+	(*Recipe)(nil),                             // 3: vtboost.Recipe
+	(*CachedQuery)(nil),                        // 4: vtboost.CachedQuery
+	(*Materialization)(nil),                    // 5: vtboost.Materialization
+	(*GraphvizRequest)(nil),                    // 6: vtboost.GraphvizRequest
+	(*GraphvizResponse)(nil),                   // 7: vtboost.GraphvizResponse
+	(*ReadyRequest)(nil),                       // 8: vtboost.ReadyRequest
+	(*ReadyResponse)(nil),                      // 9: vtboost.ReadyResponse
+	(*MaterializationsRequest)(nil),            // 10: vtboost.MaterializationsRequest
+	(*MaterializationsResponse)(nil),           // 11: vtboost.MaterializationsResponse
+	(*PutRecipeRequest)(nil),                   // 12: vtboost.PutRecipeRequest
+	(*PutRecipeResponse)(nil),                  // 13: vtboost.PutRecipeResponse
+	(*GetRecipeRequest)(nil),                   // 14: vtboost.GetRecipeRequest
+	(*GetRecipeResponse)(nil),                  // 15: vtboost.GetRecipeResponse
+	(*DescribeRecipeRequest)(nil),              // 16: vtboost.DescribeRecipeRequest
+	(*DescribeRecipeResponse)(nil),             // 17: vtboost.DescribeRecipeResponse
+	(*ClusterState)(nil),                       // 18: vtboost.ClusterState
+	(*ClusterStates)(nil),                      // 19: vtboost.ClusterStates
+	(*GetClusterRequest)(nil),                  // 20: vtboost.GetClusterRequest
+	(*GetClusterResponse)(nil),                 // 21: vtboost.GetClusterResponse
+	(*ListClustersRequest)(nil),                // 22: vtboost.ListClustersRequest
+	(*ListClustersResponse)(nil),               // 23: vtboost.ListClustersResponse
+	(*AddClusterRequest)(nil),                  // 24: vtboost.AddClusterRequest
+	(*RemoveClusterRequest)(nil),               // 25: vtboost.RemoveClusterRequest
+	(*ClusterChangeResponse)(nil),              // 26: vtboost.ClusterChangeResponse
+	(*PrimaryClusterRequest)(nil),              // 27: vtboost.PrimaryClusterRequest
+	(*PrimaryClusterResponse)(nil),             // 28: vtboost.PrimaryClusterResponse
+	(*DrainClusterRequest)(nil),                // 29: vtboost.DrainClusterRequest
+	(*DrainClusterResponse)(nil),               // 30: vtboost.DrainClusterResponse
+	(*PurgeRequest)(nil),                       // 31: vtboost.PurgeRequest
+	(*PurgeResponse)(nil),                      // 32: vtboost.PurgeResponse
+	(*ControllerState)(nil),                    // 33: vtboost.ControllerState
+	(*TopoWorkerEntry)(nil),                    // 34: vtboost.TopoWorkerEntry
+	(*Materialization_Bound)(nil),              // 35: vtboost.Materialization.Bound
+	(*Materialization_ViewDescriptor)(nil),     // 36: vtboost.Materialization.ViewDescriptor
+	nil,                                        // 37: vtboost.GraphvizRequest.ForceMemoryLimitsEntry
+	nil,                                        // 38: vtboost.ClusterState.VtgatesEntry
+	(*ListClustersResponse_State)(nil),         // 39: vtboost.ListClustersResponse.State
+	(*ControllerState_RecipeStatus)(nil),       // 40: vtboost.ControllerState.RecipeStatus
+	nil,                                        // 41: vtboost.ControllerState.RecipeVersionStatusEntry
+	(*ControllerState_RecipeStatus_Query)(nil), // 42: vtboost.ControllerState.RecipeStatus.Query
+	(*vttime.Time)(nil),                        // 43: vttime.Time
+	(*query.Field)(nil),                        // 44: query.Field
 }
 var file_vtboost_proto_depIdxs = []int32{
-	1,  // 0: vtboost.AddQueryRequest.queries:type_name -> vtboost.CachedQuery
-	17, // 1: vtboost.RemoveQueryRequest.queries:type_name -> vtboost.RemoveQueryRequest.Query
-	1,  // 2: vtboost.ListQueriesResponse.queries:type_name -> vtboost.CachedQuery
-	0,  // 3: vtboost.Cluster.state:type_name -> vtboost.Cluster.State
-	19, // 4: vtboost.Cluster.drained_at:type_name -> vttime.Time
-	18, // 5: vtboost.Cluster.vtgates:type_name -> vtboost.Cluster.VtgatesEntry
-	7,  // 6: vtboost.ClusterStates.clusters:type_name -> vtboost.Cluster
-	19, // 7: vtboost.DrainClusterRequest.drained_at:type_name -> vttime.Time
-	8,  // [8:8] is the sub-list for method output_type
-	8,  // [8:8] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	4,  // 0: vtboost.Recipe.queries:type_name -> vtboost.CachedQuery
+	4,  // 1: vtboost.Materialization.query:type_name -> vtboost.CachedQuery
+	35, // 2: vtboost.Materialization.bounds:type_name -> vtboost.Materialization.Bound
+	36, // 3: vtboost.Materialization.view:type_name -> vtboost.Materialization.ViewDescriptor
+	0,  // 4: vtboost.GraphvizRequest.clustering:type_name -> vtboost.GraphvizRequest.Clustering
+	37, // 5: vtboost.GraphvizRequest.force_memory_limits:type_name -> vtboost.GraphvizRequest.ForceMemoryLimitsEntry
+	5,  // 6: vtboost.MaterializationsResponse.materializations:type_name -> vtboost.Materialization
+	3,  // 7: vtboost.PutRecipeRequest.recipe:type_name -> vtboost.Recipe
+	3,  // 8: vtboost.GetRecipeResponse.recipe:type_name -> vtboost.Recipe
+	6,  // 9: vtboost.DescribeRecipeRequest.graphviz:type_name -> vtboost.GraphvizRequest
+	7,  // 10: vtboost.DescribeRecipeResponse.graphviz:type_name -> vtboost.GraphvizResponse
+	1,  // 11: vtboost.ClusterState.state:type_name -> vtboost.ClusterState.State
+	43, // 12: vtboost.ClusterState.drained_at:type_name -> vttime.Time
+	38, // 13: vtboost.ClusterState.vtgates:type_name -> vtboost.ClusterState.VtgatesEntry
+	43, // 14: vtboost.ClusterState.created_at:type_name -> vttime.Time
+	18, // 15: vtboost.ClusterStates.clusters:type_name -> vtboost.ClusterState
+	18, // 16: vtboost.GetClusterResponse.cluster:type_name -> vtboost.ClusterState
+	33, // 17: vtboost.GetClusterResponse.controller:type_name -> vtboost.ControllerState
+	39, // 18: vtboost.ListClustersResponse.clusters:type_name -> vtboost.ListClustersResponse.State
+	43, // 19: vtboost.AddClusterRequest.created_at:type_name -> vttime.Time
+	43, // 20: vtboost.DrainClusterRequest.drained_at:type_name -> vttime.Time
+	41, // 21: vtboost.ControllerState.recipe_version_status:type_name -> vtboost.ControllerState.RecipeVersionStatusEntry
+	44, // 22: vtboost.Materialization.ViewDescriptor.schema:type_name -> query.Field
+	44, // 23: vtboost.Materialization.ViewDescriptor.key_schema:type_name -> query.Field
+	18, // 24: vtboost.ListClustersResponse.State.cluster:type_name -> vtboost.ClusterState
+	33, // 25: vtboost.ListClustersResponse.State.controller:type_name -> vtboost.ControllerState
+	2,  // 26: vtboost.ControllerState.RecipeStatus.progress:type_name -> vtboost.ControllerState.RecipeStatus.Progress
+	42, // 27: vtboost.ControllerState.RecipeStatus.queries:type_name -> vtboost.ControllerState.RecipeStatus.Query
+	40, // 28: vtboost.ControllerState.RecipeVersionStatusEntry.value:type_name -> vtboost.ControllerState.RecipeStatus
+	2,  // 29: vtboost.ControllerState.RecipeStatus.Query.progress:type_name -> vtboost.ControllerState.RecipeStatus.Progress
+	14, // 30: vtboost.ControllerService.GetRecipe:input_type -> vtboost.GetRecipeRequest
+	8,  // 31: vtboost.ControllerService.ReadyCheck:input_type -> vtboost.ReadyRequest
+	6,  // 32: vtboost.ControllerService.Graphviz:input_type -> vtboost.GraphvizRequest
+	10, // 33: vtboost.ControllerService.GetMaterializations:input_type -> vtboost.MaterializationsRequest
+	15, // 34: vtboost.ControllerService.GetRecipe:output_type -> vtboost.GetRecipeResponse
+	9,  // 35: vtboost.ControllerService.ReadyCheck:output_type -> vtboost.ReadyResponse
+	7,  // 36: vtboost.ControllerService.Graphviz:output_type -> vtboost.GraphvizResponse
+	11, // 37: vtboost.ControllerService.GetMaterializations:output_type -> vtboost.MaterializationsResponse
+	34, // [34:38] is the sub-list for method output_type
+	30, // [30:34] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_vtboost_proto_init() }
@@ -1089,7 +2576,7 @@ func file_vtboost_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_vtboost_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CachedQuery); i {
+			switch v := v.(*Recipe); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1101,7 +2588,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AddQueryRequest); i {
+			switch v := v.(*CachedQuery); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1113,7 +2600,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveQueryRequest); i {
+			switch v := v.(*Materialization); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1125,7 +2612,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ListQueriesRequest); i {
+			switch v := v.(*GraphvizRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1137,7 +2624,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ListQueriesResponse); i {
+			switch v := v.(*GraphvizResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1149,7 +2636,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RecipeChangeResponse); i {
+			switch v := v.(*ReadyRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1161,7 +2648,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Cluster); i {
+			switch v := v.(*ReadyResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1173,7 +2660,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ClusterStates); i {
+			switch v := v.(*MaterializationsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1185,7 +2672,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ListClustersRequest); i {
+			switch v := v.(*MaterializationsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1197,7 +2684,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AddClusterRequest); i {
+			switch v := v.(*PutRecipeRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1209,7 +2696,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveClusterRequest); i {
+			switch v := v.(*PutRecipeResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1221,7 +2708,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ClusterChangeResponse); i {
+			switch v := v.(*GetRecipeRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1233,7 +2720,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PrimaryClusterRequest); i {
+			switch v := v.(*GetRecipeResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1245,7 +2732,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PrimaryClusterResponse); i {
+			switch v := v.(*DescribeRecipeRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1257,7 +2744,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DrainClusterRequest); i {
+			switch v := v.(*DescribeRecipeResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1269,7 +2756,7 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DrainClusterResponse); i {
+			switch v := v.(*ClusterState); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1281,7 +2768,247 @@ func file_vtboost_proto_init() {
 			}
 		}
 		file_vtboost_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveQueryRequest_Query); i {
+			switch v := v.(*ClusterStates); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetClusterRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetClusterResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ListClustersRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ListClustersResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*AddClusterRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RemoveClusterRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[23].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ClusterChangeResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[24].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PrimaryClusterRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PrimaryClusterResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[26].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*DrainClusterRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[27].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*DrainClusterResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[28].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PurgeRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[29].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PurgeResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[30].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ControllerState); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[31].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*TopoWorkerEntry); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[32].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Materialization_Bound); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[33].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Materialization_ViewDescriptor); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[36].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ListClustersResponse_State); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[37].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ControllerState_RecipeStatus); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtboost_proto_msgTypes[39].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ControllerState_RecipeStatus_Query); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1293,19 +3020,21 @@ func file_vtboost_proto_init() {
 			}
 		}
 	}
-	file_vtboost_proto_msgTypes[16].OneofWrappers = []interface{}{
-		(*RemoveQueryRequest_Query_Name)(nil),
-		(*RemoveQueryRequest_Query_PublicId)(nil),
+	file_vtboost_proto_msgTypes[13].OneofWrappers = []interface{}{
+		(*DescribeRecipeRequest_Graphviz)(nil),
+	}
+	file_vtboost_proto_msgTypes[14].OneofWrappers = []interface{}{
+		(*DescribeRecipeResponse_Graphviz)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_vtboost_proto_rawDesc,
-			NumEnums:      1,
-			NumMessages:   18,
+			NumEnums:      3,
+			NumMessages:   40,
 			NumExtensions: 0,
-			NumServices:   0,
+			NumServices:   1,
 		},
 		GoTypes:           file_vtboost_proto_goTypes,
 		DependencyIndexes: file_vtboost_proto_depIdxs,

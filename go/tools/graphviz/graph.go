@@ -32,10 +32,15 @@ type (
 		edges  []*Edge
 	}
 	Node struct {
-		id      int
-		Name    string
-		attrs   []string
-		tooltip string
+		id       int
+		Name     string
+		attrs    []string
+		tooltip  string
+		sections []Section
+	}
+	Section struct {
+		name  string
+		lines []string
 	}
 	Edge struct {
 		From, To *Node
@@ -55,14 +60,22 @@ func escape(s string) string {
 func (n *Node) AddAttribute(s string) {
 	n.attrs = append(n.attrs, escape(s))
 }
+
+func (n *Node) AddSection(name string, lines []string) {
+	n.sections = append(n.sections, Section{
+		name:  name,
+		lines: lines,
+	})
+}
+
 func (n *Node) AddTooltip(s string) {
 	n.tooltip = escape(s)
 }
 
-func (g *Graph) produceDot() string {
+func (g *Graph) ProduceDOT() string {
 	var dot strings.Builder
 	dot.WriteString(`digraph {
-node [shape=record, fontsize=10]
+node [shape=record, fontsize=10];
 `)
 	for _, node := range g.nodes {
 		labels := node.Name
@@ -72,9 +85,18 @@ node [shape=record, fontsize=10]
 			} else {
 				labels += "|" + attr
 			}
-
 		}
-		labels += "}"
+		if len(node.attrs) > 0 {
+			labels += "}"
+		}
+		for _, section := range node.sections {
+			lines := []string{escape(section.name)}
+			for _, line := range section.lines {
+				lines = append(lines, escape(line))
+			}
+
+			labels += "|{" + strings.Join(lines, "|") + "}"
+		}
 		if node.tooltip != "" {
 			dot.WriteString(fmt.Sprintf(`n%d [label="%s", tooltip="%s"]`, node.id, labels, node.tooltip))
 		} else {
@@ -145,7 +167,7 @@ const htmlTemplate = `
 
 func (g *Graph) Render() error {
 
-	dot := g.produceDot()
+	dot := g.ProduceDOT()
 
 	browsers := func() []string {
 		var cmds []string

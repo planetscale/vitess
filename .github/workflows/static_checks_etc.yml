@@ -73,11 +73,11 @@ jobs:
       ## Go files
       - name: Run go fmt
         run: |
-          gofmt -l . | grep -vF vendor/ && exit 1 || echo "All files formatted correctly"
+          gofmt -l . | grep -vF go/test/go-mysql-server/ && exit 1 || echo "All files formatted correctly"
 
       - name: Run goimports
         run: |
-          out=$(goimports -local vitess.io/vitess -l -w $(find . -name "*.go" | grep -v ".pb.go"))
+          out=$(goimports -local vitess.io/vitess -l -w $(find . -name "*.go" -not -path "./go/test/go-mysql-server/*" -not -path "*.pb.go"))
           echo $out | grep go > /dev/null && echo -e "The following files are malformatted:\n$out" && exit 1 || echo "All the files are formatted correctly"
 
       - name: Clean Env

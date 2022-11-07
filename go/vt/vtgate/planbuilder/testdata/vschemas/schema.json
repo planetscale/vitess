@@ -410,6 +410,7 @@
       }
     },
     "main": {
+      "sharded": false,
       "tables": {
         "unsharded": {
           "columns": [

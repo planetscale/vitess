@@ -95,10 +95,11 @@ type Executor struct {
 	txConn      *TxConn
 	pv          plancontext.PlannerVersion
 
-	mu           sync.Mutex
-	vschema      *vindexes.VSchema
-	streamSize   int
-	plans        cache.Cache
+	mu         sync.Mutex
+	vschema    *vindexes.VSchema
+	streamSize int
+	plans      cache.Cache
+
 	vschemaStats *VSchemaStats
 
 	normalize       bool
@@ -109,6 +110,8 @@ type Executor struct {
 
 	// allowScatter will fail planning if set to false and a plan contains any scatter queries
 	allowScatter bool
+
+	mats *engine.MaterializationClient
 }
 
 var executorOnce sync.Once
@@ -179,6 +182,10 @@ func NewExecutor(
 		http.Handle(pathVSchema, e)
 	})
 	return e
+}
+
+func (e *Executor) Close() {
+	e.plans.Close()
 }
 
 // Execute executes a non-streaming query.
@@ -1042,6 +1049,7 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 type iQueryOption interface {
 	cachePlan() bool
 	getSelectLimit() int
+	boostEnabled() bool
 }
 
 // getPlan computes the plan for the given query. If one is in
@@ -1063,6 +1071,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
 	}
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
+	canMaterialize := qo.boostEnabled() && engine.CanMaterialize(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 
 	setVarComment, err := prepareSetVarComment(vcursor, stmt)
@@ -1095,6 +1104,12 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	logStats.SQL = comments.Leading + query + comments.Trailing
 	logStats.IsNormalized = isNormalized
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
+
+	if canMaterialize {
+		if materializedPlan, ok := e.mats.GetPlan(vcursor, statement, bindVars); ok {
+			return materializedPlan, nil
+		}
+	}
 
 	planHash := sha256.New()
 	_, _ = planHash.Write([]byte(vcursor.planPrefixKey()))
