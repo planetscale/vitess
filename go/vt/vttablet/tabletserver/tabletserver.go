@@ -933,7 +933,14 @@ func (tsv *TabletServer) BeginStreamExecute(
 		return state, err
 	}
 
-	err = tsv.StreamExecute(ctx, target, sql, bindVariables, state.TransactionID, reservedID, options, callback)
+	err = tsv.StreamExecute(ctx, target, sql, bindVariables, state.TransactionID, reservedID, options, func(result *sqltypes.Result) error {
+		if result.SessionStateChanges == "" {
+			result.SessionStateChanges = state.SessionStateChanges
+		} else {
+			result.SessionStateChanges += "," + state.SessionStateChanges
+		}
+		return callback(result)
+	})
 	return state, err
 }
 

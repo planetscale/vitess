@@ -18,21 +18,22 @@ package vtgate
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/sysvars"
+
 	"vitess.io/vitess/go/vt/vtgate/engine"
+
+	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -494,20 +495,25 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.SystemVariables[name] = expr
 }
 
-// GetSystemVariables takes a visitor function that will save each system variables of the session
+// GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.
+// This function will only yield system variables which apply to MySQL itself; Vitess-aware system variables
+// will be skipped.
 func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	for k, v := range session.SystemVariables {
-		f(k, v)
+		if !sysvars.IsVitessAware(k) {
+			f(k, v)
+		}
 	}
 }
 
-// HasSystemVariables returns whether the session has system variables set or not.
-func (session *SafeSession) HasSystemVariables() bool {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	return len(session.SystemVariables) > 0
+// HasSystemVariables returns whether the session has system variables that would apply to MySQL
+func (session *SafeSession) HasSystemVariables() (found bool) {
+	session.GetSystemVariables(func(_ string, _ string) {
+		found = true
+	})
+	return
 }
 
 // SetOptions sets the options
@@ -539,34 +545,11 @@ func (session *SafeSession) SetReservedConn(reservedConn bool) {
 }
 
 // SetPreQueries returns the prequeries that need to be run when reserving a connection
-func (session *SafeSession) SetPreQueries() []string {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-
-	if len(session.SystemVariables) == 0 {
-		return nil
-	}
-
-	// extract keys
-	keys := make([]string, 0, len(session.SystemVariables))
-	for k := range session.SystemVariables {
-		keys = append(keys, k)
-	}
-	// sort the keys
-	sort.Strings(keys)
-
-	// build the query using sorted keys
-	var preQuery strings.Builder
-	first := true
-	for _, k := range keys {
-		if first {
-			preQuery.WriteString(fmt.Sprintf("set @@%s = %s", k, session.SystemVariables[k]))
-			first = false
-		} else {
-			preQuery.WriteString(fmt.Sprintf(", @@%s = %s", k, session.SystemVariables[k]))
-		}
-	}
-	return []string{preQuery.String()}
+func (session *SafeSession) SetPreQueries() (result []string) {
+	session.GetSystemVariables(func(k string, v string) {
+		result = append(result, fmt.Sprintf("set @@%s = %s", k, v))
+	})
+	return
 }
 
 // SetLockSession sets the lock session.

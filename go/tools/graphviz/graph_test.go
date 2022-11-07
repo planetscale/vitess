@@ -31,7 +31,7 @@ func TestSimple(t *testing.T) {
 	n2 := g.AddNode("banan")
 	g.AddEdge(n1, n2)
 
-	fmt.Println(g.produceDot())
+	fmt.Println(g.ProduceDOT())
 
 	err := g.Render()
 	require.NoError(t, err)

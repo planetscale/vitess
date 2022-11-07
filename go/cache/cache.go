@@ -38,6 +38,8 @@ type Cache interface {
 	UsedCapacity() int64
 	MaxCapacity() int64
 	SetCapacity(int64)
+
+	Close()
 }
 
 type cachedObject interface {

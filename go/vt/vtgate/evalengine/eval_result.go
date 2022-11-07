@@ -30,6 +30,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type flag uint16
@@ -463,7 +464,10 @@ func (er *EvalResult) nullSafeHashcode() (HashCode, error) {
 		if coll == nil {
 			return 0, UnsupportedCollationHashError
 		}
-		return coll.Hash(er.bytes(), 0), nil
+		var h vthash.Hasher
+		h.Reset()
+		coll.Hash(&h, er.bytes(), 0)
+		return HashCode(h.Sum64()), nil
 	case sqltypes.IsDate(er.typeof()):
 		time, err := parseDate(er)
 		if err != nil {
@@ -475,12 +479,10 @@ func (er *EvalResult) nullSafeHashcode() (HashCode, error) {
 	}
 }
 
-// NullsafeHashCodeInPlace behaves like NullsafeHashCode but the type coercion is performed
-// in-place for performance reasons. Eventually this method will replace the old implementation.
-func NullsafeHashCodeInPlace(v sqltypes.Value, collation collations.ID, typ sqltypes.Type) (HashCode, error) {
+func NullsafeHashCode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, typ sqltypes.Type) {
 	switch {
-	case typ == sqltypes.Null:
-		return HashCode(math.MaxUint64), nil
+	case v.IsNull():
+		hash.Write16(0)
 
 	case sqltypes.IsFloat(typ):
 		var f float64
@@ -500,9 +502,13 @@ func NullsafeHashCodeInPlace(v sqltypes.Value, collation collations.ID, typ sqlt
 		case v.IsText() || v.IsBinary():
 			f = parseStringToFloat(v.RawStr())
 		default:
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
+			panic("coercion should not try to coerce this value to a float")
 		}
-		return HashCode(math.Float64bits(f)), err
+		if err != nil {
+			panic(err)
+		}
+		hash.Write16(0xAAAA)
+		hash.Write64(math.Float64bits(f))
 
 	case sqltypes.IsSigned(typ):
 		var i int64
@@ -516,9 +522,17 @@ func NullsafeHashCodeInPlace(v sqltypes.Value, collation collations.ID, typ sqlt
 			uval, err = v.ToUint64()
 			i = int64(uval)
 		default:
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a signed int: %v", v)
+			panic("coercion should not try to coerce this value to a signed int")
 		}
-		return HashCode(uint64(i)), err
+		if err != nil {
+			panic(err)
+		}
+		if i < 0 {
+			hash.Write16(0xBBB1)
+		} else {
+			hash.Write16(0xBBB0)
+		}
+		hash.Write64(uint64(i))
 
 	case sqltypes.IsUnsigned(typ):
 		var u uint64
@@ -532,24 +546,29 @@ func NullsafeHashCodeInPlace(v sqltypes.Value, collation collations.ID, typ sqlt
 		case v.IsUnsigned():
 			u, err = v.ToUint64()
 		default:
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a unsigned int: %v", v)
+			panic("coercion should not try to coerce this value to a unsigned int")
 		}
-
-		return HashCode(u), err
+		if err != nil {
+			panic(err)
+		}
+		hash.Write16(0xBBB0)
+		hash.Write64(u)
 
 	case sqltypes.IsBinary(typ):
 		coll := collations.Local().LookupByID(collations.CollationBinaryID)
-		return coll.Hash(v.Raw(), 0), nil
+		hash.Write16(0xCCCC)
+		coll.Hash(hash, v.Raw(), 0)
 
 	case sqltypes.IsText(typ):
 		coll := collations.Local().LookupByID(collation)
 		if coll == nil {
-			return 0, UnsupportedCollationHashError
+			panic("cannot hash unsupported collation")
 		}
-		return coll.Hash(v.Raw(), 0), nil
+		hash.Write16(0xCCCC)
+		coll.Hash(hash, v.Raw(), 0)
 
 	default:
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported hash type: %v", v)
+		panic("unsupported hash type")
 	}
 }
 

@@ -1303,6 +1303,27 @@ func (cached *VitessMetadata) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Value)))
 	return size
 }
+func (cached *externalPlanPrimitive) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field view *vitess.io/vitess/go/boost/topo/watcher.View
+	size += cached.view.CachedSize(true)
+	// field args []vitess.io/vitess/go/sqltypes.Value
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.args)) * int64(32))
+		for _, elem := range cached.args {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field keyspace string
+	size += hack.RuntimeAllocSize(int64(len(cached.keyspace)))
+	return size
+}
 
 //go:nocheckptr
 func (cached *shardRoute) CachedSize(alloc bool) int64 {

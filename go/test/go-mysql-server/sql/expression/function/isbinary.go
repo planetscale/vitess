@@ -1,0 +1,100 @@
+// Copyright 2020-2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package function
+
+import (
+	"bytes"
+	"fmt"
+
+	"vitess.io/vitess/go/test/go-mysql-server/sql"
+	"vitess.io/vitess/go/test/go-mysql-server/sql/expression"
+)
+
+// IsBinary is a function that returns whether a blob is binary or not.
+type IsBinary struct {
+	expression.UnaryExpression
+}
+
+var _ sql.FunctionExpression = (*IsBinary)(nil)
+
+// NewIsBinary creates a new IsBinary expression.
+func NewIsBinary(e sql.Expression) sql.Expression {
+	return &IsBinary{expression.UnaryExpression{Child: e}}
+}
+
+// FunctionName implements sql.FunctionExpression
+func (ib *IsBinary) FunctionName() string {
+	return "is_binary"
+}
+
+// Description implements sql.FunctionExpression
+func (ib *IsBinary) Description() string {
+	return "returns whether a blob is a binary file or not."
+}
+
+// Eval implements the Expression interface.
+func (ib *IsBinary) Eval(
+	ctx *sql.Context,
+	row sql.Row,
+) (interface{}, error) {
+	v, err := ib.Child.Eval(ctx, row)
+	if err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return false, nil
+	}
+
+	blob, err := sql.LongBlob.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+
+	return isBinary(blob.([]byte)), nil
+}
+
+func (ib *IsBinary) String() string {
+	return fmt.Sprintf("IS_BINARY(%s)", ib.Child)
+}
+
+// WithChildren implements the Expression interface.
+func (ib *IsBinary) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+	if len(children) != 1 {
+		return nil, sql.ErrInvalidChildrenNumber.New(ib, len(children), 1)
+	}
+	return NewIsBinary(children[0]), nil
+}
+
+// Type implements the Expression interface.
+func (ib *IsBinary) Type() sql.Type {
+	return sql.Boolean
+}
+
+const sniffLen = 8000
+
+// isBinary detects if data is a binary value based on:
+// http://git.kernel.org/cgit/git/git.git/tree/xdiff-interface.c?id=HEAD#n198
+func isBinary(data []byte) bool {
+	if len(data) > sniffLen {
+		data = data[:sniffLen]
+	}
+
+	if bytes.IndexByte(data, byte(0)) == -1 {
+		return false
+	}
+
+	return true
+}

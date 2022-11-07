@@ -181,6 +181,10 @@ func (gw *TabletGateway) RegisterStats() {
 	gw.hc.RegisterStats()
 }
 
+func (gw *TabletGateway) HealthCheck() discovery.HealthCheck {
+	return gw.hc
+}
+
 // WaitForTablets is part of the Gateway interface.
 func (gw *TabletGateway) WaitForTablets(tabletTypesToWait []topodatapb.TabletType) (err error) {
 	log.Infof("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait)

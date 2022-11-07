@@ -47,6 +47,8 @@ Usage of vtgate:
 	the replication lag that is considered low enough to be healthy (default 30s)
   --emit_stats
 	If set, emit stats to push-based monitoring and stats backends
+  --enable-boost
+	Enable boost integration; requires a valid topo connection. This Vitess process will find the local Boost cluster via topo
   --enable_buffer
 	Enable buffering (stalling) of primary traffic during failovers.
   --enable_buffer_dry_run

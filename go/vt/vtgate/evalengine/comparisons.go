@@ -27,13 +27,6 @@ import (
 )
 
 type (
-	Filter interface {
-		Expr
-		LeftExpr() Expr
-		RightExpr() Expr
-		filterExpr()
-	}
-
 	ComparisonExpr struct {
 		BinaryExpr
 		Op ComparisonOp

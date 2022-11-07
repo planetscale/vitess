@@ -1,0 +1,73 @@
+name: boost_endtoend
+on: [push]
+jobs:
+
+  build:
+    name: End-to-End Test
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Configure git private repo access
+      env:
+        GITHUB_TOKEN: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+      run: |
+        git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18.4
+
+    - name: Tune the OS
+      run: |
+        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+
+    - name: Check out code
+      uses: actions/checkout@v3
+
+    - name: Get dependencies
+      env: # Or as an environment variable
+        AWS_ACCESS_KEY_ID: ${{ secrets.BUILDKITE_S3_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.BUILDKITE_S3_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: us-east-1
+      run: |
+        sudo apt-get update
+        sudo service mysql stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+
+        # Uninstall any previously installed MySQL first
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo deluser mysql
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
+        sudo apt-get install -y make unzip g++ etcd curl git wget awscli
+        sudo service etcd stop
+
+        LAST_BUILD=$(aws s3api list-objects-v2 --bucket "planetscale-mysql-server-private-ci-artifacts" --prefix mysql/main/dist --query 'reverse(sort_by(Contents[?contains(Key, `focal`)], &LastModified))[:1].Key' --output=text)
+        aws s3 cp "s3://planetscale-mysql-server-private-ci-artifacts/${LAST_BUILD}" .
+        sudo tar xf $(basename $LAST_BUILD) -C /usr --strip-components=1
+
+        go mod download
+
+    - name: Run make minimaltools
+      run: |
+        make minimaltools
+
+    - name: Build
+      run: |
+        make build
+
+    - name: endtoend
+      timeout-minutes: 30
+      run: |
+        eatmydata -- tools/e2e_boost_test_runner.sh
+
+    - uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: vtdataroot-logs
+        path: vtdataroot/
+        retention-days: 1

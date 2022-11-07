@@ -167,9 +167,9 @@ func (client *localVtctldClient) BoostAddCluster(ctx context.Context, in *vtboos
 	return client.s.BoostAddCluster(ctx, in)
 }
 
-// BoostAddQuery is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) BoostAddQuery(ctx context.Context, in *vtboostpb.AddQueryRequest, opts ...grpc.CallOption) (*vtboostpb.RecipeChangeResponse, error) {
-	return client.s.BoostAddQuery(ctx, in)
+// BoostDescribeRecipe is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostDescribeRecipe(ctx context.Context, in *vtboostpb.DescribeRecipeRequest, opts ...grpc.CallOption) (*vtboostpb.DescribeRecipeResponse, error) {
+	return client.s.BoostDescribeRecipe(ctx, in)
 }
 
 // BoostDrainCluster is part of the vtctlservicepb.VtctldClient interface.
@@ -177,14 +177,19 @@ func (client *localVtctldClient) BoostDrainCluster(ctx context.Context, in *vtbo
 	return client.s.BoostDrainCluster(ctx, in)
 }
 
-// BoostListClusters is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) BoostListClusters(ctx context.Context, in *vtboostpb.ListClustersRequest, opts ...grpc.CallOption) (*vtboostpb.ClusterStates, error) {
-	return client.s.BoostListClusters(ctx, in)
+// BoostGetCluster is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostGetCluster(ctx context.Context, in *vtboostpb.GetClusterRequest, opts ...grpc.CallOption) (*vtboostpb.GetClusterResponse, error) {
+	return client.s.BoostGetCluster(ctx, in)
 }
 
-// BoostListQueries is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) BoostListQueries(ctx context.Context, in *vtboostpb.ListQueriesRequest, opts ...grpc.CallOption) (*vtboostpb.ListQueriesResponse, error) {
-	return client.s.BoostListQueries(ctx, in)
+// BoostGetRecipe is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostGetRecipe(ctx context.Context, in *vtboostpb.GetRecipeRequest, opts ...grpc.CallOption) (*vtboostpb.GetRecipeResponse, error) {
+	return client.s.BoostGetRecipe(ctx, in)
+}
+
+// BoostListClusters is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostListClusters(ctx context.Context, in *vtboostpb.ListClustersRequest, opts ...grpc.CallOption) (*vtboostpb.ListClustersResponse, error) {
+	return client.s.BoostListClusters(ctx, in)
 }
 
 // BoostMakePrimaryCluster is part of the vtctlservicepb.VtctldClient interface.
@@ -192,14 +197,19 @@ func (client *localVtctldClient) BoostMakePrimaryCluster(ctx context.Context, in
 	return client.s.BoostMakePrimaryCluster(ctx, in)
 }
 
+// BoostPurge is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostPurge(ctx context.Context, in *vtboostpb.PurgeRequest, opts ...grpc.CallOption) (*vtboostpb.PurgeResponse, error) {
+	return client.s.BoostPurge(ctx, in)
+}
+
+// BoostPutRecipe is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostPutRecipe(ctx context.Context, in *vtboostpb.PutRecipeRequest, opts ...grpc.CallOption) (*vtboostpb.PutRecipeResponse, error) {
+	return client.s.BoostPutRecipe(ctx, in)
+}
+
 // BoostRemoveCluster is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) BoostRemoveCluster(ctx context.Context, in *vtboostpb.RemoveClusterRequest, opts ...grpc.CallOption) (*vtboostpb.ClusterChangeResponse, error) {
 	return client.s.BoostRemoveCluster(ctx, in)
-}
-
-// BoostRemoveQuery is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) BoostRemoveQuery(ctx context.Context, in *vtboostpb.RemoveQueryRequest, opts ...grpc.CallOption) (*vtboostpb.RecipeChangeResponse, error) {
-	return client.s.BoostRemoveQuery(ctx, in)
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.

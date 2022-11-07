@@ -29,6 +29,11 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	boostwatcher "vitess.io/vitess/go/boost/topo/watcher"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
+	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
@@ -36,7 +41,6 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
@@ -45,7 +49,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -99,8 +102,8 @@ var (
 	enableDirectDDL    = true
 
 	// vtgate schema tracking flags
-	enableSchemaChangeSignal = true
-	schemaChangeUser         string
+	EnableSchemaChangeSignal = true
+	SchemaChangeUser         string
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -128,8 +131,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&foreignKeyMode, "foreign_key_mode", foreignKeyMode, "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
 	fs.BoolVar(&enableOnlineDDL, "enable_online_ddl", enableOnlineDDL, "Allow users to submit, review and control Online DDL")
 	fs.BoolVar(&enableDirectDDL, "enable_direct_ddl", enableDirectDDL, "Allow users to submit direct DDL statements")
-	fs.BoolVar(&enableSchemaChangeSignal, "schema_change_signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
-	fs.StringVar(&schemaChangeUser, "schema_change_signal_user", schemaChangeUser, "User to be used to send down query to vttablet to retrieve schema changes")
+	fs.BoolVar(&EnableSchemaChangeSignal, "schema_change_signal", EnableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
+	fs.StringVar(&SchemaChangeUser, "schema_change_signal_user", SchemaChangeUser, "User to be used to send down query to vttablet to retrieve schema changes")
 }
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)
@@ -246,8 +249,8 @@ func Init(
 
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
-	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser)
+	if EnableSchemaChangeSignal {
+		st = vtschema.NewTracker(gw.hc.Subscribe(), SchemaChangeUser)
 		addKeyspaceToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -273,8 +276,15 @@ func Init(
 	)
 
 	// connect the schema tracker with the vschema manager
-	if enableSchemaChangeSignal {
+	if EnableSchemaChangeSignal {
 		st.RegisterSignalReceiver(executor.vm.Rebuild)
+	}
+
+	var boost *boostwatcher.Watcher
+	if *boostwatcher.EnableBoostIntegration {
+		ts, _ := serv.GetTopoServer()
+		boost = boostwatcher.NewWatcher(ts)
+		executor.mats = engine.NewMaterializationClient(boost)
 	}
 
 	// TODO: call serv.WatchSrvVSchema here
@@ -315,13 +325,19 @@ func Init(
 		for _, f := range RegisterVTGates {
 			f(rpcVTGate)
 		}
-		if st != nil && enableSchemaChangeSignal {
+		if st != nil && EnableSchemaChangeSignal {
 			st.Start()
+		}
+		if boost != nil {
+			boost.Start()
 		}
 	})
 	servenv.OnTerm(func() {
-		if st != nil && enableSchemaChangeSignal {
+		if st != nil && EnableSchemaChangeSignal {
 			st.Stop()
+		}
+		if boost != nil {
+			boost.Stop()
 		}
 	})
 	rpcVTGate.registerDebugHealthHandler()

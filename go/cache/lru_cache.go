@@ -155,6 +155,9 @@ func (lru *LRUCache) SetCapacity(capacity int64) {
 // Wait is a no-op in the LRU cache
 func (lru *LRUCache) Wait() {}
 
+// Close is a no-op in the LRU cache
+func (lru *LRUCache) Close() {}
+
 // UsedCapacity returns the size of the cache (in bytes)
 func (lru *LRUCache) UsedCapacity() int64 {
 	return lru.size

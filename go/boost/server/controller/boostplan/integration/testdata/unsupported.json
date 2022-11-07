@@ -1,0 +1,51 @@
+{
+  "DDL": [
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE friends (id INT(32), friend INT(32), PRIMARY KEY (id, friend))"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE users (id INT(32), age INT(32), name VARCHAR(40), address VARCHAR(40), metadata JSON, PRIMARY KEY(id))"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE votes (aid INT(32), uid INT(32), comment_id INT(32), sign INT(32),  PRIMARY KEY (aid, uid))"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE articles (id INT(32), author INT(32), title VARCHAR(40), PRIMARY KEY (id))"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE f2 (friend INT(32), id INT(32), PRIMARY KEY (id))"
+    }
+  ],
+  "Queries": [
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id FROM users LIMIT 1 OFFSET 1",
+      "Error": "query not supported by boost: query contains limit with no order by:  LIMIT 1, 1; query not supported by boost: query contains offset: 1"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, NOW() FROM users",
+      "Error": "query not supported by boost: unsupported expression by the evaluation engine: NOW()"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT 1",
+      "Error": "query not supported by boost: select without an explicit table is not supported"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT JSON_EXTRACT(metadata, '$.arbitrary') from users",
+      "Error": "query not supported by boost: unsupported expression by the evaluation engine: JSON_EXTRACT(`metadata`, '$.arbitrary')"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT id FROM users WHERE id > :id",
+      "Error": "query not supported by boost: parameter can only be compared for equality"
+    }
+  ]
+}
