@@ -397,14 +397,34 @@ type VtctldClient interface {
 	ValidateVersionShard(ctx context.Context, in *vtctldata.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
-	BoostAddQuery(ctx context.Context, in *vtboost.AddQueryRequest, opts ...grpc.CallOption) (*vtboost.RecipeChangeResponse, error)
-	BoostRemoveQuery(ctx context.Context, in *vtboost.RemoveQueryRequest, opts ...grpc.CallOption) (*vtboost.RecipeChangeResponse, error)
-	BoostListQueries(ctx context.Context, in *vtboost.ListQueriesRequest, opts ...grpc.CallOption) (*vtboost.ListQueriesResponse, error)
-	// BoostListClusters returns a list of all existing known clusters with their UUID
-	// that the system knows about. It also returns which cluster is currently marked as the primary.
+	// BoostPutRecipe applies a desired recipe (a set of queries) to all the Boost
+	// clusters in this Vitess topology. Any queries put by a previous recipe
+	// which are not present in the new recipe will be removed automatically. This
+	// RPC is idempotent; multiple calls to BoostPutRecipe with the same recipe
+	// will result in a noop.
+	//
+	// This deployment is ASYNCHRONOUS; the deployment progress for each cluster
+	// in the topology can be tracked with BoostListClusters.
+	BoostPutRecipe(ctx context.Context, in *vtboost.PutRecipeRequest, opts ...grpc.CallOption) (*vtboost.PutRecipeResponse, error)
+	// BoostGetRecipe returns the current authoritative set of queries deployed to all Boost
+	// clusters in this topology. The queries listed here are not necessarily deployed or active
+	// in all clusters in the topology. Use BoostListClusters to verify whether a specific cluster
+	// has successfully deployed all queries.
+	BoostGetRecipe(ctx context.Context, in *vtboost.GetRecipeRequest, opts ...grpc.CallOption) (*vtboost.GetRecipeResponse, error)
+	// BoostDescribeRecipe returns a Graphviz .dot description of the current
+	// graph for the queries in the cluster.
+	BoostDescribeRecipe(ctx context.Context, in *vtboost.DescribeRecipeRequest, opts ...grpc.CallOption) (*vtboost.DescribeRecipeResponse, error)
+	// BoostGetCluster returns a known cluster and its state in this topology by
+	// UUID. It also returns the metadata for its current CONTROLLER, including
+	// the most recent version of the deployed recipe and any deployment errors we
+	// may have encountered.
+	BoostGetCluster(ctx context.Context, in *vtboost.GetClusterRequest, opts ...grpc.CallOption) (*vtboost.GetClusterResponse, error)
+	// BoostListClusters returns a list of all known clusters in this topology, keyed by UUID.
 	// This can be used to detect which clusters are available, which are draining and which vtgates use
 	// which cluster currently.
-	BoostListClusters(ctx context.Context, in *vtboost.ListClustersRequest, opts ...grpc.CallOption) (*vtboost.ClusterStates, error)
+	// For each cluster, we also return the metadata for its current CONTROLLER, including the
+	// most recent version of the deployed recipe and any deployment errors we may have encountered.
+	BoostListClusters(ctx context.Context, in *vtboost.ListClustersRequest, opts ...grpc.CallOption) (*vtboost.ListClustersResponse, error)
 	// BoostAddCluster adds a new cluster to the list of known clusters. This can be called when
 	// a new cluster is added for a deployment and subsequent rollover.
 	// The new cluster will get warming traffic from vtgates without using them as the primary
@@ -424,6 +444,11 @@ type VtctldClient interface {
 	// BoostRemoveCluster removes the cluster from the known list and stops it from sending
 	// traffic to this cluster.
 	BoostRemoveCluster(ctx context.Context, in *vtboost.RemoveClusterRequest, opts ...grpc.CallOption) (*vtboost.ClusterChangeResponse, error)
+	// BoostPurge purges all boost data from the topology, including clusters,
+	// recipes, and internal leader/worker state. This RPC should only be called
+	// when an associated database branch is already deleted. Calling BoostPurge
+	// after boost data has already been purged is a no-op.
+	BoostPurge(ctx context.Context, in *vtboost.PurgeRequest, opts ...grpc.CallOption) (*vtboost.PurgeResponse, error)
 }
 
 type vtctldClient struct {
@@ -1250,35 +1275,44 @@ func (c *vtctldClient) ValidateVSchema(ctx context.Context, in *vtctldata.Valida
 	return out, nil
 }
 
-func (c *vtctldClient) BoostAddQuery(ctx context.Context, in *vtboost.AddQueryRequest, opts ...grpc.CallOption) (*vtboost.RecipeChangeResponse, error) {
-	out := new(vtboost.RecipeChangeResponse)
-	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostAddQuery", in, out, opts...)
+func (c *vtctldClient) BoostPutRecipe(ctx context.Context, in *vtboost.PutRecipeRequest, opts ...grpc.CallOption) (*vtboost.PutRecipeResponse, error) {
+	out := new(vtboost.PutRecipeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostPutRecipe", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *vtctldClient) BoostRemoveQuery(ctx context.Context, in *vtboost.RemoveQueryRequest, opts ...grpc.CallOption) (*vtboost.RecipeChangeResponse, error) {
-	out := new(vtboost.RecipeChangeResponse)
-	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostRemoveQuery", in, out, opts...)
+func (c *vtctldClient) BoostGetRecipe(ctx context.Context, in *vtboost.GetRecipeRequest, opts ...grpc.CallOption) (*vtboost.GetRecipeResponse, error) {
+	out := new(vtboost.GetRecipeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostGetRecipe", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *vtctldClient) BoostListQueries(ctx context.Context, in *vtboost.ListQueriesRequest, opts ...grpc.CallOption) (*vtboost.ListQueriesResponse, error) {
-	out := new(vtboost.ListQueriesResponse)
-	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostListQueries", in, out, opts...)
+func (c *vtctldClient) BoostDescribeRecipe(ctx context.Context, in *vtboost.DescribeRecipeRequest, opts ...grpc.CallOption) (*vtboost.DescribeRecipeResponse, error) {
+	out := new(vtboost.DescribeRecipeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostDescribeRecipe", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *vtctldClient) BoostListClusters(ctx context.Context, in *vtboost.ListClustersRequest, opts ...grpc.CallOption) (*vtboost.ClusterStates, error) {
-	out := new(vtboost.ClusterStates)
+func (c *vtctldClient) BoostGetCluster(ctx context.Context, in *vtboost.GetClusterRequest, opts ...grpc.CallOption) (*vtboost.GetClusterResponse, error) {
+	out := new(vtboost.GetClusterResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostGetCluster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) BoostListClusters(ctx context.Context, in *vtboost.ListClustersRequest, opts ...grpc.CallOption) (*vtboost.ListClustersResponse, error) {
+	out := new(vtboost.ListClustersResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostListClusters", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -1316,6 +1350,15 @@ func (c *vtctldClient) BoostDrainCluster(ctx context.Context, in *vtboost.DrainC
 func (c *vtctldClient) BoostRemoveCluster(ctx context.Context, in *vtboost.RemoveClusterRequest, opts ...grpc.CallOption) (*vtboost.ClusterChangeResponse, error) {
 	out := new(vtboost.ClusterChangeResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostRemoveCluster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) BoostPurge(ctx context.Context, in *vtboost.PurgeRequest, opts ...grpc.CallOption) (*vtboost.PurgeResponse, error) {
+	out := new(vtboost.PurgeResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostPurge", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1586,14 +1629,34 @@ type VtctldServer interface {
 	ValidateVersionShard(context.Context, *vtctldata.ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
 	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
 	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
-	BoostAddQuery(context.Context, *vtboost.AddQueryRequest) (*vtboost.RecipeChangeResponse, error)
-	BoostRemoveQuery(context.Context, *vtboost.RemoveQueryRequest) (*vtboost.RecipeChangeResponse, error)
-	BoostListQueries(context.Context, *vtboost.ListQueriesRequest) (*vtboost.ListQueriesResponse, error)
-	// BoostListClusters returns a list of all existing known clusters with their UUID
-	// that the system knows about. It also returns which cluster is currently marked as the primary.
+	// BoostPutRecipe applies a desired recipe (a set of queries) to all the Boost
+	// clusters in this Vitess topology. Any queries put by a previous recipe
+	// which are not present in the new recipe will be removed automatically. This
+	// RPC is idempotent; multiple calls to BoostPutRecipe with the same recipe
+	// will result in a noop.
+	//
+	// This deployment is ASYNCHRONOUS; the deployment progress for each cluster
+	// in the topology can be tracked with BoostListClusters.
+	BoostPutRecipe(context.Context, *vtboost.PutRecipeRequest) (*vtboost.PutRecipeResponse, error)
+	// BoostGetRecipe returns the current authoritative set of queries deployed to all Boost
+	// clusters in this topology. The queries listed here are not necessarily deployed or active
+	// in all clusters in the topology. Use BoostListClusters to verify whether a specific cluster
+	// has successfully deployed all queries.
+	BoostGetRecipe(context.Context, *vtboost.GetRecipeRequest) (*vtboost.GetRecipeResponse, error)
+	// BoostDescribeRecipe returns a Graphviz .dot description of the current
+	// graph for the queries in the cluster.
+	BoostDescribeRecipe(context.Context, *vtboost.DescribeRecipeRequest) (*vtboost.DescribeRecipeResponse, error)
+	// BoostGetCluster returns a known cluster and its state in this topology by
+	// UUID. It also returns the metadata for its current CONTROLLER, including
+	// the most recent version of the deployed recipe and any deployment errors we
+	// may have encountered.
+	BoostGetCluster(context.Context, *vtboost.GetClusterRequest) (*vtboost.GetClusterResponse, error)
+	// BoostListClusters returns a list of all known clusters in this topology, keyed by UUID.
 	// This can be used to detect which clusters are available, which are draining and which vtgates use
 	// which cluster currently.
-	BoostListClusters(context.Context, *vtboost.ListClustersRequest) (*vtboost.ClusterStates, error)
+	// For each cluster, we also return the metadata for its current CONTROLLER, including the
+	// most recent version of the deployed recipe and any deployment errors we may have encountered.
+	BoostListClusters(context.Context, *vtboost.ListClustersRequest) (*vtboost.ListClustersResponse, error)
 	// BoostAddCluster adds a new cluster to the list of known clusters. This can be called when
 	// a new cluster is added for a deployment and subsequent rollover.
 	// The new cluster will get warming traffic from vtgates without using them as the primary
@@ -1613,6 +1676,11 @@ type VtctldServer interface {
 	// BoostRemoveCluster removes the cluster from the known list and stops it from sending
 	// traffic to this cluster.
 	BoostRemoveCluster(context.Context, *vtboost.RemoveClusterRequest) (*vtboost.ClusterChangeResponse, error)
+	// BoostPurge purges all boost data from the topology, including clusters,
+	// recipes, and internal leader/worker state. This RPC should only be called
+	// when an associated database branch is already deleted. Calling BoostPurge
+	// after boost data has already been purged is a no-op.
+	BoostPurge(context.Context, *vtboost.PurgeRequest) (*vtboost.PurgeResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
 
@@ -1869,16 +1937,19 @@ func (UnimplementedVtctldServer) ValidateVersionShard(context.Context, *vtctldat
 func (UnimplementedVtctldServer) ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVSchema not implemented")
 }
-func (UnimplementedVtctldServer) BoostAddQuery(context.Context, *vtboost.AddQueryRequest) (*vtboost.RecipeChangeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BoostAddQuery not implemented")
+func (UnimplementedVtctldServer) BoostPutRecipe(context.Context, *vtboost.PutRecipeRequest) (*vtboost.PutRecipeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostPutRecipe not implemented")
 }
-func (UnimplementedVtctldServer) BoostRemoveQuery(context.Context, *vtboost.RemoveQueryRequest) (*vtboost.RecipeChangeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BoostRemoveQuery not implemented")
+func (UnimplementedVtctldServer) BoostGetRecipe(context.Context, *vtboost.GetRecipeRequest) (*vtboost.GetRecipeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostGetRecipe not implemented")
 }
-func (UnimplementedVtctldServer) BoostListQueries(context.Context, *vtboost.ListQueriesRequest) (*vtboost.ListQueriesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BoostListQueries not implemented")
+func (UnimplementedVtctldServer) BoostDescribeRecipe(context.Context, *vtboost.DescribeRecipeRequest) (*vtboost.DescribeRecipeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostDescribeRecipe not implemented")
 }
-func (UnimplementedVtctldServer) BoostListClusters(context.Context, *vtboost.ListClustersRequest) (*vtboost.ClusterStates, error) {
+func (UnimplementedVtctldServer) BoostGetCluster(context.Context, *vtboost.GetClusterRequest) (*vtboost.GetClusterResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostGetCluster not implemented")
+}
+func (UnimplementedVtctldServer) BoostListClusters(context.Context, *vtboost.ListClustersRequest) (*vtboost.ListClustersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BoostListClusters not implemented")
 }
 func (UnimplementedVtctldServer) BoostAddCluster(context.Context, *vtboost.AddClusterRequest) (*vtboost.ClusterChangeResponse, error) {
@@ -1892,6 +1963,9 @@ func (UnimplementedVtctldServer) BoostDrainCluster(context.Context, *vtboost.Dra
 }
 func (UnimplementedVtctldServer) BoostRemoveCluster(context.Context, *vtboost.RemoveClusterRequest) (*vtboost.ClusterChangeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BoostRemoveCluster not implemented")
+}
+func (UnimplementedVtctldServer) BoostPurge(context.Context, *vtboost.PurgeRequest) (*vtboost.PurgeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostPurge not implemented")
 }
 func (UnimplementedVtctldServer) mustEmbedUnimplementedVtctldServer() {}
 
@@ -3409,56 +3483,74 @@ func _Vtctld_ValidateVSchema_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_BoostAddQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtboost.AddQueryRequest)
+func _Vtctld_BoostPutRecipe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.PutRecipeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VtctldServer).BoostAddQuery(ctx, in)
+		return srv.(VtctldServer).BoostPutRecipe(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/vtctlservice.Vtctld/BoostAddQuery",
+		FullMethod: "/vtctlservice.Vtctld/BoostPutRecipe",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VtctldServer).BoostAddQuery(ctx, req.(*vtboost.AddQueryRequest))
+		return srv.(VtctldServer).BoostPutRecipe(ctx, req.(*vtboost.PutRecipeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_BoostRemoveQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtboost.RemoveQueryRequest)
+func _Vtctld_BoostGetRecipe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.GetRecipeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VtctldServer).BoostRemoveQuery(ctx, in)
+		return srv.(VtctldServer).BoostGetRecipe(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/vtctlservice.Vtctld/BoostRemoveQuery",
+		FullMethod: "/vtctlservice.Vtctld/BoostGetRecipe",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VtctldServer).BoostRemoveQuery(ctx, req.(*vtboost.RemoveQueryRequest))
+		return srv.(VtctldServer).BoostGetRecipe(ctx, req.(*vtboost.GetRecipeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_BoostListQueries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtboost.ListQueriesRequest)
+func _Vtctld_BoostDescribeRecipe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.DescribeRecipeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VtctldServer).BoostListQueries(ctx, in)
+		return srv.(VtctldServer).BoostDescribeRecipe(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/vtctlservice.Vtctld/BoostListQueries",
+		FullMethod: "/vtctlservice.Vtctld/BoostDescribeRecipe",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VtctldServer).BoostListQueries(ctx, req.(*vtboost.ListQueriesRequest))
+		return srv.(VtctldServer).BoostDescribeRecipe(ctx, req.(*vtboost.DescribeRecipeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_BoostGetCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.GetClusterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).BoostGetCluster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/BoostGetCluster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).BoostGetCluster(ctx, req.(*vtboost.GetClusterRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3549,6 +3641,24 @@ func _Vtctld_BoostRemoveCluster_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).BoostRemoveCluster(ctx, req.(*vtboost.RemoveClusterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_BoostPurge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.PurgeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).BoostPurge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/BoostPurge",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).BoostPurge(ctx, req.(*vtboost.PurgeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3881,16 +3991,20 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_ValidateVSchema_Handler,
 		},
 		{
-			MethodName: "BoostAddQuery",
-			Handler:    _Vtctld_BoostAddQuery_Handler,
+			MethodName: "BoostPutRecipe",
+			Handler:    _Vtctld_BoostPutRecipe_Handler,
 		},
 		{
-			MethodName: "BoostRemoveQuery",
-			Handler:    _Vtctld_BoostRemoveQuery_Handler,
+			MethodName: "BoostGetRecipe",
+			Handler:    _Vtctld_BoostGetRecipe_Handler,
 		},
 		{
-			MethodName: "BoostListQueries",
-			Handler:    _Vtctld_BoostListQueries_Handler,
+			MethodName: "BoostDescribeRecipe",
+			Handler:    _Vtctld_BoostDescribeRecipe_Handler,
+		},
+		{
+			MethodName: "BoostGetCluster",
+			Handler:    _Vtctld_BoostGetCluster_Handler,
 		},
 		{
 			MethodName: "BoostListClusters",
@@ -3911,6 +4025,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BoostRemoveCluster",
 			Handler:    _Vtctld_BoostRemoveCluster_Handler,
+		},
+		{
+			MethodName: "BoostPurge",
+			Handler:    _Vtctld_BoostPurge_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

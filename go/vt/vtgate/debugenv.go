@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 var (
@@ -122,6 +123,8 @@ func debugEnvHandler(vtg *VTGate, w http.ResponseWriter, r *http.Request) {
 			setDurationVal(discovery.SetHighReplicationLagMinServing)
 		case "min_num_tablets":
 			setIntVal(discovery.SetMinNumTablets)
+		case "serve_materialized_views":
+			setIntVal(engine.SetServeMaterializedViews)
 		}
 	}
 
@@ -141,6 +144,7 @@ func debugEnvHandler(vtg *VTGate, w http.ResponseWriter, r *http.Request) {
 	addDurationVar("discovery_low_replication_lag", discovery.GetLowReplicationLag)
 	addDurationVar("discovery_high_replication_lag_minimum_serving", discovery.GetHighReplicationLagMinServing)
 	addIntVar("min_num_tablets", discovery.GetMinNumTablets)
+	addIntVar("serve_materialized_views", engine.GetServeMaterializedViews)
 
 	format := r.FormValue("format")
 	if format == "json" {

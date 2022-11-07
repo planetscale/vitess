@@ -132,6 +132,7 @@ func (result *Result) Metadata() *Result {
 		Fields:              result.Fields,
 		InsertID:            result.InsertID,
 		RowsAffected:        result.RowsAffected,
+		RowsRead:            result.RowsRead,
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
 	}

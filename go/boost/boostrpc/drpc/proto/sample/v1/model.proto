@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package sample.v1;
+
+option go_package = "sample/v1;samplev1";
+
+import "third_party/envoyproxy/validate/validate.proto";
+
+// Reachability test response.
+message Pong {
+  // Whether the service is 'ready-for-use'
+  bool ok = 1;
+}
+
+// Health test response.
+message HealthResponse {
+  // Generic availability check, set to 'false' in case of errors.
+  bool alive = 1;
+}
+
+// Generic request response.
+message Response {
+  // A key on the entity
+  string name = 1 [(validate.rules).string = {min_len: 2, max_len: 5}];
+}
+
+// Sample response structure.
+message DummyResponse {
+  // Generic status check, set to 'false' in case of errors.
+  bool ok = 1;
+}

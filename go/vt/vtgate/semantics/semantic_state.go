@@ -407,3 +407,8 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 	}
 	return ks, tables
 }
+
+func (st *SemTable) GetNextTableSet() TableSet {
+	st.Tables = append(st.Tables, nil)
+	return SingleTableSet(len(st.Tables) - 1)
+}

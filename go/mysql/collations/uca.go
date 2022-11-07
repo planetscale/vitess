@@ -19,10 +19,10 @@ package collations
 import (
 	"math/bits"
 	"sync"
-	"unsafe"
 
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 func init() {
@@ -182,8 +182,8 @@ performPadding:
 	return dst
 }
 
-func (c *Collation_utf8mb4_uca_0900) Hash(src []byte, _ int) HashCode {
-	var hash = uintptr(c.id)
+func (c *Collation_utf8mb4_uca_0900) Hash(hasher *vthash.Hasher, src []byte, _ int) {
+	hasher.Write64(uint64(c.id))
 
 	it := c.uca.Iterator(src)
 	defer it.Done()
@@ -196,9 +196,10 @@ func (c *Collation_utf8mb4_uca_0900) Hash(src []byte, _ int) HashCode {
 			if n < 16 {
 				break
 			}
-			hash = memhash128(unsafe.Pointer(&chunk), hash)
+			hasher.Write(chunk[:16])
 		}
-		return memhashraw(unsafe.Pointer(&chunk), hash, uintptr(n))
+		hasher.Write(chunk[:n])
+		return
 	}
 
 	for {
@@ -206,9 +207,8 @@ func (c *Collation_utf8mb4_uca_0900) Hash(src []byte, _ int) HashCode {
 		if !ok {
 			break
 		}
-		hash = memhash16(bits.ReverseBytes16(w), hash)
+		hasher.Write16(bits.ReverseBytes16(w))
 	}
-	return hash
 }
 
 func (c *Collation_utf8mb4_uca_0900) WeightStringLen(numBytes int) int {
@@ -259,8 +259,9 @@ func (c *Collation_utf8mb4_0900_bin) WeightString(dst, src []byte, numCodepoints
 	return dst
 }
 
-func (c *Collation_utf8mb4_0900_bin) Hash(src []byte, _ int) HashCode {
-	return memhash(src, 0xb900b900)
+func (c *Collation_utf8mb4_0900_bin) Hash(hasher *vthash.Hasher, src []byte, _ int) {
+	hasher.Write64(0xb900b900)
+	hasher.Write(src)
 }
 
 func (c *Collation_utf8mb4_0900_bin) WeightStringLen(numBytes int) int {
@@ -372,29 +373,27 @@ func (c *Collation_uca_legacy) WeightString(dst, src []byte, numCodepoints int) 
 	return dst
 }
 
-func (c *Collation_uca_legacy) Hash(src []byte, numCodepoints int) HashCode {
+func (c *Collation_uca_legacy) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	it := c.uca.Iterator(src)
 	defer it.Done()
 
-	var hash = uintptr(c.id)
+	hasher.Write64(uint64(c.id))
 	for {
 		w, ok := it.Next()
 		if !ok {
 			break
 		}
-		hash = memhash16(bits.ReverseBytes16(w), hash)
+		hasher.Write16(bits.ReverseBytes16(w))
 	}
 
 	if numCodepoints > 0 {
 		weightForSpace := bits.ReverseBytes16(c.uca.WeightForSpace())
 		numCodepoints -= it.Length()
 		for numCodepoints > 0 {
-			hash = memhash16(weightForSpace, hash)
+			hasher.Write16(weightForSpace)
 			numCodepoints--
 		}
 	}
-
-	return hash
 }
 
 func (c *Collation_uca_legacy) WeightStringLen(numBytes int) int {

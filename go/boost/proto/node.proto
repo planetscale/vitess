@@ -1,0 +1,211 @@
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/boost/boostpb";
+
+package node;
+
+import "gogoproto/gogo.proto";
+
+message Type {
+  int32 t = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/sqltypes.Type"];
+  uint32 collation = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/mysql/collations.ID"];
+  bool nullable = 3;
+  string default = 4 [(gogoproto.casttype) = "Value"];
+};
+
+message IndexPair {
+  uint32 global = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
+  uint32 local = 2 [(gogoproto.casttype) = "LocalNodeIndex"];
+};
+
+message DomainAddr {
+  uint64 domain = 1 [(gogoproto.casttype) = "DomainIndex"];
+  uint64 shard = 2 [(gogoproto.casttype) = "uint"];
+};
+
+message Sharding {
+  enum Mode {
+    None = 0;
+    ForcedNone = 1;
+    Random = 2;
+    ByColumn = 3;
+  }
+
+  Mode mode = 1;
+  int64 col = 2 [(gogoproto.casttype) = "int"];
+  uint64 shards = 3 [(gogoproto.casttype) = "uint"];
+};
+
+message Node {
+  string name = 1;
+  IndexPair index = 2;
+  uint64 domain = 3 [(gogoproto.casttype) = "DomainIndex"];
+
+  repeated string fields = 4;
+  repeated Type schema = 5 [(gogoproto.nullable) = false];
+  repeated uint32 parents = 6 [(gogoproto.casttype) = "LocalNodeIndex"];
+  repeated uint32 children = 7 [(gogoproto.casttype) = "LocalNodeIndex"];
+
+  bool taken = 8;
+  bool purge = 9;
+
+  Sharding sharding = 10;
+
+  message Base {
+    repeated int64 primary_key = 1 [(gogoproto.casttype) = "int"];
+    repeated int64 dropped = 2 [(gogoproto.casttype) = "int"];
+    bool unmodified = 4;
+    repeated Type schema = 5 [(gogoproto.nullable) = false];
+  };
+
+  message ExternalBase {
+    repeated int64 primary_key = 1 [(gogoproto.casttype) = "int"];
+    string keyspace = 2;
+    repeated Type schema = 3 [(gogoproto.nullable) = false];
+  };
+
+  message Ingress {};
+  message Egress {};
+
+  message Reader {
+    uint32 for_node = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
+    repeated int64 state = 2 [(gogoproto.casttype) = "int"];
+    repeated string key_names = 3;
+    int64 col_len = 4 [(gogoproto.casttype) = "int"];
+  };
+
+  message InternalUnion {
+    message EmitProject {
+      message EmitTuple {
+        IndexPair ip = 1;
+        repeated int64 columns = 2 [(gogoproto.casttype) = "int"];
+      };
+      message EmitLeftTuple {
+        uint32 index = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
+        repeated int64 columns = 2 [(gogoproto.casttype) = "int"];
+      };
+      message ColumnsTuple {
+        IndexPair ip = 1;
+        int64 column = 2 [(gogoproto.casttype) = "int"];
+      };
+      message ColumnsLeftTuple {
+        uint32 index = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
+        int64 column = 2 [(gogoproto.casttype) = "int"];
+      };
+
+      repeated EmitTuple emit = 1;
+      repeated EmitLeftTuple emit_left = 2;
+      repeated ColumnsTuple cols = 3;
+      repeated ColumnsLeftTuple cols_left = 4;
+    };
+
+    message EmitAll {
+      IndexPair from = 1;
+      Sharding sharding = 2;
+    };
+
+    oneof emit {
+      EmitProject project = 1;
+      EmitAll all = 2;
+    }
+
+    int64 required = 3 [(gogoproto.casttype) = "int"];
+    uint32 me = 4 [(gogoproto.casttype) = "GraphNodeIdx"];
+  };
+
+  message InternalJoin {
+    IndexPair left = 1;
+    IndexPair right = 2;
+
+    int64 on0 = 3 [(gogoproto.casttype) = "int"];
+    int64 on1 = 4 [(gogoproto.casttype) = "int"];
+
+    message Emission {
+      bool left = 1;
+      int64 col = 2 [(gogoproto.casttype) = "int"];
+    }
+
+    repeated Emission emit = 5 [(gogoproto.nullable) = false];
+    repeated Emission in_place_left_emit = 6 [(gogoproto.nullable) = false];
+    repeated Emission in_place_right_emit = 7 [(gogoproto.nullable) = false];
+
+    enum JoinType {
+      Left = 0;
+      Inner = 1;
+    }
+
+    JoinType kind = 8;
+  }
+
+  message InternalGrouped {
+    IndexPair src = 1;
+    repeated Aggregation inner = 2;
+    int64 cols = 3 [(gogoproto.casttype) = "int"];
+
+    repeated int64 group_by = 4 [(gogoproto.casttype) = "int"];
+    repeated int64 out_key = 5 [(gogoproto.casttype) = "int"];
+    repeated int64 colfix = 6 [(gogoproto.casttype) = "int"];
+
+    message Aggregation {
+      enum Kind {
+        Count = 0;
+        CountStar = 1;
+        Sum = 2;
+        Min = 3;
+        Max = 4;
+      };
+
+      Kind kind = 1;
+      int64 over = 2 [(gogoproto.casttype) = "int"];
+    }
+  };
+
+  message InternalProject {
+    IndexPair src = 1;
+    int64 cols = 3 [(gogoproto.casttype) = "int"];
+
+    repeated string projections = 4;
+  };
+
+  message InternalFilter {
+    message FilterExpr {
+      string expr = 1;
+      int64 col = 2 [(gogoproto.casttype) = "int"];
+    };
+    IndexPair src = 1;
+    repeated FilterExpr filter = 2;
+  };
+
+  message InternalTopK {
+    IndexPair src = 1;
+    repeated int64 order_offsets = 2 [(gogoproto.casttype) = "int"];
+    repeated bool order_asc = 3;
+    uint64 K = 4 [(gogoproto.casttype) = "uint"];
+    repeated int64 params = 5 [(gogoproto.casttype) = "int"];
+  }
+
+  message InternalDistinct {
+    IndexPair src = 1;
+    repeated int64 params = 2 [(gogoproto.casttype) = "int"];
+  }
+
+  message Sharder {
+    int64 shard_by = 1 [(gogoproto.casttype) = "int"];
+  };
+
+  oneof impl {
+    Base base = 20;
+    Ingress ingress = 21;
+    Egress egress = 22;
+    Reader reader = 23;
+    Sharder sharder = 24;
+    ExternalBase external_base = 25;
+
+    InternalUnion union = 40;
+    InternalJoin join = 41;
+    InternalGrouped grouped = 42;
+    InternalProject project = 43;
+    InternalFilter filter = 44;
+    InternalTopK top_k = 45;
+    InternalDistinct distinct = 46;
+  };
+};
