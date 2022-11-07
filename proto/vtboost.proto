@@ -1,9 +1,15 @@
 syntax = "proto3";
 option go_package = "vitess.io/vitess/go/vt/proto/vtboost";
 
+import "query.proto";
 import "vttime.proto";
 
 package vtboost;
+
+message Recipe {
+  repeated CachedQuery queries = 1;
+  int64 version = 2;
+};
 
 message CachedQuery {
   string public_id = 1;
@@ -13,33 +19,79 @@ message CachedQuery {
   int64 max_memory_usage = 5;
 };
 
-message AddQueryRequest {
-  repeated CachedQuery queries = 1;
-};
+message Materialization {
+  CachedQuery query = 1;
+  string normalized_sql = 2;
+  repeated Bound bounds = 3;
+  ViewDescriptor view = 4;
+  bool fully_materialized = 5;
 
-message RemoveQueryRequest {
-  message Query {
-    oneof remove {
-      string name = 1;
-      string public_id = 2;
-    }
+  message Bound {
+    string name = 1;
+    int64 type = 2;
+    bytes bound_value = 3;
+    int64 pos = 4;
   };
 
-  repeated Query queries = 1;
+  message ViewDescriptor {
+    string name = 1;
+    uint32 node = 2;
+    repeated query.Field schema = 3;
+    repeated query.Field key_schema = 4;
+    repeated string shards = 5;
+  };
 };
 
-message ListQueriesRequest {};
-message ListQueriesResponse {
-  uint64 recipe_version = 1;
-  repeated CachedQuery queries = 2;
+message GraphvizRequest {
+  enum Clustering {
+    NONE = 0;
+    DOMAIN = 1;
+    QUERY = 2;
+  };
+  Clustering clustering = 1;
+  bool memory_stats = 2;
+  map<string, int64> force_memory_limits = 3;
 };
 
-message RecipeChangeResponse {
-  int64 added = 1;
-  int64 removed = 2;
+message GraphvizResponse {
+  string dot = 1;
 };
 
-message Cluster {
+message ReadyRequest {}
+message ReadyResponse {
+  bool ready = 1;
+}
+
+message MaterializationsRequest {}
+message MaterializationsResponse {
+  repeated Materialization materializations = 1;
+}
+
+message PutRecipeRequest {
+  Recipe recipe = 1;
+};
+message PutRecipeResponse {
+  int64 recipe_version = 1;
+};
+
+message GetRecipeRequest {};
+message GetRecipeResponse {
+  Recipe recipe = 1;
+};
+
+message DescribeRecipeRequest {
+  string uuid = 1;
+  oneof request {
+    GraphvizRequest graphviz = 2;
+  }
+};
+message DescribeRecipeResponse {
+  oneof response {
+    GraphvizResponse graphviz = 1;
+  }
+};
+
+message ClusterState {
   enum State {
     DISABLED = 0;
     PRIMARY = 1;
@@ -50,20 +102,42 @@ message Cluster {
   State state = 2;
   vttime.Time drained_at = 3;
   map<string, bool> vtgates = 4;
+  vttime.Time created_at = 5;
+  uint32 expected_worker_count = 6;
 };
 
 message ClusterStates {
-  repeated Cluster clusters = 1;
+  repeated ClusterState clusters = 1;
 };
+
+message GetClusterRequest {
+  string uuid = 1;
+}
+
+message GetClusterResponse {
+  ClusterState cluster = 1;
+  ControllerState controller = 2;
+}
 
 message ListClustersRequest {}
 
+message ListClustersResponse {
+  message State {
+    ClusterState cluster = 1;
+    ControllerState controller = 2;
+  };
+  repeated State clusters = 1;
+}
+
 message AddClusterRequest {
   string uuid = 1;
+  vttime.Time created_at = 2;
+  uint32 expected_worker_count = 3;
 };
 
 message RemoveClusterRequest {
-  string uuid = 1;
+  reserved 1;
+  repeated string uuids = 2;
 };
 
 message ClusterChangeResponse {}
@@ -80,3 +154,52 @@ message DrainClusterRequest {
 }
 
 message DrainClusterResponse {}
+
+message PurgeRequest{}
+
+message PurgeResponse{}
+
+message ControllerState {
+  string leader = 1;
+  int64 epoch = 2;
+  int64 recipe_version = 3;
+
+  message RecipeStatus {
+    enum Progress {
+      UNKNOWN = 0;
+      APPLYING = 1;
+      FAILED = 2;
+      READY = 3;
+      REMOVING = 4;
+    };
+
+    int64 version = 1;
+    Progress progress = 2;
+
+    reserved 3; // deprecated; was Error, use Query now
+
+    message Query {
+      string query_public_id = 1;
+      Progress progress = 2;
+      string error = 3;
+    }
+
+    repeated Query queries = 4;
+    repeated string system_errors = 5;
+  };
+
+  map<int64, RecipeStatus> recipe_version_status = 4;
+};
+
+message TopoWorkerEntry {
+  string uuid = 1;
+  string admin_addr = 2;
+  string reader_addr = 3;
+};
+
+service ControllerService {
+  rpc GetRecipe(GetRecipeRequest) returns(GetRecipeResponse);
+  rpc ReadyCheck(ReadyRequest) returns (ReadyResponse);
+  rpc Graphviz(GraphvizRequest) returns (GraphvizResponse);
+  rpc GetMaterializations(MaterializationsRequest) returns (MaterializationsResponse);
+};

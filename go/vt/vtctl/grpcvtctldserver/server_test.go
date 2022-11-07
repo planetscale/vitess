@@ -27,8 +27,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	boostclient "vitess.io/vitess/go/boost/topo/client"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -11973,6 +11976,105 @@ func TestValidateShard(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
+
+func Test_boostDo(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		ok, opaque bool
+		code       codes.Code
+	}{
+		{
+			name: "ok",
+			ok:   true,
+		},
+		{
+			name:   "opaque",
+			err:    errors.New("opaque"),
+			opaque: true,
+		},
+		// For the purposes of our tests, the actual contents of the error
+		// messages don't really matter. We just need a valid gRPC status.
+		{
+			name: "cluster already draining",
+			err:  &boostclient.Error{Code: boostclient.ErrClusterAlreadyDraining},
+			code: codes.AlreadyExists,
+		},
+		{
+			name: "cluster already exists",
+			err:  &boostclient.Error{Code: boostclient.ErrClusterAlreadyExists},
+			code: codes.AlreadyExists,
+		},
+		{
+			name: "cluster already primary",
+			err:  &boostclient.Error{Code: boostclient.ErrClusterAlreadyPrimary},
+			code: codes.AlreadyExists,
+		},
+		{
+			name: "cluster not found",
+			err:  &boostclient.Error{Code: boostclient.ErrClusterNotFound},
+			code: codes.NotFound,
+		},
+		{
+			name: "drain no timestamp",
+			err:  &boostclient.Error{Code: boostclient.ErrDrainNoTimestamp},
+			code: codes.InvalidArgument,
+		},
+		{
+			name: "multiple primaries",
+			err:  &boostclient.Error{Code: boostclient.ErrMultiplePrimaries},
+			code: codes.InvalidArgument,
+		},
+		{
+			name: "no active recipe",
+			err:  &boostclient.Error{Code: boostclient.ErrNoActiveRecipe},
+			code: codes.NotFound,
+		},
+		{
+			name: "no cluster states",
+			err:  &boostclient.Error{Code: boostclient.ErrNoClusterStates},
+			code: codes.NotFound,
+		},
+		{
+			name: "no primary or warming",
+			err:  &boostclient.Error{Code: boostclient.ErrNoPrimaryOrWarming},
+			code: codes.InvalidArgument,
+		},
+		{
+			name: "unhandled",
+			err:  &boostclient.Error{Code: 0xff},
+			code: codes.Internal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// The result doesn't actually matter, just sub in a non-empty
+			// value for the success case.
+			const value = 1
+
+			res, err := boostDo(value, tt.err)
+
+			if tt.ok {
+				require.Equal(t, value, res)
+				require.NoError(t, err)
+			} else {
+				require.Zero(t, res)
+				require.Error(t, err)
+			}
+
+			s, ok := status.FromError(err)
+			if tt.opaque {
+				// Opaque errors have no gRPC information.
+				require.False(t, ok)
+				return
+			}
+
+			require.True(t, ok)
+			require.Equal(t, tt.code, s.Code())
 		})
 	}
 }

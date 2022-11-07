@@ -1,0 +1,331 @@
+// Copyright 2020-2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package plan
+
+import (
+	"fmt"
+
+	"gopkg.in/src-d/go-errors.v1"
+
+	"vitess.io/vitess/go/test/go-mysql-server/sql"
+	"vitess.io/vitess/go/test/go-mysql-server/sql/expression"
+)
+
+var ErrUpdateNotSupported = errors.NewKind("table doesn't support UPDATE")
+var ErrUpdateForTableNotSupported = errors.NewKind("The target table %s of the UPDATE is not updatable")
+var ErrUpdateUnexpectedSetResult = errors.NewKind("attempted to set field but expression returned %T")
+
+// Update is a node for updating rows on tables.
+type Update struct {
+	UnaryNode
+	Checks sql.CheckConstraints
+	Ignore bool
+}
+
+var _ sql.Databaseable = (*Update)(nil)
+
+// NewUpdate creates an Update node.
+func NewUpdate(n sql.Node, ignore bool, updateExprs []sql.Expression) *Update {
+	return &Update{
+		UnaryNode: UnaryNode{NewUpdateSource(
+			n,
+			ignore,
+			updateExprs,
+		)},
+		Ignore: ignore,
+	}
+}
+
+func GetUpdatable(node sql.Node) (sql.UpdatableTable, error) {
+	switch node := node.(type) {
+	case sql.UpdatableTable:
+		return node, nil
+	case *IndexedTableAccess:
+		return GetUpdatable(node.ResolvedTable)
+	case *ResolvedTable:
+		return getUpdatableTable(node.Table)
+	case *SubqueryAlias:
+		return nil, ErrUpdateNotSupported.New()
+	case *TriggerExecutor:
+		return GetUpdatable(node.Left())
+	case sql.TableWrapper:
+		return getUpdatableTable(node.Underlying())
+	case *UpdateJoin:
+		return node.GetUpdatable(), nil
+	}
+	if len(node.Children()) > 1 {
+		return nil, ErrUpdateNotSupported.New()
+	}
+	for _, child := range node.Children() {
+		updater, _ := GetUpdatable(child)
+		if updater != nil {
+			return updater, nil
+		}
+	}
+	return nil, ErrUpdateNotSupported.New()
+}
+
+func getUpdatableTable(t sql.Table) (sql.UpdatableTable, error) {
+	switch t := t.(type) {
+	case sql.UpdatableTable:
+		return t, nil
+	case sql.TableWrapper:
+		return getUpdatableTable(t.Underlying())
+	default:
+		return nil, ErrUpdateNotSupported.New()
+	}
+}
+
+func updateDatabaseHelper(node sql.Node) string {
+	switch node := node.(type) {
+	case sql.UpdatableTable:
+		return ""
+	case *IndexedTableAccess:
+		return updateDatabaseHelper(node.ResolvedTable)
+	case *ResolvedTable:
+		return node.Database.Name()
+	case *UnresolvedTable:
+		return node.Database()
+	}
+
+	for _, child := range node.Children() {
+		return updateDatabaseHelper(child)
+	}
+
+	return ""
+}
+
+func (u *Update) Database() string {
+	return updateDatabaseHelper(u.Child)
+}
+
+func (u *Update) Expressions() []sql.Expression {
+	return u.Checks.ToExpressions()
+}
+
+func (u *Update) Resolved() bool {
+	return u.Child.Resolved() && expression.ExpressionsResolved(u.Checks.ToExpressions()...)
+}
+
+func (u Update) WithExpressions(newExprs ...sql.Expression) (sql.Node, error) {
+	if len(newExprs) != len(u.Checks) {
+		return nil, sql.ErrInvalidChildrenNumber.New(u, len(newExprs), len(u.Checks))
+	}
+
+	var err error
+	u.Checks, err = u.Checks.FromExpressions(newExprs)
+	if err != nil {
+		return nil, err
+	}
+
+	return &u, nil
+}
+
+// UpdateInfo is the Info for OKResults returned by Update nodes.
+type UpdateInfo struct {
+	Matched, Updated, Warnings int
+}
+
+// String implements fmt.Stringer
+func (ui UpdateInfo) String() string {
+	return fmt.Sprintf("Rows matched: %d  Changed: %d  Warnings: %d", ui.Matched, ui.Updated, ui.Warnings)
+}
+
+type updateIter struct {
+	childIter sql.RowIter
+	schema    sql.Schema
+	updater   sql.RowUpdater
+	checks    sql.CheckConstraints
+	closed    bool
+	ignore    bool
+}
+
+func (u *updateIter) Next(ctx *sql.Context) (sql.Row, error) {
+	oldAndNewRow, err := u.childIter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	oldRow, newRow := oldAndNewRow[:len(oldAndNewRow)/2], oldAndNewRow[len(oldAndNewRow)/2:]
+	if equals, err := oldRow.Equals(newRow, u.schema); err == nil {
+		if !equals {
+			// apply check constraints
+			for _, check := range u.checks {
+				if !check.Enforced {
+					continue
+				}
+
+				res, err := sql.EvaluateCondition(ctx, check.Expr, newRow)
+				if err != nil {
+					return nil, err
+				}
+
+				if sql.IsFalse(res) {
+					return nil, u.ignoreOrError(ctx, newRow, sql.ErrCheckConstraintViolated.New(check.Name))
+				}
+			}
+
+			err := u.validateNullability(ctx, newRow, u.schema)
+			if err != nil {
+				return nil, u.ignoreOrError(ctx, newRow, err)
+			}
+
+			err = u.updater.Update(ctx, oldRow, newRow)
+			if err != nil {
+				return nil, u.ignoreOrError(ctx, newRow, err)
+			}
+		}
+	} else {
+		return nil, err
+	}
+
+	return oldAndNewRow, nil
+}
+
+// Applies the update expressions given to the row given, returning the new resultant row. In the case that ignore is
+// provided and there is a type conversion error, this function sets the value to the zero value as per the MySQL standard.
+// TODO: a set of update expressions should probably be its own expression type with an Eval method that does this
+func applyUpdateExpressionsWithIgnore(ctx *sql.Context, updateExprs []sql.Expression, tableSchema sql.Schema, row sql.Row, ignore bool) (sql.Row, error) {
+	var ok bool
+	prev := row
+	for _, updateExpr := range updateExprs {
+		val, err := updateExpr.Eval(ctx, prev)
+		if err != nil {
+			wtce, ok2 := err.(sql.WrappedTypeConversionError)
+			if !ok2 || !ignore {
+				return nil, err
+			}
+
+			cpy := prev.Copy()
+			cpy[wtce.OffendingIdx] = wtce.OffendingVal // Needed for strings
+			val = convertDataAndWarn(ctx, tableSchema, cpy, wtce.OffendingIdx, wtce.Err)
+		}
+		prev, ok = val.(sql.Row)
+		if !ok {
+			return nil, ErrUpdateUnexpectedSetResult.New(val)
+		}
+	}
+	return prev, nil
+}
+
+func (u *updateIter) validateNullability(ctx *sql.Context, row sql.Row, schema sql.Schema) error {
+	for idx := 0; idx < len(row); idx++ {
+		col := schema[idx]
+		if !col.Nullable && row[idx] == nil {
+			// In the case of an IGNORE we set the nil value to a default and add a warning
+			if u.ignore {
+				row[idx] = col.Type.Zero()
+				_ = warnOnIgnorableError(ctx, row, sql.ErrInsertIntoNonNullableProvidedNull.New(col.Name)) // will always return nil
+			} else {
+				return sql.ErrInsertIntoNonNullableProvidedNull.New(col.Name)
+			}
+
+		}
+	}
+	return nil
+}
+
+func (u *updateIter) Close(ctx *sql.Context) error {
+	if !u.closed {
+		u.closed = true
+		if err := u.updater.Close(ctx); err != nil {
+			return err
+		}
+		return u.childIter.Close(ctx)
+	}
+	return nil
+}
+
+func (u *updateIter) ignoreOrError(ctx *sql.Context, row sql.Row, err error) error {
+	if !u.ignore {
+		return err
+	}
+
+	return warnOnIgnorableError(ctx, row, err)
+}
+
+func newUpdateIter(
+	childIter sql.RowIter,
+	schema sql.Schema,
+	updater sql.RowUpdater,
+	checks sql.CheckConstraints,
+	ignore bool,
+) sql.RowIter {
+	if ignore {
+		return NewCheckpointingTableEditorIter(updater, &updateIter{
+			childIter: childIter,
+			updater:   updater,
+			schema:    schema,
+			checks:    checks,
+			ignore:    true,
+		})
+	} else {
+		return NewTableEditorIter(updater, &updateIter{
+			childIter: childIter,
+			updater:   updater,
+			schema:    schema,
+			checks:    checks,
+		})
+	}
+}
+
+// RowIter implements the Node interface.
+func (u *Update) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
+	updatable, err := GetUpdatable(u.Child)
+	if err != nil {
+		return nil, err
+	}
+	updater := updatable.Updater(ctx)
+
+	iter, err := u.Child.RowIter(ctx, row)
+	if err != nil {
+		return nil, err
+	}
+
+	return newUpdateIter(iter, updatable.Schema(), updater, u.Checks, u.Ignore), nil
+}
+
+// WithChildren implements the Node interface.
+func (u *Update) WithChildren(children ...sql.Node) (sql.Node, error) {
+	if len(children) != 1 {
+		return nil, sql.ErrInvalidChildrenNumber.New(u, len(children), 1)
+	}
+	np := *u
+	np.Child = children[0]
+	return &np, nil
+}
+
+// CheckPrivileges implements the interface sql.Node.
+func (u *Update) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+	//TODO: If column values are retrieved then the SELECT privilege is required
+	// For example: "UPDATE table SET x = y + 1 WHERE z > 0"
+	// We would need SELECT privileges on both the "y" and "z" columns as they're retrieving values
+	return opChecker.UserHasPrivileges(ctx,
+		sql.NewPrivilegedOperation(u.Database(), getTableName(u.Child), "", sql.PrivilegeType_Update))
+}
+
+func (u *Update) String() string {
+	pr := sql.NewTreePrinter()
+	_ = pr.WriteNode("Update")
+	_ = pr.WriteChildren(u.Child.String())
+	return pr.String()
+}
+
+func (u *Update) DebugString() string {
+	pr := sql.NewTreePrinter()
+	_ = pr.WriteNode(fmt.Sprintf("Update"))
+	_ = pr.WriteChildren(sql.DebugString(u.Child))
+	return pr.String()
+}

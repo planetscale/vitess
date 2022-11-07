@@ -19,6 +19,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -28,11 +29,11 @@ import (
 	"strings"
 	"time"
 
+	boostwatcher "vitess.io/vitess/go/boost/topo/watcher"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/key"
-
-	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
@@ -97,8 +98,8 @@ var (
 	enableOnlineDDL = flag.Bool("enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 	enableDirectDDL = flag.Bool("enable_direct_ddl", true, "Allow users to submit direct DDL statements")
 
-	enableSchemaChangeSignal = flag.Bool("schema_change_signal", true, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
-	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
+	EnableSchemaChangeSignal = flag.Bool("schema_change_signal", true, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
+	SchemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -212,8 +213,8 @@ func Init(
 
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
-	if *enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser)
+	if *EnableSchemaChangeSignal {
+		st = vtschema.NewTracker(gw.hc.Subscribe(), SchemaChangeUser)
 		addKeyspaceToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -239,8 +240,15 @@ func Init(
 	)
 
 	// connect the schema tracker with the vschema manager
-	if *enableSchemaChangeSignal {
+	if *EnableSchemaChangeSignal {
 		st.RegisterSignalReceiver(executor.vm.Rebuild)
+	}
+
+	var boost *boostwatcher.Watcher
+	if *boostwatcher.EnableBoostIntegration {
+		ts, _ := serv.GetTopoServer()
+		boost = boostwatcher.NewWatcher(ts)
+		executor.mats = engine.NewMaterializationClient(boost)
 	}
 
 	// TODO: call serv.WatchSrvVSchema here
@@ -281,13 +289,19 @@ func Init(
 		for _, f := range RegisterVTGates {
 			f(rpcVTGate)
 		}
-		if st != nil && *enableSchemaChangeSignal {
+		if st != nil && *EnableSchemaChangeSignal {
 			st.Start()
+		}
+		if boost != nil {
+			boost.Start()
 		}
 	})
 	servenv.OnTerm(func() {
-		if st != nil && *enableSchemaChangeSignal {
+		if st != nil && *EnableSchemaChangeSignal {
 			st.Stop()
+		}
+		if boost != nil {
+			boost.Stop()
 		}
 	})
 	rpcVTGate.registerDebugHealthHandler()

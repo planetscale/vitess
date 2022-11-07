@@ -1,0 +1,149 @@
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/boost/boostpb";
+
+package service;
+
+import "packet.proto";
+import "node.proto";
+import "controller.proto";
+import "gogoproto/gogo.proto";
+
+message WorkerSource {
+  string source_uuid = 1;
+  int64 epoch = 2 [(gogoproto.casttype) = "Epoch"];
+}
+
+message RegisterWorkerRequest {
+  WorkerSource from = 1;
+  string addr = 2;
+  string read_listen_addr = 3;
+  repeated string log_files = 4;
+};
+
+message RegisterWorkerResponse {
+};
+
+message AssignDomainRequest {
+  WorkerSource from = 1;
+  DomainBuilder domain = 2;
+};
+
+message AssignDomainResponse {
+  uint64 shard = 1 [(gogoproto.casttype) = "uint"];
+  string addr = 2;
+};
+
+message DomainDescriptor {
+  uint64 id = 1 [(gogoproto.casttype) = "DomainIndex"];
+  uint64 shard = 2 [(gogoproto.casttype) = "uint"];
+  string addr = 3;
+};
+
+message DomainBootedRequest {
+  WorkerSource from = 1;
+  DomainDescriptor domain = 2;
+};
+
+message DomainBootedResponse{};
+
+message HeartbeatPacket {}
+
+message AssignStreamRequest {
+  repeated ExternalTableDescriptor tables = 1;
+}
+
+message AssignStreamResponse {}
+
+message PacketResponse {};
+
+message ViewReadRequest {
+  uint32 target_node = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
+  uint64 target_shard = 2 [(gogoproto.casttype) = "uint"];
+  string key = 3 [(gogoproto.casttype) = "Row"];
+  bool block = 4;
+};
+
+message ViewReadManyRequest {
+  uint32 target_node = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
+  uint64 target_shard = 2 [(gogoproto.casttype) = "uint"];
+  repeated string keys = 3 [(gogoproto.casttype) = "Row"];
+  bool block = 4;
+};
+
+message ViewReadResponse {
+  repeated string rows = 1 [(gogoproto.casttype) = "Row"];
+  bool hit = 2;
+};
+
+message ViewReadManyResponse {
+  repeated ViewReadResponse results = 1;
+};
+
+message ViewSizeRequest {
+  uint32 target_node = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
+  int64 target_col = 2 [(gogoproto.casttype) = "int"];
+};
+
+message ViewSizeResponse {
+  int64 total_size = 1;
+}
+
+message TableDescriptor {
+  repeated DomainDescriptor txs = 1;
+  uint32 node = 2 [(gogoproto.casttype) = "GraphNodeIdx"];
+  uint32 addr = 3 [(gogoproto.casttype) = "LocalNodeIndex"];
+  bool key_is_primary = 4;
+  repeated int64 key = 5 [(gogoproto.casttype) = "int"];
+  map<int64, string> dropped = 6 [(gogoproto.castkey) = "int", (gogoproto.castvalue) = "Value"];
+  string table_name = 7;
+  repeated string columns = 8;
+  repeated node.Type schema = 9 [(gogoproto.nullable) = false];
+}
+
+message ExternalTableDescriptor {
+  repeated node.DomainAddr txs = 1;
+  uint32 node = 2 [(gogoproto.casttype) = "GraphNodeIdx"];
+  uint32 addr = 3 [(gogoproto.casttype) = "LocalNodeIndex"];
+  bool key_is_primary = 4;
+  repeated int64 key = 5 [(gogoproto.casttype) = "int"];
+  string table_name = 7;
+  repeated string columns = 8;
+  repeated node.Type schema = 9 [(gogoproto.nullable) = false];
+  string keyspace = 10;
+}
+
+message DomainBuilder {
+  uint64 index = 1 [(gogoproto.casttype) = "DomainIndex"];
+  uint64 shard = 2 [(gogoproto.casttype) = "uint"];
+  uint64 num_shards = 3 [(gogoproto.casttype) = "uint"];
+  map<uint32, node.Node> nodes = 4 [(gogoproto.castkey) = "LocalNodeIndex"];
+  controller.DomainConfig config = 5;
+};
+
+message MemoryStatsRequest {}
+message MemoryStatsResponse {
+  message MemUsage {
+    node.DomainAddr domain = 1 [(gogoproto.nullable) = false];
+    uint32 node = 2 [(gogoproto.casttype) = "GraphNodeIdx"];
+    int64 memory = 3;
+  }
+  repeated MemUsage node_usage = 1;
+}
+
+service WorkerService {
+  rpc AssignDomain(AssignDomainRequest) returns (AssignDomainResponse);
+  rpc AssignStream(AssignStreamRequest) returns (AssignStreamResponse);
+  rpc DomainBooted(DomainBootedRequest) returns (DomainBootedResponse);
+  rpc MemoryStats(MemoryStatsRequest) returns (MemoryStatsResponse);
+};
+
+service InnerDomain {
+  rpc ProcessAsync(packet.Packet) returns(PacketResponse);
+  rpc ProcessSync(packet.SyncPacket) returns(PacketResponse);
+};
+
+service Reader {
+  rpc ViewRead(ViewReadRequest) returns (ViewReadResponse);
+  rpc ViewReadMany(ViewReadManyRequest) returns (ViewReadManyResponse);
+  rpc ViewSize(ViewSizeRequest) returns (ViewSizeResponse);
+};

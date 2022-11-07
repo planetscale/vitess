@@ -377,6 +377,8 @@ Usage of vttablet:
 	If set, emit stats to push-based monitoring and stats backends
   --enable-autocommit
 	This flag is deprecated. Autocommit is always allowed. (default true)
+  --enable-boost
+	Enable boost integration; requires a valid topo connection. This Vitess process will find the local Boost cluster via topo
   --enable-consolidator
 	Synonym to -enable_consolidator (default true)
   --enable-consolidator-replicas

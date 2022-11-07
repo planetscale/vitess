@@ -1,0 +1,166 @@
+{
+  "DDL": [
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE friends (id INT(32), friend INT(32), PRIMARY KEY (id, friend))"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE users (id INT(32), age INT(32), name VARCHAR(40), address VARCHAR(40), PRIMARY KEY(id))"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE votes (aid INT(32), uid INT(32), comment_id INT(32), sign INT(32),  PRIMARY KEY (aid, uid))"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE articles (id INT(32), author INT(32), title VARCHAR(40), PRIMARY KEY (id))"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE f2 (friend INT(32), id INT(32), PRIMARY KEY (id))"
+    }
+  ],
+  "Queries": [
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT sum(votes.sign) AS sum FROM votes GROUP BY votes.uid HAVING sum > 0"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT count(votes.uid) AS vc FROM votes GROUP BY votes.aid"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id FROM users"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, users.name FROM users WHERE users.address = ?"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT sum(votes.sign) AS sum FROM votes GROUP BY votes.uid HAVING sum > 0"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.name FROM users WHERE users.id = 42"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, users.name FROM users"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT sum(votes.sign) AS sum FROM votes WHERE votes.aid = 5 GROUP BY votes.uid"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.name, articles.title, votes.uid FROM articles JOIN users ON users.id = articles.author JOIN votes ON votes.aid = articles.id"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT sum(votes.sign) AS sum FROM votes WHERE votes.sign > 0 GROUP BY votes.uid"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT count(votes.uid) AS vc FROM votes GROUP BY votes.aid HAVING vc > 5 "
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.name, articles.title FROM articles, users WHERE users.id = articles.author"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, users.name FROM users WHERE users.name = ? AND users.id = ?"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, users.name FROM users WHERE users.id = 32"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT sum(CASE WHEN votes.aid = 5 THEN votes.sign END) AS sum FROM votes GROUP BY votes.uid"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT count(votes.aid) AS count FROM votes GROUP BY votes.uid"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT count(votes.uid) AS count FROM votes"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, users.name FROM users WHERE users.id = 42"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT count(votes.uid) AS vc FROM votes GROUP BY votes.aid HAVING vc > 5"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.name, users.id FROM users WHERE users.id = 42"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.name, articles.title, votes.uid FROM articles, users, votes WHERE users.id = articles.author AND votes.aid = articles.id"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, users.name FROM users WHERE users.id = 50"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT count(CASE WHEN votes.aid = NULL AND votes.sign = 0 THEN votes.sign END) AS votes FROM votes GROUP BY votes.comment_id"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, users.name FROM users WHERE users.id = 42 AND users.name = 'bob'"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, users.name FROM users WHERE users.name = ?"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT friends.id, f2.friend AS fof FROM friends JOIN f2 ON friends.friend = f2.id WHERE friends.id = ?"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT sum(votes.sign) AS sum FROM votes GROUP BY votes.uid HAVING sum > 0 "
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.name, 1 FROM users"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT count(CASE WHEN votes.aid = 5 THEN votes.aid END) AS count FROM votes GROUP BY votes.uid"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT count(votes.uid) AS votes FROM votes GROUP BY votes.aid"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT sum(CASE WHEN votes.aid = 5 THEN votes.sign ELSE 6 END) AS sum FROM votes GROUP BY votes.uid"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": " SELECT users.id, users.name FROM users WHERE users.id = 32 UNION DISTINCT SELECT users.id, users.name FROM users WHERE users.id = 42 AND users.name = 'bob'"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, users.name FROM users WHERE users.id = ?"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT friends.id, friends.friend FROM friends"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT 2 * users.age, 2 * 10 AS twenty FROM users"
+    }
+  ]
+}
