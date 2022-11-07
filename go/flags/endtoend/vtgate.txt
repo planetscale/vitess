@@ -147,6 +147,8 @@ Usage of vtgate:
 	Send unnormalized SQL for individually reported queries
   --insights_raw_queries_max_length uint
 	Maximum size for unnormalized SQL (default 8192)
+  --insights_reorder_threshold uint
+	Reorder INSERT columns if more than this many redundant patterns in an interval (default 5)
   --insights_rows_read_threshold uint
 	Report individual transactions that read (scan) at least this many rows (default 10000)
   --insights_rt_threshold uint

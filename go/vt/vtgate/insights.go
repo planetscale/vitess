@@ -63,10 +63,6 @@ const (
 	BrokersVar            = "INSIGHTS_KAFKA_BROKERS"
 	UsernameVar           = "INSIGHTS_KAFKA_USERNAME"
 	PasswordVar           = "INSIGHTS_KAFKA_PASSWORD"
-
-	// normalize more aggressively by alphabetizing INSERT columns if there are more than this many
-	// otherwise identical patterns in a single interval
-	ReorderColumnThreshold = 5
 )
 
 type QueryPatternAggregation struct {
@@ -115,6 +111,7 @@ type Insights struct {
 	KafkaText              bool // use human-readable pb, for tests and debugging
 	SendRawQueries         bool
 	MaxRawQueryLength      uint
+	ReorderThreshold       uint // alphabetize columns if >= this many redundant patterns in 15s
 
 	// state
 	KafkaWriter          *kafka.Writer
@@ -126,7 +123,7 @@ type Insights struct {
 	Workers              sync.WaitGroup
 	QueriesThisInterval  uint
 	ReorderInsertColumns bool
-	ColIndependentHashes map[uint32]int
+	ColIndependentHashes map[uint32]uint
 
 	// log state: we limit some log messages to once per 15s because they're caused by behavior the
 	// client controls
@@ -180,6 +177,10 @@ var (
 
 	// insightsRawQueriesMaxLength is the longest string, in bytes, we will send as the RawSql field in a Kafka message
 	insightsRawQueriesMaxLength = flag.Uint("insights_raw_queries_max_length", 8192, "Maximum size for unnormalized SQL")
+
+	// normalize more aggressively by alphabetizing INSERT columns if there are more than this many
+	// otherwise identical patterns in a single interval
+	insightsReorderThreshold = flag.Uint("insights_reorder_threshold", 5, "Reorder INSERT columns if more than this many redundant patterns in an interval")
 )
 
 func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
@@ -194,6 +195,7 @@ func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
 		*insightsRTThreshold,
 		*insightsMaxQueriesPerInterval,
 		*insightsRawQueriesMaxLength,
+		*insightsReorderThreshold,
 		time.Duration(*insightsFlushInterval)*time.Second,
 		*insightsKafkaText,
 		*insightsRawQueries,
@@ -202,7 +204,7 @@ func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
 
 func initInsightsInner(logger *streamlog.StreamLogger,
 	brokers, publicID, username, password string,
-	bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold, maxQueriesPerInterval, maxRawQueryLength uint,
+	bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold, maxQueriesPerInterval, maxRawQueryLength, reorderThreshold uint,
 	interval time.Duration,
 	kafkaText, sendRawQueries bool) (*Insights, error) {
 
@@ -228,6 +230,7 @@ func initInsightsInner(logger *streamlog.StreamLogger,
 		KafkaText:              kafkaText,
 		SendRawQueries:         sendRawQueries,
 		MaxRawQueryLength:      maxRawQueryLength,
+		ReorderThreshold:       reorderThreshold,
 	}
 	insights.Sender = insights.sendToKafka
 	err := insights.logToKafka(logger)
@@ -266,7 +269,7 @@ func (ii *Insights) startInterval() {
 	ii.QueriesThisInterval = 0
 	ii.Aggregations = make(map[QueryPatternKey]*QueryPatternAggregation)
 	ii.PeriodStart = time.Now()
-	ii.ColIndependentHashes = make(map[uint32]int)
+	ii.ColIndependentHashes = make(map[uint32]uint)
 }
 
 func (ii *Insights) shouldSendToInsights(ls *logstats.LogStats) bool {
@@ -594,7 +597,7 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *u
 
 		if ciHash != nil && !ii.ReorderInsertColumns {
 			ii.ColIndependentHashes[*ciHash]++
-			if ii.ColIndependentHashes[*ciHash] >= ReorderColumnThreshold {
+			if ii.ColIndependentHashes[*ciHash] >= ii.ReorderThreshold {
 				log.Info("Enabling ReorderInsertColumns")
 				ii.ReorderInsertColumns = true
 			}
