@@ -61,7 +61,7 @@ func setup(t *testing.T, brokers, publicID, username, password string, options s
 		dfl(options.responseTimeThreshold, 1000),
 		dfl(options.maxPerInterval, 100),
 		dfl(options.maxRawQuerySize, 64),
-		15*time.Second, true, true)
+		5, 15*time.Second, true, true)
 	if insights != nil {
 		t.Cleanup(func() { insights.Drain() })
 	}
