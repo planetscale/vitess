@@ -20,10 +20,11 @@ import (
 	"context"
 	_ "embed"
 	"flag"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 
