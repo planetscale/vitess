@@ -149,7 +149,7 @@ func (n *Node) processInternal(input *FlowInput, output *FlowOutput, i Internal)
 		return nil
 	}
 
-	var tag boostpb.Tag = boostpb.TagInvalid
+	var tag boostpb.Tag = boostpb.TagNone
 	if rpiece := input.Packet.GetReplayPiece(); rpiece != nil {
 		// NOTE: non-partial replays shouldn't be materialized only for a
 		// particular index, and so the tag shouldn't be forwarded to the
@@ -268,7 +268,7 @@ func (n *Node) Process(ctx context.Context, input *FlowInput, output *FlowOutput
 			//
 			// So: only materialize if the message we're processing is not a replay!
 			if input.KeyedBy == nil {
-				Materialize(&rs, boostpb.TagInvalid, input.State.Get(addr))
+				Materialize(&rs, boostpb.TagNone, input.State.Get(addr))
 			}
 
 			// TODO: sent write-ACKs to all the clients

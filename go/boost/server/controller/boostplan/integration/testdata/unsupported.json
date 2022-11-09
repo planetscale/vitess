@@ -46,6 +46,11 @@
       "Keyspace": "main",
       "SQL": "SELECT id FROM users WHERE id > :id",
       "Error": "query not supported by boost: parameter can only be compared for equality"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id FROM users JOIN friends WHERE users.id = 1",
+      "Error": "query not supported by boost: join without predicates is not supported"
     }
   ]
 }

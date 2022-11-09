@@ -90,7 +90,7 @@ func (m *Memory) ProcessRecords(records *[]boostpb.Record, partialTag boostpb.Ta
 	} else {
 		for _, r := range *records {
 			if r.Positive {
-				m.insert(r.Row, boostpb.TagInvalid)
+				m.insert(r.Row, boostpb.TagNone)
 			} else {
 				m.remove(r.Row)
 			}
@@ -162,7 +162,7 @@ func (m *Memory) Clear() {
 }
 
 func (m *Memory) insert(row boostpb.Row, tag boostpb.Tag) bool {
-	if tag != boostpb.TagInvalid {
+	if tag != boostpb.TagNone {
 		i, ok := m.byTag[tag]
 		if !ok {
 			// got tagged insert for unknown tag. this will happen if a node on an old

@@ -159,6 +159,11 @@ message Packet {
     uint32 tag = 2 [(gogoproto.casttype) = "Tag"];
     repeated string keys = 3 [(gogoproto.casttype) = "Row"];
   };
+  message Purge {
+    uint32 view = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
+    uint32 tag = 2 [(gogoproto.casttype) = "Tag"];
+    map<string, bool> keys = 3 [(gogoproto.castkey) = "Row"];
+  };
   message Finish{
     uint32 tag = 1 [(gogoproto.casttype) = "Tag"];
     uint32 node = 2 [(gogoproto.casttype) = "LocalNodeIndex"];
@@ -254,7 +259,6 @@ message Packet {
     uint32 tag = 1 [(gogoproto.casttype) = "Tag"];
     uint32 from = 2 [(gogoproto.casttype) = "LocalNodeIndex"];
   };
-  message Quit{};
 
   oneof inner {
     Input input = 1;
@@ -263,22 +267,20 @@ message Packet {
     ReplayPiece replay_piece = 4;
     Evict evict = 5;
     EvictKeys evict_keys = 6;
+    Purge purge = 7;
 
-    // Internal control
-    Finish finish = 7;
+    // Replay requests
+    RequestPartialReplay request_partial_replay = 10;
+    RequestReaderReplay request_reader_replay = 11;
+    StartReplay start_replay = 12;
 
     // Control messages
-    AddNode add_node = 8;
-    RemoveNodes remove_nodes = 9;
-    UpdateEgress update_egress = 11;
-    UpdateSharder update_sharder = 12;
-    PrepareState prepare_state = 13;
-
-    RequestPartialReplay request_partial_replay = 21;
-    RequestReaderReplay request_reader_replay = 22;
-    StartReplay start_replay = 23;
-
-    Quit quit = 32;
+    AddNode add_node = 20;
+    Finish finish = 21;
+    RemoveNodes remove_nodes = 22;
+    UpdateEgress update_egress = 23;
+    UpdateSharder update_sharder = 24;
+    PrepareState prepare_state = 25;
   };
 
   // Packet ID for tracing.

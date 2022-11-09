@@ -17,33 +17,36 @@ func cleanUpTree(ctx *PlanContext, node *Node, cleanHere bool) (*Node, error) {
 		return node, nil
 	}
 
-	project, isProj := node.Op.(*Project)
-
-	if !isProj {
-		return node, nil
-	}
-
-	// When the table id of a projection is not nil, it means we project a derived table,
-	// in this case we don't want to remove it.
-	if project.TableID != nil {
-		return node, nil
-	}
-
-	required := false
-	for _, column := range project.Columns {
-		expr, err := column.SingleAST() // Projection nodes should not have columns that represent multiple AST expressions
-		if err != nil {
-			return nil, err
+	switch op := node.Op.(type) {
+	case *Project:
+		// When the table id of a projection is not nil, it means we project a derived table,
+		// in this case we don't want to remove it.
+		if op.TableID != nil {
+			return node, nil
 		}
 
-		if _, isCol := expr.(*sqlparser.ColName); !isCol {
-			required = true
-			break
-		}
-	}
+		required := false
+		for _, column := range op.Columns {
+			expr, err := column.SingleAST() // Projection nodes should not have columns that represent multiple AST expressions
+			if err != nil {
+				return nil, err
+			}
 
-	if !required {
-		return node.Ancestors[0], nil
+			if _, isCol := expr.(*sqlparser.ColName); !isCol {
+				required = true
+				break
+			}
+		}
+
+		if !required {
+			return node.Ancestors[0], nil
+		}
+	case *Join:
+		if op.Predicates == nil {
+			return nil, &UnsupportedError{
+				Type: JoinWithoutPredicates,
+			}
+		}
 	}
 
 	return node, nil

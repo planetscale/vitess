@@ -71,7 +71,7 @@ func (n *Node) AsInternal() Internal {
 }
 
 func (n *Node) IsJoin() bool {
-	_, ok := n.impl.(JoinIngredient)
+	_, ok := n.impl.(ingredientJoin)
 	return ok
 }
 
@@ -86,8 +86,13 @@ func (n *Node) RequiresFullMaterialization() bool {
 }
 
 func (n *Node) CanQueryThrough() bool {
-	_, ok := n.impl.(IngredientQueryThrough)
+	_, ok := n.impl.(ingredientQueryThrough)
 	return ok
+}
+
+func (n *Node) asQueryThrough() ingredientQueryThrough {
+	qt, _ := n.impl.(ingredientQueryThrough)
+	return qt
 }
 
 func (n *Node) IsShardMerger() bool {

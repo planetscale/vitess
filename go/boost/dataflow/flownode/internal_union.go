@@ -126,7 +126,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 		// since iterating over the buffered upquery responses includes a btree lookup, we
 		// want to do fewer of those, so we do those in the outer loop.
 		var (
-			lastTag   = boostpb.TagInvalid
+			lastTag   = boostpb.TagNone
 			replayKey []int
 			rkeyFrom  boostpb.LocalNodeIndex
 		)
@@ -149,7 +149,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 			}
 
 			// make sure we use the right key columns for this tag
-			if lastTag == boostpb.TagInvalid || lastTag != it.tag {
+			if lastTag == boostpb.TagNone || lastTag != it.tag {
 				replayKey = u.replayKey[unionreplayKey{it.tag, rkeyFrom}]
 			}
 			k := replayKey

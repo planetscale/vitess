@@ -161,7 +161,7 @@ func (mg *MockGraph) One(src boostpb.IndexPair, u []boostpb.Record, remember boo
 		return u
 	}
 
-	Materialize(&u, boostpb.TagInvalid, mg.states.Get(id.AsLocal()))
+	Materialize(&u, boostpb.TagNone, mg.states.Get(id.AsLocal()))
 	return u
 }
 
@@ -214,7 +214,7 @@ func (mg *MockGraph) Seed(base boostpb.IndexPair, data RecordLike) {
 	if mg != nil {
 		st := mg.states.Get(base.AsLocal())
 		records := []boostpb.Record{data.AsRecord()}
-		st.ProcessRecords(&records, boostpb.TagInvalid)
+		st.ProcessRecords(&records, boostpb.TagNone)
 	} else {
 		mg.t.Fatalf("unnecessary seed value for %v", base.AsGlobal())
 	}
