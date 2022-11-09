@@ -89,6 +89,10 @@ func WithoutBoost() Option {
 type Option func(test *Test)
 
 func Setup(t *testing.T, options ...Option) *Test {
+	if testing.Short() {
+		t.Skipf("skipping End-To-End test when running in short mode")
+	}
+
 	t.Cleanup(func() {
 		boosttest.EnsureNoLeaks(t)
 	})

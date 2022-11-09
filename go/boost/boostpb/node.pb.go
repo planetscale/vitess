@@ -5,13 +5,11 @@ package boostpb
 
 import (
 	fmt "fmt"
+	_ "github.com/gogo/protobuf/gogoproto"
+	proto "github.com/gogo/protobuf/proto"
 	io "io"
 	math "math"
 	math_bits "math/bits"
-
-	_ "github.com/gogo/protobuf/gogoproto"
-	proto "github.com/gogo/protobuf/proto"
-
 	vitess_io_vitess_go_mysql_collations "vitess.io/vitess/go/mysql/collations"
 	vitess_io_vitess_go_sqltypes "vitess.io/vitess/go/sqltypes"
 )
@@ -703,7 +701,6 @@ var xxx_messageInfo_Node_Reader proto.InternalMessageInfo
 
 type Node_InternalUnion struct {
 	// Types that are valid to be assigned to Emit:
-	//
 	//	*Node_InternalUnion_Project
 	//	*Node_InternalUnion_All
 	Emit     isNode_InternalUnion_Emit `protobuf_oneof:"emit"`

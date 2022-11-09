@@ -51,6 +51,13 @@ func (u *UnknownQueryError) Error() string {
 	return fmt.Sprintf("no query named %q in current recipe", u.Name)
 }
 
+type QueryError interface {
+	error
+	QueryPublicID() string
+}
+
+var _ QueryError = (*QueryScopedError)(nil)
+
 type QueryScopedError struct {
 	Err   error
 	Query *CachedQuery

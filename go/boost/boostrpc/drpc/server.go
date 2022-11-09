@@ -182,3 +182,10 @@ func (srv *Server) networkInterface() (err error) {
 	}
 	return
 }
+
+func (srv *Server) ListenAddr() string {
+	if srv.net == nil {
+		return ""
+	}
+	return srv.net.Addr().String()
+}

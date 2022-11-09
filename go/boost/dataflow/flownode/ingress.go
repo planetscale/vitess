@@ -49,7 +49,7 @@ func (e *Egress) Process(ctx context.Context, m **boostpb.Packet, shard uint, ou
 	txn := len(e.txs) - 1
 
 	var replayTo graph.NodeIdx = graph.InvalidNode
-	if t := (*m).Tag(); t != boostpb.TagInvalid {
+	if t := (*m).Tag(); t != boostpb.TagNone {
 		var ok bool
 		replayTo, ok = e.tags[t]
 		if !ok {
