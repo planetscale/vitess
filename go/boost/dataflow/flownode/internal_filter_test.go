@@ -5,8 +5,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow/state"
+	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -224,5 +227,75 @@ func TestFilter(t *testing.T) {
 
 		left = boostpb.TestRow(42, "b")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
+	})
+
+	t.Run("it queries through", func(t *testing.T) {
+		cond0 := fakeFilter(t, &sqlparser.ComparisonExpr{
+			Operator: sqlparser.LessEqualOp,
+			Left:     sqlparser.NewColName("_col0"),
+			Right:    sqlparser.NewColName("_col1"),
+		}, 0, 1)
+
+		var cases = []struct {
+			name     string
+			filters  []FilterConditionTuple
+			input    []boostpb.Row
+			expected int
+			column   int
+			key      boostpb.Row
+		}{
+			{
+				name:    "all",
+				filters: []FilterConditionTuple{cond0},
+				input: []boostpb.Row{
+					boostpb.TestRow(1, 2, 3),
+				},
+				expected: 1,
+				column:   0,
+				key:      boostpb.TestRow(1),
+			},
+			{
+				name:    "all but filtered",
+				filters: []FilterConditionTuple{cond0},
+				input: []boostpb.Row{
+					boostpb.TestRow(2, 1, 3),
+				},
+				expected: 0,
+				column:   0,
+				key:      boostpb.TestRow(1),
+			},
+		}
+
+		for _, tcase := range cases {
+			t.Run(tcase.name, func(t *testing.T) {
+				index := boostpb.IndexPair{
+					Global: 0,
+					Local:  0,
+				}
+
+				states := new(state.Map)
+				schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64, sqltypes.Int64)
+
+				st := state.NewMemoryState()
+				st.AddKey([]int{0}, schema, nil)
+				st.AddKey([]int{1}, schema, nil)
+
+				var records []boostpb.Record
+				for _, r := range tcase.input {
+					records = append(records, r.ToRecord(true))
+				}
+				st.ProcessRecords(&records, boostpb.TagNone)
+				states.Insert(0, st)
+
+				project := NewFilter(0, tcase.filters)
+				remap := map[graph.NodeIdx]boostpb.IndexPair{0: index}
+				project.OnCommit(0, remap)
+
+				iter, found, mat := project.QueryThrough([]int{tcase.column}, tcase.key, new(Map), states)
+				require.Truef(t, bool(mat), "QueryThrough parent should be materialized")
+				require.Truef(t, found, "QueryThrough should not miss")
+				require.Equal(t, iter.Len(), tcase.expected)
+			})
+		}
 	})
 }

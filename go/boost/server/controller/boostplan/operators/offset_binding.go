@@ -217,9 +217,9 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 			if err != nil {
 				return err
 			}
-			p.Projections = append(p.Projections, flownode.Emit(offset))
+			p.Projections = append(p.Projections, flownode.ProjectedCol(offset))
 		case *sqlparser.Literal:
-			v, err := flownode.ProjectionLiteralFromAST(expr)
+			v, err := flownode.ProjectedLiteralFromAST(expr)
 			if err != nil {
 				return err
 			}
@@ -233,7 +233,7 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 			if err != nil {
 				return &UnsupportedError{AST: expr, Type: EvalEngineNotSupported}
 			}
-			p.Projections = append(p.Projections, flownode.Expr{
+			p.Projections = append(p.Projections, &flownode.ProjectedExpr{
 				AST:      newExpr,
 				EvalExpr: eexpr,
 			})
@@ -379,5 +379,5 @@ func (lu *lookup) CollationForExpr(expr sqlparser.Expr) collations.ID {
 }
 
 func (lu *lookup) DefaultCollation() collations.ID {
-	return collations.CollationUtf8mb4ID // TODO this should be set by flag, like it is for `vtgate
+	return collations.Default()
 }

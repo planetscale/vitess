@@ -114,10 +114,9 @@ func TestServer(t *testing.T) {
 	}
 
 	t.Run("WithPort", func(t *testing.T) {
-		port := 8000 + int32(rand.Intn(1000))
 		// RPC server
 		opts := []Option{
-			WithPort(port),
+			WithPort(0),
 			WithServiceProvider(sampleServiceProvider()),
 			WithMiddleware(smw...),
 		}
@@ -134,7 +133,7 @@ func TestServer(t *testing.T) {
 		}
 
 		// Client connection
-		cl, err := NewClient("tcp", fmt.Sprintf(":%d", port), clOpts...)
+		cl, err := NewClient("tcp", srv.ListenAddr(), clOpts...)
 		assert.Nil(err, "client connection")
 
 		// RPC client
@@ -234,11 +233,10 @@ func TestServer(t *testing.T) {
 		caCert, _ := os.ReadFile("testdata/ca.sample_cer")
 		cert, _ := os.ReadFile("testdata/server.sample_cer")
 		key, _ := os.ReadFile("testdata/server.sample_key")
-		port := 8000 + int32(rand.Intn(1000))
 
 		// RPC server
 		opts := []Option{
-			WithPort(port),
+			WithPort(0),
 			WithServiceProvider(sampleServiceProvider()),
 			WithMiddleware(smw...),
 			WithTLS(ServerTLS{
@@ -255,7 +253,7 @@ func TestServer(t *testing.T) {
 		}()
 
 		// Client connection
-		cl, err := NewClient("tcp", fmt.Sprintf(":%d", port), WithClientTLS(ClientTLS{
+		cl, err := NewClient("tcp", srv.ListenAddr(), WithClientTLS(ClientTLS{
 			IncludeSystemCAs: true,
 			CustomCAs:        [][]byte{caCert},
 			ServerName:       "node-01",
@@ -277,10 +275,9 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("WithHTTP", func(t *testing.T) {
-		port := 8000 + int32(rand.Intn(1000))
 		// RPC server
 		opts := []Option{
-			WithPort(port),
+			WithPort(0),
 			WithServiceProvider(sampleServiceProvider()),
 			WithMiddleware(smw...),
 			WithHTTP(),
@@ -292,7 +289,7 @@ func TestServer(t *testing.T) {
 		}()
 
 		// Client connection
-		cl, err := NewClient("tcp", fmt.Sprintf(":%d", port), WithProtocolHeader())
+		cl, err := NewClient("tcp", srv.ListenAddr(), WithProtocolHeader())
 		assert.Nil(err, "client connection")
 
 		// RPC client
@@ -302,7 +299,7 @@ func TestServer(t *testing.T) {
 		assert.True(res.Ok, "ping result")
 
 		// HTTP request
-		hr, err := http.Post(fmt.Sprintf("http://localhost:%d/sample.v1.FooAPI/Ping", port), "application/json", strings.NewReader(`{}`))
+		hr, err := http.Post(fmt.Sprintf("http://%s/sample.v1.FooAPI/Ping", srv.ListenAddr()), "application/json", strings.NewReader(`{}`))
 		assert.Nil(err, "POST request")
 		assert.Equal(hr.StatusCode, http.StatusOK, "HTTP status")
 		_ = hr.Body.Close()
@@ -318,12 +315,11 @@ func TestServer(t *testing.T) {
 		caCert, _ := os.ReadFile("testdata/ca.sample_cer")
 		cert, _ := os.ReadFile("testdata/server.sample_cer")
 		key, _ := os.ReadFile("testdata/server.sample_key")
-		port := 8000 + int32(rand.Intn(1000))
 
 		// RPC server
 		opts := []Option{
 			WithHTTP(),
-			WithPort(port),
+			WithPort(0),
 			WithServiceProvider(sampleServiceProvider()),
 			WithMiddleware(smw...),
 			WithTLS(ServerTLS{
@@ -349,7 +345,7 @@ func TestServer(t *testing.T) {
 				SkipVerify:       false,
 			}),
 		}
-		cl, err := NewClient("tcp", fmt.Sprintf(":%d", port), clientOpts...)
+		cl, err := NewClient("tcp", srv.ListenAddr(), clientOpts...)
 		assert.Nil(err, "new client")
 
 		// RPC request
@@ -360,7 +356,7 @@ func TestServer(t *testing.T) {
 
 		// HTTP request
 		hcl := getHTTPClient()
-		hr, err := hcl.Post(fmt.Sprintf("https://localhost:%d/sample.v1.FooAPI/Ping", port), "application/json", strings.NewReader(`{}`))
+		hr, err := hcl.Post(fmt.Sprintf("https://%s/sample.v1.FooAPI/Ping", srv.ListenAddr()), "application/json", strings.NewReader(`{}`))
 		assert.Nil(err, "POST request")
 		assert.Equal(hr.StatusCode, http.StatusOK, "HTTP status")
 		_ = hr.Body.Close()
@@ -435,10 +431,9 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("WithRetry", func(t *testing.T) {
-		port := 8000 + int32(rand.Intn(1000))
 		// RPC server
 		opts := []Option{
-			WithPort(port),
+			WithPort(0),
 			WithServiceProvider(sampleServiceProvider()),
 		}
 		srv, err := NewServer(opts...)
@@ -449,7 +444,7 @@ func TestServer(t *testing.T) {
 
 		// Client connection
 		clm := append(cmw, clMW.Retry(5, ll.With(zap.String("component", "client"))))
-		cl, err := NewClient("tcp", fmt.Sprintf(":%d", port), WithClientMiddleware(clm...))
+		cl, err := NewClient("tcp", srv.ListenAddr(), WithClientMiddleware(clm...))
 		assert.Nil(err, "client connection")
 
 		// RPC client
@@ -467,11 +462,9 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("WithRateLimit", func(t *testing.T) {
-		port := 8000 + int32(rand.Intn(1000))
-
 		// RPC server, enforce a limit of 1 request per-second
 		opts := []Option{
-			WithPort(port),
+			WithPort(0),
 			WithServiceProvider(sampleServiceProvider()),
 			WithMiddleware(append(smw, srvMW.RateLimit(1))...),
 		}
@@ -482,7 +475,7 @@ func TestServer(t *testing.T) {
 		}()
 
 		// Client connection
-		cl, err := NewClient("tcp", fmt.Sprintf(":%d", port))
+		cl, err := NewClient("tcp", srv.ListenAddr())
 		assert.Nil(err, "client connection")
 
 		// RPC client

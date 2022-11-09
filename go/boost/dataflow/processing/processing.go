@@ -38,13 +38,13 @@ func (miss *Miss) Compare(other *Miss) int {
 	if miss.On > other.On {
 		return 1
 	}
+	if cmp := slices.Compare(miss.ReplayCols, other.ReplayCols); cmp != 0 {
+		return cmp
+	}
 	if cmp := slices.Compare(miss.LookupIdx, other.LookupIdx); cmp != 0 {
 		return cmp
 	}
 	if cmp := slices.Compare(miss.LookupCols, other.LookupCols); cmp != 0 {
-		return cmp
-	}
-	if cmp := slices.Compare(miss.ReplayCols, other.ReplayCols); cmp != 0 {
 		return cmp
 	}
 	if cmp := bytes.Compare(miss.Record.Hash[:], other.Record.Hash[:]); cmp != 0 {

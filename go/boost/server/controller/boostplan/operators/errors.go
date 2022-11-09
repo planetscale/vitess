@@ -36,6 +36,7 @@ const (
 	DualTable
 	ParameterLocation
 	ParameterNotEqual
+	JoinWithoutPredicates
 )
 
 type (
@@ -116,6 +117,8 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "parameter needs to be used in a comparison expression")
 	case ParameterNotEqual:
 		fmt.Fprintf(&sb, "parameter can only be compared for equality")
+	case JoinWithoutPredicates:
+		fmt.Fprintf(&sb, "join without predicates is not supported")
 	}
 
 	return sb.String()

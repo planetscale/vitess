@@ -28,27 +28,27 @@ func (f *Filter) internal() {}
 
 func (f *Filter) dataflow() {}
 
+func (f *Filter) apply(env *evalengine.ExpressionEnv, r boostpb.Row) bool {
+	env.Row = r.ToVitess()
+	for _, f := range f.filter {
+		res, err := env.Evaluate(f.Cond)
+		if err != nil {
+			panic(err)
+		}
+		if !res.MustBoolean() {
+			return false
+		}
+	}
+	return true
+}
+
 func (f *Filter) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, replayKeyCol []int, domain *Map, states *state.Map) (processing.Result, error) {
 	var newRecords = make([]boostpb.Record, 0, len(rs))
 	var env evalengine.ExpressionEnv
 	env.DefaultCollation = collations.Default()
 
 	for _, r := range rs {
-		env.Row = r.Row.ToVitess()
-
-		var pass = true
-		for _, f := range f.filter {
-			res, err := env.Evaluate(f.Cond)
-			if err != nil {
-				panic(err)
-			}
-			if !res.MustBoolean() {
-				pass = false
-				break
-			}
-		}
-
-		if pass {
+		if f.apply(&env, r.Row) {
 			newRecords = append(newRecords, r)
 		}
 	}
@@ -57,7 +57,28 @@ func (f *Filter) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNo
 	}, nil
 }
 
+func (f *Filter) QueryThrough(columns []int, key boostpb.Row, nodes *Map, states *state.Map) (RowIterator, bool, MaterializedState) {
+	rows, found, mat := nodeLookup(f.src.AsLocal(), columns, key, nodes, states)
+	if !mat {
+		return nil, false, NotMaterialized
+	}
+	if !found {
+		return nil, false, IsMaterialized
+	}
+
+	var newRecords = make(RowSlice, 0, rows.Len())
+	var env evalengine.ExpressionEnv
+	env.DefaultCollation = collations.Default()
+	rows.ForEach(func(r boostpb.Row) {
+		if f.apply(&env, r) {
+			newRecords = append(newRecords, r)
+		}
+	})
+	return newRecords, true, IsMaterialized
+}
+
 var _ Internal = (*Filter)(nil)
+var _ ingredientQueryThrough = (*Filter)(nil)
 
 func (f *Filter) Ancestors() []graph.NodeIdx {
 	return []graph.NodeIdx{f.src.AsGlobal()}

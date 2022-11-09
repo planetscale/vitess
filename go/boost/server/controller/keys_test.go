@@ -82,7 +82,7 @@ func TestGraphKeys(t *testing.T) {
 	t.Run("column reordering", func(t *testing.T) {
 		g, a, _ := bases()
 
-		project := flownode.NewProject(a, []flownode.Projection{flownode.Emit(1), flownode.Emit(0)})
+		project := flownode.NewProject(a, []flownode.Projection{flownode.ProjectedCol(1), flownode.ProjectedCol(0)})
 		x := g.AddNode(flownode.New("x", []string{"x2", "x1"}, project))
 		g.AddEdge(a, x)
 
@@ -99,9 +99,9 @@ func TestGraphKeys(t *testing.T) {
 
 	t.Run("generated columns", func(t *testing.T) {
 		g, a, _ := bases()
-		literal, _ := flownode.ProjectionLiteralFromAST(sqlparser.NewFloatLiteral("3.14"))
+		literal, _ := flownode.ProjectedLiteralFromAST(sqlparser.NewFloatLiteral("3.14"))
 		projections := []flownode.Projection{
-			flownode.Emit(0),
+			flownode.ProjectedCol(0),
 			literal,
 		}
 		project := flownode.NewProject(a, projections)

@@ -336,7 +336,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 			for _, seg := range iternodes {
 				forceTag, ok := pathGrouping[grouping{seg.Node, pi}]
 				if !ok {
-					forceTag = boostpb.TagInvalid
+					forceTag = boostpb.TagNone
 				}
 
 				locals = append(locals, &boostpb.ReplayPathSegment{
