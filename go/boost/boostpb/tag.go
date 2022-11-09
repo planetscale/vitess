@@ -8,7 +8,7 @@ import (
 
 type Tag uint32
 
-const TagInvalid Tag = math.MaxUint32
+const TagNone Tag = math.MaxUint32
 
 type MaterializationStatus byte
 

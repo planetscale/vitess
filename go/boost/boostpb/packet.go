@@ -135,7 +135,7 @@ func (pkt *Packet) Tag() Tag {
 	case *Packet_EvictKeys_:
 		return pkt.EvictKeys.Tag
 	default:
-		return TagInvalid
+		return TagNone
 	}
 }
 

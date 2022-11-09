@@ -58,7 +58,7 @@ func JoinSourceBoth(left, right int) JoinSource {
 type emission = boostpb.Node_InternalJoin_Emission
 
 var _ Internal = (*Join)(nil)
-var _ JoinIngredient = (*Join)(nil)
+var _ ingredientJoin = (*Join)(nil)
 
 type Join struct {
 	left  boostpb.IndexPair
@@ -76,11 +76,11 @@ func (j *Join) internal() {}
 
 func (j *Join) dataflow() {}
 
-var _ JoinIngredient = (*Join)(nil)
+var _ ingredientJoin = (*Join)(nil)
 
 func (j *Join) DataflowNode() {}
 
-func (j *Join) IsJoin() {}
+func (j *Join) isJoin() {}
 
 func (j *Join) MustReplayAmong() map[graph.NodeIdx]struct{} {
 	switch j.kind {
@@ -285,10 +285,7 @@ func (j *Join) OnInput(us *Node, ex processing.Executor, from boostpb.LocalNodeI
 		prevJoinKeyRow := boostpb.RowFromValues([]boostpb.Value{prevJoinKey})
 
 		if from == j.right.AsLocal() && j.kind == JoinTypeOuter {
-			rowBag, found, isMaterialized, err := Lookup(j, j.right.AsLocal(), []int{j.on[1]}, prevJoinKeyRow, domain, state)
-			if err != nil {
-				return processing.Result{}, err
-			}
+			rowBag, found, isMaterialized := nodeLookup(j.right.AsLocal(), []int{j.on[1]}, prevJoinKeyRow, domain, state)
 			if !isMaterialized {
 				panic("join parent should always be materialized")
 			}
@@ -325,10 +322,7 @@ func (j *Join) OnInput(us *Node, ex processing.Executor, from boostpb.LocalNodeI
 		}
 
 		// get rows from the other side
-		otherRows, found, isMaterialized, err := Lookup(j, other, []int{otherKey}, prevJoinKeyRow, domain, state)
-		if err != nil {
-			return processing.Result{}, err
-		}
+		otherRows, found, isMaterialized := nodeLookup(other, []int{otherKey}, prevJoinKeyRow, domain, state)
 		if !isMaterialized {
 			panic("other should always be materialized")
 		}

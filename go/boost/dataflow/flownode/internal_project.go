@@ -16,6 +16,7 @@ import (
 )
 
 var _ Internal = (*Project)(nil)
+var _ ingredientQueryThrough = (*Project)(nil)
 
 type (
 	Project struct {
@@ -27,29 +28,71 @@ type (
 
 	Projection interface {
 		describe() string
+		build(env *evalengine.ExpressionEnv, row boostpb.Row, output *boostpb.RowBuilder)
 		ToProto() string
 		Type(g *graph.Graph[*Node], src boostpb.IndexPair) boostpb.Type
 	}
 
-	Expr struct {
+	ProjectedExpr struct {
 		AST      sqlparser.Expr
 		EvalExpr evalengine.Expr
 	}
 
-	Emit int
+	ProjectedCol int
 
-	Literal struct {
+	ProjectedLiteral struct {
 		V   boostpb.Value
 		AST *sqlparser.Literal
 	}
 )
 
-func (e Emit) proj()    {}
-func (e Expr) proj()    {}
-func (e Literal) proj() {}
+func (p *Project) QueryThrough(columns []int, key boostpb.Row, nodes *Map, states *state.Map) (RowIterator, bool, MaterializedState) {
+	inCols := columns
+	proj := p.projections
 
-var _ Projection = Expr{}
-var _ Projection = Emit(1)
+	if len(proj) > 0 {
+		inCols = make([]int, 0, len(columns))
+		for _, c := range columns {
+			switch col := p.projections[c].(type) {
+			case ProjectedCol:
+				inCols = append(inCols, int(col))
+			default:
+				panic("should never be queried for generated columns")
+			}
+		}
+	}
+
+	rows, found, materialized := nodeLookup(p.src.Local, inCols, key, nodes, states)
+	if !materialized {
+		return nil, false, NotMaterialized
+	}
+	if !found {
+		return nil, false, IsMaterialized
+	}
+	if len(proj) == 0 {
+		return rows, true, IsMaterialized
+	}
+
+	result := make(RowSlice, 0, rows.Len())
+
+	var env evalengine.ExpressionEnv
+	env.DefaultCollation = collations.Default()
+
+	rows.ForEach(func(row boostpb.Row) {
+		builder := boostpb.NewRowBuilder(len(proj))
+		for _, col := range proj {
+			col.build(&env, row, &builder)
+		}
+		result = append(result, builder.Finish())
+		env.Row = nil
+	})
+
+	return result, true, IsMaterialized
+}
+
+var _ Projection = (*ProjectedExpr)(nil)
+var _ Projection = ProjectedCol(1)
+var _ Projection = (*ProjectedLiteral)(nil)
 
 func (p *Project) internal() {}
 
@@ -65,9 +108,25 @@ func (p *Project) SuggestIndexes(graph.NodeIdx) map[graph.NodeIdx][]int {
 	return nil
 }
 
-func (p *Project) Resolve(int) []NodeColumn {
-	// TODO implement me
-	panic("implement me")
+func (p *Project) resolveColumn(col int) int {
+	if proj := p.projections; len(proj) > 0 {
+		switch col := proj[col].(type) {
+		case ProjectedCol:
+			return int(col)
+		default:
+			panic("can't resolve literal column")
+		}
+	}
+	return col
+}
+
+func (p *Project) Resolve(col int) []NodeColumn {
+	return []NodeColumn{
+		{
+			Node:   p.src.AsGlobal(),
+			Column: p.resolveColumn(col),
+		},
+	}
 }
 
 func (p *Project) ParentColumns(col int) []NodeColumn {
@@ -77,7 +136,7 @@ func (p *Project) ParentColumns(col int) []NodeColumn {
 	}
 
 	if len(p.projections) != 0 {
-		offset, ok := p.projections[col].(Emit)
+		offset, ok := p.projections[col].(ProjectedCol)
 		if ok {
 			nc.Column = int(offset)
 		} else {
@@ -95,29 +154,6 @@ func (p *Project) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
 	return expr.Type(g, p.src)
 }
 
-func (e Emit) Type(g *graph.Graph[*Node], src boostpb.IndexPair) boostpb.Type {
-	return g.Value(src.AsGlobal()).ColumnType(g, int(e))
-}
-func (e Expr) Type(g *graph.Graph[*Node], src boostpb.IndexPair) boostpb.Type {
-	var env = evalengine.EmptyExpressionEnv()
-
-	var parent = g.Value(src.AsGlobal())
-	parent.ResolveSchema(g)
-
-	for _, tt := range parent.Schema() {
-		env.Row = append(env.Row, sqltypes.MakeTrusted(tt.T, nil))
-	}
-
-	tt, err := env.TypeOf(e.EvalExpr)
-	if err != nil {
-		panic(err)
-	}
-	return boostpb.Type{T: tt}
-}
-func (e Literal) Type(*graph.Graph[*Node], boostpb.IndexPair) boostpb.Type {
-	return boostpb.Type{T: e.V.Type()}
-}
-
 func (p *Project) Description(detailed bool) string {
 	if !detailed {
 		return "π"
@@ -133,28 +169,6 @@ func (p *Project) Description(detailed bool) string {
 	return "π[" + strings.Join(cols, ", ") + "]"
 }
 
-func (e Emit) describe() string {
-	return strconv.Itoa(int(e))
-}
-func (e Expr) describe() string {
-	return sqlparser.String(e.AST)
-}
-func (e Literal) describe() string {
-	return fmt.Sprintf("lit: %s", e.V.ToVitessUnsafe().String())
-}
-
-func (e Emit) ToProto() string {
-	return sqlparser.String(&sqlparser.Offset{V: int(e)})
-}
-
-func (e Expr) ToProto() string {
-	return sqlparser.String(e.AST)
-}
-
-func (e Literal) ToProto() string {
-	return sqlparser.String(e.AST)
-}
-
 func (p *Project) OnConnected(graph *graph.Graph[*Node]) {
 	p.cols = len(graph.Value(p.src.AsGlobal()).Fields())
 }
@@ -166,11 +180,12 @@ func (p *Project) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]boostpb.Inde
 	// the inputs, so we don't needlessly perform extra work on each
 	// update.
 	for i, col := range p.projections {
-		offset, ok := col.(Emit)
-		if !ok {
-			return
-		}
-		if i != int(offset) {
+		switch col := col.(type) {
+		case ProjectedCol:
+			if i != int(col) {
+				return
+			}
+		default:
 			return
 		}
 	}
@@ -187,34 +202,17 @@ func (p *Project) OnInput(
 	_ *Map,
 	_ *state.Map,
 ) (processing.Result, error) {
-
 	if emit := p.projections; len(emit) > 0 {
 		var env evalengine.ExpressionEnv
 		env.DefaultCollation = collations.Default()
 
 		for i, record := range rs {
-			var row = record.Row
-			var sign = record.Positive
-			var rb = boostpb.NewRowBuilder(len(emit))
+			builder := boostpb.NewRowBuilder(len(emit))
 			for _, col := range emit {
-				switch col := col.(type) {
-				case Emit:
-					rb.Add(row.ValueAt(int(col)))
-				case Expr:
-					if env.Row == nil {
-						env.Row = row.ToVitess()
-					}
-					er, err := env.Evaluate(col.EvalExpr)
-					if err != nil {
-						panic(err)
-					}
-					rb.AddVitess(er.Value())
-				case Literal:
-					rb.Add(col.V)
-				}
-
+				col.build(&env, record.Row, &builder)
 			}
-			rs[i] = rb.Finish().ToRecord(sign)
+			rs[i] = builder.Finish().ToRecord(record.Positive)
+			env.Row = nil
 		}
 	}
 	return processing.Result{Records: rs}, nil
@@ -242,9 +240,9 @@ func NewProjectFromProto(proj *boostpb.Node_InternalProject) (*Project, error) {
 
 		switch expr := expr.(type) {
 		case *sqlparser.Offset:
-			expressions[i] = Emit(expr.V)
+			expressions[i] = ProjectedCol(expr.V)
 		case *sqlparser.Literal:
-			lit, err := ProjectionLiteralFromAST(expr)
+			lit, err := ProjectedLiteralFromAST(expr)
 			if err != nil {
 				return nil, err
 			}
@@ -254,7 +252,7 @@ func NewProjectFromProto(proj *boostpb.Node_InternalProject) (*Project, error) {
 			if err != nil {
 				return nil, err
 			}
-			expressions[i] = Expr{
+			expressions[i] = &ProjectedExpr{
 				AST:      expr,
 				EvalExpr: ee,
 			}
@@ -279,14 +277,81 @@ func (p *Project) ToProto() *boostpb.Node_InternalProject {
 	}
 }
 
-func ProjectionLiteralFromAST(expr *sqlparser.Literal) (Literal, error) {
+func (col ProjectedCol) Type(g *graph.Graph[*Node], src boostpb.IndexPair) boostpb.Type {
+	return g.Value(src.AsGlobal()).ColumnType(g, int(col))
+}
+
+func (col ProjectedCol) describe() string {
+	return strconv.Itoa(int(col))
+}
+
+func (col ProjectedCol) ToProto() string {
+	return sqlparser.String(&sqlparser.Offset{V: int(col)})
+}
+
+func (col ProjectedCol) build(env *evalengine.ExpressionEnv, row boostpb.Row, output *boostpb.RowBuilder) {
+	output.Add(row.ValueAt(int(col)))
+}
+
+func (expr *ProjectedExpr) Type(g *graph.Graph[*Node], src boostpb.IndexPair) boostpb.Type {
+	var env = evalengine.EmptyExpressionEnv()
+
+	var parent = g.Value(src.AsGlobal())
+	parent.ResolveSchema(g)
+
+	for _, tt := range parent.Schema() {
+		env.Row = append(env.Row, sqltypes.MakeTrusted(tt.T, nil))
+	}
+
+	tt, err := env.TypeOf(expr.EvalExpr)
+	if err != nil {
+		panic(err)
+	}
+	return boostpb.Type{T: tt}
+}
+
+func (expr *ProjectedExpr) describe() string {
+	return sqlparser.String(expr.AST)
+}
+
+func (expr *ProjectedExpr) ToProto() string {
+	return sqlparser.String(expr.AST)
+}
+
+func (expr *ProjectedExpr) build(env *evalengine.ExpressionEnv, row boostpb.Row, output *boostpb.RowBuilder) {
+	if env.Row == nil {
+		env.Row = row.ToVitess()
+	}
+	er, err := env.Evaluate(expr.EvalExpr)
+	if err != nil {
+		panic(err)
+	}
+	output.AddVitess(er.Value())
+}
+
+func (lit *ProjectedLiteral) Type(*graph.Graph[*Node], boostpb.IndexPair) boostpb.Type {
+	return boostpb.Type{T: lit.V.Type()}
+}
+
+func (lit *ProjectedLiteral) describe() string {
+	return fmt.Sprintf("lit: %s", lit.V.ToVitessUnsafe().String())
+}
+
+func (lit *ProjectedLiteral) ToProto() string {
+	return sqlparser.String(lit.AST)
+}
+
+func (lit *ProjectedLiteral) build(env *evalengine.ExpressionEnv, row boostpb.Row, output *boostpb.RowBuilder) {
+	output.Add(lit.V)
+}
+
+func ProjectedLiteralFromAST(expr *sqlparser.Literal) (*ProjectedLiteral, error) {
 	lit, err := evalengine.LiteralToValue(expr)
 	if err != nil {
-		return Literal{}, err
+		return nil, err
 	}
-	v := Literal{
+	return &ProjectedLiteral{
 		V:   boostpb.ValueFromVitess(lit),
 		AST: expr,
-	}
-	return v, nil
+	}, nil
 }

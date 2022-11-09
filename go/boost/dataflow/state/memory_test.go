@@ -28,10 +28,10 @@ func TestRecordProcessing(t *testing.T) {
 	state.AddKey([]int{0}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
 
 	head := records[:3]
-	state.ProcessRecords(&head, boostpb.TagInvalid)
+	state.ProcessRecords(&head, boostpb.TagNone)
 
 	tail := records[3:]
-	state.ProcessRecords(&tail, boostpb.TagInvalid)
+	state.ProcessRecords(&tail, boostpb.TagNone)
 
 	key := records[0].Row.ToValues()[0:1]
 	res, ok := state.Lookup([]int{0}, boostpb.RowFromValues(key))
@@ -58,7 +58,7 @@ func TestNewIndexForOldRecords(t *testing.T) {
 
 	state.AddKey([]int{0}, schema, nil)
 	record := []boostpb.Record{boostpb.VitessRowToRecord(row, true)}
-	state.ProcessRecords(&record, boostpb.TagInvalid)
+	state.ProcessRecords(&record, boostpb.TagNone)
 	state.AddKey([]int{1}, schema, nil)
 
 	key := boostpb.RowFromVitess(row[1:2])
@@ -118,7 +118,7 @@ func TestStress(t *testing.T) {
 			boostpb.TestRow(i, "3").ToRecord(true),
 			boostpb.TestRow(i, "4").ToRecord(true),
 		}
-		state.ProcessRecords(&records, boostpb.TagInvalid)
+		state.ProcessRecords(&records, boostpb.TagNone)
 	}
 
 	for i := 0; i < 8; i++ {

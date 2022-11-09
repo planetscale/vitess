@@ -23,9 +23,9 @@ import (
 )
 
 var (
-	StatViewReads      = stats.NewCountersWithMultiLabels("BoostClientViewReads", "The total number of remote view reads calls executed", []string{"PublicId"})
-	StatViewHits       = stats.NewCountersWithMultiLabels("BoostClientViewHits", "The total number of cache hits from view reads", []string{"PublicId"})
-	StatViewReadTiming = stats.NewMultiTimings("BoostClientViewReadMs", "Duration for each individual read in the view client", []string{"PublicId"})
+	StatViewReads      = stats.NewCountersWithMultiLabels("BoostClientViewReads", "The total number of remote view reads calls executed", []string{"BoostQueryPublicId"})
+	StatViewHits       = stats.NewCountersWithMultiLabels("BoostClientViewHits", "The total number of cache hits from view reads", []string{"BoostQueryPublicId"})
+	StatViewReadTiming = stats.NewMultiTimings("BoostClientViewReadMs", "Duration for each individual read in the view client", []string{"BoostQueryPublicId"})
 )
 
 type View struct {

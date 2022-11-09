@@ -509,11 +509,11 @@ type RecipeTracker struct {
 	recipe *boostplan.VersionedRecipe
 }
 
-func (rt *RecipeTracker) parseErrors(multiError error) (systemErrors []string, queryErrors map[string]string) {
+func parseErrors(multiError error) (systemErrors []string, queryErrors map[string]string) {
 	queryErrors = make(map[string]string)
 	for _, err := range multierr.Errors(multiError) {
-		if scoped, ok := err.(interface{ QueryPublicID() string }); ok {
-			queryErrors[scoped.QueryPublicID()] = err.Error()
+		if scoped, ok := err.(boostplan.QueryError); ok {
+			queryErrors[scoped.QueryPublicID()] = scoped.Error()
 		} else {
 			systemErrors = append(systemErrors, err.Error())
 		}
@@ -522,7 +522,7 @@ func (rt *RecipeTracker) parseErrors(multiError error) (systemErrors []string, q
 }
 
 func (rt *RecipeTracker) BeforeCommit(ctx context.Context, activation *boostplan.ActivationResult, planErr error) {
-	systemErrors, queryErrors := rt.parseErrors(planErr)
+	systemErrors, queryErrors := parseErrors(planErr)
 
 	_, err := rt.ctrl.topo.UpdateControllerState(ctx, func(state *vtboostpb.ControllerState) error {
 		return rt.updateRecipeStatus(state, func(status *vtboostpb.ControllerState_RecipeStatus) {
@@ -571,7 +571,7 @@ func (rt *RecipeTracker) BeforeCommit(ctx context.Context, activation *boostplan
 }
 
 func (rt *RecipeTracker) AfterCommit(ctx context.Context, commitErr error) {
-	systemErrors, queryErrors := rt.parseErrors(commitErr)
+	systemErrors, queryErrors := parseErrors(commitErr)
 	success := len(systemErrors) == 0 && len(queryErrors) == 0
 
 	_, err := rt.ctrl.topo.UpdateControllerState(ctx, func(state *vtboostpb.ControllerState) error {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"sort"
 	"strings"
 	"time"
 
@@ -145,6 +144,7 @@ type Domain struct {
 	chanSyncPackets    chan *syncPacket
 	chanDelayedPackets chan *boostpb.Packet
 	chanElapsedReplays chan tagshard
+	dirtyReaderNodes   map[boostpb.LocalNodeIndex]struct{}
 
 	upquerySlots chan uint8
 	upqueryMode  boostpb.UpqueryMode
@@ -275,6 +275,15 @@ func (d *Domain) reactor(ctx context.Context, executor processing.Executor) {
 					break moreDelayed
 				}
 			}
+
+			for dirty := range d.dirtyReaderNodes {
+				r := d.nodes.Get(dirty).AsReader()
+				if w := r.Writer(); w != nil {
+					w.Swap()
+				}
+				delete(d.dirtyReaderNodes, dirty)
+			}
+
 			if trace.T {
 				trace.GetSpan(ctx).Close()
 			}
@@ -371,6 +380,8 @@ func (d *Domain) handle(ctx context.Context, m *boostpb.Packet, executor process
 		err = d.handleEvictAny(ctx, pkt.Evict, executor)
 	case *boostpb.Packet_EvictKeys_:
 		err = d.handleEvictKeys(ctx, pkt.EvictKeys, executor)
+	case *boostpb.Packet_Purge_:
+		err = d.handlePurge(ctx, pkt.Purge)
 	case *boostpb.Packet_PrepareState_:
 		err = d.prepareState(ctx, pkt.PrepareState)
 	case *boostpb.Packet_UpdateEgress_:
@@ -975,7 +986,7 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 
 	// forward the current message through all local nodes.
 	for i, segment := range rp.Path {
-		if segment.ForceTagTo != boostpb.TagInvalid {
+		if segment.ForceTagTo != boostpb.TagNone {
 			if rpiece, ok := input.Packet.Inner.(*boostpb.Packet_ReplayPiece_); ok {
 				rpiece.ReplayPiece.Tag = segment.ForceTagTo
 			}
@@ -1029,8 +1040,8 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 			return err
 		}
 
-		sort.Slice(output.Misses, func(i, j int) bool {
-			return output.Misses[i].Compare(&output.Misses[j]) < 0
+		slices.SortFunc(output.Misses, func(a, b processing.Miss) bool {
+			return a.Compare(&b) < 0
 		})
 		slices.CompactFunc(output.Misses, func(a, b processing.Miss) bool {
 			return a.Compare(&b) == 0
@@ -1046,7 +1057,19 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 
 		if target {
 			if len(output.Misses) > 0 {
-				panic("unimplemented")
+				// we missed while processing
+				// it's important that we clear out any partially-filled holes.
+				if st := d.state.Get(segment.Node); st != nil {
+					missedOn.ForEach(func(miss boostpb.Row) {
+						st.MarkHole(miss, tag)
+					})
+				} else {
+					if w := n.AsReader().Writer(); w != nil {
+						missedOn.ForEach(func(miss boostpb.Row) {
+							w.WithKey(miss).MarkHole()
+						})
+					}
+				}
 			} else if isReader {
 				r := n.AsReader()
 				if wh := r.Writer(); wh != nil {
@@ -1209,7 +1232,7 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 
 			// next, evict any state that we had to look up to process this replay.
 			var pnsFor = boostpb.InvalidLocalNode
-			var evictTag = boostpb.TagInvalid
+			var evictTag = boostpb.TagNone
 			var pns []boostpb.LocalNodeIndex
 			var tmp []boostpb.LocalNodeIndex
 
@@ -1257,14 +1280,14 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 					// this is a node that we were doing lookups into as part of
 					// the replay -- make sure we evict any state we may have added
 					// there.
-					if evictTag != boostpb.TagInvalid {
+					if evictTag != boostpb.TagNone {
 						if !tagMatch(d.replayPaths[evictTag], pn) {
 							// can't reuse
-							evictTag = boostpb.TagInvalid
+							evictTag = boostpb.TagNone
 						}
 					}
 
-					if evictTag == boostpb.TagInvalid {
+					if evictTag == boostpb.TagNone {
 						if cs, ok := d.replayPathsByDst[pn]; ok {
 							if tags, ok := cs[common.NewColumnSet(lookup.Cols)]; ok {
 								// this is the tag we would have used to
@@ -1278,7 +1301,7 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 						}
 					}
 
-					if evictTag != boostpb.TagInvalid {
+					if evictTag != boostpb.TagNone {
 						st.MarkHole(lookup.Key, evictTag)
 					} else {
 						panic("no tag found for lookup target")
@@ -1331,7 +1354,16 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 		partial := replayctx.Partial
 		if dstIsReader {
 			if d.nodes.Get(dst).BeyondMatFrontier() {
-				panic("unimplemented")
+				// make sure we eventually evict these from here
+				time.AfterFunc(50*time.Millisecond, func() {
+					d.delayForSelf(&boostpb.Packet{Inner: &boostpb.Packet_Purge_{
+						Purge: &boostpb.Packet_Purge{
+							View: dst,
+							Tag:  tag,
+							Keys: partial.ForKeys,
+						},
+					}})
+				})
 			}
 		} else if dstIsTarget {
 			if finishedPartial == 0 {
@@ -2557,6 +2589,24 @@ func (d *Domain) handleRemoveNodes(pkt *boostpb.Packet_RemoveNodes) error {
 	return nil
 }
 
+func (d *Domain) handlePurge(_ context.Context, purge *boostpb.Packet_Purge) error {
+	node := d.nodes.Get(purge.View)
+	d.log.Debug("eagerly purging state from reader", node.GlobalAddr().Zap())
+
+	reader := node.AsReader()
+	if reader == nil {
+		panic("called Purge on non-Reader node")
+	}
+
+	if w := reader.Writer(); w != nil {
+		for key := range purge.Keys {
+			w.WithKey(key).MarkHole()
+		}
+		d.dirtyReaderNodes[purge.View] = struct{}{}
+	}
+	return nil
+}
+
 type ReaderID struct {
 	Node  graph.NodeIdx
 	Shard uint
@@ -2629,6 +2679,7 @@ func FromProto(
 		chanDelayedPackets: make(chan *boostpb.Packet, 128),
 		chanElapsedReplays: make(chan tagshard, 16),
 		finishedReplays:    make(chan boostpb.Tag, 16),
+		dirtyReaderNodes:   make(map[boostpb.LocalNodeIndex]struct{}),
 
 		upquerySlots: upquerySlots,
 		upqueryMode:  builder.Config.UpqueryMode,

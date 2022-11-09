@@ -6,6 +6,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
@@ -105,7 +106,7 @@ func (n *Node) Parents() []boostpb.LocalNodeIndex {
 }
 
 func (n *Node) MustReplayAmong() map[graph.NodeIdx]struct{} {
-	if j, ok := n.impl.(JoinIngredient); ok {
+	if j, ok := n.impl.(ingredientJoin); ok {
 		return j.MustReplayAmong()
 	}
 	return nil
@@ -259,4 +260,30 @@ func (n *Node) TryRemoveChild(child boostpb.LocalNodeIndex) bool {
 	}
 	n.children = slices.Delete(n.children, idx, idx+1)
 	return true
+}
+
+type RowSlice []boostpb.Row
+
+func (rows RowSlice) ForEach(f func(row boostpb.Row)) {
+	for _, row := range rows {
+		f(row)
+	}
+}
+
+func (rows RowSlice) Len() int {
+	return len(rows)
+}
+
+var _ RowIterator = (RowSlice)(nil)
+var _ RowIterator = (*offheap.Rows)(nil)
+
+func nodeLookup(parent boostpb.LocalNodeIndex, columns []int, key boostpb.Row, nodes *Map, states *state.Map) (RowIterator, bool, MaterializedState) {
+	if st := states.Get(parent); st != nil {
+		rowBag, found := st.Lookup(columns, key)
+		return rowBag, found, IsMaterialized
+	}
+	if internal := nodes.Get(parent).asQueryThrough(); internal != nil {
+		return internal.QueryThrough(columns, key, nodes, states)
+	}
+	return nil, false, NotMaterialized
 }
