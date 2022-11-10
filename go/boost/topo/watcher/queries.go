@@ -24,18 +24,25 @@ func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field
 			return false, nil
 		case sqlparser.Argument:
 			pos := slices.IndexFunc(keySchema, func(f *querypb.Field) bool {
-				return f.Name == string(node)
+				return f.Name == string(node) && (f.Flags&uint32(querypb.MySqlFlag_MULTIPLE_KEY_FLAG)) == 0
 			})
 			if pos < 0 {
 				panic("did not find placeholder in Key Schema")
 			}
 			bounds = append(bounds, &vtboostpb.Materialization_Bound{Name: string(node), Pos: int64(pos)})
 			arguments++
+		case sqlparser.ListArg:
+			pos := slices.IndexFunc(keySchema, func(f *querypb.Field) bool {
+				return f.Name == string(node) && (f.Flags&uint32(querypb.MySqlFlag_MULTIPLE_KEY_FLAG)) != 0
+			})
+			if pos < 0 {
+				panic("did not find placeholder in Key Schema")
+			}
+			bounds = append(bounds, &vtboostpb.Materialization_Bound{Name: string(node), Pos: int64(pos), Multi: true})
+			arguments++
 		case *sqlparser.Literal:
 			bindVar := sqlparser.SQLToBindvar(node)
 			bounds = append(bounds, &vtboostpb.Materialization_Bound{Name: "@literal", Type: int64(bindVar.Type), BoundValue: bindVar.Value})
-		case sqlparser.ListArg:
-			panic("unsupported")
 		}
 		return true, nil
 	}, stmt)
@@ -49,7 +56,11 @@ func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field
 	return
 }
 
-func matchParametrizedQuery(keyOut []sqltypes.Value, stmt sqlparser.Statement, bvars map[string]*querypb.BindVariable, bounds []*vtboostpb.Materialization_Bound) bool {
+// WHERE col1 = :foo AND col2 IN (a, b, c)
+// => col1 = :foo AND col2 = a
+// => col1 = :foo AND col2 = b
+
+func matchParametrizedQuery(keyOut []*querypb.BindVariable, stmt sqlparser.Statement, bvars map[string]*querypb.BindVariable, bounds []*vtboostpb.Materialization_Bound) bool {
 	var pos int
 
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -75,10 +86,26 @@ func matchParametrizedQuery(keyOut []sqltypes.Value, stmt sqlparser.Statement, b
 					return false, errMismatch
 				}
 			} else {
-				keyOut[bound.Pos], _ = sqltypes.BindVariableToValue(bv2)
+				keyOut[bound.Pos] = bv2
 			}
 		case sqlparser.ListArg:
-			return false, errMismatch
+			if pos == len(bounds) {
+				return false, errMismatch
+			}
+			bound := bounds[pos]
+			pos++
+
+			bv2, ok := bvars[string(node)]
+			if !ok {
+				return false, errMismatch
+			}
+			if bv2.Type != sqltypes.Tuple {
+				return false, errMismatch
+			}
+			if bound.BoundValue != nil {
+				panic("BoundValue in tuple?")
+			}
+			keyOut[bound.Pos] = bv2
 		}
 		return true, nil
 	}, stmt)

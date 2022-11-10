@@ -35,6 +35,11 @@ message Sharding {
   uint64 shards = 3 [(gogoproto.casttype) = "uint"];
 };
 
+message ViewParameter {
+  string name = 1;
+  bool multi = 2;
+}
+
 message Node {
   string name = 1;
   IndexPair index = 2;
@@ -69,7 +74,7 @@ message Node {
   message Reader {
     uint32 for_node = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
     repeated int64 state = 2 [(gogoproto.casttype) = "int"];
-    repeated string key_names = 3;
+    repeated ViewParameter parameters = 3 [(gogoproto.nullable) = false];
     int64 col_len = 4 [(gogoproto.casttype) = "int"];
   };
 

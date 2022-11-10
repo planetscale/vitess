@@ -1,7 +1,6 @@
 package materialized
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -25,7 +24,7 @@ func TestEndtoendFullyMaterialized(t *testing.T) {
 	tt := booste2e.Setup(t, booste2e.WithDDL(DDL), booste2e.WithCachedQueries(Query))
 
 	for i := 1; i <= 3; i++ {
-		tt.ExecuteFetch(fmt.Sprintf("INSERT INTO num (a, b) VALUES (%d, 100 * %d)", i, i))
+		tt.ExecuteFetch("INSERT INTO num (a, b) VALUES (%d, 100 * %d)", i, i)
 	}
 	tt.ExecuteFetch("INSERT INTO num (a, b) VALUES (null, 100)")
 	tt.ExecuteFetch("SET @@boost_cached_queries = true")

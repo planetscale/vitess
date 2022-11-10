@@ -123,10 +123,10 @@ func (v *View) addToGraph(g *graphviz.Graph) (*graphviz.Node, error) {
 	this := g.AddNode("View")
 	for _, p := range v.Parameters {
 		col := "key: " + p.key.Name
-		if p.name == "" {
+		if p.Name == "" {
 			this.AddAttribute(col)
 		} else {
-			this.AddAttribute(fmt.Sprintf("%s AS :%s", col, p.name))
+			this.AddAttribute(fmt.Sprintf("%s AS :%s", col, p.Name))
 		}
 	}
 

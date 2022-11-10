@@ -33,6 +33,7 @@ import (
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	topowatcher "vitess.io/vitess/go/boost/topo/watcher"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtboost"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -492,12 +493,20 @@ func (tv *TestView) LookupByFields(fields map[string]sqltypes.Value) *sqltypes.R
 	return res
 }
 
-func (tv *TestView) AssertLookupByFields(fields map[string]sqltypes.Value, expected []sqltypes.Row) *sqltypes.Result {
+func (tv *TestView) LookupByBindVar(bvars []*querypb.BindVariable) *sqltypes.Result {
+	tv.t.Helper()
+
+	res, err := tv.View.LookupByBindVar(context.Background(), bvars, true)
+	require.NoError(tv.t, err)
+	return res
+}
+
+func (tv *TestView) AssertLookupBindVars(bvars []*querypb.BindVariable, expected []sqltypes.Row) *sqltypes.Result {
 	tv.t.Helper()
 
 	var err error
 	for tries := 0; tries < 3; tries++ {
-		rs := tv.LookupByFields(fields)
+		rs := tv.LookupByBindVar(bvars)
 		if err = RowsEquals(expected, rs.Rows); err == nil {
 			return rs
 		}

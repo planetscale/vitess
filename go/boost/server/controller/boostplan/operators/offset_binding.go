@@ -31,7 +31,6 @@ func bindOffsets(node *Node, semTable *semantics.SemTable) error {
 func (v *View) PlanOffsets(node *Node, st *semantics.SemTable) error {
 	ancestor := node.Ancestors[0]
 	for _, param := range v.Parameters {
-		v.ParametersName = append(v.ParametersName, param.name)
 		paramExpr, err := param.key.SingleAST()
 		if err != nil {
 			return err
@@ -262,7 +261,7 @@ func rewriteColNamesToOffsets(semTable *semantics.SemTable, node *Node, expr sql
 func (f *Filter) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 	input := node.Ancestors[0]
 	var err error
-	newPredicate := sqlparser.Rewrite(f.Predicates, func(cursor *sqlparser.Cursor) bool {
+	newPredicate := sqlparser.Rewrite(sqlparser.CloneExpr(f.Predicates), func(cursor *sqlparser.Cursor) bool {
 		switch col := cursor.Node().(type) {
 		case *sqlparser.ColName, sqlparser.AggrFunc:
 			expr := col.(sqlparser.Expr) // this is always valid, but golang doesn't realise it for us

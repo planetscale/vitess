@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testexecutor"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtboost"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
@@ -107,6 +108,10 @@ func TestProjections(t *testing.T) {
 	}
 
 	g.View("op0").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{
+		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
+	})
+
+	g.View("op0").AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1")}, []sqltypes.Row{
 		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
 	})
 
@@ -839,4 +844,163 @@ select /*vt+ VIEW=simplejoin PUBLIC */ article.id, article.title, vote.id, vote.
 			require.Equal(t, articleCount+(2*votesCount), g.WorkerStats(worker.StatVStreamRows))
 		})
 	}
+}
+
+func TestRepositoriesWithIn(t *testing.T) {
+	recipe := testrecipe.Load(t, "repositories")
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 0; i < 10; i++ {
+		g.TestExecute(
+			"insert into repositories (name, url, created_at, updated_at) values ('repo-%d', 'https://repo-%d.com', NOW(), NOW())", i, i,
+		)
+	}
+
+	for i := 0; i < 10; i++ {
+		g.TestExecute(
+			"insert into tags (name, created_at, updated_at) values ('tag-%d', NOW(), NOW())", i,
+		)
+	}
+
+	for i := 0; i < 10; i++ {
+		g.TestExecute(
+			"insert into repository_tags (tag_id, repository_id, created_at, updated_at) values (%d, %d, NOW(), NOW())", i, i,
+		)
+	}
+
+	for i := 0; i < 10; i++ {
+		g.TestExecute(
+			"insert into stars (user_id, repository_id, created_at, updated_at) values (%d, %d, NOW(), NOW())", i, i,
+		)
+	}
+
+	boosttest.Settle()
+
+	g.View("query_with_in").AssertLookupBindVars([]*querypb.BindVariable{
+		{
+			Type: sqltypes.Tuple,
+			Values: []*querypb.Value{
+				{
+					Type:  sqltypes.VarChar,
+					Value: []byte("tag-7"),
+				},
+				{
+					Type:  sqltypes.VarChar,
+					Value: []byte("tag-8"),
+				},
+			},
+		},
+	}, []sqltypes.Row{
+		{sqltypes.NewInt64(1), sqltypes.NewInt64(8)},
+		{sqltypes.NewInt64(1), sqltypes.NewInt64(9)},
+	})
+}
+
+func TestUpqueryInPlan(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE conv (pk BIGINT NOT NULL AUTO_INCREMENT,
+	col_int INT, col_double DOUBLE, col_decimal DECIMAL, col_char VARCHAR(255),
+	PRIMARY KEY(pk));
+
+	SELECT /*vt+ VIEW=upquery PUBLIC */ conv.pk FROM conv WHERE conv.col_char IN ::x;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 1; i <= 3; i++ {
+		g.TestExecute("INSERT INTO conv (col_int, col_double, col_decimal, col_char) VALUES (%d, %f, %f, 'string-%d')", i, float64(i), float64(i), i)
+	}
+
+	g.View("upquery").AssertLookupBindVars([]*querypb.BindVariable{
+		{
+			Type: sqltypes.Tuple,
+			Values: []*querypb.Value{
+				{
+					Type:  sqltypes.VarChar,
+					Value: []byte("string-1"),
+				},
+				{
+					Type:  sqltypes.VarChar,
+					Value: []byte("string-2"),
+				},
+			},
+		}}, []sqltypes.Row{
+		{sqltypes.NewInt64(1)},
+		{sqltypes.NewInt64(2)},
+	})
+}
+
+func TestTypeConversions(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE conv (pk BIGINT NOT NULL AUTO_INCREMENT,
+	col_int INT, col_double DOUBLE, col_decimal DECIMAL, col_char VARCHAR(255),
+	PRIMARY KEY(pk));
+
+	SELECT /*vt+ VIEW=conv0 PUBLIC */ conv.pk FROM conv WHERE conv.col_int = :x;
+	SELECT /*vt+ VIEW=conv1 PUBLIC */ conv.pk FROM conv WHERE conv.col_double = :x;
+	SELECT /*vt+ VIEW=conv2 PUBLIC */ conv.pk FROM conv WHERE conv.col_char = :x;
+	SELECT /*vt+ VIEW=conv3 PUBLIC */ conv.pk FROM conv WHERE conv.col_char IN ::x;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 1; i <= 3; i++ {
+		g.TestExecute("INSERT INTO conv (col_int, col_double, col_decimal, col_char) VALUES (%d, %f, %f, 'string-%d')", i, float64(i), float64(i), i)
+	}
+
+	conv0 := g.View("conv0")
+	conv0.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1")}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv0.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1.0")}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv0.AssertLookup([]sqltypes.Value{sqltypes.NewFloat64(1.0)}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv0.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1.5")}, []sqltypes.Row{})
+	conv0.AssertLookup([]sqltypes.Value{sqltypes.NewFloat64(1.5)}, []sqltypes.Row{})
+
+	conv1 := g.View("conv1")
+	conv1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1")}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1.0")}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv1.AssertLookup([]sqltypes.Value{sqltypes.NewFloat64(1.0)}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1.5")}, []sqltypes.Row{})
+	conv1.AssertLookup([]sqltypes.Value{sqltypes.NewFloat64(1.5)}, []sqltypes.Row{})
+
+	conv2 := g.View("conv2")
+	conv2.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("string-1")}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
+	_, err := conv2.View.Lookup(context.Background(), []sqltypes.Value{sqltypes.NewInt64(1)}, true)
+	require.Error(t, err)
+	_, err = conv2.View.Lookup(context.Background(), []sqltypes.Value{sqltypes.NewFloat64(1.0)}, true)
+	require.Error(t, err)
+
+	conv3 := g.View("conv3")
+	_, err = conv3.View.LookupByBindVar(context.Background(), []*querypb.BindVariable{
+		{
+			Type: sqltypes.Tuple,
+			Values: []*querypb.Value{
+				{
+					Type:  sqltypes.VarChar,
+					Value: []byte("string-1"),
+				},
+				{
+					Type:  sqltypes.VarChar,
+					Value: []byte("string-2"),
+				},
+			},
+		},
+	}, true)
+	require.NoError(t, err)
+
+	_, err = conv3.View.LookupByBindVar(context.Background(), []*querypb.BindVariable{
+		{
+			Type: sqltypes.Tuple,
+			Values: []*querypb.Value{
+				{
+					Type:  sqltypes.VarChar,
+					Value: []byte("string-1"),
+				},
+				{
+					Type:  sqltypes.Int64,
+					Value: []byte("1"),
+				},
+			},
+		},
+	}, true)
+	require.Error(t, err)
 }

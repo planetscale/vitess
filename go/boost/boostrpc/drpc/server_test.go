@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 
 func TestMetadata(t *testing.T) {
 	assert := assert.New(t)
-	ctx := ContextWithMetadata(context.TODO(), map[string]string{
+	ctx := ContextWithMetadata(context.Background(), map[string]string{
 		"user.id": "user-123",
 	})
 	md, ok := MetadataFromContext(ctx)
@@ -140,17 +140,17 @@ func TestServer(t *testing.T) {
 		client := sampleV1.NewDRPCFooAPIClient(cl)
 
 		t.Run("Ping", func(t *testing.T) {
-			_, err := client.Ping(context.TODO(), &emptypb.Empty{})
+			_, err := client.Ping(context.Background(), &emptypb.Empty{})
 			assert.Nil(err, "ping")
 		})
 
 		t.Run("Health", func(t *testing.T) {
-			_, err := client.Health(context.TODO(), &emptypb.Empty{})
+			_, err := client.Health(context.Background(), &emptypb.Empty{})
 			assert.Nil(err, "health")
 		})
 
 		t.Run("RecoverPanic", func(t *testing.T) {
-			_, err := client.Faulty(context.TODO(), &emptypb.Empty{})
+			_, err := client.Faulty(context.Background(), &emptypb.Empty{})
 			assert.NotNil(err, "failed to recover panic")
 		})
 
@@ -160,7 +160,7 @@ func TestServer(t *testing.T) {
 				wk := sampleV1.NewDRPCFooAPIClient(cl)
 				for i := 0; i < 10; i++ {
 					<-time.After(time.Duration(rand.Intn(100)) * time.Millisecond)
-					_, err := wk.Ping(context.TODO(), &emptypb.Empty{})
+					_, err := wk.Ping(context.Background(), &emptypb.Empty{})
 					assert.Nil(err)
 				}
 				wg.Done()
@@ -217,7 +217,7 @@ func TestServer(t *testing.T) {
 
 		// RPC client
 		client := sampleV1.NewDRPCFooAPIClient(cl)
-		res, err := client.Ping(context.TODO(), &emptypb.Empty{})
+		res, err := client.Ping(context.Background(), &emptypb.Empty{})
 		assert.Nil(err, "ping")
 		assert.True(res.Ok, "ping result")
 
@@ -263,7 +263,7 @@ func TestServer(t *testing.T) {
 
 		// RPC client
 		client := sampleV1.NewDRPCFooAPIClient(cl)
-		res, err := client.Ping(context.TODO(), &emptypb.Empty{})
+		res, err := client.Ping(context.Background(), &emptypb.Empty{})
 		assert.Nil(err, "ping")
 		assert.True(res.Ok, "ping result")
 
@@ -294,7 +294,7 @@ func TestServer(t *testing.T) {
 
 		// RPC client
 		client := sampleV1.NewDRPCFooAPIClient(cl)
-		res, err := client.Ping(context.TODO(), &emptypb.Empty{})
+		res, err := client.Ping(context.Background(), &emptypb.Empty{})
 		assert.Nil(err, "ping")
 		assert.True(res.Ok, "ping result")
 
@@ -350,7 +350,7 @@ func TestServer(t *testing.T) {
 
 		// RPC request
 		client := sampleV1.NewDRPCFooAPIClient(cl)
-		res, err := client.Ping(context.TODO(), &emptypb.Empty{})
+		res, err := client.Ping(context.Background(), &emptypb.Empty{})
 		assert.Nil(err, "ping")
 		assert.True(res.Ok, "ping result")
 
@@ -396,14 +396,14 @@ func TestServer(t *testing.T) {
 		client := sampleV1.NewDRPCFooAPIClient(cl)
 
 		t.Run("NoCredentials", func(t *testing.T) {
-			_, err := client.Ping(context.TODO(), &emptypb.Empty{})
+			_, err := client.Ping(context.Background(), &emptypb.Empty{})
 			assert.NotNil(err, "invalid auth")
 			assert.Equal(err.Error(), "authentication: missing credentials")
 		})
 
 		t.Run("InvalidCredentials", func(t *testing.T) {
 			// Submit metadata values to the server
-			ctx := ContextWithMetadata(context.TODO(), map[string]string{
+			ctx := ContextWithMetadata(context.Background(), map[string]string{
 				"auth.token": "invalid-credentials",
 				"user.id":    "user-123",
 			})
@@ -415,7 +415,7 @@ func TestServer(t *testing.T) {
 
 		t.Run("Authenticated", func(t *testing.T) {
 			// Submit metadata values to the server
-			ctx := ContextWithMetadata(context.TODO(), map[string]string{
+			ctx := ContextWithMetadata(context.Background(), map[string]string{
 				"auth.token": "super-secure-credentials",
 				"user.id":    "user-123",
 			})
@@ -451,7 +451,7 @@ func TestServer(t *testing.T) {
 		client := sampleV1.NewDRPCFooAPIClient(cl)
 
 		// Call operation with automatic retries
-		_, err = client.Slow(context.TODO(), &emptypb.Empty{})
+		_, err = client.Slow(context.Background(), &emptypb.Empty{})
 		assert.Nil(err, "unexpected error")
 
 		// Close client connection
@@ -482,15 +482,15 @@ func TestServer(t *testing.T) {
 		client := sampleV1.NewDRPCFooAPIClient(cl)
 
 		// First request should work, second shouldn't
-		_, err = client.Ping(context.TODO(), &emptypb.Empty{})
+		_, err = client.Ping(context.Background(), &emptypb.Empty{})
 		assert.Nil(err, "invalid result")
-		_, err = client.Ping(context.TODO(), &emptypb.Empty{})
+		_, err = client.Ping(context.Background(), &emptypb.Empty{})
 		assert.NotNil(err, "invalid result")
 		assert.Equal(err.Error(), "rate: limit exceeded")
 
 		// After a second rate is re-established
 		<-time.After(1 * time.Second)
-		_, err = client.Ping(context.TODO(), &emptypb.Empty{})
+		_, err = client.Ping(context.Background(), &emptypb.Empty{})
 		assert.Nil(err, "invalid result")
 
 		// Close client connection
@@ -536,7 +536,7 @@ func ExampleNewClient() {
 	client := sampleV1.NewDRPCEchoAPIClient(cl)
 
 	// Consume the RPC service
-	res, _ := client.Ping(context.TODO(), &emptypb.Empty{})
+	res, _ := client.Ping(context.Background(), &emptypb.Empty{})
 	fmt.Printf("ping: %+v", res)
 
 	// Close client connection when no longer required

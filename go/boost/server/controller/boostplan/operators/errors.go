@@ -35,6 +35,7 @@ const (
 	EvalEngineNotSupported
 	DualTable
 	ParameterLocation
+	ParameterLocationCompare
 	ParameterNotEqual
 	JoinWithoutPredicates
 )
@@ -114,9 +115,11 @@ func (n *UnsupportedError) Error() string {
 	case DualTable:
 		fmt.Fprintf(&sb, "select without an explicit table is not supported")
 	case ParameterLocation:
-		fmt.Fprintf(&sb, "parameter needs to be used in a comparison expression")
+		fmt.Fprintf(&sb, "unsupported parameter location: %s", sqlparser.CanonicalString(n.AST))
 	case ParameterNotEqual:
-		fmt.Fprintf(&sb, "parameter can only be compared for equality")
+		fmt.Fprintf(&sb, "parameter %s can only be compared for equality", sqlparser.CanonicalString(n.AST))
+	case ParameterLocationCompare:
+		fmt.Fprintf(&sb, "parameter %s needs to be used in a comparison expression", sqlparser.CanonicalString(n.AST))
 	case JoinWithoutPredicates:
 		fmt.Fprintf(&sb, "join without predicates is not supported")
 	}
