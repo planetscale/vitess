@@ -6,6 +6,7 @@ import (
 	"unsafe"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
@@ -232,12 +233,17 @@ func RowsEqual(a, b Row) bool {
 }
 
 func (r Row) Hash(h *vthash.Hasher, schema []Type) vthash.Hash {
+	hash, _ := r.HashExact(h, schema)
+	return hash
+}
+
+func (r Row) HashExact(h *vthash.Hasher, schema []Type) (vthash.Hash, bool) {
 	h.Reset()
 	var col int
 
 	bytelen := uint16(len(r))
 	if bytelen == 0 {
-		return h.Sum128()
+		return h.Sum128(), true
 	}
 
 	s := string(r)
@@ -250,12 +256,14 @@ func (r Row) Hash(h *vthash.Hasher, schema []Type) vthash.Hash {
 
 		tt := sqltypes.Type(getUint16s(string(r)[last:]))
 		vv := []byte(r[last+2 : pos])
-		evalengine.NullsafeHashCode128(h, sqltypes.MakeTrusted(tt, vv), schema[col].Collation, schema[col].T)
+		if !evalengine.NullsafeHashCode128(h, sqltypes.MakeTrusted(tt, vv), schema[col].Collation, schema[col].T) {
+			return vthash.Hash{}, false
+		}
 
 		last = pos
 		col++
 	}
-	return h.Sum128()
+	return h.Sum128(), true
 }
 
 func (r Row) HashValue(h *vthash.Hasher, valpos int, valtype Type) vthash.Hash {
@@ -311,6 +319,10 @@ func (r Row) AsRecord() Record {
 
 func (r Row) AsRecords() []Record {
 	return []Record{r.AsRecord()}
+}
+
+func (r Row) Zap(field string) zapcore.Field {
+	return zap.String(field, fmt.Sprintf("%v", r.ToVitess()))
 }
 
 type HashedRecord struct {

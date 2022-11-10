@@ -183,7 +183,7 @@ func testBroadRecursingSubquery(t *testing.T, g *boosttest.Cluster) {
 					flownode.JoinSourceBoth(1, 0),
 					flownode.JoinSourceLeft(2)}))
 
-		mig.Maintain("reader", join, []int{2}, []string{"k0"}, 0)
+		mig.Maintain("reader", join, []int{2}, []boostpb.ViewParameter{{Name: "k0"}}, 0)
 		return nil
 	})
 	require.NoError(t, err)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"storj.io/drpc/drpcmux"
@@ -50,12 +51,12 @@ func (w *Worker) Stop() {
 	w.cancel()
 }
 
-const FailFast = false
+const DefaultReadTimeout = 5 * time.Second
 
 func (w *Worker) ViewRead(ctx context.Context, req *boostpb.ViewReadRequest) (*boostpb.ViewReadResponse, error) {
-	serializeRows := func(rows backlog.Rows) []boostpb.Row {
-		return rows.Collect(nil)
-	}
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, DefaultReadTimeout)
+	defer cancel()
 
 	w.stats.onRead()
 	reader, ok := w.readers.Get(domain.ReaderID{Node: req.TargetNode, Shard: req.TargetShard})
@@ -63,31 +64,48 @@ func (w *Worker) ViewRead(ctx context.Context, req *boostpb.ViewReadRequest) (*b
 		return nil, fmt.Errorf("missing reader for node=%d shard=%d", req.TargetNode, req.TargetShard)
 	}
 
-	var hasher vthash.Hasher
-	rs, ok := backlog.Lookup(reader, &hasher, req.Key, serializeRows)
-	if ok {
-		return &boostpb.ViewReadResponse{Rows: rs, Hit: true}, nil
+	if log := w.log.Check(zapcore.DebugLevel, "ViewRead"); log != nil {
+		log.Write(req.Key.Zap("key"))
 	}
 
-	var misses = []boostpb.Row{req.Key}
-	w.log.Debug("trigger initial reader", boostpb.ZapRows("keys", misses))
-	reader.Trigger(misses)
+	var (
+		hasher vthash.Hasher
+		rs     []boostpb.Row
+	)
+	ok = backlog.Lookup(reader, &hasher, req.Key, func(rows backlog.Rows) {
+		rs = rows.Collect(rs)
+	})
+	if ok {
+		return &boostpb.ViewReadResponse{Rows: rs, Hits: 1}, nil
+	}
+
+	if log := w.log.Check(zapcore.DebugLevel, "ViewRead trigger replay"); log != nil {
+		log.Write(req.Key.Zap("key"))
+	}
+
+	reader.Trigger([]boostpb.Row{req.Key})
 	if !req.Block {
-		return &boostpb.ViewReadResponse{Hit: false}, nil
+		return &boostpb.ViewReadResponse{Hits: 0}, nil
 	}
 
 	for ctx.Err() == nil {
-		rs, ok = backlog.BlockingLookup(ctx, reader, &hasher, req.Key, serializeRows)
+		ok = backlog.BlockingLookup(ctx, reader, &hasher, req.Key, func(rows backlog.Rows) {
+			rs = rows.Collect(rs)
+		})
 		if ok {
 			return &boostpb.ViewReadResponse{Rows: rs}, nil
 		}
 	}
 
-	w.log.Warn("request timed out", zap.Error(ctx.Err()))
+	w.log.Warn("ViewRead request timed out", zap.Error(ctx.Err()))
 	return nil, ctx.Err()
 }
 
-func (w *Worker) ViewReadMany(ctx context.Context, req *boostpb.ViewReadManyRequest) (*boostpb.ViewReadManyResponse, error) {
+func (w *Worker) ViewReadMany(ctx context.Context, req *boostpb.ViewReadManyRequest) (*boostpb.ViewReadResponse, error) {
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, DefaultReadTimeout)
+	defer cancel()
+
 	w.stats.onRead()
 	reader, ok := w.readers.Get(domain.ReaderID{Node: req.TargetNode, Shard: req.TargetShard})
 	if !ok {
@@ -96,51 +114,44 @@ func (w *Worker) ViewReadMany(ctx context.Context, req *boostpb.ViewReadManyRequ
 
 	var (
 		hasher  vthash.Hasher
-		pending []int
-		keys    []boostpb.Row
-		results = make([]*boostpb.ViewReadResponse, len(req.Keys))
+		pending []boostpb.Row
+		results boostpb.ViewReadResponse
 	)
 
-	for i, key := range req.Keys {
-		rs, ok := backlog.Lookup(reader, &hasher, key, func(rows backlog.Rows) *boostpb.ViewReadResponse {
-			return &boostpb.ViewReadResponse{Rows: rows.Collect(nil), Hit: true}
-		})
-		if ok {
-			results[i] = rs
-		} else {
-			pending = append(pending, i)
-			keys = append(keys, key)
-		}
+	if log := w.log.Check(zapcore.DebugLevel, "ViewReadMany"); log != nil {
+		log.Write(boostpb.ZapRows("keys", req.Keys))
 	}
 
-	if len(keys) == 0 {
-		return &boostpb.ViewReadManyResponse{Results: results}, nil
+	pending = backlog.LookupMany(reader, &hasher, req.Keys, func(rows backlog.Rows) {
+		results.Rows = rows.Collect(results.Rows)
+		results.Hits++
+	})
+	if len(pending) == 0 {
+		return &results, nil
 	}
 
-	w.log.Debug("trigger initial reader", boostpb.ZapRows("keys", keys))
-	reader.Trigger(keys)
+	if log := w.log.Check(zapcore.DebugLevel, "ViewReadMany trigger replay"); log != nil {
+		log.Write(boostpb.ZapRows("keys", pending))
+	}
+
+	reader.Trigger(pending)
 	if !req.Block {
-		return &boostpb.ViewReadManyResponse{Results: results}, nil
+		return &results, nil
 	}
 
 	for ctx.Err() == nil && len(pending) > 0 {
-		i := pending[len(pending)-1]
-		key := keys[len(keys)-1]
-
-		rs, ok := backlog.BlockingLookup(ctx, reader, &hasher, key, func(rows backlog.Rows) *boostpb.ViewReadResponse {
-			return &boostpb.ViewReadResponse{Rows: rows.Collect(nil)}
+		key := pending[len(pending)-1]
+		ok = backlog.BlockingLookup(ctx, reader, &hasher, key, func(rows backlog.Rows) {
+			results.Rows = rows.Collect(results.Rows)
 		})
 		if ok {
-			results[i] = rs
 			pending = pending[:len(pending)-1]
-			keys = keys[:len(keys)-1]
-		} else {
-			break
 		}
 	}
 
+	w.log.Debug("ViewReadMany finished", zap.Int("pending", len(pending)), zap.Int("results", len(results.Rows)))
 	if len(pending) == 0 {
-		return &boostpb.ViewReadManyResponse{Results: results}, nil
+		return &results, nil
 	}
 	return nil, ctx.Err()
 }

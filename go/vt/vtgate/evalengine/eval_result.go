@@ -479,12 +479,12 @@ func (er *EvalResult) nullSafeHashcode() (HashCode, error) {
 	}
 }
 
-func NullsafeHashCode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, typ sqltypes.Type) {
+func NullsafeHashCode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type) bool {
 	switch {
 	case v.IsNull():
 		hash.Write16(0)
 
-	case sqltypes.IsFloat(typ):
+	case sqltypes.IsFloat(coerceTo):
 		var f float64
 		var err error
 
@@ -499,18 +499,18 @@ func NullsafeHashCode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			f = float64(uval)
 		case v.IsFloat() || v.Type() == sqltypes.Decimal:
 			f, err = v.ToFloat64()
-		case v.IsText() || v.IsBinary():
+		case v.IsQuoted():
 			f = parseStringToFloat(v.RawStr())
 		default:
-			panic("coercion should not try to coerce this value to a float")
+			return false
 		}
 		if err != nil {
-			panic(err)
+			return false
 		}
 		hash.Write16(0xAAAA)
 		hash.Write64(math.Float64bits(f))
 
-	case sqltypes.IsSigned(typ):
+	case sqltypes.IsSigned(coerceTo):
 		var i int64
 		var err error
 
@@ -520,12 +520,31 @@ func NullsafeHashCode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		case v.IsUnsigned():
 			var uval uint64
 			uval, err = v.ToUint64()
+			if uval > math.MaxInt64 {
+				return false
+			}
 			i = int64(uval)
+		case v.IsFloat():
+			var fval float64
+			fval, err = v.ToFloat64()
+			if fval != math.Trunc(fval) {
+				return false
+			}
+			i = int64(fval)
+		case v.IsQuoted():
+			i, err = strconv.ParseInt(v.RawStr(), 10, 64)
+			if err != nil {
+				fval := parseStringToFloat(v.RawStr())
+				if fval != math.Trunc(fval) {
+					return false
+				}
+				i, err = int64(fval), nil
+			}
 		default:
-			panic("coercion should not try to coerce this value to a signed int")
+			return false
 		}
 		if err != nil {
-			panic(err)
+			return false
 		}
 		if i < 0 {
 			hash.Write16(0xBBB1)
@@ -534,7 +553,7 @@ func NullsafeHashCode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		}
 		hash.Write64(uint64(i))
 
-	case sqltypes.IsUnsigned(typ):
+	case sqltypes.IsUnsigned(coerceTo):
 		var u uint64
 		var err error
 
@@ -542,24 +561,43 @@ func NullsafeHashCode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		case v.IsSigned():
 			var ival int64
 			ival, err = v.ToInt64()
+			if ival < 0 {
+				return false
+			}
 			u = uint64(ival)
 		case v.IsUnsigned():
 			u, err = v.ToUint64()
+		case v.IsFloat():
+			var fval float64
+			fval, err = v.ToFloat64()
+			if fval != math.Trunc(fval) || fval < 0 {
+				return false
+			}
+			u = uint64(fval)
+		case v.IsQuoted():
+			u, err = strconv.ParseUint(v.RawStr(), 10, 64)
+			if err != nil {
+				fval := parseStringToFloat(v.RawStr())
+				if fval != math.Trunc(fval) || fval < 0 {
+					return false
+				}
+				u, err = uint64(fval), nil
+			}
 		default:
-			panic("coercion should not try to coerce this value to a unsigned int")
+			return false
 		}
 		if err != nil {
-			panic(err)
+			return false
 		}
 		hash.Write16(0xBBB0)
 		hash.Write64(u)
 
-	case sqltypes.IsBinary(typ):
+	case sqltypes.IsBinary(coerceTo):
 		coll := collations.Local().LookupByID(collations.CollationBinaryID)
 		hash.Write16(0xCCCC)
 		coll.Hash(hash, v.Raw(), 0)
 
-	case sqltypes.IsText(typ):
+	case sqltypes.IsText(coerceTo):
 		coll := collations.Local().LookupByID(collation)
 		if coll == nil {
 			panic("cannot hash unsupported collation")
@@ -568,8 +606,9 @@ func NullsafeHashCode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		coll.Hash(hash, v.Raw(), 0)
 
 	default:
-		panic("unsupported hash type")
+		return false
 	}
+	return true
 }
 
 func (er *EvalResult) setValueCast(v sqltypes.Value, typ sqltypes.Type) error {

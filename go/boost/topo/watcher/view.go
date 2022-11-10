@@ -81,12 +81,84 @@ func (v *View) CollectMetrics(publicID string, hitrate *metrics.RateCounter) {
 	}
 }
 
+func (v *View) LookupByBindVar(ctx context.Context, key []*querypb.BindVariable, block bool) (*sqltypes.Result, error) {
+	for i, k := range key {
+		if k.Type == sqltypes.Tuple {
+			return v.multiLookupForTuple(ctx, i, key, block)
+		}
+	}
+
+	for i, k := range key {
+		if err := v.canCoerce(k.Type, i); err != nil {
+			return nil, err
+		}
+	}
+
+	keypb := boostpb.NewRowBuilder(len(key))
+	for _, bvar := range key {
+		v, _ := sqltypes.BindVariableToValue(bvar)
+		keypb.AddVitess(v)
+	}
+	return v.lookup(ctx, keypb.Finish(), block)
+}
+
+func (cached *View) multiLookupForTuple(ctx context.Context, tuplePosition int, key []*querypb.BindVariable, block bool) (*sqltypes.Result, error) {
+	queryCount := len(key[tuplePosition].Values)
+	keypbs := make([]boostpb.Row, 0, queryCount)
+
+	for q := 0; q < queryCount; q++ {
+		keypb := boostpb.NewRowBuilder(len(key))
+
+		for i, bvar := range key {
+			var v sqltypes.Value
+			if i == tuplePosition {
+				v = sqltypes.ProtoToValue(bvar.Values[q])
+			} else {
+				var err error
+				v, err = sqltypes.BindVariableToValue(bvar)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if err := cached.canCoerce(v.Type(), i); err != nil {
+				return nil, err
+			}
+			keypb.AddVitess(v)
+		}
+
+		keypbs = append(keypbs, keypb.Finish())
+	}
+
+	return cached.lookupManyAndMerge(ctx, keypbs, block)
+}
+
 func (v *View) Lookup(ctx context.Context, key []sqltypes.Value, block bool) (*sqltypes.Result, error) {
+	for i, k := range key {
+		if err := v.canCoerce(k.Type(), i); err != nil {
+			return nil, err
+		}
+	}
+	return v.lookup(ctx, boostpb.RowFromVitess(key), block)
+}
+
+func (v *View) canCoerce(from querypb.Type, fieldPos int) error {
+	to := v.keySchema[fieldPos].Type
+
+	switch {
+	case sqltypes.IsQuoted(to):
+		if !sqltypes.IsQuoted(from) {
+			return fmt.Errorf("cannot query field %q with an %s (textual fields can only be queried textually)", v.keySchema[fieldPos].Name, from.String())
+		}
+	}
+	return nil
+}
+
+func (v *View) lookup(ctx context.Context, key boostpb.Row, block bool) (*sqltypes.Result, error) {
 	request := &boostpb.ViewReadRequest{
 		TargetNode:  v.node,
 		TargetShard: 0,
 		Block:       block,
-		Key:         boostpb.RowFromVitess(key),
+		Key:         key,
 	}
 
 	if shardCount := len(v.shards); shardCount > 1 {
@@ -100,7 +172,7 @@ func (v *View) Lookup(ctx context.Context, key []sqltypes.Value, block bool) (*s
 		return nil, err
 	}
 	v.metrics.onViewDuration(start)
-	return v.fixResult(resp), nil
+	return v.fixResult(1, resp), nil
 }
 
 func (v *View) LookupByFields(ctx context.Context, keyByName map[string]sqltypes.Value, block bool) (*sqltypes.Result, error) {
@@ -115,16 +187,13 @@ func (v *View) LookupByFields(ctx context.Context, keyByName map[string]sqltypes
 	return v.Lookup(ctx, plainkey, block)
 }
 
-func (v *View) LookupMany(ctx context.Context, keys [][]sqltypes.Value, block bool) ([]*sqltypes.Result, error) {
+func (v *View) lookupManyAndMerge(ctx context.Context, keys []boostpb.Row, block bool) (*sqltypes.Result, error) {
 	if len(v.shards) == 1 {
 		request := &boostpb.ViewReadManyRequest{
 			TargetNode:  v.node,
 			TargetShard: 0,
 			Block:       block,
-		}
-
-		for _, k := range keys {
-			request.Keys = append(request.Keys, boostpb.RowFromVitess(k))
+			Keys:        keys,
 		}
 
 		start := time.Now()
@@ -133,23 +202,17 @@ func (v *View) LookupMany(ctx context.Context, keys [][]sqltypes.Value, block bo
 			return nil, err
 		}
 		v.metrics.onViewDuration(start)
-
-		var results = make([]*sqltypes.Result, 0, len(resp.Results))
-		for _, qr := range resp.Results {
-			results = append(results, v.fixResult(qr))
-		}
-		return results, nil
+		return v.fixResult(len(keys), resp), nil
 	}
 
 	shardKeys := make([][]boostpb.Row, len(v.shards))
 	var hasher vthash.Hasher
 	for _, key := range keys {
-		bkey := boostpb.RowFromVitess(key)
-		shardn := bkey.ShardValue(&hasher, 0, v.shardKeyType, uint(len(v.shards)))
-		shardKeys[shardn] = append(shardKeys[shardn], bkey)
+		shardn := key.ShardValue(&hasher, 0, v.shardKeyType, uint(len(v.shards)))
+		shardKeys[shardn] = append(shardKeys[shardn], key)
 	}
 
-	var mergedResults []*sqltypes.Result
+	var mergedResults = &sqltypes.Result{Fields: v.schema}
 	var wg errgroup.Group
 	var mu sync.Mutex
 
@@ -174,8 +237,9 @@ func (v *View) LookupMany(ctx context.Context, keys [][]sqltypes.Value, block bo
 			v.metrics.onViewDuration(start)
 
 			mu.Lock()
-			for _, qr := range resp.Results {
-				mergedResults = append(mergedResults, v.fixResult(qr))
+			v.metrics.onViewRead(len(request.Keys), int(resp.Hits))
+			for _, row := range resp.Rows {
+				mergedResults.Rows = append(mergedResults.Rows, row.ToVitess())
 			}
 			mu.Unlock()
 			return nil
@@ -186,8 +250,8 @@ func (v *View) LookupMany(ctx context.Context, keys [][]sqltypes.Value, block bo
 	return mergedResults, err
 }
 
-func (v *View) fixResult(qr *boostpb.ViewReadResponse) *sqltypes.Result {
-	v.metrics.onViewRead(qr.Hit)
+func (v *View) fixResult(keyCount int, qr *boostpb.ViewReadResponse) *sqltypes.Result {
+	v.metrics.onViewRead(keyCount, int(qr.Hits))
 	rr := &sqltypes.Result{
 		Fields: v.schema,
 	}
@@ -217,14 +281,14 @@ func (m *scopedMetrics) onViewDuration(start time.Time) {
 	StatViewReadTiming.Record(m.labels, start)
 }
 
-func (m *scopedMetrics) onViewRead(hit bool) {
+func (m *scopedMetrics) onViewRead(reads, hits int) {
 	if m == nil {
 		return
 	}
-	StatViewReads.Add(m.labels, 1)
-	if hit {
-		StatViewHits.Add(m.labels, 1)
+	StatViewReads.Add(m.labels, int64(reads))
+	if hits > 0 {
+		StatViewHits.Add(m.labels, int64(hits))
 	}
 
-	m.hitrate.Register(hit)
+	m.hitrate.Register(hits > 0)
 }

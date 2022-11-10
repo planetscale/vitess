@@ -808,14 +808,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "post-sentry pos reached")
 	}
 
-	lockConn, err := e.pool.Get(ctx)
+	lockConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer lockConn.Recycle()
 	defer lockConn.Exec(ctx, sqlUnlockTables, 1, false)
 
-	renameConn, err := e.pool.Get(ctx)
+	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return err
 	}

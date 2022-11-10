@@ -24,20 +24,23 @@ func TestStoreWorks(t *testing.T) {
 		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
-	l, hit := Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) int { return r.Len() })
-	assert.Equal(t, 0, l)
+	hit := Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) {
+		assert.Equal(t, 0, r.Len())
+	})
 	assert.True(t, hit)
 
 	w.Add(a.AsRecords(), 0)
 
-	l, hit = Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) int { return r.Len() })
-	assert.Equal(t, 0, l)
+	hit = Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) {
+		assert.Equal(t, 0, r.Len())
+	})
 	assert.True(t, hit)
 
 	w.Swap()
 
-	l, hit = Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) int { return r.Len() })
-	assert.Equal(t, 1, l)
+	hit = Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) {
+		assert.Equal(t, 1, r.Len())
+	})
 	assert.True(t, hit)
 }
 
@@ -57,16 +60,17 @@ func TestMinimalQuery(t *testing.T) {
 
 	var hasher vthash.Hasher
 
-	l, hit := Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) int { return r.Len() })
-	assert.Equal(t, 2, l)
+	hit := Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) {
+		assert.Equal(t, 2, r.Len())
+	})
 	assert.True(t, hit)
 
-	Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) int {
+	hit = Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) {
 		allrows := r.Collect(nil)
 		assert.Contains(t, allrows, a)
 		assert.Contains(t, allrows, b)
-		return r.Len()
 	})
+	assert.True(t, hit)
 }
 
 func TestBusy(t *testing.T) {
@@ -94,11 +98,12 @@ func TestBusy(t *testing.T) {
 		key := boostpb.RowFromVitess([]sqltypes.Value{sqltypes.NewInt64(n)})
 	stress:
 		for {
-			l, hit := Lookup(r, &hasher, key, func(r Rows) int { return r.Len() })
+			var foundlen int
+			hit := Lookup(r, &hasher, key, func(r Rows) { foundlen = r.Len() })
 			switch {
 			case !hit:
 				continue
-			case l == 1:
+			case foundlen == 1:
 				break stress
 			}
 		}
@@ -111,10 +116,9 @@ func assertLookup(t *testing.T, r *Reader, key boostpb.Row, wantRowsLen int, wan
 	t.Helper()
 
 	var hasher vthash.Hasher
-	rows, hit := Lookup(r, &hasher, key, func(rows Rows) int {
-		return rows.Len()
+	hit := Lookup(r, &hasher, key, func(rows Rows) {
+		require.Equal(t, wantRowsLen, rows.Len())
 	})
-	require.Equal(t, wantRowsLen, rows)
 	require.Equal(t, wantHit, hit)
 }
 

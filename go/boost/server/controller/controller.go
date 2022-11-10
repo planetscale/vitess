@@ -364,14 +364,20 @@ func (ctrl *Controller) viewDescriptor(nodeIdx graph.NodeIdx) *vtboostpb.Materia
 		shards = append(shards, ctrl.readAddrs[domain.Assignment(s)])
 	}
 
-	var keyFields = reader.KeyNames()
+	var params = reader.Parameters()
 	var keySchema []*querypb.Field
 	for i, col := range reader.Key() {
+		flags := uint32(0)
+		if params[i].Multi {
+			flags |= uint32(querypb.MySqlFlag_MULTIPLE_KEY_FLAG)
+		}
+
 		tt := node.ColumnType(ctrl.ingredients, col)
 		keySchema = append(keySchema, &querypb.Field{
-			Name:    keyFields[i],
+			Name:    params[i].Name,
 			Type:    tt.T,
 			Charset: uint32(tt.Collation),
+			Flags:   flags,
 		})
 	}
 
