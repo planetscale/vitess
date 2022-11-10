@@ -220,6 +220,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"select /* function with distinct */ count(distinct a) from t",
 			"SELECT /* function with distinct */ COUNT(DISTINCT `a`) FROM `t`",
 		},
+		{
+			"create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
+			"CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`name` tinytext NOT NULL,\n\tFULLTEXT KEY `name_ft` (`name`) WITH PARSER ngram\n)",
+		},
 	}
 
 	for _, tc := range testcases {
