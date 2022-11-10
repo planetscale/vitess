@@ -1,6 +1,7 @@
 package boostplan
 
 import (
+	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
@@ -30,7 +31,7 @@ func (d *dummyMigration) AddBase(_ string, _ []string, b flownode.AnyBase) graph
 	return n
 }
 
-func (d *dummyMigration) Maintain(name string, na graph.NodeIdx, key []int, keyNames []string, colLen int) {
+func (d *dummyMigration) Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int) {
 	// nop
 }
 

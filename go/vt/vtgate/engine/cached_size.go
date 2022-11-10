@@ -1275,11 +1275,11 @@ func (cached *externalPlanPrimitive) CachedSize(alloc bool) int64 {
 	}
 	// field view *vitess.io/vitess/go/boost/topo/watcher.View
 	size += cached.view.CachedSize(true)
-	// field args []vitess.io/vitess/go/sqltypes.Value
+	// field args []*vitess.io/vitess/go/vt/proto/query.BindVariable
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.args)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.args)) * int64(8))
 		for _, elem := range cached.args {
-			size += elem.CachedSize(false)
+			size += elem.CachedSize(true)
 		}
 	}
 	// field keyspace string

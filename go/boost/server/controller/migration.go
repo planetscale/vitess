@@ -84,10 +84,10 @@ func (m *Migration) ensureReaderFor(na graph.NodeIdx, name string) *flownode.Nod
 	return rn
 }
 
-func (m *Migration) Maintain(name string, na graph.NodeIdx, key []int, keyNames []string, colLen int) {
+func (m *Migration) Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int) {
 	rn := m.ensureReaderFor(na, name)
 	reader := rn.AsReader()
-	reader.SetKey(key, keyNames, colLen)
+	reader.SetKey(key, parameters, colLen)
 }
 
 func (m *Migration) Commit(ctx context.Context) error {
@@ -372,12 +372,14 @@ func migrationStreamSetup(ctx context.Context, mainline *Controller, newnodes ma
 }
 
 func (m *Migration) MaintainAnonymous(n graph.NodeIdx, key []int) {
-	var keyNames []string
+	var params []boostpb.ViewParameter
 	for i := range key {
-		keyNames = append(keyNames, fmt.Sprintf("k%d", i))
+		params = append(params, boostpb.ViewParameter{
+			Name: fmt.Sprintf("k%d", i),
+		})
 	}
 	ri := m.ensureReaderFor(n, "")
-	ri.AsReader().SetKey(key, keyNames, 0)
+	ri.AsReader().SetKey(key, params, 0)
 }
 
 func NewMigration(inner *Controller) *Migration {

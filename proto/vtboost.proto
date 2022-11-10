@@ -31,6 +31,7 @@ message Materialization {
     int64 type = 2;
     bytes bound_value = 3;
     int64 pos = 4;
+    bool multi = 5;
   };
 
   message ViewDescriptor {

@@ -368,7 +368,7 @@ func (nw *Watcher) Stop() {
 type MaterializedQuery struct {
 	View       *View
 	Normalized string
-	Args       []sqltypes.Value
+	Args       []*querypb.BindVariable
 	hash       vthash.Hash
 }
 
@@ -381,7 +381,12 @@ func hashMaterializedQuery(keyspace, query string) vthash.Hash {
 	return h.Sum128()
 }
 
-var defaultBogokey = []sqltypes.Value{sqltypes.NewInt64(0)}
+var defaultBogokey = []*querypb.BindVariable{
+	{
+		Type:  sqltypes.Int64,
+		Value: []byte("0"),
+	},
+}
 
 func (nw *Watcher) GetCachedQuery(keyspace string, query sqlparser.Statement, bvars map[string]*querypb.BindVariable) (*MaterializedQuery, bool) {
 	res := &MaterializedQuery{
@@ -396,11 +401,11 @@ func (nw *Watcher) GetCachedQuery(keyspace string, query sqlparser.Statement, bv
 	}
 
 	for cached, _ := activeCluster.mats.Get(res.hash); cached != nil; cached = cached.next {
-		var args []sqltypes.Value
+		var args []*querypb.BindVariable
 		if cached.fullyMaterialized {
 			args = defaultBogokey
 		} else {
-			args = make([]sqltypes.Value, len(cached.view.keySchema))
+			args = make([]*querypb.BindVariable, len(cached.view.keySchema))
 		}
 
 		if matchParametrizedQuery(args, query, bvars, cached.bounds) {

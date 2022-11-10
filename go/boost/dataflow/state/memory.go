@@ -138,11 +138,6 @@ func (m *Memory) ClonedState() (state []boostpb.Record) {
 	return
 }
 
-func (m *Memory) Keys() [][]int {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (m *Memory) ClonedRecords() (records []boostpb.Row) {
 	m.state[0].state.ForEach(func(rs *offheap.Rows) {
 		records = rs.Collect(records)
@@ -154,11 +149,6 @@ func (m *Memory) EvictRandomKeys(rng *rand.Rand, bytesToEvict int64) ([]int, []b
 	idx := rand.Intn(len(m.state))
 	keys := m.state[idx].evictRandomKeys(rng, m.memSize.Load()-bytesToEvict, &m.memSize)
 	return m.state[idx].key, keys
-}
-
-func (m *Memory) Clear() {
-	//TODO implement me
-	panic("implement me")
 }
 
 func (m *Memory) insert(row boostpb.Row, tag boostpb.Tag) bool {

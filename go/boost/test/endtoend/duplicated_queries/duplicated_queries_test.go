@@ -1,7 +1,6 @@
 package duplicated_queries
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -24,7 +23,7 @@ CREATE TABLE mike (
 	tt := booste2e.Setup(t, booste2e.WithDDL(DDL), booste2e.WithCachedQueries(Query1, Query2))
 
 	for i := 0; i <= 20; i++ {
-		tt.ExecuteFetch(fmt.Sprintf("INSERT INTO mike (season) VALUES ('season%d')", i%3))
+		tt.ExecuteFetch("INSERT INTO mike (season) VALUES ('season%d')", i%3)
 	}
 	tt.ExecuteFetch("SET @@boost_cached_queries = true")
 

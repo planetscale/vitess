@@ -45,12 +45,32 @@
     {
       "Keyspace": "main",
       "SQL": "SELECT id FROM users WHERE id > :id",
-      "Error": "query not supported by boost: parameter can only be compared for equality"
+      "Error": "query not supported by boost: parameter `id` > :id can only be compared for equality"
     },
     {
       "Keyspace": "main",
       "SQL": "SELECT users.id FROM users JOIN friends WHERE users.id = 1",
       "Error": "query not supported by boost: join without predicates is not supported"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id FROM users WHERE users.id = :param1 OR users.id = 1",
+      "Error": "query not supported by boost: unsupported parameter location: `users`.`id` = :param1 OR `users`.`id` = 1"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id FROM users WHERE users.id = ::param1",
+      "Error": "syntax error at position 53 near '::param1'"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select :param1, 1 from users",
+      "Error": "query not supported by boost: parameter :param1 needs to be used in a comparison expression"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id FROM users WHERE users.id IN :param1",
+      "Error": "syntax error at position 53 near ':param1'"
     }
   ]
 }

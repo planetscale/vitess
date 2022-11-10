@@ -2,7 +2,6 @@ package votes
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -35,11 +34,11 @@ func TestEndtoendVoteRecipeWithExternalBase(t *testing.T) {
 	var expectedResult = sqltypes.Row{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(votesCount / articleCount)}
 
 	for i := 0; i < articleCount; i++ {
-		tt.ExecuteFetch(fmt.Sprintf("INSERT INTO `article` (`id`, `title`) VALUES (%d, 'Article %d')", i+1, i+1))
+		tt.ExecuteFetch("INSERT INTO `article` (`id`, `title`) VALUES (%d, 'Article %d')", i+1, i+1)
 	}
 
 	for i := 0; i < votesCount; i++ {
-		tt.ExecuteFetch(fmt.Sprintf("INSERT INTO `vote` (`article_id`, `user`) values (%d, %d)", (i%articleCount)+1, rand.Intn(userCount)+1))
+		tt.ExecuteFetch("INSERT INTO `vote` (`article_id`, `user`) values (%d, %d)", (i%articleCount)+1, rand.Intn(userCount)+1)
 	}
 
 	time.Sleep(1 * time.Second)
@@ -69,11 +68,11 @@ func TestEndtoendVoteRecipeRemoval(t *testing.T) {
 	var expectedResult = sqltypes.Row{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(votesCount / articleCount)}
 
 	for i := 0; i < articleCount; i++ {
-		tt.ExecuteFetch(fmt.Sprintf("INSERT INTO `article` (`id`, `title`) VALUES (%d, 'Article %d')", i+1, i+1))
+		tt.ExecuteFetch("INSERT INTO `article` (`id`, `title`) VALUES (%d, 'Article %d')", i+1, i+1)
 	}
 
 	for i := 0; i < votesCount; i++ {
-		tt.ExecuteFetch(fmt.Sprintf("INSERT INTO `vote` (`article_id`, `user`) values (%d, %d)", (i%articleCount)+1, rand.Intn(userCount)+1))
+		tt.ExecuteFetch("INSERT INTO `vote` (`article_id`, `user`) values (%d, %d)", (i%articleCount)+1, rand.Intn(userCount)+1)
 	}
 
 	time.Sleep(1 * time.Second)

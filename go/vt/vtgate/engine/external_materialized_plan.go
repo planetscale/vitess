@@ -15,7 +15,7 @@ var _ Primitive = (*externalPlanPrimitive)(nil)
 
 type externalPlanPrimitive struct {
 	view     *boostwatcher.View
-	args     []sqltypes.Value
+	args     []*querypb.BindVariable
 	keyspace string
 }
 
@@ -50,11 +50,11 @@ func (e *externalPlanPrimitive) NeedsTransaction() bool {
 }
 
 func (e *externalPlanPrimitive) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return e.view.Lookup(vcursor.Context(), e.args, true)
+	return e.view.LookupByBindVar(vcursor.Context(), e.args, true)
 }
 
 func (e *externalPlanPrimitive) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := e.view.Lookup(vcursor.Context(), e.args, true)
+	res, err := e.view.LookupByBindVar(vcursor.Context(), e.args, true)
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func (mat *MaterializationClient) GetPlan(vcursor VCursor, query sqlparser.State
 
 	go func() {
 		mat.watcher.Warmup(cached, func(view *boostwatcher.View) {
-			_, err := view.Lookup(context.Background(), cached.Args, false)
+			_, err := view.LookupByBindVar(context.Background(), cached.Args, false)
 			if err != nil {
 				log.Warningf("failed to execute warming on cluster: %v", err)
 			}
