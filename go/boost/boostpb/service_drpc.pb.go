@@ -344,7 +344,7 @@ type DRPCReaderClient interface {
 	DRPCConn() drpc.Conn
 
 	ViewRead(ctx context.Context, in *ViewReadRequest) (*ViewReadResponse, error)
-	ViewReadMany(ctx context.Context, in *ViewReadManyRequest) (*ViewReadManyResponse, error)
+	ViewReadMany(ctx context.Context, in *ViewReadManyRequest) (*ViewReadResponse, error)
 	ViewSize(ctx context.Context, in *ViewSizeRequest) (*ViewSizeResponse, error)
 }
 
@@ -367,8 +367,8 @@ func (c *drpcReaderClient) ViewRead(ctx context.Context, in *ViewReadRequest) (*
 	return out, nil
 }
 
-func (c *drpcReaderClient) ViewReadMany(ctx context.Context, in *ViewReadManyRequest) (*ViewReadManyResponse, error) {
-	out := new(ViewReadManyResponse)
+func (c *drpcReaderClient) ViewReadMany(ctx context.Context, in *ViewReadManyRequest) (*ViewReadResponse, error) {
+	out := new(ViewReadResponse)
 	err := c.cc.Invoke(ctx, "/service.Reader/ViewReadMany", drpcEncoding_File_service_proto{}, in, out)
 	if err != nil {
 		return nil, err
@@ -387,7 +387,7 @@ func (c *drpcReaderClient) ViewSize(ctx context.Context, in *ViewSizeRequest) (*
 
 type DRPCReaderServer interface {
 	ViewRead(context.Context, *ViewReadRequest) (*ViewReadResponse, error)
-	ViewReadMany(context.Context, *ViewReadManyRequest) (*ViewReadManyResponse, error)
+	ViewReadMany(context.Context, *ViewReadManyRequest) (*ViewReadResponse, error)
 	ViewSize(context.Context, *ViewSizeRequest) (*ViewSizeResponse, error)
 }
 
@@ -397,7 +397,7 @@ func (s *DRPCReaderUnimplementedServer) ViewRead(context.Context, *ViewReadReque
 	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
-func (s *DRPCReaderUnimplementedServer) ViewReadMany(context.Context, *ViewReadManyRequest) (*ViewReadManyResponse, error) {
+func (s *DRPCReaderUnimplementedServer) ViewReadMany(context.Context, *ViewReadManyRequest) (*ViewReadResponse, error) {
 	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
@@ -465,14 +465,14 @@ func (x *drpcReader_ViewReadStream) SendAndClose(m *ViewReadResponse) error {
 
 type DRPCReader_ViewReadManyStream interface {
 	drpc.Stream
-	SendAndClose(*ViewReadManyResponse) error
+	SendAndClose(*ViewReadResponse) error
 }
 
 type drpcReader_ViewReadManyStream struct {
 	drpc.Stream
 }
 
-func (x *drpcReader_ViewReadManyStream) SendAndClose(m *ViewReadManyResponse) error {
+func (x *drpcReader_ViewReadManyStream) SendAndClose(m *ViewReadResponse) error {
 	if err := x.MsgSend(m, drpcEncoding_File_service_proto{}); err != nil {
 		return err
 	}

@@ -72,11 +72,7 @@ message ViewReadManyRequest {
 
 message ViewReadResponse {
   repeated string rows = 1 [(gogoproto.casttype) = "Row"];
-  bool hit = 2;
-};
-
-message ViewReadManyResponse {
-  repeated ViewReadResponse results = 1;
+  int32 hits = 2;
 };
 
 message ViewSizeRequest {
@@ -144,6 +140,6 @@ service InnerDomain {
 
 service Reader {
   rpc ViewRead(ViewReadRequest) returns (ViewReadResponse);
-  rpc ViewReadMany(ViewReadManyRequest) returns (ViewReadManyResponse);
+  rpc ViewReadMany(ViewReadManyRequest) returns (ViewReadResponse);
   rpc ViewSize(ViewSizeRequest) returns (ViewSizeResponse);
 };

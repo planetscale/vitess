@@ -113,8 +113,7 @@ type (
 		Parameters []Parameter
 		Columns    Columns
 
-		ParametersIdx  []int
-		ParametersName []string
+		ParametersIdx []int
 
 		doesNotIntroduceColumn
 		dontKeepsAncestorColumns
@@ -148,8 +147,10 @@ type (
 	}
 
 	Parameter struct {
-		name string
-		key  *Column
+		Name string
+		Op   sqlparser.ComparisonExprOperator
+
+		key *Column
 	}
 
 	NodeTableRef struct {

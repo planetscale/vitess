@@ -2004,7 +2004,7 @@ func (d *Domain) buildUpqueryFiltered(n *flownode.Node, cols []int, keys map[boo
 		}
 
 	case len(cols) == 1:
-		sqlescape.WriteEscapeID(&query, fields[0])
+		sqlescape.WriteEscapeID(&query, fields[cols[0]])
 		query.WriteString(" IN ::upquery")
 
 		values := make([]*querypb.Value, 0, len(keys))
@@ -2176,7 +2176,7 @@ func (d *Domain) seedAll(ctx context.Context, tag boostpb.Tag, requestingShard u
 		res, ok := stat.Lookup(cols, key)
 		if !ok {
 			if log := d.log.Check(zapcore.DebugLevel, "missed lookup"); log != nil {
-				log.Write(zap.Uint32("source", uint32(repl.Source)), boostpb.ZapRows("keys", maps.Keys(keys)))
+				log.Write(zap.Uint32("source", uint32(repl.Source)), key.Zap("key"))
 			}
 			delete(keys, key)
 			misses[key] = true
@@ -2184,7 +2184,7 @@ func (d *Domain) seedAll(ctx context.Context, tag boostpb.Tag, requestingShard u
 		}
 
 		if log := d.log.Check(zapcore.DebugLevel, "succeeded lookup"); log != nil {
-			log.Write(zap.Int("len", res.Len()), zap.Uint32("source", uint32(repl.Source)), boostpb.ZapRows("keys", maps.Keys(keys)))
+			log.Write(zap.Int("len", res.Len()), zap.Uint32("source", uint32(repl.Source)), key.Zap("key"))
 		}
 
 		res.ForEach(func(r boostpb.Row) {

@@ -18,7 +18,7 @@ import (
 type Migration interface {
 	AddIngredient(name string, fields []string, impl flownode.NodeImpl) graph.NodeIdx
 	AddBase(name string, fields []string, b flownode.AnyBase) graph.NodeIdx
-	Maintain(name string, na graph.NodeIdx, key []int, keyNames []string, colLen int)
+	Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int)
 }
 
 func OpQueryToFlowParts(query *operators.Query, tr *operators.TableReport, mig Migration) (*operators.QueryFlowParts, error) {
@@ -190,8 +190,16 @@ func makeViewOpNode(node *operators.Node, mig Migration, op *operators.View) (op
 		return operators.FlowNode{}, err
 	}
 
+	var parameters = make([]boostpb.ViewParameter, 0, len(op.Parameters))
+	for _, param := range op.Parameters {
+		parameters = append(parameters, boostpb.ViewParameter{
+			Name:  param.Name,
+			Multi: param.Op == sqlparser.InOp,
+		})
+	}
+
 	if len(op.ParametersIdx) > 0 {
-		mig.Maintain(node.Name, na, op.ParametersIdx, op.ParametersName, len(op.Columns))
+		mig.Maintain(node.Name, na, op.ParametersIdx, parameters, len(op.Columns))
 	} else {
 		mig.Maintain(node.Name, na, []int{0}, nil, len(op.Columns))
 	}
@@ -224,6 +232,19 @@ func makeGroupByOpNode(node *operators.Node, mig Migration, op *operators.GroupB
 	}, nil
 }
 
+func checkParametersInExpression(ast sqlparser.SQLNode) error {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case sqlparser.Argument, sqlparser.ListArg:
+			return false, &operators.UnsupportedError{
+				AST:  ast,
+				Type: operators.ParameterLocation,
+			}
+		}
+		return true, nil
+	}, ast)
+}
+
 func makeFilterOpNode(node *operators.Node, mig Migration, op *operators.Filter) (operators.FlowNode, error) {
 	parentNa, err := node.Ancestors[0].FlowNodeAddr()
 	if err != nil {
@@ -231,6 +252,12 @@ func makeFilterOpNode(node *operators.Node, mig Migration, op *operators.Filter)
 	}
 	colnames := columnOpNames(node.Columns)
 	conditions := make([]flownode.FilterConditionTuple, 0, len(op.EvalExpr))
+
+	err = checkParametersInExpression(op.Predicates)
+	if err != nil {
+		return operators.FlowNode{}, err
+	}
+
 	for i, expr := range op.EvalExpr {
 		conditions = append(conditions, flownode.FilterConditionTuple{
 			Cond: expr,
@@ -266,6 +293,18 @@ func makeProjectOpNode(name string, parent *operators.Node, op *operators.Projec
 	if err != nil {
 		return operators.FlowNode{}, err
 	}
+
+	for _, proj := range op.Projections {
+		expr, ok := proj.(*flownode.ProjectedExpr)
+		if !ok {
+			continue
+		}
+		err = checkParametersInExpression(expr.AST)
+		if err != nil {
+			return operators.FlowNode{}, err
+		}
+	}
+
 	colNames := columnOpNames(op.Columns)
 
 	return operators.FlowNode{

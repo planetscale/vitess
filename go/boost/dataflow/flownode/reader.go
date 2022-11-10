@@ -19,10 +19,10 @@ type Reader struct {
 	// not serialized
 	writer *backlog.Writer
 
-	forNode  graph.NodeIdx
-	state    []int
-	keyNames []string
-	colLen   int
+	forNode    graph.NodeIdx
+	state      []int
+	parameters []boostpb.ViewParameter
+	colLen     int
 }
 
 func (r *Reader) dataflow() {}
@@ -31,14 +31,14 @@ func (r *Reader) Key() []int {
 	return r.state
 }
 
-func (r *Reader) SetKey(key []int, fields []string, colLen int) {
+func (r *Reader) SetKey(key []int, parameters []boostpb.ViewParameter, colLen int) {
 	if r.state != nil {
 		if !slices.Equal(r.state, key) {
 			panic("tried to replace key in Reader node with different one")
 		}
 	} else {
 		r.state = slices.Clone(key)
-		r.keyNames = slices.Clone(fields)
+		r.parameters = slices.Clone(parameters)
 		r.colLen = colLen
 	}
 }
@@ -145,8 +145,8 @@ func (r *Reader) OnEviction(keys []boostpb.Row) {
 	}
 }
 
-func (r *Reader) KeyNames() []string {
-	return r.keyNames
+func (r *Reader) Parameters() []boostpb.ViewParameter {
+	return r.parameters
 }
 
 func (r *Reader) PublicColumnLength() int {
@@ -172,19 +172,19 @@ func NewReader(forNode graph.NodeIdx) *Reader {
 
 func (r *Reader) ToProto() *boostpb.Node_Reader {
 	return &boostpb.Node_Reader{
-		ForNode:  r.forNode,
-		State:    r.state,
-		KeyNames: r.keyNames,
-		ColLen:   r.colLen,
+		ForNode:    r.forNode,
+		State:      r.state,
+		Parameters: r.parameters,
+		ColLen:     r.colLen,
 	}
 }
 
 func NewReaderFromProto(r *boostpb.Node_Reader) *Reader {
 	return &Reader{
-		writer:   nil,
-		forNode:  r.ForNode,
-		state:    r.State,
-		keyNames: r.KeyNames,
-		colLen:   r.ColLen,
+		writer:     nil,
+		forNode:    r.ForNode,
+		state:      r.State,
+		parameters: r.Parameters,
+		colLen:     r.ColLen,
 	}
 }

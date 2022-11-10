@@ -19,7 +19,7 @@ func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStateme
 
 	if len(params) == 0 {
 		params = []Parameter{{
-			name: "bogokey",
+			Name: "bogokey",
 			key:  newBogoKeyColumn(),
 		}}
 	}
@@ -57,6 +57,10 @@ func (conv *Converter) addFilterIfNeeded(node *Node, where *sqlparser.Where, par
 	if where == nil {
 		return node, params, nil
 	}
+
+	// rewrite all OR chains into IN for further optimization
+	// where.Expr = physical.TryRewriteOrToIn(where.Expr)
+
 	if where.Type == sqlparser.WhereClause && sqlparser.ContainsAggregation(where) {
 		return nil, nil, &UnsupportedError{
 			AST:  where,
@@ -189,7 +193,6 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 			switch op := cursor.Parent().(type) {
 			case *sqlparser.ComparisonExpr:
 				if op.Operator != sqlparser.EqualOp {
-					// TODO: We also want to extend this to support IN()
 					errors = append(errors, &UnsupportedError{
 						AST:  cursor.Parent(),
 						Type: ParameterNotEqual,
@@ -198,9 +201,12 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 			default:
 				errors = append(errors, &UnsupportedError{
 					AST:  cursor.Parent(),
-					Type: ParameterLocation,
+					Type: ParameterLocationCompare,
 				})
 			}
+		case sqlparser.ListArg:
+			// because of the way `sqlparser` works, a ListArg can only appear on the right-hand side
+			// of an `IN` expression, so we don't need to check for anything specific here
 		}
 		return true
 	}, nil)
@@ -317,16 +323,17 @@ func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []P
 			predicates = sqlparser.AndExpressions(predicates, e)
 			continue
 		}
-		col, cok := comp.Left.(*sqlparser.ColName)
-		arg, pok := comp.Right.(sqlparser.Argument)
-		if !cok || !pok {
-			predicates = sqlparser.AndExpressions(predicates, e)
-			continue
+		if col, cok := comp.Left.(*sqlparser.ColName); cok {
+			switch arg := comp.Right.(type) {
+			case sqlparser.Argument:
+				params = append(params, Parameter{Name: string(arg), key: ColumnFromAST(col), Op: comp.Operator})
+				continue
+			case sqlparser.ListArg:
+				params = append(params, Parameter{Name: string(arg), key: ColumnFromAST(col), Op: comp.Operator})
+				continue
+			}
 		}
-		params = append(params, Parameter{
-			name: string(arg),
-			key:  ColumnFromAST(col),
-		})
+		predicates = sqlparser.AndExpressions(predicates, e)
 	}
 	return
 }
@@ -495,8 +502,8 @@ func (conv *Converter) unionToOperator(
 ) (*Node, []Parameter, Columns, error) {
 	// UNION can be used inside a query that has parameters, but the parameters cannot exist inside the UNION
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		_, isArg := node.(sqlparser.Argument)
-		if isArg {
+		switch node.(type) {
+		case sqlparser.Argument, sqlparser.ListArg:
 			return false, &UnsupportedError{
 				AST:  node,
 				Type: ParametersInsideUnion,

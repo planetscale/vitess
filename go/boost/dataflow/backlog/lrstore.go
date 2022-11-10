@@ -176,25 +176,53 @@ func (r *Rows) Collect(rows []boostpb.Row) []boostpb.Row {
 	return r.offheap.Collect(r.epoch, rows)
 }
 
-func Lookup[T any, F func(Rows) T](r *Reader, hasher *vthash.Hasher, key boostpb.Row, then F) (out T, hit bool) {
-	h := key.Hash(hasher, r.keySchema)
+func Lookup[F func(Rows)](r *Reader, hasher *vthash.Hasher, key boostpb.Row, then F) (hit bool) {
+	hash, exact := key.HashExact(hasher, r.keySchema)
+	if !exact {
+		then(Rows{})
+		return true
+	}
+	return LookupHash(r, hash, then)
+}
 
+func LookupMany[F func(Rows)](r *Reader, hasher *vthash.Hasher, keys []boostpb.Row, then F) (misses []boostpb.Row) {
+	deduplicate := make(map[vthash.Hash]struct{}, len(keys))
+
+	for _, key := range keys {
+		hash, exact := key.HashExact(hasher, r.keySchema)
+		if !exact {
+			then(Rows{})
+			continue
+		}
+		if _, found := deduplicate[hash]; found {
+			continue
+		}
+
+		deduplicate[hash] = struct{}{}
+		if !LookupHash(r, hash, then) {
+			misses = append(misses, key)
+		}
+	}
+	return
+}
+
+func LookupHash[F func(Rows)](r *Reader, h vthash.Hash, then F) (hit bool) {
 	tbl, epoch := r.store.rStart()
 	rows, ok := tbl.Get(h)
 	defer r.store.rFinish(epoch)
 
 	if ok {
-		out = then(Rows{offheap: rows, epoch: epoch})
+		then(Rows{offheap: rows, epoch: epoch})
 		hit = true
 	}
 	if !ok && r.trigger == nil {
-		out = then(Rows{})
+		then(Rows{})
 		hit = true
 	}
-	return out, hit
+	return hit
 }
 
-func BlockingLookup[T any, F func(Rows) T](ctx context.Context, r *Reader, hasher *vthash.Hasher, key boostpb.Row, then F) (out T, hit bool) {
+func BlockingLookup[F func(Rows)](ctx context.Context, r *Reader, hasher *vthash.Hasher, key boostpb.Row, then F) (hit bool) {
 	h := key.Hash(hasher, r.keySchema)
 	_ = r.store.waker.wait(ctx, h, func() bool {
 		tbl, epoch := r.store.rStart()
@@ -202,7 +230,7 @@ func BlockingLookup[T any, F func(Rows) T](ctx context.Context, r *Reader, hashe
 		defer r.store.rFinish(epoch)
 
 		if ok {
-			out = then(Rows{offheap: rows, epoch: epoch})
+			then(Rows{offheap: rows, epoch: epoch})
 			hit = true
 			return true
 		}

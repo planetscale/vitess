@@ -200,7 +200,7 @@ func (test *Test) setupCluster() {
 	test.MySQLParams = &conn
 }
 
-func (test *Test) ExecuteFetch(query string) *sqltypes.Result {
+func (test *Test) ExecuteFetch(queryfmt string, args ...any) *sqltypes.Result {
 	test.t.Helper()
 
 	if test.vtgateconn == nil {
@@ -214,6 +214,7 @@ func (test *Test) ExecuteFetch(query string) *sqltypes.Result {
 		})
 	}
 
+	query := fmt.Sprintf(queryfmt, args...)
 	res, err := test.vtgateconn.ExecuteFetch(query, -1, false)
 	if err != nil {
 		test.t.Fatalf("failed to ExecuteFetch(%q): %v", query, err)
@@ -222,7 +223,7 @@ func (test *Test) ExecuteFetch(query string) *sqltypes.Result {
 }
 
 func (test *Test) ToggleBoost(enable bool) {
-	_ = test.ExecuteFetch(fmt.Sprintf("SET @@boost_cached_queries = %v", enable))
+	_ = test.ExecuteFetch("SET @@boost_cached_queries = %v", enable)
 }
 
 // userData1 is added here next to root since we use the MySQL protocol

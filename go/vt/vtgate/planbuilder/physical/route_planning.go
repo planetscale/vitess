@@ -449,7 +449,7 @@ func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, s
 	if plan.RouteOpCode == engine.Scatter && len(table.Predicates) > 0 {
 		// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
 		for _, pred := range table.Predicates {
-			rewritten := tryRewriteOrToIn(pred)
+			rewritten := TryRewriteOrToIn(pred)
 			if rewritten != nil {
 				err = plan.UpdateRoutingLogic(ctx, rewritten)
 				if err != nil {
@@ -462,7 +462,7 @@ func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, s
 	return plan, nil
 }
 
-func tryRewriteOrToIn(expr sqlparser.Expr) sqlparser.Expr {
+func TryRewriteOrToIn(expr sqlparser.Expr) sqlparser.Expr {
 	rewrote := false
 	newPred := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
 		_, ok := cursor.Node().(*sqlparser.OrExpr)
