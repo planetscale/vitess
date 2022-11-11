@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -177,19 +176,13 @@ func (g *Graph[I]) View(t testing.TB) {
 }
 
 func RenderGraphviz(t testing.TB, dot string) {
-	fmt.Fprintf(os.Stderr, "====================\n%s\n=======================\n", dot)
-
 	const htmlTemplate = `
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <title>GraphViz Viewer</title>
-    <script src="https://cdn.jsdelivr.net/npm/@hpcc-js/wasm/dist/index.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom/dist/svg-pan-zoom.min.js"></script>
-    <script>
-        var hpccWasm = window["@hpcc-js/wasm"];
-    </script>
 	<style>
 		#graph svg {
 			width: 90vw;
@@ -201,17 +194,30 @@ func RenderGraphviz(t testing.TB, dot string) {
 </head>
 <body>
     <div id="graph"></div>
-    <script>
-		const dot = %s;
-        hpccWasm.graphviz.layout(dot, "svg", "dot").then(svg => {
-            const div = document.getElementById("graph");
-            div.innerHTML = svg;
-			svgPanZoom(div.querySelector('svg'), { controlIconsEnabled: true });
-        });
-    </script>
+	<script type="module">
+		import { Graphviz } from "https://cdn.jsdelivr.net/npm/@hpcc-js/wasm/dist/graphviz.js";
+
+		const graphviz = await Graphviz.load();
+		const dot = %q;
+		const svg = graphviz.dot(dot);
+		const div = document.getElementById("graph");
+		div.innerHTML = graphviz.layout(dot, "svg", "dot");
+		svgPanZoom(div.querySelector('svg'), { controlIconsEnabled: true });
+	</script>
 </body>
 </html>
 `
+
+	tmpfile, err := os.CreateTemp("", "boost_graph_*.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = fmt.Fprintf(tmpfile, htmlTemplate, dot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpfile.Close()
 
 	browsers := func() []string {
 		var cmds []string
@@ -232,17 +238,6 @@ func RenderGraphviz(t testing.TB, dot string) {
 		}
 		return cmds
 	}
-
-	tmpfile, err := os.CreateTemp("", "boost_graph_*.html")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = fmt.Fprintf(tmpfile, htmlTemplate, strconv.Quote(dot))
-	if err != nil {
-		t.Fatal(err)
-	}
-	tmpfile.Close()
 
 	for _, b := range browsers() {
 		args := strings.Split(b, " ")

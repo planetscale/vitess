@@ -843,7 +843,8 @@ func (mat *Materialization) nextTag() boostpb.Tag {
 	return boostpb.Tag(atomic.AddUint32(&mat.tagGenerator, 1) - 1)
 }
 
-func (mat *Materialization) GetStatus(idx graph.NodeIdx, node *flownode.Node) boostpb.MaterializationStatus {
+func (mat *Materialization) GetStatus(node *flownode.Node) boostpb.MaterializationStatus {
+	var idx = node.GlobalAddr()
 	var isMaterialized bool
 	switch {
 	case mat.have.contains(idx):

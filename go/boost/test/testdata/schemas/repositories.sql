@@ -49,4 +49,17 @@ CREATE TABLE tags (
 select /*vt+ VIEW=query_with_in */ count(*) as count_all, stars.repository_id as stars_repository_id from stars
     join repositories on repositories.id = stars.repository_id
     join repository_tags on repository_tags.repository_id = repositories.id join tags on tags.id = repository_tags.tag_id
-    where stars.spammy = false and tags.name IN ::tags_name group by stars.repository_id
+    where stars.spammy = false and tags.name IN ::tags_name group by stars.repository_id;
+
+select /*vt+ VIEW=query_with_limit */ count(*) as count_all, stars.repository_id as stars_repository_id
+from
+    stars join repositories
+    on repositories.id = stars.repository_id join repository_tags
+    on repository_tags.repository_id = repositories.id join tags
+    on tags.id = repository_tags.tag_id
+where
+    stars.spammy = false
+    and tags.name = :name
+group by
+    stars.repository_id
+order by count_all desc limit 100;
