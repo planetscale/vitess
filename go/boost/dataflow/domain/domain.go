@@ -1586,9 +1586,16 @@ func (d *Domain) handleEvictAny(ctx context.Context, pkt *boostpb.Packet_Evict, 
 		d.log.Debug("random eviction from node", target.node.Zap(), zap.Int64("memory", target.size))
 
 		if r := n.AsReader(); r != nil {
+			if !r.IsPartial() {
+				panic("trying to evict from a fully materialized node")
+			}
 			r.EvictRandomKeys(d.rng, target.size)
 		} else {
 			st := d.state.Get(target.node)
+			if !st.IsPartial() {
+				panic("trying to evict from a fully materialized node")
+			}
+
 			keyCols, keys := st.EvictRandomKeys(d.rng, target.size)
 			if len(keys) > 0 {
 				if err := d.triggerDownstreamEvictions(ctx, keyCols, keys, target.node, ex); err != nil {
@@ -1983,42 +1990,38 @@ func (d *Domain) buildUpqueryFiltered(n *flownode.Node, cols []int, keys map[boo
 	query.WriteString(" WHERE ")
 
 	switch {
-	case len(keys) == 1:
-		var key boostpb.Row
-		for k := range keys {
-			key = k
-		}
-
-		for i, col := range cols {
-			if i > 0 {
-				query.WriteString(" AND ")
-			}
-
-			sqlescape.WriteEscapeID(&query, fields[col])
-
-			bvar := fmt.Sprintf("arg%d", i)
-			query.WriteString(" = :")
-			query.WriteString(bvar)
-
-			bvars[bvar] = sqltypes.ValueBindVariable(key.ValueAt(i).ToVitessUnsafe())
-		}
-
-	case len(cols) == 1:
+	case len(cols) == 1 && len(keys) > 1:
 		sqlescape.WriteEscapeID(&query, fields[cols[0]])
-		query.WriteString(" IN ::upquery")
+		query.WriteString(" IN ::tuple0")
 
 		values := make([]*querypb.Value, 0, len(keys))
 		for key := range keys {
 			values = append(values, sqltypes.ValueToProto(key.ValueAt(0).ToVitessUnsafe()))
 		}
 
-		bvars["upquery"] = &querypb.BindVariable{
-			Type:   sqltypes.Tuple,
-			Values: values,
-		}
+		bvars["tuple0"] = &querypb.BindVariable{Type: sqltypes.Tuple, Values: values}
 
 	default:
-		panic("unsupported for now")
+		var keycount int
+		for key := range keys {
+			if keycount > 0 {
+				query.WriteString(" OR ")
+			}
+			for i, col := range cols {
+				if i > 0 {
+					query.WriteString(" AND ")
+				}
+
+				sqlescape.WriteEscapeID(&query, fields[col])
+
+				bvar := fmt.Sprintf("arg%d", len(bvars))
+				query.WriteString(" = :")
+				query.WriteString(bvar)
+
+				bvars[bvar] = sqltypes.ValueBindVariable(key.ValueAt(i).ToVitessUnsafe())
+			}
+			keycount++
+		}
 	}
 
 	return query.String(), bvars

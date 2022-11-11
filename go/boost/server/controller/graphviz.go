@@ -20,7 +20,7 @@ func renderGraphviz(gvz *graphviz.Graph[graph.NodeIdx], g *graph.Graph[*flownode
 		}
 		node.ResolveSchema(g)
 		node.Describe(n, flownode.DescribeOptions{
-			Materialization: materialization.GetStatus(idx, node),
+			Materialization: materialization.GetStatus(node),
 			ShowSchema:      true,
 		})
 	}

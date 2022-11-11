@@ -876,24 +876,11 @@ func TestRepositoriesWithIn(t *testing.T) {
 
 	boosttest.Settle()
 
-	g.View("query_with_in").AssertLookupBindVars([]*querypb.BindVariable{
-		{
-			Type: sqltypes.Tuple,
-			Values: []*querypb.Value{
-				{
-					Type:  sqltypes.VarChar,
-					Value: []byte("tag-7"),
-				},
-				{
-					Type:  sqltypes.VarChar,
-					Value: []byte("tag-8"),
-				},
-			},
-		},
-	}, []sqltypes.Row{
-		{sqltypes.NewInt64(1), sqltypes.NewInt64(8)},
-		{sqltypes.NewInt64(1), sqltypes.NewInt64(9)},
-	})
+	g.View("query_with_in").AssertLookupBindVars(BVar([]any{"tag-7", "tag-8"}),
+		[]sqltypes.Row{
+			{sqltypes.NewInt64(1), sqltypes.NewInt64(8)},
+			{sqltypes.NewInt64(1), sqltypes.NewInt64(9)},
+		})
 }
 
 func TestUpqueryInPlan(t *testing.T) {
@@ -911,23 +898,49 @@ func TestUpqueryInPlan(t *testing.T) {
 		g.TestExecute("INSERT INTO conv (col_int, col_double, col_decimal, col_char) VALUES (%d, %f, %f, 'string-%d')", i, float64(i), float64(i), i)
 	}
 
-	g.View("upquery").AssertLookupBindVars([]*querypb.BindVariable{
-		{
-			Type: sqltypes.Tuple,
-			Values: []*querypb.Value{
-				{
-					Type:  sqltypes.VarChar,
-					Value: []byte("string-1"),
-				},
-				{
-					Type:  sqltypes.VarChar,
-					Value: []byte("string-2"),
-				},
-			},
-		}}, []sqltypes.Row{
-		{sqltypes.NewInt64(1)},
-		{sqltypes.NewInt64(2)},
-	})
+	g.View("upquery").AssertLookupBindVars(BVar([]any{"string-1", "string-2"}),
+		[]sqltypes.Row{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}})
+}
+
+func TestMultipleUpqueries(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE tbl (pk BIGINT NOT NULL AUTO_INCREMENT, 
+	a BIGINT, b BIGINT, c BIGINT,
+	PRIMARY KEY(pk));
+
+	SELECT /*vt+ VIEW=upquery0 PUBLIC */ tbl.pk FROM tbl WHERE tbl.a = :a and tbl.b = :b and tbl.c = :c;
+	SELECT /*vt+ VIEW=upquery1 PUBLIC */ tbl.pk FROM tbl WHERE tbl.a IN ::a and tbl.b = :b;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 1; i <= 16; i++ {
+		g.TestExecute("INSERT INTO tbl (a, b, c) VALUES (%d, %d, %d)", i, i%4, i*10)
+	}
+
+	upquery0 := g.View("upquery0")
+	upquery0.AssertLookup(
+		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(1), sqltypes.NewInt64(10)},
+		[]sqltypes.Row{{sqltypes.NewInt64(1)}})
+
+	upquery1 := g.View("upquery1")
+	upquery1.AssertLookupBindVars(BVar([]any{4, 8, 12}, 0),
+		[]sqltypes.Row{
+			{sqltypes.NewInt64(4)},
+			{sqltypes.NewInt64(8)},
+			{sqltypes.NewInt64(12)},
+		})
+}
+
+func BVar(fields ...any) (bvar []*querypb.BindVariable) {
+	for _, f := range fields {
+		v, err := sqltypes.BuildBindVariable(f)
+		if err != nil {
+			panic(err)
+		}
+		bvar = append(bvar, v)
+	}
+	return
 }
 
 func TestTypeConversions(t *testing.T) {
@@ -970,37 +983,10 @@ func TestTypeConversions(t *testing.T) {
 	require.Error(t, err)
 
 	conv3 := g.View("conv3")
-	_, err = conv3.View.LookupByBindVar(context.Background(), []*querypb.BindVariable{
-		{
-			Type: sqltypes.Tuple,
-			Values: []*querypb.Value{
-				{
-					Type:  sqltypes.VarChar,
-					Value: []byte("string-1"),
-				},
-				{
-					Type:  sqltypes.VarChar,
-					Value: []byte("string-2"),
-				},
-			},
-		},
-	}, true)
+
+	_, err = conv3.View.LookupByBindVar(context.Background(), BVar([]any{"string-1", "string-2"}), true)
 	require.NoError(t, err)
 
-	_, err = conv3.View.LookupByBindVar(context.Background(), []*querypb.BindVariable{
-		{
-			Type: sqltypes.Tuple,
-			Values: []*querypb.Value{
-				{
-					Type:  sqltypes.VarChar,
-					Value: []byte("string-1"),
-				},
-				{
-					Type:  sqltypes.Int64,
-					Value: []byte("1"),
-				},
-			},
-		},
-	}, true)
+	_, err = conv3.View.LookupByBindVar(context.Background(), BVar([]any{"string-1", 1}), true)
 	require.Error(t, err)
 }

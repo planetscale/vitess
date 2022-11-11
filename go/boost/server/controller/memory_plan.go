@@ -24,6 +24,7 @@ type nodeUsage struct {
 	memPerShard []int64
 	memTotal    int64
 	roots       map[boostpb.GraphNodeIdx]struct{}
+	status      boostpb.MaterializationStatus
 }
 
 func (n *nodeUsage) evict(evictions []Eviction, evict int64) []Eviction {
@@ -108,7 +109,7 @@ func NewEvictionPlan() *EvictionPlan {
 	}
 }
 
-func (ep *EvictionPlan) LoadRecipe(g *graph.Graph[*flownode.Node], rcp *boostplan.Recipe) {
+func (ep *EvictionPlan) LoadRecipe(g *graph.Graph[*flownode.Node], mat *Materialization, rcp *boostplan.Recipe) {
 	viewsByName := make(map[string]*boostplan.CachedQuery)
 	for _, v := range rcp.GetAllPublicViews() {
 		viewsByName[v.Name] = v
@@ -146,6 +147,7 @@ func (ep *EvictionPlan) LoadRecipe(g *graph.Graph[*flownode.Node], rcp *boostpla
 					ptr:         node,
 					memPerShard: make([]int64, node.Sharding().GetShards()),
 					roots:       map[boostpb.GraphNodeIdx]struct{}{},
+					status:      mat.GetStatus(node),
 				}
 				ep.nodes[nodeAddr] = usage
 			}
@@ -202,7 +204,12 @@ func (e *Eviction) MarshalJSON() ([]byte, error) {
 }
 
 func (ep *EvictionPlan) evictOnRoot(evictions []Eviction, root *rootUsage, evictBytes int64) []Eviction {
-	candidates := slices.Clone(root.nodes)
+	candidates := make([]*nodeUsage, 0, len(root.nodes))
+	for _, cand := range root.nodes {
+		if cand.status == boostpb.MaterializationPartial {
+			candidates = append(candidates, cand)
+		}
+	}
 	slices.SortFunc(candidates, func(a, b *nodeUsage) bool {
 		return a.memTotal > b.memTotal
 	})
@@ -318,7 +325,7 @@ func (ctrl *Controller) PrepareEvictionPlan(ctx context.Context) (*EvictionPlan,
 	var wg errgroup.Group
 	var ep = NewEvictionPlan()
 
-	ep.LoadRecipe(ctrl.ingredients, ctrl.recipe.Recipe)
+	ep.LoadRecipe(ctrl.ingredients, ctrl.materialization, ctrl.recipe.Recipe)
 
 	for _, wrk := range ctrl.workers {
 		client := wrk.Client
