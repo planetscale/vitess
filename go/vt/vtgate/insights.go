@@ -27,6 +27,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"github.com/twmb/murmur3"
@@ -219,7 +220,7 @@ func (ii *Insights) startInterval() {
 	ii.PeriodStart = time.Now()
 }
 
-func (ii *Insights) shouldSendToInsights(ls *LogStats) bool {
+func (ii *Insights) shouldSendToInsights(ls *logstats.LogStats) bool {
 	return ls.TotalTime().Milliseconds() > int64(ii.ResponseTimeThreshold) || ls.RowsRead >= uint64(ii.RowsReadThreshold) || ls.Error != nil
 }
 
