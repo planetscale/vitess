@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"github.com/pkg/errors"
 
 	"github.com/stretchr/testify/assert"
@@ -300,7 +302,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 	}
 	now := time.Now()
 	for _, q := range queries {
-		ls := &LogStats{
+		ls := &logstats.LogStats{
 			SQL:       q.sql,
 			StartTime: now.Add(-q.responseTime),
 			EndTime:   now,
@@ -322,7 +324,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 }
 
 var (
-	lsSlowQuery = &LogStats{
+	lsSlowQuery = &logstats.LogStats{
 		SQL:       "select sleep(5)",
 		StartTime: time.Now().Add(-5 * time.Second),
 		EndTime:   time.Now(),
