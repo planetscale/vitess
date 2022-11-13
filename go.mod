@@ -128,7 +128,6 @@ require (
 	github.com/segmentio/fasthash v1.0.3
 	github.com/segmentio/kafka-go v0.4.38
 	github.com/shopspring/decimal v1.3.1
-	github.com/syndtr/goleveldb v1.0.0
 	github.com/tidwall/btree v1.5.0
 	github.com/twmb/murmur3 v1.1.6
 	go.opentelemetry.io/otel v1.11.1
