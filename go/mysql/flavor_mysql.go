@@ -247,7 +247,7 @@ func (mysqlFlavor) disableBinlogPlaybackCommand() string {
 
 // TablesWithSize56 is a query to select table along with size for mysql 5.6
 const TablesWithSize56 = `SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length) 
-		FROM information_schema.tables WHERE table_schema = database() group by table_name`
+		FROM information_schema.tables WHERE table_schema = database() AND table_type <> 'VIEW' group by table_name`
 
 // TablesWithSize57 is a query to select table along with size for mysql 5.7.
 // It's a little weird, because the JOIN predicate only works if the table and databases do not contain weird characters.
@@ -258,7 +258,7 @@ const TablesWithSize57 = `SELECT t.table_name, t.table_type, unix_timestamp(t.cr
 UNION ALL
 	SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length)
 	FROM information_schema.tables t
-	WHERE table_schema = database() AND NOT EXISTS(SELECT * FROM information_schema.innodb_sys_tablespaces i WHERE i.name = concat(t.table_schema,'/',t.table_name)) 
+	WHERE table_schema = database() AND table_type <> 'VIEW' AND NOT EXISTS(SELECT * FROM information_schema.innodb_sys_tablespaces i WHERE i.name = concat(t.table_schema,'/',t.table_name))
 	group by table_name, table_type, unix_timestamp(create_time), table_comment
 `
 
