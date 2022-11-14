@@ -15,7 +15,7 @@ import (
 
 var DefaultAllocator cmalloc
 
-const LeakCheck = true
+const LeakCheck = false
 
 // cmalloc tracks each individual allocation for the
 // leak checker.
