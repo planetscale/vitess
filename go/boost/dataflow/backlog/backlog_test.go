@@ -203,6 +203,10 @@ func TestConcurrentRowsInternal(t *testing.T) {
 
 	w.Swap()
 
+	if !offheap.LeakCheck {
+		t.Skip("skipping, offheap leak check is disabled")
+	}
+
 	require.True(t, offheap.DefaultAllocator.IsAllocated(removedNode), "pointer for linked list node was freed too early")
 
 	internal = memrow.CollectInternal_(nil)
