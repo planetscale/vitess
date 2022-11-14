@@ -7,6 +7,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+//enumcheck:exhaustive
 type UnsupportedType int
 
 const (
