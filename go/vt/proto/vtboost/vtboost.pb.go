@@ -22,6 +22,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+//enumcheck:exhaustive
 type GraphvizRequest_Clustering int32
 
 const (
@@ -71,6 +72,7 @@ func (GraphvizRequest_Clustering) EnumDescriptor() ([]byte, []int) {
 	return file_vtboost_proto_rawDescGZIP(), []int{3, 0}
 }
 
+//enumcheck:exhaustive
 type ClusterState_State int32
 
 const (
@@ -123,6 +125,7 @@ func (ClusterState_State) EnumDescriptor() ([]byte, []int) {
 	return file_vtboost_proto_rawDescGZIP(), []int{15, 0}
 }
 
+//enumcheck:exhaustive
 type ControllerState_RecipeStatus_Progress int32
 
 const (

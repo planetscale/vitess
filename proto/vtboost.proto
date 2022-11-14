@@ -44,6 +44,7 @@ message Materialization {
 };
 
 message GraphvizRequest {
+  //enumcheck:exhaustive
   enum Clustering {
     NONE = 0;
     DOMAIN = 1;
@@ -93,6 +94,7 @@ message DescribeRecipeResponse {
 };
 
 message ClusterState {
+  //enumcheck:exhaustive
   enum State {
     DISABLED = 0;
     PRIMARY = 1;
@@ -166,6 +168,7 @@ message ControllerState {
   int64 recipe_version = 3;
 
   message RecipeStatus {
+    //enumcheck:exhaustive
     enum Progress {
       UNKNOWN = 0;
       APPLYING = 1;
