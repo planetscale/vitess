@@ -111,6 +111,29 @@ func (r Row) ToVitess() (out sqltypes.Row) {
 	return
 }
 
+func (r Row) ToVitessTruncate(length int) (out sqltypes.Row) {
+	bytelen := uint16(len(r))
+	if bytelen == 0 {
+		return nil
+	}
+
+	s := string(r)
+	last := getUint16s(s)
+	s = s[2:]
+
+	for col := 0; col < length && last < bytelen; col++ {
+		pos := getUint16s(s)
+		s = s[2:]
+
+		tt := getUint16s(string(r)[last:])
+		vv := []byte(r[last+2 : pos])
+		out = append(out, sqltypes.MakeTrusted(sqltypes.Type(tt), vv))
+
+		last = pos
+	}
+	return
+}
+
 func (r Row) ToValues() (out []Value) {
 	bytelen := uint16(len(r))
 	if bytelen == 0 {

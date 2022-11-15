@@ -43,8 +43,8 @@ func TestEndtoendVoteRecipeWithExternalBase(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	awvc.AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(votesCount / articleCount)}})
-	awvc.AssertLookup([]sqltypes.Value{sqltypes.NewInt64(2)}, []sqltypes.Row{{sqltypes.NewInt64(2), sqltypes.NewVarChar("Article 2"), sqltypes.NewInt64(votesCount / articleCount)}})
+	awvc.Lookup(1).Expect([]sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(votesCount / articleCount)}})
+	awvc.Lookup(2).Expect([]sqltypes.Row{{sqltypes.NewInt64(2), sqltypes.NewVarChar("Article 2"), sqltypes.NewInt64(votesCount / articleCount)}})
 
 	tt.ExecuteFetch("SET @@boost_cached_queries = false")
 

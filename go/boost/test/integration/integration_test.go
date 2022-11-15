@@ -85,25 +85,13 @@ func testBasic(t *testing.T, g *boosttest.Cluster) {
 	require.Equal(t, []string{"a", "b"}, muta.Table.Columns())
 
 	muta.Insert([]sqltypes.Value{id, sqltypes.NewInt64(2)})
-
-	cq.AssertLookup(
-		[]sqltypes.Value{id},
-		[]sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}},
-	)
+	cq.Lookup(id).Expect([]sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}})
 
 	mutb.Insert([]sqltypes.Value{id, sqltypes.NewInt64(4)})
-
-	cq.AssertLookup(
-		[]sqltypes.Value{id},
-		[]sqltypes.Row{{id, sqltypes.NewInt64(2)}, {id, sqltypes.NewInt64(4)}},
-	)
+	cq.Lookup(id).Expect([]sqltypes.Row{{id, sqltypes.NewInt64(2)}, {id, sqltypes.NewInt64(4)}})
 
 	muta.Delete([]sqltypes.Value{id})
-
-	cq.AssertLookup(
-		[]sqltypes.Value{id},
-		[]sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewInt64(4)}},
-	)
+	cq.Lookup(id).Expect([]sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewInt64(4)}})
 }
 
 func TestShardedSuffle(t *testing.T) {
@@ -136,7 +124,7 @@ func testShardedSuffle(t *testing.T, g *boosttest.Cluster) {
 	base.BatchInsert(batch)
 
 	// drum roll, please...
-	view.AssertLookupLen(sqltypes.Row{sqltypes.NewInt64(1)}, 100)
+	view.Lookup(1).ExpectLen(100)
 }
 
 func TestBroadRecursingSubquery(t *testing.T) {
@@ -204,7 +192,7 @@ func testBroadRecursingSubquery(t *testing.T, g *boosttest.Cluster) {
 	base.BatchInsert(batch)
 
 	// moment of truth
-	rows := reader.AssertLookupLen(sqltypes.Row{sqltypes.NewInt64(1)}, N)
+	rows := reader.Lookup(1).ExpectLen(N)
 	for i := int64(0); i < N; i++ {
 		var found bool
 		for _, r := range rows.Rows {
@@ -243,28 +231,14 @@ func TestShardedInterdomainAncestors(t *testing.T) {
 
 	muta.Insert([]sqltypes.Value{id, sqltypes.NewInt64(2)})
 
-	bq.AssertLookup(
-		[]sqltypes.Value{id},
-		[]sqltypes.Row{{id, sqltypes.NewInt64(2)}},
-	)
-
-	cq.AssertLookup(
-		[]sqltypes.Value{id},
-		[]sqltypes.Row{{id, sqltypes.NewInt64(2)}},
-	)
+	bq.Lookup(id).Expect([]sqltypes.Row{{id, sqltypes.NewInt64(2)}})
+	cq.Lookup(id).Expect([]sqltypes.Row{{id, sqltypes.NewInt64(2)}})
 
 	id = sqltypes.NewInt64(2)
 	muta.Insert([]sqltypes.Value{id, sqltypes.NewInt64(4)})
 
-	bq.AssertLookup(
-		[]sqltypes.Value{id},
-		[]sqltypes.Row{{id, sqltypes.NewInt64(4)}},
-	)
-
-	cq.AssertLookup(
-		[]sqltypes.Value{id},
-		[]sqltypes.Row{{id, sqltypes.NewInt64(4)}},
-	)
+	bq.Lookup(id).Expect([]sqltypes.Row{{id, sqltypes.NewInt64(4)}})
+	bq.Lookup(id).Expect([]sqltypes.Row{{id, sqltypes.NewInt64(4)}})
 }
 
 func TestWithMaterialization(t *testing.T) {
@@ -293,8 +267,7 @@ func TestWithMaterialization(t *testing.T) {
 	muta.Insert(sqltypes.Row{id, sqltypes.NewInt64(2)})
 	muta.Insert(sqltypes.Row{id, sqltypes.NewInt64(3)})
 
-	cq.AssertLookup(
-		[]sqltypes.Value{id},
+	cq.Lookup(id).Expect(
 		[]sqltypes.Row{
 			{id, sqltypes.NewInt64(1)},
 			{id, sqltypes.NewInt64(2)},
@@ -306,8 +279,7 @@ func TestWithMaterialization(t *testing.T) {
 	mutb.Insert(sqltypes.Row{id, sqltypes.NewInt64(5)})
 	mutb.Insert(sqltypes.Row{id, sqltypes.NewInt64(6)})
 
-	cq.AssertLookup(
-		[]sqltypes.Value{id},
+	cq.Lookup(id).Expect(
 		[]sqltypes.Row{
 			{id, sqltypes.NewInt64(1)},
 			{id, sqltypes.NewInt64(2)},
@@ -354,8 +326,7 @@ func TestWithPartialMaterialization(t *testing.T) {
 	cq := g.View("c")
 	// TODO: check cq.Len()
 
-	cq.AssertLookup(
-		[]sqltypes.Value{id},
+	cq.Lookup(id).Expect(
 		[]sqltypes.Row{
 			{id, sqltypes.NewInt64(1)},
 			{id, sqltypes.NewInt64(2)},

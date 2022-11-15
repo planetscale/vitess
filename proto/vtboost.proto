@@ -40,6 +40,10 @@ message Materialization {
     repeated query.Field schema = 3;
     repeated query.Field key_schema = 4;
     repeated string shards = 5;
+
+    repeated int64 topk_order_cols = 6;
+    repeated bool topk_order_desc = 7;
+    int64 topk_limit = 8;
   };
 };
 

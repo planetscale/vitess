@@ -38,7 +38,12 @@ message Sharding {
 message ViewParameter {
   string name = 1;
   bool multi = 2;
-}
+};
+
+message OrderedColumn {
+  int64 col = 1 [(gogoproto.casttype) = "int"];
+  bool desc = 2;
+};
 
 message Node {
   string name = 1;
@@ -75,7 +80,12 @@ message Node {
     uint32 for_node = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
     repeated int64 state = 2 [(gogoproto.casttype) = "int"];
     repeated ViewParameter parameters = 3 [(gogoproto.nullable) = false];
-    int64 col_len = 4 [(gogoproto.casttype) = "int"];
+
+    repeated OrderedColumn topk_order = 5 [(gogoproto.nullable) = false];
+    int64 topk_limit = 6 [(gogoproto.casttype) = "int"];
+
+    int64 columns_for_view = 7 [(gogoproto.casttype) = "int"];
+    int64 columns_for_user = 8 [(gogoproto.casttype) = "int"];
   };
 
   message InternalUnion {
@@ -182,10 +192,9 @@ message Node {
 
   message InternalTopK {
     IndexPair src = 1;
-    repeated int64 order_offsets = 2 [(gogoproto.casttype) = "int"];
-    repeated bool order_asc = 3;
-    uint64 K = 4 [(gogoproto.casttype) = "uint"];
-    repeated int64 params = 5 [(gogoproto.casttype) = "int"];
+    repeated OrderedColumn order = 2 [(gogoproto.nullable) = false];
+    uint64 K = 3 [(gogoproto.casttype) = "uint"];
+    repeated int64 params = 4 [(gogoproto.casttype) = "int"];
   }
 
   message InternalDistinct {
