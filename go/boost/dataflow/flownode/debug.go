@@ -112,10 +112,10 @@ func (n *Node) Describe(gvz *graphviz.Node, options DescribeOptions) {
 
 		if !options.ShowSchema {
 			var fields string
-			if len(n.fields) > impl.colLen {
-				fields += strings.Join(n.fields[:impl.colLen], ", ")
+			if len(n.fields) > impl.columnsForUser {
+				fields += strings.Join(n.fields[:impl.columnsForUser], ", ")
 				fields += ` <I><FONT COLOR="grey">[, `
-				fields += strings.Join(n.fields[impl.colLen:], ", ")
+				fields += strings.Join(n.fields[impl.columnsForUser:], ", ")
 				fields += `]</FONT></I>`
 			} else {
 				fields = strings.Join(n.fields, ", ")

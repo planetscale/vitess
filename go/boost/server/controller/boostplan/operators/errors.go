@@ -25,7 +25,6 @@ const (
 	JoinWithUsing
 	ParametersInsideUnion
 	OrderByNoLimit
-	OrderByAtRoot
 	LimitNoOrderBy
 	Offset
 	ColumnsNotExpanded
@@ -96,8 +95,6 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "query uses unsupported parameters inside a union: %s", sqlparser.CanonicalString(n.AST))
 	case OrderByNoLimit:
 		fmt.Fprintf(&sb, "query contains order by with no limit: %s", sqlparser.CanonicalString(n.AST))
-	case OrderByAtRoot:
-		fmt.Fprintf(&sb, "query contains order by at the outer SELECT or UNION: %s", sqlparser.CanonicalString(n.AST))
 	case LimitNoOrderBy:
 		fmt.Fprintf(&sb, "query contains limit with no order by: %s", sqlparser.CanonicalString(n.AST))
 	case Offset:

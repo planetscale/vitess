@@ -472,19 +472,6 @@ type TestView struct {
 	t    testing.TB
 }
 
-func (tv *TestView) Lookup(key []sqltypes.Value) *sqltypes.Result {
-	tv.t.Helper()
-
-	if key == nil {
-		// Inject bogokey
-		key = []sqltypes.Value{sqltypes.NewInt64(0)}
-	}
-
-	res, err := tv.View.Lookup(context.Background(), key, true)
-	require.NoError(tv.t, err)
-	return res
-}
-
 func (tv *TestView) LookupByFields(fields map[string]sqltypes.Value) *sqltypes.Result {
 	tv.t.Helper()
 
@@ -493,51 +480,131 @@ func (tv *TestView) LookupByFields(fields map[string]sqltypes.Value) *sqltypes.R
 	return res
 }
 
-func (tv *TestView) LookupByBindVar(bvars []*querypb.BindVariable) *sqltypes.Result {
-	tv.t.Helper()
-
-	res, err := tv.View.LookupByBindVar(context.Background(), bvars, true)
-	require.NoError(tv.t, err)
-	return res
+type Lookup struct {
+	t   testing.TB
+	try func() (*sqltypes.Result, error)
 }
 
-func (tv *TestView) AssertLookupBindVars(bvars []*querypb.BindVariable, expected []sqltypes.Row) *sqltypes.Result {
+func (tv *TestView) LookupBvar(govals ...any) *Lookup {
 	tv.t.Helper()
 
+	var bvar []*querypb.BindVariable
+	for _, f := range govals {
+		v, err := sqltypes.BuildBindVariable(f)
+		if err != nil {
+			tv.t.Fatal(err)
+		}
+		bvar = append(bvar, v)
+	}
+
+	return &Lookup{
+		t: tv.t,
+		try: func() (*sqltypes.Result, error) {
+			return tv.View.LookupByBindVar(context.Background(), bvar, true)
+		},
+	}
+}
+
+func (tv *TestView) Lookup(govals ...any) *Lookup {
+	tv.t.Helper()
+
+	var values []sqltypes.Value
+	for _, goval := range govals {
+		switch goval := goval.(type) {
+		case nil:
+			values = append(values, sqltypes.NULL)
+		case []byte:
+			values = append(values, sqltypes.MakeTrusted(sqltypes.VarBinary, goval))
+		case int:
+			values = append(values, sqltypes.NewInt64(int64(goval)))
+		case int64:
+			values = append(values, sqltypes.NewInt64(goval))
+		case int32:
+			values = append(values, sqltypes.NewInt32(goval))
+		case int8:
+			values = append(values, sqltypes.NewInt8(goval))
+		case uint64:
+			values = append(values, sqltypes.NewUint64(goval))
+		case uint32:
+			values = append(values, sqltypes.NewUint32(goval))
+		case float64:
+			values = append(values, sqltypes.NewFloat64(goval))
+		case string:
+			values = append(values, sqltypes.NewVarChar(goval))
+		case sqltypes.Value:
+			values = append(values, goval)
+		default:
+			tv.t.Fatalf("unexpected value %T", goval)
+		}
+	}
+
+	if values == nil {
+		values = append(values, sqltypes.NewInt64(0))
+	}
+
+	return &Lookup{
+		t: tv.t,
+		try: func() (*sqltypes.Result, error) {
+			return tv.View.Lookup(context.Background(), values, true)
+		},
+	}
+}
+
+func (l *Lookup) Expect(expected []sqltypes.Row) *sqltypes.Result {
+	l.t.Helper()
+	return l.expect(func(result *sqltypes.Result) error {
+		return RowsEquals(expected, result.Rows)
+	})
+}
+
+func (l *Lookup) ExpectSorted(expected []sqltypes.Row) *sqltypes.Result {
+	l.t.Helper()
+	return l.expect(func(result *sqltypes.Result) error {
+		expectedS := fmt.Sprintf("%v", expected)
+		resultS := fmt.Sprintf("%v", result.Rows)
+		if expectedS != resultS {
+			return fmt.Errorf("mismatch in sorted rows;\nwant: %s\ngot:  %s", expectedS, resultS)
+		}
+		return nil
+	})
+}
+
+func (l *Lookup) ExpectLen(expected int) *sqltypes.Result {
+	l.t.Helper()
+	return l.expect(func(result *sqltypes.Result) error {
+		if len(result.Rows) != expected {
+			return fmt.Errorf("wrong row count: got %d, expected %d", len(result.Rows), expected)
+		}
+		return nil
+	})
+}
+
+func (l *Lookup) expect(check func(result *sqltypes.Result) error) *sqltypes.Result {
+	l.t.Helper()
+
+	var rs *sqltypes.Result
 	var err error
 	for tries := 0; tries < 3; tries++ {
-		rs := tv.LookupByBindVar(bvars)
-		if err = RowsEquals(expected, rs.Rows); err == nil {
+		rs, err = l.try()
+		if err != nil {
+			continue
+		}
+		if err = check(rs); err == nil {
 			return rs
 		}
 		time.Sleep(3 * time.Millisecond)
 	}
-	tv.t.Fatal(err)
+	l.t.Fatal(err)
 	return nil
 }
 
-func (tv *TestView) AssertLookup(key []sqltypes.Value, expected []sqltypes.Row) *sqltypes.Result {
-	tv.t.Helper()
+func (l *Lookup) ExpectError() {
+	l.t.Helper()
 
-	var err error
-	var rs *sqltypes.Result
-	for tries := 0; tries < 3; tries++ {
-		rs = tv.Lookup(key)
-		if err = RowsEquals(expected, rs.Rows); err == nil {
-			return rs
-		}
-		time.Sleep(5 * time.Millisecond)
+	_, err := l.try()
+	if err == nil {
+		l.t.Fatalf("expected lookup to fail")
 	}
-	tv.t.Fatal(err)
-	return nil
-}
-
-func (tv *TestView) AssertLookupLen(key []sqltypes.Value, expected int) *sqltypes.Result {
-	tv.t.Helper()
-
-	rs := tv.Lookup(key)
-	require.Len(tv.t, rs.Rows, expected)
-	return rs
 }
 
 type TestTable struct {

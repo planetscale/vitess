@@ -233,6 +233,45 @@ func (m *Materialization_ViewDescriptor) MarshalToSizedBufferVT(dAtA []byte) (in
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.TopkLimit != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.TopkLimit))
+		i--
+		dAtA[i] = 0x40
+	}
+	if len(m.TopkOrderDesc) > 0 {
+		for iNdEx := len(m.TopkOrderDesc) - 1; iNdEx >= 0; iNdEx-- {
+			i--
+			if m.TopkOrderDesc[iNdEx] {
+				dAtA[i] = 1
+			} else {
+				dAtA[i] = 0
+			}
+		}
+		i = encodeVarint(dAtA, i, uint64(len(m.TopkOrderDesc)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if len(m.TopkOrderCols) > 0 {
+		var pksize2 int
+		for _, num := range m.TopkOrderCols {
+			pksize2 += sov(uint64(num))
+		}
+		i -= pksize2
+		j1 := i
+		for _, num1 := range m.TopkOrderCols {
+			num := uint64(num1)
+			for num >= 1<<7 {
+				dAtA[j1] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j1++
+			}
+			dAtA[j1] = uint8(num)
+			j1++
+		}
+		i = encodeVarint(dAtA, i, uint64(pksize2))
+		i--
+		dAtA[i] = 0x32
+	}
 	if len(m.Shards) > 0 {
 		for iNdEx := len(m.Shards) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.Shards[iNdEx])
@@ -1990,6 +2029,19 @@ func (m *Materialization_ViewDescriptor) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
+	if len(m.TopkOrderCols) > 0 {
+		l = 0
+		for _, e := range m.TopkOrderCols {
+			l += sov(uint64(e))
+		}
+		n += 1 + sov(uint64(l)) + l
+	}
+	if len(m.TopkOrderDesc) > 0 {
+		n += 1 + sov(uint64(len(m.TopkOrderDesc))) + len(m.TopkOrderDesc)*1
+	}
+	if m.TopkLimit != 0 {
+		n += 1 + sov(uint64(m.TopkLimit))
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -3299,6 +3351,171 @@ func (m *Materialization_ViewDescriptor) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Shards = append(m.Shards, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 6:
+			if wireType == 0 {
+				var v int64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= int64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.TopkOrderCols = append(m.TopkOrderCols, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLength
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLength
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				var count int
+				for _, integer := range dAtA[iNdEx:postIndex] {
+					if integer < 128 {
+						count++
+					}
+				}
+				elementCount = count
+				if elementCount != 0 && len(m.TopkOrderCols) == 0 {
+					m.TopkOrderCols = make([]int64, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v int64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= int64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.TopkOrderCols = append(m.TopkOrderCols, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field TopkOrderCols", wireType)
+			}
+		case 7:
+			if wireType == 0 {
+				var v int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.TopkOrderDesc = append(m.TopkOrderDesc, bool(v != 0))
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLength
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLength
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				elementCount = packedLen
+				if elementCount != 0 && len(m.TopkOrderDesc) == 0 {
+					m.TopkOrderDesc = make([]bool, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.TopkOrderDesc = append(m.TopkOrderDesc, bool(v != 0))
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field TopkOrderDesc", wireType)
+			}
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TopkLimit", wireType)
+			}
+			m.TopkLimit = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TopkLimit |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
