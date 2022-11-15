@@ -4764,6 +4764,46 @@
     }
   },
   {
+    "comment": "Group By X Order By X",
+    "query": "SELECT user.intcol FROM user GROUP BY user.intcol ORDER BY COUNT(user.intcol)",
+    "v3-plan": "unsupported: in scatter query: complex order by expression: count(`user`.intcol)",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT user.intcol FROM user GROUP BY user.intcol ORDER BY COUNT(user.intcol)",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "1 ASC",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum_count(1) AS count(`user`.intcol)",
+            "GroupBy": "0",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.intcol, count(`user`.intcol) from `user` where 1 != 1 group by `user`.intcol",
+                "OrderBy": "0 ASC",
+                "Query": "select `user`.intcol, count(`user`.intcol) from `user` group by `user`.intcol order by `user`.intcol asc",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "AggregateRandom in non full group by query",
     "query": "select u.id, u.name, count(m.predef1) from user.user as u join user.user_extra as m on u.id = m.order group by u.id",
     "v3-plan": "unsupported: cross-shard query with aggregates",
