@@ -33,7 +33,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"aggr_test", "t3", "t7_xxhash", "aggr_test_dates", "t7_xxhash_idx", "t1", "t2"}
+		tables := []string{"t3", "t3_id7_idx", "t9", "aggr_test", "aggr_test_dates", "t7_xxhash_idx", "t7_xxhash", "t1", "t2"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -364,4 +364,14 @@ func TestEmptyTableAggr(t *testing.T) {
 		})
 	}
 
+}
+
+func TestAggregateRandom(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(t1_id, name, value, shardKey) values (1, 'name 1', 'value 1', 1), (2, 'name 2', 'value 2', 2)")
+	mcmp.Exec("insert into t2(id, shardKey) values (1, 10), (2, 20)")
+
+	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t1.shardKey, t1.name, count(t2.id) FROM t1 JOIN t2 ON t1.value != t2.shardKey GROUP BY t1.t1_id", `[[INT64(1) VARCHAR("name 1") INT64(2)] [INT64(2) VARCHAR("name 2") INT64(2)]]`)
 }
