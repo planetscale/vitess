@@ -154,11 +154,11 @@ func makeTopKNode(node *operators.Node, mig Migration, op *operators.TopK) (oper
 	if err != nil {
 		return operators.FlowNode{}, err
 	}
-	var order []flownode.OrderedColumn
+	var order []boostpb.OrderedColumn
 	for i, o := range op.Order {
-		order = append(order, flownode.OrderedColumn{
-			Column: op.OrderOffsets[i],
-			Order:  o.Direction,
+		order = append(order, boostpb.OrderedColumn{
+			Col:  op.OrderOffsets[i],
+			Desc: o.Direction == sqlparser.DescOrder,
 		})
 	}
 

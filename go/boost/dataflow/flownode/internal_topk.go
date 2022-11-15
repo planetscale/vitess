@@ -12,28 +12,18 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-type OrderedColumn struct {
-	Column int
-	Order  sqlparser.OrderDirection
-}
-
-type Order []OrderedColumn
+type Order []boostpb.OrderedColumn
 
 func (ord Order) Cmp(a, b boostpb.Row) int {
-	var res int
 	for _, oc := range ord {
-		col := oc.Column
-		if oc.Order == sqlparser.AscOrder {
-			res = a.ValueAt(col).Cmp(b.ValueAt(col))
-		} else {
-			res = b.ValueAt(col).Cmp(a.ValueAt(col))
-		}
-		if res != 0 {
-			return res
+		if cmp := a.ValueAt(oc.Col).Cmp(b.ValueAt(oc.Col)); cmp != 0 {
+			if oc.Desc {
+				return -cmp
+			}
+			return cmp
 		}
 	}
 	return 0
@@ -54,7 +44,7 @@ func (t *TopK) internal() {}
 
 func (t *TopK) dataflow() {}
 
-func NewTopK(src graph.NodeIdx, order []OrderedColumn, keys []int, k uint) *TopK {
+func NewTopK(src graph.NodeIdx, order []boostpb.OrderedColumn, keys []int, k uint) *TopK {
 	sort.Ints(keys)
 	return &TopK{
 		src:   boostpb.NewIndexPair(src),
@@ -90,7 +80,11 @@ func (t *TopK) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
 func (t *TopK) Description(detailed bool) string {
 	var order []string
 	for _, o := range t.order {
-		order = append(order, fmt.Sprintf(":%d %s", o.Column, o.Order.ToString()))
+		orderName := "ASC"
+		if o.Desc {
+			orderName = "DESC"
+		}
+		order = append(order, fmt.Sprintf(":%d %s", o.Col, orderName))
 	}
 	var params []string
 	for _, key := range t.keys {
@@ -155,11 +149,6 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 			return order.Cmp(a.row, b.row) < 0
 		})
 
-		start := len(current) - int(k)
-		if start < 0 {
-			start = 0
-		}
-
 		if grpk == k {
 			if len(current) < int(grpk) {
 				// there used to be k things in the group
@@ -188,12 +177,12 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 		}
 
 		// optimization: if we don't *have to* remove something, we don't
-		for i := start; i < len(current); i++ {
+		for i := int(k); i < len(current); i++ {
 			cur := &current[i]
 			if cur.new {
 				// we found an `is_new` in current
 				// can we replace it with a !is_new with the same order value?
-				replace := slices.IndexFunc(current[:start], func(r newrow) bool {
+				replace := slices.IndexFunc(current[k:], func(r newrow) bool {
 					return !r.new && order.Cmp(r.row, cur.row) == 0
 				})
 				if replace >= 0 {
@@ -202,15 +191,15 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 			}
 		}
 
-		for _, nr := range current[start:] {
-			if nr.new {
-				out = append(out, nr.row.ToRecord(true))
+		for i := 0; i < int(k) && i < len(current); i++ {
+			if current[i].new {
+				out = append(out, current[i].row.ToRecord(true))
 			}
 		}
 
-		for _, nr := range current[:start] {
-			if !nr.new {
-				out = append(out, nr.row.ToRecord(false))
+		for i := int(k); i < len(current); i++ {
+			if !current[i].new {
+				out = append(out, current[i].row.ToRecord(false))
 			}
 		}
 
@@ -287,32 +276,16 @@ func (t *TopK) ToProto() *boostpb.Node_InternalTopK {
 		Src:    &t.src,
 		K:      t.k,
 		Params: t.keys,
-	}
-	for _, column := range t.order {
-		pb.OrderOffsets = append(pb.OrderOffsets, column.Column)
-		pb.OrderAsc = append(pb.OrderAsc, column.Order == sqlparser.AscOrder)
+		Order:  t.order,
 	}
 	return pb
 }
 
 func NewTopKFromProto(pb *boostpb.Node_InternalTopK) *TopK {
-	var order Order
-	for i, offset := range pb.OrderOffsets {
-		var dir sqlparser.OrderDirection
-		if pb.OrderAsc[i] {
-			dir = sqlparser.AscOrder
-		} else {
-			dir = sqlparser.DescOrder
-		}
-		order = append(order, OrderedColumn{
-			Column: offset,
-			Order:  dir,
-		})
-	}
 	return &TopK{
 		src:   *pb.Src,
 		keys:  pb.Params,
-		order: order,
+		order: pb.Order,
 		k:     pb.K,
 	}
 }

@@ -392,12 +392,17 @@ func (ctrl *Controller) viewDescriptor(nodeIdx graph.NodeIdx) *vtboostpb.Materia
 		})
 	}
 
+	orderCols, orderColsDesc, orderLimit := reader.Order()
+
 	return &vtboostpb.Materialization_ViewDescriptor{
-		Name:      node.Name,
-		Node:      uint32(nodeIdx),
-		Schema:    schema,
-		KeySchema: keySchema,
-		Shards:    shards,
+		Name:          node.Name,
+		Node:          uint32(nodeIdx),
+		Schema:        schema,
+		KeySchema:     keySchema,
+		Shards:        shards,
+		TopkOrderCols: orderCols,
+		TopkOrderDesc: orderColsDesc,
+		TopkLimit:     orderLimit,
 	}
 }
 

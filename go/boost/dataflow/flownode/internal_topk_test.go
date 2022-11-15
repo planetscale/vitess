@@ -7,16 +7,11 @@ import (
 
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestTopk(t *testing.T) {
-	setup := func(t *testing.T, reversed bool) (*MockGraph, boostpb.IndexPair) {
-		var cmprows = []OrderedColumn{{2, sqlparser.AscOrder}}
-		if reversed {
-			cmprows[0].Order = sqlparser.DescOrder
-		}
-
+	setup := func(t *testing.T, desc bool) (*MockGraph, boostpb.IndexPair) {
+		cmprows := []boostpb.OrderedColumn{{Col: 2, Desc: desc}}
 		g := NewMockGraph(t)
 		s := g.AddBase(
 			"source",
@@ -70,10 +65,10 @@ func TestTopk(t *testing.T) {
 		require.Equal(t, r11a.AsRecords(), a)
 
 		a = g.NarrowOneRow(r05a, true)
-		require.Len(t, a, 0)
+		require.ElementsMatch(t, []boostpb.Record{r12a.ToRecord(false), r05a.ToRecord(true)}, a)
 
 		a = g.NarrowOneRow(r15a, true)
-		require.ElementsMatch(t, []boostpb.Record{r10a.ToRecord(false), r15a.ToRecord(true)}, a)
+		require.Len(t, a, 0)
 	})
 
 	t.Run("it must query", func(t *testing.T) {
@@ -133,10 +128,10 @@ func TestTopk(t *testing.T) {
 		require.Equal(t, r11.AsRecords(), a)
 
 		a = g.NarrowOneRow(r5, true)
-		require.Len(t, a, 0)
+		require.ElementsMatch(t, []boostpb.Record{r12.ToRecord(false), r5.ToRecord(true)}, a)
 
 		a = g.NarrowOneRow(r15, true)
-		require.ElementsMatch(t, []boostpb.Record{r10.ToRecord(false), r15.ToRecord(true)}, a)
+		require.Len(t, a, 0)
 	})
 
 	t.Run("it reports parent columns", func(t *testing.T) {
@@ -165,7 +160,6 @@ func TestTopk(t *testing.T) {
 		r3 := boostpb.TestRow(3, "z", 10)
 		r4 := boostpb.TestRow(4, "z", 5)
 		r4a := boostpb.TestRow(4, "z", 10)
-		r4b := boostpb.TestRow(4, "z", 11)
 
 		g.NarrowOneRow(r1, true)
 		g.NarrowOneRow(r2, true)
@@ -175,32 +169,32 @@ func TestTopk(t *testing.T) {
 		// anything
 		emit := g.NarrowOneRow(r4, true)
 		require.Equal(t, 3, g.states.Get(ni).Rows())
-		require.Len(t, emit, 0)
+		require.ElementsMatch(t, []boostpb.Record{r1.ToRecord(false), r4.ToRecord(true)}, emit)
 
 		// should now have 3 rows in Top-K
-		// [1, z, 10]
 		// [2, z, 10]
 		// [3, z, 10]
+		// [4, z, 5]
 
 		emit = g.NarrowOne([]boostpb.Record{r4.ToRecord(false), r4a.ToRecord(true)}, true)
 
-		// nothing should have been emitted, as [4, z, 10] doesn't enter Top-K
-		require.Len(t, emit, 0)
+		// [4, z, 5] is now replaced by [4, z, 10] in the Top-K
+		require.ElementsMatch(t, []boostpb.Record{r4.ToRecord(false), r4a.ToRecord(true)}, emit)
 
-		emit = g.NarrowOne([]boostpb.Record{r4a.ToRecord(false), r4b.ToRecord(true)}, true)
+		emit = g.NarrowOne([]boostpb.Record{r4a.ToRecord(false), r4.ToRecord(true)}, true)
 
-		// now [4, z, 11] is in, BUT we still only keep 3 elements
+		// now [4, z, 5] is in, BUT we still only keep 3 elements
 		// and have to remove one of the existing ones
 		require.Equal(t, 3, g.states.Get(ni).Rows())
 
 		if emit[0].Positive {
-			require.Equal(t, sqltypes.NewInt64(11), emit[0].Row.ValueAt(2).ToVitessUnsafe())
+			require.Equal(t, sqltypes.NewInt64(5), emit[0].Row.ValueAt(2).ToVitessUnsafe())
 			require.Equal(t, false, emit[1].Positive)
 			require.Equal(t, sqltypes.NewInt64(10), emit[1].Row.ValueAt(2).ToVitessUnsafe())
 		} else {
 			require.Equal(t, sqltypes.NewInt64(10), emit[0].Row.ValueAt(2).ToVitessUnsafe())
 			require.Equal(t, true, emit[1].Positive)
-			require.Equal(t, sqltypes.NewInt64(11), emit[1].Row.ValueAt(2).ToVitessUnsafe())
+			require.Equal(t, sqltypes.NewInt64(5), emit[1].Row.ValueAt(2).ToVitessUnsafe())
 		}
 	})
 }

@@ -22,7 +22,12 @@ type Reader struct {
 	forNode    graph.NodeIdx
 	state      []int
 	parameters []boostpb.ViewParameter
-	colLen     int
+
+	topkOrder Order
+	topkLimit int
+
+	columnsForView int
+	columnsForUser int
 }
 
 func (r *Reader) dataflow() {}
@@ -31,16 +36,31 @@ func (r *Reader) Key() []int {
 	return r.state
 }
 
-func (r *Reader) SetKey(key []int, parameters []boostpb.ViewParameter, colLen int) {
-	if r.state != nil {
-		if !slices.Equal(r.state, key) {
-			panic("tried to replace key in Reader node with different one")
+func (r *Reader) OnConnected(ingredients *graph.Graph[*Node], key []int, parameters []boostpb.ViewParameter, colLen int) {
+	r.state = slices.Clone(key)
+	r.parameters = slices.Clone(parameters)
+	r.columnsForUser = colLen
+	r.columnsForView = colLen
+
+	switch parent := ingredients.Value(r.forNode).impl.(type) {
+	case *TopK:
+		r.topkOrder = slices.Clone(parent.order)
+		r.topkLimit = int(parent.k)
+
+		for _, ord := range r.topkOrder {
+			if ord.Col >= r.columnsForUser {
+				r.columnsForView = 0
+			}
 		}
-	} else {
-		r.state = slices.Clone(key)
-		r.parameters = slices.Clone(parameters)
-		r.colLen = colLen
 	}
+}
+
+func (r *Reader) Order() (cols []int64, desc []bool, limit int64) {
+	for _, ord := range r.topkOrder {
+		cols = append(cols, int64(ord.Col))
+		desc = append(desc, ord.Desc)
+	}
+	return cols, desc, int64(r.topkLimit)
 }
 
 func (r *Reader) IsFor() graph.NodeIdx {
@@ -119,7 +139,7 @@ func (r *Reader) Process(ctx context.Context, m **boostpb.Packet, swap bool) err
 			trace.GetSpan(ctx).Arg("added", dataToAdd)
 		}
 
-		st.Add(dataToAdd, r.colLen)
+		st.Add(dataToAdd, r.columnsForView)
 		if swap {
 			st.Swap()
 		}
@@ -150,7 +170,7 @@ func (r *Reader) Parameters() []boostpb.ViewParameter {
 }
 
 func (r *Reader) PublicColumnLength() int {
-	return r.colLen
+	return r.columnsForUser
 }
 
 func (r *Reader) KeySchema() []boostpb.Type {
@@ -172,19 +192,25 @@ func NewReader(forNode graph.NodeIdx) *Reader {
 
 func (r *Reader) ToProto() *boostpb.Node_Reader {
 	return &boostpb.Node_Reader{
-		ForNode:    r.forNode,
-		State:      r.state,
-		Parameters: r.parameters,
-		ColLen:     r.colLen,
+		ForNode:        r.forNode,
+		State:          r.state,
+		Parameters:     r.parameters,
+		ColumnsForView: r.columnsForView,
+		ColumnsForUser: r.columnsForUser,
+		TopkOrder:      r.topkOrder,
+		TopkLimit:      r.topkLimit,
 	}
 }
 
 func NewReaderFromProto(r *boostpb.Node_Reader) *Reader {
 	return &Reader{
-		writer:     nil,
-		forNode:    r.ForNode,
-		state:      r.State,
-		parameters: r.Parameters,
-		colLen:     r.ColLen,
+		writer:         nil,
+		forNode:        r.ForNode,
+		state:          r.State,
+		parameters:     r.Parameters,
+		columnsForView: r.ColumnsForView,
+		columnsForUser: r.ColumnsForUser,
+		topkOrder:      r.TopkOrder,
+		topkLimit:      r.TopkLimit,
 	}
 }

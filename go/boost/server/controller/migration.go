@@ -60,12 +60,13 @@ func (m *Migration) AddBase(name string, fields []string, b flownode.AnyBase) gr
 	return ni
 }
 
-func (m *Migration) ensureReaderFor(na graph.NodeIdx, name string) *flownode.Node {
+func (m *Migration) ensureReaderFor(na graph.NodeIdx, name string, connect func(r *flownode.Reader)) *flownode.Node {
 	fn, found := m.Readers[na]
 	if found {
 		return m.Mainline.ingredients.Value(fn)
 	}
 	r := flownode.NewReader(na)
+	connect(r)
 
 	var rn *flownode.Node
 	if name != "" {
@@ -85,9 +86,9 @@ func (m *Migration) ensureReaderFor(na graph.NodeIdx, name string) *flownode.Nod
 }
 
 func (m *Migration) Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int) {
-	rn := m.ensureReaderFor(na, name)
-	reader := rn.AsReader()
-	reader.SetKey(key, parameters, colLen)
+	m.ensureReaderFor(na, name, func(reader *flownode.Reader) {
+		reader.OnConnected(m.Mainline.ingredients, key, parameters, colLen)
+	})
 }
 
 func (m *Migration) Commit(ctx context.Context) error {
@@ -378,8 +379,9 @@ func (m *Migration) MaintainAnonymous(n graph.NodeIdx, key []int) {
 			Name: fmt.Sprintf("k%d", i),
 		})
 	}
-	ri := m.ensureReaderFor(n, "")
-	ri.AsReader().SetKey(key, params, 0)
+	m.ensureReaderFor(n, "", func(r *flownode.Reader) {
+		r.OnConnected(m.Mainline.ingredients, key, params, 0)
+	})
 }
 
 func NewMigration(inner *Controller) *Migration {
