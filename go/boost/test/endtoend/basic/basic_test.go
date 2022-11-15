@@ -40,12 +40,12 @@ func TestEndtoendBasicWithExternalBase(t *testing.T) {
 	tt.ExecuteFetch("INSERT INTO a VALUES (1, 2)")
 	boosttest.Settle()
 
-	cq.AssertLookup([]sqltypes.Value{id}, []sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}})
+	cq.Lookup(id).Expect([]sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}})
 
 	tt.ExecuteFetch("INSERT INTO b VALUES (1, 4)")
 	boosttest.Settle()
 
-	cq.AssertLookup([]sqltypes.Value{id}, []sqltypes.Row{
+	cq.Lookup(id).Expect([]sqltypes.Row{
 		{id, sqltypes.NewInt64(2)},
 		{id, sqltypes.NewInt64(4)},
 	})
@@ -53,14 +53,9 @@ func TestEndtoendBasicWithExternalBase(t *testing.T) {
 	tt.ExecuteFetch("DELETE FROM a WHERE c1 = 1")
 	boosttest.Settle()
 
-	cq.AssertLookup([]sqltypes.Value{id}, []sqltypes.Row{
-		{id, sqltypes.NewInt64(4)},
-	})
-
+	cq.Lookup(id).Expect([]sqltypes.Row{{id, sqltypes.NewInt64(4)}})
 	tt.ExecuteFetch("UPDATE b SET c2 = 3 WHERE c1 = 1")
 	boosttest.Settle()
 
-	cq.AssertLookup([]sqltypes.Value{id}, []sqltypes.Row{
-		{id, sqltypes.NewInt64(3)},
-	})
+	cq.Lookup(id).Expect([]sqltypes.Row{{id, sqltypes.NewInt64(3)}})
 }

@@ -20,7 +20,6 @@ import (
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testexecutor"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtboost"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
@@ -54,11 +53,11 @@ SELECT /*vt+ VIEW=v_full PUBLIC */ SUM(num.a) FROM num;
 		g.TestExecute("INSERT INTO num (a) VALUES (%d)", i)
 	}
 
-	g.View("v_partial").AssertLookup(nil, []sqltypes.Row{})
+	g.View("v_partial").Lookup().Expect([]sqltypes.Row{})
 
-	g.View("v_partial").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
+	g.View("v_partial").Lookup(1).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
 	time.Sleep(500 * time.Millisecond)
-	g.View("v_full").AssertLookup(nil, []sqltypes.Row{{sqltypes.NewDecimal("6")}})
+	g.View("v_full").Lookup().Expect([]sqltypes.Row{{sqltypes.NewDecimal("6")}})
 }
 
 func TestMaterializationWithIgnoredPacketsAndMultiplePartial(t *testing.T) {
@@ -75,7 +74,7 @@ SELECT /*vt+ VIEW=v_sum_b PUBLIC */ SUM(num.b) FROM num WHERE num.a = :a;
 	g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", 2, 2)
 	g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", 2, 3)
 
-	g.View("v_sum_b").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(2)}, []sqltypes.Row{{sqltypes.NewDecimal("5")}})
+	g.View("v_sum_b").Lookup(2).Expect([]sqltypes.Row{{sqltypes.NewDecimal("5")}})
 
 	time.Sleep(50 * time.Millisecond)
 	g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", 2, 3)
@@ -83,10 +82,10 @@ SELECT /*vt+ VIEW=v_sum_b PUBLIC */ SUM(num.b) FROM num WHERE num.a = :a;
 	g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", 3, 3)
 
 	time.Sleep(200 * time.Millisecond)
-	g.View("v_sum_a").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(2)}, []sqltypes.Row{{sqltypes.NewDecimal("6")}})
+	g.View("v_sum_a").Lookup(2).Expect([]sqltypes.Row{{sqltypes.NewDecimal("6")}})
 
 	time.Sleep(500 * time.Millisecond)
-	g.View("v_sum_b").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(2)}, []sqltypes.Row{{sqltypes.NewDecimal("8")}})
+	g.View("v_sum_b").Lookup(2).Expect([]sqltypes.Row{{sqltypes.NewDecimal("8")}})
 }
 
 func TestProjections(t *testing.T) {
@@ -107,21 +106,21 @@ func TestProjections(t *testing.T) {
 		g.TestExecute("INSERT INTO num (a, b, c, d, e, f, g, h) VALUES (%d, %d, %d, %d, %d, %d, %d, %d)", i, i, i, i, i, i, i, i)
 	}
 
-	g.View("op0").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{
+	g.View("op0").Lookup(1).Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
 	})
 
-	g.View("op0").AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1")}, []sqltypes.Row{
+	g.View("op0").Lookup("1").Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
 	})
 
-	g.View("op1").AssertLookup(nil, []sqltypes.Row{
+	g.View("op1").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
 		{sqltypes.NewInt32(2), sqltypes.NewInt64(4), sqltypes.NewInt64(420)},
 		{sqltypes.NewInt32(3), sqltypes.NewInt64(6), sqltypes.NewInt64(420)},
 	})
 
-	g.View("op3").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{
+	g.View("op3").Lookup(1).Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(3), sqltypes.NewInt64(420)},
 	})
 }
@@ -143,7 +142,7 @@ func TestProjectionsWithMigration(t *testing.T) {
 		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i, i)
 	}
 
-	g.View("op0").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{
+	g.View("op0").Lookup(1).Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
 	})
 
@@ -160,10 +159,10 @@ func TestProjectionsWithMigration(t *testing.T) {
 	g.TestExecute("INSERT INTO num (a, b, c) VALUES (%d, %d, %d)", 10, 10, 666)
 	boosttest.Settle()
 
-	g.View("op0").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{
+	g.View("op0").Lookup(1).Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
 	})
-	g.View("op1").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(10)}, []sqltypes.Row{
+	g.View("op1").Lookup(10).Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(666), sqltypes.NewInt64(20), sqltypes.NewInt64(420)},
 	})
 }
@@ -188,15 +187,15 @@ func TestAggregations(t *testing.T) {
 	}
 	g.TestExecute("INSERT INTO num (a, b) VALUES (null, 100)")
 
-	g.View("op0").AssertLookup(nil, []sqltypes.Row{
+	g.View("op0").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(3), sqltypes.NewInt64(4)},
 	})
-	g.View("op1").AssertLookup(nil, []sqltypes.Row{
+	g.View("op1").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(100), sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
 		{sqltypes.NewInt32(200), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 		{sqltypes.NewInt32(300), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 	})
-	g.View("op2").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(2)}, []sqltypes.Row{
+	g.View("op2").Lookup(2).Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 	})
 }
@@ -225,15 +224,15 @@ func TestAggregationsWithFullExternalReplay(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	g.ApplyRecipeEx(recipe, false, true)
 
-	g.View("op0").AssertLookup(nil, []sqltypes.Row{
+	g.View("op0").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(3), sqltypes.NewInt64(4)},
 	})
-	g.View("op1").AssertLookup(nil, []sqltypes.Row{
+	g.View("op1").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(100), sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
 		{sqltypes.NewInt32(200), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 		{sqltypes.NewInt32(300), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 	})
-	g.View("op2").AssertLookup([]sqltypes.Value{sqltypes.NewInt64(2)}, []sqltypes.Row{
+	g.View("op2").Lookup(2).Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 	})
 }
@@ -280,19 +279,18 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 		g.TestExecute("INSERT INTO num (a, b, c, d, e, f, g, h) VALUES (%d, %d, %d, %d, %d, %d, %d, %d)", i, i, i, i, i, i, i, i)
 	}
 
-	identity := g.View("identity")
-	res := identity.Lookup([]sqltypes.Value{sqltypes.NewInt64(1)})
-	t.Logf("lookup identity: %v", res.Rows)
+	identity := g.View("identity").Lookup(1).ExpectLen(1)
+	t.Logf("lookup identity: %v", identity.Rows)
 
-	g.View("summed_a").AssertLookup(nil, []sqltypes.Row{{sqltypes.NewDecimal("6")}})
-	g.View("summed_g").AssertLookup(nil, []sqltypes.Row{{sqltypes.NewFloat64(6)}})
+	g.View("summed_a").Lookup().Expect([]sqltypes.Row{{sqltypes.NewDecimal("6")}})
+	g.View("summed_g").Lookup().Expect([]sqltypes.Row{{sqltypes.NewFloat64(6)}})
 
-	g.View("max_a").AssertLookup(nil, []sqltypes.Row{{sqltypes.NewInt32(3)}})
-	g.View("max_g").AssertLookup(nil, []sqltypes.Row{{sqltypes.NewFloat64(3)}})
+	g.View("max_a").Lookup().Expect([]sqltypes.Row{{sqltypes.NewInt32(3)}})
+	g.View("max_g").Lookup().Expect([]sqltypes.Row{{sqltypes.NewFloat64(3)}})
 
-	g.View("min_a").AssertLookup(nil, []sqltypes.Row{{sqltypes.NewInt32(1)}})
-	g.View("min_g").AssertLookup(nil, []sqltypes.Row{{sqltypes.NewFloat64(1)}})
-	g.View("multi").AssertLookup(nil, []sqltypes.Row{{sqltypes.NewDecimal("6"), sqltypes.NewFloat64(1)}})
+	g.View("min_a").Lookup().Expect([]sqltypes.Row{{sqltypes.NewInt32(1)}})
+	g.View("min_g").Lookup().Expect([]sqltypes.Row{{sqltypes.NewFloat64(1)}})
+	g.View("multi").Lookup().Expect([]sqltypes.Row{{sqltypes.NewDecimal("6"), sqltypes.NewFloat64(1)}})
 }
 
 func TestHaving(t *testing.T) {
@@ -319,11 +317,10 @@ SELECT /*vt+ VIEW=summed PUBLIC */ a, SUM(b) FROM num GROUP BY a HAVING a = 2 AN
 		g.TestExecute("INSERT INTO num (a, b) VALUES (1, %d), (2, %d)", i, i*i)
 	}
 
-	g.View("summed").AssertLookup(nil, []sqltypes.Row{{sqltypes.NewInt32(2), sqltypes.NewDecimal("14")}})
+	g.View("summed").Lookup().Expect([]sqltypes.Row{{sqltypes.NewInt32(2), sqltypes.NewDecimal("14")}})
 }
 
 func TestTopK(t *testing.T) {
-	t.Skip("TODO: enable again when ORDER BY works")
 	const Recipe = `
 CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 	a INT, 
@@ -332,6 +329,8 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 
 	SELECT /*vt+ VIEW=top PUBLIC */ a, b FROM num WHERE a = ? ORDER BY b LIMIT 3;
 	SELECT /*vt+ VIEW=top_with_bogokey PUBLIC */ a, b FROM num ORDER BY b LIMIT 3;
+	SELECT /*vt+ VIEW=top_without_key PUBLIC */ pk FROM num WHERE a = ? ORDER BY b LIMIT 3;
+	SELECT /*vt+ VIEW=top_multi PUBLIC */ pk FROM num WHERE a IN ::a ORDER BY b LIMIT 4;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -339,35 +338,54 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 	for i := 1; i <= 5; i++ {
 		/*
 			pk | a | b
-			0  | 1 | 1
-			1  | 2 | -1
-			2  | 1 | 2
-			3  | 2 | -4
-			4  | 1 | 3
-			3  | 2 | -9
+			1  | 1 | 1
+			2  | 2 | -1
+			3  | 1 | 2
+			4  | 2 | -4
+			5  | 1 | 3
+			6  | 2 | -9
+			7  | 1 | 4
+			8  | 2 | -16
+			9  | 1 | 5
+			10 | 2 | -25
 		*/
 		g.TestExecute("INSERT INTO num (a, b) VALUES (1, %d), (2, -%d)", i, i*i)
 	}
 
-	g.View("top").AssertLookup([]sqltypes.Value{sqltypes.NewInt32(2)},
+	g.View("top").Lookup(int32(2)).ExpectSorted(
 		[]sqltypes.Row{
+			{sqltypes.NewInt32(2), sqltypes.NewInt32(-25)},
+			{sqltypes.NewInt32(2), sqltypes.NewInt32(-16)},
 			{sqltypes.NewInt32(2), sqltypes.NewInt32(-9)},
-			{sqltypes.NewInt32(2), sqltypes.NewInt32(-4)},
-			{sqltypes.NewInt32(2), sqltypes.NewInt32(-1)},
 		})
 
-	g.View("top").AssertLookup([]sqltypes.Value{sqltypes.NewInt32(1)},
+	g.View("top").Lookup(int32(1)).ExpectSorted(
 		[]sqltypes.Row{
+			{sqltypes.NewInt32(1), sqltypes.NewInt32(1)},
+			{sqltypes.NewInt32(1), sqltypes.NewInt32(2)},
 			{sqltypes.NewInt32(1), sqltypes.NewInt32(3)},
-			{sqltypes.NewInt32(1), sqltypes.NewInt32(4)},
-			{sqltypes.NewInt32(1), sqltypes.NewInt32(5)},
 		})
 
-	g.View("top_with_bogokey").AssertLookup(nil,
+	g.View("top_with_bogokey").Lookup().ExpectSorted(
 		[]sqltypes.Row{
-			{sqltypes.NewInt32(1), sqltypes.NewInt32(3)},
-			{sqltypes.NewInt32(1), sqltypes.NewInt32(4)},
-			{sqltypes.NewInt32(1), sqltypes.NewInt32(5)},
+			{sqltypes.NewInt32(2), sqltypes.NewInt32(-25)},
+			{sqltypes.NewInt32(2), sqltypes.NewInt32(-16)},
+			{sqltypes.NewInt32(2), sqltypes.NewInt32(-9)},
+		})
+
+	g.View("top_without_key").Lookup(int32(2)).ExpectSorted(
+		[]sqltypes.Row{
+			{sqltypes.NewInt64(10)},
+			{sqltypes.NewInt64(8)},
+			{sqltypes.NewInt64(6)},
+		})
+
+	g.View("top_multi").LookupBvar([]any{1, 2}).ExpectSorted(
+		[]sqltypes.Row{
+			{sqltypes.NewInt64(10)},
+			{sqltypes.NewInt64(8)},
+			{sqltypes.NewInt64(6)},
+			{sqltypes.NewInt64(4)},
 		})
 }
 
@@ -394,10 +412,10 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 		{sqltypes.NewInt32(2), sqltypes.NewInt32(4)},
 		{sqltypes.NewInt32(1), sqltypes.NewInt32(1)},
 	}
-	g.View("distinct").AssertLookup(nil, expected)
-	g.View("union_distinct").AssertLookup(nil, expected)
+	g.View("distinct").Lookup().Expect(expected)
+	g.View("union_distinct").Lookup().Expect(expected)
 
-	g.View("distinct2").AssertLookup([]sqltypes.Value{sqltypes.NewInt32(4)},
+	g.View("distinct2").Lookup(int32(4)).Expect(
 		[]sqltypes.Row{
 			{sqltypes.NewInt32(2), sqltypes.NewInt32(4)},
 		})
@@ -411,10 +429,10 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 		{sqltypes.NewInt32(2), sqltypes.NewInt32(4)},
 		{sqltypes.NewInt32(1), sqltypes.NewInt32(1)},
 	}
-	g.View("distinct").AssertLookup(nil, expected)
-	g.View("union_distinct").AssertLookup(nil, expected)
+	g.View("distinct").Lookup().Expect(expected)
+	g.View("union_distinct").Lookup().Expect(expected)
 
-	g.View("distinct2").AssertLookup([]sqltypes.Value{sqltypes.NewInt32(4)},
+	g.View("distinct2").Lookup(int32(4)).Expect(
 		[]sqltypes.Row{
 			{sqltypes.NewInt32(2), sqltypes.NewInt32(4)},
 			{sqltypes.NewInt32(5), sqltypes.NewInt32(4)},
@@ -432,7 +450,7 @@ SELECT /*vt+ VIEW=caseaggr PUBLIC */ user, sum(CASE WHEN article_id = 5 THEN 1 E
 
 	g.TestExecute("INSERT INTO vote(id, article_id, user) VALUES (1, 1, 1), (2, 5, 2), (3, 2, 2), (4, 5, 2)")
 
-	g.View("caseaggr").AssertLookup(nil, []sqltypes.Row{
+	g.View("caseaggr").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(2), sqltypes.NewDecimal("2")},
 		{sqltypes.NewInt64(1), sqltypes.NewDecimal("0")},
 	})
@@ -468,27 +486,26 @@ func TestBasicEx(t *testing.T) {
 	cq := g.View("c")
 
 	executor.TestExecute("INSERT INTO a VALUES (1, 2)")
-	cq.AssertLookup([]sqltypes.Value{id}, []sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}})
+	cq.Lookup(id).Expect([]sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}})
 
 	executor.TestExecute("INSERT INTO b VALUES (1, 4)")
-	cq.AssertLookup([]sqltypes.Value{id}, []sqltypes.Row{
+	cq.Lookup(id).Expect([]sqltypes.Row{
 		{id, sqltypes.NewInt64(2)},
 		{id, sqltypes.NewInt64(4)},
 	})
 
 	executor.TestExecute("DELETE FROM a WHERE c1 = 1")
-	cq.AssertLookup([]sqltypes.Value{id}, []sqltypes.Row{
+	cq.Lookup(id).Expect([]sqltypes.Row{
 		{id, sqltypes.NewInt64(4)},
 	})
 
 	executor.TestExecute("UPDATE b SET c2 = 3 WHERE c1 = 1")
-	cq.AssertLookup([]sqltypes.Value{id}, []sqltypes.Row{
+	cq.Lookup(id).Expect([]sqltypes.Row{
 		{id, sqltypes.NewInt64(3)},
 	})
 }
 
 func TestVoteRecipe(t *testing.T) {
-
 	t.Run("Default", func(t *testing.T) {
 		testVoteRecipe(t, testrecipe.Load(t, "votes"))
 	})
@@ -517,8 +534,8 @@ func testVoteRecipe(t *testing.T, recipe *testrecipe.Recipe) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	awvc.AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(votesCount / articleCount)}})
-	awvc.AssertLookup([]sqltypes.Value{sqltypes.NewInt64(2)}, []sqltypes.Row{{sqltypes.NewInt64(2), sqltypes.NewVarChar("Article 2"), sqltypes.NewInt64(votesCount / articleCount)}})
+	awvc.Lookup(1).Expect([]sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(votesCount / articleCount)}})
+	awvc.Lookup(2).Expect([]sqltypes.Row{{sqltypes.NewInt64(2), sqltypes.NewVarChar("Article 2"), sqltypes.NewInt64(votesCount / articleCount)}})
 
 	require.Equal(t, 2, g.WorkerReads())
 	require.Equal(t, articleCount+votesCount, g.WorkerStats(worker.StatVStreamRows))
@@ -560,7 +577,7 @@ func TestAlbumsRecipe(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	view := g.View("album_friends")
-	view.AssertLookup(nil, []sqltypes.Row{
+	view.Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewVarChar("albumQ"), sqltypes.NewInt32(4)},
 		{sqltypes.NewVarChar("albumY"), sqltypes.NewInt32(1)},
 		{sqltypes.NewVarChar("albumY"), sqltypes.NewInt32(2)},
@@ -638,10 +655,7 @@ func TestSQLRecipe(t *testing.T) {
 		g.TestExecute("INSERT INTO `Car` (`id`, `brand`) values (%d, '%s')", i, brand)
 	}
 
-	getter.AssertLookup(
-		[]sqltypes.Value{sqltypes.NewVarChar("Volvo")},
-		[]sqltypes.Row{{sqltypes.NewInt64(2)}},
-	)
+	getter.Lookup("Volvo").Expect([]sqltypes.Row{{sqltypes.NewInt64(2)}})
 
 	require.Equal(t, 3, g.WorkerStats(worker.StatVStreamRows))
 }
@@ -654,15 +668,8 @@ func TestDoubleShuffle(t *testing.T) {
 	g.TestExecute("INSERT INTO `Price` (`pid`, `price`) values (%d, %d)", 1, 100)
 	g.TestExecute("INSERT INTO `Car` (`cid`, `pid`) values (%d, %d)", 1, 1)
 
-	carPrice.AssertLookup(
-		[]sqltypes.Value{sqltypes.NewInt64(1)},
-		[]sqltypes.Row{{sqltypes.NewInt32(1), sqltypes.NewInt32(100)}},
-	)
-
-	carPrice.AssertLookup(
-		[]sqltypes.Value{sqltypes.NewInt32(1)},
-		[]sqltypes.Row{{sqltypes.NewInt32(1), sqltypes.NewInt32(100)}},
-	)
+	carPrice.Lookup(1).Expect([]sqltypes.Row{{sqltypes.NewInt32(1), sqltypes.NewInt32(100)}})
+	carPrice.Lookup(int32(1)).Expect([]sqltypes.Row{{sqltypes.NewInt32(1), sqltypes.NewInt32(100)}})
 
 	require.Equal(t, 2, g.WorkerStats(worker.StatVStreamRows))
 }
@@ -688,7 +695,7 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY
 	g.ApplyRecipe(recipe)
 
 	clientQ1 := g.View("q1")
-	clientQ1.AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{{sqltypes.NewInt64(2)}})
+	clientQ1.Lookup(1).Expect([]sqltypes.Row{{sqltypes.NewInt64(2)}})
 
 	recipe.Queries = append(recipe.Queries, &vtboost.CachedQuery{
 		PublicId: "c0ffe",
@@ -699,9 +706,10 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY
 
 	g.ApplyRecipe(recipe)
 
-	clientQ1.AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{{sqltypes.NewInt64(2)}})
+	clientQ1.Lookup(1).Expect([]sqltypes.Row{{sqltypes.NewInt64(2)}})
+
 	clientQ2 := g.View("q2")
-	clientQ2.AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{{sqltypes.NewInt64(2)}})
+	clientQ2.Lookup(1).Expect([]sqltypes.Row{{sqltypes.NewInt64(2)}})
 
 	recipe.Queries = xslice.Filter(recipe.Queries, func(q *vtboost.CachedQuery) bool { return q.Name != "q1" })
 	g.ApplyRecipe(recipe)
@@ -709,7 +717,7 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY
 	time.Sleep(100 * time.Millisecond)
 
 	require.Nil(t, g.FindView("q1"))
-	clientQ2.AssertLookup([]sqltypes.Value{sqltypes.NewInt64(1)}, []sqltypes.Row{{sqltypes.NewInt64(2)}})
+	clientQ2.Lookup(1).Expect([]sqltypes.Row{{sqltypes.NewInt64(2)}})
 }
 
 func TestFriendOfFriends(t *testing.T) {
@@ -768,7 +776,7 @@ select /*vt+ VIEW=query */ id from mike where season = ?;
 
 	boosttest.Settle()
 
-	g.View("query").AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("fall-69")}, []sqltypes.Row{{sqltypes.NewUint32(70)}})
+	g.View("query").Lookup("fall-69").Expect([]sqltypes.Row{{sqltypes.NewUint32(70)}})
 }
 
 func TestCollationsInJoins(t *testing.T) {
@@ -827,19 +835,19 @@ select /*vt+ VIEW=simplejoin PUBLIC */ article.id, article.title, vote.id, vote.
 
 			join1 := g.View("complexjoin")
 
-			join1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("Article 1")}, []sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(int64(expectedCount))}})
-			join1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("Article 2")}, []sqltypes.Row{{sqltypes.NewInt64(2), sqltypes.NewVarChar("Article 2"), sqltypes.NewInt64(int64(expectedCount))}})
+			join1.Lookup("Article 1").Expect([]sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(int64(expectedCount))}})
+			join1.Lookup("Article 2").Expect([]sqltypes.Row{{sqltypes.NewInt64(2), sqltypes.NewVarChar("Article 2"), sqltypes.NewInt64(int64(expectedCount))}})
 
 			if coll.CaseSensitive {
-				join1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("ARTICLE 1")}, []sqltypes.Row{})
-				join1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("ARTICLE 2")}, []sqltypes.Row{})
+				join1.Lookup("ARTICLE 1").Expect([]sqltypes.Row{})
+				join1.Lookup("ARTICLE 2").Expect([]sqltypes.Row{})
 			} else {
-				join1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("ARTICLE 1")}, []sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(int64(expectedCount))}})
-				join1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("ARTICLE 2")}, []sqltypes.Row{{sqltypes.NewInt64(2), sqltypes.NewVarChar("Article 2"), sqltypes.NewInt64(int64(expectedCount))}})
+				join1.Lookup("ARTICLE 1").Expect([]sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(int64(expectedCount))}})
+				join1.Lookup("ARTICLE 2").Expect([]sqltypes.Row{{sqltypes.NewInt64(2), sqltypes.NewVarChar("Article 2"), sqltypes.NewInt64(int64(expectedCount))}})
 			}
 
 			join2 := g.View("simplejoin")
-			require.Len(t, join2.Lookup([]sqltypes.Value{sqltypes.NewVarChar("Article 1")}).Rows, expectedCount)
+			join2.Lookup("Article 1").ExpectLen(expectedCount)
 
 			require.Equal(t, 5, g.WorkerReads())
 			require.Equal(t, articleCount+(2*votesCount), g.WorkerStats(worker.StatVStreamRows))
@@ -877,7 +885,7 @@ func TestRepositoriesWithIn(t *testing.T) {
 
 	boosttest.Settle()
 
-	g.View("query_with_in").AssertLookupBindVars(BVar([]any{"tag-7", "tag-8"}),
+	g.View("query_with_in").LookupBvar([]any{"tag-7", "tag-8"}).Expect(
 		[]sqltypes.Row{
 			{sqltypes.NewInt64(1), sqltypes.NewInt64(8)},
 			{sqltypes.NewInt64(1), sqltypes.NewInt64(9)},
@@ -899,8 +907,7 @@ func TestUpqueryInPlan(t *testing.T) {
 		g.TestExecute("INSERT INTO conv (col_int, col_double, col_decimal, col_char) VALUES (%d, %f, %f, 'string-%d')", i, float64(i), float64(i), i)
 	}
 
-	g.View("upquery").AssertLookupBindVars(BVar([]any{"string-1", "string-2"}),
-		[]sqltypes.Row{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}})
+	g.View("upquery").LookupBvar([]any{"string-1", "string-2"}).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}})
 }
 
 func TestMultipleUpqueries(t *testing.T) {
@@ -920,28 +927,15 @@ func TestMultipleUpqueries(t *testing.T) {
 	}
 
 	upquery0 := g.View("upquery0")
-	upquery0.AssertLookup(
-		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(1), sqltypes.NewInt64(10)},
-		[]sqltypes.Row{{sqltypes.NewInt64(1)}})
+	upquery0.Lookup(1, 1, 10).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
 
 	upquery1 := g.View("upquery1")
-	upquery1.AssertLookupBindVars(BVar([]any{4, 8, 12}, 0),
+	upquery1.LookupBvar([]any{4, 8, 12}, 0).Expect(
 		[]sqltypes.Row{
 			{sqltypes.NewInt64(4)},
 			{sqltypes.NewInt64(8)},
 			{sqltypes.NewInt64(12)},
 		})
-}
-
-func BVar(fields ...any) (bvar []*querypb.BindVariable) {
-	for _, f := range fields {
-		v, err := sqltypes.BuildBindVariable(f)
-		if err != nil {
-			panic(err)
-		}
-		bvar = append(bvar, v)
-	}
-	return
 }
 
 func TestTypeConversions(t *testing.T) {
@@ -963,31 +957,25 @@ func TestTypeConversions(t *testing.T) {
 	}
 
 	conv0 := g.View("conv0")
-	conv0.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1")}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
-	conv0.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1.0")}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
-	conv0.AssertLookup([]sqltypes.Value{sqltypes.NewFloat64(1.0)}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
-	conv0.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1.5")}, []sqltypes.Row{})
-	conv0.AssertLookup([]sqltypes.Value{sqltypes.NewFloat64(1.5)}, []sqltypes.Row{})
+	conv0.Lookup("1").Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv0.Lookup("1.0").Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv0.Lookup(1.0).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv0.Lookup("1.5").Expect([]sqltypes.Row{})
+	conv0.Lookup(1.5).Expect([]sqltypes.Row{})
 
 	conv1 := g.View("conv1")
-	conv1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1")}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
-	conv1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1.0")}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
-	conv1.AssertLookup([]sqltypes.Value{sqltypes.NewFloat64(1.0)}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
-	conv1.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("1.5")}, []sqltypes.Row{})
-	conv1.AssertLookup([]sqltypes.Value{sqltypes.NewFloat64(1.5)}, []sqltypes.Row{})
+	conv1.Lookup("1").Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv1.Lookup("1.0").Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv1.Lookup(1.0).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv1.Lookup("1.5").Expect([]sqltypes.Row{})
+	conv1.Lookup(1.5).Expect([]sqltypes.Row{})
 
 	conv2 := g.View("conv2")
-	conv2.AssertLookup([]sqltypes.Value{sqltypes.NewVarChar("string-1")}, []sqltypes.Row{{sqltypes.NewInt64(1)}})
-	_, err := conv2.View.Lookup(context.Background(), []sqltypes.Value{sqltypes.NewInt64(1)}, true)
-	require.Error(t, err)
-	_, err = conv2.View.Lookup(context.Background(), []sqltypes.Value{sqltypes.NewFloat64(1.0)}, true)
-	require.Error(t, err)
+	conv2.Lookup("string-1").Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
+	conv2.Lookup(1).ExpectError()
+	conv2.Lookup(1.0).ExpectError()
 
 	conv3 := g.View("conv3")
-
-	_, err = conv3.View.LookupByBindVar(context.Background(), BVar([]any{"string-1", "string-2"}), true)
-	require.NoError(t, err)
-
-	_, err = conv3.View.LookupByBindVar(context.Background(), BVar([]any{"string-1", 1}), true)
-	require.Error(t, err)
+	conv3.LookupBvar([]any{"string-1", "string-2"}).ExpectLen(2)
+	conv3.LookupBvar([]any{"string-1", 1}).ExpectError()
 }

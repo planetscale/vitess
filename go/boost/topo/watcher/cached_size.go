@@ -29,7 +29,7 @@ func (cached *View) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(160)
+		size += int64(192)
 	}
 	// field name string
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
@@ -62,6 +62,10 @@ func (cached *View) CachedSize(alloc bool) int64 {
 				size += cc.CachedSize(true)
 			}
 		}
+	}
+	// field topkOrder []vitess.io/vitess/go/boost/boostpb.OrderedColumn
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.topkOrder)) * int64(9))
 	}
 	// field shardKeyType vitess.io/vitess/go/boost/boostpb.Type
 	size += cached.shardKeyType.CachedSize(false)

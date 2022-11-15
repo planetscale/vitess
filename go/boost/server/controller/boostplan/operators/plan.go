@@ -36,15 +36,6 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 		panic("not a SelectStatement")
 	}
 
-	orderBy := sel.GetOrderBy()
-	if orderBy != nil {
-		err = &UnsupportedError{
-			AST:  orderBy,
-			Type: OrderByAtRoot,
-		}
-		return
-	}
-
 	ctx := &PlanContext{
 		SemTable: semTable,
 		Name:     name,
