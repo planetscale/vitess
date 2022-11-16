@@ -132,6 +132,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 	go func() {
 		if orc.proc != nil {
 			orc.exit <- orc.proc.Wait()
+			close(orc.exit)
 		}
 	}()
 
@@ -153,7 +154,8 @@ func (orc *VtorcProcess) TearDown() error {
 
 	case <-time.After(30 * time.Second):
 		_ = orc.proc.Process.Kill()
+		err := <-orc.exit
 		orc.proc = nil
-		return <-orc.exit
+		return err
 	}
 }
