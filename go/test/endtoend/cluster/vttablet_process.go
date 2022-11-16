@@ -144,6 +144,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	go func() {
 		if vttablet.proc != nil {
 			vttablet.exit <- vttablet.proc.Wait()
+			close(vttablet.exit)
 		}
 	}()
 
@@ -363,12 +364,10 @@ func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) erro
 		return nil
 
 	case <-time.After(timeout):
-		proc := vttablet.proc
-		if proc != nil {
-			vttablet.proc.Process.Kill()
-			vttablet.proc = nil
-		}
-		return <-vttablet.exit
+		vttablet.proc.Process.Kill()
+		err := <-vttablet.exit
+		vttablet.proc = nil
+		return err
 	}
 }
 
