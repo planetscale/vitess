@@ -2349,6 +2349,10 @@ func (c *Cluster) Debug() map[string]any {
 		m["vtctld"] = vtctld.Debug()
 	}
 
+	if discovery, ok := c.Discovery.(debug.Debuggable); ok {
+		m["discovery"] = discovery.Debug()
+	}
+
 	return m
 }
 
