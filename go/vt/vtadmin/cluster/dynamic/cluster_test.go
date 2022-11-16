@@ -91,11 +91,8 @@ func TestClusterDiscovery(t *testing.T) {
 		s                   string
 		encoder             func(b []byte) string
 		expectedID          string
-		shouldVtctldErr     bool
 		expectedVtctldAddrs []string
-		shouldVTGateErr     bool
 		expectedVTGateAddrs []string
-		shouldErr           bool
 	}{
 		{
 			name:                "PlanetScale example",
@@ -120,11 +117,6 @@ func TestClusterDiscovery(t *testing.T) {
 			enc := tt.encoder([]byte(tt.s))
 
 			c, id, err := ClusterFromString(context.Background(), enc)
-			if tt.shouldErr {
-				assert.Error(t, err)
-				assert.Nil(t, c, "when err != nil, cluster must be nil")
-				return
-			}
 
 			require.NoError(t, err)
 			require.NotEmpty(t, id, "when err == nil, id must be non-empty")
@@ -133,19 +125,11 @@ func TestClusterDiscovery(t *testing.T) {
 			assert.NotNil(t, c, "when err == nil, cluster should not be nil")
 
 			vtgates, err := c.Discovery.DiscoverVTGateAddrs(ctx, []string{})
-			if tt.shouldVTGateErr {
-				assert.Error(t, err)
-				assert.Nil(t, c, "when err != nil, cluster must be nil")
-				return
-			}
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedVTGateAddrs, vtgates)
 
 			vtctlds, err := c.Discovery.DiscoverVtctldAddrs(ctx, []string{})
-			if tt.shouldVtctldErr {
-				assert.Error(t, err)
-				assert.Nil(t, c, "when err != nil, cluster must be nil")
-				return
-			}
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedVtctldAddrs, vtctlds)
 		})
 	}
