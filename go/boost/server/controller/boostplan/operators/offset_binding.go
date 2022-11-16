@@ -141,8 +141,17 @@ func handleJoinColumn(
 ) error {
 	lftCol, lftOK := col.AST[0].(*sqlparser.ColName)
 	rgtCol, rgtOK := col.AST[1].(*sqlparser.ColName)
-	if !lftOK || !rgtOK {
-		return NewBug("wrong data in join predicate, should be an equal op comparison")
+	if !lftOK {
+		return &UnsupportedError{
+			AST:  col.AST[0],
+			Type: JoinPredicates,
+		}
+	}
+	if !rgtOK {
+		return &UnsupportedError{
+			AST:  col.AST[1],
+			Type: JoinPredicates,
+		}
 	}
 	switch {
 	// lhs = rhs
@@ -159,7 +168,14 @@ func handleJoinColumn(
 			return err
 		}
 	default:
-		return NewBug("wrong data in join predicate, should be an equal op comparison")
+		return &UnsupportedError{
+			AST: &sqlparser.ComparisonExpr{
+				Operator: sqlparser.EqualOp,
+				Left:     lftCol,
+				Right:    rgtCol,
+			},
+			Type: JoinPredicates,
+		}
 	}
 	return nil
 }
@@ -185,14 +201,14 @@ func getComparisons(expr sqlparser.Expr) (predicates []*sqlparser.ComparisonExpr
 		return nil, nil
 	}
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
-		switch comp := e.(type) {
-		case *sqlparser.ComparisonExpr:
-			if comp.Operator != sqlparser.EqualOp {
-				return nil, NewBug("wrong data in join predicate, should be an equal op comparison")
-			}
+		comp, ok := e.(*sqlparser.ComparisonExpr)
+		if ok {
 			predicates = append(predicates, comp)
-		default:
-			return nil, NewBug("wrong data in join predicate, should be an equal op comparison")
+			continue
+		}
+		return nil, &UnsupportedError{
+			AST:  e,
+			Type: JoinPredicates,
 		}
 	}
 	return

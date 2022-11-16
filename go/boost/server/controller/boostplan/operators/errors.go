@@ -39,6 +39,7 @@ const (
 	ParameterLocationCompare
 	ParameterNotEqual
 	JoinWithoutPredicates
+	JoinPredicates
 )
 
 type (
@@ -123,6 +124,8 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "parameter %s needs to be used in a comparison expression", sqlparser.CanonicalString(n.AST))
 	case JoinWithoutPredicates:
 		fmt.Fprintf(&sb, "join without predicates is not supported")
+	case JoinPredicates:
+		fmt.Fprintf(&sb, "join predicates have to be in the form <tbl1.col> = <tbl2.col>, was [%s]", sqlparser.CanonicalString(n.AST))
 	}
 
 	return sb.String()

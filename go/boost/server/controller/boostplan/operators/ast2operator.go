@@ -406,14 +406,46 @@ func (conv *Converter) buildFromJoin(ctx *PlanContext, join *sqlparser.JoinTable
 	}
 
 	op := &Join{
-		Inner:      join.Join == sqlparser.NormalJoinType,
-		Predicates: join.Condition.On,
+		Inner: join.Join == sqlparser.NormalJoinType,
 	}
 
 	joinCols := Columns{}.
 		Add(ctx, lhsCols...).
 		Add(ctx, rhsCols...)
-	return conv.NewNode("join", op, []*Node{lhs, rhs}), append(lhsParams, rhsParams...), joinCols, nil
+	params = append(lhsParams, rhsParams...)
+	if op.Inner {
+		// for inner joins, we can handle any predicates on the join condition as normal filtering predicates.
+		// we just need at least one equality comparison between the two tables and we can plan a hash join
+		filter := &Filter{Predicates: join.Condition.On}
+		joinNode := conv.NewNode("join", op, []*Node{lhs, rhs})
+		return conv.NewNode("filter", filter, []*Node{joinNode}), params, joinCols, nil
+	}
+
+	// if we have an outer join, we have to be a bit more careful with the join predicates
+	// since we can only do hash joins, we need at least one comparison predicate between the two tables
+	// but if we also have other predicates, we can deal with them
+	for _, e := range sqlparser.SplitAndExpression(nil, join.Condition.On) {
+		deps := ctx.SemTable.DirectDeps(e)
+		lhsID := lhs.Covers()
+		rhsID := rhs.Covers()
+		bothSides := rhsID.Merge(lhsID)
+		switch {
+		case deps.NumberOfTables() == 0 || !deps.IsSolvedBy(bothSides) || deps.IsSolvedBy(lhsID):
+			// this is a predicate the does not need any table input, or needs tables outside these two
+			return nil, nil, nil, &UnsupportedError{
+				AST:  e,
+				Type: JoinPredicates,
+			}
+		case deps.IsSolvedBy(rhsID):
+			// push join condition to outer side
+			// this is pretty easy - we just make a filter under the outer side
+			rhs = conv.NewNode("filter", &Filter{Predicates: e}, []*Node{rhs})
+		case deps.IsSolvedBy(bothSides):
+			// a predicate that depends on both sides
+			op.Predicates = sqlparser.AndExpressions(op.Predicates, e)
+		}
+	}
+	return conv.NewNode("join", op, []*Node{lhs, rhs}), params, joinCols, nil
 }
 
 func externalTableName(keyspace string, name string) string {
