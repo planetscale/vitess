@@ -230,7 +230,10 @@ func (j *Join) AddColumns(ctx *PlanContext, col Columns) (Columns, error) {
 		lftCol, lftOK := cmp.Left.(*sqlparser.ColName)
 		rgtCol, rgtOK := cmp.Right.(*sqlparser.ColName)
 		if !lftOK || !rgtOK {
-			return Columns{}, NewBug("wrong data in join predicate, should be an equal op comparison")
+			return Columns{}, &UnsupportedError{
+				AST:  cmp,
+				Type: JoinPredicates,
+			}
 		}
 
 		j.EmitColumns = j.EmitColumns.Add(ctx, &Column{

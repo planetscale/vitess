@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/server"
 	"vitess.io/vitess/go/boost/server/controller"
-	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
 	"vitess.io/vitess/go/boost/server/worker"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testexecutor"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
@@ -251,15 +250,6 @@ func New(t *testing.T, options ...Option) *Cluster {
 	}
 
 	return cluster
-}
-
-func IsNotSupportedError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	_, ok := err.(*operators.UnsupportedError)
-	return ok
 }
 
 func (c *Cluster) Controller() *controller.Server {
