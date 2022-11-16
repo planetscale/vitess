@@ -271,10 +271,9 @@ func TestDynamicDiscoverAddrs(t *testing.T) {
 		contents            []byte
 		expectedVtctldAddrs []string
 		expectedVTGateAddrs []string
-		shouldErr           bool
 	}{
 		{
-			name: "one vtctld and vtgate",
+			name: "PlanetScale example",
 			contents: []byte(`{
 				"vtctlds": [
 					{
@@ -294,7 +293,6 @@ func TestDynamicDiscoverAddrs(t *testing.T) {
 			}`),
 			expectedVTGateAddrs: []string{"primary-kiamr3uh3da0-vtgate.user-data.svc.cluster.local:15999"},
 			expectedVtctldAddrs: []string{"default-8487d4c-vtctld-e0fba64e.user-data.svc.cluster.local:15999"},
-			shouldErr:           false,
 		},
 	}
 
@@ -311,170 +309,14 @@ func TestDynamicDiscoverAddrs(t *testing.T) {
 			require.NoError(t, err)
 
 			vtctld, err := disco.DiscoverVtctldAddrs(ctx, []string{})
-			if tt.shouldErr {
-				assert.Error(t, err)
-				return
-			}
+			require.NoError(t, err)
 
-			vtgate, err := disco.DiscoverVTGateAddrs(ctx, []string{})
-			if tt.shouldErr {
-				assert.Error(t, err)
-				return
-			}
+			vtgate, _ := disco.DiscoverVTGateAddrs(ctx, []string{})
+			require.NoError(t, err)
 
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedVtctldAddrs, vtctld)
 			assert.Equal(t, tt.expectedVTGateAddrs, vtgate)
-		})
-	}
-}
-
-func TestDynamicDiscoverVtctlds(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		contents []byte
-		tags     []string
-		expected []*vtadminpb.Vtctld
-		// True if the test should produce an error on the DiscoverVTGates call
-		shouldErr bool
-		// True if the test should produce an error on the disco.parseConfig step
-		shouldErrConfig bool
-	}{
-		{
-			name:      "empty config",
-			contents:  []byte(`{}`),
-			expected:  []*vtadminpb.Vtctld{},
-			shouldErr: false,
-		},
-		{
-			name: "no tags",
-			contents: []byte(`
-				{
-					"vtctlds": [
-						{
-							"host": {
-								"hostname": "127.0.0.1:12345"
-							}
-						},
-						{
-							"host": {
-								"hostname": "127.0.0.1:67890"
-							}
-						}
-					]
-				}
-			`),
-			expected: []*vtadminpb.Vtctld{
-				{Hostname: "127.0.0.1:12345"},
-				{Hostname: "127.0.0.1:67890"},
-			},
-			shouldErr: false,
-		},
-		{
-			name: "filtered by tags",
-			contents: []byte(`
-				{
-					"vtctlds": [
-						{
-							"host": {
-								"hostname": "127.0.0.1:11111"
-							},
-							"tags": ["cell:cellA"]
-						},
-						{
-							"host": {
-								"hostname": "127.0.0.1:22222"
-							},
-							"tags": ["cell:cellB"]
-						},
-						{
-							"host": {
-								"hostname": "127.0.0.1:33333"
-							},
-							"tags": ["cell:cellA"]
-						}
-					]
-				}
-			`),
-			tags: []string{"cell:cellA"},
-			expected: []*vtadminpb.Vtctld{
-				{Hostname: "127.0.0.1:11111"},
-				{Hostname: "127.0.0.1:33333"},
-			},
-			shouldErr: false,
-		},
-		{
-			name: "filtered by multiple tags",
-			contents: []byte(`
-				{
-					"vtctlds": [
-						{
-							"host": {
-								"hostname": "127.0.0.1:11111"
-							},
-							"tags": ["cell:cellA"]
-						},
-						{
-							"host": {
-								"hostname": "127.0.0.1:22222"
-							},
-							"tags": ["cell:cellA", "pool:poolZ"]
-						},
-						{
-							"host": {
-								"hostname": "127.0.0.1:33333"
-							},
-							"tags": ["pool:poolZ"]
-						}
-					]
-				}
-			`),
-			tags: []string{"cell:cellA", "pool:poolZ"},
-			expected: []*vtadminpb.Vtctld{
-				{Hostname: "127.0.0.1:22222"},
-			},
-			shouldErr: false,
-		},
-		{
-			name: "invalid json",
-			contents: []byte(`
-				{
-					"vtctlds": "malformed"
-				}
-			`),
-			tags:            []string{},
-			shouldErr:       false,
-			shouldErrConfig: true,
-		},
-	}
-
-	ctx := context.Background()
-
-	for _, tt := range tests {
-		tt := tt
-
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			disco := &DynamicDiscovery{}
-
-			err := disco.parseConfig(tt.contents)
-			if tt.shouldErrConfig {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-
-			vtctlds, err := disco.DiscoverVtctlds(ctx, tt.tags)
-			if tt.shouldErr {
-				assert.Error(t, err)
-				return
-			}
-
-			assert.NoError(t, err)
-			assert.ElementsMatch(t, tt.expected, vtctlds)
 		})
 	}
 }
@@ -567,7 +409,7 @@ func TestDynamicDiscoverVtctld(t *testing.T) {
 	}
 }
 
-func TestDynamicDiscoverVTGateAddrs(t *testing.T) {
+func TestDynamicDiscoverVtctlds(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -575,7 +417,7 @@ func TestDynamicDiscoverVTGateAddrs(t *testing.T) {
 		contents []byte
 		tags     []string
 		expected []*vtadminpb.Vtctld
-		// True if the test should produce an error on the DiscoverVTGates call
+		// True if the test should produce an error on the DiscoverVtctlds call
 		shouldErr bool
 		// True if the test should produce an error on the disco.parseConfig step
 		shouldErrConfig bool
