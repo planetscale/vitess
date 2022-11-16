@@ -36,15 +36,15 @@ import (
 // As an example, here's a minimal JSON file for a single Vitess cluster running locally
 // (such as the one described in https://vitess.io/docs/get-started/local-docker):
 //
-// 		{
-// 			"vtgates": [
-// 				{
-// 					"host": {
-// 						"hostname": "127.0.0.1:15991"
-// 					}
-// 				}
-// 			]
-// 		}
+//	{
+//		"vtgates": [
+//			{
+//				"host": {
+//					"hostname": "127.0.0.1:15991"
+//				}
+//			}
+//		]
+//	}
 //
 // For more examples of various static file configurations, see the unit tests.
 type JSONDiscovery struct {
@@ -309,4 +309,32 @@ func (d *JSONDiscovery) discoverVtctlds(ctx context.Context, tags []string) ([]*
 	}
 
 	return results, nil
+}
+
+func (d *JSONDiscovery) Debug() map[string]any {
+	m := map[string]any{
+		"config": map[string]any{},
+	}
+
+	vtgates := make([]map[string]any, len(d.config.VTGates))
+	for i, gate := range d.config.VTGates {
+		vtgates[i] = map[string]any{
+			"hostname": gate.Host.Hostname,
+			"cell":     gate.Host.Cell,
+			"fqdn":     gate.Host.FQDN,
+		}
+	}
+
+	vtctlds := make([]map[string]any, len(d.config.Vtctlds))
+	for i, vtctld := range d.config.Vtctlds {
+		vtctlds[i] = map[string]any{
+			"hostname": vtctld.Host.Hostname,
+			"fqdn":     vtctld.Host.FQDN,
+		}
+	}
+
+	m["vtctlds"] = vtctlds
+	m["vtgates"] = vtgates
+
+	return m
 }

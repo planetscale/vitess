@@ -125,7 +125,9 @@ func (vtctld *ClientProxy) dial(ctx context.Context) error {
 	opts = append(opts, grpc.WithResolvers(vtctld.resolver))
 
 	// TODO: update dialFunc to take ctx as first arg.
-	client, err := vtctld.dialFunc(resolver.DialAddr(vtctld.resolver, "vtctld"), grpcclient.FailFast(false), opts...)
+	dialAddr := resolver.DialAddr(vtctld.resolver, "vtctld")
+	log.Infof("Vtctld dialing client for cluster %s at address %s", vtctld.cluster.Name, resolver.DialAddr(vtctld.resolver, "vtctld"))
+	client, err := vtctld.dialFunc(dialAddr, grpcclient.FailFast(false), opts...)
 	if err != nil {
 		return err
 	}
