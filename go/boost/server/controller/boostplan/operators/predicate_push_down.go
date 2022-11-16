@@ -7,25 +7,28 @@ import (
 
 func (conv *Converter) pushDownPredicate(ctx *PlanContext) RewriteOpFunc {
 	return func(node *Node) (*Node, error) {
-		switch op := node.Op.(type) {
-		case *Filter:
-			filter := op
-			inputNode := node.Ancestors[0]
-			switch inputOp := inputNode.Op.(type) {
-			case *Filter:
-				// If we have two filters on top of each other, merge them into a single one
-				op.Predicates = sqlparser.AndExpressions(op.Predicates, inputOp.Predicates)
-				node.Ancestors = inputNode.Ancestors
-				return node, nil
-			case *Join:
-				return conv.pushDownPredicateThroughJoin(ctx, node, inputNode, filter, inputOp)
-			default:
-				return conv.pushDownToSingleAncestor(node, inputNode, op, ctx, filter), nil
-
-			}
-		}
-		return node, nil
+		return conv.predicatePushDown(ctx, node)
 	}
+}
+
+func (conv *Converter) predicatePushDown(ctx *PlanContext, node *Node) (*Node, error) {
+	switch op := node.Op.(type) {
+	case *Filter:
+		filter := op
+		inputNode := node.Ancestors[0]
+		switch inputOp := inputNode.Op.(type) {
+		case *Filter:
+			// If we have two filters on top of each other, merge them into a single one
+			op.Predicates = sqlparser.AndExpressions(op.Predicates, inputOp.Predicates)
+			node.Ancestors = inputNode.Ancestors
+			return conv.predicatePushDown(ctx, node)
+		case *Join:
+			return conv.pushDownPredicateThroughJoin(ctx, node, inputNode, filter, inputOp)
+		default:
+			return conv.pushDownToSingleAncestor(node, inputNode, op, ctx, filter), nil
+		}
+	}
+	return node, nil
 }
 
 func (conv *Converter) pushDownToSingleAncestor(node *Node, inputNode *Node, op *Filter, ctx *PlanContext, filter *Filter) *Node {
