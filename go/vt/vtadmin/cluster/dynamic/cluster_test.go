@@ -4,13 +4,10 @@ import (
 	"context"
 	"encoding/base32"
 	"encoding/base64"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/vtadmin/cluster"
 )
 
 func TestClusterFromString(t *testing.T) {
@@ -31,6 +28,11 @@ func TestClusterFromString(t *testing.T) {
 				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"localhost:15991\" } } ] }"
 			}`,
 			expectedID: "dynamic_cluster",
+		},
+		{
+			name:       "PlanetScale example",
+			s:          `{"id":"101-101-db1-kiamr3uh3da0","name":"101-101-db1-kiamr3uh3da0","vtsql-credentials-username":"kiamr3uh3da0","vtsql-credentials-password":"","discovery":"dynamic","discovery-dynamic-discovery":"{\"vtctlds\":[{\"host\":{\"fqdn\":\"default-8487d4c-vtctld-e0fba64e.user-data.svc.cluster.local:15000\",\"hostname\":\"default-8487d4c-vtctld-e0fba64e.user-data.svc.cluster.local:15999\"}}],\"vtgates\":[{\"host\":{\"hostname\":\"primary-kiamr3uh3da0-vtgate.user-data.svc.cluster.local:15999\"}}]}"}`,
+			expectedID: "101-101-db1-kiamr3uh3da0",
 		},
 		{
 			name:      "empty id",
@@ -80,44 +82,71 @@ func TestClusterFromString(t *testing.T) {
 			assert.NotNil(t, c, "when err == nil, cluster should not be nil")
 		})
 	}
+}
+func TestClusterDiscovery(t *testing.T) {
+	t.Parallel()
 
-	t.Run("vtsql credentials", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name                string
+		s                   string
+		encoder             func(b []byte) string
+		expectedID          string
+		shouldVtctldErr     bool
+		expectedVtctldAddrs []string
+		shouldVTGateErr     bool
+		expectedVTGateAddrs []string
+		shouldErr           bool
+	}{
+		{
+			name:                "PlanetScale example",
+			s:                   `{"id":"101-101-db1-kiamr3uh3da0","name":"101-101-db1-kiamr3uh3da0","vtsql-credentials-username":"kiamr3uh3da0","vtsql-credentials-password":"","discovery":"dynamic","discovery-dynamic-discovery":"{\"vtctlds\":[{\"host\":{\"fqdn\":\"default-8487d4c-vtctld-e0fba64e.user-data.svc.cluster.local:15000\",\"hostname\":\"default-8487d4c-vtctld-e0fba64e.user-data.svc.cluster.local:15999\"}}],\"vtgates\":[{\"host\":{\"hostname\":\"primary-kiamr3uh3da0-vtgate.user-data.svc.cluster.local:15999\"}}]}"}`,
+			expectedID:          "101-101-db1-kiamr3uh3da0",
+			expectedVtctldAddrs: []string{"default-8487d4c-vtctld-e0fba64e.user-data.svc.cluster.local:15999"},
+			expectedVTGateAddrs: []string{"primary-kiamr3uh3da0-vtgate.user-data.svc.cluster.local:15999"},
+		},
+	}
 
-		enc := base64.StdEncoding.EncodeToString([]byte(`{
-			"id": "dynamic_cluster",
-			"vtsql-credentials-username": "vtadmin-username",
-			"vtsql-credentials-password": "my-password",
-			"discovery": "dynamic",
-			"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"localhost:15991\" } } ] }"
-		}`))
+	ctx := context.Background()
 
-		cfg, id, err := cluster.LoadConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(enc)), "json")
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		require.NoError(t, err)
-		require.NotEmpty(t, id, "when err == nil, id must be non-empty")
+			if tt.encoder == nil {
+				tt.encoder = base64.StdEncoding.EncodeToString
+			}
 
-		assert.Equal(t, cfg.VtSQLFlags["credentials-username"], "vtadmin-username")
-		assert.Equal(t, cfg.VtSQLFlags["credentials-password"], "my-password")
-	})
+			enc := tt.encoder([]byte(tt.s))
 
-	t.Run("vtsql credentials - empty password string", func(t *testing.T) {
-		t.Parallel()
+			c, id, err := ClusterFromString(context.Background(), enc)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				assert.Nil(t, c, "when err != nil, cluster must be nil")
+				return
+			}
 
-		enc := base64.StdEncoding.EncodeToString([]byte(`{
-			"id": "dynamic_cluster",
-			"vtsql-credentials-username": "vtadmin-username",
-			"vtsql-credentials-password": "",
-			"discovery": "dynamic",
-			"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"localhost:15991\" } } ] }"
-		}`))
+			require.NoError(t, err)
+			require.NotEmpty(t, id, "when err == nil, id must be non-empty")
 
-		cfg, id, err := cluster.LoadConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(enc)), "json")
+			assert.Equal(t, tt.expectedID, id)
+			assert.NotNil(t, c, "when err == nil, cluster should not be nil")
 
-		require.NoError(t, err)
-		require.NotEmpty(t, id, "when err == nil, id must be non-empty")
+			vtgates, err := c.Discovery.DiscoverVTGateAddrs(ctx, []string{})
+			if tt.shouldVTGateErr {
+				assert.Error(t, err)
+				assert.Nil(t, c, "when err != nil, cluster must be nil")
+				return
+			}
+			assert.Equal(t, tt.expectedVTGateAddrs, vtgates)
 
-		assert.Equal(t, cfg.VtSQLFlags["credentials-username"], "vtadmin-username")
-		assert.Equal(t, cfg.VtSQLFlags["credentials-password"], "")
-	})
+			vtctlds, err := c.Discovery.DiscoverVtctldAddrs(ctx, []string{})
+			if tt.shouldVtctldErr {
+				assert.Error(t, err)
+				assert.Nil(t, c, "when err != nil, cluster must be nil")
+				return
+			}
+			assert.Equal(t, tt.expectedVtctldAddrs, vtctlds)
+		})
+	}
 }
