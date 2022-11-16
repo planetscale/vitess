@@ -263,6 +263,64 @@ func TestDynamicDiscoverVTGates(t *testing.T) {
 	}
 }
 
+func TestDynamicDiscoverAddrs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		contents            []byte
+		expectedVtctldAddrs []string
+		expectedVTGateAddrs []string
+	}{
+		{
+			name: "PlanetScale example",
+			contents: []byte(`{
+				"vtctlds": [
+					{
+						"host": {
+							"fqdn": "default-8487d4c-vtctld-e0fba64e.user-data.svc.cluster.local:15000",
+							"hostname": "default-8487d4c-vtctld-e0fba64e.user-data.svc.cluster.local:15999"
+						}
+					}
+				],
+				"vtgates": [
+					{
+						"host": {
+							"hostname": "primary-kiamr3uh3da0-vtgate.user-data.svc.cluster.local:15999"
+						}
+					}
+				]
+			}`),
+			expectedVTGateAddrs: []string{"primary-kiamr3uh3da0-vtgate.user-data.svc.cluster.local:15999"},
+			expectedVtctldAddrs: []string{"default-8487d4c-vtctld-e0fba64e.user-data.svc.cluster.local:15999"},
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			disco := &DynamicDiscovery{}
+			err := disco.parseConfig(tt.contents)
+			require.NoError(t, err)
+
+			vtctld, err := disco.DiscoverVtctldAddrs(ctx, []string{})
+			require.NoError(t, err)
+
+			vtgate, _ := disco.DiscoverVTGateAddrs(ctx, []string{})
+			require.NoError(t, err)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedVtctldAddrs, vtctld)
+			assert.Equal(t, tt.expectedVTGateAddrs, vtgate)
+		})
+	}
+}
+
 func TestDynamicDiscoverVtctld(t *testing.T) {
 	t.Parallel()
 
@@ -359,7 +417,7 @@ func TestDynamicDiscoverVtctlds(t *testing.T) {
 		contents []byte
 		tags     []string
 		expected []*vtadminpb.Vtctld
-		// True if the test should produce an error on the DiscoverVTGates call
+		// True if the test should produce an error on the DiscoverVtctlds call
 		shouldErr bool
 		// True if the test should produce an error on the disco.parseConfig step
 		shouldErrConfig bool

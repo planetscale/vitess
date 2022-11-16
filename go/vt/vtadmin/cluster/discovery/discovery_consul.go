@@ -479,3 +479,16 @@ type consulClient struct {
 func (c *consulClient) Health() ConsulHealth {
 	return c.Client.Health()
 }
+
+func (c *ConsulDiscovery) Debug() map[string]any {
+	m := map[string]any{
+		"vtgate_datacenter":             c.vtgateDatacenter,
+		"vtgate_service":                c.vtgateService,
+		"vtgate_pool_tag":               c.vtgatePoolTag,
+		"vtgate_keyspaces_to_watch_tag": c.vtgateKeyspacesToWatchTag,
+		"vtctld_datacenter":             c.vtctldDatacenter,
+		"vtctld_service":                c.vtctldService,
+	}
+
+	return m
+}

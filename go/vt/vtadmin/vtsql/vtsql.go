@@ -135,9 +135,10 @@ func (vtgate *VTGateProxy) dial(ctx context.Context, target string, opts ...grpc
 	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 	span.Annotate("is_using_credentials", vtgate.creds != nil)
 
+	dialAddr := resolver.DialAddr(vtgate.resolver, "vtgate")
 	conf := vitessdriver.Configuration{
 		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster.Id),
-		Address:         resolver.DialAddr(vtgate.resolver, "vtgate"),
+		Address:         dialAddr,
 		Target:          target,
 		GRPCDialOptions: append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(vtgate.resolver)),
 	}
@@ -148,6 +149,7 @@ func (vtgate *VTGateProxy) dial(ctx context.Context, target string, opts ...grpc
 		}, conf.GRPCDialOptions...)
 	}
 
+	log.Infof("VTGate dialing client for cluster %s at address %s", vtgate.cluster.Name, dialAddr)
 	vtgate.conn, err = vtgate.dialFunc(conf)
 	if err != nil {
 		return fmt.Errorf("error dialing vtgate: %w", err)

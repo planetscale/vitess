@@ -111,7 +111,7 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating discovery impl (%s): %w", cfg.DiscoveryImpl, err)
 	}
-
+	log.Infof("Created discovery impl for cluster %s with args %+v ", cfg.Name, discoargs)
 	cluster.Discovery = disco
 
 	protocluster := cluster.ToProto()
@@ -122,6 +122,7 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating vtsql connection config: %w", err)
 	}
+	log.Infof("Created vtsql connection config for cluster %s with args %+v ", cfg.Name, vtsqlargs)
 
 	for _, opt := range cfg.vtsqlConfigOpts {
 		vtsqlCfg = opt(vtsqlCfg)
@@ -133,6 +134,7 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating vtctldclient proxy config: %w", err)
 	}
+	log.Infof("Created vtctldclient proxy config for cluster %s with args %+v ", cfg.Name, vtctldargs)
 
 	for _, opt := range cfg.vtctldConfigOpts {
 		vtctldCfg = opt(vtctldCfg)
@@ -142,11 +144,13 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating vtsql proxy: %w", err)
 	}
+	log.Infof("Created vtsql proxy for cluster %s", cfg.Name)
 
 	cluster.Vtctld, err = vtctldclient.New(ctx, vtctldCfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating vtctldclient: %w", err)
 	}
+	log.Infof("Created vtctldclient for cluster %s", cfg.Name)
 
 	if cfg.TabletFQDNTmplStr != "" {
 		cluster.TabletFQDNTmpl, err = template.New(cluster.ID + "-tablet-fqdn").Parse(cfg.TabletFQDNTmplStr)
@@ -2347,6 +2351,10 @@ func (c *Cluster) Debug() map[string]any {
 
 	if vtctld, ok := c.Vtctld.(debug.Debuggable); ok {
 		m["vtctld"] = vtctld.Debug()
+	}
+
+	if discovery, ok := c.Discovery.(debug.Debuggable); ok {
+		m["discovery"] = discovery.Debug()
 	}
 
 	return m
