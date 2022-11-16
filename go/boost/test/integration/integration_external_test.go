@@ -855,6 +855,19 @@ select /*vt+ VIEW=simplejoin PUBLIC */ article.id, article.title, vote.id, vote.
 	}
 }
 
+func TestOuterJoinWithLiteralComparison(t *testing.T) {
+	const Recipe = `
+CREATE TABLE article (id bigint, title varchar(255), PRIMARY KEY(id));
+CREATE TABLE vote (id bigint NOT NULL AUTO_INCREMENT, article_title varchar(255), user bigint, PRIMARY KEY(id));
+
+SELECT /*vt+ VIEW=outer2 PUBLIC */ COUNT(1) FROM article LEFT JOIN vote ON vote.article_title="ticket_price" AND article.id = vote.id;
+SELECT /*vt+ VIEW=inner1 PUBLIC */ COUNT(1) FROM article JOIN vote ON vote.article_title="ticket_price" AND article.id = vote.id;
+SELECT /*vt+ VIEW=inner2 PUBLIC */ COUNT(1) FROM article JOIN vote ON article.title="ticket_price" AND article.id = vote.id;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	_ = SetupExternal(t, boosttest.WithTestRecipe(recipe))
+}
+
 func TestRepositoriesWithIn(t *testing.T) {
 	recipe := testrecipe.Load(t, "repositories")
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))

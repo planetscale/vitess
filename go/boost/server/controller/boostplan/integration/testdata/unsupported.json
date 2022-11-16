@@ -71,6 +71,16 @@
       "Keyspace": "main",
       "SQL": "SELECT users.id FROM users WHERE users.id IN :param1",
       "Error": "syntax error at position 53 near ':param1'"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id FROM users JOIN friends ON users.id = friends.id JOIN votes ON users.age = friends.friend",
+      "Error": "query not supported by boost: join without predicates is not supported"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id FROM users JOIN friends ON users.id = friends.id LEFT JOIN votes ON users.age = friends.friend",
+      "Error": "query not supported by boost: join predicates have to be in the form <tbl1.col> = <tbl2.col>, was [`users`.`age` = `friends`.`friend`]"
     }
   ]
 }
