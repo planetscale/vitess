@@ -81,6 +81,11 @@
       "Keyspace": "main",
       "SQL": "SELECT users.id FROM users JOIN friends ON users.id = friends.id LEFT JOIN votes ON users.age = friends.friend",
       "Error": "query not supported by boost: join predicates have to be in the form <tbl1.col> = <tbl2.col>, was [`users`.`age` = `friends`.`friend`]"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id FROM users WHERE users.id IN ::param1 AND users.name IN ::param2",
+      "Error": "query not supported by boost: multiple IN() clauses for a parameter are not supported: `users`.`name` IN ::param2"
     }
   ]
 }
