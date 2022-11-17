@@ -76,6 +76,10 @@ func (ex *Executor) SetMaxBatchSize(maxBatchSize int) {
 	ex.maxBatchSize = maxBatchSize
 }
 
+func (ex *Executor) Rollback(ctx context.Context, safeSession *vtgate.SafeSession) error {
+	return nil
+}
+
 func (ex *Executor) StreamExecute(ctx context.Context, method string, safeSession *vtgate.SafeSession, sql string, bvars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	if cid := callerid.EffectiveCallerIDFromContext(ctx); cid == nil {
 		ex.t.Fatalf("missing: EffectiveCallerID passed on context")
