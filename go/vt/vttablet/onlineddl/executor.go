@@ -2151,6 +2151,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 			onlyScheduleOneMigration.Do(func() {
 				err = e.updateMigrationStatus(ctx, uuid, schema.OnlineDDLStatusReady)
 				log.Infof("Executor.scheduleNextMigration: scheduling migration %s; err: %v", uuid, err)
+				e.triggerNextCheckInterval()
 			})
 			if err != nil {
 				return err
@@ -2535,6 +2536,7 @@ func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onl
 
 // failMigration marks a migration as failed
 func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
+	defer e.triggerNextCheckInterval()
 	_ = e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
 	if withError != nil {
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error())
@@ -3590,6 +3592,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
 			return err
 		}
+		defer e.triggerNextCheckInterval()
 		_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 		// Because the migration is stale, it may not update completed_timestamp. It is essential to set completed_timestamp
 		// as this is then used when cleaning artifacts
