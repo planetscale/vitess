@@ -38,6 +38,6 @@ func TestEndtoendFullyMaterialized(t *testing.T) {
 		{sqltypes.NewInt32(200), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 		{sqltypes.NewInt32(300), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 	}, rs.Rows)
-	require.Equal(t, 1, tt.Boost.WorkerReads())
-	require.Equal(t, 4, tt.Boost.WorkerStats(worker.StatVStreamRows))
+	require.Equal(t, 1, tt.BoostTestCluster.WorkerReads())
+	require.Equal(t, 4, tt.BoostTestCluster.WorkerStats(worker.StatVStreamRows))
 }

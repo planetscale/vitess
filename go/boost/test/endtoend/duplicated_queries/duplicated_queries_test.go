@@ -31,9 +31,9 @@ CREATE TABLE mike (
 
 	rs := tt.ExecuteFetch(`select id from mike where season = 'season1'`)
 	require.Len(t, rs.Rows, 7)
-	require.Equal(t, 1, tt.Boost.WorkerReads())
+	require.Equal(t, 1, tt.BoostTestCluster.WorkerReads())
 
 	rs = tt.ExecuteFetch(`select id from mike where season = 'foo'`)
 	require.Len(t, rs.Rows, 0)
-	require.Equal(t, 2, tt.Boost.WorkerReads())
+	require.Equal(t, 2, tt.BoostTestCluster.WorkerReads())
 }

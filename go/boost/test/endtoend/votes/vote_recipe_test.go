@@ -29,7 +29,7 @@ const votesCount = 100
 
 func TestEndtoendVoteRecipeWithExternalBase(t *testing.T) {
 	tt := booste2e.Setup(t, booste2e.WithRecipe("votes"))
-	awvc := tt.Boost.View("articlewithvotecount")
+	awvc := tt.BoostTestCluster.View("articlewithvotecount")
 
 	var expectedResult = sqltypes.Row{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(votesCount / articleCount)}
 
@@ -51,15 +51,15 @@ func TestEndtoendVoteRecipeWithExternalBase(t *testing.T) {
 	rs := tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)
 	require.Equal(t, expectedResult, rs.Rows[0])
-	require.Equal(t, 2, tt.Boost.WorkerReads())
+	require.Equal(t, 2, tt.BoostTestCluster.WorkerReads())
 
 	tt.ExecuteFetch("SET @@boost_cached_queries = true")
 
 	rs = tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)
 	require.Equal(t, expectedResult, rs.Rows[0])
-	require.Equal(t, 3, tt.Boost.WorkerReads())
-	require.Equal(t, articleCount+votesCount, tt.Boost.WorkerStats(worker.StatVStreamRows))
+	require.Equal(t, 3, tt.BoostTestCluster.WorkerReads())
+	require.Equal(t, articleCount+votesCount, tt.BoostTestCluster.WorkerStats(worker.StatVStreamRows))
 }
 
 func TestEndtoendVoteRecipeRemoval(t *testing.T) {
@@ -82,8 +82,8 @@ func TestEndtoendVoteRecipeRemoval(t *testing.T) {
 	rs := tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)
 	require.Equal(t, expectedResult, rs.Rows[0])
-	require.Equal(t, 1, tt.Boost.WorkerReads())
-	require.Equal(t, articleCount+votesCount, tt.Boost.WorkerStats(worker.StatVStreamRows))
+	require.Equal(t, 1, tt.BoostTestCluster.WorkerReads())
+	require.Equal(t, articleCount+votesCount, tt.BoostTestCluster.WorkerStats(worker.StatVStreamRows))
 
 	recipe, err := tt.BoostTopo.GetRecipe(context.Background(), &vtboostpb.GetRecipeRequest{})
 	require.NoError(t, err)
@@ -100,8 +100,8 @@ func TestEndtoendVoteRecipeRemoval(t *testing.T) {
 	rs = tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)
 	require.Equal(t, expectedResult, rs.Rows[0])
-	require.Equal(t, 1, tt.Boost.WorkerReads())
-	require.Equal(t, articleCount+votesCount, tt.Boost.WorkerStats(worker.StatVStreamRows))
+	require.Equal(t, 1, tt.BoostTestCluster.WorkerReads())
+	require.Equal(t, articleCount+votesCount, tt.BoostTestCluster.WorkerStats(worker.StatVStreamRows))
 
 	_, err = tt.BoostTopo.PutRecipe(context.Background(), &vtboostpb.PutRecipeRequest{
 		Recipe: &vtboostpb.Recipe{
@@ -116,6 +116,6 @@ func TestEndtoendVoteRecipeRemoval(t *testing.T) {
 	rs = tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)
 	require.Equal(t, expectedResult, rs.Rows[0])
-	require.Equal(t, 2, tt.Boost.WorkerReads())
-	require.Equal(t, articleCount+votesCount, tt.Boost.WorkerStats(worker.StatVStreamRows))
+	require.Equal(t, 2, tt.BoostTestCluster.WorkerReads())
+	require.Equal(t, articleCount+votesCount, tt.BoostTestCluster.WorkerStats(worker.StatVStreamRows))
 }
