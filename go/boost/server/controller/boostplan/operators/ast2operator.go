@@ -187,6 +187,8 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 		})
 	}
 
+	var hasListArg bool
+
 	sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
 		switch cursor.Node().(type) {
 		case sqlparser.Argument:
@@ -207,6 +209,13 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 		case sqlparser.ListArg:
 			// because of the way `sqlparser` works, a ListArg can only appear on the right-hand side
 			// of an `IN` expression, so we don't need to check for anything specific here
+			if hasListArg {
+				errors = append(errors, &UnsupportedError{
+					AST:  cursor.Parent(),
+					Type: MultipleIn,
+				})
+			}
+			hasListArg = true
 		}
 		return true
 	}, nil)
