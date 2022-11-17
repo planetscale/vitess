@@ -91,13 +91,39 @@ func (conv *Converter) loadNamedTable(ddl DDLSchema, keyspace, name string) (*No
 	return n, nil
 }
 
+func indexContainsNullableColumn(index *sqlparser.IndexDefinition, spec *sqlparser.TableSpec) bool {
+	for _, indexCol := range index.Columns {
+		for _, tableCol := range spec.Columns {
+			if indexCol.Column.String() == tableCol.Name.String() {
+				if tableCol.Type.Options == nil || tableCol.Type.Options.Null == nil || *tableCol.Type.Options.Null {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 func (conv *Converter) makeTableNode(keyspace, name string, spec *sqlparser.TableSpec) (*Node, error) {
 	var primaryKey *sqlparser.IndexDefinition
 
-	for _, cons := range spec.Indexes {
-		if cons.Info.Primary {
-			primaryKey = cons
+	for _, idx := range spec.Indexes {
+		if idx.Info.Primary {
+			primaryKey = idx
 			break
+		}
+	}
+
+	// If we have no primary key, we fall back to the first unique non-nullable key
+	// which can function as the primary key for Boost. This is a requirement we already
+	// enforce for online DDL as well, so it should always pass for any production
+	// branch under normal circumstances.
+	if primaryKey == nil {
+		for _, idx := range spec.Indexes {
+			if idx.Info.Unique && !indexContainsNullableColumn(idx, spec) {
+				primaryKey = idx
+				break
+			}
 		}
 	}
 
@@ -123,7 +149,7 @@ func (conv *Converter) makeTableNode(keyspace, name string, spec *sqlparser.Tabl
 		return conv.NewNode(name, op, nil), nil
 	}
 
-	return nil, &NoPrimaryKeyError{
+	return nil, &NoUniqueKeyError{
 		Keyspace: keyspace,
 		Table:    name,
 		Spec:     spec,
