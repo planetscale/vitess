@@ -38,7 +38,7 @@ import (
 
 type Executor interface {
 	StreamExecute(ctx context.Context, method string, safeSession *vtgate.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error
-	Rollback(ctx context.Context, safeSession *vtgate.SafeSession) error
+	CloseSession(ctx context.Context, safeSession *vtgate.SafeSession) error
 	VSchema() *vindexes.VSchema
 }
 
@@ -2033,16 +2033,13 @@ func (d *Domain) performUpquery(ctx context.Context, queryStr string, bvars map[
 
 	var records []boostpb.Record
 	var gtid string
-	var session = vtgate.NewSafeSession(nil)
 
 	ctx = callerid.NewContext(ctx, vitessCallerID, vtgateCallerID)
-
-	defer func() {
-		_ = d.executor.Rollback(ctx, session)
-	}()
+	session := vtgate.NewSafeSession(nil)
 
 	switch d.upqueryMode {
 	case boostpb.UpqueryMode_SELECT_GTID:
+		session.Autocommit = true
 		err := d.executor.StreamExecute(ctx, "Boost.Upquery", session, queryStr, bvars, func(result *sqltypes.Result) error {
 			records = records[:0]
 
@@ -2068,6 +2065,11 @@ func (d *Domain) performUpquery(ctx context.Context, queryStr string, bvars map[
 			Workload:             querypb.ExecuteOptions_OLAP,
 			TransactionIsolation: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
 		}
+
+		defer func() {
+			_ = d.executor.CloseSession(ctx, session)
+		}()
+
 		err := d.executor.StreamExecute(ctx, "Boost.Upquery", session, queryStr, bvars, func(result *sqltypes.Result) error {
 			records = records[:0]
 
@@ -2082,6 +2084,7 @@ func (d *Domain) performUpquery(ctx context.Context, queryStr string, bvars map[
 		if err != nil {
 			return fmt.Errorf("failed to start upquery transaction: %w", err)
 		}
+
 	}
 	return nil
 }
