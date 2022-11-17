@@ -451,8 +451,10 @@ func (ts *Server) CreateTablet(ctx context.Context, tablet *topodatapb.Tablet) e
 	}
 
 	if updateErr := UpdateTabletReplicationData(ctx, ts, tablet); updateErr != nil {
+		log.Errorf("UpdateTabletReplicationData failed for tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), updateErr)
 		return updateErr
 	}
+	log.Infof("Successfully updated tablet replication data for alias: %v", topoproto.TabletAliasString(tablet.Alias))
 
 	if err == nil {
 		event.Dispatch(&events.TabletChange{
