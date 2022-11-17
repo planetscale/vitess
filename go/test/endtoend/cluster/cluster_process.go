@@ -20,7 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net"
 	"os"
@@ -34,9 +34,9 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
+	"vitess.io/vitess/go/test/endtoend/filelock"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // DefaultCell : If no cell name is passed, then use following
@@ -893,24 +893,49 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	return cluster.nextPortForProcess
 }
 
+// portFileTimeout determines when we see the content of a port file as
+// stale. After this time, we assume we can start with the default base
+// port again.
+const portFileTimeout = 1 * time.Hour
+
 // getPort checks if we have recent used port info in /tmp/todaytime.port
 // If no, then use a random port and save that port + 200 in the above file
 // If yes, then return that port, and save port + 200 in the same file
 // here, assumptions is 200 ports might be consumed for all tests in a package
 func getPort() int {
-	tmpPortFileName := path.Join(os.TempDir(), time.Now().Format("01022006.port"))
+	portFile, err := os.OpenFile(path.Join(os.TempDir(), "endtoend.port"), os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		panic(err)
+	}
+
+	filelock.Lock(portFile)
+	defer filelock.Unlock(portFile)
+
+	fileInfo, err := portFile.Stat()
+	if err != nil {
+		panic(err)
+	}
+
+	portBytes, err := io.ReadAll(portFile)
+	if err != nil {
+		panic(err)
+	}
+
 	var port int
-	if _, err := os.Stat(tmpPortFileName); os.IsNotExist(err) {
+	if len(portBytes) == 0 || time.Now().After(fileInfo.ModTime().Add(portFileTimeout)) {
 		port = getVtStartPort()
 	} else {
-		result, _ := os.ReadFile(tmpPortFileName)
-		cport, err := strconv.Atoi(string(result))
-		if err != nil || cport > 60000 || cport == 0 {
-			cport = getVtStartPort()
+		parsedPort, err := strconv.ParseInt(string(portBytes), 10, 64)
+		if err != nil {
+			panic(err)
 		}
-		port = cport
+		port = int(parsedPort)
 	}
-	os.WriteFile(tmpPortFileName, []byte(fmt.Sprintf("%d", port+200)), 0666)
+
+	portFile.Truncate(0)
+	portFile.Seek(0, 0)
+	portFile.WriteString(fmt.Sprintf("%v", port+200))
+	portFile.Close()
 	return port
 }
 
@@ -934,7 +959,7 @@ func getRandomNumber(maxNumber int32, baseNumber int) int {
 func getVtStartPort() int {
 	osVtPort := os.Getenv("VTPORTSTART")
 	if osVtPort != "" {
-		cport, err := strconv.Atoi(string(osVtPort))
+		cport, err := strconv.Atoi(osVtPort)
 		if err == nil {
 			return cport
 		}
@@ -1048,11 +1073,11 @@ func getCoveragePath(fileName string) string {
 // PrintMysqlctlLogFiles prints all the log files associated with the mysqlctl binary
 func (cluster *LocalProcessCluster) PrintMysqlctlLogFiles() {
 	logDir := cluster.TmpDirectory
-	files, _ := ioutil.ReadDir(logDir)
+	files, _ := os.ReadDir(logDir)
 	for _, fileInfo := range files {
 		if !fileInfo.IsDir() && strings.Contains(fileInfo.Name(), "mysqlctl") {
 			log.Errorf("Printing the log file - " + fileInfo.Name())
-			logOut, _ := ioutil.ReadFile(path.Join(logDir, fileInfo.Name()))
+			logOut, _ := os.ReadFile(path.Join(logDir, fileInfo.Name()))
 			log.Errorf(string(logOut))
 		}
 	}
