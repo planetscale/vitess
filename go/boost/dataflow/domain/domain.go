@@ -38,6 +38,7 @@ import (
 
 type Executor interface {
 	StreamExecute(ctx context.Context, method string, safeSession *vtgate.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error
+	Rollback(ctx context.Context, safeSession *vtgate.SafeSession) error
 	VSchema() *vindexes.VSchema
 }
 
@@ -2036,6 +2037,10 @@ func (d *Domain) performUpquery(ctx context.Context, queryStr string, bvars map[
 
 	ctx = callerid.NewContext(ctx, vitessCallerID, vtgateCallerID)
 
+	defer func() {
+		_ = d.executor.Rollback(ctx, session)
+	}()
+
 	switch d.upqueryMode {
 	case boostpb.UpqueryMode_SELECT_GTID:
 		err := d.executor.StreamExecute(ctx, "Boost.Upquery", session, queryStr, bvars, func(result *sqltypes.Result) error {
@@ -2074,7 +2079,6 @@ func (d *Domain) performUpquery(ctx context.Context, queryStr string, bvars map[
 			}
 			return callback(gtid, records)
 		})
-
 		if err != nil {
 			return fmt.Errorf("failed to start upquery transaction: %w", err)
 		}
