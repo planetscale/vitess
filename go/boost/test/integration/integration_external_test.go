@@ -737,7 +737,7 @@ CREATE TABLE dog (
 create table dog_friends (
     pid BIGINT NOT NULL,
     did BIGINT NOT NULL,
-    PRIMARY KEY(pid,did));
+    UNIQUE(pid,did));
 
     select person.name, dog.name 
     from person 

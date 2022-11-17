@@ -19,6 +19,10 @@
     {
       "Keyspace": "main",
       "SQL": "CREATE TABLE f2 (friend INT(32), id INT(32), PRIMARY KEY (id))"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE users_no_unique_key (id INT(32), age INT(32), name VARCHAR(40), address VARCHAR(40), metadata JSON)"
     }
   ],
   "Queries": [
@@ -86,6 +90,11 @@
       "Keyspace": "main",
       "SQL": "SELECT users.id FROM users WHERE users.id IN ::param1 AND users.name IN ::param2",
       "Error": "query not supported by boost: multiple IN() clauses for a parameter are not supported: `users`.`name` IN ::param2"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT id FROM users_no_unique_key WHERE id = :id",
+      "Error": "table main.users_no_unique_key has no unique non nullable key"
     }
   ]
 }

@@ -48,7 +48,7 @@ type (
 		AST  sqlparser.SQLNode
 		Type UnsupportedType
 	}
-	NoPrimaryKeyError struct {
+	NoUniqueKeyError struct {
 		Keyspace, Table string
 		Spec            *sqlparser.TableSpec
 	}
@@ -138,8 +138,8 @@ func (u *UnknownColumnsError) Error() string {
 	return fmt.Sprintf("unknown column(s) %+v in table %s.%s", u.Columns, u.Keyspace, u.Table)
 }
 
-func (n *NoPrimaryKeyError) Error() string {
-	return fmt.Sprintf("table %s.%s has no primary key", n.Keyspace, n.Table)
+func (n *NoUniqueKeyError) Error() string {
+	return fmt.Sprintf("table %s.%s has no unique non nullable key", n.Keyspace, n.Table)
 }
 
 func (b *BugError) Error() string {
