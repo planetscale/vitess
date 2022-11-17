@@ -76,7 +76,7 @@ func (ex *Executor) SetMaxBatchSize(maxBatchSize int) {
 	ex.maxBatchSize = maxBatchSize
 }
 
-func (ex *Executor) Rollback(ctx context.Context, safeSession *vtgate.SafeSession) error {
+func (ex *Executor) CloseSession(ctx context.Context, safeSession *vtgate.SafeSession) error {
 	return nil
 }
 
