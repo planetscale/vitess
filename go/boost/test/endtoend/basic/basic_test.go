@@ -18,7 +18,7 @@ import (
 func TestEndtoendBasicWithExternalBase(t *testing.T) {
 	tt := booste2e.Setup(t, booste2e.WithRecipe("basic"))
 
-	err := tt.Boost.Controller().Migrate(context.Background(), func(_ context.Context, mig *controller.Migration) error {
+	err := tt.BoostTestCluster.Controller().Migrate(context.Background(), func(_ context.Context, mig *controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
 		a := mig.AddBase("a", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, tt.Keyspace))
 		b := mig.AddBase("b", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, tt.Keyspace))
@@ -35,7 +35,7 @@ func TestEndtoendBasicWithExternalBase(t *testing.T) {
 	require.NoError(t, err, "migration failed")
 
 	var id = sqltypes.NewInt64(1)
-	cq := tt.Boost.View("c")
+	cq := tt.BoostTestCluster.View("c")
 
 	tt.ExecuteFetch("INSERT INTO a VALUES (1, 2)")
 	boosttest.Settle()
