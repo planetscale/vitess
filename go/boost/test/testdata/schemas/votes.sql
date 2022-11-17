@@ -1,4 +1,4 @@
-CREATE TABLE article (id bigint, title varchar(255), PRIMARY KEY(id));
+CREATE TABLE article (id bigint NOT NULL AUTO_INCREMENT, title varchar(255), PRIMARY KEY(id));
 CREATE TABLE vote (id bigint NOT NULL AUTO_INCREMENT, article_id bigint, user bigint, PRIMARY KEY(id));
 
 /* DML */

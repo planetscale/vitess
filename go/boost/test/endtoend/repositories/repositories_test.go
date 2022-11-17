@@ -41,9 +41,9 @@ select count(*) as count_all, stars.repository_id as stars_repository_id from st
 
 	rs := tt.ExecuteFetch(Query, "('tag-6', 'tag-7', 'tag-8')")
 	require.Len(t, rs.Rows, 3)
-	require.Equal(t, 1, tt.Boost.WorkerReads())
+	require.Equal(t, 1, tt.BoostTestCluster.WorkerReads())
 
 	rs = tt.ExecuteFetch(Query, "('tag-3')")
 	require.Len(t, rs.Rows, 1)
-	require.Equal(t, 2, tt.Boost.WorkerReads())
+	require.Equal(t, 2, tt.BoostTestCluster.WorkerReads())
 }
