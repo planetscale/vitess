@@ -160,7 +160,13 @@ func WithTestRecipe(recipe *testrecipe.Recipe) Option {
 	}
 }
 
-func New(t *testing.T, options ...Option) *Cluster {
+func WithClusterUUID(uuid string) Option {
+	return func(c *Cluster) {
+		c.UUID = uuid
+	}
+}
+
+func New(t testing.TB, options ...Option) *Cluster {
 	var cluster = &Cluster{
 		t:             t,
 		cachedConns:   common.NewSyncMap[string, drpc.Conn](),
