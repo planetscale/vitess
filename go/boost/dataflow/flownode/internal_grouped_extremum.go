@@ -179,6 +179,8 @@ const (
 	AggregationCount     = boostpb.Node_InternalGrouped_Aggregation_Count
 	AggregationCountStar = boostpb.Node_InternalGrouped_Aggregation_CountStar
 	AggregationSum       = boostpb.Node_InternalGrouped_Aggregation_Sum
+
+	AggregationInvalid AggregationKind = -1
 )
 
 func AggregationOver(kind AggregationKind, over int) AggrExpr {

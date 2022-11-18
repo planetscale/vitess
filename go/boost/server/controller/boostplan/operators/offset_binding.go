@@ -69,26 +69,31 @@ func (g *GroupBy) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 				return err
 			}
 		}
+		aggrKind, err := aggrFuncToGroupKind(aggr)
+		if err != nil {
+			return err
+		}
 		g.AggregationsIdx = append(g.AggregationsIdx, offset)
-		g.AggregationsTypes = append(g.AggregationsTypes, aggrFuncToGroupKind(aggr))
+		g.AggregationsTypes = append(g.AggregationsTypes, aggrKind)
 	}
 	return nil
 }
 
-func aggrFuncToGroupKind(aggr sqlparser.AggrFunc) flownode.AggregationKind {
+func aggrFuncToGroupKind(aggr sqlparser.AggrFunc) (flownode.AggregationKind, error) {
 	switch aggr.(type) {
 	case *sqlparser.Sum:
-		return flownode.AggregationSum
+		return flownode.AggregationSum, nil
 	case *sqlparser.Count:
-		return flownode.AggregationCount
+		return flownode.AggregationCount, nil
 	case *sqlparser.CountStar:
-		return flownode.AggregationCountStar
+		return flownode.AggregationCountStar, nil
 	case *sqlparser.Min:
-		return flownode.ExtremumMin
+		return flownode.ExtremumMin, nil
 	case *sqlparser.Max:
-		return flownode.ExtremumMax
+		return flownode.ExtremumMax, nil
+	default:
+		return flownode.AggregationInvalid, &UnsupportedError{AST: aggr, Type: Aggregation}
 	}
-	panic("should not happen")
 }
 
 func (j *Join) PlanOffsets(node *Node, semTable *semantics.SemTable) error {

@@ -635,11 +635,21 @@ func TestAlbumsRecipe(t *testing.T) {
 }
 
 func TestLoadingExternalRecipes(t *testing.T) {
-	for _, schemaName := range []string{"lobsters-schema", "tpc-h", "tpc-w"} {
-		t.Run(schemaName, func(t *testing.T) {
-			t.Skip("not green yet")
-
-			recipe := testrecipe.Load(t, schemaName)
+	var recipes = []struct {
+		name      string
+		supported bool
+	}{
+		{"lobsters-schema", false},
+		{"tpc-h", false},
+		{"tpc-w", false},
+		{"connections", false},
+	}
+	for _, r := range recipes {
+		t.Run(r.name, func(t *testing.T) {
+			if !r.supported {
+				t.Skipf("schema %q is not yet supported by the planner", r.name)
+			}
+			recipe := testrecipe.Load(t, r.name)
 			_ = SetupExternal(t, boosttest.WithTestRecipe(recipe))
 		})
 	}
