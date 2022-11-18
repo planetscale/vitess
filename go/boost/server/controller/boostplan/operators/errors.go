@@ -41,6 +41,7 @@ const (
 	JoinWithoutPredicates
 	JoinPredicates
 	MultipleIn
+	Aggregation
 )
 
 type (
@@ -126,9 +127,11 @@ func (n *UnsupportedError) Error() string {
 	case JoinWithoutPredicates:
 		fmt.Fprintf(&sb, "join without predicates is not supported")
 	case JoinPredicates:
-		fmt.Fprintf(&sb, "join predicates have to be in the form <tbl1.col> = <tbl2.col>, was [%s]", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "join predicates have to be in the form <tbl1.col> = <tbl2.col>, was '%s'", sqlparser.CanonicalString(n.AST))
 	case MultipleIn:
 		fmt.Fprintf(&sb, "multiple IN() clauses for a parameter are not supported: %v", sqlparser.CanonicalString(n.AST))
+	case Aggregation:
+		fmt.Fprintf(&sb, "group aggregation function '%s' is not supported", sqlparser.CanonicalString(n.AST))
 	}
 
 	return sb.String()
