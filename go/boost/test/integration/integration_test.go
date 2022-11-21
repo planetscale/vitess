@@ -167,9 +167,12 @@ func testBroadRecursingSubquery(t *testing.T, g *boosttest.Cluster) {
 
 		join := mig.AddIngredient("join", []string{"base_col", "join_col", "reader_col"},
 			flownode.NewJoin(x, y, flownode.JoinTypeOuter,
-				[]flownode.JoinSource{flownode.JoinSourceLeft(0),
+				[2]int{1, 0},
+				[]flownode.JoinSource{
+					flownode.JoinSourceLeft(0),
 					flownode.JoinSourceBoth(1, 0),
-					flownode.JoinSourceLeft(2)}))
+					flownode.JoinSourceLeft(2),
+				}))
 
 		mig.Maintain("reader", join, []int{2}, []boostpb.ViewParameter{{Name: "k0"}}, 0)
 		return nil

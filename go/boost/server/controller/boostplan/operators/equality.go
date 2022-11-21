@@ -50,6 +50,15 @@ func (f *Filter) Equals(st *semantics.SemTable, op Operator) bool {
 	return sqlparser.EqualsExpr(f.Predicates, other.Predicates)
 }
 
+func (n *NullFilter) Equals(st *semantics.SemTable, op Operator) bool {
+	other, ok := op.(*NullFilter)
+	if !ok {
+		return false
+	}
+
+	return sqlparser.EqualsExpr(n.Predicates, other.Predicates)
+}
+
 func (j *Join) Equals(st *semantics.SemTable, op Operator) bool {
 	other, ok := op.(*Join)
 	if !ok {

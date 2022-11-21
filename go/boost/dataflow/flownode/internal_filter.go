@@ -74,6 +74,7 @@ func (f *Filter) QueryThrough(columns []int, key boostpb.Row, nodes *Map, states
 			newRecords = append(newRecords, r)
 		}
 	})
+
 	return newRecords, true, IsMaterialized
 }
 

@@ -100,23 +100,13 @@ func opNodeToFlowParts(node *operators.Node, mig Migration) (operators.FlowNode,
 	case *operators.NodeTableRef:
 		fn, err = makeTableRefNode(op, mig)
 	case *operators.Union:
-		fn, err = makeNodeUnionNode(node, mig, op)
+		fn, err = makeUnionNode(node, mig, op)
 	case *operators.TopK:
 		fn, err = makeTopKNode(node, mig, op)
 	case *operators.Distinct:
-		src := node.Ancestors[0].Flow.Address
-
-		var groupBy []int
-		for i := range node.Columns {
-			groupBy = append(groupBy, i)
-		}
-
-		distinct := flownode.NewDistinct(src, groupBy)
-		flowNode := operators.FlowNode{
-			Address: mig.AddIngredient(node.Name, columnOpNames(node.Columns), distinct),
-			Age:     operators.FlowNodeNew,
-		}
-		fn = flowNode
+		fn = makeDistinctNode(node, mig)
+	case *operators.NullFilter:
+		fn, err = makeNullFilterNode(node, node.Ancestors[0], mig, op)
 	default:
 		panic(fmt.Sprintf("opNodeToFlowParts doesn't know '%T", node.Op))
 	}
@@ -136,7 +126,7 @@ func opNodeToFlowParts(node *operators.Node, mig Migration) (operators.FlowNode,
 	return fn, nil
 }
 
-func makeNodeUnionNode(node *operators.Node, mig Migration, op *operators.Union) (operators.FlowNode, error) {
+func makeUnionNode(node *operators.Node, mig Migration, op *operators.Union) (operators.FlowNode, error) {
 	colNames := columnOpNames(op.Columns)
 	emitColumnID := make(map[graph.NodeIdx][]int)
 	for i, ancestor := range node.Ancestors {
@@ -284,7 +274,7 @@ func makeJoinOpNode(node *operators.Node, mig Migration, op *operators.Join) (op
 	joinType := flownode.ParserJoinTypeToFlowNodeJoinType(op.Inner)
 	return operators.FlowNode{
 		Age:     operators.FlowNodeNew,
-		Address: mig.AddIngredient(node.Name, columnOpNames(node.Columns), flownode.NewJoin(leftNa, rightNa, joinType, op.Emit)),
+		Address: mig.AddIngredient(node.Name, columnOpNames(node.Columns), flownode.NewJoin(leftNa, rightNa, joinType, op.On, op.Emit)),
 	}, nil
 }
 
@@ -311,7 +301,20 @@ func makeProjectOpNode(name string, parent *operators.Node, op *operators.Projec
 		Age:     operators.FlowNodeNew,
 		Address: mig.AddIngredient(name, colNames, flownode.NewProject(parentNa, op.Projections)),
 	}, nil
+}
 
+func makeNullFilterNode(node, parent *operators.Node, mig Migration, op *operators.NullFilter) (operators.FlowNode, error) {
+	parentNa, err := parent.FlowNodeAddr()
+	if err != nil {
+		return operators.FlowNode{}, err
+	}
+
+	colNames := columnOpNames(node.Columns)
+
+	return operators.FlowNode{
+		Age:     operators.FlowNodeNew,
+		Address: mig.AddIngredient(node.Name, colNames, flownode.NewProject(parentNa, op.Projections)),
+	}, nil
 }
 
 func columnOpNames(columns []*operators.Column) (names []string) {
@@ -377,4 +380,20 @@ func makeBaseOpNode(name string, op *operators.Table, mig Migration) (operators.
 	base := flownode.NewExternalBase(keyColumnIds, columnTypes, op.Keyspace)
 	address := mig.AddBase(name, columnNames, base)
 	return operators.FlowNode{Age: operators.FlowNodeNew, Address: address}, nil
+}
+
+func makeDistinctNode(node *operators.Node, mig Migration) operators.FlowNode {
+	src := node.Ancestors[0].Flow.Address
+
+	var groupBy []int
+	for i := range node.Columns {
+		groupBy = append(groupBy, i)
+	}
+
+	distinct := flownode.NewDistinct(src, groupBy)
+	flowNode := operators.FlowNode{
+		Address: mig.AddIngredient(node.Name, columnOpNames(node.Columns), distinct),
+		Age:     operators.FlowNodeNew,
+	}
+	return flowNode
 }

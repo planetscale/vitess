@@ -1,6 +1,8 @@
 package operators
 
 import (
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -103,45 +105,50 @@ func (j *Join) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 	rhsID := rhsNode.Covers()
 
 	for _, col := range j.EmitColumns {
-		if len(col.AST) == 2 {
-			err := handleJoinColumn(col, semTable, lhsID, rhsID, j, lhsNode, rhsNode)
+		isJoinCondition := slices.Index(j.JoinColumns, col) >= 0
+
+		if isJoinCondition && j.Inner {
+			err := j.handleJoinColumn(col, semTable, lhsID, rhsID, lhsNode, rhsNode)
 			if err != nil {
 				return err
 			}
 			continue
 		}
 
-		expr, err := col.SingleAST()
-		if err != nil {
-			return err
-		}
-		deps := semTable.DirectDeps(expr)
-		switch {
-		case deps.IsSolvedBy(lhsID):
-			offset, err := lhsNode.ExprLookup(semTable, expr)
-			if err != nil {
-				return err
+		for _, expr := range col.AST {
+			deps := semTable.DirectDeps(expr)
+			switch {
+			case deps.IsSolvedBy(lhsID):
+				offset, err := lhsNode.ExprLookup(semTable, expr)
+				if err != nil {
+					return err
+				}
+				j.Emit = append(j.Emit, flownode.JoinSourceLeft(offset))
+				if isJoinCondition {
+					j.On[0] = offset
+				}
+			case deps.IsSolvedBy(rhsID):
+				offset, err := rhsNode.ExprLookup(semTable, expr)
+				if err != nil {
+					return err
+				}
+				j.Emit = append(j.Emit, flownode.JoinSourceRight(offset))
+				if isJoinCondition {
+					j.On[1] = offset
+				}
+			default:
+				panic("could not find where this should go!")
 			}
-			j.Emit = append(j.Emit, flownode.JoinSourceLeft(offset))
-		case deps.IsSolvedBy(rhsID):
-			offset, err := rhsNode.ExprLookup(semTable, expr)
-			if err != nil {
-				return err
-			}
-			j.Emit = append(j.Emit, flownode.JoinSourceRight(offset))
-		default:
-			panic("could not find where this should go!")
 		}
 	}
 
 	return nil
 }
 
-func handleJoinColumn(
+func (j *Join) handleJoinColumn(
 	col *Column,
 	semTable *semantics.SemTable,
 	lhsID, rhsID semantics.TableSet,
-	op *Join,
 	lhsNode, rhsNode *Node,
 ) error {
 	lftCol, lftOK := col.AST[0].(*sqlparser.ColName)
@@ -162,13 +169,13 @@ func handleJoinColumn(
 	// lhs = rhs
 	case semTable.DirectDeps(lftCol).IsSolvedBy(lhsID) &&
 		semTable.DirectDeps(rgtCol).IsSolvedBy(rhsID):
-		err := setColNameOffsets(semTable, op, lhsNode, rhsNode, lftCol, rgtCol)
+		err := j.setColNameOffsets(semTable, lhsNode, rhsNode, lftCol, rgtCol)
 		if err != nil {
 			return err
 		}
 	case semTable.DirectDeps(rgtCol).IsSolvedBy(lhsID) &&
 		semTable.DirectDeps(lftCol).IsSolvedBy(rhsID):
-		err := setColNameOffsets(semTable, op, lhsNode, rhsNode, rgtCol, lftCol)
+		err := j.setColNameOffsets(semTable, lhsNode, rhsNode, rgtCol, lftCol)
 		if err != nil {
 			return err
 		}
@@ -185,7 +192,7 @@ func handleJoinColumn(
 	return nil
 }
 
-func setColNameOffsets(semTable *semantics.SemTable, op *Join, lhsNode, rhsNode *Node, lftCol, rgtCol *sqlparser.ColName) error {
+func (j *Join) setColNameOffsets(semTable *semantics.SemTable, lhsNode, rhsNode *Node, lftCol, rgtCol *sqlparser.ColName) error {
 	lft, err := lhsNode.ExprLookup(semTable, lftCol)
 	if err != nil {
 		return err
@@ -195,7 +202,8 @@ func setColNameOffsets(semTable *semantics.SemTable, op *Join, lhsNode, rhsNode 
 	if err != nil {
 		return err
 	}
-	op.Emit = append(op.Emit, flownode.JoinSourceBoth(lft, rgt))
+	j.Emit = append(j.Emit, flownode.JoinSourceBoth(lft, rgt))
+	j.On = [2]int{lft, rgt}
 	return nil
 }
 
@@ -262,6 +270,75 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 	return nil
 }
 
+func (n *NullFilter) PlanOffsets(node *Node, st *semantics.SemTable) error {
+	input := node.Ancestors[0]
+
+	newPredicate := sqlparser.Rewrite(sqlparser.CloneExpr(n.Predicates), findOffsets(st, input), nil).(sqlparser.Expr)
+
+	for _, col := range node.Columns {
+		ast, err := col.SingleAST()
+		if err != nil {
+			return err
+		}
+
+		col, ok := ast.(*sqlparser.ColName)
+		deps := st.DirectDeps(col)
+
+		if ok && !deps.Equals(n.OuterSide) {
+			// if we have a bare column and it comes from the inner side of the join, we can just pass it through
+			offset, err := input.ExprLookup(st, col)
+			if err != nil {
+				return err
+			}
+			n.Projections = append(n.Projections, flownode.ProjectedCol(offset))
+			continue
+		}
+
+		// for everything else, we need to go over the expression and null out values coming from the outer side
+		ast = sqlparser.CloneExpr(ast)
+		ast = sqlparser.Rewrite(ast, func(cursor *sqlparser.Cursor) bool {
+			col, ok := cursor.Node().(*sqlparser.ColName)
+			if !ok {
+				return err != nil
+			}
+
+			offset, thisErr := input.ExprLookup(st, col)
+			if thisErr != nil {
+				err = thisErr
+				return false
+			}
+
+			offsetExpr := sqlparser.NewOffset(offset, col)
+			if !st.DirectDeps(col).Equals(n.OuterSide) {
+				// columns from the inner side can just pass through
+				cursor.Replace(offsetExpr)
+				return false
+			}
+
+			caseExpr := &sqlparser.CaseExpr{
+				Whens: []*sqlparser.When{{
+					Cond: newPredicate,
+					Val:  offsetExpr,
+				}},
+				Else: &sqlparser.NullVal{},
+			}
+
+			cursor.Replace(caseExpr)
+			return false
+		}, nil).(sqlparser.Expr)
+		if err != nil {
+			return err
+		}
+		eeExpr, err := evalengine.Translate(ast, nil)
+		n.Projections = append(n.Projections, &flownode.ProjectedExpr{
+			AST:      ast,
+			EvalExpr: eeExpr,
+		})
+	}
+
+	return nil
+}
+
 func rewriteColNamesToOffsets(semTable *semantics.SemTable, node *Node, expr sqlparser.Expr) (sqlparser.Expr, error) {
 	var breakingError error
 	result := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
@@ -279,10 +356,8 @@ func rewriteColNamesToOffsets(semTable *semantics.SemTable, node *Node, expr sql
 	return result.(sqlparser.Expr), breakingError
 }
 
-func (f *Filter) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
-	input := node.Ancestors[0]
-	var err error
-	newPredicate := sqlparser.Rewrite(sqlparser.CloneExpr(f.Predicates), func(cursor *sqlparser.Cursor) bool {
+func findOffsets(semTable *semantics.SemTable, input *Node) func(cursor *sqlparser.Cursor) bool {
+	return func(cursor *sqlparser.Cursor) bool {
 		switch col := cursor.Node().(type) {
 		case *sqlparser.ColName, sqlparser.AggrFunc:
 			expr := col.(sqlparser.Expr) // this is always valid, but golang doesn't realise it for us
@@ -296,7 +371,13 @@ func (f *Filter) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 			})
 		}
 		return true
-	}, nil)
+	}
+}
+
+func (f *Filter) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
+	input := node.Ancestors[0]
+	var err error
+	newPredicate := sqlparser.Rewrite(sqlparser.CloneExpr(f.Predicates), findOffsets(semTable, input), nil)
 	if err != nil {
 		return err
 	}
