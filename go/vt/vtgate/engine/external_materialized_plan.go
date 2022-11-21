@@ -85,15 +85,15 @@ func CanMaterialize(query sqlparser.Statement) bool {
 	}
 }
 
-func (mat *MaterializationClient) GetPlan(vcursor VCursor, query sqlparser.Statement, bvars map[string]*querypb.BindVariable) (*Plan, bool) {
+func (mat *MaterializationClient) GetPlan(vcursor VCursor, query sqlparser.Statement, bvars map[string]*querypb.BindVariable) (*Plan, string, bool) {
 	if mat == nil || materializationEnabled == 0 {
-		return nil, false
+		return nil, "", false
 	}
 
 	keyspace := vcursor.GetKeyspace()
 	cached, ok := mat.watcher.GetCachedQuery(keyspace, query, bvars)
 	if !ok {
-		return nil, false
+		return nil, "", false
 	}
 
 	plan := &Plan{
@@ -116,7 +116,7 @@ func (mat *MaterializationClient) GetPlan(vcursor VCursor, query sqlparser.State
 		})
 	}()
 
-	return plan, true
+	return plan, cached.View.PublicQueryID(), true
 }
 
 type MaterializationClient struct {

@@ -25,9 +25,9 @@ import (
 )
 
 var (
-	StatViewReads      = stats.NewCountersWithMultiLabels("BoostClientViewReads", "The total number of remote view reads calls executed", []string{"BoostQueryPublicId"})
-	StatViewHits       = stats.NewCountersWithMultiLabels("BoostClientViewHits", "The total number of cache hits from view reads", []string{"BoostQueryPublicId"})
-	StatViewReadTiming = stats.NewMultiTimings("BoostClientViewReadMs", "Duration for each individual read in the view client", []string{"BoostQueryPublicId"})
+	StatViewReads      = stats.NewCountersWithSingleLabel("BoostClientViewReads", "The total number of remote view reads calls executed", "BoostQueryPublicId")
+	StatViewHits       = stats.NewCountersWithSingleLabel("BoostClientViewHits", "The total number of cache hits from view reads", "BoostQueryPublicId")
+	StatViewReadTiming = stats.NewTimings("BoostClientViewReadMs", "Duration for each individual read in the view client", "BoostQueryPublicId")
 )
 
 type View struct {
@@ -86,10 +86,17 @@ func NewViewClientFromProto(pb *vtboostpb.Materialization_ViewDescriptor, rpcs *
 	return v, nil
 }
 
+func (v *View) PublicQueryID() string {
+	if v.metrics == nil {
+		return ""
+	}
+	return v.metrics.publicQueryID
+}
+
 func (v *View) CollectMetrics(publicID string, hitrate *metrics.RateCounter) {
 	v.metrics = &scopedMetrics{
-		labels:  []string{publicID},
-		hitrate: hitrate,
+		publicQueryID: publicID,
+		hitrate:       hitrate,
 	}
 }
 
@@ -114,7 +121,7 @@ func (v *View) LookupByBindVar(ctx context.Context, key []*querypb.BindVariable,
 	return v.lookup(ctx, keypb.Finish(), block)
 }
 
-func (cached *View) multiLookupForTuple(ctx context.Context, tuplePosition int, key []*querypb.BindVariable, block bool) (*sqltypes.Result, error) {
+func (v *View) multiLookupForTuple(ctx context.Context, tuplePosition int, key []*querypb.BindVariable, block bool) (*sqltypes.Result, error) {
 	queryCount := len(key[tuplePosition].Values)
 	keypbs := make([]boostpb.Row, 0, queryCount)
 
@@ -122,26 +129,26 @@ func (cached *View) multiLookupForTuple(ctx context.Context, tuplePosition int, 
 		keypb := boostpb.NewRowBuilder(len(key))
 
 		for i, bvar := range key {
-			var v sqltypes.Value
+			var val sqltypes.Value
 			if i == tuplePosition {
-				v = sqltypes.ProtoToValue(bvar.Values[q])
+				val = sqltypes.ProtoToValue(bvar.Values[q])
 			} else {
 				var err error
-				v, err = sqltypes.BindVariableToValue(bvar)
+				val, err = sqltypes.BindVariableToValue(bvar)
 				if err != nil {
 					return nil, err
 				}
 			}
-			if err := cached.canCoerce(v.Type(), i); err != nil {
+			if err := v.canCoerce(val.Type(), i); err != nil {
 				return nil, err
 			}
-			keypb.AddVitess(v)
+			keypb.AddVitess(val)
 		}
 
 		keypbs = append(keypbs, keypb.Finish())
 	}
 
-	return cached.lookupManyAndMerge(ctx, keypbs, block)
+	return v.lookupManyAndMerge(ctx, keypbs, block)
 }
 
 func (v *View) Lookup(ctx context.Context, key []sqltypes.Value, block bool) (*sqltypes.Result, error) {
@@ -252,9 +259,7 @@ func (v *View) lookupManyAndMerge(ctx context.Context, keys []boostpb.Row, block
 			v.metrics.onViewRead(len(keys), int(resp.Hits))
 
 			mu.Lock()
-			for _, row := range resp.Rows {
-				mergedResults = append(mergedResults, row)
-			}
+			mergedResults = append(mergedResults, resp.Rows...)
 			mu.Unlock()
 			return nil
 		})
@@ -295,24 +300,24 @@ func (v *View) Fields() []*query.Field {
 }
 
 type scopedMetrics struct {
-	labels  []string
-	hitrate *metrics.RateCounter
+	publicQueryID string
+	hitrate       *metrics.RateCounter
 }
 
 func (m *scopedMetrics) onViewDuration(start time.Time) {
 	if m == nil {
 		return
 	}
-	StatViewReadTiming.Record(m.labels, start)
+	StatViewReadTiming.Record(m.publicQueryID, start)
 }
 
 func (m *scopedMetrics) onViewRead(reads, hits int) {
 	if m == nil {
 		return
 	}
-	StatViewReads.Add(m.labels, int64(reads))
+	StatViewReads.Add(m.publicQueryID, int64(reads))
 	if hits > 0 {
-		StatViewHits.Add(m.labels, int64(hits))
+		StatViewHits.Add(m.publicQueryID, int64(hits))
 	}
 
 	m.hitrate.Register(hits > 0)

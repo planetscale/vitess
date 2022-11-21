@@ -1114,7 +1114,8 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	}
 
 	if canMaterialize {
-		if materializedPlan, ok := e.mats.GetPlan(vcursor, statement, bindVars); ok {
+		if materializedPlan, queryID, ok := e.mats.GetPlan(vcursor, statement, bindVars); ok {
+			logStats.BoostQueryID = queryID
 			return materializedPlan, nil
 		}
 	}

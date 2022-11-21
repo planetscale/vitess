@@ -17,14 +17,13 @@ limitations under the License.
 package logstats
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
 	"net/url"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
@@ -60,6 +59,9 @@ type LogStats struct {
 	SessionUUID    string
 	CachedPlan     bool
 	ActiveKeyspace string // ActiveKeyspace is the selected keyspace `use ks`
+
+	// Set if the query was executed through Boost
+	BoostQueryID string
 
 	// These two fields are deprecated and will be removed in the Vitess V16 release
 	Keyspace string
@@ -161,9 +163,9 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	var fmtString string
 	switch streamlog.GetQueryLogFormat() {
 	case streamlog.QueryLogFormatText:
-		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%q\t%q\t%v\t%v\t%q\n"
+		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%q\t%q\t%v\t%v\t%q\t%q\n"
 	case streamlog.QueryLogFormatJSON:
-		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q,  \"Keyspace\": %q, \"Table\": %q, \"TabletType\": %q, \"SessionUUID\": %q, \"Cached Plan\": %v, \"TablesUsed\": %v, \"ActiveKeyspace\": %q}\n"
+		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q,  \"Keyspace\": %q, \"Table\": %q, \"TabletType\": %q, \"SessionUUID\": %q, \"Cached Plan\": %v, \"TablesUsed\": %v, \"ActiveKeyspace\": %q, \"BoostQueryID\": %q}\n"
 	}
 
 	tables := stats.TablesUsed
@@ -201,6 +203,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		stats.CachedPlan,
 		string(tablesUsed),
 		stats.ActiveKeyspace,
+		stats.BoostQueryID,
 	)
 
 	return err
