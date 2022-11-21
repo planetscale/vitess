@@ -65,6 +65,10 @@ func (f *Filter) Signature() QuerySignature {
 	return QuerySignature{}.AddPredicate(f.Predicates)
 }
 
+func (n *NullFilter) Signature() QuerySignature {
+	return QuerySignature{}.AddPredicate(n.Predicates)
+}
+
 func (g *GroupBy) Signature() QuerySignature {
 	return QuerySignature{}
 }

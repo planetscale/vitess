@@ -39,20 +39,20 @@ const (
 )
 
 type JoinSource struct {
-	left  int
-	right int
+	Left  int
+	Right int
 }
 
 func JoinSourceLeft(col int) JoinSource {
-	return JoinSource{left: col, right: -1}
+	return JoinSource{Left: col, Right: -1}
 }
 
 func JoinSourceRight(col int) JoinSource {
-	return JoinSource{left: -1, right: col}
+	return JoinSource{Left: -1, Right: col}
 }
 
 func JoinSourceBoth(left, right int) JoinSource {
-	return JoinSource{left: left, right: right}
+	return JoinSource{Left: left, Right: right}
 }
 
 type emission = boostpb.Node_InternalJoin_Emission
@@ -119,7 +119,7 @@ func (j *Join) Resolve(col int) []NodeColumn {
 
 func (j *Join) ParentColumns(col int) []NodeColumn {
 	pcol := j.emit[col]
-	if (pcol.Left && pcol.Col == j.on[0]) || (!pcol.Left && pcol.Col == j.on[1]) {
+	if (pcol.Left && pcol.Col == j.on[0] && pcol.MultiParent) || (!pcol.Left && pcol.Col == j.on[1] && pcol.MultiParent) {
 		// join column comes from both parents
 		return []NodeColumn{
 			{j.left.AsGlobal(), j.on[0]},
@@ -508,27 +508,20 @@ func (j *Join) generateRow(left boostpb.Row, right boostpb.Row, reusing preproce
 	return result.Finish()
 }
 
-func NewJoin(left, right graph.NodeIdx, kind JoinType, joinSources []JoinSource) *Join {
-	var joinColumns [][2]int
+func NewJoin(left, right graph.NodeIdx, kind JoinType, joinColumns [2]int, joinSources []JoinSource) *Join {
 	var emit []emission
-
 	for _, e := range joinSources {
 		switch {
-		case e.left >= 0 && e.right >= 0:
-			joinColumns = append(joinColumns, [2]int{e.left, e.right})
-			emit = append(emit, emission{Left: true, Col: e.left})
-		case e.left >= 0:
-			emit = append(emit, emission{Left: true, Col: e.left})
-		case e.right >= 0:
-			emit = append(emit, emission{Left: false, Col: e.right})
+		case e.Left >= 0 && e.Right >= 0:
+			emit = append(emit, emission{Left: true, Col: e.Left, MultiParent: true})
+		case e.Left >= 0:
+			emit = append(emit, emission{Left: true, Col: e.Left})
+		case e.Right >= 0:
+			emit = append(emit, emission{Left: false, Col: e.Right})
 		}
 	}
 
-	if len(joinColumns) > 1 {
-		panic("unsupported: multiple column joins")
-	}
-
-	computeInPlaceEmit := func(left bool) []emission {
+	computeInPlaceEmit := func(emit []emission, left bool) []emission {
 		var numColumns int
 		for _, e := range emit {
 			if e.Left == left {
@@ -563,10 +556,10 @@ func NewJoin(left, right graph.NodeIdx, kind JoinType, joinSources []JoinSource)
 	return &Join{
 		left:             boostpb.NewIndexPair(left),
 		right:            boostpb.NewIndexPair(right),
-		on:               joinColumns[0],
+		on:               joinColumns,
 		emit:             emit,
-		inPlaceLeftEmit:  computeInPlaceEmit(true),
-		inPlaceRightEmit: computeInPlaceEmit(false),
+		inPlaceLeftEmit:  computeInPlaceEmit(emit, true),
+		inPlaceRightEmit: computeInPlaceEmit(emit, false),
 		kind:             kind,
 	}
 }

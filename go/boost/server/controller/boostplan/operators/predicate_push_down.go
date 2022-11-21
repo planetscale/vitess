@@ -6,35 +6,40 @@ import (
 )
 
 func (conv *Converter) pushDownPredicate(ctx *PlanContext) RewriteOpFunc {
-	return func(node *Node) (*Node, error) {
-		return conv.predicatePushDown(ctx, node)
-	}
-}
-
-func (conv *Converter) predicatePushDown(ctx *PlanContext, node *Node) (*Node, error) {
-	switch op := node.Op.(type) {
-	case *Filter:
-		filter := op
-		inputNode := node.Ancestors[0]
-		switch inputOp := inputNode.Op.(type) {
+	return func(node *Node) (*Node, TreeState, error) {
+		switch op := node.Op.(type) {
 		case *Filter:
-			// If we have two filters on top of each other, merge them into a single one
-			op.Predicates = sqlparser.AndExpressions(op.Predicates, inputOp.Predicates)
-			node.Ancestors = inputNode.Ancestors
-			return conv.predicatePushDown(ctx, node)
-		case *Join:
-			return conv.pushDownPredicateThroughJoin(ctx, node, inputNode, filter, inputOp)
-		default:
-			return conv.pushDownToSingleAncestor(node, inputNode, op, ctx, filter), nil
+			filter := op
+			inputNode := node.Ancestors[0]
+			switch inputOp := inputNode.Op.(type) {
+			case *Filter:
+				// If we have two filters on top of each other, merge them into a single one
+				op.Predicates = sqlparser.AndExpressions(op.Predicates, inputOp.Predicates)
+				node.Ancestors = inputNode.Ancestors
+				return node, NewTree, nil
+			case *Join:
+				return conv.pushDownPredicateThroughJoin(ctx, node, inputNode, filter, inputOp)
+			default:
+				return conv.pushDownToSingleAncestor(node, inputNode, op, ctx, filter)
+			}
+		case *NullFilter:
+			// a null-filter needs to be directly on top of a join, so if we have had a filter injected between
+			// the null-filter and the join, we swap places between these two to push down the null-filter
+			inputNode := node.Ancestors[0]
+			_, isFilter := inputNode.Op.(*Filter)
+			if isFilter {
+				node.Ancestors[0], inputNode.Ancestors[0] = inputNode.Ancestors[0], node
+				return inputNode, NewTree, nil
+			}
 		}
+		return node, SameTree, nil
 	}
-	return node, nil
 }
 
-func (conv *Converter) pushDownToSingleAncestor(node *Node, inputNode *Node, op *Filter, ctx *PlanContext, filter *Filter) *Node {
+func (conv *Converter) pushDownToSingleAncestor(node *Node, inputNode *Node, op *Filter, ctx *PlanContext, filter *Filter) (*Node, TreeState, error) {
 	if len(inputNode.Ancestors) != 1 {
 		// if we are dealing with nodes with less or more than a single source, we can't push here
-		return node
+		return node, SameTree, nil
 	}
 	inputInput := inputNode.Ancestors[0]
 	// first, let's figure out which predicates we can push and which we can't
@@ -53,25 +58,26 @@ func (conv *Converter) pushDownToSingleAncestor(node *Node, inputNode *Node, op 
 	pushThese := sqlparser.AndExpressions(canPush...)
 	switch {
 	case len(canPush) == 0:
-		return node
+		return node, SameTree, nil
 	case len(canNotPush) == 0:
 		// we can remove the Filter we started with, and create a new one under the ancestor of the original filter
 		filterAncestor := inputNode.Ancestors[0]
 		inputNode.Ancestors[0] = conv.NewNode("filter", &Filter{Predicates: pushThese}, []*Node{filterAncestor})
-		return inputNode
+		return inputNode, NewTree, nil
 	default:
 		// we can push down some, but not all predicate. keep this filter _and_ create a new one under the ancestor
 		filterAncestor := inputNode.Ancestors[0]
 		inputNode.Ancestors[0] = conv.NewNode("filter", &Filter{Predicates: pushThese}, []*Node{filterAncestor})
 		filter.Predicates = sqlparser.AndExpressions(canNotPush...)
-		return node
+		return node, NewTree, nil
 	}
 }
 
 // check if we can push down predicates either to one of the sides of the join,
 // or into the join as join predicates
-func (conv *Converter) pushDownPredicateThroughJoin(ctx *PlanContext, filterNode, joinNode *Node, filterOp *Filter, join *Join) (*Node, error) {
+func (conv *Converter) pushDownPredicateThroughJoin(ctx *PlanContext, filterNode, joinNode *Node, filterOp *Filter, join *Join) (*Node, TreeState, error) {
 	predicates := sqlparser.SplitAndExpression(nil, filterOp.Predicates)
+	originalFilterCount := len(predicates)
 	var notPushedPredicates []sqlparser.Expr
 	switchedOuterToInner := false
 	lhs := joinNode.Ancestors[0]
@@ -115,7 +121,7 @@ func (conv *Converter) pushDownPredicateThroughJoin(ctx *PlanContext, filterNode
 				notPushedPredicates = append(notPushedPredicates, predicate)
 			}
 		default:
-			return nil, NewBug("weird dependencies for a predicate")
+			return nil, false, NewBug("weird dependencies for a predicate")
 		}
 	}
 
@@ -138,11 +144,15 @@ func (conv *Converter) pushDownPredicateThroughJoin(ctx *PlanContext, filterNode
 	}
 
 	if len(notPushedPredicates) == 0 {
-		return joinNode, nil
+		return joinNode, NewTree, nil
 	}
 
 	filterOp.Predicates = sqlparser.AndExpressions(notPushedPredicates...)
-	return filterNode, nil
+	state := SameTree
+	if len(notPushedPredicates) != originalFilterCount {
+		state = NewTree
+	}
+	return filterNode, state, nil
 }
 
 func canBeUsedForEquiJoin(e sqlparser.Expr) bool {

@@ -867,15 +867,36 @@ select /*vt+ VIEW=simplejoin PUBLIC */ article.id, article.title, vote.id, vote.
 
 func TestOuterJoinWithLiteralComparison(t *testing.T) {
 	const Recipe = `
-CREATE TABLE article (id bigint, title varchar(255), PRIMARY KEY(id));
-CREATE TABLE vote (id bigint NOT NULL AUTO_INCREMENT, article_title varchar(255), user bigint, PRIMARY KEY(id));
+CREATE TABLE article (id bigint NOT NULL AUTO_INCREMENT, foo bigint, title varchar(255), PRIMARY KEY(id));
+CREATE TABLE vote (id bigint NOT NULL AUTO_INCREMENT, foo bigint, article_title varchar(255), user bigint, PRIMARY KEY(id));
 
-SELECT /*vt+ VIEW=outer2 PUBLIC */ COUNT(1) FROM article LEFT JOIN vote ON vote.article_title="ticket_price" AND article.id = vote.id;
-SELECT /*vt+ VIEW=inner1 PUBLIC */ COUNT(1) FROM article JOIN vote ON vote.article_title="ticket_price" AND article.id = vote.id;
-SELECT /*vt+ VIEW=inner2 PUBLIC */ COUNT(1) FROM article JOIN vote ON article.title="ticket_price" AND article.id = vote.id;
+SELECT /*vt+ VIEW=outer2 PUBLIC */ article.foo, vote.foo FROM article LEFT JOIN vote ON vote.article_title="ticket_price" AND article.foo = vote.foo;
+SELECT /*vt+ VIEW=outer1 PUBLIC */ article.foo, vote.foo FROM article LEFT JOIN vote ON article.title="ticket_price" AND article.foo = vote.foo;
+SELECT /*vt+ VIEW=inner PUBLIC */ article.foo, vote.foo FROM article JOIN vote ON vote.article_title="ticket_price" AND article.foo = vote.foo;
 `
+
 	recipe := testrecipe.LoadSQL(t, Recipe)
-	_ = SetupExternal(t, boosttest.WithTestRecipe(recipe))
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	g.TestExecute("INSERT INTO `article` (foo, title) VALUES (1, 'first'), (2, 'ticket_price')")
+	g.TestExecute("INSERT INTO `vote` (foo, article_title) VALUES (1, 'ticket_price'), (2, 'apa')")
+
+	g.View("outer1").Lookup().Expect(
+		[]sqltypes.Row{
+			{sqltypes.NewInt64(1), sqltypes.NULL},
+			{sqltypes.NewInt64(2), sqltypes.NewInt64(2)},
+		})
+
+	g.View("outer2").Lookup().Expect(
+		[]sqltypes.Row{
+			{sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
+			{sqltypes.NewInt64(2), sqltypes.NULL},
+		})
+
+	g.View("inner").Lookup().Expect(
+		[]sqltypes.Row{
+			{sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
+		})
 }
 
 func TestRepositoriesWithIn(t *testing.T) {

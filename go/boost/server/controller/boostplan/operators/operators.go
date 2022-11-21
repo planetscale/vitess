@@ -2,7 +2,6 @@ package operators
 
 import (
 	"vitess.io/vitess/go/boost/dataflow/flownode"
-	"vitess.io/vitess/go/tools/graphviz"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -14,7 +13,6 @@ type (
 
 	Operator interface {
 		Signature() QuerySignature
-		addToGraph(g *graphviz.Graph) (*graphviz.Node, error)
 
 		// AddColumns will add columns to this operator, and return a slice of Columns that this operator
 		// needs to receive from its ancestors in order to do it's work
@@ -62,9 +60,11 @@ type (
 		Inner      bool
 
 		EmitColumns Columns
+		JoinColumns Columns
 
 		// These are the columns that will be compared.
 		// The size of these two slices must be the same
+		On   [2]int
 		Emit []flownode.JoinSource
 
 		doesNotIntroduceColumn
@@ -82,6 +82,27 @@ type (
 
 		doesNotIntroduceColumn
 		keepsAncestorColumns
+	}
+
+	// NullFilter is used when we have an outer join with additional predicates that can't be evaluated with a hash join
+	// In these cases, we want to evaluate a filter on top of the join, and make the columns coming from the outer side
+	// into nulls instead of filtering out the rows
+	// After planning, this operator will be represented by a projection flownode
+	NullFilter struct {
+		Join *Join
+
+		// The original AST expression
+		Predicates sqlparser.Expr
+
+		// These are not filled in at creation,
+		// but rather after the operator tree has stopped iterating
+		Projections []flownode.Projection
+
+		// This is the table(s) that are on the outer side of the join
+		OuterSide semantics.TableSet
+
+		doesNotIntroduceColumn
+		dontKeepsAncestorColumns
 	}
 
 	GroupBy struct {
@@ -167,7 +188,14 @@ type (
 		Dir    sqlparser.OrderDirection
 	}
 
-	RewriteOpFunc func(op *Node) (*Node, error)
+	TreeState bool
+
+	RewriteOpFunc func(op *Node) (*Node, TreeState, error)
+)
+
+const (
+	SameTree TreeState = false
+	NewTree  TreeState = true
 )
 
 var _ Operator = (*Table)(nil)
@@ -180,22 +208,39 @@ var _ Operator = (*NodeTableRef)(nil)
 var _ Operator = (*Union)(nil)
 var _ Operator = (*TopK)(nil)
 var _ Operator = (*Distinct)(nil)
+var _ Operator = (*NullFilter)(nil)
 
-func rewrite(op *Node, f RewriteOpFunc) (*Node, error) {
-	op, err := f(op)
+func rewriteActually(op *Node, f RewriteOpFunc) (*Node, TreeState, error) {
+	op, state, err := f(op)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	ops := op.Ancestors
 	var newOps []*Node
 	for _, operator := range ops {
-		operator, err = rewrite(operator, f)
+		var childState TreeState
+		operator, childState, err = rewriteActually(operator, f)
 		if err != nil {
-			return nil, err
+			return nil, false, err
+		}
+		if childState == NewTree {
+			state = NewTree
 		}
 		newOps = append(newOps, operator)
 	}
 	op.Ancestors = newOps
+	return op, state, nil
+
+}
+func rewrite(op *Node, f RewriteOpFunc) (*Node, error) {
+	var state = NewTree
+	var err error
+	for state == NewTree {
+		op, state, err = rewriteActually(op, f)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return op, nil
 }
 

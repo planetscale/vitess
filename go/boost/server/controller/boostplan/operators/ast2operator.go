@@ -430,6 +430,8 @@ func (conv *Converter) buildFromJoin(ctx *PlanContext, join *sqlparser.JoinTable
 		return conv.NewNode("filter", filter, []*Node{joinNode}), params, joinCols, nil
 	}
 
+	var nullFilter *NullFilter
+
 	// if we have an outer join, we have to be a bit more careful with the join predicates
 	// since we can only do hash joins, we need at least one comparison predicate between the two tables
 	// but if we also have other predicates, we can deal with them
@@ -439,12 +441,19 @@ func (conv *Converter) buildFromJoin(ctx *PlanContext, join *sqlparser.JoinTable
 		rhsID := rhs.Covers()
 		bothSides := rhsID.Merge(lhsID)
 		switch {
-		case deps.NumberOfTables() == 0 || !deps.IsSolvedBy(bothSides) || deps.IsSolvedBy(lhsID):
+		case deps.NumberOfTables() == 0 || !deps.IsSolvedBy(bothSides):
 			// this is a predicate the does not need any table input, or needs tables outside these two
 			return nil, nil, nil, &UnsupportedError{
 				AST:  e,
 				Type: JoinPredicates,
 			}
+		case deps.IsSolvedBy(lhsID):
+			// for this situation, we need to not filter out rows,
+			// but instead turn the columns coming from the RHS into null
+			if nullFilter == nil {
+				nullFilter = &NullFilter{Join: op, OuterSide: rhsID}
+			}
+			nullFilter.Predicates = sqlparser.AndExpressions(nullFilter.Predicates, e)
 		case deps.IsSolvedBy(rhsID):
 			// push join condition to outer side
 			// this is pretty easy - we just make a filter under the outer side
@@ -454,7 +463,13 @@ func (conv *Converter) buildFromJoin(ctx *PlanContext, join *sqlparser.JoinTable
 			op.Predicates = sqlparser.AndExpressions(op.Predicates, e)
 		}
 	}
-	return conv.NewNode("join", op, []*Node{lhs, rhs}), params, joinCols, nil
+
+	joinNode := conv.NewNode("join", op, []*Node{lhs, rhs})
+	if nullFilter != nil {
+		return conv.NewNode("nullFilter", nullFilter, []*Node{joinNode}), params, joinCols, nil
+	}
+
+	return joinNode, params, joinCols, nil
 }
 
 func externalTableName(keyspace string, name string) string {

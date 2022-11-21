@@ -64,9 +64,6 @@ func pushToJoin(ctx *PlanContext, this *Node, needsColumns Columns) error {
 			return err
 		}
 		err = pushColumnsToAncestors(ctx, ancestor, toAncestors)
-		if this.Op.KeepAncestorColumns() {
-			this.Columns = ancestor.Columns
-		}
 		if err != nil {
 			return err
 		}
@@ -220,6 +217,20 @@ func (f *Filter) AddColumns(ctx *PlanContext, col Columns) (Columns, error) {
 	return col, nil
 }
 
+func (n *NullFilter) AddColumns(ctx *PlanContext, col Columns) (Columns, error) {
+	var needs Columns
+	needs.Add(ctx)
+	needs = needs.Add(ctx, getColumnsAndAggregationsInTree(ctx, n.Predicates)...)
+	for _, col := range col {
+		ast, err := col.SingleAST()
+		if err != nil {
+			return nil, err
+		}
+		needs = needs.Add(ctx, getColumnsAndAggregationsInTree(ctx, ast)...)
+	}
+	return needs, nil
+}
+
 func (j *Join) AddColumns(ctx *PlanContext, col Columns) (Columns, error) {
 	comparisons, err := getComparisons(j.Predicates)
 	if err != nil {
@@ -236,10 +247,18 @@ func (j *Join) AddColumns(ctx *PlanContext, col Columns) (Columns, error) {
 			}
 		}
 
-		j.EmitColumns = j.EmitColumns.Add(ctx, &Column{
-			AST:  []sqlparser.Expr{lftCol, rgtCol},
-			Name: fmt.Sprintf("%s/%s", sqlparser.String(lftCol), sqlparser.String(rgtCol)),
-		})
+		var add []*Column
+		if j.Inner {
+			add = append(add, &Column{
+				AST:  []sqlparser.Expr{lftCol, rgtCol},
+				Name: fmt.Sprintf("%s/%s", sqlparser.String(lftCol), sqlparser.String(rgtCol)),
+			})
+		} else {
+			add = append(add, ColumnFromAST(lftCol), ColumnFromAST(rgtCol))
+		}
+
+		j.EmitColumns = j.EmitColumns.Add(ctx, add...)
+		j.JoinColumns = append(j.JoinColumns, add...)
 	}
 	j.EmitColumns = j.EmitColumns.Add(ctx, col...)
 	col = col.Add(ctx, getColumnsInTree(ctx, j.Predicates)...)

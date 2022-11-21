@@ -135,8 +135,9 @@ message Node {
     int64 on1 = 4 [(gogoproto.casttype) = "int"];
 
     message Emission {
-      bool left = 1;
-      int64 col = 2 [(gogoproto.casttype) = "int"];
+      int64 col = 1 [(gogoproto.casttype) = "int"];
+      bool left = 2;
+      bool multi_parent = 3;
     }
 
     repeated Emission emit = 5 [(gogoproto.nullable) = false];
