@@ -79,15 +79,10 @@ func (cached *scopedMetrics) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(24)
 	}
-	// field labels []string
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.labels)) * int64(16))
-		for _, elem := range cached.labels {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
+	// field publicQueryID string
+	size += hack.RuntimeAllocSize(int64(len(cached.publicQueryID)))
 	// field hitrate *vitess.io/vitess/go/boost/common/metrics.RateCounter
 	if cached.hitrate != nil {
 		size += hack.RuntimeAllocSize(int64(57))
