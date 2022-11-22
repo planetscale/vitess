@@ -93,13 +93,9 @@ func WithMemoryTopo() Option {
 	}
 }
 
-func WithUpqueryMode(mode string) Option {
-	m, ok := boostpb.UpqueryMode_value[mode]
-	if !ok {
-		panic("invalid upquery mode")
-	}
+func WithUpqueryMode(mode boostpb.UpqueryMode) Option {
 	return func(c *Cluster) {
-		c.Config.DomainConfig.UpqueryMode = boostpb.UpqueryMode(m)
+		c.Config.DomainConfig.UpqueryMode = mode
 	}
 }
 

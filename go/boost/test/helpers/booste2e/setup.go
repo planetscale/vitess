@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
 	"vitess.io/vitess/go/boost/topo/client"
@@ -26,7 +27,11 @@ import (
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 )
 
-var flagGtidMode = flag.String("gtid-mode", "SELECT_GTID", "GTID tracking mode for upqueries (options are 'SELECT_GTID', 'TRACK_GTID')")
+var flagGtidMode = boostpb.UpqueryMode_SELECT_GTID
+
+func init() {
+	flag.Var(&flagGtidMode, "gtid-mode", "GTID tracking mode for upqueries (options are 'SELECT_GTID', 'TRACK_GTID')")
+}
 
 const DefaultKeyspace = "source"
 const DefaultSchemaChangeUser = "root"
@@ -172,7 +177,7 @@ func (test *Test) setupBoost() {
 			boosttest.WithTopoServer(test.Topo),
 			boosttest.WithTabletManager(tmclient.NewTabletManagerClient()),
 			boosttest.WithShards(0),
-			boosttest.WithUpqueryMode(*flagGtidMode),
+			boosttest.WithUpqueryMode(flagGtidMode),
 			boosttest.WithVitessExecutor(),
 			boosttest.WithSchemaChangeUser("root"),
 			boosttest.WithLocalCell(test.Cell),
