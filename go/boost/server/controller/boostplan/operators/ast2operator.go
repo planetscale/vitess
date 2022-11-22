@@ -464,6 +464,13 @@ func (conv *Converter) buildFromJoin(ctx *PlanContext, join *sqlparser.JoinTable
 		}
 	}
 
+	if op.Predicates == nil {
+		return nil, nil, nil, &UnsupportedError{
+			AST:  join.Condition.On,
+			Type: JoinPredicates,
+		}
+	}
+
 	joinNode := conv.NewNode("join", op, []*Node{lhs, rhs})
 	if nullFilter != nil {
 		return conv.NewNode("nullFilter", nullFilter, []*Node{joinNode}), params, joinCols, nil
