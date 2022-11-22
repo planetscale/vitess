@@ -43,7 +43,12 @@ func (g *groupInt64) update(r boostpb.Record) {
 			g.diffs = append(g.diffs, -1)
 		}
 	case AggregationSum:
-		i, err := r.Row.ValueAt(g.over).ToVitessUnsafe().ToInt64()
+		val := r.Row.ValueAt(g.over)
+		if val.Type() == sqltypes.Null {
+			g.diffs = append(g.diffs, 0)
+			return
+		}
+		i, err := val.ToVitessUnsafe().ToInt64()
 		if err != nil {
 			panic(err)
 		}

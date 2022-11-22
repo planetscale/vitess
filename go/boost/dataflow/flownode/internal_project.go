@@ -293,6 +293,15 @@ func (col ProjectedCol) build(env *evalengine.ExpressionEnv, row boostpb.Row, ou
 	output.Add(row.ValueAt(int(col)))
 }
 
+func defaultCollationForType(t sqltypes.Type) collations.ID {
+	switch {
+	case sqltypes.IsText(t):
+		return collations.ID(collations.Local().DefaultConnectionCharset())
+	default:
+		return collations.CollationBinaryID
+	}
+}
+
 func (expr *ProjectedExpr) Type(g *graph.Graph[*Node], src boostpb.IndexPair) boostpb.Type {
 	var env = evalengine.EmptyExpressionEnv()
 
@@ -307,7 +316,10 @@ func (expr *ProjectedExpr) Type(g *graph.Graph[*Node], src boostpb.IndexPair) bo
 	if err != nil {
 		panic(err)
 	}
-	return boostpb.Type{T: tt}
+	// FIXME: there are some expressions for which the evalengine can resolve
+	// a non-default collation (e.g. an explicitly COLLATE('str'), but we have
+	// no way of accessing this data right now
+	return boostpb.Type{T: tt, Collation: defaultCollationForType(tt)}
 }
 
 func (expr *ProjectedExpr) describe() string {
@@ -330,7 +342,8 @@ func (expr *ProjectedExpr) build(env *evalengine.ExpressionEnv, row boostpb.Row,
 }
 
 func (lit *ProjectedLiteral) Type(*graph.Graph[*Node], boostpb.IndexPair) boostpb.Type {
-	return boostpb.Type{T: lit.V.Type()}
+	tt := lit.V.Type()
+	return boostpb.Type{T: tt, Collation: defaultCollationForType(tt)}
 }
 
 func (lit *ProjectedLiteral) describe() string {

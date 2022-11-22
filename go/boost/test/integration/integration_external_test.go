@@ -200,6 +200,39 @@ func TestAggregations(t *testing.T) {
 	})
 }
 
+func TestAggregationsAverage(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE num (
+	    pk BIGINT NOT NULL AUTO_INCREMENT, 
+		b INT,
+	    a INT,
+	PRIMARY KEY(pk));
+
+	SELECT /*vt+ VIEW=op0 PUBLIC */ avg(num.a) FROM num;
+	SELECT /*vt+ VIEW=op1 PUBLIC */ b, avg(num.a) FROM num GROUP BY b;
+	SELECT /*vt+ VIEW=op2 PUBLIC */ count(num.a), avg(num.a) FROM num;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 1; i <= 3; i++ {
+		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, 100 * %d)", i, i)
+	}
+	g.TestExecute("INSERT INTO num (a, b) VALUES (null, 100)")
+
+	g.View("op0").Lookup().Expect([]sqltypes.Row{
+		{sqltypes.NewDecimal("2.0000")},
+	})
+	g.View("op1").Lookup().Expect([]sqltypes.Row{
+		{sqltypes.NewInt32(100), sqltypes.NewDecimal("1.0000")},
+		{sqltypes.NewInt32(200), sqltypes.NewDecimal("2.0000")},
+		{sqltypes.NewInt32(300), sqltypes.NewDecimal("3.0000")},
+	})
+	g.View("op2").Lookup().Expect([]sqltypes.Row{
+		{sqltypes.NewInt64(3), sqltypes.NewDecimal("2.0000")},
+	})
+}
+
 func TestAggregationsWithFullExternalReplay(t *testing.T) {
 	const Recipe = `
 	CREATE TABLE num (

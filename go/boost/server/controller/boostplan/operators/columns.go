@@ -196,7 +196,7 @@ func (g *GroupBy) AddColumns(ctx *PlanContext, columns Columns) (Columns, error)
 
 	if len(g.Grouping) == 0 {
 		grpCol := ColumnFromAST(sqlparser.NewIntLiteral("0"))
-		grpCol.Name = "grp"
+		grpCol.Name = "bogo_group"
 		needs = needs.Add(ctx, grpCol)
 		g.Grouping = g.Grouping.Add(ctx, grpCol)
 	}
@@ -422,10 +422,17 @@ func (v *View) GetColumns() Columns {
 }
 
 func (g *GroupBy) GetColumns() Columns {
-	cols := Columns{}
+	var cols Columns
 	cols = append(cols, g.Grouping...)
 	for _, aggr := range g.Aggregations {
-		cols = append(cols, ColumnFromAST(aggr))
+		argname := "?"
+		if col, ok := aggr.GetArg().(*sqlparser.ColName); ok {
+			argname = col.Name.String()
+		}
+		cols = append(cols, &Column{
+			AST:  []sqlparser.Expr{aggr},
+			Name: fmt.Sprintf("%s(%s)", aggr.AggrName(), argname),
+		})
 	}
 	return cols
 }

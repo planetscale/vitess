@@ -204,10 +204,73 @@ func makeViewOpNode(node *operators.Node, mig Migration, op *operators.View) (op
 }
 
 func makeGroupByOpNode(node *operators.Node, mig Migration, op *operators.GroupBy) (operators.FlowNode, error) {
-	colnames := columnOpNames(node.Columns)
-	aggrExprs := make([]flownode.AggrExpr, 0, len(op.AggregationsTypes))
-	for i, aggregationsType := range op.AggregationsTypes {
-		aggrExprs = append(aggrExprs, flownode.AggregationOver(aggregationsType, op.AggregationsIdx[i]))
+	var (
+		colnames   []string
+		aggrExprs  []flownode.AggrExpr
+		projExprs  []flownode.Projection
+		groupCount = len(op.GroupingIdx)
+	)
+
+	for i := 0; i < groupCount; i++ {
+		colnames = append(colnames, node.Columns[i].Name)
+	}
+	for i, aggr := range op.Aggregations {
+		var kind flownode.AggregationKind
+		switch aggr.(type) {
+		case *sqlparser.Sum:
+			kind = flownode.AggregationSum
+		case *sqlparser.Count:
+			kind = flownode.AggregationCount
+		case *sqlparser.CountStar:
+			kind = flownode.AggregationCountStar
+		case *sqlparser.Min:
+			kind = flownode.ExtremumMin
+		case *sqlparser.Max:
+			kind = flownode.ExtremumMax
+		case *sqlparser.Avg:
+			var sumOffset = -1
+			var countOffset = -1
+			for idx, agg2 := range op.Aggregations {
+				if op.AggregationsIdx[idx] == op.AggregationsIdx[i] {
+					switch agg2.(type) {
+					case *sqlparser.Sum:
+						sumOffset = idx
+					case *sqlparser.Count:
+						countOffset = idx
+					}
+				}
+			}
+			if sumOffset < 0 {
+				sumOffset = len(aggrExprs)
+				aggrExprs = append(aggrExprs, flownode.AggregationOver(flownode.AggregationSum, op.AggregationsIdx[i]))
+				colnames = append(colnames, "bogo_aggr_sum")
+			}
+			if countOffset < 0 {
+				countOffset = len(aggrExprs)
+				aggrExprs = append(aggrExprs, flownode.AggregationOver(flownode.AggregationCount, op.AggregationsIdx[i]))
+				colnames = append(colnames, "bogo_aggr_count")
+			}
+
+			// AVG(x) = SUM(x) / COUNT(x)
+			avgExpr := &sqlparser.BinaryExpr{
+				Operator: sqlparser.DivOp,
+				Left:     &sqlparser.Offset{V: groupCount + sumOffset},
+				Right:    &sqlparser.Offset{V: groupCount + countOffset},
+			}
+			evalExpr, err := evalengine.Translate(avgExpr, nil)
+			if err != nil {
+				// the evalengine should never fail to translate this
+				return operators.FlowNode{}, operators.NewBug(err.Error())
+			}
+			projExprs = append(projExprs, &flownode.ProjectedExpr{AST: avgExpr, EvalExpr: evalExpr})
+			continue
+
+		default:
+			return operators.FlowNode{}, &operators.UnsupportedError{AST: aggr, Type: operators.Aggregation}
+		}
+
+		aggrExprs = append(aggrExprs, flownode.AggregationOver(kind, op.AggregationsIdx[i]))
+		colnames = append(colnames, node.Columns[groupCount+i].Name)
 	}
 
 	parentNa, err := node.Ancestors[0].FlowNodeAddr()
@@ -216,10 +279,34 @@ func makeGroupByOpNode(node *operators.Node, mig Migration, op *operators.GroupB
 	}
 
 	grouped := flownode.NewGrouped(parentNa, op.GroupingIdx, aggrExprs)
-	return operators.FlowNode{
+	groupingFlowNode := operators.FlowNode{
 		Age:     operators.FlowNodeNew,
 		Address: mig.AddIngredient(node.Name, colnames, grouped),
-	}, nil
+	}
+
+	if len(projExprs) > 0 {
+		var projections []flownode.Projection
+		for i := range op.GroupingIdx {
+			projections = append(projections, flownode.ProjectedCol(i))
+		}
+		for i, aggregation := range op.Aggregations {
+			switch aggregation.(type) {
+			case *sqlparser.Avg:
+				projections = append(projections, projExprs[0])
+				projExprs = projExprs[1:]
+			default:
+				projections = append(projections, flownode.ProjectedCol(groupCount+i))
+			}
+		}
+
+		proj := flownode.NewProject(groupingFlowNode.Address, projections)
+		return operators.FlowNode{
+			Age:     operators.FlowNodeNew,
+			Address: mig.AddIngredient(node.Name+"_extra_proj", columnOpNames(node.Columns), proj),
+		}, nil
+	}
+
+	return groupingFlowNode, nil
 }
 
 func checkParametersInExpression(ast sqlparser.SQLNode) error {

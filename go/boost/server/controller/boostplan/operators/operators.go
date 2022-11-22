@@ -110,9 +110,8 @@ type (
 		Aggregations []sqlparser.AggrFunc
 		TableID      semantics.TableSet
 
-		GroupingIdx       []int
-		AggregationsIdx   []int
-		AggregationsTypes []flownode.AggregationKind
+		GroupingIdx     []int
+		AggregationsIdx []int
 
 		dontKeepsAncestorColumns
 	}
