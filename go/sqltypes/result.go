@@ -96,6 +96,7 @@ func (result *Result) Copy() *Result {
 		RowsRead:            result.RowsRead,
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,
+		StatusFlags:         result.StatusFlags,
 	}
 	if result.Fields != nil {
 		out.Fields = make([]*querypb.Field, len(result.Fields))
