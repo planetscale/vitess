@@ -152,6 +152,27 @@ func TestInsightsSummariesByKeyspace(t *testing.T) {
 		})
 }
 
+func TestInsightsBoostQueryId(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			{sql: "select * from foo", boostQueryID: "abc", responseTime: 5 * time.Second},
+			{sql: "select * from foo", boostQueryID: "def", responseTime: 5 * time.Second},
+			{sql: "select * from foo", boostQueryID: "def", responseTime: 5 * time.Second},
+			{sql: "select * from bar", boostQueryID: "", responseTime: 5 * time.Second},
+			{sql: "select * from bar", boostQueryID: "", responseTime: 5 * time.Second},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryStatsBundleTopic, "select * from foo", "boost_query_public_id:{value:\\\"abc\\\"}", "query_count:1"),
+			expect(queryTopic, "select * from foo", "boost_query_public_id:{value:\\\"abc\\\"}").count(1),
+
+			expect(queryStatsBundleTopic, "select * from foo", "boost_query_public_id:{value:\\\"def\\\"}", "query_count:2"),
+			expect(queryTopic, "select * from foo", "boost_query_public_id:{value:\\\"def\\\"}").count(2),
+
+			expect(queryStatsBundleTopic, "select * from bar", "query_count:2"),
+			expect(queryTopic, "select * from bar").count(2),
+		})
+}
+
 func TestInsightsSchemaChanges(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
@@ -855,6 +876,8 @@ type insightsQuery struct {
 	// that occurs after query parsing has succeeded, or to simulate a successful
 	// statement that did not need to be normalized.
 	normalized int
+
+	boostQueryID string
 }
 
 type insightsKafkaExpectation struct {
@@ -931,6 +954,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 			Table:          options.tableString,
 			Keyspace:       q.keyspace,
 			ActiveKeyspace: q.activeKeyspace,
+			BoostQueryID:   q.boostQueryID,
 		}
 		if q.error != "" {
 			ls.Error = errors.New(q.error)
