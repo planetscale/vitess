@@ -45,17 +45,17 @@ type Worker struct {
 
 	domainListenAddr string
 	readerListenAddr string
+
+	readTimeout time.Duration
 }
 
 func (w *Worker) Stop() {
 	w.cancel()
 }
 
-const DefaultReadTimeout = 5 * time.Second
-
 func (w *Worker) ViewRead(ctx context.Context, req *boostpb.ViewReadRequest) (*boostpb.ViewReadResponse, error) {
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, DefaultReadTimeout)
+	ctx, cancel = context.WithTimeout(ctx, w.readTimeout)
 	defer cancel()
 
 	w.stats.onRead()
@@ -103,7 +103,7 @@ func (w *Worker) ViewRead(ctx context.Context, req *boostpb.ViewReadRequest) (*b
 
 func (w *Worker) ViewReadMany(ctx context.Context, req *boostpb.ViewReadManyRequest) (*boostpb.ViewReadResponse, error) {
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, DefaultReadTimeout)
+	ctx, cancel = context.WithTimeout(ctx, w.readTimeout)
 	defer cancel()
 
 	w.stats.onRead()

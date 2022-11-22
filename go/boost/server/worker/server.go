@@ -146,6 +146,7 @@ func (srv *Server) LeaderChange(st *vtboostpb.ControllerState) {
 		stream:           NewEventProcessor(srv.log, stats, srv.coord, srv.resolver),
 		domainListenAddr: netutil.JoinHostPort(host, 0),
 		readerListenAddr: netutil.JoinHostPort(host, 0),
+		readTimeout:      srv.cfg.WorkerReadTimeout,
 	}
 
 	if err := srv.active.start(srv.ctx, srv.cfg, srv.globalAddr); err != nil {

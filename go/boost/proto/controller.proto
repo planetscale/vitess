@@ -47,4 +47,5 @@ message Config {
   uint64 quorum = 8 [(gogoproto.casttype) = "uint"];
   ReuseType reuse = 9;
   google.protobuf.Duration evict_every = 10 [(gogoproto.stdduration) = true, (gogoproto.nullable) = false];
+  google.protobuf.Duration worker_read_timeout = 11 [(gogoproto.stdduration) = true, (gogoproto.nullable) = false];
 }

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"net"
 	"net/http"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -44,8 +45,8 @@ func main() {
 		drpcPort    int
 		clusterUUID string
 		cell        string
-		gtidMode    string
 		memoryLimit int
+		config      = boostpb.DefaultConfig()
 	)
 
 	// When deploying in Kubernetes, it's not enough to use the local hostname
@@ -60,8 +61,17 @@ func main() {
 	flag.IntVar(&drpcPort, "drpc-port", 0, "default listen address for DRPC")
 	flag.StringVar(&clusterUUID, "boost-cluster-uuid", "", "UUID of the boost cluster, this value is used to find the cluster in the topology.")
 	flag.StringVar(&cell, "cell", "", "cell on which the Boost cluster is deployed")
-	flag.StringVar(&gtidMode, "gtid-mode", "SELECT_GTID", "GTID tracking mode for upqueries (options are 'SELECT_GTID', 'TRACK_GTID')")
 	flag.IntVar(&memoryLimit, "memory-limit", 0, "the memory limit in bytes this process is allowed to allocate: used to detect memory pressure")
+
+	// gtid-mode configures how GTID tracking is performed by upqueries; setting this to 'TRACK_GTID' requires a forked
+	// version of MySQL for now; the default value is 'SELECT_GTID', which works with any MySQL version even though we've
+	// seen it can produce inconsistencies under load
+	flag.Var(&config.DomainConfig.UpqueryMode, "gtid-mode", "GTID tracking mode for upqueries (options are 'SELECT_GTID', 'TRACK_GTID')")
+
+	// The default worker timeout value is set based on the timeout value for upqueries. This timeout
+	// is configured at the vttablet level with --queryserver-config-olap-transaction-timeout and defaults
+	// to 30 seconds. We add some additional buffer time here to then process the (potentially huge) results as well.
+	flag.DurationVar(&config.WorkerReadTimeout, "worker-read-timeout", 40*time.Second, "the timeout for blocking reads on a worker")
 
 	servenv.ParseFlags("vtboost")
 	servenv.Init()
@@ -86,15 +96,6 @@ func main() {
 		// library seems promising: https://github.com/containerd/cgroups.
 	}
 
-	config := boostpb.DefaultConfig()
-	switch gtidMode {
-	case "SELECT_GTID":
-		config.DomainConfig.UpqueryMode = boostpb.UpqueryMode_SELECT_GTID
-	case "TRACK_GTID":
-		config.DomainConfig.UpqueryMode = boostpb.UpqueryMode_TRACK_GTID
-	default:
-		log.Fatal("invalid GTID mode selected", zap.String("gtid_mode", gtidMode))
-	}
 	boost := server.NewBoostInstance(log, ts, tmclient.NewTabletManagerClient(), config, clusterUUID)
 
 	if !vtgate.EnableSchemaChangeSignal {
