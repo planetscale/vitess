@@ -63,39 +63,19 @@ func (g *GroupBy) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 
 	for _, aggr := range g.Aggregations {
 		var offset int
-		var err error
-		_, isCountStar := aggr.(*sqlparser.CountStar)
-		if !isCountStar {
+		switch aggr := aggr.(type) {
+		case *sqlparser.CountStar:
+		default:
+			var err error
 			offset, err = input.ExprLookup(semTable, aggr.GetArg())
 			if err != nil {
 				return err
 			}
 		}
-		aggrKind, err := aggrFuncToGroupKind(aggr)
-		if err != nil {
-			return err
-		}
+
 		g.AggregationsIdx = append(g.AggregationsIdx, offset)
-		g.AggregationsTypes = append(g.AggregationsTypes, aggrKind)
 	}
 	return nil
-}
-
-func aggrFuncToGroupKind(aggr sqlparser.AggrFunc) (flownode.AggregationKind, error) {
-	switch aggr.(type) {
-	case *sqlparser.Sum:
-		return flownode.AggregationSum, nil
-	case *sqlparser.Count:
-		return flownode.AggregationCount, nil
-	case *sqlparser.CountStar:
-		return flownode.AggregationCountStar, nil
-	case *sqlparser.Min:
-		return flownode.ExtremumMin, nil
-	case *sqlparser.Max:
-		return flownode.ExtremumMax, nil
-	default:
-		return flownode.AggregationInvalid, &UnsupportedError{AST: aggr, Type: Aggregation}
-	}
 }
 
 func (j *Join) PlanOffsets(node *Node, semTable *semantics.SemTable) error {

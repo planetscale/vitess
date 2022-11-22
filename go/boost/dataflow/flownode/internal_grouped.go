@@ -12,6 +12,7 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -86,14 +87,14 @@ func (g *Grouped) ColumnType(gra *graph.Graph[*Node], col int) boostpb.Type {
 	case *groupedAggregator:
 		switch inner.kind {
 		case AggregationCount, AggregationCountStar:
-			return boostpb.Type{T: sqltypes.Int64, Nullable: false}
+			return boostpb.Type{T: sqltypes.Int64, Nullable: false, Collation: collations.CollationBinaryID}
 		case AggregationSum:
 			tt := parent.ColumnType(gra, inner.over)
 			switch {
 			case sqltypes.IsFloat(tt.T):
-				return boostpb.Type{T: sqltypes.Float64, Nullable: true}
+				return boostpb.Type{T: sqltypes.Float64, Nullable: true, Collation: collations.CollationBinaryID}
 			case sqltypes.IsIntegral(tt.T) || tt.T == sqltypes.Decimal:
-				return boostpb.Type{T: sqltypes.Decimal, Nullable: true}
+				return boostpb.Type{T: sqltypes.Decimal, Nullable: true, Collation: collations.CollationBinaryID}
 			}
 		}
 	}
