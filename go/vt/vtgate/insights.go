@@ -91,9 +91,10 @@ type QueryPatternAggregation struct {
 }
 
 type QueryPatternKey struct {
-	Keyspace       string
-	ActiveKeyspace string
-	SQL            string
+	Keyspace           string
+	ActiveKeyspace     string
+	SQL                string
+	BoostQueryPublicID string
 }
 
 type Insights struct {
@@ -577,8 +578,9 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *u
 
 	var pa *QueryPatternAggregation
 	key := QueryPatternKey{
-		Keyspace:       ls.Keyspace,
-		ActiveKeyspace: ls.ActiveKeyspace,
+		Keyspace:           ls.Keyspace,
+		ActiveKeyspace:     ls.ActiveKeyspace,
+		BoostQueryPublicID: ls.BoostQueryID,
 	}
 
 	key.SQL = sql
@@ -708,6 +710,7 @@ func (ii *Insights) makeQueryMessage(ls *logstats.LogStats, sql string, tables [
 		CommitDuration:         durationOrNil(ls.CommitTime),
 		Error:                  stringOrNil(ls.ErrorStr()),
 		CommentTags:            tags,
+		BoostQueryPublicId:     stringOrNil(ls.BoostQueryID),
 	}
 	if ii.SendRawQueries {
 		if ls.IsNormalized && ls.StmtType == "INSERT" {
@@ -854,6 +857,7 @@ func (ii *Insights) makeQueryPatternMessage(key QueryPatternKey, pa *QueryPatter
 		MaxExecuteDuration:     durationOrNil(pa.MaxExecuteDuration),
 		SumCommitDuration:      durationOrNil(pa.SumCommitDuration),
 		MaxCommitDuration:      durationOrNil(pa.MaxCommitDuration),
+		BoostQueryPublicId:     stringOrNil(key.BoostQueryPublicID),
 	}
 
 	var out []byte
