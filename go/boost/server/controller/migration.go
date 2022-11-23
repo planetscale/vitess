@@ -4,103 +4,91 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/boost/server/controller/boostplan"
 )
 
-type ColumnChangeAdd struct {
-	Name    string
-	Default sqltypes.Value
-}
-
-type ColumnChangeDrop int
-
-type Column struct {
-	Node   graph.NodeIdx
-	Change interface{}
-}
-
 type Migration struct {
-	Mainline *Controller
-	Added    map[graph.NodeIdx]bool
-	Columns  []Column
-	Readers  map[graph.NodeIdx]graph.NodeIdx
+	ctrl    *Controller
+	added   map[graph.NodeIdx]bool
+	readers map[graph.NodeIdx]graph.NodeIdx
 
-	Start   time.Time
-	Context map[string]sqltypes.Value
+	start time.Time
+	uuid  uuid.UUID
 }
+
+var _ boostplan.Migration = (*Migration)(nil)
 
 func (m *Migration) AddIngredient(name string, fields []string, impl flownode.NodeImpl) graph.NodeIdx {
 	newNode := flownode.New(name, fields, impl)
-	newNode.OnConnected(m.Mainline.ingredients)
+	newNode.OnConnected(m.ctrl.ingredients)
 
 	parents := newNode.Ancestors()
 
-	ni := m.Mainline.ingredients.AddNode(newNode)
-	m.Added[ni] = true
+	ni := m.ctrl.ingredients.AddNode(newNode)
+	m.added[ni] = true
 	for _, parent := range parents {
-		m.Mainline.ingredients.AddEdge(parent, ni)
+		m.ctrl.ingredients.AddEdge(parent, ni)
 	}
 	return ni
 }
 
 func (m *Migration) AddBase(name string, fields []string, b flownode.AnyBase) graph.NodeIdx {
 	base := flownode.New(name, fields, b)
-	ni := m.Mainline.ingredients.AddNode(base)
-	m.Added[ni] = true
-	m.Mainline.ingredients.AddEdge(m.Mainline.source, ni)
+	ni := m.ctrl.ingredients.AddNode(base)
+	m.added[ni] = true
+	m.ctrl.ingredients.AddEdge(m.ctrl.source, ni)
 	return ni
 }
 
 func (m *Migration) ensureReaderFor(na graph.NodeIdx, name string, connect func(r *flownode.Reader)) *flownode.Node {
-	fn, found := m.Readers[na]
+	fn, found := m.readers[na]
 	if found {
-		return m.Mainline.ingredients.Value(fn)
+		return m.ctrl.ingredients.Value(fn)
 	}
 	r := flownode.NewReader(na)
 	connect(r)
 
 	var rn *flownode.Node
 	if name != "" {
-		rn = m.Mainline.ingredients.Value(na).NamedMirror(r, name)
+		rn = m.ctrl.ingredients.Value(na).NamedMirror(r, name)
 	} else {
-		rn = m.Mainline.ingredients.Value(na).Mirror(r)
-	}
-	if strings.HasPrefix(rn.Name, "SHALLOW_") {
-		rn.Purge = true
+		rn = m.ctrl.ingredients.Value(na).Mirror(r)
 	}
 
-	ri := m.Mainline.ingredients.AddNode(rn)
-	m.Mainline.ingredients.AddEdge(na, ri)
-	m.Added[ri] = true
-	m.Readers[na] = ri
+	ri := m.ctrl.ingredients.AddNode(rn)
+	m.ctrl.ingredients.AddEdge(na, ri)
+	m.added[ri] = true
+	m.readers[na] = ri
 	return rn
 }
 
 func (m *Migration) Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int) {
 	m.ensureReaderFor(na, name, func(reader *flownode.Reader) {
-		reader.OnConnected(m.Mainline.ingredients, key, parameters, colLen)
+		reader.OnConnected(m.ctrl.ingredients, key, parameters, colLen)
 	})
 }
 
-func (m *Migration) Commit(ctx context.Context) error {
-	log := common.Logger(ctx)
-	mainline := m.Mainline
-	newNodes := m.Added
-	topo := mainline.TopoOrder(newNodes)
+func (m *Migration) Commit(ctx context.Context, up *boostplan.Upqueries) error {
+	ctx = common.ContextWithLogger(ctx, m.ctrl.log.With(zap.String("migration", m.uuid.String())))
+
+	ctrl := m.ctrl
+	newNodes := maps.Clone(m.added)
+	topo := ctrl.topoOrder(newNodes)
 
 	var swapped0 map[graph.NodeIdxPair]graph.NodeIdx
-	if sharding := mainline.sharding; sharding != nil {
+	if sharding := ctrl.sharding; sharding != nil {
 		var err error
-		topo, swapped0, err = migrationShard(ctx, m.Mainline.ingredients, newNodes, topo, *sharding)
+		topo, swapped0, err = migrationShard(ctx, m.ctrl.ingredients, newNodes, topo, *sharding)
 		if err != nil {
 			return err
 		}
@@ -108,9 +96,9 @@ func (m *Migration) Commit(ctx context.Context) error {
 		swapped0 = make(map[graph.NodeIdxPair]graph.NodeIdx)
 	}
 
-	migrationAssign(mainline.ingredients, topo, &mainline.nDomains)
-	swapped1 := migrationAddRouting(mainline.ingredients, mainline.source, newNodes, topo)
-	topo = mainline.TopoOrder(newNodes)
+	migrationAssign(ctrl.ingredients, topo, &ctrl.nDomains)
+	swapped1 := migrationAddRouting(ctrl.ingredients, ctrl.source, newNodes, topo)
+	topo = ctrl.topoOrder(newNodes)
 
 	for pair, instead := range swapped1 {
 		src := pair.Two
@@ -126,7 +114,7 @@ func (m *Migration) Commit(ctx context.Context) error {
 				// `src`, and then picking the *other*, since that must then be node
 				// below.
 
-				if mainline.ingredients.FindEdge(src, instead) != graph.InvalidEdge {
+				if ctrl.ingredients.FindEdge(src, instead) != graph.InvalidEdge {
 					// src -> instead -> instead0 -> [children]
 					// from [children]'s perspective, we should use instead0 for from, so
 					// we can just ignore the `instead` swap.
@@ -156,7 +144,7 @@ func (m *Migration) Commit(ctx context.Context) error {
 
 	changedDomains := make(map[boostpb.DomainIndex]struct{})
 	for _, ni := range sortedNew {
-		node := mainline.ingredients.Value(ni)
+		node := ctrl.ingredients.Value(ni)
 		if !node.IsDropped() {
 			changedDomains[node.Domain()] = struct{}{}
 		}
@@ -164,8 +152,8 @@ func (m *Migration) Commit(ctx context.Context) error {
 
 	domainNewNodes := make(map[boostpb.DomainIndex][]graph.NodeIdx)
 	for _, ni := range sortedNew {
-		if ni != mainline.source {
-			node := mainline.ingredients.Value(ni)
+		if ni != ctrl.source {
+			node := ctrl.ingredients.Value(ni)
 			if !node.IsDropped() {
 				dom := node.Domain()
 				domainNewNodes[dom] = append(domainNewNodes[dom], ni)
@@ -176,7 +164,7 @@ func (m *Migration) Commit(ctx context.Context) error {
 	// Assign local addresses to all new nodes, and initialize them
 	for dom, nodes := range domainNewNodes {
 		var nnodes int
-		if rm, ok := mainline.remap[dom]; ok {
+		if rm, ok := ctrl.remap[dom]; ok {
 			nnodes = len(rm)
 		}
 
@@ -188,12 +176,12 @@ func (m *Migration) Commit(ctx context.Context) error {
 		for _, ni := range nodes {
 			ip := boostpb.NewIndexPair(ni)
 			ip.SetLocal(boostpb.LocalNodeIndex(nnodes))
-			mainline.ingredients.Value(ni).SetFinalizedAddr(ip)
+			ctrl.ingredients.Value(ni).SetFinalizedAddr(ip)
 
-			if rm, ok := mainline.remap[dom]; ok {
+			if rm, ok := ctrl.remap[dom]; ok {
 				rm[ni] = ip
 			} else {
-				mainline.remap[dom] = map[graph.NodeIdx]boostpb.IndexPair{ni: ip}
+				ctrl.remap[dom] = map[graph.NodeIdx]boostpb.IndexPair{ni: ip}
 			}
 
 			nnodes++
@@ -201,20 +189,20 @@ func (m *Migration) Commit(ctx context.Context) error {
 
 		// Initialize each new node
 		for _, ni := range nodes {
-			node := mainline.ingredients.Value(ni)
+			node := ctrl.ingredients.Value(ni)
 			if node.IsInternal() {
 				// Figure out all the remappings that have happened
 				// NOTE: this has to be *per node*, since a shared parent may be remapped
 				// differently to different children (due to sharding for example). we just
 				// allocate it once though.
-				remap := maps.Clone(mainline.remap[dom])
+				remap := maps.Clone(ctrl.remap[dom])
 				for pair, instead := range swapped {
 					dst := pair.One
 					src := pair.Two
 					if dst != ni {
 						continue
 					}
-					remap[src] = mainline.remap[dom][instead]
+					remap[src] = ctrl.remap[dom][instead]
 				}
 
 				node.OnCommit(remap)
@@ -222,8 +210,8 @@ func (m *Migration) Commit(ctx context.Context) error {
 		}
 	}
 
-	if sharding := mainline.sharding; sharding != nil {
-		if err := migrationValidateSharding(m.Mainline.ingredients, topo, *sharding); err != nil {
+	if sharding := ctrl.sharding; sharding != nil {
+		if err := migrationValidateSharding(m.ctrl.ingredients, topo, *sharding); err != nil {
 			return err
 		}
 	}
@@ -248,10 +236,10 @@ func (m *Migration) Commit(ctx context.Context) error {
 	// etc.
 
 	for ni := range newNodes {
-		n := mainline.ingredients.Value(ni)
-		if ni != mainline.source && !n.IsDropped() {
+		n := ctrl.ingredients.Value(ni)
+		if ni != ctrl.source && !n.IsDropped() {
 			di := n.Domain()
-			mainline.domainNodes[di] = append(mainline.domainNodes[di], ni)
+			ctrl.domainNodes[di] = append(ctrl.domainNodes[di], ni)
 		}
 	}
 
@@ -259,7 +247,7 @@ func (m *Migration) Commit(ctx context.Context) error {
 	for di := range changedDomains {
 		var m []NewNode
 
-		for _, ni := range mainline.domainNodes[di] {
+		for _, ni := range ctrl.domainNodes[di] {
 			_, found := newNodes[ni]
 			m = append(m, NewNode{ni, found})
 		}
@@ -273,79 +261,41 @@ func (m *Migration) Commit(ctx context.Context) error {
 
 	// Boot up new domains (they'll ignore all updates for now)
 	for dom := range changedDomains {
-		if _, found := mainline.domains[dom]; found {
+		if _, found := ctrl.domains[dom]; found {
 			continue
 		}
 
 		nodes := uninformedDomainNodes[dom]
 		delete(uninformedDomainNodes, dom)
 
-		numshards := mainline.ingredients.Value(nodes[0].Idx).Sharding().TryGetShards()
-		d, err := mainline.PlaceDomain(ctx, dom, numshards, nodes)
+		numshards := ctrl.ingredients.Value(nodes[0].Idx).Sharding().TryGetShards()
+		d, err := ctrl.PlaceDomain(ctx, dom, numshards, nodes)
 		if err != nil {
 			return err
 		}
-		mainline.domains[dom] = d
+		ctrl.domains[dom] = d
 	}
 
 	// Add any new nodes to existing domains (they'll also ignore all updates for now)
-	if err := migrationAugmentationInform(ctx, mainline, uninformedDomainNodes); err != nil {
+	if err := migrationAugmentationInform(ctx, ctrl, uninformedDomainNodes); err != nil {
 		return err
-	}
-
-	for _, colchange := range m.Columns {
-		var inform []graph.NodeIdx
-		if _, ok := colchange.Change.(ColumnChangeAdd); ok {
-			// we need to inform all of the base's children too,
-			// so that they know to add columns to existing records when replaying
-
-			eni := mainline.ingredients.NeighborsDirected(colchange.Node, graph.DirectionOutgoing)
-			for eni.Next() {
-				if mainline.ingredients.Value(eni.Current).IsEgress() {
-					// find ingresses under this egress
-					ini := mainline.ingredients.NeighborsDirected(eni.Current, graph.DirectionOutgoing)
-					for ini.Next() {
-						inform = append(inform, ini.Current)
-					}
-				}
-			}
-		}
-
-		inform = append(inform, colchange.Node)
-		for _, ni := range inform {
-			var pkt boostpb.Packet
-			n := mainline.ingredients.Value(ni)
-			switch colchange.Change.(type) {
-			case ColumnChangeAdd:
-				panic("unimplemented")
-
-			case ColumnChangeDrop:
-				panic("unimplemented")
-			}
-
-			domhandle := mainline.domains[n.Domain()]
-			if err := domhandle.SendToHealthy(ctx, &pkt, mainline.workers); err != nil {
-				return err
-			}
-		}
 	}
 
 	// Set up inter-domain connections
 	// NOTE: once we do this, we are making existing domains block on new domains!
-	if err := migrationRoutingConnect(ctx, mainline.ingredients, mainline.domains, mainline.workers, newNodes); err != nil {
+	if err := migrationRoutingConnect(ctx, ctrl.ingredients, ctrl.domains, ctrl.workers, newNodes); err != nil {
 		return err
 	}
 
-	if err := migrationStreamSetup(ctx, mainline, newNodes); err != nil {
+	if err := migrationStreamSetup(ctx, ctrl, newNodes); err != nil {
 		return err
 	}
 
 	// And now, the last piece of the puzzle -- set up materializations
-	if err := mainline.materialization.Commit(ctx, mainline.ingredients, newNodes, mainline.domains, mainline.workers); err != nil {
+	if err := ctrl.materialization.Commit(ctx, ctrl.ingredients, newNodes, ctrl.domains, ctrl.workers); err != nil {
 		return err
 	}
 
-	log.Info("migration complete")
 	return nil
 }
 
@@ -380,16 +330,16 @@ func (m *Migration) MaintainAnonymous(n graph.NodeIdx, key []int) {
 		})
 	}
 	m.ensureReaderFor(n, "", func(r *flownode.Reader) {
-		r.OnConnected(m.Mainline.ingredients, key, params, 0)
+		r.OnConnected(m.ctrl.ingredients, key, params, 0)
 	})
 }
 
 func NewMigration(inner *Controller) *Migration {
 	return &Migration{
-		Mainline: inner,
-		Added:    make(map[graph.NodeIdx]bool),
-		Readers:  make(map[graph.NodeIdx]graph.NodeIdx),
-		Start:    time.Now(),
-		Context:  make(map[string]sqltypes.Value),
+		ctrl:    inner,
+		added:   make(map[graph.NodeIdx]bool),
+		readers: make(map[graph.NodeIdx]graph.NodeIdx),
+		start:   time.Now(),
+		uuid:    uuid.New(),
 	}
 }

@@ -19,10 +19,9 @@ type Materialization struct {
 	have  indexmap
 	added indexmap
 
-	state            map[graph.NodeIdx]*boostpb.Packet_PrepareState
-	partial          map[graph.NodeIdx]bool
-	partialEnabled   bool
-	frontierStrategy *boostpb.FrontierStrategy
+	state          map[graph.NodeIdx]*boostpb.Packet_PrepareState
+	partial        map[graph.NodeIdx]bool
+	partialEnabled bool
 
 	tagGenerator uint32 // atomic
 }
@@ -34,19 +33,11 @@ func NewMaterialization() *Materialization {
 		state:          make(map[graph.NodeIdx]*boostpb.Packet_PrepareState),
 		partial:        make(map[graph.NodeIdx]bool),
 		partialEnabled: true,
-		frontierStrategy: &boostpb.FrontierStrategy{
-			Type:  boostpb.FrontierStrategyType_NONE,
-			Match: "",
-		},
 	}
 }
 
 func (mat *Materialization) DisablePartial() {
 	mat.partialEnabled = false
-}
-
-func (mat *Materialization) SetFrontierStrategy(strat *boostpb.FrontierStrategy) {
-	mat.frontierStrategy = strat
 }
 
 func indicesEqual(a, b [][]int) bool {
@@ -370,10 +361,6 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 					replayObligations.insert(mi, index)
 				}
 			}
-		} else {
-			if g.Value(ni).Purge {
-				panic("full materialization placed beyond materialization frontier")
-			}
 		}
 
 		// no matter what happens, we're going to have to fulfill our replay obligations.
@@ -416,7 +403,6 @@ func (mat *Materialization) Commit(
 	domains map[boostpb.DomainIndex]*DomainHandle,
 	workers map[WorkerID]*Worker,
 ) error {
-	log := common.Logger(ctx)
 	if err := mat.extend(g, newnodes); err != nil {
 		return err
 	}
@@ -444,41 +430,6 @@ func (mat *Materialization) Commit(
 			if pi := anyPartial(ni); pi != graph.InvalidNode {
 				panic("partial materialization above full materialization")
 			}
-		}
-	}
-
-	// Mark nodes as beyond the frontier as dictated by the strategy
-	for ni := range newnodes {
-		n := g.Value(ni)
-
-		if (mat.have.contains(ni) || n.IsReader()) && !mat.partial[ni] {
-			// full materializations cannot be beyond the frontier.
-			continue
-		}
-
-		// Normally, we only mark things that are materialized as .purge, but when it comes to
-		// name matching, we don't do that since MIR will sometimes place the name of identity
-		// nodes and the like. It's up to the user to make sure they don't match node names
-		// that are, say, above a full materialization.
-		if mat.frontierStrategy.Type == boostpb.FrontierStrategyType_MATCH {
-			n.Purge = n.Purge || strings.Contains(n.Name, mat.frontierStrategy.Match)
-			continue
-		}
-		if strings.HasPrefix(n.Name, "SHALLOW_") {
-			n.Purge = true
-			continue
-		}
-
-		// For all other strategies, we only want to deal with partial indices
-		if !mat.partial[ni] {
-			continue
-		}
-
-		switch mat.frontierStrategy.Type {
-		case boostpb.FrontierStrategyType_ALL_PARTIAL:
-			n.Purge = true
-		case boostpb.FrontierStrategyType_READERS:
-			n.Purge = n.Purge || n.IsReader()
 		}
 	}
 
@@ -583,42 +534,16 @@ func (mat *Materialization) Commit(
 		}
 	}
 
-	for ni := range newnodes {
-		// any nodes marked as .purge should have their state be beyond the materialization
-		// frontier. however, mir may have named an identity child instead of the node with a
-		// materialization, so let's make sure the label gets correctly applied: specifically,
-		// if a .prune node doesn't have state, we "move" that .prune to its ancestors.
-
-		n := g.Value(ni)
-		if n.Purge && !(mat.have.contains(ni) || n.IsReader()) {
-			it := g.NeighborsDirected(ni, graph.DirectionIncoming)
-			for it.Next() {
-				if !newnodes[it.Current] {
-					continue
-				}
-				if !mat.have.contains(it.Current) {
-					log.Warn("no associated state with purged node", it.Current.Zap())
-					continue
-				}
-				g.Value(it.Current).Purge = true
-			}
-		}
-	}
-
 	var nonPurge []graph.NodeIdx
 	for ni := range newnodes {
 		n := g.Value(ni)
-		if (n.IsReader() || mat.have.contains(ni)) && !n.Purge {
+		if n.IsReader() || mat.have.contains(ni) {
 			nonPurge = g.NeighborsDirected(ni, graph.DirectionIncoming).Collect(nonPurge)
 		}
 	}
 	for len(nonPurge) > 0 {
 		ni := nonPurge[len(nonPurge)-1]
 		nonPurge = nonPurge[:len(nonPurge)-1]
-
-		if g.Value(ni).Purge {
-			panic("found purge node above non-purge node")
-		}
 		if mat.have.contains(ni) {
 			// already shceduled to be checked
 			// NOTE: no need to check for readers here, since they can't be parents
@@ -729,7 +654,6 @@ func (mat *Materialization) Commit(
 		pkt.Inner = &boostpb.SyncPacket_Ready_{
 			Ready: &boostpb.SyncPacket_Ready{
 				Node:  n.LocalAddr(),
-				Purge: n.Purge,
 				Index: indexProto,
 			},
 		}

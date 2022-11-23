@@ -207,11 +207,9 @@ func (pkt *SyncPacket) Trace() any {
 		return struct {
 			Packet string
 			Node   LocalNodeIndex
-			Purge  bool
 		}{
 			"Ready",
 			pkt.Ready.Node,
-			pkt.Ready.Purge,
 		}
 	case *SyncPacket_SetupReplayPath_:
 		return struct {

@@ -381,8 +381,6 @@ func (d *Domain) handle(ctx context.Context, m *boostpb.Packet, executor process
 		err = d.handleEvictAny(ctx, pkt.Evict, executor)
 	case *boostpb.Packet_EvictKeys_:
 		err = d.handleEvictKeys(ctx, pkt.EvictKeys, executor)
-	case *boostpb.Packet_Purge_:
-		err = d.handlePurge(ctx, pkt.Purge)
 	case *boostpb.Packet_PrepareState_:
 		err = d.prepareState(ctx, pkt.PrepareState)
 	case *boostpb.Packet_UpdateEgress_:
@@ -409,8 +407,6 @@ func (d *Domain) handleReady(rdy *boostpb.SyncPacket_Ready, done chan struct{}) 
 	if d.replaying != nil {
 		d.log.Panic("called Ready on replaying node", node.Zap())
 	}
-
-	d.nodes.Get(node).Purge = rdy.Purge
 
 	if len(rdy.Index) > 0 {
 		n := d.nodes.Get(node)
@@ -1212,25 +1208,6 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 		// only evicting from a after the replay has passed the join (or, more
 		// generally, the operator that might perform lookups into a)
 		if backfillKeys != nil {
-			// first and foremost -- evict the source of the replay (if we own it).
-			// we only do this when the replay has reached its target, or if it's
-			// about to leave the domain, otherwise we might evict state that a
-			// later operator (like a join) will still do lookups into.
-			if i == len(rp.Path)-1 {
-				if rp.Source != boostpb.InvalidLocalNode {
-					n := d.nodes.Get(rp.Source)
-					if n.BeyondMatFrontier() {
-						st := d.state.Get(rp.Source)
-						if st == nil {
-							panic("replay sourced at non-materialized node")
-						}
-						for r := range backfillKeys {
-							st.MarkHole(r, m.Tag)
-						}
-					}
-				}
-			}
-
 			// next, evict any state that we had to look up to process this replay.
 			var pnsFor = boostpb.InvalidLocalNode
 			var evictTag = boostpb.TagNone
@@ -1253,10 +1230,6 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 						pnn := d.nodes.Get(pn)
 
 						if d.state.ContainsKey(pn) {
-							if pnn.BeyondMatFrontier() {
-								//we should evict from this
-								pns = append(pns, pn)
-							}
 							// Otherwise we should not evict from this
 							continue
 						}
@@ -1353,27 +1326,17 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 		}
 	case *boostpb.Packet_ReplayPiece_Partial:
 		partial := replayctx.Partial
-		if dstIsReader {
-			if d.nodes.Get(dst).BeyondMatFrontier() {
-				// make sure we eventually evict these from here
-				time.AfterFunc(50*time.Millisecond, func() {
-					d.delayForSelf(&boostpb.Packet{Inner: &boostpb.Packet_Purge_{
-						Purge: &boostpb.Packet_Purge{
-							View: dst,
-							Tag:  tag,
-							Keys: partial.ForKeys,
-						},
-					}})
-				})
-			}
-		} else if dstIsTarget {
+		switch {
+		case dstIsReader:
+			// we're on the replay path
+		case dstIsTarget:
 			if finishedPartial == 0 {
 				if len(partial.ForKeys) != 0 {
 					panic("expected ForKeys to be empty")
 				}
 			}
 			finishedReplay = &finished{m.Tag, dst, partial.ForKeys}
-		} // otherwise we're just on the replay path
+		}
 	}
 
 finished:
@@ -2596,24 +2559,6 @@ func (d *Domain) handleRemoveNodes(pkt *boostpb.Packet_RemoveNodes) error {
 		})
 	}
 
-	return nil
-}
-
-func (d *Domain) handlePurge(_ context.Context, purge *boostpb.Packet_Purge) error {
-	node := d.nodes.Get(purge.View)
-	d.log.Debug("eagerly purging state from reader", node.GlobalAddr().Zap())
-
-	reader := node.AsReader()
-	if reader == nil {
-		panic("called Purge on non-Reader node")
-	}
-
-	if w := reader.Writer(); w != nil {
-		for key := range purge.Keys {
-			w.WithKey(key).MarkHole()
-		}
-		d.dirtyReaderNodes[purge.View] = struct{}{}
-	}
 	return nil
 }
 

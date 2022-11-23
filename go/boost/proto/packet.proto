@@ -89,7 +89,6 @@ message SyncPacket {
 
   message Ready{
     uint32 node = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
-    bool purge = 2;
 
     message Index {
       repeated int64 key = 1 [(gogoproto.casttype) = "int"];
@@ -158,11 +157,6 @@ message Packet {
     Link link = 1;
     uint32 tag = 2 [(gogoproto.casttype) = "Tag"];
     repeated string keys = 3 [(gogoproto.casttype) = "Row"];
-  };
-  message Purge {
-    uint32 view = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
-    uint32 tag = 2 [(gogoproto.casttype) = "Tag"];
-    map<string, bool> keys = 3 [(gogoproto.castkey) = "Row"];
   };
   message Finish{
     uint32 tag = 1 [(gogoproto.casttype) = "Tag"];
@@ -267,7 +261,6 @@ message Packet {
     ReplayPiece replay_piece = 4;
     Evict evict = 5;
     EvictKeys evict_keys = 6;
-    Purge purge = 7;
 
     // Replay requests
     RequestPartialReplay request_partial_replay = 10;

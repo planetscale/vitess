@@ -16,7 +16,6 @@ func (n *Node) ToProto() *boostpb.Node {
 		Parents:  n.parents,
 		Children: n.children,
 		Taken:    n.taken,
-		Purge:    n.Purge,
 		Sharding: &n.shardedBy,
 	}
 
@@ -63,7 +62,6 @@ func NodeFromProto(v *boostpb.Node) *Node {
 		parents:   v.Parents,
 		children:  v.Children,
 		taken:     v.Taken,
-		Purge:     v.Purge,
 		shardedBy: *v.Sharding,
 	}
 	switch impl := v.Impl.(type) {

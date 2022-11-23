@@ -117,7 +117,11 @@ func (srv *Server) Migrate(ctx context.Context, perform func(ctx context.Context
 		panic("tried to migrate without being a leader")
 	}
 
-	return srv.inner.Migrate(ctx, perform)
+	mig := NewMigration(srv.inner)
+	if err := perform(ctx, mig); err != nil {
+		return err
+	}
+	return mig.Commit(ctx, nil)
 }
 
 func (srv *Server) IsReady() bool {

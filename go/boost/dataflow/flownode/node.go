@@ -28,7 +28,6 @@ type Node struct {
 
 	impl      NodeImpl
 	taken     bool
-	Purge     bool
 	shardedBy boostpb.Sharding
 
 	Stats Stats
@@ -171,7 +170,6 @@ func (n *Node) Finalize(g *graph.Graph[*Node]) *Node {
 		children:  nil, // intentionally left blank
 		impl:      n.impl,
 		taken:     false,
-		Purge:     n.Purge,
 		shardedBy: n.shardedBy,
 	}
 	var ni = final.index.AsGlobal()
@@ -243,10 +241,6 @@ func (n *Node) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
 
 func (n *Node) Remove() {
 	n.impl = &Dropped{}
-}
-
-func (n *Node) BeyondMatFrontier() bool {
-	return n.Purge
 }
 
 func (n *Node) AddChild(child boostpb.LocalNodeIndex) {

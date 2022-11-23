@@ -1,13 +1,9 @@
 package boostplan
 
 import (
-	"context"
-
 	"go.uber.org/multierr"
-	"go.uber.org/zap"
 
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
@@ -47,12 +43,7 @@ func (r *VersionedRecipe) NodeAddrFor(name string) (graph.NodeIdx, bool) {
 	return r.inc.GetQueryAddress(name)
 }
 
-func (r *VersionedRecipe) Activate(ctx context.Context, mig Migration, schema *SchemaInformation) (*ActivationResult, error) {
-	log := common.Logger(ctx)
-	log.Info("activating new recipe",
-		zap.Int64("version", r.version),
-	)
-
+func (r *VersionedRecipe) Activate(mig Migration, schema *SchemaInformation) (*ActivationResult, error) {
 	var added []QueryID
 	var removed []QueryID
 	var unchanged []QueryID
@@ -135,6 +126,10 @@ func (r *VersionedRecipe) EnableReuse(reuse boostpb.ReuseType) {
 
 func (r *VersionedRecipe) IsLeafAddress(ni graph.NodeIdx) bool {
 	return r.inc.IsLeafAddress(ni)
+}
+
+func (r *VersionedRecipe) Upqueries() *Upqueries {
+	return NewUpqueryPlanner(r.inc)
 }
 
 func (r *VersionedRecipe) Version() int64 {

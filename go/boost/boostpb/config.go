@@ -9,10 +9,6 @@ func DefaultConfig() *Config {
 	return &Config{
 		Shards:         0,
 		PartialEnabled: true,
-		FrontierStrategy: &FrontierStrategy{
-			Type:  FrontierStrategyType_NONE,
-			Match: "",
-		},
 		DomainConfig: &DomainConfig{
 			ConcurrentReplays:  512,
 			ReplayBatchTimeout: 100_000 * time.Nanosecond,
