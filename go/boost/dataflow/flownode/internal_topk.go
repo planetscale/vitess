@@ -32,8 +32,7 @@ func (ord Order) Cmp(a, b boostpb.Row) int {
 var _ Internal = (*TopK)(nil)
 
 type TopK struct {
-	src  boostpb.IndexPair
-	cols int
+	src boostpb.IndexPair
 
 	keys  []int
 	order Order
@@ -48,7 +47,6 @@ func NewTopK(src graph.NodeIdx, order []boostpb.OrderedColumn, keys []int, k uin
 	sort.Ints(keys)
 	return &TopK{
 		src:   boostpb.NewIndexPair(src),
-		cols:  0,
 		keys:  keys,
 		order: order,
 		k:     k,
@@ -94,8 +92,6 @@ func (t *TopK) Description(detailed bool) string {
 }
 
 func (t *TopK) OnConnected(graph *graph.Graph[*Node]) {
-	srcn := graph.Value(t.src.AsGlobal())
-	t.cols = len(srcn.Fields())
 }
 
 func (t *TopK) OnCommit(you graph.NodeIdx, remap map[graph.NodeIdx]boostpb.IndexPair) {
