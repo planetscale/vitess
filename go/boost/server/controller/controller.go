@@ -156,7 +156,10 @@ func (ctrl *Controller) PlaceDomain(ctx context.Context, idx boostpb.DomainIndex
 	for s := uint(0); s < shards; s++ {
 		var shardN = s
 		wg.Go(func() error {
-			dombuilder := ctrl.BuildDomain(idx, shardN, shards, nodes, ctrl.domainConfig)
+			dombuilder, err := ctrl.BuildDomain(idx, shardN, shards, nodes, ctrl.domainConfig)
+			if err != nil {
+				return err
+			}
 
 			var wrk *Worker
 			for i := range workers {

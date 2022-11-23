@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/btree"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"storj.io/drpc"
@@ -34,6 +35,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtboost"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgate"
@@ -243,9 +245,7 @@ func New(t testing.TB, options ...Option) *Cluster {
 		t.Fatal(err)
 	}
 
-	if err := cluster.checkDomainSerialization(); err != nil {
-		t.Fatal(err)
-	}
+	cluster.checkDomainSerialization()
 
 	if cluster.defaultRecipe != nil {
 		cluster.ApplyRecipe(cluster.defaultRecipe)
@@ -285,28 +285,41 @@ func (c *Cluster) TestExecute(sqlwithparams string, args ...any) *sqltypes.Resul
 	return c.Executor.TestExecute(sqlwithparams, args...)
 }
 
-func (c *Cluster) checkDomainSerialization() error {
+func (c *Cluster) checkDomainSerialization() {
 	ctrl := c.Controller()
-	var err error
-	ctrl.Inner().BuildDomain = func(idx boostpb.DomainIndex, shard, numShards uint, nodes *flownode.Map, config *boostpb.DomainConfig) *boostpb.DomainBuilder {
-		dom := domain.ToProto(idx, shard, numShards, nodes, config)
+	ctrl.Inner().BuildDomain = func(idx boostpb.DomainIndex, shard, numShards uint, nodes *flownode.Map, config *boostpb.DomainConfig) (*boostpb.DomainBuilder, error) {
+		dom, err := domain.ToProto(idx, shard, numShards, nodes, config)
+		if err != nil {
+			return nil, err
+		}
 
 		converted := flownode.NewMapFromProto(dom.Nodes)
-
 		options := []cmp.Option{
+			// btree.Map: compare keys and values directly, not the maps themselves
+			cmp.Comparer(func(a, b btree.Map[boostpb.LocalNodeIndex, []int]) bool {
+				return reflect.DeepEqual(a.Keys(), b.Keys()) && reflect.DeepEqual(a.Values(), b.Values())
+			}),
+			cmp.Comparer(func(a, b btree.Map[boostpb.LocalNodeIndex, int]) bool {
+				return reflect.DeepEqual(a.Keys(), b.Keys()) && reflect.DeepEqual(a.Values(), b.Values())
+			}),
+			// btree.BTreeG: compare items directly, not the trees themselves
+			cmp.Comparer(func(a, b *btree.BTreeG[*flownode.UnionReplay]) bool {
+				return reflect.DeepEqual(a.Items(), b.Items())
+			}),
+			// sqlparser.Offset: only the actual position for the offset matters; offset.Original is not preserved
+			cmp.Comparer(func(a, b *sqlparser.Offset) bool {
+				return a.V == b.V
+			}),
+			// Exporter: ensure _all_ private fields for all the Domain data are compared
 			cmp.Exporter(func(reflect.Type) bool {
 				return true
 			}),
 		}
 		if diff := cmp.Diff(nodes, converted, options...); diff != "" {
-			err = fmt.Errorf("domain.ToProto() mismatch (-want +got):\n%s", diff)
+			return nil, fmt.Errorf("domain.ToProto() mismatch (-want +got):\n%s", diff)
 		}
-		return dom
+		return dom, nil
 	}
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (c *Cluster) ServerInstances() []*server.Server {

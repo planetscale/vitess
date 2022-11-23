@@ -215,7 +215,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 		pi    []int
 	}
 
-	var unionSuffixes = btree.NewGeneric(func(a, b *suffix) bool {
+	var unionSuffixes = btree.NewBTreeGOptions(func(a, b *suffix) bool {
 		if a.union < b.union {
 			return true
 		}
@@ -223,7 +223,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 			return false
 		}
 		return a.path.Compare(b.path) < 0
-	})
+	}, btree.Options{NoLocks: true})
 
 	for pi, path := range paths {
 		for at, seg := range path {

@@ -2641,7 +2641,7 @@ func FromProto(
 	}
 }
 
-func ToProto(idx boostpb.DomainIndex, shard, numShards uint, nodes *flownode.Map, config *boostpb.DomainConfig) *boostpb.DomainBuilder {
+func ToProto(idx boostpb.DomainIndex, shard, numShards uint, nodes *flownode.Map, config *boostpb.DomainConfig) (*boostpb.DomainBuilder, error) {
 	pbuilder := &boostpb.DomainBuilder{
 		Index:     idx,
 		Shard:     shard,
@@ -2649,7 +2649,7 @@ func ToProto(idx boostpb.DomainIndex, shard, numShards uint, nodes *flownode.Map
 		Nodes:     nodes.ToProto(),
 		Config:    config,
 	}
-	return pbuilder
+	return pbuilder, nil
 }
 
-type BuilderFn func(idx boostpb.DomainIndex, shard, numShards uint, nodes *flownode.Map, config *boostpb.DomainConfig) *boostpb.DomainBuilder
+type BuilderFn func(idx boostpb.DomainIndex, shard, numShards uint, nodes *flownode.Map, config *boostpb.DomainConfig) (*boostpb.DomainBuilder, error)

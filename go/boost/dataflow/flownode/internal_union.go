@@ -1,11 +1,11 @@
 package flownode
 
 import (
-	"math"
 	"sort"
 
+	"github.com/tidwall/btree"
+
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common/btree"
 	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
@@ -15,10 +15,15 @@ import (
 var _ Internal = (*Union)(nil)
 var _ ingredientInputRaw = (*Union)(nil)
 
+var unionBtreeCfg = btree.Options{
+	NoLocks: true,
+	Degree:  32,
+}
+
 type Union struct {
 	emit         unionEmit
 	replayKey    map[unionreplayKey][]int
-	replayPieces *btree.BTreeG[*unionreplay] // *btree.[*unionreplay]
+	replayPieces *btree.BTreeG[*UnionReplay]
 	required     int
 	wait         *ongoingWait
 	me           graph.NodeIdx
@@ -29,7 +34,7 @@ type unionreplayKey struct {
 	node boostpb.LocalNodeIndex
 }
 
-type unionreplay struct {
+type UnionReplay struct {
 	// Key
 	tag          boostpb.Tag
 	replayingKey boostpb.Row
@@ -40,7 +45,7 @@ type unionreplay struct {
 	evict    bool
 }
 
-func compareReplays(a, b *unionreplay) bool {
+func compareReplays(a, b *UnionReplay) bool {
 	if a.tag < b.tag {
 		return true
 	}
@@ -137,7 +142,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 			rkeyFrom = from
 		}
 
-		u.replayPieces.Ascend(func(it *unionreplay) bool {
+		u.replayPieces.Scan(func(it *UnionReplay) bool {
 			// first, let's see if _any_ of the records in this batch even affect this
 			// buffered upquery response.
 			buffered, ok := it.buffered[from]
@@ -368,14 +373,14 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 
 		var released = make(map[boostpb.Row]bool)
 		var captured = make(map[boostpb.Row]bool)
-		var toprocess []*unionreplay
+		var toprocess []*UnionReplay
 		var finalrecords []boostpb.Record
 
 		for key := range keys {
 			rs := rsByKey[key]
 			delete(rsByKey, key)
 
-			urp := &unionreplay{
+			urp := &UnionReplay{
 				tag:          tag,
 				replayingKey: key,
 				shard:        requestingShard,
@@ -404,7 +409,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 				if u.required == 1 {
 					toprocess = append(toprocess, urp)
 				} else {
-					u.replayPieces.ReplaceOrInsert(urp)
+					u.replayPieces.Set(urp)
 					captured[key] = true
 				}
 			}
@@ -528,10 +533,11 @@ func (u *Union) IsShardMerger() bool {
 
 func (u *Union) OnEviction(from boostpb.LocalNodeIndex, tag boostpb.Tag, keys []boostpb.Row) {
 	for _, key := range keys {
-		var startKey = &unionreplay{tag: tag, replayingKey: key, shard: 0}
-		var endKey = &unionreplay{tag: tag, replayingKey: key, shard: math.MaxUint}
-
-		u.replayPieces.AscendRange(startKey, endKey, func(e *unionreplay) bool {
+		startKey := &UnionReplay{tag: tag, replayingKey: key, shard: 0}
+		u.replayPieces.Ascend(startKey, func(e *UnionReplay) bool {
+			if e.tag != tag || e.replayingKey != key {
+				return false
+			}
 			if _, found := e.buffered[from]; found {
 				// we've already received something from left, but it has now been evicted.
 				// we can't remove the buffered replay, since we'll then get confused when the
@@ -579,7 +585,7 @@ func NewUnion(emit map[graph.NodeIdx][]int) *Union {
 		required:     len(emit),
 		me:           graph.InvalidNode,
 		replayKey:    make(map[unionreplayKey][]int),
-		replayPieces: btree.NewG[*unionreplay](2, compareReplays),
+		replayPieces: btree.NewBTreeGOptions[*UnionReplay](compareReplays, unionBtreeCfg),
 	}
 }
 
@@ -596,7 +602,7 @@ func NewUnionDeshard(parent graph.NodeIdx, sharding boostpb.Sharding) *Union {
 		required:     int(*shards),
 		me:           graph.InvalidNode,
 		replayKey:    make(map[unionreplayKey][]int),
-		replayPieces: btree.NewG[*unionreplay](2, compareReplays),
+		replayPieces: btree.NewBTreeGOptions[*UnionReplay](compareReplays, unionBtreeCfg),
 	}
 }
 
@@ -629,7 +635,7 @@ func NewUnionFromProto(u *boostpb.Node_InternalUnion) *Union {
 	return &Union{
 		emit:         emit,
 		replayKey:    make(map[unionreplayKey][]int),
-		replayPieces: btree.NewG[*unionreplay](2, compareReplays),
+		replayPieces: btree.NewBTreeGOptions[*UnionReplay](compareReplays, unionBtreeCfg),
 		required:     u.Required,
 		me:           u.Me,
 	}
