@@ -38,11 +38,7 @@ func (n *Node) Describe(gvz *graphviz.Node, options DescribeOptions) {
 	switch options.Materialization {
 	case boostpb.MaterializationNone:
 	case boostpb.MaterializationPartial:
-		if n.Purge {
-			materialized = "◔"
-		} else {
-			materialized = "◕"
-		}
+		materialized = "◕"
 	case boostpb.MaterializationFull:
 		materialized = "●"
 	}

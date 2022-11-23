@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/google/uuid"
 	"go.uber.org/multierr"
@@ -69,7 +68,6 @@ func NewController(log *zap.Logger, uuid uuid.UUID, config *boostpb.Config, stat
 	if !config.PartialEnabled {
 		mat.DisablePartial()
 	}
-	mat.SetFrontierStrategy(config.FrontierStrategy)
 
 	recipe := boostplan.BlankRecipe()
 	recipe.EnableReuse(config.Reuse)
@@ -108,20 +106,7 @@ func (ctrl *Controller) IsReady() bool {
 	return ctrl.expectedWorkerCount > 0 && len(ctrl.workers) >= ctrl.expectedWorkerCount
 }
 
-func (ctrl *Controller) Migrate(ctx context.Context, perform func(ctx context.Context, mig *Migration) error) error {
-	mig := NewMigration(ctrl)
-	ctx = common.ContextWithLogger(ctx, ctrl.log.With(zap.Uintptr("migration", uintptr(unsafe.Pointer(mig)))))
-	if err := perform(ctx, mig); err != nil {
-		return err
-	}
-	return mig.Commit(ctx)
-}
-
-func (ctrl *Controller) NewMigration() *Migration {
-	return NewMigration(ctrl)
-}
-
-func (ctrl *Controller) TopoOrder(new map[graph.NodeIdx]bool) (topolist []graph.NodeIdx) {
+func (ctrl *Controller) topoOrder(new map[graph.NodeIdx]bool) (topolist []graph.NodeIdx) {
 	topolist = make([]graph.NodeIdx, 0, len(new))
 	topo := graph.NewTopoVisitor(ctrl.ingredients)
 	for topo.Next(ctrl.ingredients) {
@@ -676,21 +661,24 @@ func (ctrl *Controller) cleanupRecipe(ctx context.Context, activation *boostplan
 }
 
 func (ctrl *Controller) applyRecipe(ctx context.Context, newrecipe *boostplan.VersionedRecipe, si *boostplan.SchemaInformation) (*boostplan.ActivationResult, error) {
-	var tracker = &RecipeTracker{ctrl: ctrl, recipe: newrecipe}
-	var activation *boostplan.ActivationResult
+	ctrl.log.Info("applying new recipe", zap.Int64("version", newrecipe.Version()))
 
-	err := ctrl.Migrate(ctx, func(ctx context.Context, mig *Migration) error {
-		var err error
-		activation, err = newrecipe.Activate(ctx, mig, si)
-		tracker.BeforeCommit(ctx, activation, err)
-		return err
-	})
+	tracker := &RecipeTracker{ctrl: ctrl, recipe: newrecipe}
+	mig := NewMigration(ctrl)
 
+	activation, err := newrecipe.Activate(mig, si)
+	tracker.BeforeCommit(ctx, activation, err)
+	if err != nil {
+		return nil, err
+	}
+
+	err = mig.Commit(ctx, newrecipe.Upqueries())
 	tracker.AfterCommit(ctx, err)
 	if err != nil {
 		return nil, err
 	}
 
+	ctrl.log.Info("recipe application complete", zap.Duration("duration", time.Since(mig.start)))
 	ctrl.recipe = newrecipe
 
 	// cleanupRecipe only removes old nodes that are no longer in use; we do not fail recipe application

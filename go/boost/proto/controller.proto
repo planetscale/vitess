@@ -6,23 +6,11 @@ package controller;
 import "gogoproto/gogo.proto";
 import "google/protobuf/duration.proto";
 
-enum FrontierStrategyType {
-  NONE = 0;
-  ALL_PARTIAL = 1;
-  READERS = 2;
-  MATCH = 3;
-}
-
 enum ReuseType {
   FINKELSTEIN = 0;
   RELAXED = 1;
   FULL = 2;
   NO_REUSE = 3;
-}
-
-message FrontierStrategy {
-  FrontierStrategyType type = 1;
-  string match = 2;
 }
 
 enum UpqueryMode {
@@ -39,7 +27,6 @@ message DomainConfig {
 message Config {
   uint64 shards = 1 [(gogoproto.casttype) = "uint"];
   bool partial_enabled = 2;
-  FrontierStrategy frontier_strategy = 3;
   DomainConfig domain_config = 4;
   // persistence = 5;
   google.protobuf.Duration heartbeat_every = 6 [(gogoproto.stdduration) = true, (gogoproto.nullable) = false];

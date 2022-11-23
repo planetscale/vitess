@@ -21,7 +21,7 @@ type Migration interface {
 	Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int)
 }
 
-func OpQueryToFlowParts(query *operators.Query, tr *operators.TableReport, mig Migration) (*operators.QueryFlowParts, error) {
+func queryToFlowParts(mig Migration, tr *operators.TableReport, query *operators.Query) (*operators.QueryFlowParts, error) {
 	var newNodes []graph.NodeIdx
 	var reusedNodes []graph.NodeIdx
 
@@ -37,7 +37,7 @@ func OpQueryToFlowParts(query *operators.Query, tr *operators.TableReport, mig M
 		n := nodeQueue[0]
 		nodeQueue = nodeQueue[1:]
 
-		flowNode, err := opNodeToFlowParts(n, mig)
+		flowNode, err := opNodeToFlowParts(mig, n)
 		if err != nil {
 			return nil, err
 		}
@@ -71,12 +71,12 @@ func OpQueryToFlowParts(query *operators.Query, tr *operators.TableReport, mig M
 		Name:        query.Name,
 		NewNodes:    newNodes,
 		ReusedNodes: reusedNodes,
-		QueryLeaf:   query.View.Flow.Address,
+		QueryLeaf:   query.Leaf(),
 		TableReport: tr,
 	}, nil
 }
 
-func opNodeToFlowParts(node *operators.Node, mig Migration) (operators.FlowNode, error) {
+func opNodeToFlowParts(mig Migration, node *operators.Node) (operators.FlowNode, error) {
 	if node.Flow.Valid() {
 		return node.Flow, nil
 	}
@@ -86,27 +86,27 @@ func opNodeToFlowParts(node *operators.Node, mig Migration) (operators.FlowNode,
 
 	switch op := node.Op.(type) {
 	case *operators.Filter:
-		fn, err = makeFilterOpNode(node, mig, op)
+		fn, err = makeFilterOpNode(mig, node, op)
 	case *operators.Join:
-		fn, err = makeJoinOpNode(node, mig, op)
+		fn, err = makeJoinOpNode(mig, node, op)
 	case *operators.Table:
-		fn, err = makeBaseOpNode(node.Name, op, mig)
+		fn, err = makeBaseOpNode(mig, node, op)
 	case *operators.Project:
-		fn, err = makeProjectOpNode(node.Name, node.Ancestors[0], op, mig)
+		fn, err = makeProjectOpNode(mig, node, op, node.Ancestors[0])
 	case *operators.GroupBy:
-		fn, err = makeGroupByOpNode(node, mig, op)
+		fn, err = makeGroupByOpNode(mig, node, op)
 	case *operators.View:
-		fn, err = makeViewOpNode(node, mig, op)
+		fn, err = makeViewOpNode(mig, node, op)
 	case *operators.NodeTableRef:
-		fn, err = makeTableRefNode(op, mig)
+		fn, err = makeTableRefNode(mig, op)
 	case *operators.Union:
-		fn, err = makeUnionNode(node, mig, op)
+		fn, err = makeUnionNode(mig, node, op)
 	case *operators.TopK:
-		fn, err = makeTopKNode(node, mig, op)
+		fn, err = makeTopKNode(mig, node, op)
 	case *operators.Distinct:
-		fn = makeDistinctNode(node, mig)
+		fn = makeDistinctNode(mig, node)
 	case *operators.NullFilter:
-		fn, err = makeNullFilterNode(node, node.Ancestors[0], mig, op)
+		fn, err = makeNullFilterNode(mig, node, op, node.Ancestors[0])
 	default:
 		panic(fmt.Sprintf("opNodeToFlowParts doesn't know '%T", node.Op))
 	}
@@ -126,7 +126,7 @@ func opNodeToFlowParts(node *operators.Node, mig Migration) (operators.FlowNode,
 	return fn, nil
 }
 
-func makeUnionNode(node *operators.Node, mig Migration, op *operators.Union) (operators.FlowNode, error) {
+func makeUnionNode(mig Migration, node *operators.Node, op *operators.Union) (operators.FlowNode, error) {
 	colNames := columnOpNames(op.Columns)
 	emitColumnID := make(map[graph.NodeIdx][]int)
 	for i, ancestor := range node.Ancestors {
@@ -138,7 +138,7 @@ func makeUnionNode(node *operators.Node, mig Migration, op *operators.Union) (op
 	}, nil
 }
 
-func makeTopKNode(node *operators.Node, mig Migration, op *operators.TopK) (operators.FlowNode, error) {
+func makeTopKNode(mig Migration, node *operators.Node, op *operators.TopK) (operators.FlowNode, error) {
 	colnames := columnOpNames(node.Columns)
 	parentNa, err := node.Ancestors[0].FlowNodeAddr()
 	if err != nil {
@@ -158,11 +158,11 @@ func makeTopKNode(node *operators.Node, mig Migration, op *operators.TopK) (oper
 	}, nil
 }
 
-func makeTableRefNode(op *operators.NodeTableRef, mig Migration) (operators.FlowNode, error) {
+func makeTableRefNode(mig Migration, op *operators.NodeTableRef) (operators.FlowNode, error) {
 	if !op.Node.Flow.Valid() {
 		// if the referenced table has never been added to the flow graph before, we must do so now
 		var err error
-		op.Node.Flow, err = makeBaseOpNode(op.Node.Name, op.Node.Op.(*operators.Table), mig)
+		op.Node.Flow, err = makeBaseOpNode(mig, op.Node, op.Node.Op.(*operators.Table))
 		if err != nil {
 			return operators.FlowNode{}, err
 		}
@@ -173,7 +173,7 @@ func makeTableRefNode(op *operators.NodeTableRef, mig Migration) (operators.Flow
 	}, nil
 }
 
-func makeViewOpNode(node *operators.Node, mig Migration, op *operators.View) (operators.FlowNode, error) {
+func makeViewOpNode(mig Migration, node *operators.Node, op *operators.View) (operators.FlowNode, error) {
 	parent := node.Ancestors[0]
 	na, err := parent.FlowNodeAddr()
 	if err != nil {
@@ -203,7 +203,7 @@ func makeViewOpNode(node *operators.Node, mig Migration, op *operators.View) (op
 	panic("could not make the view node op")
 }
 
-func makeGroupByOpNode(node *operators.Node, mig Migration, op *operators.GroupBy) (operators.FlowNode, error) {
+func makeGroupByOpNode(mig Migration, node *operators.Node, op *operators.GroupBy) (operators.FlowNode, error) {
 	var (
 		colnames   []string
 		aggrExprs  []flownode.AggrExpr
@@ -322,7 +322,7 @@ func checkParametersInExpression(ast sqlparser.SQLNode) error {
 	}, ast)
 }
 
-func makeFilterOpNode(node *operators.Node, mig Migration, op *operators.Filter) (operators.FlowNode, error) {
+func makeFilterOpNode(mig Migration, node *operators.Node, op *operators.Filter) (operators.FlowNode, error) {
 	parentNa, err := node.Ancestors[0].FlowNodeAddr()
 	if err != nil {
 		return operators.FlowNode{}, err
@@ -349,7 +349,7 @@ func makeFilterOpNode(node *operators.Node, mig Migration, op *operators.Filter)
 	}, nil
 }
 
-func makeJoinOpNode(node *operators.Node, mig Migration, op *operators.Join) (operators.FlowNode, error) {
+func makeJoinOpNode(mig Migration, node *operators.Node, op *operators.Join) (operators.FlowNode, error) {
 	leftNa, err := node.Ancestors[0].FlowNodeAddr()
 	if err != nil {
 		return operators.FlowNode{}, err
@@ -365,7 +365,7 @@ func makeJoinOpNode(node *operators.Node, mig Migration, op *operators.Join) (op
 	}, nil
 }
 
-func makeProjectOpNode(name string, parent *operators.Node, op *operators.Project, mig Migration) (operators.FlowNode, error) {
+func makeProjectOpNode(mig Migration, node *operators.Node, op *operators.Project, parent *operators.Node) (operators.FlowNode, error) {
 	parentNa, err := parent.FlowNodeAddr()
 	if err != nil {
 		return operators.FlowNode{}, err
@@ -386,11 +386,11 @@ func makeProjectOpNode(name string, parent *operators.Node, op *operators.Projec
 
 	return operators.FlowNode{
 		Age:     operators.FlowNodeNew,
-		Address: mig.AddIngredient(name, colNames, flownode.NewProject(parentNa, op.Projections)),
+		Address: mig.AddIngredient(node.Name, colNames, flownode.NewProject(parentNa, op.Projections)),
 	}, nil
 }
 
-func makeNullFilterNode(node, parent *operators.Node, mig Migration, op *operators.NullFilter) (operators.FlowNode, error) {
+func makeNullFilterNode(mig Migration, node *operators.Node, op *operators.NullFilter, parent *operators.Node) (operators.FlowNode, error) {
 	parentNa, err := parent.FlowNodeAddr()
 	if err != nil {
 		return operators.FlowNode{}, err
@@ -411,7 +411,7 @@ func columnOpNames(columns []*operators.Column) (names []string) {
 	return
 }
 
-func makeBaseOpNode(name string, op *operators.Table, mig Migration) (operators.FlowNode, error) {
+func makeBaseOpNode(mig Migration, node *operators.Node, op *operators.Table) (operators.FlowNode, error) {
 	var columnNames []string
 	var columnTypes []boostpb.Type
 
@@ -465,11 +465,11 @@ func makeBaseOpNode(name string, op *operators.Table, mig Migration) (operators.
 	}
 
 	base := flownode.NewExternalBase(keyColumnIds, columnTypes, op.Keyspace)
-	address := mig.AddBase(name, columnNames, base)
+	address := mig.AddBase(node.Name, columnNames, base)
 	return operators.FlowNode{Age: operators.FlowNodeNew, Address: address}, nil
 }
 
-func makeDistinctNode(node *operators.Node, mig Migration) operators.FlowNode {
+func makeDistinctNode(mig Migration, node *operators.Node) operators.FlowNode {
 	src := node.Ancestors[0].Flow.Address
 
 	var groupBy []int

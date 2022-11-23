@@ -56,8 +56,6 @@ message Node {
   repeated uint32 children = 7 [(gogoproto.casttype) = "LocalNodeIndex"];
 
   bool taken = 8;
-  bool purge = 9;
-
   Sharding sharding = 10;
 
   message Base {

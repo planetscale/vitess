@@ -8,6 +8,10 @@ type Query struct {
 	View  *Node
 }
 
+func (q *Query) Leaf() graph.NodeIdx {
+	return q.View.Flow.Address
+}
+
 func NewQuerySingleton(name string, node *Node) *Query {
 	return &Query{
 		Name:  name,
