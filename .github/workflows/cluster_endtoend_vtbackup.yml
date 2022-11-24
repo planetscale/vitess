@@ -1,14 +1,14 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (19)
+name: Cluster (vtbackup)
 on: [push]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (19)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtbackup)')
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (19)
+    name: Run endtoend tests on Cluster (vtbackup)
     runs-on: ubuntu-20.04
     timeout-minutes: 60
 
@@ -88,4 +88,4 @@ jobs:
 
         set -x
 
-        eatmydata -- go run test.go -docker=false -follow -shard 19
+        eatmydata -- go run test.go -docker=false -follow -shard vtbackup
