@@ -29,9 +29,8 @@ import (
 type mysqlVersion string
 
 const (
-	mysql57    mysqlVersion = "mysql57"
-	mysql80    mysqlVersion = "mysql80"
-	mariadb103 mysqlVersion = "mariadb103"
+	mysql57 mysqlVersion = "mysql57"
+	mysql80 mysqlVersion = "mysql80"
 
 	defaultMySQLVersion = mysql80
 )
@@ -40,11 +39,11 @@ type mysqlVersions []mysqlVersion
 
 var (
 	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
-	allMySQLVersions     = []mysqlVersion{mysql57, mysql80}
+	allMySQLVersions     = []mysqlVersion{mysql80}
 )
 
 var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb103}
+	unitTestDatabases = []mysqlVersion{mysql80}
 )
 
 const (
@@ -78,7 +77,6 @@ var (
 		"xb_backup",
 		"21",
 		"22",
-		"24",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
@@ -344,6 +342,8 @@ func generateClusterWorkflows(list []string, tpl string) {
 			}
 			if mysqlVersion == mysql57 {
 				test.Platform = string(mysql57)
+			} else if mysqlVersion == mysql80 {
+				test.Platform = string(mysql80)
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 				test.LimitResourceUsage = true

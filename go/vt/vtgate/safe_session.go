@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -546,10 +547,30 @@ func (session *SafeSession) SetReservedConn(reservedConn bool) {
 
 // SetPreQueries returns the prequeries that need to be run when reserving a connection
 func (session *SafeSession) SetPreQueries() (result []string) {
+	var keys []string
 	session.GetSystemVariables(func(k string, v string) {
-		result = append(result, fmt.Sprintf("set @@%s = %s", k, v))
+		keys = append(keys, k)
 	})
-	return
+
+	if len(keys) == 0 {
+		return nil
+	}
+
+	// sort the keys
+	sort.Strings(keys)
+
+	// build the query using sorted keys
+	var preQuery strings.Builder
+	first := true
+	for _, k := range keys {
+		if first {
+			preQuery.WriteString(fmt.Sprintf("set @@%s = %s", k, session.SystemVariables[k]))
+			first = false
+		} else {
+			preQuery.WriteString(fmt.Sprintf(", @@%s = %s", k, session.SystemVariables[k]))
+		}
+	}
+	return []string{preQuery.String()}
 }
 
 // SetLockSession sets the lock session.

@@ -89,6 +89,7 @@ func init() {
 	servenv.OnParseFor("vtgateclienttest", registerTabletTypeFlag)
 	servenv.OnParseFor("vtcombo", registerTabletTypeFlag)
 	servenv.OnParseFor("vtexplain", registerTabletTypeFlag)
+	servenv.OnParseFor("vtboost", registerTabletTypeFlag)
 }
 
 // Executor is the engine that executes queries by utilizing

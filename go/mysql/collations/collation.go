@@ -23,8 +23,6 @@ import (
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-//go:generate go run ./tools/makecolldata/ -embed=true
-
 // ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
 

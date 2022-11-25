@@ -6,38 +6,11 @@ jobs:
     name: End-to-End Test
     runs-on: ubuntu-20.04
     steps:
-    - name: Check if workflow needs to be skipped
-      id: skip-workflow
+    - name: Configure git private repo access
+      env:
+        GITHUB_TOKEN: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
       run: |
-        skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
-        echo Skip ${skip}
-        echo "::set-output name=skip-workflow::${skip}"
-
-    - name: Check out code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v2
-
-    - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: frouioui/paths-filter@main
-      id: changes
-      with:
-        token: ''
-        filters: |
-          end_to_end:
-            - 'go/**/*.go'
-            - 'test.go'
-            - 'Makefile'
-            - 'build.env'
-            - 'go.[sumod]'
-            - 'proto/*.proto'
-            - 'tools/**'
-            - 'config/**'
-            - 'bootstrap.sh'
-            - '.github/workflows/endtoend.yml'
+        git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
     - name: Set up Go
       uses: actions/setup-go@v3
@@ -45,13 +18,11 @@ jobs:
         go-version: 1.18.7
 
     - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
     # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
     - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
     # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
@@ -60,7 +31,6 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Get dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
@@ -71,17 +41,14 @@ jobs:
         go mod download
 
     - name: Run make minimaltools
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         make minimaltools
 
     - name: Build
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         make build
 
     - name: endtoend
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
         eatmydata -- tools/e2e_test_runner.sh

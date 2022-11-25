@@ -173,14 +173,14 @@ func TestUpdateEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
 	)}
 	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, res)
 
-	_, err := executorExec(executor, "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2", nil)
+	_, err := executorExec(executor, "update t2_lookup set lu_col = 5 where wo_lu_col = 2", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where wo_lu_col = 2 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2",
+			Sql:           "update t2_lookup set lu_col = 5 where wo_lu_col = 2",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
@@ -779,14 +779,14 @@ func TestUpdateEqualWithMultipleLookupVindex(t *testing.T) {
 		"1|2|2|2|2|2|1|0",
 	)})
 
-	_, err := executorExec(executor, "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1", nil)
+	_, err := executorExec(executor, "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where wo_lu_col = 2 and lu_col = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1",
+			Sql:           "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
@@ -834,14 +834,14 @@ func TestUpdateUseHigherCostVindexIfBackfilling(t *testing.T) {
 		"1|2|2|2|2|2|2|0",
 	)})
 
-	_, err := executorExec(executor, "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in (1, 2)", nil)
+	_, err := executorExec(executor, "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in (1, 2)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col, lu_col = 5 from t2_lookup where wo_lu_col = 2 and lu_col in (1, 2) for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in (1, 2)",
+			Sql:           "update t2_lookup set lu_col = 5 where wo_lu_col = 2 and lu_col in (1, 2)",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
@@ -894,14 +894,14 @@ func TestDeleteEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
 	)}
 	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, res)
 
-	_, err := executorExec(executor, "delete from t2_wo_lookup where wo_lu_col = 1", nil)
+	_, err := executorExec(executor, "delete from t2_lookup where wo_lu_col = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col from t2_lookup where wo_lu_col = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "delete from t2_wo_lookup where wo_lu_col = 1",
+			Sql:           "delete from t2_lookup where wo_lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
@@ -978,14 +978,14 @@ func TestDeleteEqualWithMultipleLookupVindex(t *testing.T) {
 		"1|1|1|1|1|1|1",
 	)})
 
-	_, err := executorExec(executor, "delete from t2_wo_lookup where wo_lu_col = 1 and lu_col = 1", nil)
+	_, err := executorExec(executor, "delete from t2_lookup where wo_lu_col = 1 and lu_col = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col from t2_lookup where wo_lu_col = 1 and lu_col = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "delete from t2_wo_lookup where wo_lu_col = 1 and lu_col = 1",
+			Sql:           "delete from t2_lookup where wo_lu_col = 1 and lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 
@@ -1058,14 +1058,14 @@ func TestDeleteUseHigherCostVindexIfBackfilling(t *testing.T) {
 		"1|1|1|1|1|1|2",
 	)})
 
-	_, err := executorExec(executor, "delete from t2_wo_lookup where wo_lu_col = 1 and lu_col in (1, 2)", nil)
+	_, err := executorExec(executor, "delete from t2_lookup where wo_lu_col = 1 and lu_col in (1, 2)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
 			Sql:           "select id, wo_lu_col, erl_lu_col, srl_lu_col, nrl_lu_col, nv_lu_col, lu_col from t2_lookup where wo_lu_col = 1 and lu_col in (1, 2) for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "delete from t2_wo_lookup where wo_lu_col = 1 and lu_col in (1, 2)",
+			Sql:           "delete from t2_lookup where wo_lu_col = 1 and lu_col in (1, 2)",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
 

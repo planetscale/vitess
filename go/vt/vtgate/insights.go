@@ -29,10 +29,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/segmentio/kafka-go"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
+
+	"github.com/segmentio/kafka-go"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 

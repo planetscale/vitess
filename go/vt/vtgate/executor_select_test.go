@@ -747,8 +747,6 @@ func TestSelectLastInsertId(t *testing.T) {
 }
 
 func TestReplLag(t *testing.T) {
-	// Special setup: Don't use createExecutorEnv.
-	*GatewayImplementation = tabletGatewayImplementation
 	cell := "maxrepl"
 	hc := discovery.NewFakeHealthCheck(nil)
 	ks1 := "TestReplLag1"

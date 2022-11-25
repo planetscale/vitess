@@ -170,7 +170,7 @@ var executorVSchema = `
         		"from": "lu_col",
         		"to": "keyspace_id"
       		},
-      		"owner": "t2_wo_lookup"
+      		"owner": "t2_lookup"
     	},
 		"regional_vdx": {
 			"type": "region_experimental",
@@ -334,7 +334,7 @@ var executorVSchema = `
 				}
 			]
 		},
-		"t2_wo_lookup": {
+		"t2_lookup": {
       		"column_vindexes": [
 				{
 				  	"column": "id",

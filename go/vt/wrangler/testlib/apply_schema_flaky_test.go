@@ -41,7 +41,7 @@ import (
 // --allow_long_unavailability flag of vtctl ApplySchema.
 // Only if the flag is specified, potentially long running schema changes are
 // allowed.
-func TestApplySchema_AllowLongUnavailability(t *testing.T) {
+func TestApplySchemaAllowLongUnavailability(t *testing.T) {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)

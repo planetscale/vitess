@@ -87,7 +87,12 @@ endif
 	bash ./build.env
 	go env -w GOPRIVATE=github.com/planetscale/*
 	# build all the binaries by default with CGO enabled for now because of Boost
-	CGO_ENABLED=1 go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	# Binaries will be placed in ${VTROOTBIN}.
+	CGO_ENABLED=1 go build \
+		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
+		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -o ${VTROOTBIN} ./go/...
+
 	# build vtorc with CGO, because it depends on sqlite
 	CGO_ENABLED=1 go build \
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
@@ -102,12 +107,21 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	# In order to cross-compile, go install requires GOBIN to be unset
-	export GOBIN=""
-	# For the specified GOOS + GOARCH, build all the binaries by default with CGO disabled
-	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
-	# Cross-compiling w/ cgo isn't trivial and we don't need vtboost or vtorc,
-	# so we can skip building it
+
+	# For the specified GOOS + GOARCH, build all the binaries by default
+	# with CGO disabled. Binaries will be placed in
+	# ${VTROOTBIN}/${GOOS}_${GOARG}.
+	mkdir -p ${VTROOTBIN}/${GOOS}_${GOARCH}
+	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build         \
+		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
+		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -o ${VTROOTBIN}/${GOOS}_${GOARCH} ./go/...
+
+	@if [ ! -x "${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet" ]; then \
+		echo "Missing vttablet at: ${VTROOTBIN}/${GOOS}_${GOARCH}." && exit; \
+	fi
+
+	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it
 
 debug:
 ifndef NOBANNER
@@ -126,21 +140,21 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup,vtboost} "$${PREFIX}/bin/"
+	cp "$${VTROOTBIN}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup,vtboost} "$${PREFIX}/bin/"
 
 # Will only work inside the docker bootstrap for now
 cross-install: cross-build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
 	# Still no vtorc for cross-compile
-	cp "/go/bin/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup,vtboost} "$${PREFIX}/bin/"
+	cp "${VTROOTBIN}/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
 install-local: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup,vtboost} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup,vtboost} "$${PREFIX}/bin/"
 
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
@@ -247,10 +261,10 @@ java_test:
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@$(shell go list -m -f '{{ .Version }}' google.golang.org/protobuf)
-	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0 # the GRPC compiler its own pinned version
-	go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@$(shell go list -m -f '{{ .Version }}' github.com/planetscale/vtprotobuf)
-	go install storj.io/drpc/cmd/protoc-gen-go-drpc@latest
+	GOBIN=$(VTROOTBIN) go install google.golang.org/protobuf/cmd/protoc-gen-go@$(shell go list -m -f '{{ .Version }}' google.golang.org/protobuf)
+	GOBIN=$(VTROOTBIN) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0 # the GRPC compiler its own pinned version
+	GOBIN=$(VTROOTBIN) go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@$(shell go list -m -f '{{ .Version }}' github.com/planetscale/vtprotobuf)
+	GOBIN=$(VTROOTBIN) go install storj.io/drpc/cmd/protoc-gen-go-drpc@latest
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -273,7 +287,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 		-I${PWD}/dist/vt-protoc-21.3/include:proto $(PROTO_SRCS)
 
 	$(VTROOT)/bin/protoc \
-		--go-drpc_out=. --plugin protoc-gen-go-drpc="${GOBIN}/protoc-gen-go-drpc" \
+		--go-drpc_out=. --plugin protoc-gen-go-drpc="${VTROOTBIN}/protoc-gen-go-drpc" \
 		-I${PWD}/dist/vt-protoc-21.3/include:proto proto/vtboost.proto
 
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto

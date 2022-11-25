@@ -18,10 +18,12 @@ import (
 	"vitess.io/vitess/go/boost/topo/client"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/proto/vtboost"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
@@ -232,6 +234,7 @@ func (test *Test) setupCluster() {
 	if err != nil {
 		test.Fatalf("failed to StartVtgate(): %v", err)
 	}
+	vtgate.QueryLogger = streamlog.New("VTGate", 10)
 
 	test.VtParams = &mysql.ConnParams{
 		Host: test.Vitess.Hostname,
