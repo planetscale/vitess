@@ -228,7 +228,7 @@ func TestGetSchema(t *testing.T) {
 	require.Nil(t, err)
 
 	t1Create := gjson.Get(res, "table_definitions.#(name==\"t1\").schema")
-	assert.Contains(t, []string{getSchemaT1Results8030, getSchemaT1Results80, getSchemaT1Results57}, t1Create.String())
+	assert.Equal(t, getSchemaT1Results, t1Create.String())
 	v1Create := gjson.Get(res, "table_definitions.#(name==\"v1\").schema")
 	assert.Equal(t, getSchemaV1Results, v1Create.String())
 }

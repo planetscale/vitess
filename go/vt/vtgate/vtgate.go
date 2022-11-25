@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+
 	boostwatcher "vitess.io/vitess/go/boost/topo/watcher"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"

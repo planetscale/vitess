@@ -441,9 +441,11 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t, vc)
 
 	insertInitialData(t)
+
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, "product", 2)
 	})
+
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
 }
 

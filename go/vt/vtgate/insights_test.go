@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"github.com/pkg/errors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/assert"

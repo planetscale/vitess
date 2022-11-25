@@ -39,8 +39,7 @@ const (
 )
 
 var (
-	// temporarily disable VDiff2 tests until the new work can be backported
-	runVDiffsSideBySide = false
+	runVDiffsSideBySide = true
 )
 
 func vdiff(t *testing.T, keyspace, workflow, cells string, v1, v2 bool, wantV2Result *expectedVDiff2Result) {

@@ -32,22 +32,17 @@ import (
 )
 
 const (
-	workflowName         = "wf1"
-	sourceKs             = "product"
-	targetKs             = "customer"
-	ksWorkflow           = targetKs + "." + workflowName
-	reverseKsWorkflow    = sourceKs + "." + workflowName + "_reverse"
-	tablesToMove         = "customer"
-	defaultCellName      = "zone1"
-	readQuery            = "select cid from customer"
-	workflowStartTimeout = 90 * time.Second
-	// Because of resource constraints -- and the fact that we have 30+ tablets and
-	// mysqld's along with the vtgate,vtctld,etcd in TestBasicV2Workflows -- the
-	// replication catchup in the final phases can be quite slow.
-	// MySQL 8.0 makes this noticably worse as it is generally more resource hungry
-	// and intensive than 5.7.
-	switchTrafficTimeout = 5 * time.Minute
+	workflowName      = "wf1"
+	sourceKs          = "product"
+	targetKs          = "customer"
+	ksWorkflow        = targetKs + "." + workflowName
+	reverseKsWorkflow = sourceKs + "." + workflowName + "_reverse"
+	tablesToMove      = "customer"
+	defaultCellName   = "zone1"
+	readQuery         = "select cid from customer"
+)
 
+const (
 	workflowActionCreate         = "Create"
 	workflowActionSwitchTraffic  = "SwitchTraffic"
 	workflowActionReverseTraffic = "ReverseTraffic"
@@ -113,14 +108,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 				args = append(args, "--source_shards", sourceShards)
 			}
 		} else {
-			args = append(args, "--source_shards", sourceShards,
-				"--target_shards", targetShards,
-				"--timeout", workflowStartTimeout.String())
+			args = append(args, "--source_shards", sourceShards, "--target_shards", targetShards)
 		}
-	case workflowActionSwitchTraffic:
-		args = append(args, "--timeout", switchTrafficTimeout.String())
 	}
-
 	if cells != "" {
 		args = append(args, "--cells", cells)
 	}
@@ -254,15 +244,6 @@ func getCurrentState(t *testing.T) string {
 func TestBasicV2Workflows(t *testing.T) {
 	defaultRdonly = 1
 	defer func() { defaultRdonly = 0 }()
-
-	extraVTTabletArgs = []string{
-		"--dba_pool_size=5",
-		"--app_pool_size=8",
-		"--queryserver-config-pool-size=10",
-		"--queryserver-config-stream-pool-size=10",
-		"--queryserver-config-transaction-cap=10",
-	}
-
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
 	defer vc.TearDown(t)
@@ -276,43 +257,15 @@ func TestBasicV2Workflows(t *testing.T) {
 	log.Flush()
 }
 
-func waitForWorkflowToStart(t *testing.T, ksWorkflow string) {
-	done := false
-	ticker := time.NewTicker(100 * time.Millisecond)
-	timer := time.NewTimer(workflowStartTimeout)
-	log.Infof("Waiting for workflow %s to start", ksWorkflow)
-	for {
-		select {
-		case <-ticker.C:
-			if done {
-				log.Infof("Workflow %s has started", ksWorkflow)
-				return
-			}
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
-			require.NoError(t, err)
-			done = true
-			state := ""
-			result := gjson.Get(output, "ShardStatuses")
-			result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each participating tablet
-				tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
-					if streamId.String() == "PrimaryReplicationStatuses" {
-						streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
-							state = attributeValue.Get("State").String()
-							if state != "Running" {
-								done = false // we need to wait for all streams to start
-							}
-							return true
-						})
-					}
-					return true
-				})
-				return true
-			})
+func getVtctldGRPCURL() string {
+	return net.JoinHostPort("localhost", strconv.Itoa(vc.Vtctld.GrpcPort))
+}
 
-		case <-timer.C:
-			require.FailNowf(t, "workflow %s not yet started", ksWorkflow)
-		}
-	}
+func applyShardRoutingRules(t *testing.T, rules string) {
+	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "ApplyShardRoutingRules", "--rules", rules})
+	log.Infof("ApplyShardRoutingRules err: %+v, output: %+v", err, output)
+	require.NoError(t, err, output)
+	require.NotNil(t, output)
 }
 
 /*
