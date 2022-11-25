@@ -59,10 +59,10 @@ The new commits in `release-15.0` will have to be manually cherry-picked into `l
 
 Of course any conflicts will need to be resolved for both.
 
-## Important!
-
 This [Google Sheet](https://docs.google.com/spreadsheets/d/1BBzIx-A3y7yCCnL8-FNV9SNiNoXk2LNL297h52Qpuwk/edit#gid=1511084840)
-keeps track of all played commits and should be updated as new commits get replayed.
+kept track of all commits replayed as part of the initial `git replay` process.
+
+Additional commits to fix incorrect merges/conflict resolutions were done in this [corrective PR](https://github.com/planetscale/vitess-private/pull/1362)
 
 # Vitess
 
