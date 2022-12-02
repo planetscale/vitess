@@ -206,7 +206,6 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			if conn, err := tabletconn.GetDialer()(ti.Tablet, true); err == nil {
 				// OK to use ctx here because it is not actually used by the underlying Close implementation
 				_ = conn.Close(ctx)
-				log.Infof("tablet picker found tablet %s", ti.Tablet.String())
 				return ti.Tablet, nil
 			}
 			// err found

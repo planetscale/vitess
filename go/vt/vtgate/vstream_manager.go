@@ -412,19 +412,16 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 }
 
 // getCells determines the availability zones to select tablets from.
-// 3 scenarios:
+// 2 scenarios:
 //
-// 1. No cells specified by the client via the gRPC request and vstreamCellAliasFallback = False
-// Tablets from the local cell of the VTGate will be selected by default
+// 1. No cells specified by the client via the gRPC request.
+// Tablets from the VTGate's local cell AND the cell alias that this cell belongs to will be selected,
+// with the local cell taking precedence.
 //
-// 2. No cells specified by the client via the gRPC request and vstreamCellAliasFallback = True
-// Tablets from the local cell AND the cell alias that the VTGate's local cell belongs to qill be selected/
-// The local cell of the VTGate will take precendence over any other cell in the alias.
-//
-// 3. Cells are specified by the client via the gRPC request
-// These cell will take precendence over vstreamCellAliasFallback and only tablets belonging to the specified cells will be selected.
+// 2. Cells are specified by the client via the gRPC request.
+// These cells will take precedence over the default local cell and its alias and only tablets belonging to the specified cells will be selected.
 // If the "local" tag is passed in as an option in the list of optCells,
-// the local cell of the VTGate will take precedence over any other cell specified.
+// the local cell of the VTGate (and then its alias) will take precedence over any other cell specified.
 func (vs *vstream) getCells(ctx context.Context) []string {
 	var cells []string
 	if vs.optCells != "" {
