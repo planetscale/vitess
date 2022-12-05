@@ -476,6 +476,10 @@ func (ii *Insights) handleMessage(record interface{}) {
 		return
 	}
 
+	if ls.Method == "Prepare" {
+		return // Don't record prepares
+	}
+
 	if ls.StmtType == "DDL" && ls.Error == nil {
 		buf, err := ii.makeSchemaChangeMessage(ls)
 

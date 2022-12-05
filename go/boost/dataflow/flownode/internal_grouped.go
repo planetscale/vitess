@@ -9,6 +9,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
@@ -31,17 +32,19 @@ type aggregationState interface {
 type AggrExpr interface {
 	setup(parent *Node)
 	state(schema boostpb.Type) aggregationState
-	description(detailed bool) string
+	description() string
+	defaultValue() sqltypes.Value
 }
 
 type Grouped struct {
 	src   boostpb.IndexPair
 	inner []AggrExpr
 
-	cols    int
-	groupBy []int
-	outKey  []int
-	colfix  []int
+	cols       int
+	scalar     bool
+	groupByKey []int
+	outKey     []int
+	colfix     []int
 }
 
 func (g *Grouped) internal() {}
@@ -102,12 +105,12 @@ func (g *Grouped) ColumnType(gra *graph.Graph[*Node], col int) boostpb.Type {
 	panic("unreachable")
 }
 
-func (g *Grouped) Description(detailed bool) string {
+func (g *Grouped) Description() string {
 	var descs []string
 	for _, inner := range g.inner {
-		descs = append(descs, inner.description(detailed))
+		descs = append(descs, inner.description())
 	}
-	descs = append(descs, fmt.Sprintf("GROUP BY(%v)", g.groupBy))
+	descs = append(descs, fmt.Sprintf("GROUP BY(%v)", g.groupByKey))
 	return strings.Join(descs, ", ")
 }
 
@@ -118,15 +121,15 @@ func (g *Grouped) OnConnected(graph *graph.Graph[*Node]) {
 	}
 
 	g.cols = len(srcn.Fields())
-	sort.Ints(g.groupBy)
+	sort.Ints(g.groupByKey)
 
-	g.outKey = make([]int, 0, len(g.groupBy))
-	for i := range g.groupBy {
+	g.outKey = make([]int, 0, len(g.groupByKey))
+	for i := range g.groupByKey {
 		g.outKey = append(g.outKey, i)
 	}
 
 	for c := 0; c < g.cols; c++ {
-		if slices.Contains(g.groupBy, c) {
+		if slices.Contains(g.groupByKey, c) {
 			g.colfix = append(g.colfix, c)
 		}
 	}
@@ -137,15 +140,50 @@ func (g *Grouped) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]boostpb.Inde
 }
 
 func getGroupValues(groupBy []int, row boostpb.Record) (group []boostpb.Value) {
-	group = make([]boostpb.Value, 0, len(groupBy)+1)
+	group = make([]boostpb.Value, 0, len(groupBy))
 	for _, idx := range groupBy {
 		group = append(group, row.Row.ValueAt(idx))
 	}
 	return group
 }
 
-func (g *Grouped) OnInput(usnode *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, replayKeyCol []int, domain *Map, st *state.Map) (processing.Result, error) {
+var defaultBogoKey = boostpb.RowFromVitess([]sqltypes.Value{sqltypes.NewInt64(0)})
+
+func (g *Grouped) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
+	us := you.LocalAddr()
+	db := states.Get(us)
+	if db == nil {
+		panic("grouped operators must have their own state materialized")
+	}
+
 	if len(rs) == 0 {
+		if g.scalar {
+			if partial := repl.Partial; partial != nil {
+				for key := range partial.Keys {
+					def := boostpb.NewRowBuilder(len(partial.KeyCols) + len(g.inner))
+					for i := range partial.KeyCols {
+						def.Add(key.ValueAt(i))
+					}
+					for _, inn := range g.inner {
+						def.AddVitess(inn.defaultValue())
+					}
+					rs = append(rs, def.Finish().ToRecord(true))
+				}
+			} else if repl.Full != nil && *repl.Full {
+				rows, found := db.Lookup(g.outKey, defaultBogoKey)
+				if !found {
+					panic("miss on fully materialized state")
+				}
+				if rows.Len() == 0 {
+					def := boostpb.NewRowBuilder(1 + len(g.inner))
+					def.AddVitess(sqltypes.NewInt64(0))
+					for _, inn := range g.inner {
+						def.AddVitess(inn.defaultValue())
+					}
+					rs = append(rs, def.Finish().ToRecord(true))
+				}
+			}
+		}
 		return processing.Result{Records: rs}, nil
 	}
 
@@ -158,29 +196,24 @@ func (g *Grouped) OnInput(usnode *Node, ex processing.Executor, from boostpb.Loc
 	for _, r := range rs {
 		hashrs = append(hashrs, boostpb.HashedRecord{
 			Record: r,
-			Hash:   r.Row.HashWithKey(&hasher, g.groupBy, pschema),
+			Hash:   r.Row.HashWithKey(&hasher, g.groupByKey, pschema),
 		})
 	}
 	slices.SortStableFunc(hashrs, func(a, b boostpb.HashedRecord) bool {
 		return bytes.Compare(a.Hash[:], b.Hash[:]) < 0
 	})
 
-	us := usnode.LocalAddr()
-	db := st.Get(us)
-	if db == nil {
-		panic("grouped operators must have their own state materialized")
-	}
-
 	var misses []processing.Miss
 	var lookups []processing.Lookup
 	var out []boostpb.Record
+	replKey := repl.Key()
 
 	handleGroup := func(groupRs []boostpb.HashedRecord, states []aggregationState) error {
-		group := boostpb.RowFromValues(getGroupValues(g.groupBy, groupRs[0].Record))
+		group := boostpb.RowFromValues(getGroupValues(g.groupByKey, groupRs[0].Record))
 
 		rs, found := db.Lookup(g.outKey, group)
 		if found {
-			if replayKeyCol != nil {
+			if replKey != nil {
 				lookups = append(lookups, processing.Lookup{
 					On:   us,
 					Cols: g.outKey,
@@ -192,8 +225,8 @@ func (g *Grouped) OnInput(usnode *Node, ex processing.Executor, from boostpb.Loc
 				misses = append(misses, processing.Miss{
 					On:         us,
 					LookupIdx:  g.outKey,
-					LookupCols: g.groupBy,
-					ReplayCols: replayKeyCol,
+					LookupCols: g.groupByKey,
+					ReplayCols: replKey,
 					Record:     r,
 				})
 			}
@@ -227,7 +260,7 @@ func (g *Grouped) OnInput(usnode *Node, ex processing.Executor, from boostpb.Loc
 			if nonEmpty {
 				out = append(out, rs.First().ToRecord(false))
 			}
-			var builder = boostpb.NewRowBuilder(len(g.groupBy) + len(newstate))
+			var builder = boostpb.NewRowBuilder(len(g.groupByKey) + len(newstate))
 			for _, v := range group.ToValues() {
 				builder.Add(v)
 			}
@@ -240,36 +273,36 @@ func (g *Grouped) OnInput(usnode *Node, ex processing.Executor, from boostpb.Loc
 	}
 
 	var groupRs []boostpb.HashedRecord
-	var states = make([]aggregationState, 0, len(g.inner))
+	var aggStates = make([]aggregationState, 0, len(g.inner))
 	for i, agg := range g.inner {
-		states = append(states, agg.state(usnode.schema[len(g.colfix)+i]))
+		aggStates = append(aggStates, agg.state(you.schema[len(g.colfix)+i]))
 	}
 
 	for _, r := range hashrs {
 		if len(groupRs) > 0 && groupRs[0].Hash != r.Hash {
-			err := handleGroup(groupRs, states)
+			err := handleGroup(groupRs, aggStates)
 			if err != nil {
 				return processing.Result{}, err
 			}
 			groupRs = groupRs[:0]
-			for _, st := range states {
+			for _, st := range aggStates {
 				st.reset()
 			}
 		}
 
-		for _, st := range states {
+		for _, st := range aggStates {
 			st.update(r.Record)
 		}
 		groupRs = append(groupRs, r)
 	}
 
-	for _, st := range states {
-		if st.len() == 0 {
+	for _, st := range aggStates {
+		if st.len() == 0 && len(rs) > 0 {
 			panic("diffs should not be empty")
 		}
 	}
 
-	err := handleGroup(groupRs, states)
+	err := handleGroup(groupRs, aggStates)
 	if err != nil {
 		return processing.Result{}, err
 	}
@@ -283,22 +316,24 @@ func (g *Grouped) OnInput(usnode *Node, ex processing.Executor, from boostpb.Loc
 
 var _ Internal = (*Grouped)(nil)
 
-func NewGrouped(src graph.NodeIdx, groupBy []int, op []AggrExpr) *Grouped {
+func NewGrouped(src graph.NodeIdx, scalar bool, groupByKey []int, op []AggrExpr) *Grouped {
 	return &Grouped{
-		src:     boostpb.NewIndexPair(src),
-		inner:   op,
-		groupBy: groupBy,
+		src:        boostpb.NewIndexPair(src),
+		inner:      op,
+		scalar:     scalar,
+		groupByKey: groupByKey,
 	}
 }
 
 func newGroupedFromProto(pgroup *boostpb.Node_InternalGrouped) *Grouped {
 	grp := &Grouped{
-		src:     *pgroup.Src,
-		inner:   nil,
-		cols:    pgroup.Cols,
-		groupBy: pgroup.GroupBy,
-		outKey:  pgroup.OutKey,
-		colfix:  pgroup.Colfix,
+		src:        *pgroup.Src,
+		inner:      nil,
+		cols:       pgroup.Cols,
+		scalar:     pgroup.Scalar,
+		groupByKey: pgroup.GroupByKey,
+		outKey:     pgroup.OutKey,
+		colfix:     pgroup.Colfix,
 	}
 
 	for _, agg := range pgroup.Inner {
@@ -309,11 +344,12 @@ func newGroupedFromProto(pgroup *boostpb.Node_InternalGrouped) *Grouped {
 
 func (g *Grouped) ToProto() *boostpb.Node_InternalGrouped {
 	pg := &boostpb.Node_InternalGrouped{
-		Src:     &g.src,
-		Cols:    g.cols,
-		GroupBy: g.groupBy,
-		OutKey:  g.outKey,
-		Colfix:  g.colfix,
+		Src:        &g.src,
+		Cols:       g.cols,
+		Scalar:     g.scalar,
+		GroupByKey: g.groupByKey,
+		OutKey:     g.outKey,
+		Colfix:     g.colfix,
 	}
 
 	for _, agg := range g.inner {

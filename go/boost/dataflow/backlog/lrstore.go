@@ -45,8 +45,8 @@ func (st *lrstore) rFinish(lr uintptr) {
 	atomic.AddInt64(&st.active[lr&0x1], -1)
 }
 
-func (st *lrstore) wRefresh(memsize *common.AtomicInt64) {
-	if st.changelog.IsEmpty() {
+func (st *lrstore) wRefresh(memsize *common.AtomicInt64, force bool) {
+	if !force && st.changelog.IsEmpty() {
 		return
 	}
 
@@ -143,9 +143,7 @@ func (st *lrstore) wEvict(_ *rand.Rand, bytesToEvict int64) {
 }
 
 func (st *lrstore) free(memsize *common.AtomicInt64) {
-	for !st.changelog.IsEmpty() {
-		st.wRefresh(memsize)
-	}
+	st.wRefresh(memsize, true)
 
 	st.tables[0].ForEach(func(rows *offheap.ConcurrentRows) {
 		rows.Free(memsize)

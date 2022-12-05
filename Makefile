@@ -128,6 +128,7 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
+	go env -w GOPRIVATE=github.com/planetscale/*
 	go build -trimpath \
 		$(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		-ldflags "$(shell tools/build_version_flags.sh)"  \

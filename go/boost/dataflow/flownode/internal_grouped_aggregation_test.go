@@ -13,7 +13,7 @@ func TestGroupedAggregation(t *testing.T) {
 	setup := func(t *testing.T, materialize bool) *MockGraph {
 		g := NewMockGraph(t)
 		s := g.AddBase("source", []string{"x", "y"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64), nil)
-		grp := NewGrouped(s.AsGlobal(), []int{0}, []AggrExpr{AggregationOver(AggregationCount, 1)})
+		grp := NewGrouped(s.AsGlobal(), false, []int{0}, []AggrExpr{AggregationOver(AggregationCount, 1)})
 
 		g.SetOp("identity", []string{"x", "ys"}, grp, materialize)
 		return g
@@ -22,7 +22,7 @@ func TestGroupedAggregation(t *testing.T) {
 	setupMulticol := func(t *testing.T, materialize bool) *MockGraph {
 		g := NewMockGraph(t)
 		s := g.AddBase("source", []string{"x", "y", "z"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64, sqltypes.Int64), nil)
-		grp := NewGrouped(s.AsGlobal(), []int{0, 2}, []AggrExpr{AggregationOver(AggregationCount, 1)})
+		grp := NewGrouped(s.AsGlobal(), false, []int{0, 2}, []AggrExpr{AggregationOver(AggregationCount, 1)})
 		g.SetOp("identity", []string{"x", "z", "ys"}, grp, materialize)
 		return g
 	}

@@ -65,7 +65,7 @@ func (w *Worker) ViewRead(ctx context.Context, req *boostpb.ViewReadRequest) (*b
 	}
 
 	if log := w.log.Check(zapcore.DebugLevel, "ViewRead"); log != nil {
-		log.Write(req.Key.Zap("key"))
+		log.Write(req.Key.Zap("key"), req.TargetNode.Zap())
 	}
 
 	var (

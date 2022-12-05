@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/sqltypes"
@@ -119,7 +120,7 @@ func (mg *MockGraph) SetOp(name string, fields []string, i Internal, materialize
 	mg.nodes = new(Map)
 
 	var topo = graph.NewTopoVisitor(mg.graph)
-	for topo.Next(mg.graph) {
+	for topo.Next() {
 		if topo.Current == mg.source {
 			continue
 		}
@@ -148,7 +149,7 @@ func (mg *MockGraph) One(src boostpb.IndexPair, u []boostpb.Record, remember boo
 	var ex DummyExecutor
 	id := mg.nut
 	n := mg.nodes.Get(id.AsLocal())
-	m, err := n.OnInput(&ex, src.AsLocal(), u, nil, mg.nodes, mg.states)
+	m, err := n.OnInput(&ex, src.AsLocal(), u, replay.Context{}, mg.nodes, mg.states)
 	if err != nil {
 		mg.t.Fatal(err)
 	}

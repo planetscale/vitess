@@ -200,6 +200,7 @@ func (g *GroupBy) AddColumns(ctx *PlanContext, columns Columns) (Columns, error)
 		needs = needs.Add(ctx, grpCol)
 		g.Grouping = g.Grouping.Add(ctx, grpCol)
 	}
+
 	return needs, nil
 }
 

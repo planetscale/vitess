@@ -2,6 +2,7 @@ package flownode
 
 import (
 	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
@@ -15,7 +16,7 @@ func (i *Identity) internal() {}
 
 func (i *Identity) dataflow() {}
 
-func (i *Identity) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, replayKeyCol []int, domain *Map, states *state.Map) (processing.Result, error) {
+func (i *Identity) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
 	return processing.Result{
 		Records: rs,
 	}, nil
@@ -45,7 +46,7 @@ func (i *Identity) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
 	return g.Value(i.src.AsGlobal()).ColumnType(g, col)
 }
 
-func (i *Identity) Description(_ bool) string {
+func (i *Identity) Description() string {
 	return "≡"
 }
 

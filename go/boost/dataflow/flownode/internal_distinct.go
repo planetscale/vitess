@@ -9,6 +9,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
@@ -52,12 +53,11 @@ func (d *Distinct) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
 	return g.Value(d.src.AsGlobal()).ColumnType(g, col)
 }
 
-func (d *Distinct) Description(detailed bool) string {
+func (d *Distinct) Description() string {
 	var params []string
 	for _, key := range d.params {
 		params = append(params, fmt.Sprintf("%d", key))
 	}
-
 	return fmt.Sprintf("Distinct (%s)", strings.Join(params, ", "))
 }
 
@@ -68,7 +68,7 @@ func (d *Distinct) OnCommit(you graph.NodeIdx, remap map[graph.NodeIdx]boostpb.I
 	d.src.Remap(remap)
 }
 
-func (d *Distinct) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, replayKeyCol []int, domain *Map, states *state.Map) (processing.Result, error) {
+func (d *Distinct) OnInput(you *Node, _ processing.Executor, _ boostpb.LocalNodeIndex, rs []boostpb.Record, _ replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
 	if len(rs) == 0 {
 		return processing.Result{Records: rs}, nil
 	}

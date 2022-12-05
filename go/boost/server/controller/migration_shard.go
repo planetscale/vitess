@@ -1,11 +1,9 @@
 package controller
 
 import (
-	"context"
 	"fmt"
 
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 )
@@ -35,8 +33,8 @@ func firstSharding(shardings map[graph.NodeIdx]boostpb.Sharding) boostpb.Shardin
 	panic("firstSharding on empty map")
 }
 
-func migrationShard(ctx context.Context, g *graph.Graph[*flownode.Node], new map[graph.NodeIdx]bool, topoList []graph.NodeIdx, shardingFactor uint) ([]graph.NodeIdx, map[graph.NodeIdxPair]graph.NodeIdx, error) {
-	log := common.Logger(ctx)
+func (mig *migration) shard(new map[graph.NodeIdx]bool, topoList []graph.NodeIdx, shardingFactor uint) ([]graph.NodeIdx, map[graph.NodeIdxPair]graph.NodeIdx, error) {
+	g := mig.target.ingredients
 	swaps := make(map[graph.NodeIdxPair]graph.NodeIdx)
 
 nodes:
@@ -78,15 +76,15 @@ nodes:
 				s = boostpb.NewShardingForcedNone()
 			}
 			if s.IsNone() {
-				log.Debug("de-sharding prior to poorly keyed reader", node.Zap())
+				mig.log.Debug("de-sharding prior to poorly keyed reader", node.Zap())
 			} else {
-				log.Debug("sharding reader", node.Zap())
+				mig.log.Debug("sharding reader", node.Zap())
 				// FIXME: this is a no-op
 				graphNode.AsReader().Shard(shardingFactor)
 			}
 
 			if s != inputShardings[ni] {
-				migrationReshard(ctx, new, swaps, g, ni, node, s)
+				mig.reshard(new, swaps, ni, node, s)
 			}
 			graphNode.ShardBy(s)
 			continue
@@ -106,7 +104,7 @@ nodes:
 				s = firstSharding(inputShardings)
 			}
 
-			log.Debug("preserving sharding for pass-through node", node.Zap())
+			mig.log.Debug("preserving sharding for pass-through node", node.Zap())
 
 			if graphNode.IsInternal() || graphNode.IsAnyBase() {
 				if c, shards, ok := s.ByColumn(); ok {
@@ -141,9 +139,9 @@ nodes:
 				// not supported yet -- force no sharding
 				// TODO: if we're sharding by a two-part key and need sharding by the *first* part
 				// of that key, we can probably re-use the existing sharding?
-				log.Error("de-sharding for lack of multi-key sharding support", node.Zap())
+				mig.log.Error("de-sharding for lack of multi-key sharding support", node.Zap())
 				for ni := range inputShardings {
-					migrationReshard(ctx, new, swaps, g, ni, node, boostpb.NewShardingForcedNone())
+					mig.reshard(new, swaps, ni, node, boostpb.NewShardingForcedNone())
 				}
 			}
 			continue
@@ -158,9 +156,9 @@ nodes:
 			}
 			wantSharding := wantShardingVec[0]
 			if graphNode.Fields()[wantSharding] == "bogokey" {
-				log.Debug("de-sharding node that operates on bogokey", node.Zap())
+				mig.log.Debug("de-sharding node that operates on bogokey", node.Zap())
 				for ni := range inputShardings {
-					migrationReshard(ctx, new, swaps, g, ni, node, boostpb.NewShardingForcedNone())
+					mig.reshard(new, swaps, ni, node, boostpb.NewShardingForcedNone())
 					inputShardings[ni] = boostpb.NewShardingForcedNone()
 				}
 				continue
@@ -186,7 +184,7 @@ nodes:
 				// weird operator -- needs an index in its output, which it generates.
 				// we need to have *no* sharding on our inputs!
 				for ni := range inputShardings {
-					migrationReshard(ctx, new, swaps, g, ni, node, boostpb.NewShardingForcedNone())
+					mig.reshard(new, swaps, ni, node, boostpb.NewShardingForcedNone())
 					inputShardings[ni] = boostpb.NewShardingForcedNone()
 				}
 				// ok to continue since standard shard_by is None
@@ -227,7 +225,7 @@ nodes:
 					for ni, col := range wantShardingInput {
 						needShardingShard := boostpb.NewShardingByColumn(col, shardingFactor)
 						if inputShardings[ni] != needShardingShard {
-							migrationReshard(ctx, new, swaps, g, ni, node, needShardingShard)
+							mig.reshard(new, swaps, ni, node, needShardingShard)
 							inputShardings[ni] = needShardingShard
 						}
 					}
@@ -242,7 +240,7 @@ nodes:
 			// do here is to simply force all our ancestors to be unsharded, but that would lead to
 			// a very suboptimal graph. instead, we try to choose a sharding that is "harmonious"
 			// with that of our inputs.
-			log.Debug("testing for harmonious sharding", node.Zap())
+			mig.log.Debug("testing for harmonious sharding", node.Zap())
 
 		outer:
 			for col := range graphNode.Fields() {
@@ -320,7 +318,7 @@ nodes:
 					for _, nc := range srcs {
 						needShardingShard := boostpb.NewShardingByColumn(nc.Column, shardingFactor)
 						if inputShardings[nc.Node] != needShardingShard {
-							migrationReshard(ctx, new, swaps, g, nc.Node, node, needShardingShard)
+							mig.reshard(new, swaps, nc.Node, node, needShardingShard)
 							inputShardings[nc.Node] = needShardingShard
 						}
 					}
@@ -349,7 +347,7 @@ nodes:
 		sharding := boostpb.NewShardingForcedNone()
 		for ni, inSharding := range inputShardings {
 			if !inSharding.IsNone() {
-				migrationReshard(ctx, new, swaps, g, ni, node, sharding)
+				mig.reshard(new, swaps, ni, node, sharding)
 				inputShardings[ni] = inSharding
 			}
 		}
@@ -371,9 +369,9 @@ nodes:
 
 	sharders:
 		for _, n := range newSharderSplit {
-			log.Debug("can we eliminate sharder?", n.Zap())
+			mig.log.Debug("can we eliminate sharder?", n.Zap())
 			if _, contains := gone[n]; contains {
-				log.Debug("no, parent is weird (already eliminated)")
+				mig.log.Debug("no, parent is weird (already eliminated)")
 				continue
 			}
 
@@ -543,15 +541,15 @@ nodes:
 
 	for _, n := range shardedSharders {
 		p := g.NeighborsDirected(n, graph.DirectionIncoming).First()
-		log.Error("preventing unsupported sharded shuffle", n.Zap())
+		mig.log.Error("preventing unsupported sharded shuffle", n.Zap())
 
-		migrationReshard(ctx, new, swaps, g, p, n, boostpb.NewShardingForcedNone())
+		mig.reshard(new, swaps, p, n, boostpb.NewShardingForcedNone())
 		g.Value(n).ShardBy(boostpb.NewShardingForcedNone())
 	}
 
 	var finalTopoList []graph.NodeIdx
 	topo := graph.NewTopoVisitor(g)
-	for topo.Next(g) {
+	for topo.Next() {
 		node := topo.Current
 		graphNode := g.Value(node)
 		if graphNode.IsSource() || graphNode.IsDropped() {
@@ -562,14 +560,14 @@ nodes:
 		}
 		finalTopoList = append(finalTopoList, node)
 	}
-	if err := migrationValidateSharding(g, finalTopoList, shardingFactor); err != nil {
+	if err := mig.validateSharding(finalTopoList, shardingFactor); err != nil {
 		return nil, nil, err
 	}
 	return finalTopoList, swaps, nil
 }
 
-func migrationReshard(ctx context.Context, new map[graph.NodeIdx]bool, swaps map[graph.NodeIdxPair]graph.NodeIdx, g *graph.Graph[*flownode.Node], src graph.NodeIdx, dst graph.NodeIdx, to boostpb.Sharding) {
-	log := common.Logger(ctx)
+func (mig *migration) reshard(new map[graph.NodeIdx]bool, swaps map[graph.NodeIdxPair]graph.NodeIdx, src graph.NodeIdx, dst graph.NodeIdx, to boostpb.Sharding) {
+	g := mig.target.ingredients
 	graphSrc := g.Value(src)
 
 	if graphSrc.Sharding().IsNone() && to.IsNone() {
@@ -589,7 +587,7 @@ func migrationReshard(ctx context.Context, new map[graph.NodeIdx]bool, swaps map
 		panic("unexpected reshard node")
 	}
 
-	log.Debug("told to shuffle", src.Zap(), dst.Zap())
+	mig.log.Debug("told to shuffle", src.Zap(), dst.Zap())
 
 	nodeIdx := g.AddNode(node)
 	new[nodeIdx] = true
@@ -606,7 +604,9 @@ func migrationReshard(ctx context.Context, new map[graph.NodeIdx]bool, swaps map
 	swaps[graph.NodeIdxPair{One: dst, Two: src}] = nodeIdx
 }
 
-func migrationValidateSharding(g *graph.Graph[*flownode.Node], topoList []graph.NodeIdx, shardingFactor uint) error {
+func (mig *migration) validateSharding(topoList []graph.NodeIdx, shardingFactor uint) error {
+	g := mig.target.ingredients
+
 	// ensure that each node matches the sharding of each of its ancestors, unless the ancestor is
 	// a sharder or a shard merger
 	for _, node := range topoList {

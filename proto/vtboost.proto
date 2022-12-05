@@ -55,8 +55,13 @@ message GraphvizRequest {
     QUERY = 2;
   };
   Clustering clustering = 1;
-  bool memory_stats = 2;
+  reserved 2; // was: memory_stats
   map<string, int64> force_memory_limits = 3;
+
+  // disable parts of the rendering if they're not needed; otherwise
+  // as much data as possible is shown on the graphviz
+  bool hide_memory_stats = 10;
+  bool hide_replay_paths = 11;
 };
 
 message GraphvizResponse {

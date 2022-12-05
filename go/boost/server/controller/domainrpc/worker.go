@@ -1,4 +1,4 @@
-package controller
+package domainrpc
 
 import (
 	"net"

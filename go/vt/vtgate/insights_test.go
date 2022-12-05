@@ -429,6 +429,19 @@ func TestInsightsInsertColumnOrderNormalization(t *testing.T) {
 		})
 }
 
+func TestInsightsPreparesExcluded(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			{sql: "select foo", responseTime: 5 * time.Second},
+			{sql: "select bar", responseTime: 5 * time.Second, method: "Prepare"},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryStatsBundleTopic, `select foo`, "query_count:1"),
+			expect(queryTopic, `select foo`),
+		})
+
+}
+
 func TestMakeKafkaKeyIsDeterministic(t *testing.T) {
 	insights, err := setup(t, "localhost:1234", "mumblefoo", "", "", setupOptions{})
 	require.NoError(t, err)
@@ -879,6 +892,7 @@ type insightsQuery struct {
 	normalized int
 
 	boostQueryID string
+	method       string
 }
 
 type insightsKafkaExpectation struct {
@@ -938,8 +952,14 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 		return nil
 	}
 	now := time.Now()
+
 	for _, q := range queries {
+		if q.method == "" {
+			q.method = "Execute"
+		}
+
 		ls := &logstats.LogStats{
+			Method:       q.method,
 			SQL:          q.sql,
 			RawSQL:       q.rawSQL,
 			IsNormalized: q.normalized == YES || (q.error == "" && q.normalized == AUTO),

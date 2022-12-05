@@ -432,6 +432,26 @@ func (m *GraphvizRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.HideReplayPaths {
+		i--
+		if m.HideReplayPaths {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x58
+	}
+	if m.HideMemoryStats {
+		i--
+		if m.HideMemoryStats {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x50
+	}
 	if len(m.ForceMemoryLimits) > 0 {
 		for k := range m.ForceMemoryLimits {
 			v := m.ForceMemoryLimits[k]
@@ -448,16 +468,6 @@ func (m *GraphvizRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			i--
 			dAtA[i] = 0x1a
 		}
-	}
-	if m.MemoryStats {
-		i--
-		if m.MemoryStats {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x10
 	}
 	if m.Clustering != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.Clustering))
@@ -2090,9 +2100,6 @@ func (m *GraphvizRequest) SizeVT() (n int) {
 	if m.Clustering != 0 {
 		n += 1 + sov(uint64(m.Clustering))
 	}
-	if m.MemoryStats {
-		n += 2
-	}
 	if len(m.ForceMemoryLimits) > 0 {
 		for k, v := range m.ForceMemoryLimits {
 			_ = k
@@ -2100,6 +2107,12 @@ func (m *GraphvizRequest) SizeVT() (n int) {
 			mapEntrySize := 1 + len(k) + sov(uint64(len(k))) + 1 + sov(uint64(v))
 			n += mapEntrySize + 1 + sov(uint64(mapEntrySize))
 		}
+	}
+	if m.HideMemoryStats {
+		n += 2
+	}
+	if m.HideReplayPaths {
+		n += 2
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -3795,26 +3808,6 @@ func (m *GraphvizRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field MemoryStats", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.MemoryStats = bool(v != 0)
 		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ForceMemoryLimits", wireType)
@@ -3928,6 +3921,46 @@ func (m *GraphvizRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ForceMemoryLimits[mapkey] = mapvalue
 			iNdEx = postIndex
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field HideMemoryStats", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.HideMemoryStats = bool(v != 0)
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field HideReplayPaths", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.HideReplayPaths = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

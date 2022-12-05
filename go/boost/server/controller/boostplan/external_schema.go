@@ -72,7 +72,7 @@ type SchemaInformation struct {
 	SkipColumns bool
 }
 
-func (si *SchemaInformation) semantics(keyspace string) semantics.SchemaInformation {
+func (si *SchemaInformation) Semantics(keyspace string) semantics.SchemaInformation {
 	return &ddlWrapper{
 		ddl:             si.Schema,
 		defaultKeyspace: keyspace,

@@ -60,7 +60,7 @@ func TestBasic(t *testing.T) {
 }
 
 func testBasic(t *testing.T, g *boosttest.Cluster) {
-	err := g.Controller().Migrate(context.Background(), func(_ context.Context, mig *controller.Migration) error {
+	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
 		a := mig.AddBase("a", []string{"a", "b"}, flownode.NewBase([]int{0}, schema, nil))
 		b := mig.AddBase("b", []string{"a", "b"}, flownode.NewBase([]int{0}, schema, nil))
@@ -103,7 +103,7 @@ func testShardedSuffle(t *testing.T, g *boosttest.Cluster) {
 	// in this test, we have a single sharded base node that is keyed on one column, and a sharded
 	// reader that is keyed by a different column. this requires a shuffle. we want to make sure
 	// that that shuffle happens correctly.
-	err := g.Controller().Migrate(context.Background(), func(_ context.Context, mig *controller.Migration) error {
+	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
 		a := mig.AddBase("base", []string{"id", "non_id"}, flownode.NewBase([]int{0}, schema, nil))
 		mig.MaintainAnonymous(a, []int{1})
@@ -158,7 +158,7 @@ func testBroadRecursingSubquery(t *testing.T, g *boosttest.Cluster) {
 	// exercise here.
 	//
 	// we're also going to make the join a left join so that we know the upquery will go to base_x.
-	err := g.Controller().Migrate(context.Background(), func(_ context.Context, mig *controller.Migration) error {
+	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schemaX := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64, sqltypes.Int64)
 		schemaY := boostpb.TestSchema(sqltypes.Int64)
 
@@ -211,7 +211,7 @@ func testBroadRecursingSubquery(t *testing.T, g *boosttest.Cluster) {
 func TestShardedInterdomainAncestors(t *testing.T) {
 	g := boosttest.New(t, boosttest.WithMemoryTopo(), boosttest.WithShards(2))
 
-	err := g.Controller().Migrate(context.Background(), func(ctx context.Context, mig *controller.Migration) error {
+	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
 		a := mig.AddBase("a", []string{"a", "b"}, flownode.NewBase(nil, schema, nil))
 
@@ -247,7 +247,7 @@ func TestShardedInterdomainAncestors(t *testing.T) {
 func TestWithMaterialization(t *testing.T) {
 	g := boosttest.New(t, boosttest.WithMemoryTopo(), boosttest.WithShards(2))
 
-	err := g.Controller().Migrate(context.Background(), func(ctx context.Context, mig *controller.Migration) error {
+	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
 		a := mig.AddBase("a", []string{"a", "b"}, flownode.NewBase(nil, schema, nil))
 		b := mig.AddBase("b", []string{"a", "b"}, flownode.NewBase(nil, schema, nil))
@@ -300,7 +300,7 @@ func TestWithPartialMaterialization(t *testing.T) {
 	var a graph.NodeIdx
 	var b graph.NodeIdx
 
-	err := g.Controller().Migrate(context.Background(), func(ctx context.Context, mig *controller.Migration) error {
+	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
 		a = mig.AddBase("a", []string{"a", "b"}, flownode.NewBase(nil, schema, nil))
 		b = mig.AddBase("b", []string{"a", "b"}, flownode.NewBase(nil, schema, nil))
@@ -315,7 +315,7 @@ func TestWithPartialMaterialization(t *testing.T) {
 	muta.Insert(sqltypes.Row{id, sqltypes.NewInt64(2)})
 	muta.Insert(sqltypes.Row{id, sqltypes.NewInt64(3)})
 
-	err = g.Controller().Migrate(context.Background(), func(ctx context.Context, mig *controller.Migration) error {
+	err = g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		u := flownode.NewUnion(map[graph.NodeIdx][]int{
 			a: {0, 1},
 			b: {0, 1},

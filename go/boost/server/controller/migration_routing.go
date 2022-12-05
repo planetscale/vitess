@@ -9,17 +9,16 @@
 package controller
 
 import (
-	"context"
-
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 )
 
 // Add in ingress and egress nodes as appropriate in the graph to facilitate cross-domain
 // communication.
-func migrationAddRouting(g *graph.Graph[*flownode.Node], source graph.NodeIdx, new map[graph.NodeIdx]bool, topolist []graph.NodeIdx) map[graph.NodeIdxPair]graph.NodeIdx {
+func (mig *migration) addRouting(new map[graph.NodeIdx]bool, topolist []graph.NodeIdx) map[graph.NodeIdxPair]graph.NodeIdx {
+	g := mig.target.ingredients
+
 	// find all new nodes in topological order. we collect first since we'll be mutating the graph
 	// below. it's convenient to have the nodes in topological order, because we then know that
 	// we'll first add egress nodes, and then the related ingress nodes. if we're ever required to
@@ -59,7 +58,7 @@ func migrationAddRouting(g *graph.Graph[*flownode.Node], source graph.NodeIdx, n
 
 			// parent is in other domain! does it already have an egress?
 			var ingress *graph.NodeIdx
-			if parent != source {
+			if !parent.IsSource() {
 				pchild := g.NeighborsDirected(parent, graph.DirectionOutgoing)
 
 			search:
@@ -146,7 +145,7 @@ func migrationAddRouting(g *graph.Graph[*flownode.Node], source graph.NodeIdx, n
 				panic("ingress has more than one parent")
 			}
 
-			if sender == source {
+			if sender.IsSource() {
 				// no need for egress from source
 				continue
 			}
@@ -199,8 +198,9 @@ func migrationAddRouting(g *graph.Graph[*flownode.Node], source graph.NodeIdx, n
 	return swaps
 }
 
-func migrationRoutingConnect(ctx context.Context, g *graph.Graph[*flownode.Node], domains map[boostpb.DomainIndex]*DomainHandle, workers map[WorkerID]*Worker, new map[graph.NodeIdx]bool) error {
-	log := common.Logger(ctx)
+func (mig *migration) routingConnect(new map[graph.NodeIdx]bool) error {
+	g := mig.target.ingredients
+
 	for node := range new {
 		n := g.Value(node)
 		if n.IsIngress() {
@@ -214,11 +214,10 @@ func migrationRoutingConnect(ctx context.Context, g *graph.Graph[*flownode.Node]
 			senderNode := g.Value(it.Current)
 			switch {
 			case senderNode.IsEgress():
-				log.Debug("migration routing: connect", it.Current.ZapField("egress"), node.ZapField("ingress"))
+				mig.log.Debug("migration routing: connect", it.Current.ZapField("egress"), node.ZapField("ingress"))
 
-				shards := domains[n.Domain()].Shards()
-				domain := domains[senderNode.Domain()]
-
+				domain := senderNode.Domain()
+				shards := mig.DomainShards(n.Domain())
 				if shards != 1 && !senderNode.Sharding().IsNone() {
 					for s := uint(0); s < shards; s++ {
 						var pkt boostpb.Packet
@@ -235,7 +234,7 @@ func migrationRoutingConnect(ctx context.Context, g *graph.Graph[*flownode.Node]
 								},
 							},
 						}
-						if err := domain.SendToHealthyShard(ctx, s, &pkt, workers); err != nil {
+						if err := mig.SendPacketToShard(domain, s, &pkt); err != nil {
 							return err
 						}
 					}
@@ -260,12 +259,13 @@ func migrationRoutingConnect(ctx context.Context, g *graph.Graph[*flownode.Node]
 							},
 						},
 					}}
-					if err := domain.SendToHealthy(ctx, &pkt, workers); err != nil {
+					if err := mig.SendPacket(domain, &pkt); err != nil {
 						return err
 					}
 				}
 			case senderNode.IsSharder():
-				shards := domains[n.Domain()].Shards()
+				domain := senderNode.Domain()
+				shards := mig.DomainShards(n.Domain())
 				update := &boostpb.Packet_UpdateSharder{
 					Node:   senderNode.LocalAddr(),
 					NewTxs: make([]*boostpb.Packet_UpdateSharder_Tx, 0, shards),
@@ -282,7 +282,7 @@ func migrationRoutingConnect(ctx context.Context, g *graph.Graph[*flownode.Node]
 
 				var pkt boostpb.Packet
 				pkt.Inner = &boostpb.Packet_UpdateSharder_{UpdateSharder: update}
-				if err := domains[senderNode.Domain()].SendToHealthy(ctx, &pkt, workers); err != nil {
+				if err := mig.SendPacket(domain, &pkt); err != nil {
 					return err
 				}
 			case senderNode.IsSource():

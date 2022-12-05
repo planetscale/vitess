@@ -2,9 +2,11 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -86,6 +88,8 @@ SELECT /*vt+ VIEW=v_sum_b PUBLIC */ SUM(num.b) FROM num WHERE num.a = :a;
 
 	time.Sleep(500 * time.Millisecond)
 	g.View("v_sum_b").Lookup(2).Expect([]sqltypes.Row{{sqltypes.NewDecimal("8")}})
+
+	g.View("v_sum_b").Lookup(420).Expect([]sqltypes.Row{{sqltypes.NULL}})
 }
 
 func TestProjections(t *testing.T) {
@@ -198,6 +202,9 @@ func TestAggregations(t *testing.T) {
 	g.View("op2").Lookup(2).Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 	})
+	g.View("op2").Lookup(420).Expect([]sqltypes.Row{
+		{sqltypes.NewInt64(0), sqltypes.NewInt64(0)},
+	})
 }
 
 func TestAggregationsAverage(t *testing.T) {
@@ -282,6 +289,57 @@ func TestStarIsOK(t *testing.T) {
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	_ = SetupExternal(t, boosttest.WithTestRecipe(recipe))
+}
+
+func TestAggregationPermutations(t *testing.T) {
+	const RecipeTemplate = `
+	CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a {{.Type}}, b {{.Type}}, PRIMARY KEY(pk));
+	SELECT /*vt+ VIEW=view_min PUBLIC */ MIN(num.a) FROM num{{if .Filter}} WHERE {{.Filter}}{{end}}{{if .Group}} GROUP BY {{.Group}}{{end}};
+	SELECT /*vt+ VIEW=view_max PUBLIC */ MAX(num.a) FROM num{{if .Filter}} WHERE {{.Filter}}{{end}}{{if .Group}} GROUP BY {{.Group}}{{end}};
+	SELECT /*vt+ VIEW=view_sum PUBLIC */ SUM(num.a) FROM num{{if .Filter}} WHERE {{.Filter}}{{end}}{{if .Group}} GROUP BY {{.Group}}{{end}};
+`
+	recipeTemplate := template.Must(template.New("recipe").Parse(RecipeTemplate))
+
+	type Recipe struct {
+		Type   string
+		Filter string
+		Group  string
+
+		From          int
+		To            int
+		Min, Max, Sum string
+	}
+
+	queries := []Recipe{
+		{Type: "BIGINT", From: 0, To: 17, Min: "[[INT64(0)]]", Max: "[[INT64(16)]]", Sum: "[[DECIMAL(136)]]"},
+		{Type: "BIGINT", From: 1, To: 17, Min: "[[INT64(1)]]", Max: "[[INT64(16)]]", Sum: "[[DECIMAL(136)]]"},
+		{Type: "BIGINT", Filter: "b = 0", From: 0, To: 17, Min: "[[INT64(0)]]", Max: "[[INT64(16)]]", Sum: "[[DECIMAL(40)]]"},
+		{Type: "BIGINT", Filter: "b = 420", From: 0, To: 17, Min: "[[NULL]]", Max: "[[NULL]]", Sum: "[[NULL]]"},
+		{Type: "BIGINT", From: 0, To: 0, Min: "[[NULL]]", Max: "[[NULL]]", Sum: "[[NULL]]"},
+		{Type: "DOUBLE", From: 0, To: 17, Min: "[[FLOAT64(0)]]", Max: "[[FLOAT64(16)]]", Sum: "[[FLOAT64(136)]]"},
+		{Type: "DOUBLE", From: 1, To: 17, Min: "[[FLOAT64(1)]]", Max: "[[FLOAT64(16)]]", Sum: "[[FLOAT64(136)]]"},
+		{Type: "DOUBLE", Filter: "b = 0", From: 0, To: 17, Min: "[[FLOAT64(0)]]", Max: "[[FLOAT64(16)]]", Sum: "[[FLOAT64(40)]]"},
+		{Type: "DOUBLE", Filter: "b = 420", From: 0, To: 17, Min: "[[NULL]]", Max: "[[NULL]]", Sum: "[[NULL]]"},
+		{Type: "DOUBLE", From: 0, To: 0, Min: "[[NULL]]", Max: "[[NULL]]", Sum: "[[NULL]]"},
+	}
+
+	for _, qq := range queries {
+		t.Run(fmt.Sprintf("%s_%s_%s", qq.Type, qq.Filter, qq.Group), func(t *testing.T) {
+			var recipeSQL strings.Builder
+			require.NoError(t, recipeTemplate.Execute(&recipeSQL, qq))
+
+			recipe := testrecipe.LoadSQL(t, recipeSQL.String())
+			g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+			for i := qq.From; i < qq.To; i++ {
+				g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i, i%4)
+			}
+
+			g.View("view_min").Lookup().ExpectStr(qq.Min)
+			g.View("view_max").Lookup().ExpectStr(qq.Max)
+			g.View("view_sum").Lookup().ExpectStr(qq.Sum)
+		})
+	}
 }
 
 func TestCustomBaseTypes(t *testing.T) {
@@ -499,7 +557,7 @@ func TestBasicEx(t *testing.T) {
 
 	g := boosttest.New(t, boosttest.WithTopoServer(ts), boosttest.WithFakeExecutor(executor), boosttest.WithShards(0), boosttest.WithInstances(4))
 
-	err := g.Controller().Migrate(context.Background(), func(_ context.Context, mig *controller.Migration) error {
+	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
 		a := mig.AddBase("a", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, executor.Keyspace()))
 		b := mig.AddBase("b", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, executor.Keyspace()))
@@ -989,7 +1047,7 @@ func TestUpqueryInPlan(t *testing.T) {
 
 func TestMultipleUpqueries(t *testing.T) {
 	const Recipe = `
-	CREATE TABLE tbl (pk BIGINT NOT NULL AUTO_INCREMENT, 
+	CREATE TABLE tbl (pk BIGINT NOT NULL AUTO_INCREMENT,
 	a BIGINT, b BIGINT, c BIGINT,
 	PRIMARY KEY(pk));
 
@@ -1055,4 +1113,92 @@ func TestTypeConversions(t *testing.T) {
 	conv3 := g.View("conv3")
 	conv3.LookupBvar([]any{"string-1", "string-2"}).ExpectLen(2)
 	conv3.LookupBvar([]any{"string-1", 1}).ExpectError()
+}
+
+func TestDeletedReader(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE tbl (pk BIGINT NOT NULL AUTO_INCREMENT,
+	a BIGINT, b BIGINT, c BIGINT,
+	PRIMARY KEY(pk));
+
+	SELECT /*vt+ VIEW=upquery0 PUBLIC */ tbl.pk FROM tbl WHERE tbl.a = :a and tbl.b = :b and tbl.c = :c;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 1; i <= 16; i++ {
+		g.TestExecute("INSERT INTO tbl (a, b, c) VALUES (%d, %d, %d)", i, i%4, i*10)
+	}
+
+	upquery0 := g.View("upquery0")
+	upquery0.Lookup(1, 1, 10).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
+
+	g.ApplyRecipeEx(&testrecipe.Recipe{}, false, true)
+
+	upquery0.Lookup(1, 1, 10).ExpectErrorEventually()
+}
+
+func TestEmptyPartialMaterializationAggregations(t *testing.T) {
+	const Recipe = `
+CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY KEY(pk));
+SELECT /*vt+ VIEW=agg0 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num WHERE num.a = :a;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 0; i < 12; i++ {
+		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i, 10*i)
+	}
+
+	agg0 := g.View("agg0")
+	agg0.Lookup(2).Expect([]sqltypes.Row{{sqltypes.NewDecimal("2"), sqltypes.NewInt64(1)}})
+	agg0.Lookup(420).Expect([]sqltypes.Row{{sqltypes.NULL, sqltypes.NewInt64(0)}})
+}
+
+func TestEmptyFullMaterializationAggregations(t *testing.T) {
+	const Recipe = `
+CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY KEY(pk));
+SELECT /*vt+ VIEW=agg0 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num;
+SELECT /*vt+ VIEW=agg1 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num GROUP BY num.a;
+SELECT /*vt+ VIEW=agg2 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num WHERE num.pk = :pk;
+SELECT /*vt+ VIEW=agg3 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num WHERE num.pk = :pk GROUP BY num.pk;
+`
+
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	agg0 := g.View("agg0")
+	agg1 := g.View("agg1")
+	agg2 := g.View("agg2")
+	agg3 := g.View("agg3")
+
+	agg0.Lookup().Expect([]sqltypes.Row{{sqltypes.NULL, sqltypes.NewInt64(0)}})
+	agg1.Lookup().Expect(nil)
+	agg2.Lookup(4).Expect([]sqltypes.Row{{sqltypes.NULL, sqltypes.NewInt64(0)}})
+	agg3.Lookup(4).Expect(nil)
+
+	for i := 0; i < 3; i++ {
+		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i, 10*i)
+	}
+
+	agg0.Lookup().Expect([]sqltypes.Row{{sqltypes.NewDecimal("3"), sqltypes.NewInt64(3)}})
+	agg1.Lookup().Expect([]sqltypes.Row{
+		{sqltypes.NewDecimal("2"), sqltypes.NewInt64(1)},
+		{sqltypes.NewDecimal("1"), sqltypes.NewInt64(1)},
+		{sqltypes.NewDecimal("0"), sqltypes.NewInt64(1)},
+	})
+	agg2.Lookup(4).Expect([]sqltypes.Row{{sqltypes.NULL, sqltypes.NewInt64(0)}})
+	agg3.Lookup(4).Expect(nil)
+
+	g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", 420, 420)
+
+	agg0.Lookup().Expect([]sqltypes.Row{{sqltypes.NewDecimal("423"), sqltypes.NewInt64(4)}})
+	agg1.Lookup().Expect([]sqltypes.Row{
+		{sqltypes.NewDecimal("420"), sqltypes.NewInt64(1)},
+		{sqltypes.NewDecimal("2"), sqltypes.NewInt64(1)},
+		{sqltypes.NewDecimal("1"), sqltypes.NewInt64(1)},
+		{sqltypes.NewDecimal("0"), sqltypes.NewInt64(1)},
+	})
+	agg2.Lookup(4).Expect([]sqltypes.Row{{sqltypes.NewDecimal("420"), sqltypes.NewInt64(1)}})
+	agg3.Lookup(4).Expect([]sqltypes.Row{{sqltypes.NewDecimal("420"), sqltypes.NewInt64(1)}})
 }

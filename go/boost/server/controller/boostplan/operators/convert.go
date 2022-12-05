@@ -206,8 +206,8 @@ func (conv *Converter) RemoveQuery(name string) {
 	}
 }
 
-func newTableRef(st *semantics.SemTable, tableNode *Node, v int64, id semantics.TableSet) (*Node, error) {
-	op := &NodeTableRef{TableID: id, Node: tableNode}
+func newTableRef(st *semantics.SemTable, tableNode *Node, v int64, id semantics.TableSet, hints sqlparser.IndexHints) (*Node, error) {
+	op := &NodeTableRef{TableID: id, Node: tableNode, Hints: hints}
 	n := &Node{
 		Name:    tableNode.Name,
 		Version: v,

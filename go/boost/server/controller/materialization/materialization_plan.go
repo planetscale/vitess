@@ -1,7 +1,6 @@
-package controller
+package materialization
 
 import (
-	"context"
 	"sort"
 
 	"github.com/tidwall/btree"
@@ -98,21 +97,20 @@ type domainTag struct {
 	domain boostpb.DomainIndex
 }
 
-type plan struct {
+type Plan struct {
 	m       *Materialization
-	graph   *graph.Graph[*flownode.Node]
 	node    graph.NodeIdx
-	domains map[boostpb.DomainIndex]*DomainHandle
-	workers map[WorkerID]*Worker
 	partial bool
 
+	// output of the plan
 	tags    map[common.ColumnSet][]domainTag
 	paths   map[boostpb.Tag][]graph.NodeIdx
+	state   *boostpb.Packet_PrepareState
 	pending []PendingReplay
 }
 
-func (p *plan) add(ctx context.Context, indexOn []int) error {
-	log := common.Logger(ctx)
+func (p *Plan) add(mig Migration, indexOn []int) error {
+	g := mig.Graph()
 	indexOnKey := common.NewColumnSet(indexOn)
 	if !p.partial && len(p.paths) > 0 {
 		// non-partial views should not have one replay path per index. that would cause us to
@@ -124,7 +122,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 		return nil
 	}
 
-	paths := p.findPaths(indexOn)
+	paths := p.findPaths(g, indexOn)
 
 	// all right, story time!
 	//
@@ -227,7 +225,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 
 	for pi, path := range paths {
 		for at, seg := range path {
-			n := p.graph.Value(seg.Node)
+			n := g.Value(seg.Node)
 			if n.IsUnion() && !n.IsShardMerger() {
 				suf := &suffix{
 					union: seg.Node,
@@ -281,10 +279,10 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 		// to the requesting shard, as opposed to all shards. in order to do that, that sharder
 		// needs to know who it is!
 		var partialUnicastSharder = graph.InvalidNode
-		if partial != nil && !p.graph.Value(path[len(path)-1].Node).Sharding().IsNone() {
+		if partial != nil && !g.Value(path[len(path)-1].Node).Sharding().IsNone() {
 			for n := len(path) - 1; n >= 0; n-- {
 				ni := path[n].Node
-				if p.graph.Value(ni).IsSharder() {
+				if g.Value(ni).IsSharder() {
 					partialUnicastSharder = ni
 				}
 			}
@@ -298,7 +296,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 		var lastDomain = boostpb.InvalidDomainIndex
 
 		for _, pe := range path {
-			dom := p.graph.Value(pe.Node).Domain()
+			dom := g.Value(pe.Node).Domain()
 			if lastDomain == boostpb.InvalidDomainIndex || dom != lastDomain {
 				segments = append(segments, segment{domain: dom})
 				lastDomain = dom
@@ -312,7 +310,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 			seg.path = append(seg.path, PathElement{Node: pe.Node, Columns: key})
 		}
 
-		log.Debug("domain replay path configured", zap.Any("path", segments), tag.Zap())
+		mig.Log().Debug("domain replay path configured", zap.Any("path", segments), tag.Zap())
 
 		var pending *PendingReplay
 		var seen = make(map[boostpb.DomainIndex]struct{})
@@ -340,7 +338,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 				}
 
 				locals = append(locals, &boostpb.ReplayPathSegment{
-					Node:       p.graph.Value(seg.Node).LocalAddr(),
+					Node:       g.Value(seg.Node).LocalAddr(),
 					ForceTagTo: forceTag,
 					PartialKey: seg.Columns,
 				})
@@ -362,7 +360,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 				Trigger:               nil,
 			}
 			if i == 0 {
-				setup.Source = p.graph.Value(seg.path[0].Node).LocalAddr()
+				setup.Source = g.Value(seg.path[0].Node).LocalAddr()
 			}
 
 			if partial != nil {
@@ -398,7 +396,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 					// the same shard as ourselves. this is because any answers from other
 					// shards would necessarily just be with records that do not match our
 					// sharding key anyway, and that we should thus never see.
-					srcSharding := p.graph.Value(segments[0].path[0].Node).Sharding()
+					srcSharding := g.Value(segments[0].path[0].Node).Sharding()
 					shards := common.UnwrapOr(srcSharding.TryGetShards(), uint(1))
 
 					var lookupKeyToShard *int
@@ -467,7 +465,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 						findMergers := func(segments []segment) bool {
 							for _, seg := range segments {
 								for _, pathseg := range seg.path {
-									if p.graph.Value(pathseg.Node).IsShardMerger() {
+									if g.Value(pathseg.Node).IsShardMerger() {
 										return true
 									}
 								}
@@ -493,7 +491,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 					setup.NotifyDone = true
 					pending = &PendingReplay{
 						Tag:          tag,
-						Source:       p.graph.Value(segments[0].path[0].Node).LocalAddr(),
+						Source:       g.Value(segments[0].path[0].Node).LocalAddr(),
 						SourceDomain: segments[0].domain,
 						TargetDomain: seg.domain,
 					}
@@ -505,7 +503,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 				// must either be an egress or a Sharder. If it's an egress, we need
 				// to tell it about this replay path so that it knows
 				// what path to forward replay packets on.
-				n := p.graph.Value(seg.path[len(seg.path)-1].Node)
+				n := g.Value(seg.path[len(seg.path)-1].Node)
 
 				var pkt boostpb.Packet
 				pkt.Inner = &boostpb.Packet_UpdateEgress_{
@@ -520,7 +518,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 				}
 
 				if n.IsEgress() {
-					if err := p.domains[seg.domain].SendToHealthy(ctx, &pkt, p.workers); err != nil {
+					if err := mig.SendPacket(seg.domain, &pkt); err != nil {
 						return err
 					}
 				} else {
@@ -532,9 +530,7 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 
 			var pkt boostpb.SyncPacket
 			pkt.Inner = &boostpb.SyncPacket_SetupReplayPath_{SetupReplayPath: setup}
-
-			sender := p.domains[seg.domain]
-			if err := sender.SendToHealthySync(ctx, &pkt, p.workers); err != nil {
+			if err := mig.SendPacketSync(seg.domain, &pkt); err != nil {
 				return err
 			}
 		}
@@ -552,11 +548,12 @@ func (p *plan) add(ctx context.Context, indexOn []int) error {
 	return nil
 }
 
-func (p *plan) finalize(ctx context.Context) (*boostpb.Packet_PrepareState, []PendingReplay, error) {
-	var state boostpb.Packet_PrepareState
+func (p *Plan) finalize(mig Migration) ([]PendingReplay, error) {
+	g := mig.Graph()
+	node := g.Value(p.node)
 
-	node := p.graph.Value(p.node)
-	state.Node = node.LocalAddr()
+	p.state = new(boostpb.Packet_PrepareState)
+	p.state.Node = node.LocalAddr()
 
 	if r := node.AsReader(); r != nil {
 		if p.partial {
@@ -565,9 +562,9 @@ func (p *plan) finalize(ctx context.Context) (*boostpb.Packet_PrepareState, []Pe
 			}
 
 			lastDomain := node.Domain()
-			numShards := p.domains[lastDomain].Shards()
+			numShards := mig.DomainShards(lastDomain)
 
-			state.State = &boostpb.Packet_PrepareState_PartialGlobal_{PartialGlobal: &boostpb.Packet_PrepareState_PartialGlobal{
+			p.state.State = &boostpb.Packet_PrepareState_PartialGlobal_{PartialGlobal: &boostpb.Packet_PrepareState_PartialGlobal{
 				Gid:  p.node,
 				Cols: len(node.Fields()),
 				Key:  r.Key(),
@@ -578,7 +575,7 @@ func (p *plan) finalize(ctx context.Context) (*boostpb.Packet_PrepareState, []Pe
 			},
 			}
 		} else {
-			state.State = &boostpb.Packet_PrepareState_Global_{Global: &boostpb.Packet_PrepareState_Global{
+			p.state.State = &boostpb.Packet_PrepareState_Global_{Global: &boostpb.Packet_PrepareState_Global{
 				Gid:  p.node,
 				Cols: len(node.Fields()),
 				Key:  r.Key(),
@@ -597,7 +594,7 @@ func (p *plan) finalize(ctx context.Context) (*boostpb.Packet_PrepareState, []Pe
 					Tags: tags,
 				})
 			}
-			state.State = &boostpb.Packet_PrepareState_PartialLocal_{PartialLocal: local}
+			p.state.State = &boostpb.Packet_PrepareState_PartialLocal_{PartialLocal: local}
 		} else {
 			local := &boostpb.Packet_PrepareState_IndexedLocal{}
 			for k := range p.tags {
@@ -605,16 +602,13 @@ func (p *plan) finalize(ctx context.Context) (*boostpb.Packet_PrepareState, []Pe
 					Key: k.ToSlice(),
 				})
 			}
-			state.State = &boostpb.Packet_PrepareState_IndexedLocal_{IndexedLocal: local}
+			p.state.State = &boostpb.Packet_PrepareState_IndexedLocal_{IndexedLocal: local}
 		}
 	}
 
-	err := p.domains[node.Domain()].SendToHealthy(ctx,
-		&boostpb.Packet{Inner: &boostpb.Packet_PrepareState_{PrepareState: &state}},
-		p.workers,
-	)
-	if err != nil {
-		return nil, nil, err
+	pkt := &boostpb.Packet{Inner: &boostpb.Packet_PrepareState_{PrepareState: p.state}}
+	if err := mig.SendPacket(node.Domain(), pkt); err != nil {
+		return nil, err
 	}
 
 	if !p.partial {
@@ -637,10 +631,10 @@ func (p *plan) finalize(ctx context.Context) (*boostpb.Packet_PrepareState, []Pe
 			panic("pending should be empty")
 		}
 	}
-	return &state, p.pending, nil
+	return p.pending, nil
 }
 
-func (p *plan) cutPath(path []PathElement) []PathElement {
+func (p *Plan) cutPath(path []PathElement) []PathElement {
 	var cut = 1
 	for cut < len(path) {
 		node := path[cut].Node
@@ -660,10 +654,9 @@ func (p *plan) cutPath(path []PathElement) []PathElement {
 	return path
 }
 
-func (p *plan) findPaths(columns []int) [][]PathElement {
-	graph := p.graph
+func (p *Plan) findPaths(g *graph.Graph[*flownode.Node], columns []int) [][]PathElement {
 	ni := p.node
-	paths := ProvenanceOf(graph, ni, columns, materializationPlanOnJoin(graph))
+	paths := ProvenanceOf(g, ni, columns, materializationPlanOnJoin(g))
 
 	// cut paths so they only reach to the the closest materialized node
 	for i, path := range paths {
@@ -682,13 +675,10 @@ func (p *plan) findPaths(columns []int) [][]PathElement {
 	return paths
 }
 
-func newMaterializationPlan(m *Materialization, g *graph.Graph[*flownode.Node], node graph.NodeIdx, domains map[boostpb.DomainIndex]*DomainHandle, workers map[WorkerID]*Worker) *plan {
-	return &plan{
+func newMaterializationPlan(m *Materialization, node graph.NodeIdx) *Plan {
+	return &Plan{
 		m:       m,
-		graph:   g,
 		node:    node,
-		domains: domains,
-		workers: workers,
 		partial: m.partial[node],
 
 		tags:  make(map[common.ColumnSet][]domainTag),

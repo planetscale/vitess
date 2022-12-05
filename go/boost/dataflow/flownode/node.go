@@ -7,6 +7,7 @@ import (
 
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
+	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
@@ -80,8 +81,8 @@ func (n *Node) OnCommit(remap map[graph.NodeIdx]boostpb.IndexPair) {
 	}
 }
 
-func (n *Node) OnInput(ex processing.Executor, from boostpb.LocalNodeIndex, data []boostpb.Record, replayKeyCol []int, domain *Map, states *state.Map) (processing.Result, error) {
-	return n.impl.(Internal).OnInput(n, ex, from, data, replayKeyCol, domain, states)
+func (n *Node) OnInput(ex processing.Executor, from boostpb.LocalNodeIndex, data []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
+	return n.impl.(Internal).OnInput(n, ex, from, data, repl, domain, states)
 }
 
 func (n *Node) Ancestors() []graph.NodeIdx {

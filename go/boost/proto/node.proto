@@ -155,9 +155,10 @@ message Node {
     repeated Aggregation inner = 2;
     int64 cols = 3 [(gogoproto.casttype) = "int"];
 
-    repeated int64 group_by = 4 [(gogoproto.casttype) = "int"];
-    repeated int64 out_key = 5 [(gogoproto.casttype) = "int"];
-    repeated int64 colfix = 6 [(gogoproto.casttype) = "int"];
+    bool scalar = 4;
+    repeated int64 group_by_key = 5 [(gogoproto.casttype) = "int"];
+    repeated int64 out_key = 6 [(gogoproto.casttype) = "int"];
+    repeated int64 colfix = 7 [(gogoproto.casttype) = "int"];
 
     message Aggregation {
       enum Kind {

@@ -1,23 +1,19 @@
 package operators
 
-import "vitess.io/vitess/go/boost/graph"
+import (
+	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+)
 
 type Query struct {
-	Name  string
-	Roots []*Node
-	View  *Node
+	Name     string
+	Roots    []*Node
+	View     *Node
+	SemTable *semantics.SemTable
 }
 
 func (q *Query) Leaf() graph.NodeIdx {
 	return q.View.Flow.Address
-}
-
-func NewQuerySingleton(name string, node *Node) *Query {
-	return &Query{
-		Name:  name,
-		Roots: []*Node{node},
-		View:  node,
-	}
 }
 
 type QueryFlowParts struct {

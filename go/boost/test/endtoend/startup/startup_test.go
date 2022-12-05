@@ -24,6 +24,7 @@ func TestVTBoostStartupAndCleanup(t *testing.T) {
 			t.Logf("liveness failed: %v", err)
 			continue
 		}
+		resp.Body.Close()
 
 		if resp.StatusCode != 200 {
 			t.Logf("liveness failed with status code %d", resp.StatusCode)

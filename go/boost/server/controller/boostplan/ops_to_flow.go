@@ -19,6 +19,7 @@ type Migration interface {
 	AddIngredient(name string, fields []string, impl flownode.NodeImpl) graph.NodeIdx
 	AddBase(name string, fields []string, b flownode.AnyBase) graph.NodeIdx
 	Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int)
+	MaintainAnonymous(n graph.NodeIdx, key []int)
 }
 
 func queryToFlowParts(mig Migration, tr *operators.TableReport, query *operators.Query) (*operators.QueryFlowParts, error) {
@@ -278,7 +279,7 @@ func makeGroupByOpNode(mig Migration, node *operators.Node, op *operators.GroupB
 		return operators.FlowNode{}, err
 	}
 
-	grouped := flownode.NewGrouped(parentNa, op.GroupingIdx, aggrExprs)
+	grouped := flownode.NewGrouped(parentNa, op.ScalarAggregation, op.GroupingIdx, aggrExprs)
 	groupingFlowNode := operators.FlowNode{
 		Age:     operators.FlowNodeNew,
 		Address: mig.AddIngredient(node.Name, colnames, grouped),

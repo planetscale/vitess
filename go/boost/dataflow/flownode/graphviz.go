@@ -2,20 +2,18 @@ package flownode
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/common/graphviz"
 	"vitess.io/vitess/go/mysql/collations"
 )
 
-type DescribeOptions struct {
+type GraphvizOptions struct {
 	Materialization boostpb.MaterializationStatus
 	ShowSchema      bool
 }
 
-func (n *Node) Describe(gvz *graphviz.Node, options DescribeOptions) {
+func (n *Node) RenderGraphviz(gvz *graphviz.Node, options GraphvizOptions) {
 	switch n.shardedBy.Mode {
 	case boostpb.Sharding_ByColumn, boostpb.Sharding_Random:
 		gvz.Attr["style"] = "filled,dashed"
@@ -26,7 +24,9 @@ func (n *Node) Describe(gvz *graphviz.Node, options DescribeOptions) {
 	var (
 		materialized string
 		sharding     string
-		addr         graphviz.Escaped
+		addr         = graphviz.Cell{
+			Attr: map[string]string{"PORT": "node_addr"},
+		}
 	)
 
 	if n.domain != boostpb.InvalidDomainIndex {
@@ -55,12 +55,12 @@ func (n *Node) Describe(gvz *graphviz.Node, options DescribeOptions) {
 	}
 
 	if n.index.IsEmpty() {
-		addr = "???"
+		addr.Txt = "???"
 	} else {
 		if n.index.HasLocal() {
-			addr = graphviz.Fmt("%d <FONT COLOR=\"grey\" POINT-SIZE=\"10\">(%d)</FONT>", n.index.AsGlobal(), n.index.AsLocal())
+			addr.Txt = graphviz.Fmt("%d<FONT COLOR=\"grey\">(%d)</FONT>", n.index.AsGlobal(), n.index.AsLocal())
 		} else {
-			addr = graphviz.Fmt("%d <FONT COLOR=\"grey\" POINT-SIZE=\"10\">(?)</FONT>", n.index.AsGlobal())
+			addr.Txt = graphviz.Fmt("%d<FONT COLOR=\"grey\">(?)</FONT>", n.index.AsGlobal())
 		}
 	}
 
@@ -69,32 +69,22 @@ func (n *Node) Describe(gvz *graphviz.Node, options DescribeOptions) {
 		gvz.Row("(source)")
 		return
 	case *Dropped:
-		gvz.Row(addr, "dropped")
+		gvz.Row(addr, "(dropped)")
+		return
 	case *Base:
 		gvz.Row(addr, graphviz.Fmt("<B>%s</B>", n.Name), materialized)
-		gvz.Row(sharding)
-		if !options.ShowSchema {
-			gvz.Row(strings.Join(n.fields, ", \n"))
-		}
 	case *ExternalBase:
 		gvz.Row(addr, graphviz.Fmt("<B>%s</B> <I>(external)</I>", n.Name))
 		gvz.Row(impl.keyspace)
-		gvz.Row(sharding)
-		if !options.ShowSchema {
-			gvz.Row(strings.Join(n.fields, ", \n"))
-		}
 	case *Ingress:
 		gvz.Row(addr, materialized)
 		gvz.Row("(ingress)")
-		gvz.Row(sharding)
 	case *Egress:
 		gvz.Row(addr)
 		gvz.Row("(egress)")
-		gvz.Row(sharding)
 	case *Sharder:
 		gvz.Row(addr)
 		gvz.Row("shard by " + n.fields[impl.ShardedBy()])
-		gvz.Row(sharding)
 	case *Reader:
 		var key string
 		if impl.Key() == nil {
@@ -104,39 +94,41 @@ func (n *Node) Describe(gvz *graphviz.Node, options DescribeOptions) {
 		}
 		gvz.Row(addr, graphviz.Fmt("<B>%s</B>", n.Name), materialized)
 		gvz.Row("(reader / ⚷: " + key + ")")
-		gvz.Row(sharding)
-
-		if !options.ShowSchema {
-			var fields string
-			if len(n.fields) > impl.columnsForUser {
-				fields += strings.Join(n.fields[:impl.columnsForUser], ", ")
-				fields += ` <I><FONT COLOR="grey">[, `
-				fields += strings.Join(n.fields[impl.columnsForUser:], ", ")
-				fields += `]</FONT></I>`
-			} else {
-				fields = strings.Join(n.fields, ", ")
-			}
-			gvz.Row(graphviz.Escaped(fields))
-		}
 	case Internal:
 		gvz.Row(addr, n.Name, materialized)
-		gvz.Row(graphviz.Fmt("<FONT POINT-SIZE=\"8\">%s</FONT>", impl.Description(true)))
-		gvz.Row(sharding)
-		if !options.ShowSchema {
-			gvz.Row(strings.Join(n.fields, ", "))
-		}
+		gvz.Row(graphviz.Fmt("<FONT POINT-SIZE=\"10\">%s</FONT>", impl.Description()))
 	}
+
+	gvz.Row(sharding)
 
 	if options.ShowSchema {
 		schema := n.Schema()
 		fields := n.Fields()
+		reader := n.AsReader()
 
 		for i, f := range fields {
-			collname := "???"
+			var (
+				collname  string
+				fieldname graphviz.Escaped
+				fieldn    graphviz.Cell
+			)
 			if coll := collations.Local().LookupByID(schema[i].Collation); coll != nil {
 				collname = coll.Name()
+			} else {
+				collname = "???"
 			}
-			gvz.Row(strconv.Itoa(i), f, graphviz.Fmt("%s (%s)", schema[i].T.String(), collname))
+			if reader != nil && i >= reader.columnsForUser {
+				fieldname = graphviz.Fmt(`<I><FONT COLOR="grey">[%s]</FONT></I>`, f)
+			} else {
+				fieldname = graphviz.Fmt("%s", f)
+			}
+			fieldn = graphviz.Cell{
+				Txt: graphviz.Fmt("%d", i),
+				Attr: map[string]string{
+					"PORT": fmt.Sprintf("field%d", i),
+				},
+			}
+			gvz.Row(fieldn, fieldname, graphviz.Fmt("%s (%s)", schema[i].T.String(), collname))
 		}
 	}
 }

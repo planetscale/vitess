@@ -61,7 +61,7 @@ func (g *groupInt64) update(r boostpb.Record) {
 
 func (g *groupInt64) apply(current *boostpb.Value) boostpb.Value {
 	var n int64
-	if current != nil {
+	if current != nil && current.Type() != sqltypes.Null {
 		var err error
 		n, err = strconv.ParseInt(current.RawStr(), 10, 64)
 		if err != nil {
@@ -109,7 +109,7 @@ func (g *groupFloat) update(r boostpb.Record) {
 
 func (g *groupFloat) apply(current *boostpb.Value) boostpb.Value {
 	var n float64
-	if current != nil {
+	if current != nil && current.Type() != sqltypes.Null {
 		n, _ = current.ToVitessUnsafe().ToFloat64()
 	}
 	for _, d := range g.diffs {
@@ -150,7 +150,26 @@ func (a *groupedAggregator) state(tt boostpb.Type) aggregationState {
 	}
 }
 
-func (a *groupedAggregator) description(_ bool) string {
+// mysql> select count(*), count(id), sum(id), avg(id), min(id), max(id) from users where id = <id>;
+//+----------+-----------+---------+---------+---------+---------+
+//| count(*) | count(id) | sum(id) | avg(id) | min(id) | max(id) |
+//+----------+-----------+---------+---------+---------+---------+
+//|        0 |         0 |    NULL |    NULL |    NULL |    NULL |
+//+----------+-----------+---------+---------+---------+---------+
+//1 row in set (0.01 sec)
+
+var defaultValueZero = sqltypes.NewInt64(0)
+
+func (a *groupedAggregator) defaultValue() sqltypes.Value {
+	switch a.kind {
+	case AggregationCount, AggregationCountStar:
+		return defaultValueZero
+	default:
+		return sqltypes.NULL
+	}
+}
+
+func (a *groupedAggregator) description() string {
 	switch a.kind {
 	case AggregationCount:
 		return fmt.Sprintf("COUNT(%d)", a.over)

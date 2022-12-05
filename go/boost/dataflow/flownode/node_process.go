@@ -103,7 +103,7 @@ func (n *Node) processInternal(input *FlowInput, output *FlowOutput, i Internal)
 				panic("unsupported")
 			}
 		} else {
-			res, err := i.OnInput(n, input.Ex, from, oldData, repl.Key(), input.Nodes, input.State)
+			res, err := i.OnInput(n, input.Ex, from, oldData, repl, input.Nodes, input.State)
 			if err != nil {
 				return err
 			}

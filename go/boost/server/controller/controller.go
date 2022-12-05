@@ -2,9 +2,8 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,11 +16,12 @@ import (
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/boost/common"
-	"vitess.io/vitess/go/boost/common/graphviz"
 	"vitess.io/vitess/go/boost/dataflow/domain"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
+	"vitess.io/vitess/go/boost/server/controller/domainrpc"
+	"vitess.io/vitess/go/boost/server/controller/materialization"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	topowatcher "vitess.io/vitess/go/boost/topo/watcher"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -32,7 +32,6 @@ type Controller struct {
 	ingredients *graph.Graph[*flownode.Node]
 
 	uuid               uuid.UUID
-	source             graph.NodeIdx
 	nDomains           uint
 	sharding           *uint
 	epoch              boostpb.Epoch
@@ -42,17 +41,17 @@ type Controller struct {
 	lastCheckedWorkers time.Time
 
 	domainConfig    *boostpb.DomainConfig
-	materialization *Materialization
+	materialization *materialization.Materialization
 	recipe          *boostplan.VersionedRecipe
-	domains         map[boostpb.DomainIndex]*DomainHandle
+	domains         map[boostpb.DomainIndex]*domainrpc.Handle
 	domainNodes     map[boostpb.DomainIndex][]graph.NodeIdx
 	remap           map[boostpb.DomainIndex]map[graph.NodeIdx]boostpb.IndexPair
 	chanCoordinator *boostrpc.ChannelCoordinator
 
 	workersReady        bool
 	expectedWorkerCount int
-	workers             map[WorkerID]*Worker
-	readAddrs           map[WorkerID]string
+	workers             map[domainrpc.WorkerID]*domainrpc.Worker
+	readAddrs           map[domainrpc.WorkerID]string
 
 	topo *toposerver.Server
 	log  *zap.Logger
@@ -62,9 +61,13 @@ type Controller struct {
 
 func NewController(log *zap.Logger, uuid uuid.UUID, config *boostpb.Config, state *vtboostpb.ControllerState, ts *toposerver.Server) *Controller {
 	g := new(graph.Graph[*flownode.Node])
-	source := g.AddNode(flownode.New("source", []string{"dummy-field"}, &flownode.Source{}))
 
-	mat := NewMaterialization()
+	// the Source node has no relevant fields; it just acts as a root for the whole DAG
+	if !g.AddNode(flownode.New("source", []string{"void"}, &flownode.Source{})).IsSource() {
+		panic("expected initial node to be Source")
+	}
+
+	mat := materialization.NewMaterialization()
 	if !config.PartialEnabled {
 		mat.DisablePartial()
 	}
@@ -80,7 +83,6 @@ func NewController(log *zap.Logger, uuid uuid.UUID, config *boostpb.Config, stat
 	return &Controller{
 		ingredients:        g,
 		uuid:               uuid,
-		source:             source,
 		sharding:           sharding,
 		epoch:              boostpb.Epoch(state.Epoch),
 		quorum:             config.Quorum,
@@ -90,12 +92,12 @@ func NewController(log *zap.Logger, uuid uuid.UUID, config *boostpb.Config, stat
 		domainConfig:       config.DomainConfig,
 		materialization:    mat,
 		recipe:             recipe,
-		domains:            make(map[boostpb.DomainIndex]*DomainHandle),
+		domains:            make(map[boostpb.DomainIndex]*domainrpc.Handle),
 		domainNodes:        make(map[boostpb.DomainIndex][]graph.NodeIdx),
 		remap:              make(map[boostpb.DomainIndex]map[graph.NodeIdx]boostpb.IndexPair),
 		chanCoordinator:    boostrpc.NewChannelCoordinator(),
-		workers:            make(map[WorkerID]*Worker),
-		readAddrs:          make(map[WorkerID]string),
+		workers:            make(map[domainrpc.WorkerID]*domainrpc.Worker),
+		readAddrs:          make(map[domainrpc.WorkerID]string),
 		topo:               ts,
 		log:                log.With(zap.Int64("epoch", state.Epoch)),
 		BuildDomain:        domain.ToProto,
@@ -106,28 +108,9 @@ func (ctrl *Controller) IsReady() bool {
 	return ctrl.expectedWorkerCount > 0 && len(ctrl.workers) >= ctrl.expectedWorkerCount
 }
 
-func (ctrl *Controller) topoOrder(new map[graph.NodeIdx]bool) (topolist []graph.NodeIdx) {
-	topolist = make([]graph.NodeIdx, 0, len(new))
-	topo := graph.NewTopoVisitor(ctrl.ingredients)
-	for topo.Next(ctrl.ingredients) {
-		node := topo.Current
-		if node == ctrl.source {
-			continue
-		}
-		if ctrl.ingredients.Value(node).IsDropped() {
-			continue
-		}
-		if !new[node] {
-			continue
-		}
-		topolist = append(topolist, node)
-	}
-	return
-}
-
-func (ctrl *Controller) RegisterWorker(req *vtboostpb.TopoWorkerEntry) {
-	workerid := WorkerID(req.Uuid)
-	ws, err := NewWorker(workerid, req.AdminAddr)
+func (ctrl *Controller) registerWorker(req *vtboostpb.TopoWorkerEntry) {
+	workerid := domainrpc.WorkerID(req.Uuid)
+	ws, err := domainrpc.NewWorker(workerid, req.AdminAddr)
 	if err != nil {
 		ctrl.log.Error("failed to register worker", zap.Error(err))
 		return
@@ -137,7 +120,7 @@ func (ctrl *Controller) RegisterWorker(req *vtboostpb.TopoWorkerEntry) {
 	ctrl.readAddrs[workerid] = req.ReaderAddr
 }
 
-func (ctrl *Controller) PlaceDomain(ctx context.Context, idx boostpb.DomainIndex, maybeShardNumber *uint, innodes []NewNode) (*DomainHandle, error) {
+func (ctrl *Controller) placeDomain(ctx context.Context, idx boostpb.DomainIndex, maybeShardNumber *uint, innodes []nodeWithAge) (*domainrpc.Handle, error) {
 	nodes := new(flownode.Map)
 
 	for _, n := range innodes {
@@ -147,7 +130,7 @@ func (ctrl *Controller) PlaceDomain(ctx context.Context, idx boostpb.DomainIndex
 
 	var (
 		shards       = common.UnwrapOr(maybeShardNumber, 1)
-		domainshards = make([]DomainShardHandle, shards)
+		domainshards = make([]domainrpc.ShardHandle, shards)
 		announce     = make([]*boostpb.DomainDescriptor, shards)
 		workers      = maps.Values(ctrl.workers)
 		wg           errgroup.Group
@@ -161,7 +144,7 @@ func (ctrl *Controller) PlaceDomain(ctx context.Context, idx boostpb.DomainIndex
 				return err
 			}
 
-			var wrk *Worker
+			var wrk *domainrpc.Worker
 			for i := range workers {
 				wrk = workers[(int(shardN)+i)%len(workers)]
 				if wrk.Healthy {
@@ -196,7 +179,7 @@ func (ctrl *Controller) PlaceDomain(ctx context.Context, idx boostpb.DomainIndex
 				Shard: shardN,
 				Addr:  resp.Addr,
 			}
-			domainshards[shardN] = DomainShardHandle{worker: wrk.UUID, client: shardClient}
+			domainshards[shardN] = domainrpc.NewShardHandle(wrk.UUID, shardClient)
 			return nil
 		})
 	}
@@ -221,10 +204,7 @@ func (ctrl *Controller) PlaceDomain(ctx context.Context, idx boostpb.DomainIndex
 		}
 	}
 
-	return &DomainHandle{
-		idx:    idx,
-		shards: domainshards,
-	}, nil
+	return domainrpc.NewHandle(idx, domainshards), nil
 }
 
 func (ctrl *Controller) outputs() map[string]graph.NodeIdx {
@@ -243,7 +223,7 @@ func (ctrl *Controller) outputs() map[string]graph.NodeIdx {
 func (ctrl *Controller) inputs() map[string]graph.NodeIdx {
 	var inputs = make(map[string]graph.NodeIdx)
 
-	neigh := ctrl.ingredients.NeighborsDirected(ctrl.source, graph.DirectionOutgoing)
+	neigh := ctrl.ingredients.NeighborsDirected(graph.Source, graph.DirectionOutgoing)
 	for neigh.Next() {
 		base := ctrl.ingredients.Value(neigh.Current)
 		if !base.IsAnyBase() {
@@ -304,38 +284,6 @@ func (ctrl *Controller) tableDescriptor(name string) *boostpb.TableDescriptor {
 		}
 	}
 
-	return tbl
-}
-
-func (ctrl *Controller) externalTableDescriptor(node graph.NodeIdx) *boostpb.ExternalTableDescriptor {
-	base := ctrl.ingredients.Value(node)
-	dom := ctrl.domains[base.Domain()]
-
-	tbl := &boostpb.ExternalTableDescriptor{
-		Txs:          nil,
-		Node:         base.GlobalAddr(),
-		Addr:         base.LocalAddr(),
-		KeyIsPrimary: false,
-		Key:          nil,
-		TableName:    base.Name,
-		Columns:      slices.Clone(base.Fields()),
-		Schema:       slices.Clone(base.Schema()),
-		Keyspace:     base.AsExternalBase().Keyspace(),
-	}
-
-	key := base.SuggestIndexes(node)[node]
-	if key == nil {
-		if col, _, ok := base.Sharding().ByColumn(); ok {
-			key = []int{col}
-		}
-	} else {
-		tbl.KeyIsPrimary = true
-	}
-	tbl.Key = key
-
-	for s := uint(0); s < dom.Shards(); s++ {
-		tbl.Txs = append(tbl.Txs, &boostpb.DomainAddr{Domain: base.Domain(), Shard: s})
-	}
 	return tbl
 }
 
@@ -420,7 +368,7 @@ func (ctrl *Controller) viewDescriptorForName(name string) *vtboostpb.Materializ
 
 func (ctrl *Controller) findViewFor(node graph.NodeIdx, name string) (graph.NodeIdx, bool) {
 	bfs := graph.NewBFSVisitor(ctrl.ingredients, node)
-	for bfs.Next(ctrl.ingredients) {
+	for bfs.Next() {
 		n := ctrl.ingredients.Value(bfs.Current)
 		if r := n.AsReader(); r != nil {
 			if r.IsFor() == node && n.Name == name {
@@ -463,153 +411,7 @@ func (ctrl *Controller) GetMaterializations() ([]*vtboostpb.Materialization, err
 	return res, nil
 }
 
-func (ctrl *Controller) Graphviz(ctx context.Context, buf *strings.Builder, req *vtboostpb.GraphvizRequest) error {
-	var gvz = graphviz.NewGraph[graph.NodeIdx]()
-	gvz.Clustering = req.Clustering != vtboostpb.GraphvizRequest_NONE
-
-	renderGraphviz(gvz, ctrl.ingredients, ctrl.materialization, req.Clustering == vtboostpb.GraphvizRequest_DOMAIN)
-
-	if req.MemoryStats {
-		plan, err := ctrl.PrepareEvictionPlan(ctx)
-		if err != nil {
-			return err
-		}
-		if req.ForceMemoryLimits != nil {
-			plan.SetCustomLimits(req.ForceMemoryLimits)
-		}
-		plan.RenderGraphviz(gvz, req.Clustering == vtboostpb.GraphvizRequest_QUERY)
-	}
-
-	gvz.Render(buf)
-	return nil
-}
-
-var errInvalidEpoch = errors.New("epoch race (somebody else already updated our controller state?)")
-
-func (rt *RecipeTracker) updateRecipeStatus(state *vtboostpb.ControllerState, update func(status *vtboostpb.ControllerState_RecipeStatus)) error {
-	if boostpb.Epoch(state.Epoch) > rt.ctrl.epoch {
-		return errInvalidEpoch
-	}
-	if state.RecipeVersionStatus == nil {
-		state.RecipeVersionStatus = make(map[int64]*vtboostpb.ControllerState_RecipeStatus)
-	}
-	version := rt.recipe.Version()
-	status, ok := state.RecipeVersionStatus[version]
-	if !ok {
-		status = &vtboostpb.ControllerState_RecipeStatus{Version: version}
-		state.RecipeVersionStatus[version] = status
-	}
-	update(status)
-	return nil
-}
-
-type RecipeTracker struct {
-	ctrl   *Controller
-	recipe *boostplan.VersionedRecipe
-}
-
-func parseErrors(multiError error) (systemErrors []string, queryErrors map[string]string) {
-	queryErrors = make(map[string]string)
-	for _, err := range multierr.Errors(multiError) {
-		if scoped, ok := err.(boostplan.QueryError); ok {
-			queryErrors[scoped.QueryPublicID()] = scoped.Error()
-		} else {
-			systemErrors = append(systemErrors, err.Error())
-		}
-	}
-	return
-}
-
-func (rt *RecipeTracker) BeforeCommit(ctx context.Context, activation *boostplan.ActivationResult, planErr error) {
-	systemErrors, queryErrors := parseErrors(planErr)
-
-	_, err := rt.ctrl.topo.UpdateControllerState(ctx, func(state *vtboostpb.ControllerState) error {
-		return rt.updateRecipeStatus(state, func(status *vtboostpb.ControllerState_RecipeStatus) {
-			status.Progress = vtboostpb.ControllerState_RecipeStatus_APPLYING
-			status.SystemErrors = append(status.SystemErrors, systemErrors...)
-
-			for publicID, err := range queryErrors {
-				status.Queries = append(status.Queries, &vtboostpb.ControllerState_RecipeStatus_Query{
-					QueryPublicId: publicID,
-					Progress:      vtboostpb.ControllerState_RecipeStatus_FAILED,
-					Error:         err,
-				})
-			}
-
-			for _, existing := range activation.QueriesUnchanged {
-				status.Queries = append(status.Queries, &vtboostpb.ControllerState_RecipeStatus_Query{
-					QueryPublicId: existing.PublicId,
-					Progress:      vtboostpb.ControllerState_RecipeStatus_READY,
-				})
-			}
-
-			for _, added := range activation.QueriesAdded {
-				if _, failed := queryErrors[added.PublicId]; failed {
-					continue
-				}
-				status.Queries = append(status.Queries, &vtboostpb.ControllerState_RecipeStatus_Query{
-					QueryPublicId: added.PublicId,
-					Progress:      vtboostpb.ControllerState_RecipeStatus_APPLYING,
-				})
-			}
-
-			for _, removed := range activation.QueriesRemoved {
-				if _, failed := queryErrors[removed.PublicId]; failed {
-					continue
-				}
-				status.Queries = append(status.Queries, &vtboostpb.ControllerState_RecipeStatus_Query{
-					QueryPublicId: removed.PublicId,
-					Progress:      vtboostpb.ControllerState_RecipeStatus_REMOVING,
-				})
-			}
-		})
-	})
-	if err != nil {
-		rt.ctrl.log.Error("UpdateControllerState failed; recipe may not be properly applied", zap.Error(err))
-	}
-}
-
-func (rt *RecipeTracker) AfterCommit(ctx context.Context, commitErr error) {
-	systemErrors, queryErrors := parseErrors(commitErr)
-	success := len(systemErrors) == 0 && len(queryErrors) == 0
-
-	_, err := rt.ctrl.topo.UpdateControllerState(ctx, func(state *vtboostpb.ControllerState) error {
-		if success {
-			// Upgrade recipe version if we've committed cleanly
-			state.RecipeVersion = rt.recipe.Version()
-		}
-
-		return rt.updateRecipeStatus(state, func(status *vtboostpb.ControllerState_RecipeStatus) {
-			if success {
-				status.Progress = vtboostpb.ControllerState_RecipeStatus_READY
-			} else {
-				status.Progress = vtboostpb.ControllerState_RecipeStatus_FAILED
-			}
-
-			status.SystemErrors = append(status.SystemErrors, systemErrors...)
-
-			for _, query := range status.Queries {
-				switch query.Progress {
-				case vtboostpb.ControllerState_RecipeStatus_FAILED:
-					// nothing to do; query was previously failed
-
-				case vtboostpb.ControllerState_RecipeStatus_APPLYING, vtboostpb.ControllerState_RecipeStatus_REMOVING:
-					if err, ok := queryErrors[query.QueryPublicId]; ok {
-						query.Progress = vtboostpb.ControllerState_RecipeStatus_FAILED
-						query.Error = err
-					} else {
-						query.Progress = vtboostpb.ControllerState_RecipeStatus_READY
-					}
-				}
-			}
-		})
-	})
-	if err != nil {
-		rt.ctrl.log.Error("UpdateControllerState failed; recipe may not be properly applied", zap.Error(err))
-	}
-}
-
-func (ctrl *Controller) ModifyRecipe(ctx context.Context, recipepb *vtboostpb.Recipe, si *boostplan.SchemaInformation) (*boostplan.ActivationResult, error) {
+func (ctrl *Controller) ModifyRecipe(ctx context.Context, recipepb *vtboostpb.Recipe, si *boostplan.SchemaInformation, migrate Migrator) (*boostplan.ActivationResult, error) {
 	if recipepb.Version <= ctrl.recipe.Version() {
 		return &boostplan.ActivationResult{}, nil
 	}
@@ -619,7 +421,7 @@ func (ctrl *Controller) ModifyRecipe(ctx context.Context, recipepb *vtboostpb.Re
 		return nil, err
 	}
 
-	return ctrl.applyRecipe(ctx, newrecipe, si)
+	return ctrl.applyRecipe(ctx, newrecipe, si, migrate)
 }
 
 func (ctrl *Controller) cleanupRecipe(ctx context.Context, activation *boostplan.ActivationResult) error {
@@ -635,7 +437,7 @@ func (ctrl *Controller) cleanupRecipe(ctx context.Context, activation *boostplan
 
 	var topoRemovals []graph.NodeIdx
 	var topo = graph.NewTopoVisitor(ctrl.ingredients)
-	for topo.Next(ctrl.ingredients) {
+	for topo.Next() {
 		if slices.Contains(removedOther, topo.Current) {
 			topoRemovals = append(topoRemovals, topo.Current)
 		}
@@ -663,25 +465,22 @@ func (ctrl *Controller) cleanupRecipe(ctx context.Context, activation *boostplan
 	return multierr.Combine(removalErrors...)
 }
 
-func (ctrl *Controller) applyRecipe(ctx context.Context, newrecipe *boostplan.VersionedRecipe, si *boostplan.SchemaInformation) (*boostplan.ActivationResult, error) {
+func (ctrl *Controller) applyRecipe(ctx context.Context, newrecipe *boostplan.VersionedRecipe, si *boostplan.SchemaInformation, migrate Migrator) (*boostplan.ActivationResult, error) {
 	ctrl.log.Info("applying new recipe", zap.Int64("version", newrecipe.Version()))
 
-	tracker := &RecipeTracker{ctrl: ctrl, recipe: newrecipe}
-	mig := NewMigration(ctrl)
+	mig := migrate(ctx, ctrl)
+	mig = NewTrackedMigration(mig, ctrl)
 
-	activation, err := newrecipe.Activate(mig, si)
-	tracker.BeforeCommit(ctx, activation, err)
+	activation, err := mig.Activate(newrecipe, si)
 	if err != nil {
 		return nil, err
 	}
 
-	err = mig.Commit(ctx, newrecipe.Upqueries())
-	tracker.AfterCommit(ctx, err)
+	err = mig.Commit(newrecipe.Upqueries())
 	if err != nil {
 		return nil, err
 	}
 
-	ctrl.log.Info("recipe application complete", zap.Duration("duration", time.Since(mig.start)))
 	ctrl.recipe = newrecipe
 
 	// cleanupRecipe only removes old nodes that are no longer in use; we do not fail recipe application
@@ -743,7 +542,7 @@ func (ctrl *Controller) removeLeaf(ctx context.Context, leaf graph.NodeIdx) erro
 
 		var readers []graph.NodeIdx
 		var bfs = graph.NewBFSVisitor(ctrl.ingredients, leaf)
-		for bfs.Next(ctrl.ingredients) {
+		for bfs.Next() {
 			n := ctrl.ingredients.Value(bfs.Current)
 			if r := n.AsReader(); r != nil && r.IsFor() == leaf {
 				readers = append(readers, bfs.Current)
@@ -787,4 +586,70 @@ func (ctrl *Controller) removeLeaf(ctx context.Context, leaf graph.NodeIdx) erro
 	}
 
 	return ctrl.removeNodes(ctx, removals)
+}
+
+func (ctrl *Controller) PrepareEvictionPlan(ctx context.Context) (*materialization.EvictionPlan, error) {
+	var mu sync.Mutex
+	var wg errgroup.Group
+	var ep = materialization.NewEvictionPlan()
+
+	ep.LoadRecipe(ctrl.ingredients, ctrl.materialization, ctrl.recipe.Recipe)
+
+	for _, wrk := range ctrl.workers {
+		client := wrk.Client
+		wg.Go(func() error {
+			resp, err := client.MemoryStats(ctx, &boostpb.MemoryStatsRequest{})
+			if err != nil {
+				return err
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			return ep.LoadMemoryStats(resp)
+		})
+	}
+
+	if err := wg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return ep, nil
+}
+
+func (ctrl *Controller) PerformDistributedEviction(ctx context.Context, forceLimits map[string]int64) (*materialization.EvictionPlan, error) {
+	ctrl.log.Info("preparing eviction plan for distributed eviction")
+
+	plan, err := ctrl.PrepareEvictionPlan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	plan.SetCustomLimits(forceLimits)
+	evictions := plan.Evictions()
+
+	ctrl.log.Info("distributed eviction plan ready", zap.Int("evictions", len(evictions)))
+
+	var errs []error
+	for _, ev := range plan.Evictions() {
+		dom, err := ctrl.chanCoordinator.GetClient(ev.Domain.Domain, ev.Domain.Shard)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		err = dom.ProcessAsync(ctx, &boostpb.Packet{
+			Inner: &boostpb.Packet_Evict_{Evict: &boostpb.Packet_Evict{
+				Node:     ev.Local,
+				NumBytes: ev.Evict,
+			}},
+		})
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, multierr.Combine(errs...)
+	}
+	return plan, nil
 }

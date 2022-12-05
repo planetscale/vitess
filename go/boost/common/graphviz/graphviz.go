@@ -84,13 +84,14 @@ type Edge[I comparable] struct {
 
 type Graph[I comparable] struct {
 	Clustering bool
+	Attr       map[string]string
 
 	nodes map[I]*Node
 	edges []*Edge[I]
 }
 
 func NewGraph[I comparable]() *Graph[I] {
-	return &Graph[I]{nodes: map[I]*Node{}}
+	return &Graph[I]{nodes: map[I]*Node{}, Attr: map[string]string{}}
 }
 
 func (g *Graph[I]) Node(idx I) (*Node, bool) {
@@ -133,8 +134,11 @@ func (g *Graph[I]) renderSubgraph(w io.Writer, name string, nodes map[I]*Node) {
 }
 
 func (g *Graph[I]) Render(w io.Writer) {
-	fmt.Fprintf(w, "digraph {{\n")
-	fmt.Fprintf(w, "\tnode [shape=plain, fontsize=10]\n")
+	fmt.Fprintf(w, "digraph {\n")
+	for k, v := range g.Attr {
+		fmt.Fprintf(w, "\t%s=%q\n", k, v)
+	}
+	fmt.Fprintf(w, "\tnode [shape=plain, fontsize=12]\n")
 
 	if g.Clustering {
 		var subgraphs = make(map[string]map[I]*Node)
@@ -166,7 +170,7 @@ func (g *Graph[I]) Render(w io.Writer) {
 		fmt.Fprintf(w, "\n")
 	}
 
-	fmt.Fprintf(w, "}}\n")
+	fmt.Fprintf(w, "}\n")
 }
 
 func (g *Graph[I]) View(t testing.TB) {
@@ -176,6 +180,8 @@ func (g *Graph[I]) View(t testing.TB) {
 }
 
 func RenderGraphviz(t testing.TB, dot string) {
+	fmt.Fprintf(os.Stderr, "%s\n", dot)
+
 	const htmlTemplate = `
 <!DOCTYPE html>
 <html>

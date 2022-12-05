@@ -3,13 +3,16 @@ package graph
 type Topo[N any] struct {
 	Current NodeIdx
 
+	g       *Graph[N]
 	tovisit []NodeIdx
 	ordered map[NodeIdx]struct{}
 }
 
 func NewTopoVisitor[N any](g *Graph[N]) *Topo[N] {
-	var topo Topo[N]
-	topo.ordered = make(map[NodeIdx]struct{})
+	topo := Topo[N]{
+		g:       g,
+		ordered: make(map[NodeIdx]struct{}),
+	}
 
 	for i := range g.nodes {
 		idx := NodeIdx(i)
@@ -21,7 +24,7 @@ func NewTopoVisitor[N any](g *Graph[N]) *Topo[N] {
 	return &topo
 }
 
-func (topo *Topo[N]) Next(g *Graph[N]) bool {
+func (topo *Topo[N]) Next() bool {
 	for len(topo.tovisit) > 0 {
 		nix := topo.tovisit[len(topo.tovisit)-1]
 		topo.tovisit = topo.tovisit[:len(topo.tovisit)-1]
@@ -31,10 +34,10 @@ func (topo *Topo[N]) Next(g *Graph[N]) bool {
 		}
 		topo.ordered[nix] = struct{}{}
 
-		neigh := g.NeighborsDirected(nix, DirectionOutgoing)
+		neigh := topo.g.NeighborsDirected(nix, DirectionOutgoing)
 		for neigh.Next() {
 			var allVisited = true
-			reverse := g.NeighborsDirected(neigh.Current, DirectionIncoming)
+			reverse := topo.g.NeighborsDirected(neigh.Current, DirectionIncoming)
 			for reverse.Next() {
 				if _, visited := topo.ordered[reverse.Current]; !visited {
 					allVisited = false
@@ -54,6 +57,7 @@ func (topo *Topo[N]) Next(g *Graph[N]) bool {
 type BFS[N any] struct {
 	Current NodeIdx
 
+	g          *Graph[N]
 	discovered bitset
 	stack      []NodeIdx
 }
@@ -62,17 +66,18 @@ func NewBFSVisitor[N any](g *Graph[N], start NodeIdx) *BFS[N] {
 	discovered := bitsetWithCapacity(g.NodeCount())
 	discovered.visit(start)
 	return &BFS[N]{
+		g:          g,
 		discovered: discovered,
 		stack:      []NodeIdx{start},
 	}
 }
 
-func (it *BFS[N]) Next(g *Graph[N]) bool {
+func (it *BFS[N]) Next() bool {
 	if len(it.stack) > 0 {
 		it.Current = it.stack[0]
 		it.stack = it.stack[1:]
 
-		neigh := g.NeighborsDirected(it.Current, DirectionOutgoing)
+		neigh := it.g.NeighborsDirected(it.Current, DirectionOutgoing)
 		for neigh.Next() {
 			if it.discovered.visit(neigh.Current) {
 				it.stack = append(it.stack, neigh.Current)
@@ -116,12 +121,14 @@ func (b *bitset) isVisited(bit NodeIdx) bool {
 type DFS[N any] struct {
 	Current NodeIdx
 
+	g          *Graph[N]
 	stack      []NodeIdx
 	discovered bitset
 }
 
 func NewEmptyDFS[N any](g *Graph[N]) *DFS[N] {
 	return &DFS[N]{
+		g:          g,
 		discovered: bitsetWithCapacity(g.NodeCount()),
 	}
 }
@@ -131,13 +138,13 @@ func (it *DFS[N]) MoveTo(start NodeIdx) {
 	it.stack = append(it.stack, start)
 }
 
-func (it *DFS[N]) Next(g *Graph[N]) bool {
+func (it *DFS[N]) Next() bool {
 	for len(it.stack) > 0 {
 		it.Current = it.stack[len(it.stack)-1]
 		it.stack = it.stack[:len(it.stack)-1]
 
 		if it.discovered.visit(it.Current) {
-			succ := g.NeighborsDirected(it.Current, DirectionOutgoing)
+			succ := it.g.NeighborsDirected(it.Current, DirectionOutgoing)
 			for succ.Next() {
 				if !it.discovered.isVisited(succ.Current) {
 					it.stack = append(it.stack, succ.Current)
@@ -153,7 +160,7 @@ func (it *DFS[N]) Next(g *Graph[N]) bool {
 func HasPathConnecting[N any](g *Graph[N], from, to NodeIdx) bool {
 	dfs := NewEmptyDFS(g)
 	dfs.MoveTo(from)
-	for dfs.Next(g) {
+	for dfs.Next() {
 		if dfs.Current == to {
 			return true
 		}

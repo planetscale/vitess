@@ -85,7 +85,7 @@ func (w *Writer) EntryFromRecord(row boostpb.Row) *WriteEntry {
 }
 
 func (w *Writer) Swap() {
-	w.store.wRefresh(&w.memsize)
+	w.store.wRefresh(&w.memsize, false)
 }
 
 func (w *Writer) KeySchema() []boostpb.Type {

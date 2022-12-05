@@ -1,7 +1,6 @@
 name: Static Code Checks, Etc.
 
 on:
-  - pull_request
   - push
 
 jobs:
