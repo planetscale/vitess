@@ -20,11 +20,11 @@ type Ingredient interface {
 	ParentColumns(col int) []NodeColumn
 	ColumnType(g *graph.Graph[*Node], col int) boostpb.Type
 
-	Description(detailed bool) string
+	Description() string
 
 	OnConnected(graph *graph.Graph[*Node])
 	OnCommit(you graph.NodeIdx, remap map[graph.NodeIdx]boostpb.IndexPair)
-	OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, data []boostpb.Record, replayKeyCol []int, domain *Map, states *state.Map) (processing.Result, error)
+	OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error)
 }
 
 type ingredientInputRaw interface {

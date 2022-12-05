@@ -1,4 +1,4 @@
-package controller
+package materialization
 
 import (
 	"golang.org/x/exp/slices"

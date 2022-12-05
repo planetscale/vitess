@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
@@ -42,7 +43,7 @@ func (f *Filter) apply(env *evalengine.ExpressionEnv, r boostpb.Row) bool {
 	return true
 }
 
-func (f *Filter) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, replayKeyCol []int, domain *Map, states *state.Map) (processing.Result, error) {
+func (f *Filter) OnInput(_ *Node, _ processing.Executor, _ boostpb.LocalNodeIndex, rs []boostpb.Record, _ replay.Context, _ *Map, _ *state.Map) (processing.Result, error) {
 	var newRecords = make([]boostpb.Record, 0, len(rs))
 	var env evalengine.ExpressionEnv
 	env.DefaultCollation = collations.Default()
@@ -101,11 +102,7 @@ func (f *Filter) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
 	return g.Value(f.src.AsGlobal()).ColumnType(g, col)
 }
 
-func (f *Filter) Description(detailed bool) string {
-	if !detailed {
-		return "σ"
-	}
-
+func (f *Filter) Description() string {
 	var fs []string
 	for _, f := range f.filter {
 		fs = append(fs, f.Expr)

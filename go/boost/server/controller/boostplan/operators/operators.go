@@ -27,6 +27,9 @@ type (
 		PlanOffsets(node *Node, st *semantics.SemTable) error
 
 		Equals(st *semantics.SemTable, op Operator) bool
+
+		// AddToQueryBuilder is used to reconstruct a query from the operator tree
+		AddToQueryBuilder(qb []*queryBuilder, this *Node) error
 	}
 
 	// ColumnHolder is used by operators that already at creation time know which columns they will have
@@ -110,8 +113,9 @@ type (
 		Aggregations []sqlparser.AggrFunc
 		TableID      semantics.TableSet
 
-		GroupingIdx     []int
-		AggregationsIdx []int
+		GroupingIdx       []int
+		ScalarAggregation bool
+		AggregationsIdx   []int
 
 		dontKeepsAncestorColumns
 	}
@@ -178,6 +182,7 @@ type (
 		Node    *Node
 		Columns Columns
 		Version int
+		Hints   sqlparser.IndexHints
 
 		dontKeepsAncestorColumns
 	}

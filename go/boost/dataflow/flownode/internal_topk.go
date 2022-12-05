@@ -9,6 +9,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
@@ -75,7 +76,7 @@ func (t *TopK) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
 	return g.Value(t.src.AsGlobal()).ColumnType(g, col)
 }
 
-func (t *TopK) Description(detailed bool) string {
+func (t *TopK) Description() string {
 	var order []string
 	for _, o := range t.order {
 		orderName := "ASC"
@@ -88,7 +89,7 @@ func (t *TopK) Description(detailed bool) string {
 	for _, key := range t.keys {
 		params = append(params, fmt.Sprintf("%d", key))
 	}
-	return fmt.Sprintf("order by %s limit %d params %s", strings.Join(order, ", "), t.k, strings.Join(params, ", "))
+	return fmt.Sprintf("ORDER BY %s LIMIT %d PARAMS %s", strings.Join(order, ", "), t.k, strings.Join(params, ", "))
 }
 
 func (t *TopK) OnConnected(graph *graph.Graph[*Node]) {
@@ -98,7 +99,7 @@ func (t *TopK) OnCommit(you graph.NodeIdx, remap map[graph.NodeIdx]boostpb.Index
 	t.src.Remap(remap)
 }
 
-func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, replayKeyCol []int, domain *Map, states *state.Map) (processing.Result, error) {
+func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
 	if len(rs) == 0 {
 		return processing.Result{Records: rs}, nil
 	}
@@ -202,6 +203,7 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 		return out
 	}
 
+	replKey := repl.Key()
 	for _, r := range hashrs {
 		if r.Hash != grpHash {
 			if len(grp) > 0 {
@@ -216,7 +218,7 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 			if !found {
 				missed = true
 			} else {
-				if replayKeyCol != nil {
+				if replKey != nil {
 					lookups = append(lookups, processing.Lookup{
 						On:   us.Local,
 						Cols: groupBy,
@@ -237,7 +239,7 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 				On:         us.Local,
 				LookupIdx:  groupBy,
 				LookupCols: groupBy,
-				ReplayCols: replayKeyCol,
+				ReplayCols: replKey,
 				Record:     r,
 			})
 		} else {

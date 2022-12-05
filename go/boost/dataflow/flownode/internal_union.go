@@ -97,7 +97,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 			//
 			// TODO: why is this an || past self?
 
-			rs, err := u.OnInput(nil, ex, from, rs, nil, n, s)
+			rs, err := u.OnInput(nil, ex, from, rs, replay.Context{}, n, s)
 			if err != nil {
 				return nil, err
 			}
@@ -106,7 +106,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 		}
 
 		if u.replayPieces.Len() == 0 {
-			res, err := u.OnInput(nil, ex, from, rs, nil, n, s)
+			res, err := u.OnInput(nil, ex, from, rs, replay.Context{}, n, s)
 			if err != nil {
 				return nil, err
 			}
@@ -196,7 +196,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 		})
 
 		// return a regular processing result
-		res, err := u.OnInput(nil, ex, from, rs, nil, n, s)
+		res, err := u.OnInput(nil, ex, from, rs, replay.Context{}, n, s)
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +257,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 		// still emit 2 (i.e., not capture it), since it'll just be dropped by the target
 		// domain.
 		last := *rpl.Full
-		res, err := u.OnInput(nil, ex, from, rs, nil, n, s)
+		res, err := u.OnInput(nil, ex, from, rs, replay.Context{}, n, s)
 		if err != nil {
 			return nil, err
 		}
@@ -415,13 +415,19 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 			}
 		}
 
+		childReplayCtx := replay.Context{
+			Partial: &replay.Partial{
+				KeyCols: keyCols,
+			},
+		}
+
 		for _, urp := range toprocess {
 			if urp.evict {
 				panic("!!! need to issue an eviction after replaying key")
 			}
 			released[urp.replayingKey] = true
 			for from, rs := range urp.buffered {
-				res, err := u.OnInput(nil, ex, from, rs, keyCols, n, s)
+				res, err := u.OnInput(nil, ex, from, rs, childReplayCtx, n, s)
 				if err != nil {
 					return nil, err
 				}
@@ -509,8 +515,8 @@ func (u *Union) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
 	return u.emit.ColumnType(g, col)
 }
 
-func (u *Union) Description(detailed bool) string {
-	return u.emit.Description(detailed)
+func (u *Union) Description() string {
+	return u.emit.Description()
 }
 
 func (u *Union) OnConnected(graph *graph.Graph[*Node]) {
@@ -522,7 +528,7 @@ func (u *Union) OnCommit(you graph.NodeIdx, remap map[graph.NodeIdx]boostpb.Inde
 	u.emit.OnCommit(remap)
 }
 
-func (u *Union) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, replayKeyCol []int, domain *Map, states *state.Map) (processing.Result, error) {
+func (u *Union) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
 	return u.emit.OnInput(from, rs)
 }
 
@@ -560,7 +566,7 @@ func (u *Union) OnEviction(from boostpb.LocalNodeIndex, tag boostpb.Tag, keys []
 type unionEmit interface {
 	Ancestors() []graph.NodeIdx
 	Resolve(col int) []NodeColumn
-	Description(detailed bool) string
+	Description() string
 	ParentColumns(col int) []NodeColumn
 	ColumnType(graph *graph.Graph[*Node], col int) boostpb.Type
 	OnCommit(remap map[graph.NodeIdx]boostpb.IndexPair)

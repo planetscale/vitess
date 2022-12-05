@@ -25,7 +25,7 @@ func (u *unionEmitAll) Resolve(col int) []NodeColumn {
 	return []NodeColumn{{Node: u.from.AsGlobal(), Column: col}}
 }
 
-func (u *unionEmitAll) Description(_ bool) string {
+func (u *unionEmitAll) Description() string {
 	return "⊍"
 }
 

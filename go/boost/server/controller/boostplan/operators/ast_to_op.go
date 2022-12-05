@@ -285,6 +285,10 @@ func (conv *Converter) buildAggregation(ctx *PlanContext, sel *sqlparser.Select,
 		}
 	}
 
+	if len(groupBy.Grouping) == 0 {
+		groupBy.ScalarAggregation = true
+	}
+
 	// We add a projection before the aggregation so that if we are aggregating over
 	// something more complicated than a column, we can evaluate it first
 	projNode := conv.NewNode("projection", &Project{}, []*Node{input})
@@ -533,7 +537,7 @@ func (conv *Converter) buildFromTableName(ctx *PlanContext, tableExpr *sqlparser
 		}
 	}
 
-	return newTableRef(ctx.SemTable, tableNode, conv.version, tableID)
+	return newTableRef(ctx.SemTable, tableNode, conv.version, tableID, tableExpr.Hints)
 }
 
 func (conv *Converter) buildFromOp(ctx *PlanContext, from []sqlparser.TableExpr) (last *Node, params []Parameter, columns Columns, err error) {

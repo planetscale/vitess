@@ -18,6 +18,10 @@ const (
 type NodeIdx uint32
 type EdgeIdx uint32
 
+func (n NodeIdx) IsSource() bool {
+	return n == Source
+}
+
 func (n NodeIdx) Zap() zap.Field {
 	return zap.Uint32("node_idx", uint32(n))
 }
@@ -26,6 +30,7 @@ func (n NodeIdx) ZapField(field string) zap.Field {
 	return zap.Uint32(field, uint32(n))
 }
 
+const Source NodeIdx = 0
 const InvalidNode NodeIdx = math.MaxUint32
 const InvalidEdge EdgeIdx = math.MaxUint32
 

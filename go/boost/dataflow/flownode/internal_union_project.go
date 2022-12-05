@@ -56,10 +56,7 @@ func (u *unionEmitProject) Resolve(col int) (resolve []NodeColumn) {
 	return
 }
 
-func (u *unionEmitProject) Description(detailed bool) string {
-	if !detailed {
-		return "⋃"
-	}
+func (u *unionEmitProject) Description() string {
 	var ips = maps.Keys(u.emit)
 	sort.Slice(ips, func(i, j int) bool {
 		return ips[i].AsGlobal() < ips[j].AsGlobal()

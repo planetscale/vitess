@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
@@ -154,10 +155,7 @@ func (p *Project) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
 	return expr.Type(g, p.src)
 }
 
-func (p *Project) Description(detailed bool) string {
-	if !detailed {
-		return "π"
-	}
+func (p *Project) Description() string {
 	if len(p.projections) == 0 {
 		return "π[*]"
 	}
@@ -165,7 +163,6 @@ func (p *Project) Description(detailed bool) string {
 	for _, p := range p.projections {
 		cols = append(cols, p.describe())
 	}
-
 	return "π[" + strings.Join(cols, ", ") + "]"
 }
 
@@ -193,15 +190,7 @@ func (p *Project) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]boostpb.Inde
 	p.projections = []Projection{}
 }
 
-func (p *Project) OnInput(
-	_ *Node,
-	_ processing.Executor,
-	_ boostpb.LocalNodeIndex,
-	rs []boostpb.Record,
-	_ []int,
-	_ *Map,
-	_ *state.Map,
-) (processing.Result, error) {
+func (p *Project) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
 	if emit := p.projections; len(emit) > 0 {
 		var env evalengine.ExpressionEnv
 		env.DefaultCollation = collations.Default()

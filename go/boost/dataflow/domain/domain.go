@@ -2378,9 +2378,6 @@ func (d *Domain) handleReplayFromExternalBase(ctx context.Context, n *flownode.N
 	d.buildUpquery(&upquery, n)
 
 	err := d.performUpquery(ctx, upquery.String(), nil, func(gtid string, records []boostpb.Record) error {
-		if len(records) == 0 {
-			return nil
-		}
 		var pkt = &boostpb.Packet{
 			Inner: &boostpb.Packet_ReplayPiece_{ReplayPiece: &boostpb.Packet_ReplayPiece{
 				Link:    link.Clone(),
@@ -2440,6 +2437,10 @@ func (d *Domain) handleStartReplay(ctx context.Context, startReplay *boostpb.Pac
 	}
 
 	link := &boostpb.Link{Src: startReplay.From, Dst: d.replayPaths[startReplay.Tag].Path[0].Node}
+
+	// TODO: if this is a replay from a local base and the local base is empty, we
+	// still need to send a dummy packet with no records and Last == true to initialize
+	// all the intermediate state
 
 	// we're been given an entire state snapshot, but we need to digest it
 	// piece by piece spawn off a thread to do that chunking. however, before
@@ -2544,9 +2545,21 @@ func (d *Domain) handleFinishReplay(ctx context.Context, tag boostpb.Tag, node b
 }
 
 func (d *Domain) handleRemoveNodes(pkt *boostpb.Packet_RemoveNodes) error {
+	var deleted []*backlog.Writer
 	for _, node := range pkt.Nodes {
-		d.nodes.Get(node).Remove()
+		n := d.nodes.Get(node)
+		if reader := n.AsReader(); reader != nil {
+			readerID := ReaderID{
+				Node:  n.GlobalAddr(),
+				Shard: d.shardn(),
+			}
+			d.readers.Delete(readerID)
+			deleted = append(deleted, reader.Writer())
+		}
+
+		n.Remove()
 		d.nodes.Remove(node)
+
 		d.log.Debug("node removed", node.Zap())
 	}
 
@@ -2558,6 +2571,12 @@ func (d *Domain) handleRemoveNodes(pkt *boostpb.Packet_RemoveNodes) error {
 			return true
 		})
 	}
+
+	go func() {
+		for _, w := range deleted {
+			w.Free()
+		}
+	}()
 
 	return nil
 }

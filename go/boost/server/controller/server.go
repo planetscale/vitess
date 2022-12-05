@@ -13,6 +13,7 @@ import (
 
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
+	"vitess.io/vitess/go/boost/server/controller/materialization"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
 )
@@ -44,7 +45,7 @@ func (srv *Server) RegisterWorker(ctx context.Context, worker *vtboostpb.TopoWor
 		return
 	}
 
-	srv.inner.RegisterWorker(worker)
+	srv.inner.registerWorker(worker)
 	srv.checkForReady(ctx)
 }
 
@@ -109,7 +110,7 @@ func (srv *Server) GetViewDescriptor_(name string) (*vtboostpb.Materialization_V
 	return bld, nil
 }
 
-func (srv *Server) Migrate(ctx context.Context, perform func(ctx context.Context, mig *Migration) error) error {
+func (srv *Server) Migrate(ctx context.Context, perform func(mig Migration) error) error {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
@@ -117,11 +118,11 @@ func (srv *Server) Migrate(ctx context.Context, perform func(ctx context.Context
 		panic("tried to migrate without being a leader")
 	}
 
-	mig := NewMigration(srv.inner)
-	if err := perform(ctx, mig); err != nil {
+	mig := NewMigration(ctx, srv.inner)
+	if err := perform(mig); err != nil {
 		return err
 	}
-	return mig.Commit(ctx, nil)
+	return mig.Commit(nil)
 }
 
 func (srv *Server) IsReady() bool {
@@ -196,9 +197,15 @@ func (srv *Server) campaign(ctx context.Context) {
 	}
 }
 
+var errNoLeader = fmt.Errorf("cannot access Boost API; instance is not the cluster leader")
+
 func (srv *Server) GetMaterializations(_ context.Context, _ *vtboostpb.MaterializationsRequest) (*vtboostpb.MaterializationsResponse, error) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
+
+	if srv.inner == nil {
+		return nil, errNoLeader
+	}
 
 	mats, err := srv.inner.GetMaterializations()
 	if err != nil {
@@ -208,26 +215,29 @@ func (srv *Server) GetMaterializations(_ context.Context, _ *vtboostpb.Materiali
 }
 
 func (srv *Server) PutRecipe(ctx context.Context, recipe *vtboostpb.Recipe) error {
-	return srv.PutRecipeWithOptions(ctx, recipe, nil)
+	return srv.PutRecipeWithOptions(ctx, recipe, nil, nil)
 }
 
 func (srv *Server) defaultSchemaInfo() *boostplan.SchemaInformation {
 	return &boostplan.SchemaInformation{Schema: boostplan.NewDDLSchema(srv.topo)}
 }
 
-func (srv *Server) PutRecipeWithOptions(ctx context.Context, recipepb *vtboostpb.Recipe, si *boostplan.SchemaInformation) error {
+func (srv *Server) PutRecipeWithOptions(ctx context.Context, recipepb *vtboostpb.Recipe, si *boostplan.SchemaInformation, migrate Migrator) error {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
 	if srv.inner == nil {
-		return fmt.Errorf("not the leader")
+		return errNoLeader
 	}
 
 	if si == nil {
 		si = srv.defaultSchemaInfo()
 	}
+	if migrate == nil {
+		migrate = NewMigration
+	}
 
-	_, err := srv.inner.ModifyRecipe(ctx, recipepb, si)
+	_, err := srv.inner.ModifyRecipe(ctx, recipepb, si, migrate)
 	return err
 }
 
@@ -248,7 +258,7 @@ func (srv *Server) GetRecipe(context.Context, *vtboostpb.GetRecipeRequest) (*vtb
 	defer srv.mu.Unlock()
 
 	if srv.inner == nil {
-		return nil, fmt.Errorf("not the leader")
+		return nil, errNoLeader
 	}
 	recipe := &vtboostpb.Recipe{
 		Queries: srv.inner.recipe.ToProto(),
@@ -260,6 +270,10 @@ func (srv *Server) Graphviz(ctx context.Context, request *vtboostpb.GraphvizRequ
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
+	if srv.inner == nil {
+		return nil, errNoLeader
+	}
+
 	var dot strings.Builder
 	if err := srv.inner.Graphviz(ctx, &dot, request); err != nil {
 		return nil, err
@@ -267,11 +281,11 @@ func (srv *Server) Graphviz(ctx context.Context, request *vtboostpb.GraphvizRequ
 	return &vtboostpb.GraphvizResponse{Dot: dot.String()}, nil
 }
 
-func (srv *Server) PerformDistributedEviction(ctx context.Context, forceLimits map[string]int64) (*EvictionPlan, error) {
+func (srv *Server) PerformDistributedEviction(ctx context.Context, forceLimits map[string]int64) (*materialization.EvictionPlan, error) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	if srv.inner == nil {
-		return nil, fmt.Errorf("not the leader")
+		return nil, errNoLeader
 	}
 	return srv.inner.PerformDistributedEviction(ctx, forceLimits)
 }

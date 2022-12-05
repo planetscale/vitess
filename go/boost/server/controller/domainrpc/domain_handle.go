@@ -1,4 +1,4 @@
-package controller
+package domainrpc
 
 import (
 	"context"
@@ -8,25 +8,39 @@ import (
 	"vitess.io/vitess/go/boost/boostrpc"
 )
 
-type DomainShardHandle struct {
+type ShardHandle struct {
 	worker WorkerID
 	client boostrpc.DomainClient
 }
 
-type DomainHandle struct {
-	idx    boostpb.DomainIndex
-	shards []DomainShardHandle
+func NewShardHandle(id WorkerID, client boostrpc.DomainClient) ShardHandle {
+	return ShardHandle{
+		worker: id,
+		client: client,
+	}
 }
 
-func (h *DomainHandle) Shards() uint {
+type Handle struct {
+	idx    boostpb.DomainIndex
+	shards []ShardHandle
+}
+
+func NewHandle(idx boostpb.DomainIndex, shards []ShardHandle) *Handle {
+	return &Handle{
+		idx:    idx,
+		shards: shards,
+	}
+}
+
+func (h *Handle) Shards() uint {
 	return uint(len(h.shards))
 }
 
-func (h *DomainHandle) Assignment(shard uint) WorkerID {
+func (h *Handle) Assignment(shard uint) WorkerID {
 	return h.shards[shard].worker
 }
 
-func (h *DomainHandle) SendToHealthy(ctx context.Context, p *boostpb.Packet, workers map[WorkerID]*Worker) error {
+func (h *Handle) SendToHealthy(ctx context.Context, p *boostpb.Packet, workers map[WorkerID]*Worker) error {
 	for _, shrd := range h.shards {
 		if workers[shrd.worker].Healthy {
 			if err := shrd.client.ProcessAsync(ctx, p); err != nil {
@@ -39,7 +53,7 @@ func (h *DomainHandle) SendToHealthy(ctx context.Context, p *boostpb.Packet, wor
 	return nil
 }
 
-func (h *DomainHandle) SendToHealthySync(ctx context.Context, p *boostpb.SyncPacket, workers map[WorkerID]*Worker) error {
+func (h *Handle) SendToHealthySync(ctx context.Context, p *boostpb.SyncPacket, workers map[WorkerID]*Worker) error {
 	for _, shrd := range h.shards {
 		if workers[shrd.worker].Healthy {
 			if err := shrd.client.ProcessSync(ctx, p); err != nil {
@@ -52,7 +66,7 @@ func (h *DomainHandle) SendToHealthySync(ctx context.Context, p *boostpb.SyncPac
 	return nil
 }
 
-func (h *DomainHandle) SendToHealthyShard(ctx context.Context, i uint, p *boostpb.Packet, workers map[WorkerID]*Worker) error {
+func (h *Handle) SendToHealthyShard(ctx context.Context, i uint, p *boostpb.Packet, workers map[WorkerID]*Worker) error {
 	if workers[h.shards[i].worker].Healthy {
 		return h.shards[i].client.ProcessAsync(ctx, p)
 	}

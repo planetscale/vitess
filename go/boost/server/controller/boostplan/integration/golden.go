@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/boost/server/controller/boostplan/integration/utils"
 )
 
 type TestQuery struct {
@@ -23,41 +23,8 @@ type GoldenTestCase struct {
 	path     string
 }
 
-func loadExternalDDLSchema(t *testing.T, ddls []rawDDL) *boostplan.DDLSchema {
-	schema := &boostplan.DDLSchema{
-		Specs: make(map[string]map[string]*sqlparser.TableSpec),
-	}
-
-	for _, ddl := range ddls {
-		ks, ok := schema.Specs[ddl.Keyspace]
-		if !ok {
-			ks = make(map[string]*sqlparser.TableSpec)
-			schema.Specs[ddl.Keyspace] = ks
-		}
-
-		stmt, err := sqlparser.ParseStrictDDL(ddl.SQL)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		switch stmt := stmt.(type) {
-		case *sqlparser.CreateTable:
-			ks[stmt.Table.Name.String()] = stmt.TableSpec
-		default:
-			t.Fatalf("unexpected type: %T", stmt)
-		}
-	}
-
-	return schema
-}
-
-type rawDDL struct {
-	Keyspace string
-	SQL      string
-}
-
 type rawTestcase struct {
-	DDL     []rawDDL
+	DDL     []utils.RawDDL
 	Queries []*TestQuery
 }
 
@@ -73,7 +40,7 @@ func LoadGoldenTest(t *testing.T, path string) *GoldenTestCase {
 		t.Fatal(err)
 	}
 
-	extschema := loadExternalDDLSchema(t, testcase.DDL)
+	extschema := utils.LoadExternalDDLSchema(t, testcase.DDL)
 
 	return &GoldenTestCase{
 		SchemaInformation: &boostplan.SchemaInformation{

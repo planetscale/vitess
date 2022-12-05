@@ -9,6 +9,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
@@ -165,17 +166,13 @@ func (j *Join) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
 	}
 }
 
-func (j *Join) Description(detailed bool) string {
+func (j *Join) Description() string {
 	var op string
 	switch j.kind {
 	case JoinTypeOuter:
 		op = "⋉"
 	case JoinTypeInner:
 		op = "⋈"
-	}
-
-	if !detailed {
-		return op
 	}
 
 	var buf strings.Builder
@@ -202,7 +199,7 @@ func (j *Join) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]boostpb.IndexPa
 	j.right.Remap(remap)
 }
 
-func (j *Join) OnInput(us *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, replayKeyCols []int, domain *Map, state *state.Map) (processing.Result, error) {
+func (j *Join) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
 	var misses []processing.Miss
 	var lookups []processing.Lookup
 
@@ -230,11 +227,12 @@ func (j *Join) OnInput(us *Node, ex processing.Executor, from boostpb.LocalNodeI
 	var jointype boostpb.Type
 	for col, pcol := range j.emit {
 		if (pcol.Left && pcol.Col == j.on[0]) || (!pcol.Left && pcol.Col == j.on[1]) {
-			jointype = us.schema[col]
+			jointype = you.schema[col]
 			break
 		}
 	}
 
+	replayKeyCols := repl.Key()
 	if replayKeyCols != nil {
 		mappedReplayKeyCols := make([]int, 0, len(replayKeyCols))
 		for _, replayCol := range replayKeyCols {
@@ -285,7 +283,7 @@ func (j *Join) OnInput(us *Node, ex processing.Executor, from boostpb.LocalNodeI
 		prevJoinKeyRow := boostpb.RowFromValues([]boostpb.Value{prevJoinKey})
 
 		if from == j.right.AsLocal() && j.kind == JoinTypeOuter {
-			rowBag, found, isMaterialized := nodeLookup(j.right.AsLocal(), []int{j.on[1]}, prevJoinKeyRow, domain, state)
+			rowBag, found, isMaterialized := nodeLookup(j.right.AsLocal(), []int{j.on[1]}, prevJoinKeyRow, domain, states)
 			if !isMaterialized {
 				panic("join parent should always be materialized")
 			}
@@ -322,7 +320,7 @@ func (j *Join) OnInput(us *Node, ex processing.Executor, from boostpb.LocalNodeI
 		}
 
 		// get rows from the other side
-		otherRows, found, isMaterialized := nodeLookup(other, []int{otherKey}, prevJoinKeyRow, domain, state)
+		otherRows, found, isMaterialized := nodeLookup(other, []int{otherKey}, prevJoinKeyRow, domain, states)
 		if !isMaterialized {
 			panic("other should always be materialized")
 		}

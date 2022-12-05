@@ -10,10 +10,11 @@ import (
 	"vitess.io/vitess/go/boost/graph"
 )
 
-func migrationAssign(g *graph.Graph[*flownode.Node], topolist []graph.NodeIdx, ndomains *uint) {
+func (mig *migration) assign(topolist []graph.NodeIdx) {
+	g := mig.target.ingredients
 	nextdomain := func() boostpb.DomainIndex {
-		next := boostpb.DomainIndex(*ndomains)
-		*ndomains++
+		next := boostpb.DomainIndex(mig.target.nDomains)
+		mig.target.nDomains++
 		return next
 	}
 

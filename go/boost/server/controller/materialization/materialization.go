@@ -1,4 +1,4 @@
-package controller
+package materialization
 
 import (
 	"context"
@@ -10,16 +10,26 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common"
+	"vitess.io/vitess/go/boost/common/graphviz"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 )
+
+type Migration interface {
+	context.Context
+
+	Log() *zap.Logger
+	Graph() *graph.Graph[*flownode.Node]
+	SendPacket(domain boostpb.DomainIndex, b *boostpb.Packet) error
+	SendPacketSync(domain boostpb.DomainIndex, b *boostpb.SyncPacket) error
+	DomainShards(domain boostpb.DomainIndex) uint
+}
 
 type Materialization struct {
 	have  indexmap
 	added indexmap
 
-	state          map[graph.NodeIdx]*boostpb.Packet_PrepareState
+	plans          map[graph.NodeIdx]*Plan
 	partial        map[graph.NodeIdx]bool
 	partialEnabled bool
 
@@ -30,7 +40,7 @@ func NewMaterialization() *Materialization {
 	return &Materialization{
 		have:           newIndexmap(),
 		added:          newIndexmap(),
-		state:          make(map[graph.NodeIdx]*boostpb.Packet_PrepareState),
+		plans:          make(map[graph.NodeIdx]*Plan),
 		partial:        make(map[graph.NodeIdx]bool),
 		partialEnabled: true,
 	}
@@ -254,7 +264,7 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 	var ordered = make([]graph.NodeIdx, 0, g.NodeCount())
 	var topo = graph.NewTopoVisitor(g)
 
-	for topo.Next(g) {
+	for topo.Next() {
 		n := g.Value(topo.Current)
 		if n.IsSource() {
 			continue
@@ -396,13 +406,8 @@ func containsColumn(cols []int, col int) bool {
 // Commit commits all materialization decisions since the last time `commit` was called.
 // This includes setting up replay paths, adding new indices to existing materializations, and
 // populating new materializations
-func (mat *Materialization) Commit(
-	ctx context.Context,
-	g *graph.Graph[*flownode.Node],
-	newnodes map[graph.NodeIdx]bool,
-	domains map[boostpb.DomainIndex]*DomainHandle,
-	workers map[WorkerID]*Worker,
-) error {
+func (mat *Materialization) Commit(mig Migration, newnodes map[graph.NodeIdx]bool) error {
+	g := mig.Graph()
 	if err := mat.extend(g, newnodes); err != nil {
 		return err
 	}
@@ -463,12 +468,20 @@ func (mat *Materialization) Commit(
 									}
 								}
 								if !overlap {
-									break
+									continue
 								}
 
-								for _, col := range columns {
+								for _, col := range index {
+									if !containsColumn(columns, col) {
+										panic("partially overlapping partial indices (1)")
+									}
+								}
+
+								for i, col := range columns {
 									if !containsColumn(index, col) {
-										panic("unimplemented")
+										panic(fmt.Sprintf("partially overlapping partial indices; parent = %d, pcols = %#v, child = %d, cols = %#v, conflict = %d",
+											pni, index, ni, columns, i,
+										))
 									}
 								}
 							}
@@ -556,7 +569,7 @@ func (mat *Materialization) Commit(
 	var mknodes = make([]graph.NodeIdx, 0, len(newnodes))
 	var topo = graph.NewTopoVisitor(g)
 
-	for topo.Next(g) {
+	for topo.Next() {
 		n := g.Value(topo.Current)
 		if n.IsSource() || n.IsDropped() {
 			continue
@@ -603,7 +616,7 @@ func (mat *Materialization) Commit(
 
 		n := g.Value(node)
 		if mat.partial[node] {
-			if err := mat.setup(ctx, node, indexOn, g, domains, workers); err != nil {
+			if err := mat.setup(mig, node, indexOn); err != nil {
 				return err
 			}
 		} else {
@@ -623,7 +636,7 @@ func (mat *Materialization) Commit(
 					},
 				},
 			}
-			if err := domains[n.Domain()].SendToHealthy(ctx, &pkt, workers); err != nil {
+			if err := mig.SendPacket(n.Domain(), &pkt); err != nil {
 				return err
 			}
 		}
@@ -634,7 +647,7 @@ func (mat *Materialization) Commit(
 
 		n := g.Value(ni)
 		indexOn := mat.added.remove(ni)
-		indexOn, err = mat.readyOne(ctx, ni, indexOn, g, domains, workers)
+		indexOn, err = mat.readyOne(mig, ni, indexOn)
 		if err != nil {
 			return err
 		}
@@ -658,9 +671,8 @@ func (mat *Materialization) Commit(
 			},
 		}
 
-		domain := domains[n.Domain()]
-		if err := domain.SendToHealthySync(ctx, &pkt, workers); err != nil {
-			return nil
+		if err := mig.SendPacketSync(n.Domain(), &pkt); err != nil {
+			return err
 		}
 	}
 
@@ -668,23 +680,23 @@ func (mat *Materialization) Commit(
 	return nil
 }
 
-func (mat *Materialization) readyOne(ctx context.Context, ni graph.NodeIdx, indexOn [][]int, g *graph.Graph[*flownode.Node], domains map[boostpb.DomainIndex]*DomainHandle, workers map[WorkerID]*Worker) ([][]int, error) {
-	log := common.Logger(ctx)
-	n := g.Value(ni)
+func (mat *Materialization) readyOne(mig Migration, ni graph.NodeIdx, indexOn [][]int) ([][]int, error) {
+	log := mig.Log().With(ni.Zap())
+	n := mig.Graph().Value(ni)
 	hasState := len(indexOn) > 0
 
 	if hasState {
 		if mat.partial[ni] {
-			log.Debug("new partially materialized node", zap.Any("node", n))
+			log.Debug("new partially materialized node")
 		} else {
-			log.Debug("new fully-materialized node", zap.Any("node", n))
+			log.Debug("new fully-materialized node")
 		}
 	} else {
-		log.Debug("new stateless node", zap.Any("node", n))
+		log.Debug("new stateless node")
 	}
 
 	if n.IsAnyBase() {
-		log.Debug("no need to replay empty new base", ni.Zap())
+		log.Debug("no need to replay empty new base")
 		return indexOn, nil
 	}
 
@@ -694,25 +706,23 @@ func (mat *Materialization) readyOne(ctx context.Context, ni graph.NodeIdx, inde
 		}
 	}
 	if !hasState {
-		log.Debug("no need to replay non-materialized view", ni.Zap())
+		log.Debug("no need to replay non-materialized view")
 		return indexOn, nil
 	}
 
-	log.Debug("beginning node reconstruction", ni.Zap())
+	log.Debug("beginning node reconstruction")
 	// NOTE: the state has already been marked ready by the replay completing, but we want to
 	// wait for the domain to finish replay, which the ready executed by the outer commit()
 	// loop does.
-	err := mat.setup(ctx, ni, indexOn, g, domains, workers)
+	err := mat.setup(mig, ni, indexOn)
 	return nil, err
 }
 
-func (mat *Materialization) setup(ctx context.Context, ni graph.NodeIdx, indexOn [][]int, g *graph.Graph[*flownode.Node], domains map[boostpb.DomainIndex]*DomainHandle, workers map[WorkerID]*Worker) error {
-	log := common.Logger(ctx)
-
+func (mat *Materialization) setup(mig Migration, ni graph.NodeIdx, indexOn [][]int) error {
 	if len(indexOn) == 0 {
 		// we must be reconstructing a Reader.
 		// figure out what key that Reader is using
-		reader := g.Value(ni).AsReader()
+		reader := mig.Graph().Value(ni).AsReader()
 		if reader == nil || !reader.IsMaterialized() {
 			panic("expected to have a materialized reader")
 		}
@@ -721,18 +731,18 @@ func (mat *Materialization) setup(ctx context.Context, ni graph.NodeIdx, indexOn
 		}
 	}
 
-	plan := newMaterializationPlan(mat, g, ni, domains, workers)
+	plan := newMaterializationPlan(mat, ni)
 	for _, idx := range indexOn {
-		if err := plan.add(ctx, idx); err != nil {
+		if err := plan.add(mig, idx); err != nil {
 			return err
 		}
 	}
-	state, pending, err := plan.finalize(ctx)
+	pending, err := plan.finalize(mig)
 	if err != nil {
 		return err
 	}
 
-	mat.state[ni] = state
+	mat.plans[ni] = plan
 
 	if len(pending) > 0 {
 		for n, pending := range pending {
@@ -743,8 +753,8 @@ func (mat *Materialization) setup(ctx context.Context, ni graph.NodeIdx, indexOn
 					From: pending.Source,
 				}}
 
-			log.Debug("sending pending StartReplay", zap.Int("n", n), pending.Tag.Zap(), pending.Source.Zap(), pending.SourceDomain.Zap())
-			if err := domains[pending.SourceDomain].SendToHealthy(ctx, &pkt, workers); err != nil {
+			mig.Log().Debug("sending pending StartReplay", zap.Int("n", n), pending.Tag.Zap(), pending.Source.Zap(), pending.SourceDomain.Zap())
+			if err := mig.SendPacket(pending.SourceDomain, &pkt); err != nil {
 				return err
 			}
 		}
@@ -754,9 +764,9 @@ func (mat *Materialization) setup(ctx context.Context, ni graph.NodeIdx, indexOn
 		//		is capable of waiting on specific tags to finish, but we don't really know what's going to be the
 		//		final tag for our replay once it reaches the target domain so we cannot explicitly wait for it.
 		var pkt = &boostpb.SyncPacket{Inner: &boostpb.SyncPacket_WaitForReplay{}}
-		var finishTarget = g.Value(ni).Domain()
-		log.Debug("waiting for WaitForReplay", finishTarget.Zap())
-		if err := domains[finishTarget].SendToHealthySync(ctx, pkt, workers); err != nil {
+		var finishTarget = mig.Graph().Value(ni).Domain()
+		mig.Log().Debug("waiting for WaitForReplay", finishTarget.Zap())
+		if err := mig.SendPacketSync(finishTarget, pkt); err != nil {
 			return err
 		}
 	}
@@ -783,5 +793,31 @@ func (mat *Materialization) GetStatus(node *flownode.Node) boostpb.Materializati
 		return boostpb.MaterializationPartial
 	} else {
 		return boostpb.MaterializationFull
+	}
+}
+
+func (mat *Materialization) RenderGraphviz(gvz *graphviz.Graph[graph.NodeIdx]) {
+	portLabels := []string{"w", "e"}
+	portCount := 0
+
+	for _, plan := range mat.plans {
+		state := plan.state.String()
+
+		for tag, replayPath := range plan.paths {
+			port := portLabels[portCount%2]
+			portCount++
+
+			for e := 0; e < len(replayPath)-1; e++ {
+				from := replayPath[e]
+				to := replayPath[e+1]
+				edge := gvz.AddEdge(from, to)
+				edge.Attr["xlabel"] = fmt.Sprintf("T%d (⇨%d)", tag, plan.node)
+				edge.Attr["color"] = fmt.Sprintf("/spectral11/%d", (tag%11)+1)
+				edge.Attr["headport"] = port
+				edge.Attr["tailport"] = port
+				edge.Attr["penwidth"] = "3"
+				edge.Attr["labeltooltip"] = state
+			}
+		}
 	}
 }

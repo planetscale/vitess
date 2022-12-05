@@ -1,15 +1,10 @@
-package controller
+package materialization
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 
-	"go.uber.org/multierr"
-	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
-	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/common/graphviz"
@@ -282,8 +277,7 @@ func (ep *EvictionPlan) RenderGraphviz(gvz *graphviz.Graph[graph.NodeIdx], query
 	}
 
 	for idx, usage := range ep.nodes {
-		if idx == 0 {
-			// Skip the graph's source
+		if idx.IsSource() {
 			continue
 		}
 		if node, ok := gvz.Node(idx); ok {
@@ -318,70 +312,4 @@ func (ep *EvictionPlan) RenderGraphviz(gvz *graphviz.Graph[graph.NodeIdx], query
 			node.Row(graphviz.Fmt("Total Query Usage: <B>%s</B>", humanize.IBytes(uint64(root.memTotal()))))
 		}
 	}
-}
-
-func (ctrl *Controller) PrepareEvictionPlan(ctx context.Context) (*EvictionPlan, error) {
-	var mu sync.Mutex
-	var wg errgroup.Group
-	var ep = NewEvictionPlan()
-
-	ep.LoadRecipe(ctrl.ingredients, ctrl.materialization, ctrl.recipe.Recipe)
-
-	for _, wrk := range ctrl.workers {
-		client := wrk.Client
-		wg.Go(func() error {
-			resp, err := client.MemoryStats(ctx, &boostpb.MemoryStatsRequest{})
-			if err != nil {
-				return err
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-			return ep.LoadMemoryStats(resp)
-		})
-	}
-
-	if err := wg.Wait(); err != nil {
-		return nil, err
-	}
-
-	return ep, nil
-}
-
-func (ctrl *Controller) PerformDistributedEviction(ctx context.Context, forceLimits map[string]int64) (*EvictionPlan, error) {
-	ctrl.log.Info("preparing eviction plan for distributed eviction")
-
-	plan, err := ctrl.PrepareEvictionPlan(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	plan.SetCustomLimits(forceLimits)
-	evictions := plan.Evictions()
-
-	ctrl.log.Info("distributed eviction plan ready", zap.Int("evictions", len(evictions)))
-
-	var errs []error
-	for _, ev := range plan.Evictions() {
-		dom, err := ctrl.chanCoordinator.GetClient(ev.Domain.Domain, ev.Domain.Shard)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-
-		err = dom.ProcessAsync(ctx, &boostpb.Packet{
-			Inner: &boostpb.Packet_Evict_{Evict: &boostpb.Packet_Evict{
-				Node:     ev.Local,
-				NumBytes: ev.Evict,
-			}},
-		})
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	if len(errs) > 0 {
-		return nil, multierr.Combine(errs...)
-	}
-	return plan, nil
 }

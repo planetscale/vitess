@@ -75,7 +75,7 @@ jobs:
       - name: Determine SHA
         id: determine-sha
         run: |
-          echo "::set-output name=sha::$(git rev-parse --short HEAD)"
+          echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Docker meta
         id: meta

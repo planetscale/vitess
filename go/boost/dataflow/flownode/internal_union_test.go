@@ -28,7 +28,7 @@ func TestUnion(t *testing.T) {
 		u, l, r := setup(t)
 		assert.Equal(t,
 			fmt.Sprintf("%v:[0 1] ⋃ %v:[0 2]", l, r),
-			u.Node().impl.(Internal).Description(true),
+			u.Node().impl.(Internal).Description(),
 		)
 	})
 

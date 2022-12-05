@@ -1,23 +1,19 @@
 package controller
 
 import (
-	"context"
-
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/graph"
 )
 
-type NewNode struct {
+type nodeWithAge struct {
 	Idx graph.NodeIdx
 	New bool
 }
 
-func migrationAugmentationInform(ctx context.Context, controller *Controller, nodes map[boostpb.DomainIndex][]NewNode) error {
-	source := controller.source
+func (mig *migration) augmentationInform(nodes map[boostpb.DomainIndex][]nodeWithAge) error {
+	g := mig.target.ingredients
 
 	for domain, nodes := range nodes {
-		sender := controller.domains[domain]
-
 		oldNodes := make(map[graph.NodeIdx]bool)
 		for _, nn := range nodes {
 			if !nn.New {
@@ -30,14 +26,13 @@ func migrationAugmentationInform(ctx context.Context, controller *Controller, no
 				continue
 			}
 			ni := nn.Idx
-			node := controller.ingredients.Value(ni).Finalize(controller.ingredients)
+			node := g.Value(ni).Finalize(g)
 
 			var oldParents []boostpb.LocalNodeIndex
-			g := controller.ingredients
 			it := g.NeighborsDirected(ni, graph.DirectionIncoming)
 			for it.Next() {
 				ni := it.Current
-				if ni != source && oldNodes[ni] {
+				if !ni.IsSource() && oldNodes[ni] {
 					n := g.Value(ni)
 					if n.Domain() == domain {
 						oldParents = append(oldParents, n.LocalAddr())
@@ -52,8 +47,7 @@ func migrationAugmentationInform(ctx context.Context, controller *Controller, no
 					Parents: oldParents,
 				},
 			}
-
-			if err := sender.SendToHealthy(ctx, &pkt, controller.workers); err != nil {
+			if err := mig.SendPacket(domain, &pkt); err != nil {
 				return err
 			}
 		}

@@ -37,7 +37,7 @@ func TestFileBackupStorage_ListBackups(t *testing.T) {
 	tmpfile := createTempFile(t, content)
 	t.Cleanup(func() { os.Remove(tmpfile) })
 
-	os.Setenv(annotationsFilePath, tmpfile)
+	t.Setenv(annotationsFilePath, tmpfile)
 
 	fbs := testFilesBackupStorage(t)
 
@@ -61,14 +61,14 @@ func TestFileBackupStorage_ListBackups(t *testing.T) {
 	tmpfile = createTempFile(t, "")
 	t.Cleanup(func() { os.Remove(tmpfile) })
 
-	os.Setenv(annotationsFilePath, tmpfile)
+	t.Setenv(annotationsFilePath, tmpfile)
 
 	backups, err = fbs.ListBackups(ctx, "a/b")
 	assert.NoError(t, err)
 	require.Equal(t, 0, len(backups))
 
 	// it should fail if loadDownwardAPIMap fails.
-	os.Setenv(annotationsFilePath, "nosuchfile")
+	t.Setenv(annotationsFilePath, "nosuchfile")
 	_, err = fbs.ListBackups(ctx, "a/b")
 	assert.Error(t, err)
 }
@@ -79,7 +79,7 @@ func TestFilesBackupStorage_ListBackups_withExcludedKeyspace(t *testing.T) {
 	content := fmt.Sprintf("%s=\"1234\"\n%s=\"not-included\"", lastBackupLabel, lastBackupExcludedKeyspacesLabel)
 	tmpfile := createTempFile(t, content)
 	defer os.Remove(tmpfile)
-	os.Setenv(annotationsFilePath, tmpfile)
+	t.Setenv(annotationsFilePath, tmpfile)
 
 	fbs := testFilesBackupStorage(t)
 	backups, err := fbs.ListBackups(ctx, "a/b")
@@ -99,7 +99,7 @@ func TestFilesBackupStorage_StartBackup(t *testing.T) {
 	tmpfile := createTempFile(t, content)
 	t.Cleanup(func() { os.Remove(tmpfile) })
 
-	os.Setenv(annotationsFilePath, tmpfile)
+	t.Setenv(annotationsFilePath, tmpfile)
 
 	fbs := testFilesBackupStorage(t)
 
@@ -113,21 +113,38 @@ func TestFilesBackupStorage_StartBackup(t *testing.T) {
 	_, err = w.Write(input)
 	require.NoError(t, err)
 	w.Close()
+}
 
-	// Make sure you can't start another backup in the same place.
-	_, err = fbs.StartBackup(ctx, "a", "b")
-	assert.Error(t, err)
+func TestFilesBackupStorage_StartBackup_Complete(t *testing.T) {
+	ctx := context.Background()
 
-	r, err := handle.ReadFile(ctx, "ssfile")
+	// annotations config.
+	backupID := rand.Int63()
+	content := fmt.Sprintf(`%v="%v"`, backupIDLabel, backupID)
+	tmpfile := createTempFile(t, content)
+	t.Cleanup(func() { os.Remove(tmpfile) })
+	t.Setenv(annotationsFilePath, tmpfile)
+
+	// init the storage.
+	fbs := testFilesBackupStorage(t)
+
+	// create a backup.
+	h, err := fbs.StartBackup(ctx, "dir", "b")
 	require.NoError(t, err)
-	output, err := ioutil.ReadAll(r)
-	assert.NoError(t, err)
-	assert.Equal(t, input, output)
-	r.Close()
 
-	// Test fbh no-op API
-	assert.NoError(t, handle.EndBackup(ctx))
-	assert.NoError(t, handle.AbortBackup(ctx))
+	// add a dummy manifest to indicate that this backup is complete.
+	f, err := h.AddFile(ctx, backupManifestFileName, 3)
+	require.NoError(t, err)
+
+	_, err = f.Write([]byte("abc"))
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	require.NoError(t, h.EndBackup(ctx))
+
+	// we expect an error because that backup is complete.
+	_, err = fbs.StartBackup(ctx, "dir", "b")
+	require.Error(t, err)
+	require.EqualError(t, err, `kmsbackup: cannot start backup because the manifest already exists`)
 }
 
 func TestFilesBackupStorage_StartBackup_sanityCheck(t *testing.T) {
@@ -138,7 +155,7 @@ func TestFilesBackupStorage_StartBackup_sanityCheck(t *testing.T) {
 	tmpfile := createTempFile(t, content)
 	t.Cleanup(func() { os.Remove(tmpfile) })
 
-	os.Setenv(annotationsFilePath, tmpfile)
+	t.Setenv(annotationsFilePath, tmpfile)
 
 	fbs := testFilesBackupStorage(t)
 
@@ -181,7 +198,7 @@ func TestFilesBackupStorage_StartBackup_uploadSizeFile(t *testing.T) {
 	tmpfile := createTempFile(t, content)
 	t.Cleanup(func() { os.Remove(tmpfile) })
 
-	os.Setenv(annotationsFilePath, tmpfile)
+	t.Setenv(annotationsFilePath, tmpfile)
 
 	fbs := testFilesBackupStorage(t)
 

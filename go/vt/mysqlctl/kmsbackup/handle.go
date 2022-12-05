@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/planetscale/common-libs/files"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -67,26 +69,41 @@ func (f *filesBackupHandle) Name() string {
 	return f.name
 }
 
+// CreateRoot attempts to create a root path for this backup.
+//
+// The method performs a check to ensure that we do not accidentally re-write
+// a complete backup while it allows us to "resume" backups by clearing the
+// root path if it is not empty.
+//
+// A complete backup is one that has the `MANIFEST` file because without it
+// vitess cannot restore. If it exists the method returns an error, otherwise
+// if it does not exist the method will clear the backup by deleting all files.
 func (f *filesBackupHandle) createRoot(ctx context.Context) error {
-	err := f.fs.MkdirAll(ctx, f.rootPath)
-	if err != nil {
+	if err := f.fs.MkdirAll(ctx, f.rootPath); err != nil {
 		return err
 	}
 
-	// Make sure the target dir is empty.
-	// TODO(sougou): this type of check does not fully protect against races.
-	// I tried creating a lock file, but S3 is too permissive.
-	// For now, we'll just trust that the caller will never
-	// attempt two concurrent backups with the same ID.
-	dir, err := f.fs.ReadDir(ctx, f.rootPath)
-	if err != nil {
-		return err
+	manifest := path.Join(f.rootPath, backupManifestFileName)
+	if _, err := f.fs.Stat(ctx, manifest); err != nil {
+		if status.Code(err) == codes.NotFound {
+			return f.reset(ctx)
+		}
+		return fmt.Errorf("kmsbackup: cannot stat(%q) - %w", manifest, err)
 	}
 
-	if len(dir) != 0 {
-		return fmt.Errorf("target directory not empty: has %d entries", len(dir))
-	}
+	return fmt.Errorf(
+		"kmsbackup: cannot start backup because the manifest already exists",
+	)
+}
 
+// Reset resets the backup directory.
+func (f *filesBackupHandle) reset(ctx context.Context) error {
+	if err := f.fs.RemoveAll(ctx, f.rootPath); err != nil {
+		return fmt.Errorf("kmsbackup: remove all %q - %w", f.rootPath, err)
+	}
+	if err := f.fs.MkdirAll(ctx, f.rootPath); err != nil {
+		return fmt.Errorf("kmsbackup: mkdir all %q - %w", f.rootPath, err)
+	}
 	return nil
 }
 

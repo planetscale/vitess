@@ -1,6 +1,7 @@
 package flownode
 
 import (
+	"fmt"
 	"strconv"
 
 	"golang.org/x/exp/slices"
@@ -48,7 +49,7 @@ func (g *aggExtremumInteger[N]) apply(current *boostpb.Value) boostpb.Value {
 	var extremes []N
 	var isExtreme func(v N) bool
 
-	if current != nil {
+	if current != nil && current.Type() != sqltypes.Null {
 		n, _ := g.from(*current)
 		extremes = append(extremes, n)
 
@@ -150,23 +151,24 @@ func (e *groupedExtremum) state(tt boostpb.Type) aggregationState {
 	}
 }
 
+func (e *groupedExtremum) defaultValue() sqltypes.Value {
+	return sqltypes.NULL
+}
+
 func (e *groupedExtremum) setup(parent *Node) {
 	if e.over >= len(parent.Fields()) {
 		panic("cannot aggregate over non-existing column")
 	}
 }
 
-func (e *groupedExtremum) description(detailed bool) string {
-	if !detailed {
-		switch e.kind {
-		case ExtremumMin:
-			return "MIN"
-		case ExtremumMax:
-			return "MAX"
-		}
-		panic("unreachable")
+func (e *groupedExtremum) description() string {
+	switch e.kind {
+	case ExtremumMin:
+		return fmt.Sprintf("MIN(:%d)", e.over)
+	case ExtremumMax:
+		return fmt.Sprintf("MAX(:%d)", e.over)
 	}
-	return "Extremum (TODO)"
+	panic("unreachable")
 }
 
 var _ AggrExpr = (*groupedExtremum)(nil)

@@ -168,6 +168,10 @@ func (f *fakeOp) PlanOffsets(node *Node, st *semantics.SemTable) error {
 	panic("implement me")
 }
 
+func (f *fakeOp) AddToQueryBuilder(qb []*queryBuilder, this *Node) error {
+	panic("implement me")
+}
+
 func (f *fakeOp) Equals(st *semantics.SemTable, op Operator) bool {
 	if f.equalTo == nil {
 		return false

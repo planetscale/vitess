@@ -13,6 +13,8 @@ type dummyMigration struct {
 	nodes   map[graph.NodeIdx]flownode.NodeImpl
 }
 
+var _ Migration = (*dummyMigration)(nil)
+
 func (d *dummyMigration) next() graph.NodeIdx {
 	n := d.counter
 	d.counter++
@@ -31,7 +33,11 @@ func (d *dummyMigration) AddBase(_ string, _ []string, b flownode.AnyBase) graph
 	return n
 }
 
-func (d *dummyMigration) Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int) {
+func (d *dummyMigration) Maintain(string, graph.NodeIdx, []int, []boostpb.ViewParameter, int) {
+	// nop
+}
+
+func (d *dummyMigration) MaintainAnonymous(n graph.NodeIdx, key []int) {
 	// nop
 }
 

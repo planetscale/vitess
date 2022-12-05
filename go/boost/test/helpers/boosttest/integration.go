@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/server"
 	"vitess.io/vitess/go/boost/server/controller"
+	"vitess.io/vitess/go/boost/server/controller/materialization"
 	"vitess.io/vitess/go/boost/server/worker"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testexecutor"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
@@ -329,11 +330,10 @@ func (c *Cluster) ServerInstances() []*server.Server {
 	return nil
 }
 
-func (c *Cluster) DebugEviction(renderGraphviz bool, forceLimits map[string]int64) *controller.EvictionPlan {
+func (c *Cluster) DebugEviction(renderGraphviz bool, forceLimits map[string]int64) *materialization.EvictionPlan {
 	if renderGraphviz {
 		resp, err := c.Controller().Graphviz(context.Background(),
 			&vtboost.GraphvizRequest{
-				MemoryStats:       true,
 				ForceMemoryLimits: forceLimits,
 				Clustering:        vtboost.GraphvizRequest_QUERY,
 			})
@@ -419,7 +419,7 @@ func (c *Cluster) shutdown() {
 }
 
 func (c *Cluster) ViewGraphviz() {
-	gz, err := c.Controller().Graphviz(context.Background(), &vtboost.GraphvizRequest{MemoryStats: true})
+	gz, err := c.Controller().Graphviz(context.Background(), &vtboost.GraphvizRequest{})
 	if err != nil {
 		c.t.Fatal(err)
 	}
@@ -562,6 +562,17 @@ func (l *Lookup) Expect(expected []sqltypes.Row) *sqltypes.Result {
 	})
 }
 
+func (l *Lookup) ExpectStr(expected string) *sqltypes.Result {
+	l.t.Helper()
+	return l.expect(func(result *sqltypes.Result) error {
+		resultStr := fmt.Sprintf("%v", result.Rows)
+		if expected == resultStr {
+			return nil
+		}
+		return fmt.Errorf("expected %q = %q", expected, resultStr)
+	})
+}
+
 func (l *Lookup) ExpectSorted(expected []sqltypes.Row) *sqltypes.Result {
 	l.t.Helper()
 	return l.expect(func(result *sqltypes.Result) error {
@@ -589,7 +600,7 @@ func (l *Lookup) expect(check func(result *sqltypes.Result) error) *sqltypes.Res
 
 	var rs *sqltypes.Result
 	var err error
-	for tries := 0; tries < 3; tries++ {
+	for tries := 0; tries < 10; tries++ {
 		rs, err = l.try()
 		if err != nil {
 			continue
@@ -597,7 +608,7 @@ func (l *Lookup) expect(check func(result *sqltypes.Result) error) *sqltypes.Res
 		if err = check(rs); err == nil {
 			return rs
 		}
-		time.Sleep(3 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 	l.t.Fatal(err)
 	return nil
@@ -610,6 +621,20 @@ func (l *Lookup) ExpectError() {
 	if err == nil {
 		l.t.Fatalf("expected lookup to fail")
 	}
+}
+
+func (l *Lookup) ExpectErrorEventually() {
+	l.t.Helper()
+
+	for i := 0; i < 100; i++ {
+		_, err := l.try()
+		if err != nil {
+			l.t.Logf("failed after %d attempts: %v", i, err)
+			return
+		}
+	}
+
+	l.t.Fatalf("expected lookup to fail")
 }
 
 type TestTable struct {
@@ -683,7 +708,7 @@ func (c *Cluster) ApplyRecipeEx(recipe *testrecipe.Recipe, mysql, boost bool) {
 			Queries: recipe.Queries,
 			Version: c.RecipeVersion,
 		}
-		if err := c.Controller().PutRecipeWithOptions(context.Background(), recipepb, recipe.SchemaInformation()); err != nil {
+		if err := c.Controller().PutRecipeWithOptions(context.Background(), recipepb, recipe.SchemaInformation(), nil); err != nil {
 			c.t.Fatalf("failed to PutRecipeWithOptions(): %v", err)
 		}
 	}

@@ -26,7 +26,7 @@ func TestJoin(t *testing.T) {
 		j, l, r := setup(t)
 		assert.Equal(t,
 			fmt.Sprintf("[%v:0, %v:1, %v:1] %v:0 ⋉ %v:0", l, l, r, l, r),
-			j.Node().impl.(Internal).Description(true),
+			j.Node().impl.(Internal).Description(),
 		)
 	})
 
