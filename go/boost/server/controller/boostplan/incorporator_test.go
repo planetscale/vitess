@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/boost/server/controller"
+
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/integration"
 )
@@ -17,16 +19,20 @@ func TestGoldenIncorporatorCasesFromNoria(t *testing.T) {
 	golden := integration.LoadGoldenTest(t, "integration/testdata/noria.json")
 
 	t.Run("ItParses", func(t *testing.T) {
-		ti := boostplan.NewTestIncorporator(golden.SchemaInformation)
+		mig := controller.NewDummyMigration()
+		ti := boostplan.NewTestIncorporator(golden.SchemaInformation, mig)
 
 		err := ti.AddQuery("main", "SELECT users.id from users;")
+		require.NoError(t, err)
+		err = mig.Commit()
 		require.NoError(t, err)
 	})
 
 	t.Run("GoldenQueries", func(t *testing.T) {
-		ti := boostplan.NewTestIncorporator(golden.SchemaInformation)
-
 		for _, query := range golden.Queries {
+			mig := controller.NewDummyMigration()
+			ti := boostplan.NewTestIncorporator(golden.SchemaInformation, mig)
+
 			t.Logf("%s", query.SQL)
 
 			err := ti.AddQuery(query.Keyspace, query.SQL)
@@ -46,9 +52,9 @@ func TestGoldenIncorporatorCasesFromNoria(t *testing.T) {
 				t.Logf("\tSKIPPING: %s", query.Error)
 				continue
 			}
-			if err != nil {
-				t.Errorf("failed to AddParsedQuery: %v", err)
-			}
+			require.NoError(t, err)
+			err = mig.Commit()
+			require.NoError(t, err)
 		}
 	})
 
@@ -61,12 +67,16 @@ func TestUnsupportedQueries(t *testing.T) {
 	unsupported := integration.LoadGoldenTest(t, "integration/testdata/unsupported.json")
 
 	t.Run("handles unsupported queries", func(t *testing.T) {
-		ti := boostplan.NewTestIncorporator(unsupported.SchemaInformation)
 
 		for _, query := range unsupported.Queries {
+			mig := controller.NewDummyMigration()
+			ti := boostplan.NewTestIncorporator(unsupported.SchemaInformation, mig)
 			t.Logf("%s", query.SQL)
 
 			err := ti.AddQuery(query.Keyspace, query.SQL)
+			if err == nil {
+				err = mig.Commit()
+			}
 			if *goldenSave {
 				if err != nil {
 					query.Error = err.Error()

@@ -3,7 +3,6 @@ package operators
 import (
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -62,12 +61,20 @@ func (g *GroupBy) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 	}
 
 	for _, aggr := range g.Aggregations {
+		ast, err := aggr.SingleAST()
+		if err != nil {
+			return err
+		}
 		var offset int
-		switch aggr := aggr.(type) {
+		switch aggr := ast.(type) {
 		case *sqlparser.CountStar:
-		default:
-			var err error
+		case sqlparser.AggrFunc:
 			offset, err = input.ExprLookup(semTable, aggr.GetArg())
+			if err != nil {
+				return err
+			}
+		default:
+			offset, err = input.ExprLookup(semTable, aggr)
 			if err != nil {
 				return err
 			}
@@ -103,7 +110,7 @@ func (j *Join) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 				if err != nil {
 					return err
 				}
-				j.Emit = append(j.Emit, flownode.JoinSourceLeft(offset))
+				j.Emit = append(j.Emit, [2]int{offset, -1})
 				if isJoinCondition {
 					j.On[0] = offset
 				}
@@ -112,7 +119,7 @@ func (j *Join) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 				if err != nil {
 					return err
 				}
-				j.Emit = append(j.Emit, flownode.JoinSourceRight(offset))
+				j.Emit = append(j.Emit, [2]int{-1, offset})
 				if isJoinCondition {
 					j.On[1] = offset
 				}
@@ -182,8 +189,10 @@ func (j *Join) setColNameOffsets(semTable *semantics.SemTable, lhsNode, rhsNode 
 	if err != nil {
 		return err
 	}
-	j.Emit = append(j.Emit, flownode.JoinSourceBoth(lft, rgt))
-	j.On = [2]int{lft, rgt}
+
+	source := [2]int{lft, rgt}
+	j.Emit = append(j.Emit, source)
+	j.On = source
 	return nil
 }
 
@@ -225,13 +234,9 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 			if err != nil {
 				return err
 			}
-			p.Projections = append(p.Projections, flownode.ProjectedCol(offset))
+			p.Projections = append(p.Projections, Projection{Kind: ProjectionColumn, Column: offset})
 		case *sqlparser.Literal:
-			v, err := flownode.ProjectedLiteralFromAST(expr)
-			if err != nil {
-				return err
-			}
-			p.Projections = append(p.Projections, v)
+			p.Projections = append(p.Projections, Projection{Kind: ProjectionLiteral, AST: expr})
 		default:
 			newExpr, err := rewriteColNamesToOffsets(semTable, node.Ancestors[0], expr)
 			if err != nil {
@@ -241,10 +246,7 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 			if err != nil {
 				return &UnsupportedError{AST: expr, Type: EvalEngineNotSupported}
 			}
-			p.Projections = append(p.Projections, &flownode.ProjectedExpr{
-				AST:      newExpr,
-				EvalExpr: eexpr,
-			})
+			p.Projections = append(p.Projections, Projection{Kind: ProjectionEval, AST: newExpr, Eval: eexpr})
 		}
 	}
 	return nil
@@ -270,7 +272,7 @@ func (n *NullFilter) PlanOffsets(node *Node, st *semantics.SemTable) error {
 			if err != nil {
 				return err
 			}
-			n.Projections = append(n.Projections, flownode.ProjectedCol(offset))
+			n.Projections = append(n.Projections, Projection{Kind: ProjectionColumn, Column: offset})
 			continue
 		}
 
@@ -309,11 +311,12 @@ func (n *NullFilter) PlanOffsets(node *Node, st *semantics.SemTable) error {
 		if err != nil {
 			return err
 		}
+
 		eeExpr, err := evalengine.Translate(ast, nil)
-		n.Projections = append(n.Projections, &flownode.ProjectedExpr{
-			AST:      ast,
-			EvalExpr: eeExpr,
-		})
+		if err != nil {
+			return err
+		}
+		n.Projections = append(n.Projections, Projection{Kind: ProjectionEval, AST: ast, Eval: eeExpr})
 	}
 
 	return nil

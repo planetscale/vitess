@@ -69,7 +69,7 @@ func (g *GroupBy) MarshalJSON() ([]byte, error) {
 		out.Grouping = append(out.Grouping, column.Name)
 	}
 	for _, aggr := range g.Aggregations {
-		out.Aggregations = append(out.Aggregations, sqlparser.String(aggr))
+		out.Aggregations = append(out.Aggregations, aggr.Name)
 	}
 	return json.Marshal(out)
 }

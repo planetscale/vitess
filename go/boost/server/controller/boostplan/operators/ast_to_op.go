@@ -223,59 +223,101 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 	return multierr.Combine(errors...)
 }
 
-func markOther(st *semantics.SemTable, col sqlparser.AggrFunc, tableID semantics.TableSet) func(cursor *sqlparser.Cursor) bool {
+// markOther returns a sqlparser rewriter that adds aggregation expressions to the semtable
+func markOther(st *semantics.SemTable, col sqlparser.Expr, tableID semantics.TableSet) func(cursor *sqlparser.Cursor) bool {
 	return func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
-		case sqlparser.AggrFunc:
-			if sqlparser.EqualsAggrFunc(col, node) {
-				st.Direct[node] = tableID
-			}
 		case *sqlparser.Subquery:
 			return false
+		case sqlparser.Expr:
+			if sqlparser.EqualsSQLNode(col, node) {
+				st.Direct[node] = tableID
+			}
 		}
 		return true
 	}
 }
 
-func (conv *Converter) buildAggregation(ctx *PlanContext, sel *sqlparser.Select, input *Node) (output *Node, columns Columns, err error) {
+type aggrCol int
+
+const (
+	grouping aggrCol = iota
+	aggregation
+	unknown
+)
+
+func (conv *Converter) buildAggregation(ctx *PlanContext, sel *sqlparser.Select, input *Node) (*Node, Columns, error) {
 	groupBy := &GroupBy{
 		Grouping: Columns{},
 		TableID:  ctx.SemTable.GetNextTableSet(),
 	}
+
+	columns := Columns{} // these are the columns that we want the whole SELECT query to return
+
+	var ownCols []*Column // these are the columns that the aggregation works with
+	var outputTypes []aggrCol
+
 	colMap := map[string]sqlparser.Expr{}
 
+	// step 1. we go over all expressions and mark them as either unknown or aggregation expressions
 	for _, field := range sel.SelectExprs {
 		switch field := field.(type) {
 		case *sqlparser.StarExpr:
 			return nil, nil, &UnsupportedError{AST: field, Type: ColumnsNotExpanded}
 		case *sqlparser.AliasedExpr:
-			createdColumn := &Column{
+			col := &Column{
 				AST:  []sqlparser.Expr{field.Expr},
 				Name: field.ColumnName(),
 			}
+			ownCols = append(ownCols, col)
+			columns = columns.Add(ctx, col)
 
 			switch col := field.Expr.(type) {
 			case sqlparser.AggrFunc:
-				addAggregations(ctx, sel, col, groupBy)
+				outputTypes = append(outputTypes, aggregation)
 			default:
 				if sqlparser.ContainsAggregation(col) {
 					return nil, nil, &UnsupportedError{AST: col, Type: AggregationInComplexExpression}
 				}
+				outputTypes = append(outputTypes, unknown)
 				if !field.As.IsEmpty() {
 					colMap[field.As.String()] = field.Expr
 				} else if col, isCol := field.Expr.(*sqlparser.ColName); isCol {
 					colMap[col.Name.String()] = col
 				}
 			}
-			columns = columns.Add(ctx, createdColumn)
 		}
 	}
+
+	// step 2. now go over the grouping clause. if we can find the expression in the list of outputs,
+	// we mark it as a grouping column. if we can't find the column, we add a new one
 	for _, expr := range sel.GroupBy {
 		if col, isCol := expr.(*sqlparser.ColName); isCol && col.Qualifier.IsEmpty() {
 			expr = colMap[col.Name.String()]
 		}
-		createdColumn := ColumnFromAST(expr)
-		groupBy.Grouping = groupBy.Grouping.Add(ctx, createdColumn)
+		for i, col := range ownCols {
+			if col.EqualsAST(ctx.SemTable, expr, true) {
+				outputTypes[i] = grouping
+			}
+		}
+		ownCols = append(ownCols, ColumnFromAST(expr))
+		outputTypes = append(outputTypes, grouping)
+	}
+
+	// step 3. finally, any output columns still marked as unknown are expressions outside
+	// the ONLY_FULL_GROUP_BY limitation. we handle these by using a random expression, similarly to what mysql does
+	for i, col := range ownCols {
+		switch outputTypes[i] {
+		case grouping:
+			groupBy.Grouping = groupBy.Grouping.Add(ctx, col)
+		case aggregation, unknown:
+			// here we just add everything to the aggregations list. when we are going over these when building the flowNode,
+			// any that do not implement AggrFunc are known to need special handling
+			err := groupBy.addAggregations(ctx, sel, col)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
 	}
 
 	if len(groupBy.Grouping) > 0 && len(groupBy.Aggregations) == 0 {
@@ -297,17 +339,26 @@ func (conv *Converter) buildAggregation(ctx *PlanContext, sel *sqlparser.Select,
 	return groupingNode, columns, nil
 }
 
-func addAggregations(ctx *PlanContext, sel *sqlparser.Select, col sqlparser.AggrFunc, groupBy *GroupBy) {
+func (groupBy *GroupBy) addAggregations(ctx *PlanContext, sel *sqlparser.Select, col *Column) error {
 	groupBy.Aggregations = append(groupBy.Aggregations, col)
 
 	// to make it possible to do offset lookups in later phases, we add these aggregation functions as being introduced
 	// by this operator. apart from setting the dependency for this particular expression, we also need to search for
 	// other uses of this aggregation expression. So, we traverse the ORDER BY and HAVING clauses, the only other places
 	// where aggregations can be found
-	ctx.SemTable.Direct[col] = groupBy.TableID
-	markOtherF := markOther(ctx.SemTable, col, groupBy.TableID)
+	ast, err := col.SingleAST()
+	if err != nil {
+		return err
+	}
+	_, isAggrFunc := ast.(sqlparser.AggrFunc)
+	if !isAggrFunc {
+		return nil
+	}
+	ctx.SemTable.Direct[ast] = groupBy.TableID
+	markOtherF := markOther(ctx.SemTable, ast, groupBy.TableID)
 	sqlparser.Rewrite(sel.OrderBy, markOtherF, nil)
 	sqlparser.Rewrite(sel.Having, markOtherF, nil)
+	return nil
 }
 
 func (conv *Converter) planProjectionWithoutAggr(ctx *PlanContext, sel *sqlparser.Select) (columns Columns, err error) {

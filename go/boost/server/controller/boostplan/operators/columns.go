@@ -151,47 +151,40 @@ func (p *Project) isDerivedTable() bool {
 }
 
 func (g *GroupBy) AddColumns(ctx *PlanContext, columns Columns) (Columns, error) {
+outer:
 	for _, col := range columns {
-		ast, err := col.SingleAST()
-		if err != nil {
-			return Columns{}, err
-		}
-		_, isAggr := ast.(sqlparser.AggrFunc)
-		var hasCol bool
-		if isAggr {
-			for _, aggrFunc := range g.Aggregations {
-				if sqlparser.EqualsExpr(ast, aggrFunc) {
-					hasCol = true
-					break
-				}
+		for _, aggrFunc := range g.Aggregations {
+			if aggrFunc.Equals(ctx.SemTable, col, true) {
+				continue outer
 			}
-			if !hasCol {
-				return Columns{}, NewBug("cant add aggregations after the operator has been built")
-			}
-			continue
 		}
 
 		for _, g := range g.Grouping {
 			if g.Equals(ctx.SemTable, col, true) {
-				hasCol = true
-				break
+				continue outer
 			}
 		}
-		if !hasCol {
-			g.Grouping = g.Grouping.Add(ctx, col)
-		}
+
+		// If we get here, we are seeing a new expression being requested here.
+		// This is usually a predicate with a parameter,
+		// and these are handled by adding the expression as a grouping expression.
+		g.Grouping = g.Grouping.Add(ctx, col)
 	}
 
 	needs := Columns{}.Add(ctx, g.Grouping...)
 	for _, aggrFunc := range g.Aggregations {
-		_, isCountStar := aggrFunc.(*sqlparser.CountStar)
-		if isCountStar {
-			continue
+		ast, err := aggrFunc.SingleAST()
+		if err != nil {
+			return nil, err
 		}
-
-		arg := aggrFunc.GetArg()
-		col := ColumnFromAST(arg)
-		needs = needs.Add(ctx, col)
+		switch ast := ast.(type) {
+		case *sqlparser.CountStar:
+			// empty by design
+		case sqlparser.AggrFunc:
+			needs = needs.Add(ctx, ColumnFromAST(ast.GetArg()))
+		case sqlparser.Expr:
+			needs = needs.Add(ctx, ColumnFromAST(ast))
+		}
 	}
 
 	if len(g.Grouping) == 0 {
@@ -425,16 +418,8 @@ func (v *View) GetColumns() Columns {
 func (g *GroupBy) GetColumns() Columns {
 	var cols Columns
 	cols = append(cols, g.Grouping...)
-	for _, aggr := range g.Aggregations {
-		argname := "?"
-		if col, ok := aggr.GetArg().(*sqlparser.ColName); ok {
-			argname = col.Name.String()
-		}
-		cols = append(cols, &Column{
-			AST:  []sqlparser.Expr{aggr},
-			Name: fmt.Sprintf("%s(%s)", aggr.AggrName(), argname),
-		})
-	}
+	cols = append(cols, g.Aggregations...)
+
 	return cols
 }
 

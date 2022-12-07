@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,10 +24,10 @@ func TestCodec(t *testing.T) {
 		assert.Equal(3, n)
 		assert.NoError(enc.Close())
 
-		dec, err := newDecoder(ctx, kms, ioutil.NopCloser(buf))
+		dec, err := newDecoder(ctx, kms, io.NopCloser(buf))
 		assert.NoError(err)
 
-		data, err := ioutil.ReadAll(dec)
+		data, err := io.ReadAll(dec)
 		assert.NoError(err)
 		assert.Equal([]byte("foo"), data)
 	})

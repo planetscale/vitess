@@ -20,6 +20,8 @@ func (n *Node) ToProto() *boostpb.Node {
 	}
 
 	switch impl := n.impl.(type) {
+	case *Source:
+		pnode.Impl = nil
 	case *Base:
 		pnode.Impl = &boostpb.Node_Base_{Base: impl.ToProto()}
 	case *Egress:

@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"os"
 	"testing"
@@ -221,7 +221,7 @@ func TestFilesBackupStorage_StartBackup_uploadSizeFile(t *testing.T) {
 	input := []byte("20")
 	r, err := handle.ReadFile(ctx, "SIZE")
 	require.NoError(t, err)
-	output, err := ioutil.ReadAll(r)
+	output, err := io.ReadAll(r)
 	assert.NoError(t, err)
 	assert.Equal(t, input, output)
 	r.Close()
@@ -267,7 +267,7 @@ func testFilesBackupStorage(t *testing.T) *FilesBackupStorage {
 // and returns the name of the file.
 func createTempFile(t *testing.T, content string) string {
 	t.Helper()
-	tmpfile, err := ioutil.TempFile("", "backup_labels_test")
+	tmpfile, err := os.CreateTemp("", "backup_labels_test")
 	require.NoError(t, err)
 	defer tmpfile.Close()
 

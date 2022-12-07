@@ -94,7 +94,7 @@ type redo struct {
 }
 
 type hole struct {
-	columns common.ColumnSet
+	columns common.Columns
 	key     boostpb.Row
 }
 
@@ -129,7 +129,7 @@ type Domain struct {
 	readerTriggered map[boostpb.LocalNodeIndex]common.RowSet
 	finishedReplays chan boostpb.Tag
 
-	replayPathsByDst map[boostpb.LocalNodeIndex]map[common.ColumnSet][]boostpb.Tag
+	replayPathsByDst map[boostpb.LocalNodeIndex]map[common.Columns][]boostpb.Tag
 
 	concurrentReplays    int
 	maxConcurrentReplays int
@@ -897,7 +897,7 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 		if partial, ok := m.Context.(*boostpb.Packet_ReplayPiece_Partial); ok {
 			partial := partial.Partial
 			had := len(partial.ForKeys)
-			partialKeys := common.NewColumnSet(pathLast.PartialKey)
+			partialKeys := common.ColumnsFrom(pathLast.PartialKey)
 
 			if w, ok := d.waiting[dst]; ok {
 				for r := range partial.ForKeys {
@@ -1263,7 +1263,7 @@ func (d *Domain) handleReplay(ctx context.Context, pkt *boostpb.Packet, executor
 
 					if evictTag == boostpb.TagNone {
 						if cs, ok := d.replayPathsByDst[pn]; ok {
-							if tags, ok := cs[common.NewColumnSet(lookup.Cols)]; ok {
+							if tags, ok := cs[common.ColumnsFrom(lookup.Cols)]; ok {
 								// this is the tag we would have used to
 								// fill a lookup hole in this ancestor, so
 								// this is the tag we need to evict from.
@@ -1358,7 +1358,7 @@ finished:
 			delete(d.waiting, finishedReplay.ni)
 
 			rp := d.replayPaths[finishedReplay.tag]
-			keyCols := common.NewColumnSet(rp.Path[len(rp.Path)-1].PartialKey)
+			keyCols := common.ColumnsFrom(rp.Path[len(rp.Path)-1].PartialKey)
 
 			// we got a partial replay result that we were waiting for. it's time we let any
 			// downstream nodes that missed in us on that key know that they can (probably)
@@ -1677,7 +1677,7 @@ func (d *Domain) handleReaderReplay(ctx context.Context, replay *boostpb.Packet_
 }
 
 func (d *Domain) findTagsAndReplay(ctx context.Context, missKeys []boostpb.Row, missCols []int, missIn boostpb.LocalNodeIndex) error {
-	missColumns := common.NewColumnSet(missCols)
+	missColumns := common.ColumnsFrom(missCols)
 
 	var tags []boostpb.Tag
 	if candidates, ok := d.replayPathsByDst[missIn]; ok {
@@ -1858,11 +1858,11 @@ func (d *Domain) handleSetupReplayPath(setup *boostpb.SyncPacket_SetupReplayPath
 
 		rpath, ok := d.replayPathsByDst[last.Node]
 		if !ok {
-			rpath = make(map[common.ColumnSet][]boostpb.Tag)
+			rpath = make(map[common.Columns][]boostpb.Tag)
 			d.replayPathsByDst[last.Node] = rpath
 		}
 
-		partialKey := common.NewColumnSet(last.PartialKey)
+		partialKey := common.ColumnsFrom(last.PartialKey)
 		rpath[partialKey] = append(rpath[partialKey], tag)
 	}
 
@@ -2219,7 +2219,7 @@ func (d *Domain) onReplayMiss(ctx context.Context, missIn boostpb.LocalNodeIndex
 		unishard:        unishard,
 	}
 
-	holeEntry := hole{common.NewColumnSet(missColumns), missKey}
+	holeEntry := hole{common.ColumnsFrom(missColumns), missKey}
 	e, found := w.redos[holeEntry]
 	if found {
 		// we have already requested backfill of this key
@@ -2285,7 +2285,7 @@ func (d *Domain) finishedPartialReplay(ctx context.Context, tag boostpb.Tag, num
 		last := rp.Path[len(rp.Path)-1]
 
 		if cs, ok := d.replayPathsByDst[last.Node]; ok {
-			if tags, ok := cs[common.NewColumnSet(last.PartialKey)]; ok {
+			if tags, ok := cs[common.ColumnsFrom(last.PartialKey)]; ok {
 				for _, tag := range tags {
 					if _, end := d.replayPaths[tag].Trigger.(*replay.TriggerEnd); end {
 						requestsSatisfied++
@@ -2634,7 +2634,7 @@ func FromProto(
 		memstats:               memstats,
 		rng:                    rand.New(rand.NewSource(time.Now().UnixNano())),
 		readerTriggered:        make(map[boostpb.LocalNodeIndex]common.RowSet),
-		replayPathsByDst:       make(map[boostpb.LocalNodeIndex]map[common.ColumnSet][]boostpb.Tag),
+		replayPathsByDst:       make(map[boostpb.LocalNodeIndex]map[common.Columns][]boostpb.Tag),
 		replayPaths:            make(map[boostpb.Tag]*replay.Path),
 		bufferedReplayRequests: make(map[tagshard]*bufferedReplay),
 		concurrentReplays:      0,

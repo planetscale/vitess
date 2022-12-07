@@ -122,7 +122,7 @@ func (srv *Server) Migrate(ctx context.Context, perform func(mig Migration) erro
 	if err := perform(mig); err != nil {
 		return err
 	}
-	return mig.Commit(nil)
+	return mig.Commit()
 }
 
 func (srv *Server) IsReady() bool {
@@ -239,18 +239,6 @@ func (srv *Server) PutRecipeWithOptions(ctx context.Context, recipepb *vtboostpb
 
 	_, err := srv.inner.ModifyRecipe(ctx, recipepb, si, migrate)
 	return err
-}
-
-func (srv *Server) TryPlan(keyspace, sql string, si *boostplan.SchemaInformation) error {
-	srv.mu.Lock()
-	defer srv.mu.Unlock()
-
-	if si == nil {
-		si = srv.defaultSchemaInfo()
-	}
-
-	planner := boostplan.NewTestIncorporator(si)
-	return planner.AddQuery(keyspace, sql)
 }
 
 func (srv *Server) GetRecipe(context.Context, *vtboostpb.GetRecipeRequest) (*vtboostpb.GetRecipeResponse, error) {

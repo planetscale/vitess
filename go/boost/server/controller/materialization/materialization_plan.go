@@ -1,8 +1,6 @@
 package materialization
 
 import (
-	"sort"
-
 	"github.com/tidwall/btree"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
@@ -71,9 +69,7 @@ func materializationPlanOnJoin(g *graph.Graph[*flownode.Node]) OnJoin {
 		}
 
 		// ensure that our choice of multiple possible parents is deterministic
-		sort.Slice(parents, func(i, j int) bool {
-			return parents[i] < parents[j]
-		})
+		slices.Sort(parents)
 
 		// TODO:
 		// if any required parent is empty, and we know we're building a full materialization,
@@ -85,16 +81,37 @@ func materializationPlanOnJoin(g *graph.Graph[*flownode.Node]) OnJoin {
 	}
 }
 
-type PendingReplay struct {
-	Tag          boostpb.Tag
-	Source       boostpb.LocalNodeIndex
-	SourceDomain boostpb.DomainIndex
-	TargetDomain boostpb.DomainIndex
+type pendingReplay struct {
+	tag          boostpb.Tag
+	source       boostpb.LocalNodeIndex
+	sourceDomain boostpb.DomainIndex
+	targetDomain boostpb.DomainIndex
 }
 
 type domainTag struct {
 	tag    boostpb.Tag
 	domain boostpb.DomainIndex
+}
+
+type pathGrouping struct {
+	union graph.NodeIdx
+	pi    int
+}
+
+type pathSegment struct {
+	domain boostpb.DomainIndex
+	path   Path
+	setup  *boostpb.SyncPacket_SetupReplayPath
+}
+
+func (ps *pathSegment) Equals(other *pathSegment) bool {
+	return ps.domain == other.domain && ps.path.Compare(other.path) == 0
+}
+
+type pathSuffix struct {
+	union graph.NodeIdx
+	path  Path
+	pi    []int
 }
 
 type Plan struct {
@@ -103,15 +120,289 @@ type Plan struct {
 	partial bool
 
 	// output of the plan
-	tags    map[common.ColumnSet][]domainTag
-	paths   map[boostpb.Tag][]graph.NodeIdx
+	tags    map[common.Columns][]domainTag
+	paths   map[boostpb.Tag][]*pathSegment
 	state   *boostpb.Packet_PrepareState
-	pending []PendingReplay
+	pending []pendingReplay
+}
+
+func (p *Plan) prepareReplayPath(mig Migration, tag boostpb.Tag, pi int, path []PathElement, pathGroupings map[pathGrouping]boostpb.Tag) (boostpb.DomainIndex, *pendingReplay, error) {
+	g := mig.Graph()
+
+	// what key are we using for partial materialization (if any)?
+	var partial []int
+	if p.partial {
+		partial = path[0].Columns
+	}
+
+	// if this is a partial replay path, and the target node is sharded, then we need to
+	// make sure that the last sharder on the path knows to only send the replay response
+	// to the requesting shard, as opposed to all shards. in order to do that, that sharder
+	// needs to know who it is!
+	var partialUnicastSharder = graph.InvalidNode
+	if partial != nil && !g.Value(path[len(path)-1].Node).Sharding().IsNone() {
+		for n := len(path) - 1; n >= 0; n-- {
+			ni := path[n].Node
+			if g.Value(ni).IsSharder() {
+				partialUnicastSharder = ni
+			}
+		}
+	}
+
+	var segments []*pathSegment
+	var lastDomain = boostpb.InvalidDomainIndex
+
+	for _, pe := range path {
+		dom := g.Value(pe.Node).Domain()
+		if lastDomain == boostpb.InvalidDomainIndex || dom != lastDomain {
+			segments = append(segments, &pathSegment{domain: dom})
+			lastDomain = dom
+		}
+
+		var key []int
+		if p.partial {
+			key = pe.Columns
+		}
+		seg := segments[len(segments)-1]
+		seg.path = append(seg.path, PathElement{Node: pe.Node, Columns: key})
+	}
+
+	mig.Log().Debug("domain replay path configured", zap.Any("path", segments), tag.Zap())
+	p.paths[tag] = segments
+
+	var pending *pendingReplay
+	var seen = make(map[boostpb.DomainIndex]struct{})
+
+	for i, seg := range segments {
+		// TODO:
+		//  a domain may appear multiple times in this list if a path crosses into the same
+		//  domain more than once. currently, that will cause a deadlock.
+		if _, seen := seen[seg.domain]; seen {
+			panic("detected a-b-a replay path")
+		}
+		seen[seg.domain] = struct{}{}
+
+		iternodes := seg.path
+		if i == 0 {
+			// we're not replaying through the starter node
+			iternodes = iternodes[1:]
+		}
+
+		var locals = make([]*boostpb.ReplayPathSegment, 0, len(iternodes))
+		for _, seg := range iternodes {
+			forceTag, ok := pathGroupings[pathGrouping{seg.Node, pi}]
+			if !ok {
+				forceTag = boostpb.TagNone
+			}
+
+			locals = append(locals, &boostpb.ReplayPathSegment{
+				Node:       g.Value(seg.Node).LocalAddr(),
+				ForceTagTo: forceTag,
+				PartialKey: seg.Columns,
+			})
+		}
+
+		if len(locals) == 0 {
+			if i != 0 {
+				panic("unexpected empty locals")
+			}
+			continue
+		}
+
+		seg.setup = &boostpb.SyncPacket_SetupReplayPath{
+			Tag:                   tag,
+			Source:                boostpb.InvalidLocalNode,
+			Path:                  locals,
+			PartialUnicastSharder: partialUnicastSharder,
+			NotifyDone:            false,
+			Trigger:               nil,
+		}
+		if i == 0 {
+			seg.setup.Source = g.Value(seg.path[0].Node).LocalAddr()
+		}
+
+		if partial != nil {
+			p.prepareSegmentPartial(g, segments, i, partial, seg.setup)
+		} else {
+			// for full materializations, the last domain should report when it's done
+			if i == len(segments)-1 {
+				seg.setup.NotifyDone = true
+				pending = &pendingReplay{
+					tag:          tag,
+					source:       g.Value(segments[0].path[0].Node).LocalAddr(),
+					sourceDomain: segments[0].domain,
+					targetDomain: seg.domain,
+				}
+			}
+		}
+
+		if i < len(segments)-1 {
+			// since there is a later domain, the last node of any non-final domain
+			// must either be an egress or a Sharder. If it's an egress, we need
+			// to tell it about this replay path so that it knows
+			// what path to forward replay packets on.
+			n := g.Value(seg.path[len(seg.path)-1].Node)
+
+			var pkt boostpb.Packet
+			pkt.Inner = &boostpb.Packet_UpdateEgress_{
+				UpdateEgress: &boostpb.Packet_UpdateEgress{
+					Node:  n.LocalAddr(),
+					NewTx: nil,
+					NewTag: &boostpb.Packet_UpdateEgress_Tag{
+						Tag:  tag,
+						Node: segments[i+1].path[0].Node,
+					},
+				},
+			}
+
+			if n.IsEgress() {
+				if err := mig.SendPacket(seg.domain, &pkt); err != nil {
+					return boostpb.InvalidDomainIndex, nil, err
+				}
+			} else {
+				if !n.IsSharder() {
+					panic("node should be Egress or Sharder")
+				}
+			}
+		}
+
+		var pkt boostpb.SyncPacket
+		pkt.Inner = &boostpb.SyncPacket_SetupReplayPath_{SetupReplayPath: seg.setup}
+		if err := mig.SendPacketSync(seg.domain, &pkt); err != nil {
+			return boostpb.InvalidDomainIndex, nil, err
+		}
+	}
+
+	return lastDomain, pending, nil
+}
+
+func (p *Plan) prepareSegmentPartial(g *graph.Graph[*flownode.Node], segments []*pathSegment, i int, partial []int, setup *boostpb.SyncPacket_SetupReplayPath) {
+	// for partial materializations, nodes need to know how to trigger replays
+	switch {
+	case len(segments) == 1:
+		setup.Trigger = &boostpb.TriggerEndpoint{
+			Trigger: &boostpb.TriggerEndpoint_Local_{
+				Local: &boostpb.TriggerEndpoint_Local{
+					Cols: partial,
+				},
+			},
+		}
+	case i == 0:
+		// first domain needs to be told about partial replay trigger
+		setup.Trigger = &boostpb.TriggerEndpoint{
+			Trigger: &boostpb.TriggerEndpoint_Start_{
+				Start: &boostpb.TriggerEndpoint_Start{
+					Cols: partial,
+				},
+			},
+		}
+	case i == len(segments)-1:
+		// if the source is sharded, we need to know whether we should ask all
+		// the shards, or just one. if the replay key is the same as the
+		// sharding key, we just ask one, and all is good. if the replay key
+		// and the sharding key differs, we generally have to query *all* the
+		// shards.
+		//
+		// there is, however, an exception to this: if we have two domains that
+		// have the same sharding, but a replay path between them on some other
+		// key than the sharding key, the right thing to do is to *only* query
+		// the same shard as ourselves. this is because any answers from other
+		// shards would necessarily just be with records that do not match our
+		// sharding key anyway, and that we should thus never see.
+		srcSharding := g.Value(segments[0].path[0].Node).Sharding()
+		shards := common.UnwrapOr(srcSharding.TryGetShards(), uint(1))
+
+		var lookupKeyToShard *int
+		if c, _, ok := srcSharding.ByColumn(); ok {
+			lookupKey := segments[i].path[0].Columns
+			if len(lookupKey) == 1 {
+				if c == lookupKey[0] {
+					var key0 = 0
+					lookupKeyToShard = &key0
+				}
+			} else {
+				// we're using a compound key to look up into a node that's
+				// sharded by a single column. if the sharding key is one
+				// of the lookup keys, then we indeed only need to look at
+				// one shard, otherwise we need to ask all
+				//
+				// NOTE: this _could_ be merged with the if arm above,
+				// but keeping them separate allows us to make this case
+				// explicit and more obvious
+				var key int
+				for key = 0; key < len(lookupKey); key++ {
+					if lookupKey[key] == c {
+						lookupKeyToShard = &key
+						break
+					}
+				}
+			}
+		}
+
+		var selection replay.SourceSelection
+
+		if lookupKeyToShard != nil {
+			// if we are not sharded, all is okay.
+			//
+			// if we are sharded:
+			//
+			//  - if there is a shuffle above us, a shard merger + sharder
+			//    above us will ensure that we hear the replay response.
+			//
+			//  - if there is not, we are sharded by the same column as the
+			//    source. this also means that the replay key in the
+			//    destination is the sharding key of the destination. to see
+			//    why, consider the case where the destination is sharded by x.
+			//    the source must also be sharded by x for us to be in this
+			//    case. we also know that the replay lookup key on the source
+			//    must be x since lookup_on_shard_key == true. since no shuffle
+			//    was introduced, src.x must resolve to dst.x assuming x is not
+			//    aliased in dst. because of this, it should be the case that
+			//    KeyShard == SameShard; if that were not the case, the value
+			//    in dst.x should never have reached dst in the first place.
+			selection = replay.SourceSelection{
+				Kind:        replay.SourceSelectionKeyShard,
+				NShards:     shards,
+				KeyItoShard: *lookupKeyToShard,
+			}
+		} else {
+			// replay key != sharding key
+			// normally, we'd have to query all shards, but if we are sharded
+			// the same as the source (i.e., there are no shuffles between the
+			// source and us), then we should *only* query the same shard of
+			// the source (since it necessarily holds all records we could
+			// possibly see).
+			//
+			// note that the no-sharding case is the same as "ask all shards"
+			// except there is only one (shards == 1).
+			findMergers := func(segments []*pathSegment) bool {
+				for _, seg := range segments {
+					for _, pathseg := range seg.path {
+						if g.Value(pathseg.Node).IsShardMerger() {
+							return true
+						}
+					}
+				}
+				return false
+			}
+
+			if srcSharding.IsNone() || findMergers(segments) {
+				selection = replay.SourceSelection{Kind: replay.SourceSelectionAllShards, NShards: shards}
+			} else {
+				selection = replay.SourceSelection{Kind: replay.SourceSelectionSameShard}
+			}
+		}
+
+		setup.Trigger = &boostpb.TriggerEndpoint{Trigger: &boostpb.TriggerEndpoint_End_{End: &boostpb.TriggerEndpoint_End{
+			Selection: selection.ToProto(),
+			Domain:    segments[0].domain,
+		}}}
+	}
 }
 
 func (p *Plan) add(mig Migration, indexOn []int) error {
 	g := mig.Graph()
-	indexOnKey := common.NewColumnSet(indexOn)
+	indexOnKey := common.ColumnsFrom(indexOn)
 	if !p.partial && len(p.paths) > 0 {
 		// non-partial views should not have one replay path per index. that would cause us to
 		// replay several times, even though one full replay should always be sufficient.
@@ -207,13 +498,7 @@ func (p *Plan) add(mig Migration, indexOn []int) error {
 		assignedTags = append(assignedTags, p.m.nextTag())
 	}
 
-	type suffix struct {
-		union graph.NodeIdx
-		path  Path
-		pi    []int
-	}
-
-	var unionSuffixes = btree.NewBTreeGOptions(func(a, b *suffix) bool {
+	var unionSuffixes = btree.NewBTreeGOptions(func(a, b *pathSuffix) bool {
 		if a.union < b.union {
 			return true
 		}
@@ -227,7 +512,7 @@ func (p *Plan) add(mig Migration, indexOn []int) error {
 		for at, seg := range path {
 			n := g.Value(seg.Node)
 			if n.IsUnion() && !n.IsShardMerger() {
-				suf := &suffix{
+				suf := &pathSuffix{
 					union: seg.Node,
 					path:  path[at+1:],
 				}
@@ -241,19 +526,14 @@ func (p *Plan) add(mig Migration, indexOn []int) error {
 		}
 	}
 
-	type grouping struct {
-		union graph.NodeIdx
-		pi    int
-	}
-
 	// map each suffix-sharing group of paths at each union to one tag at that union
-	pathGrouping := make(map[grouping]boostpb.Tag)
-	unionSuffixes.Scan(func(s *suffix) bool {
+	pathGroupings := make(map[pathGrouping]boostpb.Tag)
+	unionSuffixes.Scan(func(s *pathSuffix) bool {
 		// at this union, all the given paths share a suffix
 		// make all of the paths use a single identifier from that point on
 		tagAll := assignedTags[s.pi[0]]
 		for _, pi := range s.pi {
-			pathGrouping[grouping{s.union, pi}] = tagAll
+			pathGroupings[pathGrouping{s.union, pi}] = tagAll
 		}
 		return true
 	})
@@ -262,277 +542,9 @@ func (p *Plan) add(mig Migration, indexOn []int) error {
 	for pi, path := range paths {
 		tag := assignedTags[pi]
 
-		var pathNodes []graph.NodeIdx
-		for _, seg := range path {
-			pathNodes = append(pathNodes, seg.Node)
-		}
-		p.paths[tag] = pathNodes
-
-		// what key are we using for partial materialization (if any)?
-		var partial []int
-		if p.partial {
-			partial = path[0].Columns
-		}
-
-		// if this is a partial replay path, and the target node is sharded, then we need to
-		// make sure that the last sharder on the path knows to only send the replay response
-		// to the requesting shard, as opposed to all shards. in order to do that, that sharder
-		// needs to know who it is!
-		var partialUnicastSharder = graph.InvalidNode
-		if partial != nil && !g.Value(path[len(path)-1].Node).Sharding().IsNone() {
-			for n := len(path) - 1; n >= 0; n-- {
-				ni := path[n].Node
-				if g.Value(ni).IsSharder() {
-					partialUnicastSharder = ni
-				}
-			}
-		}
-
-		type segment struct {
-			domain boostpb.DomainIndex
-			path   Path
-		}
-		var segments []segment
-		var lastDomain = boostpb.InvalidDomainIndex
-
-		for _, pe := range path {
-			dom := g.Value(pe.Node).Domain()
-			if lastDomain == boostpb.InvalidDomainIndex || dom != lastDomain {
-				segments = append(segments, segment{domain: dom})
-				lastDomain = dom
-			}
-
-			var key []int
-			if p.partial {
-				key = pe.Columns
-			}
-			seg := &segments[len(segments)-1]
-			seg.path = append(seg.path, PathElement{Node: pe.Node, Columns: key})
-		}
-
-		mig.Log().Debug("domain replay path configured", zap.Any("path", segments), tag.Zap())
-
-		var pending *PendingReplay
-		var seen = make(map[boostpb.DomainIndex]struct{})
-
-		for i, seg := range segments {
-			// TODO:
-			//  a domain may appear multiple times in this list if a path crosses into the same
-			//  domain more than once. currently, that will cause a deadlock.
-			if _, seen := seen[seg.domain]; seen {
-				panic("detected a-b-a replay path")
-			}
-			seen[seg.domain] = struct{}{}
-
-			iternodes := seg.path
-			if i == 0 {
-				// we're not replaying through the starter node
-				iternodes = iternodes[1:]
-			}
-
-			var locals = make([]*boostpb.ReplayPathSegment, 0, len(iternodes))
-			for _, seg := range iternodes {
-				forceTag, ok := pathGrouping[grouping{seg.Node, pi}]
-				if !ok {
-					forceTag = boostpb.TagNone
-				}
-
-				locals = append(locals, &boostpb.ReplayPathSegment{
-					Node:       g.Value(seg.Node).LocalAddr(),
-					ForceTagTo: forceTag,
-					PartialKey: seg.Columns,
-				})
-			}
-
-			if len(locals) == 0 {
-				if i != 0 {
-					panic("unexpected empty locals")
-				}
-				continue
-			}
-
-			var setup = &boostpb.SyncPacket_SetupReplayPath{
-				Tag:                   tag,
-				Source:                boostpb.InvalidLocalNode,
-				Path:                  locals,
-				PartialUnicastSharder: partialUnicastSharder,
-				NotifyDone:            false,
-				Trigger:               nil,
-			}
-			if i == 0 {
-				setup.Source = g.Value(seg.path[0].Node).LocalAddr()
-			}
-
-			if partial != nil {
-				// for partial materializations, nodes need to know how to trigger replays
-				switch {
-				case len(segments) == 1:
-					setup.Trigger = &boostpb.TriggerEndpoint{
-						Trigger: &boostpb.TriggerEndpoint_Local_{
-							Local: &boostpb.TriggerEndpoint_Local{
-								Cols: partial,
-							},
-						},
-					}
-				case i == 0:
-					// first domain needs to be told about partial replay trigger
-					setup.Trigger = &boostpb.TriggerEndpoint{
-						Trigger: &boostpb.TriggerEndpoint_Start_{
-							Start: &boostpb.TriggerEndpoint_Start{
-								Cols: partial,
-							},
-						},
-					}
-				case i == len(segments)-1:
-					// if the source is sharded, we need to know whether we should ask all
-					// the shards, or just one. if the replay key is the same as the
-					// sharding key, we just ask one, and all is good. if the replay key
-					// and the sharding key differs, we generally have to query *all* the
-					// shards.
-					//
-					// there is, however, an exception to this: if we have two domains that
-					// have the same sharding, but a replay path between them on some other
-					// key than the sharding key, the right thing to do is to *only* query
-					// the same shard as ourselves. this is because any answers from other
-					// shards would necessarily just be with records that do not match our
-					// sharding key anyway, and that we should thus never see.
-					srcSharding := g.Value(segments[0].path[0].Node).Sharding()
-					shards := common.UnwrapOr(srcSharding.TryGetShards(), uint(1))
-
-					var lookupKeyToShard *int
-					if c, _, ok := srcSharding.ByColumn(); ok {
-						lookupKey := seg.path[0].Columns
-						if len(lookupKey) == 1 {
-							if c == lookupKey[0] {
-								var key0 = 0
-								lookupKeyToShard = &key0
-							}
-						} else {
-							// we're using a compound key to look up into a node that's
-							// sharded by a single column. if the sharding key is one
-							// of the lookup keys, then we indeed only need to look at
-							// one shard, otherwise we need to ask all
-							//
-							// NOTE: this _could_ be merged with the if arm above,
-							// but keeping them separate allows us to make this case
-							// explicit and more obvious
-							var key int
-							for key = 0; key < len(lookupKey); key++ {
-								if lookupKey[key] == c {
-									lookupKeyToShard = &key
-									break
-								}
-							}
-						}
-					}
-
-					var selection replay.SourceSelection
-
-					if lookupKeyToShard != nil {
-						// if we are not sharded, all is okay.
-						//
-						// if we are sharded:
-						//
-						//  - if there is a shuffle above us, a shard merger + sharder
-						//    above us will ensure that we hear the replay response.
-						//
-						//  - if there is not, we are sharded by the same column as the
-						//    source. this also means that the replay key in the
-						//    destination is the sharding key of the destination. to see
-						//    why, consider the case where the destination is sharded by x.
-						//    the source must also be sharded by x for us to be in this
-						//    case. we also know that the replay lookup key on the source
-						//    must be x since lookup_on_shard_key == true. since no shuffle
-						//    was introduced, src.x must resolve to dst.x assuming x is not
-						//    aliased in dst. because of this, it should be the case that
-						//    KeyShard == SameShard; if that were not the case, the value
-						//    in dst.x should never have reached dst in the first place.
-						selection = replay.SourceSelection{
-							Kind:        replay.SourceSelectionKeyShard,
-							NShards:     shards,
-							KeyItoShard: *lookupKeyToShard,
-						}
-					} else {
-						// replay key != sharding key
-						// normally, we'd have to query all shards, but if we are sharded
-						// the same as the source (i.e., there are no shuffles between the
-						// source and us), then we should *only* query the same shard of
-						// the source (since it necessarily holds all records we could
-						// possibly see).
-						//
-						// note that the no-sharding case is the same as "ask all shards"
-						// except there is only one (shards == 1).
-						findMergers := func(segments []segment) bool {
-							for _, seg := range segments {
-								for _, pathseg := range seg.path {
-									if g.Value(pathseg.Node).IsShardMerger() {
-										return true
-									}
-								}
-							}
-							return false
-						}
-
-						if srcSharding.IsNone() || findMergers(segments) {
-							selection = replay.SourceSelection{Kind: replay.SourceSelectionAllShards, NShards: shards}
-						} else {
-							selection = replay.SourceSelection{Kind: replay.SourceSelectionSameShard}
-						}
-					}
-
-					setup.Trigger = &boostpb.TriggerEndpoint{Trigger: &boostpb.TriggerEndpoint_End_{End: &boostpb.TriggerEndpoint_End{
-						Selection: selection.ToProto(),
-						Domain:    segments[0].domain,
-					}}}
-				}
-			} else {
-				// for full materializations, the last domain should report when it's done
-				if i == len(segments)-1 {
-					setup.NotifyDone = true
-					pending = &PendingReplay{
-						Tag:          tag,
-						Source:       g.Value(segments[0].path[0].Node).LocalAddr(),
-						SourceDomain: segments[0].domain,
-						TargetDomain: seg.domain,
-					}
-				}
-			}
-
-			if i < len(segments)-1 {
-				// since there is a later domain, the last node of any non-final domain
-				// must either be an egress or a Sharder. If it's an egress, we need
-				// to tell it about this replay path so that it knows
-				// what path to forward replay packets on.
-				n := g.Value(seg.path[len(seg.path)-1].Node)
-
-				var pkt boostpb.Packet
-				pkt.Inner = &boostpb.Packet_UpdateEgress_{
-					UpdateEgress: &boostpb.Packet_UpdateEgress{
-						Node:  n.LocalAddr(),
-						NewTx: nil,
-						NewTag: &boostpb.Packet_UpdateEgress_Tag{
-							Tag:  tag,
-							Node: segments[i+1].path[0].Node,
-						},
-					},
-				}
-
-				if n.IsEgress() {
-					if err := mig.SendPacket(seg.domain, &pkt); err != nil {
-						return err
-					}
-				} else {
-					if !n.IsSharder() {
-						panic("node should be Egress or Sharder")
-					}
-				}
-			}
-
-			var pkt boostpb.SyncPacket
-			pkt.Inner = &boostpb.SyncPacket_SetupReplayPath_{SetupReplayPath: setup}
-			if err := mig.SendPacketSync(seg.domain, &pkt); err != nil {
-				return err
-			}
+		lastDomain, pending, err := p.prepareReplayPath(mig, tag, pi, path, pathGroupings)
+		if err != nil {
+			return err
 		}
 
 		if !p.partial {
@@ -548,7 +560,7 @@ func (p *Plan) add(mig Migration, indexOn []int) error {
 	return nil
 }
 
-func (p *Plan) finalize(mig Migration) ([]PendingReplay, error) {
+func (p *Plan) finalize(mig Migration) ([]pendingReplay, error) {
 	g := mig.Graph()
 	node := g.Value(p.node)
 
@@ -622,7 +634,26 @@ func (p *Plan) finalize(mig Migration) ([]PendingReplay, error) {
 		// than once. we do need to be careful here though: the fact that the source and
 		// destination of a path are the same does *not* mean that the path is the same (b/c of
 		// unions), and we do not want to eliminate different paths!
-		// TODO: dedup
+		pending := p.pending
+		p.pending = make([]pendingReplay, 0, len(pending))
+
+		for i, repl := range pending {
+			path1 := p.paths[repl.tag]
+			duplicated := false
+
+			// this is quadratic because pathSegments are hard to hash, but that's perfectly OK;
+			// there's usually very few paths when planning
+			for j := 0; j < i; j++ {
+				path2 := p.paths[pending[j].tag]
+				if slices.EqualFunc(path1, path2, func(a, b *pathSegment) bool { return a.Equals(b) }) {
+					duplicated = true
+					break
+				}
+			}
+			if !duplicated {
+				p.pending = append(p.pending, repl)
+			}
+		}
 		if len(p.pending) == 0 {
 			panic("pending should not be empty")
 		}
@@ -666,8 +697,8 @@ func (p *Plan) findPaths(g *graph.Graph[*flownode.Node], columns []int) [][]Path
 	// since we cut off part of each path, we *may* now have multiple paths that are the same
 	// (i.e., if there was a union above the nearest materialization). this would be bad, as it
 	// would cause a domain to request replays *twice* for a key from one view!
-	sort.Slice(paths, func(i, j int) bool {
-		return Path(paths[i]).Compare(paths[j]) < 0
+	slices.SortFunc(paths, func(a, b []PathElement) bool {
+		return Path(a).Compare(b) < 0
 	})
 	paths = slices.CompactFunc(paths, func(a, b []PathElement) bool {
 		return Path(a).Compare(b) == 0
@@ -681,7 +712,7 @@ func newMaterializationPlan(m *Materialization, node graph.NodeIdx) *Plan {
 		node:    node,
 		partial: m.partial[node],
 
-		tags:  make(map[common.ColumnSet][]domainTag),
-		paths: make(map[boostpb.Tag][]graph.NodeIdx),
+		tags:  make(map[common.Columns][]domainTag),
+		paths: make(map[boostpb.Tag][]*pathSegment),
 	}
 }

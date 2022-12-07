@@ -9,6 +9,9 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/gogo/protobuf/jsonpb"
+	"github.com/gogo/protobuf/proto"
 )
 
 type Node struct {
@@ -16,6 +19,15 @@ type Node struct {
 	Attr      map[string]string
 	TableAttr map[string]string
 	table     [][]any
+}
+
+func JSON(x proto.Message) string {
+	m := &jsonpb.Marshaler{EmitDefaults: true, Indent: "    "}
+	j, err := m.MarshalToString(x)
+	if err != nil {
+		panic(err)
+	}
+	return j
 }
 
 type Escaped string
@@ -180,8 +192,6 @@ func (g *Graph[I]) View(t testing.TB) {
 }
 
 func RenderGraphviz(t testing.TB, dot string) {
-	fmt.Fprintf(os.Stderr, "%s\n", dot)
-
 	const htmlTemplate = `
 <!DOCTYPE html>
 <html>

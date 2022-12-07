@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -42,27 +43,58 @@ var (
 )
 
 type setupOptions struct {
-	bufSize, patternLimit, rowsReadThreshold, responseTimeThreshold, maxPerInterval uint
+	bufSize, patternLimit, rowsReadThreshold, responseTimeThreshold, maxPerInterval *uint
 	tableString                                                                     string
-	maxRawQuerySize                                                                 uint
+	maxRawQuerySize                                                                 *uint
+	queryTimeSketch                                                                 *bool
+	totalDurationSketchAlpha                                                        *float64
+	totalDurationSketchUnits                                                        *int
 }
 
 func setup(t *testing.T, brokers, publicID, username, password string, options setupOptions) (*Insights, error) {
 	logger = streamlog.New("tests", 32)
-	dfl := func(x, y uint) uint {
-		if x != 0 {
-			return x
+	defaultUint := func(val *uint, dfault uint) uint {
+		if val != nil {
+			return *val
 		}
-		return y
+		return dfault
 	}
+
+	defaultFloat64 := func(val *float64, dfault float64) float64 {
+		if val != nil {
+			return *val
+		}
+		return dfault
+	}
+
+	defaultBool := func(val *bool, dfault bool) bool {
+		if val != nil {
+			return *val
+		}
+		return dfault
+	}
+
+	defaultInt := func(val *int, dfault int) int {
+		if val != nil {
+			return *val
+		}
+		return dfault
+	}
+
 	insights, err := initInsightsInner(logger, brokers, publicID, username, password,
-		dfl(options.bufSize, 5*1024*1024),
-		dfl(options.patternLimit, 10000),
-		dfl(options.rowsReadThreshold, 1000),
-		dfl(options.responseTimeThreshold, 1000),
-		dfl(options.maxPerInterval, 100),
-		dfl(options.maxRawQuerySize, 64),
-		5, 15*time.Second, true, true)
+		defaultUint(options.bufSize, 5*1024*1024),
+		defaultUint(options.patternLimit, 10000),
+		defaultUint(options.rowsReadThreshold, 1000),
+		defaultUint(options.responseTimeThreshold, 1000),
+		defaultUint(options.maxPerInterval, 100),
+		defaultUint(options.maxRawQuerySize, 64),
+		5,
+		15*time.Second,
+		true,
+		true,
+		defaultBool(options.queryTimeSketch, true),
+		defaultFloat64(options.totalDurationSketchAlpha, 0.01),
+		defaultInt(options.totalDurationSketchUnits, -6))
 	if insights != nil {
 		t.Cleanup(func() { insights.Drain() })
 	}
@@ -71,7 +103,7 @@ func setup(t *testing.T, brokers, publicID, username, password string, options s
 
 func TestInsightsNeedsDatabaseBranchID(t *testing.T) {
 	_, err := setup(t, "localhost:1234", "", "", "", setupOptions{})
-	assert.Error(t, err, "public_id is required")
+	assert.ErrorContains(t, err, "public_id is required")
 }
 
 func TestInsightsDisabled(t *testing.T) {
@@ -86,12 +118,66 @@ func TestInsightsEnabled(t *testing.T) {
 
 func TestInsightsMissingUsername(t *testing.T) {
 	_, err := setup(t, "localhost:1234", "mumblefoo", "", "password", setupOptions{})
-	assert.Error(t, err, "without a username")
+	assert.ErrorContains(t, err, "without a username")
 }
 
 func TestInsightsMissingPassword(t *testing.T) {
 	_, err := setup(t, "localhost:1234", "mumblefoo", "username", "", setupOptions{})
-	assert.Error(t, err, "without a password")
+	assert.ErrorContains(t, err, "without a password")
+}
+
+func TestInsightsTotalDurationSketchAlphaValidation(t *testing.T) {
+	tests := []struct {
+		alpha      float64
+		shouldFail bool
+	}{
+		{math.SmallestNonzeroFloat64, true}, // becomes 0 when cast to float32
+		{-0.1, true},
+		{0.0, true},
+		{0.001, false},
+		{0.99, false},
+		{0.999999999, true}, // becomes 1 when cast to float32
+		{1.0, true},
+		{1.1, true},
+	}
+
+	for _, tc := range tests {
+		_, err := setup(t, "localhost:1234", "mumblefoo", "username", "password", setupOptions{
+			totalDurationSketchAlpha: &tc.alpha,
+		})
+
+		if tc.shouldFail {
+			assert.ErrorContains(t, err, "-insights_total_duration_sketch_alpha must be between 0.0 and 1.0 (exclusive)", "alpha: %v", tc.alpha)
+		} else {
+			assert.NoError(t, err, "alpha: %v", tc.alpha)
+		}
+	}
+}
+
+func TestInsightsTotalDurationSketchUnitsValidation(t *testing.T) {
+	tests := []struct {
+		units      int
+		shouldFail bool
+	}{
+		{-10, true},
+		{-9, false},
+		{-6, false},
+		{-3, false},
+		{0, false},
+		{1, true},
+	}
+
+	for _, tc := range tests {
+		_, err := setup(t, "localhost:1234", "mumblefoo", "username", "password", setupOptions{
+			totalDurationSketchUnits: &tc.units,
+		})
+
+		if tc.shouldFail {
+			assert.ErrorContains(t, err, "-insights_total_duration_sketch_units must be between -9 and 0 (inclusive)", "units: %v", tc.units)
+		} else {
+			assert.NoError(t, err, "units: %v", tc.units)
+		}
+	}
 }
 
 func TestInsightsConnectionRefused(t *testing.T) {
@@ -220,8 +306,9 @@ func TestInsightsSchemaChangesNoTruncateTable(t *testing.T) {
 }
 
 func TestInsightsTooManyPatterns(t *testing.T) {
+	var patternLimit uint = 3
 	insightsTestHelper(t, true,
-		setupOptions{patternLimit: 3},
+		setupOptions{patternLimit: &patternLimit},
 		[]insightsQuery{
 			{sql: "select * from foo1", responseTime: 5 * time.Second},
 			{sql: "select * from foo2", responseTime: 5 * time.Second},
@@ -242,8 +329,9 @@ func TestInsightsTooManyPatterns(t *testing.T) {
 }
 
 func TestInsightsTooManyInteresting(t *testing.T) {
+	var maxPerInterval uint = 4
 	insightsTestHelper(t, true,
-		setupOptions{maxPerInterval: 4},
+		setupOptions{maxPerInterval: &maxPerInterval},
 		[]insightsQuery{
 			{sql: "select 1", responseTime: 5 * time.Second},
 			{sql: "select 1", rowsRead: 20000},
@@ -263,8 +351,9 @@ func TestInsightsTooManyInteresting(t *testing.T) {
 }
 
 func TestInsightsResponseTimeThreshold(t *testing.T) {
+	var responseTimeThreshold uint = 500
 	insightsTestHelper(t, false,
-		setupOptions{responseTimeThreshold: 500},
+		setupOptions{responseTimeThreshold: &responseTimeThreshold},
 		[]insightsQuery{
 			{sql: "select * from foo1", responseTime: 400 * time.Millisecond},
 			{sql: "select * from foo2", responseTime: 600 * time.Millisecond},
@@ -275,8 +364,9 @@ func TestInsightsResponseTimeThreshold(t *testing.T) {
 }
 
 func TestInsightsRowsReadThreshold(t *testing.T) {
+	var rowsReadThreshold uint = 42
 	insightsTestHelper(t, false,
-		setupOptions{rowsReadThreshold: 42},
+		setupOptions{rowsReadThreshold: &rowsReadThreshold},
 		[]insightsQuery{
 			{sql: "select * from foo1", responseTime: 5 * time.Millisecond, rowsRead: 88},
 			{sql: "select * from foo2", responseTime: 5 * time.Millisecond, rowsRead: 15},
@@ -287,8 +377,9 @@ func TestInsightsRowsReadThreshold(t *testing.T) {
 }
 
 func TestInsightsKafkaBufferSize(t *testing.T) {
+	var bufSize uint = 5
 	insightsTestHelper(t, true,
-		setupOptions{bufSize: 5},
+		setupOptions{bufSize: &bufSize},
 		[]insightsQuery{
 			{sql: "select * from foo1", responseTime: 5 * time.Second},
 		},
@@ -311,13 +402,13 @@ func TestInsightsErrors(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
 			{sql: "select this does not parse", error: "syntax error at position 21 after 'does'"},
-			{sql: "nor does this", error: "this is a fake error, BindVars: {'foo'}"},
+			{sql: "nor does this", error: "this is a fake error, BindVars: {'bar'}"},
 			{sql: "third bogus", error: "another fake error, Sql: \"third bogus\""},
 		},
 		[]insightsKafkaExpectation{
 			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"syntax error at position <position>\"}`, `statement_type:{value:\"ERROR\"}`).butNot("does"),
-			expect(queryStatsBundleTopic, `normalized_sql:{value:\"<error>\"}`, `statement_type:\"ERROR\"`, "query_count:3", "error_count:3").butNot("does", "foo", "bogus"),
-			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"this is a fake error\"}`, `statement_type:{value:\"ERROR\"}`).butNot("foo", "BindVars"),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"<error>\"}`, `statement_type:\"ERROR\"`, "query_count:3", "error_count:3").butNot("does", "bar", "bogus"),
+			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"this is a fake error\"}`, `statement_type:{value:\"ERROR\"}`).butNot("bar", "BindVars"),
 			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, `error:{value:\"another fake error\"}`, `statement_type:{value:\"ERROR\"}`).butNot("Sql", "bogus"),
 		})
 }
@@ -326,28 +417,28 @@ func TestInsightsSafeErrors(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
 			{sql: "select :vtg1", normalized: YES, error: "target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: 29.998788288s, killing query ID 58 (CallerID: userData1)"},
-			{sql: "select :vtg1", normalized: YES, error: `target: commerce.0.primary: vttablet: rpc error: code = Aborted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) (CallerID: userData1): Sql: "select * from foo as f1 join foo as f2 join foo as f3 join foo as f4 join foo as f5 join foo as f6 where f1.id > :vtg1", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"0\"`},
+			{sql: "select :vtg1", normalized: YES, error: `target: commerce.0.primary: vttablet: rpc error: code = Aborted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) (CallerID: userData1): Sql: "select * from bar as f1 join bar as f2 join bar as f3 join bar as f4 join bar as f5 join bar as f6 where f1.id > :vtg1", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"0\"`},
 			{sql: "select :vtg1", normalized: YES, error: "target: commerce.0.primary: vttablet: rpc error: code = ResourceExhausted desc = grpc: trying to send message larger than max (18345369 vs. 16777216)"},
-			{sql: "select :vtg1", normalized: YES, error: `target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = EOF (errno 2013) (sqlstate HY000) (CallerID: userData1): Sql: "select :vtg1 from foo", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"1\"`},
+			{sql: "select :vtg1", normalized: YES, error: `target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = EOF (errno 2013) (sqlstate HY000) (CallerID: userData1): Sql: "select :vtg1 from bar", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"1\"`},
 			{sql: "select :vtg1", normalized: YES, error: `target: sharded.-40.primary: vttablet: rpc error: code = Unavailable desc = error reading from server: EOF`},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Canceled`).butNot("foo", "BindVars", "Sql").count(2),
-			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Aborted`).butNot("foo", "BindVars", "Sql"),
+			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Canceled`).butNot("bar", "BindVars", "Sql").count(2),
+			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Aborted`).butNot("bar", "BindVars", "Sql"),
 			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = ResourceExhausted`),
 			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Unavailable`),
-			expect(queryStatsBundleTopic, `normalized_sql:{value:\"select :vtg1 from dual\"}`, `statement_type:\"ERROR\"`, "query_count:5", "error_count:5").butNot("foo", "BindVars", ":vtg1"),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"select :vtg1 from dual\"}`, `statement_type:\"ERROR\"`, "query_count:5", "error_count:5").butNot("bar", "BindVars"),
 		})
 }
 
 func TestInsightsSavepoints(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
-			{sql: "savepoint foo"},
+			{sql: "savepoint baz"},
 			{sql: "savepoint bar"},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryStatsBundleTopic, `savepoint <id>`, "query_count:2", `statement_type:\"SAVEPOINT\"`).butNot("foo", "bar"),
+			expect(queryStatsBundleTopic, `savepoint <id>`, "query_count:2", `statement_type:\"SAVEPOINT\"`).butNot("baz", "bar"),
 		})
 }
 
@@ -705,7 +796,8 @@ func TestStringTruncation(t *testing.T) {
 }
 
 func TestRawQueries(t *testing.T) {
-	insightsTestHelper(t, true, setupOptions{maxRawQuerySize: 32},
+	var maxRawQuerySize uint = 32
+	insightsTestHelper(t, true, setupOptions{maxRawQuerySize: &maxRawQuerySize},
 		[]insightsQuery{
 			{sql: "select * from users where id = :vtg1", responseTime: 5 * time.Second,
 				rawSQL: "select * from users where id=7"}, // no change
@@ -874,6 +966,72 @@ func TestErrorNormalization(t *testing.T) {
 	}
 }
 
+func TestTotalDurationSketches(t *testing.T) {
+	alpha := 0.01
+	units := -6
+
+	insightsTestHelper(t, true, setupOptions{totalDurationSketchAlpha: &alpha, totalDurationSketchUnits: &units},
+		[]insightsQuery{
+			{sql: "select * from foo", responseTime: 0 * time.Microsecond},
+			{sql: "select * from foo", responseTime: 1 * time.Microsecond},
+			{sql: "select * from foo", responseTime: 10 * time.Microsecond},
+			{sql: "select * from foo", responseTime: 100 * time.Microsecond},
+			{sql: "select * from foo", responseTime: 100 * time.Microsecond},
+			{sql: "select * from foo", responseTime: 100 * time.Millisecond},
+			{sql: "select * from foo", responseTime: 1 * time.Second},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryStatsBundleTopic, "select * from foo",
+				"total_duration_sketch:{gamma:1.020202 units:-6 sum:1.100211e+06 count:7",
+				"buckets:{key:0 value:2}",
+				"buckets:{key:116 value:1}",
+				"buckets:{key:231 value:2}",
+				"buckets:{key:576 value:1}",
+				"buckets:{key:691 value:1}"),
+		})
+
+	alpha = 0.05
+	units = -3
+
+	insightsTestHelper(t, true, setupOptions{totalDurationSketchAlpha: &alpha, totalDurationSketchUnits: &units},
+		[]insightsQuery{
+			{sql: "select * from foo", responseTime: 0 * time.Microsecond},
+			{sql: "select * from foo", responseTime: 1 * time.Microsecond},
+			{sql: "select * from foo", responseTime: 10 * time.Microsecond},
+			{sql: "select * from foo", responseTime: 100 * time.Microsecond},
+			{sql: "select * from foo", responseTime: 100 * time.Microsecond},
+			{sql: "select * from foo", responseTime: 100 * time.Millisecond},
+			{sql: "select * from foo", responseTime: 1 * time.Second},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryStatsBundleTopic, "select * from foo",
+				"total_duration_sketch:{gamma:1.1052631 units:-3 sum:1100.211 count:7",
+				"buckets:{key:0 value:5}",
+				"buckets:{key:47 value:1}",
+				"buckets:{key:70 value:1}"),
+		})
+}
+
+func TestTotalDurationSketchesDisabled(t *testing.T) {
+	sketchesEnabled := true
+	insightsTestHelper(t, true, setupOptions{queryTimeSketch: &sketchesEnabled},
+		[]insightsQuery{
+			{sql: "select * from foo", responseTime: 10 * time.Microsecond},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryStatsBundleTopic, "select * from foo", "total_duration_sketch"),
+		})
+
+	sketchesEnabled = false
+	insightsTestHelper(t, true, setupOptions{queryTimeSketch: &sketchesEnabled},
+		[]insightsQuery{
+			{sql: "select * from foo", responseTime: 10 * time.Microsecond},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryStatsBundleTopic, "select * from foo").butNot("total_duration_sketch"),
+		})
+}
+
 const (
 	AUTO = iota
 	NO
@@ -924,8 +1082,8 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 	t.Helper()
 	insights, err := setup(t, "localhost:1234", "mumblefoo", "", "", options)
 	require.NoError(t, err)
-	if options.maxRawQuerySize > 0 {
-		insights.MaxRawQueryLength = options.maxRawQuerySize
+	if options.maxRawQuerySize != nil {
+		insights.MaxRawQueryLength = *options.maxRawQuerySize
 	}
 	insights.Sender = func(buf []byte, topic, key string) error {
 		assert.Contains(t, string(buf), "mumblefoo", "database branch public ID not present in message body")
@@ -941,6 +1099,14 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 						break
 					}
 				}
+
+				for _, ap := range ex.antipatterns {
+					if strings.Contains(string(buf), ap) {
+						matchesAll = false
+						break
+					}
+				}
+
 				if matchesAll {
 					expect[i].found++
 					found = true

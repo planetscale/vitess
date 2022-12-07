@@ -16,8 +16,7 @@ func TestJoin(t *testing.T) {
 		g := NewMockGraph(t)
 		l := g.AddBase("left", []string{"l0", "l1"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
 		r := g.AddBase("right", []string{"r0", "r1"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
-		j := NewJoin(l.AsGlobal(), r.AsGlobal(), JoinTypeOuter, [2]int{0, 0}, []JoinSource{
-			JoinSourceBoth(0, 0), JoinSourceLeft(1), JoinSourceRight(1)})
+		j := NewJoin(l.AsGlobal(), r.AsGlobal(), JoinTypeOuter, [2]int{0, 0}, [][2]int{{0, 0}, {1, -1}, {-1, 1}})
 		g.SetOp("join", []string{"j0", "j1", "j2"}, j, false)
 		return g, l, r
 	}

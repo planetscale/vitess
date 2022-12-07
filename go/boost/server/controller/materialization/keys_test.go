@@ -159,11 +159,7 @@ func TestGraphKeys(t *testing.T) {
 
 		join := flownode.NewJoin(a, b, flownode.JoinTypeInner,
 			[2]int{1, 0},
-			[]flownode.JoinSource{
-				flownode.JoinSourceLeft(0),
-				flownode.JoinSourceBoth(1, 0),
-				flownode.JoinSourceRight(1),
-			})
+			[][2]int{{0, -1}, {1, 0}, {-1, 1}})
 		x := g.AddNode(flownode.New("x", []string{"a1", "a2b1", "b2"}, join))
 		g.AddEdge(a, x)
 		g.AddEdge(b, x)

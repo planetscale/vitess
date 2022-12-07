@@ -1,45 +1,9 @@
 package boostplan
 
 import (
-	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/dataflow/flownode"
-	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
-
-type dummyMigration struct {
-	counter graph.NodeIdx
-	nodes   map[graph.NodeIdx]flownode.NodeImpl
-}
-
-var _ Migration = (*dummyMigration)(nil)
-
-func (d *dummyMigration) next() graph.NodeIdx {
-	n := d.counter
-	d.counter++
-	return n
-}
-
-func (d *dummyMigration) AddIngredient(_ string, _ []string, impl flownode.NodeImpl) graph.NodeIdx {
-	n := d.next()
-	d.nodes[n] = impl
-	return n
-}
-
-func (d *dummyMigration) AddBase(_ string, _ []string, b flownode.AnyBase) graph.NodeIdx {
-	n := d.next()
-	d.nodes[n] = b
-	return n
-}
-
-func (d *dummyMigration) Maintain(string, graph.NodeIdx, []int, []boostpb.ViewParameter, int) {
-	// nop
-}
-
-func (d *dummyMigration) MaintainAnonymous(n graph.NodeIdx, key []int) {
-	// nop
-}
 
 // TestIncorporator is a no-op query incorporator that allows testing whether a given query
 // can be properly planned by the Boost planner.
@@ -47,25 +11,23 @@ func (d *dummyMigration) MaintainAnonymous(n graph.NodeIdx, key []int) {
 type TestIncorporator struct {
 	inc    *Incorporator
 	schema *SchemaInformation
-	mig    dummyMigration
+	mig    Migration
 }
 
 // NewTestIncorporator creates a new test incorporator. The given schemaInfo must contain
 // all the schema information for any base tables that are referenced by the queries that
 // will be planned by this incorporator. It is usually safest to simply load all the
 // schemas for all the keyspaces current available in the Vitess cluster.
-func NewTestIncorporator(schemaInfo *SchemaInformation) *TestIncorporator {
+func NewTestIncorporator(schemaInfo *SchemaInformation, mig Migration) *TestIncorporator {
 	return &TestIncorporator{
 		inc:    NewIncorporator(),
 		schema: schemaInfo,
-		mig: dummyMigration{
-			nodes: map[graph.NodeIdx]flownode.NodeImpl{},
-		},
+		mig:    mig,
 	}
 }
 
 func (ti *TestIncorporator) add(keyspace string, stmt sqlparser.Statement) (*operators.TableReport, error) {
-	qfp, err := ti.inc.AddParsedQuery(keyspace, stmt, "", true, &ti.mig, ti.schema)
+	qfp, err := ti.inc.AddParsedQuery(keyspace, stmt, "", true, ti.mig, ti.schema)
 	if err != nil {
 		return nil, err
 	}

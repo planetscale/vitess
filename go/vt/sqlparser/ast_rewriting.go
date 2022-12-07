@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -133,18 +134,33 @@ func (r *ReservedVars) ReserveHasValuesSubQuery() string {
 const staticBvar10 = "vtg0vtg1vtg2vtg3vtg4vtg5vtg6vtg7vtg8vtg9"
 const staticBvar100 = "vtg10vtg11vtg12vtg13vtg14vtg15vtg16vtg17vtg18vtg19vtg20vtg21vtg22vtg23vtg24vtg25vtg26vtg27vtg28vtg29vtg30vtg31vtg32vtg33vtg34vtg35vtg36vtg37vtg38vtg39vtg40vtg41vtg42vtg43vtg44vtg45vtg46vtg47vtg48vtg49vtg50vtg51vtg52vtg53vtg54vtg55vtg56vtg57vtg58vtg59vtg60vtg61vtg62vtg63vtg64vtg65vtg66vtg67vtg68vtg69vtg70vtg71vtg72vtg73vtg74vtg75vtg76vtg77vtg78vtg79vtg80vtg81vtg82vtg83vtg84vtg85vtg86vtg87vtg88vtg89vtg90vtg91vtg92vtg93vtg94vtg95vtg96vtg97vtg98vtg99"
 
+func staticBvar(counter int) string {
+	switch {
+	case counter < 10:
+		ofs := counter * 4
+		return staticBvar10[ofs : ofs+4]
+	case counter < 100:
+		ofs := (counter - 10) * 5
+		return staticBvar100[ofs : ofs+5]
+	default:
+		return ""
+	}
+}
+
+func DefaultBindVar(n int) string {
+	if st := staticBvar(n); st != "" {
+		return st
+	}
+	return fmt.Sprintf("vtg%d", n)
+}
+
 func (r *ReservedVars) nextUnusedVar() string {
 	if r.fast {
 		r.counter++
 
 		if r.static {
-			switch {
-			case r.counter < 10:
-				ofs := r.counter * 4
-				return staticBvar10[ofs : ofs+4]
-			case r.counter < 100:
-				ofs := (r.counter - 10) * 5
-				return staticBvar100[ofs : ofs+5]
+			if bvar := staticBvar(r.counter); bvar != "" {
+				return bvar
 			}
 		}
 

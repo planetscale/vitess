@@ -91,10 +91,10 @@ func (target *memTarget) execute(querySQL string, variables map[string]*querypb.
 		if err != nil {
 			return nil, err
 		}
-
-		// HACK: our in-memory SQL engine does not like the backticks around `gtid_executed`
-		querySQL = strings.Replace(querySQL, "@@global.`gtid_executed`", "@@global.gtid_executed", 1)
 	}
+
+	// HACK: our in-memory SQL engine does not like the backticks around `gtid_executed`
+	querySQL = strings.Replace(querySQL, "@@global.`gtid_executed`", "@@global.gtid_executed", 1)
 
 	ctx := sql.NewContext(context.Background(), sql.WithServices(sql.Services{
 		LogTransaction: target.gtid.Log,

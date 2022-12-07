@@ -11,8 +11,10 @@ import (
 
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/common/graphviz"
+	"vitess.io/vitess/go/boost/common/xslice"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type Migration interface {
@@ -23,11 +25,12 @@ type Migration interface {
 	SendPacket(domain boostpb.DomainIndex, b *boostpb.Packet) error
 	SendPacketSync(domain boostpb.DomainIndex, b *boostpb.SyncPacket) error
 	DomainShards(domain boostpb.DomainIndex) uint
+	PlannedUpquery(node graph.NodeIdx) (sqlparser.SelectStatement, bool)
 }
 
 type Materialization struct {
-	have  indexmap
-	added indexmap
+	have  graphIndexMap
+	added graphIndexMap
 
 	plans          map[graph.NodeIdx]*Plan
 	partial        map[graph.NodeIdx]bool
@@ -38,8 +41,8 @@ type Materialization struct {
 
 func NewMaterialization() *Materialization {
 	return &Materialization{
-		have:           newIndexmap(),
-		added:          newIndexmap(),
+		have:           make(graphIndexMap),
+		added:          make(graphIndexMap),
 		plans:          make(map[graph.NodeIdx]*Plan),
 		partial:        make(map[graph.NodeIdx]bool),
 		partialEnabled: true,
@@ -50,54 +53,84 @@ func (mat *Materialization) DisablePartial() {
 	mat.partialEnabled = false
 }
 
-func indicesEqual(a, b [][]int) bool {
-	return slices.EqualFunc(a, b, func(a, b []int) bool { return slices.Equal(a, b) })
-}
+type indexSet [][]int
 
-type indexmap struct {
-	m map[graph.NodeIdx][][]int
+func (idx indexSet) equal(other indexSet) bool {
+	return slices.EqualFunc(idx, other, func(a, b []int) bool {
+		return slices.Equal(a, b)
+	})
 }
-
-func newIndexmap() indexmap {
-	return indexmap{m: make(map[graph.NodeIdx][][]int)}
-}
-
-func (o *indexmap) insert(idx graph.NodeIdx, cols []int) bool {
-	existing := o.m[idx]
-	for _, cc := range existing {
+func (idx indexSet) contains(cols []int) bool {
+	for _, cc := range idx {
 		if slices.Equal(cc, cols) {
-			return false
+			return true
 		}
 	}
-	existing = append(existing, cols)
-	o.m[idx] = existing
-	return true
+	return false
 }
 
-func (o *indexmap) contains(idx graph.NodeIdx) bool {
-	_, ok := o.m[idx]
-	return ok
+func (idx indexSet) insert(cols []int) (indexSet, bool) {
+	if idx.contains(cols) {
+		return idx, false
+	}
+	return append(idx, cols), true
 }
 
-func (o *indexmap) get(idx graph.NodeIdx) (cols [][]int, ok bool) {
-	cols, ok = o.m[idx]
+type graphIndexMap map[graph.NodeIdx]indexSet
+
+func (im graphIndexMap) insert(idx graph.NodeIdx, cols []int) (inserted bool) {
+	im[idx], inserted = im[idx].insert(cols)
 	return
 }
 
-func (o *indexmap) clear() {
-	o.m = make(map[graph.NodeIdx][][]int)
+func (im graphIndexMap) clear() {
+	for k := range im {
+		delete(im, k)
+	}
 }
 
-func (o *indexmap) remove(idx graph.NodeIdx) [][]int {
-	cols, ok := o.m[idx]
+func (im graphIndexMap) take(idx graph.NodeIdx) indexSet {
+	cols, ok := im[idx]
 	if ok {
-		delete(o.m, idx)
+		delete(im, idx)
 	}
 	return cols
 }
 
-func (o *indexmap) indexLen(idx graph.NodeIdx) int {
-	return len(o.m[idx])
+func (im graphIndexMap) contains(n graph.NodeIdx) bool {
+	_, found := im[n]
+	return found
+}
+
+func mapIndices(n *flownode.Node, parent graph.NodeIdx, indices [][]int) error {
+	for _, index := range indices {
+		for c, col := range index {
+			if !n.IsInternal() {
+				if n.IsAnyBase() {
+					panic("???")
+				}
+				continue
+			}
+
+			var rewritten bool
+			for _, pc := range n.ParentColumns(col) {
+				if pc.Node == parent {
+					index[c] = pc.Column
+					rewritten = true
+					break
+				}
+			}
+
+			if !rewritten {
+				return &ObligationResolveError{
+					Node:       n.GlobalAddr(),
+					ParentNode: parent,
+					Column:     col,
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // Extend the current set of materializations with any additional materializations needed to
@@ -136,10 +169,10 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 	//
 
 	// Holds all lookup obligations. Keyed by the node that should be materialized.
-	var lookupObligations = newIndexmap()
+	var lookupObligations = make(graphIndexMap)
 
 	// Holds all replay obligations. Keyed by the node whose *parent* should be materialized.
-	var replayObligations = newIndexmap()
+	var replayObligations = make(graphIndexMap)
 
 	// Find indices we need to add.
 	for ni := range newnodes {
@@ -182,35 +215,6 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 		}
 	}
 
-	mapIndices := func(n *flownode.Node, parent graph.NodeIdx, indices [][]int) error {
-		for _, index := range indices {
-			for c, col := range index {
-				if !n.IsInternal() {
-					if n.IsAnyBase() {
-						panic("???")
-					}
-					continue
-				}
-
-				var rewritten bool
-				for _, pc := range n.ParentColumns(col) {
-					if pc.Node == parent {
-						index[c] = pc.Column
-						rewritten = true
-						break
-					}
-				}
-
-				if !rewritten {
-					return fmt.Errorf(
-						"could not resolve obligation past operator; node: %v, ancestor: %v, column: %v",
-						n, parent, col)
-				}
-			}
-		}
-		return nil
-	}
-
 	// lookup obligations are fairly rigid, in that they require a materialization, and can
 	// only be pushed through query-through nodes, and never across domains. so, we deal with
 	// those first.
@@ -220,7 +224,7 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 	// partial node may add indices to only a subset of the intermediate partial views between
 	// it and the nearest full materialization (because the intermediate ones haven't been
 	// marked as materialized yet).
-	for ni, indices := range lookupObligations.m {
+	for ni, indices := range lookupObligations {
 		// we want to find the closest materialization that allows lookups (i.e., counting
 		// query-through operators).
 		mi := ni
@@ -283,7 +287,7 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 	// order: if we didn't, a node could receive additional indexes after we've checked it!
 	for i := len(ordered) - 1; i >= 0; i-- {
 		ni := ordered[i]
-		indexes, ok := replayObligations.get(ni)
+		indexes, ok := replayObligations[ni]
 		if !ok {
 			continue
 		}
@@ -293,7 +297,7 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 		// stage that we can trace the key column back into each of our nearest
 		// materializations.
 		var able = mat.partialEnabled
-		var add = newIndexmap()
+		var add = make(graphIndexMap)
 
 		nn := g.Value(ni)
 		if nn.IsAnyBase() {
@@ -304,7 +308,7 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 		}
 
 		// we are already fully materialized, so can't be made partial
-		if !newnodes[ni] && !mat.partial[ni] && mat.added.indexLen(ni) != mat.have.indexLen(ni) {
+		if !newnodes[ni] && !mat.partial[ni] && len(mat.added[ni]) != len(mat.have[ni]) {
 			able = false
 		}
 
@@ -353,8 +357,8 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 						break attempt
 					}
 
-					if m, ok := mat.have.get(pe.Node); ok {
-						if slices.IndexFunc(m, func(cc []int) bool { return slices.Equal(cc, pe.Columns) }) < 0 {
+					if m, ok := mat.have[pe.Node]; ok {
+						if !m.contains(pe.Columns) {
 							add.insert(pe.Node, pe.Columns)
 						}
 						break
@@ -366,7 +370,7 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 		if able {
 			// we can do partial if we add all those indices
 			mat.partial[ni] = true
-			for mi, indices := range add.m {
+			for mi, indices := range add {
 				for _, index := range indices {
 					replayObligations.insert(mi, index)
 				}
@@ -394,180 +398,33 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 	return nil
 }
 
-func containsColumn(cols []int, col int) bool {
-	for _, c := range cols {
-		if c == col {
-			return true
-		}
-	}
-	return false
-}
-
 // Commit commits all materialization decisions since the last time `commit` was called.
 // This includes setting up replay paths, adding new indices to existing materializations, and
 // populating new materializations
 func (mat *Materialization) Commit(mig Migration, newnodes map[graph.NodeIdx]bool) error {
 	g := mig.Graph()
+
 	if err := mat.extend(g, newnodes); err != nil {
 		return err
 	}
 
-	// check that we don't have fully materialized nodes downstream of partially materialized nodes.
-	{
-		var anyPartial func(ni graph.NodeIdx) graph.NodeIdx
-		anyPartial = func(ni graph.NodeIdx) graph.NodeIdx {
-			if mat.partial[ni] {
-				return ni
-			}
-			neighbors := g.NeighborsDirected(ni, graph.DirectionIncoming)
-			for neighbors.Next() {
-				if ni := anyPartial(neighbors.Current); ni != graph.InvalidNode {
-					return ni
-				}
-			}
-			return graph.InvalidNode
-		}
-
-		for ni := range mat.added.m {
-			if mat.partial[ni] {
-				continue
-			}
-			if pi := anyPartial(ni); pi != graph.InvalidNode {
-				panic("partial materialization above full materialization")
-			}
-		}
+	if err := mat.checkMaterializationOrdering(g); err != nil {
+		return err
 	}
 
-	// check that no node is partial over a subset of the indices in its parent
-	{
-		for ni, added := range mat.added.m {
-			if !mat.partial[ni] {
-				continue
-			}
-
-			for _, index := range added {
-				paths := ProvenanceOf(g, ni, index, materializationPlanOnJoin(g))
-				for _, path := range paths {
-					for _, pe := range path {
-						pni := pe.Node
-						columns := pe.Columns
-
-						if slices.Contains(columns, -1) {
-							break
-						} else if mat.partial[pni] {
-							indexes, ok := mat.have.get(pni)
-							if !ok {
-								break
-							}
-							for _, index := range indexes {
-								overlap := false
-								for _, col := range index {
-									if containsColumn(columns, col) {
-										overlap = true
-										break
-									}
-								}
-								if !overlap {
-									continue
-								}
-
-								for _, col := range index {
-									if !containsColumn(columns, col) {
-										panic("partially overlapping partial indices (1)")
-									}
-								}
-
-								for i, col := range columns {
-									if !containsColumn(index, col) {
-										panic(fmt.Sprintf("partially overlapping partial indices; parent = %d, pcols = %#v, child = %d, cols = %#v, conflict = %d",
-											pni, index, ni, columns, i,
-										))
-									}
-								}
-							}
-						} else if mat.have.contains(ni) {
-							break
-						}
-					}
-				}
-			}
-		}
+	if err := mat.checkPartialOverIndices(g); err != nil {
+		return err
 	}
 
-	// check that we don't have any cases where a subgraph is sharded by one column, and then
-	// has a replay path on a duplicated copy of that column. for example, a join with
-	// [B(0, 0), R(0)] where the join's subgraph is sharded by .0, but a downstream replay path
-	// looks up by .1. this causes terrible confusion where the target (correctly) queries only
-	// one shard, but the shard merger expects to have to wait for all shards (since the replay
-	// key and the sharding key do not match at the shard merger).
-	{
-		for node := range newnodes {
-			n := g.Value(node)
-			if !n.IsShardMerger() {
-				continue
-			}
-
-			// we don't actually store replay paths anywhere in Materializations (perhaps we
-			// should). however, we can check a proxy for the necessary property by making sure
-			// that our parent's sharding key is never aliased. this will lead to some false
-			// positives (all replay paths may use the same alias as we shard by), but we'll
-			// deal with that.
-			parent := g.NeighborsDirected(node, graph.DirectionIncoming).First()
-			psharding := g.Value(parent).Sharding()
-			if col, _, ok := psharding.ByColumn(); ok {
-				// we want to resolve col all the way to its nearest materialized ancestor.
-				// and then check whether any other cols of the parent alias that source column
-				columns := make([]int, len(n.Fields()))
-				for c := range columns {
-					columns[c] = c
-				}
-
-				paths := ProvenanceOf(g, parent, columns, OnJoinNone)
-				for _, path := range paths {
-					m := 0
-					for m < len(path) {
-						if mat.have.contains(path[m].Node) {
-							break
-						}
-						m++
-					}
-					cols := path[m].Columns
-					src := cols[col]
-					if src == -1 {
-						continue
-					}
-
-					for c, res := range cols {
-						if c != col && res == src {
-							panic("attempting to merge sharding by aliased column")
-						}
-					}
-				}
-			}
-		}
+	if err := mat.checkDuplicateColumns(g, newnodes); err != nil {
+		return err
 	}
 
-	var nonPurge []graph.NodeIdx
-	for ni := range newnodes {
-		n := g.Value(ni)
-		if n.IsReader() || mat.have.contains(ni) {
-			nonPurge = g.NeighborsDirected(ni, graph.DirectionIncoming).Collect(nonPurge)
-		}
-	}
-	for len(nonPurge) > 0 {
-		ni := nonPurge[len(nonPurge)-1]
-		nonPurge = nonPurge[:len(nonPurge)-1]
-		if mat.have.contains(ni) {
-			// already shceduled to be checked
-			// NOTE: no need to check for readers here, since they can't be parents
-			continue
-		}
-		nonPurge = g.NeighborsDirected(ni, graph.DirectionIncoming).Collect(nonPurge)
-	}
-
-	var reindex = make([]graph.NodeIdx, 0, len(newnodes))
-	var mknodes = make([]graph.NodeIdx, 0, len(newnodes))
-	var topo = graph.NewTopoVisitor(g)
+	var (
+		toReindex = make([]graph.NodeIdx, 0, len(newnodes))
+		toMake    = make([]graph.NodeIdx, 0, len(newnodes))
+		topo      = graph.NewTopoVisitor(g)
+	)
 
 	for topo.Next() {
 		n := g.Value(topo.Current)
@@ -575,18 +432,72 @@ func (mat *Materialization) Commit(mig Migration, newnodes map[graph.NodeIdx]boo
 			continue
 		}
 		if newnodes[topo.Current] {
-			mknodes = append(mknodes, topo.Current)
+			toMake = append(toMake, topo.Current)
 		} else if mat.added.contains(topo.Current) {
-			reindex = append(reindex, topo.Current)
+			toReindex = append(toReindex, topo.Current)
 		}
 	}
 
+	if err := mat.reindexNodes(mig, newnodes, toReindex); err != nil {
+		return err
+	}
+
+	if err := mat.makeNewNodes(mig, toMake); err != nil {
+		return err
+	}
+
+	mat.added.clear()
+	return nil
+}
+
+func (mat *Materialization) makeNewNodes(mig Migration, toMake []graph.NodeIdx) error {
+	g := mig.Graph()
+
+	for _, ni := range toMake {
+		var err error
+
+		n := g.Value(ni)
+		indexOn := mat.added.take(ni)
+		indexOn, err = mat.readyOne(mig, ni, indexOn)
+		if err != nil {
+			return err
+		}
+
+		// communicate to the domain in charge of a particular node that it should start
+		// delivering updates to a given new node. note that we wait for the domain to
+		// acknowledge the change. this is important so that we don't ready a child in a
+		// different domain before the parent has been readied. it's also important to avoid us
+		// returning before the graph is actually fully operational.
+
+		var indexProto []*boostpb.SyncPacket_Ready_Index
+		for _, idx := range indexOn {
+			indexProto = append(indexProto, &boostpb.SyncPacket_Ready_Index{Key: idx})
+		}
+
+		var pkt boostpb.SyncPacket
+		pkt.Inner = &boostpb.SyncPacket_Ready_{
+			Ready: &boostpb.SyncPacket_Ready{
+				Node:  n.LocalAddr(),
+				Index: indexProto,
+			},
+		}
+
+		if err := mig.SendPacketSync(n.Domain(), &pkt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (mat *Materialization) reindexNodes(mig Migration, newnodes map[graph.NodeIdx]bool, reindex []graph.NodeIdx) error {
+	g := mig.Graph()
+
 	// first, we add any new indices to existing nodes
 	for _, node := range reindex {
-		indexOn := mat.added.remove(node)
+		indexOn := mat.added.take(node)
 
 		// are they trying to make a non-materialized node materialized?
-		if indicesEqual(mat.have.m[node], indexOn) {
+		if mat.have[node].equal(indexOn) {
 			if mat.partial[node] {
 				// we can't make this node partial if any of its children are materialized, as
 				// we might stop forwarding updates to them, which would make them very sad.
@@ -605,7 +516,7 @@ func (mat *Materialization) Commit(mig Migration, newnodes map[graph.NodeIdx]boo
 						continue
 					}
 
-					if mat.added.indexLen(child) != mat.have.indexLen(child) {
+					if len(mat.added[child]) != len(mat.have[child]) {
 						panic("node was previously materialized!")
 					}
 
@@ -641,42 +552,183 @@ func (mat *Materialization) Commit(mig Migration, newnodes map[graph.NodeIdx]boo
 			}
 		}
 	}
+	return nil
+}
 
-	for _, ni := range mknodes {
-		var err error
-
-		n := g.Value(ni)
-		indexOn := mat.added.remove(ni)
-		indexOn, err = mat.readyOne(mig, ni, indexOn)
-		if err != nil {
-			return err
+// check that we don't have any cases where a subgraph is sharded by one column, and then
+// has a replay path on a duplicated copy of that column. for example, a join with
+// [B(0, 0), R(0)] where the join's subgraph is sharded by .0, but a downstream replay path
+// looks up by .1. this causes terrible confusion where the target (correctly) queries only
+// one shard, but the shard merger expects to have to wait for all shards (since the replay
+// key and the sharding key do not match at the shard merger).
+func (mat *Materialization) checkDuplicateColumns(g *graph.Graph[*flownode.Node], newnodes map[graph.NodeIdx]bool) error {
+	for node := range newnodes {
+		n := g.Value(node)
+		if !n.IsShardMerger() {
+			continue
 		}
 
-		// communicate to the domain in charge of a particular node that it should start
-		// delivering updates to a given new node. note that we wait for the domain to
-		// acknowledge the change. this is important so that we don't ready a child in a
-		// different domain before the parent has been readied. it's also important to avoid us
-		// returning before the graph is actually fully operational.
+		// we don't actually store replay paths anywhere in Materializations (perhaps we
+		// should). however, we can check a proxy for the necessary property by making sure
+		// that our parent's sharding key is never aliased. this will lead to some false
+		// positives (all replay paths may use the same alias as we shard by), but we'll
+		// deal with that.
+		parent := g.NeighborsDirected(node, graph.DirectionIncoming).First()
+		psharding := g.Value(parent).Sharding()
+		if col, _, ok := psharding.ByColumn(); ok {
+			// we want to resolve col all the way to its nearest materialized ancestor.
+			// and then check whether any other cols of the parent alias that source column
+			columns := make([]int, len(n.Fields()))
+			for c := range columns {
+				columns[c] = c
+			}
 
-		var indexProto []*boostpb.SyncPacket_Ready_Index
-		for _, idx := range indexOn {
-			indexProto = append(indexProto, &boostpb.SyncPacket_Ready_Index{Key: idx})
-		}
+			paths := ProvenanceOf(g, parent, columns, OnJoinNone)
+			for _, path := range paths {
+				m := 0
+				for m < len(path) {
+					if mat.have.contains(path[m].Node) {
+						break
+					}
+					m++
+				}
+				cols := path[m].Columns
+				src := cols[col]
+				if src == -1 {
+					continue
+				}
 
-		var pkt boostpb.SyncPacket
-		pkt.Inner = &boostpb.SyncPacket_Ready_{
-			Ready: &boostpb.SyncPacket_Ready{
-				Node:  n.LocalAddr(),
-				Index: indexProto,
-			},
-		}
-
-		if err := mig.SendPacketSync(n.Domain(), &pkt); err != nil {
-			return err
+				for c, res := range cols {
+					if c != col && res == src {
+						return &MergeShardingByAliasedColumnError{
+							Node:         node,
+							ParentNode:   parent,
+							SourceColumn: src,
+						}
+					}
+				}
+			}
 		}
 	}
+	return nil
+}
 
-	mat.added.clear()
+// check that no node is partial over a subset of the indices in its parent
+func (mat *Materialization) checkPartialOverIndices(g *graph.Graph[*flownode.Node]) error {
+	for ni, added := range mat.added {
+		if !mat.partial[ni] {
+			continue
+		}
+
+		for _, index := range added {
+			paths := ProvenanceOf(g, ni, index, materializationPlanOnJoin(g))
+			for _, path := range paths {
+				for _, pe := range path {
+					pni := pe.Node
+					columns := pe.Columns
+
+					if slices.Contains(columns, -1) {
+						break
+					} else if mat.partial[pni] {
+						for _, index := range mat.have[pni] {
+							// is this node partial over some of the child's partial
+							// columns, but not others? if so, we run into really sad
+							// situations where the parent could miss in its state despite
+							// the child having state present for that key.
+
+							if xslice.All(index, func(c int) bool { return !slices.Contains(columns, c) }) {
+								continue
+							}
+
+							conflict, found := xslice.Find(index, func(c int) bool { return !slices.Contains(columns, c) })
+							if !found {
+								conflict, found = xslice.Find(columns, func(c int) bool { return !slices.Contains(index, c) })
+							}
+							if found {
+								/*
+									Check that we don't run into newfound bug
+
+									Specifically, consider the case where you have an aggregation that
+									groups by [0,1], and a downstream reader keyed by [0]. The reader
+									will be partial, and add an index on [0] on the aggregation. When the
+									reader misses, it will ask the aggregation for a replay of, say, ["7"].
+									The aggregation will perform that replay, but when trying to process the
+									response, it will miss when doing a self-lookup of ["7", x] for whatever
+									value x happens to be in column 1 of the replay responses. This triggers
+									a second round of (unnecessary) replays, which in and of itself causes a
+									bunch of issues, but let's imagine that it works fine, and that both
+									["7"] and ["7", x] is filled correctly in the aggregation. Now a write
+									comes along for ["7", y]. The aggregation misses on its lookup, so the
+									write is discarded. But the reader holds state for ["7"], so this
+									violates key monotonicity!
+
+									There are a couple of ways that this could be fixed. One idea is that
+									the aggregation could evict ["7"] on miss, similar to what we currently
+									do for joins. This would cause us to do a lot more replays, and will
+									likely reveal a bunch of bugs with overlapping replays, but should be
+									theoretically correct. An alternative, and more robust, idea is to to
+									have Soup realize that [0,1] and [0] overlap, and that the replay of [0]
+									actually fills *all* holes in [0,1].
+
+									Separately, the *reason* why we run into this situation in the majority
+									of cases is that Soup has to pull through columns for downstream views
+									(e.g., consider the case where 0 = article id and 1 = title). In these
+									cases, there is *really* just one group by key (article id), and the
+									other column value is uniquely determined by the first. In this case,
+									the aggregation operator (and other similar operators) could be modified
+									to know about these kinds of "pull through" columns, and simply pick any
+									1 value for a set of records sharing the same value for [0]. This is
+									similar to what MySQL does when it is lax about not having to name all
+									selected columns in a GROUP BY (PostgreSQL does not allow this).
+
+									From: https://github.com/vmg/noria/commit/25e0be14c216b1289c15a5f731a2277736d5d12d
+								*/
+								return &PartialOverlappingPartialIndexesError{
+									ParentNode: pni,
+									Index:      index,
+									ChildNode:  ni,
+									Columns:    columns,
+									Conflict:   conflict,
+								}
+							}
+						}
+					} else if mat.have.contains(ni) {
+						break
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// check that we don't have fully materialized nodes downstream of partially materialized nodes.
+func (mat *Materialization) checkMaterializationOrdering(g *graph.Graph[*flownode.Node]) error {
+	var anyPartial func(ni graph.NodeIdx) graph.NodeIdx
+	anyPartial = func(ni graph.NodeIdx) graph.NodeIdx {
+		if mat.partial[ni] {
+			return ni
+		}
+		neighbors := g.NeighborsDirected(ni, graph.DirectionIncoming)
+		for neighbors.Next() {
+			if ni := anyPartial(neighbors.Current); ni != graph.InvalidNode {
+				return ni
+			}
+		}
+		return graph.InvalidNode
+	}
+
+	for ni := range mat.added {
+		if mat.partial[ni] {
+			continue
+		}
+		if pi := anyPartial(ni); pi != graph.InvalidNode {
+			return &PartialMaterializationAboveFullMaterializationError{
+				FullNode:    ni,
+				PartialNode: pi,
+			}
+		}
+	}
 	return nil
 }
 
@@ -749,12 +801,12 @@ func (mat *Materialization) setup(mig Migration, ni graph.NodeIdx, indexOn [][]i
 			var pkt boostpb.Packet
 			pkt.Inner = &boostpb.Packet_StartReplay_{
 				StartReplay: &boostpb.Packet_StartReplay{
-					Tag:  pending.Tag,
-					From: pending.Source,
+					Tag:  pending.tag,
+					From: pending.source,
 				}}
 
-			mig.Log().Debug("sending pending StartReplay", zap.Int("n", n), pending.Tag.Zap(), pending.Source.Zap(), pending.SourceDomain.Zap())
-			if err := mig.SendPacket(pending.SourceDomain, &pkt); err != nil {
+			mig.Log().Debug("sending pending StartReplay", zap.Int("n", n), pending.tag.Zap(), pending.source.Zap(), pending.sourceDomain.Zap())
+			if err := mig.SendPacket(pending.sourceDomain, &pkt); err != nil {
 				return err
 			}
 		}
@@ -801,22 +853,31 @@ func (mat *Materialization) RenderGraphviz(gvz *graphviz.Graph[graph.NodeIdx]) {
 	portCount := 0
 
 	for _, plan := range mat.plans {
-		state := plan.state.String()
-
 		for tag, replayPath := range plan.paths {
-			port := portLabels[portCount%2]
-			portCount++
+			for _, seg := range replayPath {
+				port := portLabels[portCount%2]
+				portCount++
 
-			for e := 0; e < len(replayPath)-1; e++ {
-				from := replayPath[e]
-				to := replayPath[e+1]
-				edge := gvz.AddEdge(from, to)
-				edge.Attr["xlabel"] = fmt.Sprintf("T%d (⇨%d)", tag, plan.node)
-				edge.Attr["color"] = fmt.Sprintf("/spectral11/%d", (tag%11)+1)
-				edge.Attr["headport"] = port
-				edge.Attr["tailport"] = port
-				edge.Attr["penwidth"] = "3"
-				edge.Attr["labeltooltip"] = state
+				setup := graphviz.JSON(seg.setup)
+				color := fmt.Sprintf("/spectral11/%d", (tag%11)+1)
+
+				addEdge := func(from, to PathElement) {
+					edge := gvz.AddEdge(from.Node, to.Node)
+					edge.Attr["xlabel"] = fmt.Sprintf("T%d (d%d, %v⇨%v)", tag, seg.domain, from.Columns, to.Columns)
+					edge.Attr["color"] = color
+					edge.Attr["fontcolor"] = color
+					edge.Attr["headport"] = port
+					edge.Attr["tailport"] = port
+					edge.Attr["penwidth"] = "3"
+					edge.Attr["labeltooltip"] = setup
+				}
+
+				if len(seg.path) == 1 {
+					addEdge(seg.path[0], seg.path[0])
+				}
+				for e := 0; e < len(seg.path)-1; e++ {
+					addEdge(seg.path[e], seg.path[e+1])
+				}
 			}
 		}
 	}

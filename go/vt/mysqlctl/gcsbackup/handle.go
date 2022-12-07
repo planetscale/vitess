@@ -3,12 +3,15 @@ package gcsbackup
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"path"
 	"strconv"
 	"sync/atomic"
 
 	"cloud.google.com/go/storage"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/api/iterator"
 
 	"vitess.io/vitess/go/vt/concurrency"
 )
@@ -56,6 +59,54 @@ func (h *handle) Directory() string {
 // Name implementation.
 func (h *handle) Name() string {
 	return h.name
+}
+
+// Init checks to see if a backup can be performed.
+//
+// If the backup prefix already has a `MANIFEST` the method will error to ensure
+// that a complete backup is not overwritten. If a manifest does not exist the method
+// will ensure that the backup is completley empty before returning.
+func (h *handle) init(ctx context.Context) error {
+	_, err := h.object("MANIFEST").Attrs(ctx)
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			return h.clear(ctx)
+		}
+		return fmt.Errorf("gcsbackup: checking for the MANIFEST - %w", err)
+	}
+	return errors.New("gcsbackup: cannot start a complete backup")
+}
+
+// Clear clears the backup prefix from all files.
+func (h *handle) clear(ctx context.Context) error {
+	eg, subctx := errgroup.WithContext(ctx)
+	iter := h.bucket.Objects(ctx, &storage.Query{
+		Prefix: path.Join(h.id, h.dir, h.name) + "/",
+	})
+
+	eg.SetLimit(10) // arbitrary limit.
+
+	for {
+		obj, err := iter.Next()
+		if err != nil {
+			if !errors.Is(err, iterator.Done) {
+				return fmt.Errorf("iterating over the backup prefix - %w", err)
+			}
+			break
+		}
+
+		if obj.Deleted.IsZero() {
+			eg.Go(func() error {
+				return h.bucket.Object(obj.Name).Delete(subctx)
+			})
+		}
+	}
+
+	if err := eg.Wait(); err != nil {
+		return fmt.Errorf("clearing the directory - %w", err)
+	}
+
+	return nil
 }
 
 // AddFile implementation.

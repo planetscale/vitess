@@ -16,6 +16,7 @@ import (
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
 	"vitess.io/vitess/go/boost/server/controller/materialization"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type migration struct {
@@ -23,12 +24,19 @@ type migration struct {
 
 	log    *zap.Logger
 	target *Controller
+	graph  *graph.Graph[*flownode.Node]
 
-	added   map[graph.NodeIdx]bool
-	readers map[graph.NodeIdx]graph.NodeIdx
+	added     map[graph.NodeIdx]bool
+	readers   map[graph.NodeIdx]graph.NodeIdx
+	upqueries map[graph.NodeIdx]sqlparser.SelectStatement
 
 	start time.Time
 	uuid  uuid.UUID
+}
+
+func (mig *migration) PlannedUpquery(node graph.NodeIdx) (sqlparser.SelectStatement, bool) {
+	sel, ok := mig.upqueries[node]
+	return sel, ok
 }
 
 var _ materialization.Migration = (*migration)(nil)
@@ -39,7 +47,7 @@ func (mig *migration) Log() *zap.Logger {
 }
 
 func (mig *migration) Graph() *graph.Graph[*flownode.Node] {
-	return mig.target.ingredients
+	return mig.graph
 }
 
 func (mig *migration) SendPacket(domain boostpb.DomainIndex, pkt *boostpb.Packet) error {
@@ -62,15 +70,14 @@ func (mig *migration) DomainShards(domain boostpb.DomainIndex) uint {
 }
 
 func (mig *migration) sortInTopoOrder(new map[graph.NodeIdx]bool) (topolist []graph.NodeIdx) {
-	g := mig.target.ingredients
 	topolist = make([]graph.NodeIdx, 0, len(new))
-	topo := graph.NewTopoVisitor(g)
+	topo := graph.NewTopoVisitor(mig.graph)
 	for topo.Next() {
 		node := topo.Current
 		if node.IsSource() {
 			continue
 		}
-		if g.Value(node).IsDropped() {
+		if mig.graph.Value(node).IsDropped() {
 			continue
 		}
 		if !new[node] {
@@ -81,48 +88,50 @@ func (mig *migration) sortInTopoOrder(new map[graph.NodeIdx]bool) (topolist []gr
 	return
 }
 
-func (mig *migration) AddIngredient(name string, fields []string, impl flownode.NodeImpl) graph.NodeIdx {
-	g := mig.target.ingredients
+func (mig *migration) AddIngredient(name string, fields []string, impl flownode.NodeImpl, upquerySQL sqlparser.SelectStatement) graph.NodeIdx {
 	newNode := flownode.New(name, fields, impl)
-	newNode.OnConnected(g)
+	newNode.OnConnected(mig.graph)
 
 	parents := newNode.Ancestors()
 
-	ni := g.AddNode(newNode)
+	ni := mig.graph.AddNode(newNode)
 	mig.added[ni] = true
 	for _, parent := range parents {
-		g.AddEdge(parent, ni)
+		mig.graph.AddEdge(parent, ni)
 	}
+
+	if upquerySQL != nil {
+		mig.upqueries[ni] = upquerySQL
+	}
+
 	return ni
 }
 
 func (mig *migration) AddBase(name string, fields []string, b flownode.AnyBase) graph.NodeIdx {
-	g := mig.target.ingredients
 	base := flownode.New(name, fields, b)
-	ni := g.AddNode(base)
+	ni := mig.graph.AddNode(base)
 	mig.added[ni] = true
-	g.AddEdge(graph.Source, ni)
+	mig.graph.AddEdge(graph.Source, ni)
 	return ni
 }
 
 func (mig *migration) ensureReaderFor(na graph.NodeIdx, name string, connect func(r *flownode.Reader)) *flownode.Node {
-	g := mig.target.ingredients
 	fn, found := mig.readers[na]
 	if found {
-		return g.Value(fn)
+		return mig.graph.Value(fn)
 	}
 	r := flownode.NewReader(na)
 	connect(r)
 
 	var rn *flownode.Node
 	if name != "" {
-		rn = g.Value(na).NamedMirror(r, name)
+		rn = mig.graph.Value(na).NamedMirror(r, name)
 	} else {
-		rn = g.Value(na).Mirror(r)
+		rn = mig.graph.Value(na).Mirror(r)
 	}
 
-	ri := g.AddNode(rn)
-	g.AddEdge(na, ri)
+	ri := mig.graph.AddNode(rn)
+	mig.graph.AddEdge(na, ri)
 	mig.added[ri] = true
 	mig.readers[na] = ri
 	return rn
@@ -130,13 +139,12 @@ func (mig *migration) ensureReaderFor(na graph.NodeIdx, name string, connect fun
 
 func (mig *migration) Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int) {
 	mig.ensureReaderFor(na, name, func(reader *flownode.Reader) {
-		reader.OnConnected(mig.target.ingredients, key, parameters, colLen)
+		reader.OnConnected(mig.graph, key, parameters, colLen)
 	})
 }
 
-func (mig *migration) Commit(up *boostplan.Upqueries) error {
+func (mig *migration) Commit() error {
 	target := mig.target
-	g := target.ingredients
 	newNodes := maps.Clone(mig.added)
 	topo := mig.sortInTopoOrder(newNodes)
 
@@ -169,7 +177,7 @@ func (mig *migration) Commit(up *boostplan.Upqueries) error {
 				// `src`, and then picking the *other*, since that must then be node
 				// below.
 
-				if g.FindEdge(src, instead) != graph.InvalidEdge {
+				if mig.graph.FindEdge(src, instead) != graph.InvalidEdge {
 					// src -> instead -> instead0 -> [children]
 					// from [children]'s perspective, we should use instead0 for from, so
 					// we can just ignore the `instead` swap.
@@ -199,7 +207,7 @@ func (mig *migration) Commit(up *boostplan.Upqueries) error {
 
 	changedDomains := make(map[boostpb.DomainIndex]struct{})
 	for _, ni := range sortedNew {
-		node := g.Value(ni)
+		node := mig.graph.Value(ni)
 		if !node.IsDropped() {
 			changedDomains[node.Domain()] = struct{}{}
 		}
@@ -208,7 +216,7 @@ func (mig *migration) Commit(up *boostplan.Upqueries) error {
 	domainNewNodes := make(map[boostpb.DomainIndex][]graph.NodeIdx)
 	for _, ni := range sortedNew {
 		if !ni.IsSource() {
-			node := g.Value(ni)
+			node := mig.graph.Value(ni)
 			if !node.IsDropped() {
 				dom := node.Domain()
 				domainNewNodes[dom] = append(domainNewNodes[dom], ni)
@@ -231,7 +239,7 @@ func (mig *migration) Commit(up *boostplan.Upqueries) error {
 		for _, ni := range nodes {
 			ip := boostpb.NewIndexPair(ni)
 			ip.SetLocal(boostpb.LocalNodeIndex(nnodes))
-			g.Value(ni).SetFinalizedAddr(ip)
+			mig.graph.Value(ni).SetFinalizedAddr(ip)
 
 			if rm, ok := target.remap[dom]; ok {
 				rm[ni] = ip
@@ -244,7 +252,7 @@ func (mig *migration) Commit(up *boostplan.Upqueries) error {
 
 		// Initialize each new node
 		for _, ni := range nodes {
-			node := g.Value(ni)
+			node := mig.graph.Value(ni)
 			if node.IsInternal() {
 				// Figure out all the remappings that have happened
 				// NOTE: this has to be *per node*, since a shared parent may be remapped
@@ -292,7 +300,7 @@ func (mig *migration) Commit(up *boostplan.Upqueries) error {
 	// etc.
 
 	for ni := range newNodes {
-		n := g.Value(ni)
+		n := mig.graph.Value(ni)
 		if !ni.IsSource() && !n.IsDropped() {
 			dom := n.Domain()
 			target.domainNodes[dom] = append(target.domainNodes[dom], ni)
@@ -324,7 +332,7 @@ func (mig *migration) Commit(up *boostplan.Upqueries) error {
 		nodes := uninformedDomainNodes[dom]
 		delete(uninformedDomainNodes, dom)
 
-		numshards := g.Value(nodes[0].Idx).Sharding().TryGetShards()
+		numshards := mig.graph.Value(nodes[0].Idx).Sharding().TryGetShards()
 		d, err := target.placeDomain(mig, dom, numshards, nodes)
 		if err != nil {
 			return err
@@ -357,7 +365,7 @@ func (mig *migration) Commit(up *boostplan.Upqueries) error {
 }
 
 func (mig *migration) describeExternalTable(node graph.NodeIdx) *boostpb.ExternalTableDescriptor {
-	base := mig.target.ingredients.Value(node)
+	base := mig.graph.Value(node)
 
 	tbl := &boostpb.ExternalTableDescriptor{
 		Txs:          nil,
@@ -389,11 +397,9 @@ func (mig *migration) describeExternalTable(node graph.NodeIdx) *boostpb.Externa
 }
 
 func (mig *migration) streamSetup(newnodes map[graph.NodeIdx]bool) error {
-	g := mig.target.ingredients
-
 	var externals []*boostpb.ExternalTableDescriptor
 	for n := range newnodes {
-		node := g.Value(n)
+		node := mig.graph.Value(n)
 		if node.IsExternalBase() {
 			externals = append(externals, mig.describeExternalTable(n))
 		}
@@ -420,9 +426,10 @@ func (mig *migration) MaintainAnonymous(n graph.NodeIdx, key []int) {
 		})
 	}
 	mig.ensureReaderFor(n, "", func(r *flownode.Reader) {
-		r.OnConnected(mig.target.ingredients, key, params, 0)
+		r.OnConnected(mig.graph, key, params, 0)
 	})
 }
+
 func (mig *migration) Activate(recipe *boostplan.VersionedRecipe, schema *boostplan.SchemaInformation) (*boostplan.ActivationResult, error) {
 	return recipe.Activate(mig, schema)
 }
@@ -432,7 +439,7 @@ type Migration interface {
 	boostplan.Migration
 
 	Activate(recipe *boostplan.VersionedRecipe, schema *boostplan.SchemaInformation) (*boostplan.ActivationResult, error)
-	Commit(up *boostplan.Upqueries) error
+	Commit() error
 }
 
 type Migrator func(ctx context.Context, target *Controller) Migration
@@ -440,12 +447,14 @@ type Migrator func(ctx context.Context, target *Controller) Migration
 func NewMigration(ctx context.Context, target *Controller) Migration {
 	miguuid := uuid.New()
 	return &migration{
-		Context: ctx,
-		log:     target.log.With(zap.String("migration", miguuid.String())),
-		target:  target,
-		added:   make(map[graph.NodeIdx]bool),
-		readers: make(map[graph.NodeIdx]graph.NodeIdx),
-		start:   time.Now(),
-		uuid:    miguuid,
+		Context:   ctx,
+		log:       target.log.With(zap.String("migration", miguuid.String())),
+		target:    target,
+		graph:     target.ingredients,
+		added:     make(map[graph.NodeIdx]bool),
+		readers:   make(map[graph.NodeIdx]graph.NodeIdx),
+		upqueries: make(map[graph.NodeIdx]sqlparser.SelectStatement),
+		start:     time.Now(),
+		uuid:      miguuid,
 	}
 }

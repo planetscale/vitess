@@ -16,7 +16,7 @@ import (
 )
 
 type Migration interface {
-	AddIngredient(name string, fields []string, impl flownode.NodeImpl) graph.NodeIdx
+	AddIngredient(name string, fields []string, impl flownode.NodeImpl, upquerySQL sqlparser.SelectStatement) graph.NodeIdx
 	AddBase(name string, fields []string, b flownode.AnyBase) graph.NodeIdx
 	Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int)
 	MaintainAnonymous(n graph.NodeIdx, key []int)
@@ -135,7 +135,7 @@ func makeUnionNode(mig Migration, node *operators.Node, op *operators.Union) (op
 	}
 	return operators.FlowNode{
 		Age:     operators.FlowNodeNew,
-		Address: mig.AddIngredient(node.Name, colNames, flownode.NewUnion(emitColumnID)),
+		Address: mig.AddIngredient(node.Name, colNames, flownode.NewUnion(emitColumnID), node.Upquery),
 	}, nil
 }
 
@@ -155,7 +155,7 @@ func makeTopKNode(mig Migration, node *operators.Node, op *operators.TopK) (oper
 
 	return operators.FlowNode{
 		Age:     operators.FlowNodeNew,
-		Address: mig.AddIngredient(node.Name, colnames, flownode.NewTopK(parentNa, order, op.ParamOffsets, op.K)),
+		Address: mig.AddIngredient(node.Name, colnames, flownode.NewTopK(parentNa, order, op.ParamOffsets, op.K), node.Upquery),
 	}, nil
 }
 
@@ -215,8 +215,13 @@ func makeGroupByOpNode(mig Migration, node *operators.Node, op *operators.GroupB
 	for i := 0; i < groupCount; i++ {
 		colnames = append(colnames, node.Columns[i].Name)
 	}
-	for i, aggr := range op.Aggregations {
+	for i, col := range op.Aggregations {
 		var kind flownode.AggregationKind
+		aggr, err := col.SingleAST()
+		if err != nil {
+			return operators.FlowNode{}, err
+		}
+		aggregateOver := op.AggregationsIdx[i]
 		switch aggr.(type) {
 		case *sqlparser.Sum:
 			kind = flownode.AggregationSum
@@ -231,9 +236,14 @@ func makeGroupByOpNode(mig Migration, node *operators.Node, op *operators.GroupB
 		case *sqlparser.Avg:
 			var sumOffset = -1
 			var countOffset = -1
-			for idx, agg2 := range op.Aggregations {
-				if op.AggregationsIdx[idx] == op.AggregationsIdx[i] {
-					switch agg2.(type) {
+			for idx, col := range op.Aggregations {
+				aggregatingOverSameColumn := op.AggregationsIdx[idx] == aggregateOver
+				if aggregatingOverSameColumn {
+					ast, err := col.SingleAST()
+					if err != nil {
+						return operators.FlowNode{}, err
+					}
+					switch ast.(type) {
 					case *sqlparser.Sum:
 						sumOffset = idx
 					case *sqlparser.Count:
@@ -243,12 +253,12 @@ func makeGroupByOpNode(mig Migration, node *operators.Node, op *operators.GroupB
 			}
 			if sumOffset < 0 {
 				sumOffset = len(aggrExprs)
-				aggrExprs = append(aggrExprs, flownode.AggregationOver(flownode.AggregationSum, op.AggregationsIdx[i]))
+				aggrExprs = append(aggrExprs, flownode.AggregationOver(flownode.AggregationSum, aggregateOver))
 				colnames = append(colnames, "bogo_aggr_sum")
 			}
 			if countOffset < 0 {
 				countOffset = len(aggrExprs)
-				aggrExprs = append(aggrExprs, flownode.AggregationOver(flownode.AggregationCount, op.AggregationsIdx[i]))
+				aggrExprs = append(aggrExprs, flownode.AggregationOver(flownode.AggregationCount, aggregateOver))
 				colnames = append(colnames, "bogo_aggr_count")
 			}
 
@@ -265,12 +275,14 @@ func makeGroupByOpNode(mig Migration, node *operators.Node, op *operators.GroupB
 			}
 			projExprs = append(projExprs, &flownode.ProjectedExpr{AST: avgExpr, EvalExpr: evalExpr})
 			continue
-
-		default:
+		case sqlparser.AggrFunc:
 			return operators.FlowNode{}, &operators.UnsupportedError{AST: aggr, Type: operators.Aggregation}
+		default:
+			return operators.FlowNode{}, &operators.UnsupportedError{AST: aggr, Type: operators.NoFullGroupBy}
 		}
 
-		aggrExprs = append(aggrExprs, flownode.AggregationOver(kind, op.AggregationsIdx[i]))
+		over := flownode.AggregationOver(kind, aggregateOver)
+		aggrExprs = append(aggrExprs, over)
 		colnames = append(colnames, node.Columns[groupCount+i].Name)
 	}
 
@@ -282,7 +294,7 @@ func makeGroupByOpNode(mig Migration, node *operators.Node, op *operators.GroupB
 	grouped := flownode.NewGrouped(parentNa, op.ScalarAggregation, op.GroupingIdx, aggrExprs)
 	groupingFlowNode := operators.FlowNode{
 		Age:     operators.FlowNodeNew,
-		Address: mig.AddIngredient(node.Name, colnames, grouped),
+		Address: mig.AddIngredient(node.Name, colnames, grouped, node.Upquery),
 	}
 
 	if len(projExprs) > 0 {
@@ -290,7 +302,11 @@ func makeGroupByOpNode(mig Migration, node *operators.Node, op *operators.GroupB
 		for i := range op.GroupingIdx {
 			projections = append(projections, flownode.ProjectedCol(i))
 		}
-		for i, aggregation := range op.Aggregations {
+		for i, col := range op.Aggregations {
+			aggregation, err := col.SingleAST()
+			if err != nil {
+				return operators.FlowNode{}, err
+			}
 			switch aggregation.(type) {
 			case *sqlparser.Avg:
 				projections = append(projections, projExprs[0])
@@ -303,7 +319,7 @@ func makeGroupByOpNode(mig Migration, node *operators.Node, op *operators.GroupB
 		proj := flownode.NewProject(groupingFlowNode.Address, projections)
 		return operators.FlowNode{
 			Age:     operators.FlowNodeNew,
-			Address: mig.AddIngredient(node.Name+"_extra_proj", columnOpNames(node.Columns), proj),
+			Address: mig.AddIngredient(node.Name+"_extra_proj", columnOpNames(node.Columns), proj, nil),
 		}, nil
 	}
 
@@ -343,7 +359,7 @@ func makeFilterOpNode(mig Migration, node *operators.Node, op *operators.Filter)
 		})
 	}
 	filter := flownode.NewFilter(parentNa, conditions)
-	ingredient := mig.AddIngredient(node.Name, colnames, filter)
+	ingredient := mig.AddIngredient(node.Name, colnames, filter, node.Upquery)
 	return operators.FlowNode{
 		Age:     operators.FlowNodeNew,
 		Address: ingredient,
@@ -362,8 +378,32 @@ func makeJoinOpNode(mig Migration, node *operators.Node, op *operators.Join) (op
 	joinType := flownode.ParserJoinTypeToFlowNodeJoinType(op.Inner)
 	return operators.FlowNode{
 		Age:     operators.FlowNodeNew,
-		Address: mig.AddIngredient(node.Name, columnOpNames(node.Columns), flownode.NewJoin(leftNa, rightNa, joinType, op.On, op.Emit)),
+		Address: mig.AddIngredient(node.Name, columnOpNames(node.Columns), flownode.NewJoin(leftNa, rightNa, joinType, op.On, op.Emit), node.Upquery),
 	}, nil
+}
+
+func makeProjections(opProjections []operators.Projection) ([]flownode.Projection, error) {
+	projections := make([]flownode.Projection, 0, len(opProjections))
+	for _, proj := range opProjections {
+		switch proj.Kind {
+		case operators.ProjectionColumn:
+			projections = append(projections, flownode.ProjectedCol(proj.Column))
+
+		case operators.ProjectionLiteral:
+			lit, err := flownode.ProjectedLiteralFromAST(proj.AST.(*sqlparser.Literal))
+			if err != nil {
+				return nil, err
+			}
+			projections = append(projections, lit)
+
+		case operators.ProjectionEval:
+			if err := checkParametersInExpression(proj.AST); err != nil {
+				return nil, err
+			}
+			projections = append(projections, &flownode.ProjectedExpr{AST: proj.AST, EvalExpr: proj.Eval})
+		}
+	}
+	return projections, nil
 }
 
 func makeProjectOpNode(mig Migration, node *operators.Node, op *operators.Project, parent *operators.Node) (operators.FlowNode, error) {
@@ -372,22 +412,16 @@ func makeProjectOpNode(mig Migration, node *operators.Node, op *operators.Projec
 		return operators.FlowNode{}, err
 	}
 
-	for _, proj := range op.Projections {
-		expr, ok := proj.(*flownode.ProjectedExpr)
-		if !ok {
-			continue
-		}
-		err = checkParametersInExpression(expr.AST)
-		if err != nil {
-			return operators.FlowNode{}, err
-		}
+	projections, err := makeProjections(op.Projections)
+	if err != nil {
+		return operators.FlowNode{}, err
 	}
 
 	colNames := columnOpNames(op.Columns)
 
 	return operators.FlowNode{
 		Age:     operators.FlowNodeNew,
-		Address: mig.AddIngredient(node.Name, colNames, flownode.NewProject(parentNa, op.Projections)),
+		Address: mig.AddIngredient(node.Name, colNames, flownode.NewProject(parentNa, projections), node.Upquery),
 	}, nil
 }
 
@@ -397,11 +431,16 @@ func makeNullFilterNode(mig Migration, node *operators.Node, op *operators.NullF
 		return operators.FlowNode{}, err
 	}
 
+	projections, err := makeProjections(op.Projections)
+	if err != nil {
+		return operators.FlowNode{}, err
+	}
+
 	colNames := columnOpNames(node.Columns)
 
 	return operators.FlowNode{
 		Age:     operators.FlowNodeNew,
-		Address: mig.AddIngredient(node.Name, colNames, flownode.NewProject(parentNa, op.Projections)),
+		Address: mig.AddIngredient(node.Name, colNames, flownode.NewProject(parentNa, projections), node.Upquery),
 	}, nil
 }
 
@@ -480,7 +519,7 @@ func makeDistinctNode(mig Migration, node *operators.Node) operators.FlowNode {
 
 	distinct := flownode.NewDistinct(src, groupBy)
 	flowNode := operators.FlowNode{
-		Address: mig.AddIngredient(node.Name, columnOpNames(node.Columns), distinct),
+		Address: mig.AddIngredient(node.Name, columnOpNames(node.Columns), distinct, node.Upquery),
 		Age:     operators.FlowNodeNew,
 	}
 	return flowNode

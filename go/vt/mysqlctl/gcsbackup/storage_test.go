@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 	"strconv"
@@ -48,9 +48,45 @@ func TestStorage(t *testing.T) {
 		r, err := all[0].ReadFile(ctx, "test")
 		assert.NoError(err)
 
-		buf, err := ioutil.ReadAll(r)
+		buf, err := io.ReadAll(r)
 		assert.NoError(err)
 		assert.Equal(data, buf)
+	})
+
+	t.Run("restarting complete backup errors", func(t *testing.T) {
+		ctx := context.Background()
+		assert := require.New(t)
+		storage := setupStorage(t)
+
+		makeBackup(t, storage, "dir", "backup")
+
+		_, err := storage.StartBackup(ctx, "dir", "backup")
+		assert.Error(err)
+		assert.EqualError(err, `gcsbackup: cannot start a complete backup`)
+	})
+
+	t.Run("restarting incomplete backup clears all files", func(t *testing.T) {
+		ctx := context.Background()
+		assert := require.New(t)
+		s := setupStorage(t)
+
+		// Incomplete backup, no MANIFEST.
+		b, err := s.StartBackup(ctx, "dir", "backup")
+		assert.NoError(err)
+
+		w, err := b.AddFile(ctx, "test", 4)
+		assert.NoError(err)
+		_, err = w.Write([]byte("test"))
+		assert.NoError(err)
+		assert.NoError(w.Close())
+		assert.NoError(b.EndBackup(ctx))
+
+		// Ensure that incomplete backups can be rewritten.
+		b, err = s.StartBackup(ctx, "dir", "backup")
+		assert.NoError(err)
+
+		_, err = b.ReadFile(ctx, "test")
+		assert.ErrorIs(err, storage.ErrObjectNotExist)
 	})
 
 	t.Run("list sorted", func(t *testing.T) {
@@ -134,50 +170,60 @@ func TestStorage(t *testing.T) {
 		assert := require.New(t)
 		storage := setupStorage(t)
 
-		makeBackup(t, storage, "dir", "backup")
+		expect := makeBackup(t, storage, "dir", "backup")
 
 		obj := storage.bucket.Object("backup-id/dir/backup/SIZE")
 		r, err := obj.NewReader(ctx)
 		assert.NoError(err)
 
-		buf, err := ioutil.ReadAll(r)
+		buf, err := io.ReadAll(r)
 		assert.NoError(err)
 
-		size, err := strconv.Atoi(string(buf))
+		got, err := strconv.Atoi(string(buf))
 		assert.NoError(err)
 
-		assert.Equal(4, size)
+		assert.Equal(expect, got)
 	})
 }
 
-func makeBackup(t testing.TB, s *Storage, dir, name string) {
+func makeBackup(t testing.TB, s *Storage, dir, name string) int {
 	t.Helper()
 
 	ctx := context.Background()
-	data := []byte("data")
+	size := 0
+	files := map[string][]byte{
+		"test":     []byte("data"),
+		"MANIFEST": []byte("manifest"),
+	}
 
 	b, err := s.StartBackup(ctx, dir, name)
 	if err != nil {
 		t.Fatalf("start backup: %s", err)
 	}
 
-	w, err := b.AddFile(ctx, "test", int64(len(data)))
-	if err != nil {
-		t.Fatalf("add file: %s", err)
-	}
+	for name, data := range files {
+		w, err := b.AddFile(ctx, name, int64(len(data)))
+		if err != nil {
+			t.Fatalf("add file: %s", err)
+		}
 
-	_, err = w.Write(data)
-	if err != nil {
-		t.Fatalf("write: %s", err)
-	}
+		_, err = w.Write(data)
+		if err != nil {
+			t.Fatalf("write: %s", err)
+		}
 
-	if err := w.Close(); err != nil {
-		t.Fatalf("close: %s", err)
+		if err := w.Close(); err != nil {
+			t.Fatalf("close: %s", err)
+		}
+
+		size += len(data)
 	}
 
 	if err := b.EndBackup(ctx); err != nil {
 		t.Fatalf("end backup: %s", err)
 	}
+
+	return size
 }
 
 // The function will setup a new storage.

@@ -171,6 +171,56 @@ func TestProjectionsWithMigration(t *testing.T) {
 	})
 }
 
+func TestMidFlowUpqueries(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE num (
+	    pk BIGINT NOT NULL AUTO_INCREMENT, 
+		b INT,
+	    a INT,
+	PRIMARY KEY(pk));
+
+	SELECT /*vt+ VIEW=upquery PUBLIC */ count(num.a) FROM num WHERE a = ?;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 1; i <= 12; i++ {
+		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, 100 * %d)", i%3, i)
+	}
+	g.TestExecute("INSERT INTO num (a, b) VALUES (null, 100)")
+
+	g.View("upquery").Lookup(2).Expect([]sqltypes.Row{
+		{sqltypes.NewInt64(4)},
+	})
+}
+
+func TestMidFlowUpqueriesFully(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE num (
+	    pk BIGINT NOT NULL AUTO_INCREMENT, 
+		b INT,
+	    a INT,
+	PRIMARY KEY(pk));
+
+	SELECT /*vt+ VIEW=upquery PUBLIC */ count(num.a), sum(num.b) FROM num;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t)
+	g.ApplyRecipeEx(recipe, true, false)
+
+	for i := 1; i <= 12; i++ {
+		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, 100 * %d)", i, i)
+	}
+	g.TestExecute("INSERT INTO num (a, b) VALUES (null, 100)")
+
+	time.Sleep(100 * time.Millisecond)
+	g.ApplyRecipeEx(recipe, false, true)
+
+	g.View("upquery").Lookup().Expect([]sqltypes.Row{
+		{sqltypes.NewInt64(12), sqltypes.NewDecimal("7900")},
+	})
+}
+
 func TestAggregations(t *testing.T) {
 	const Recipe = `
 	CREATE TABLE num (
@@ -567,7 +617,7 @@ func TestBasicEx(t *testing.T) {
 			b: {0, 1},
 		}
 		u := flownode.NewUnion(emits)
-		c := mig.AddIngredient("c", []string{"c1", "c2"}, u)
+		c := mig.AddIngredient("c", []string{"c1", "c2"}, u, nil)
 		mig.MaintainAnonymous(c, []int{0})
 		return nil
 	})
@@ -843,9 +893,10 @@ create table dog_friends (
     select person.name, dog.name 
     from person 
         join dog_friends df on person.pid = df.pid join ( 
-		select p.pid, count(*) noOfFriends 
+		select p.pid, count(*) as noOfFriends 
 		from person p 
-		    join dog_friends df on p.pid = df.pid 
+		    join dog_friends df on p.pid = df.pid
+		group by p.pid
 		having noOfFriends > 3
 	) lotsOfFriends on person.pid = lotsOfFriends.pid join dog on df.did = dog.did 
 `

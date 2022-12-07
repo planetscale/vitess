@@ -5,24 +5,33 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
+	"vitess.io/vitess/go/boost/server/controller/boostplan/sqlparserx"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func ToSQL(ctx *PlanContext, node *Node, keys []int) (sqlparser.SelectStatement, error) {
-	q := newQueryBuilder(ctx)
-	err := buildQuery(node, q)
-	if err != nil {
-		return nil, err
-	}
-	q.sortTables()
-	err = q.addKeys(keys)
-	if err != nil {
-		return nil, err
+func generateUpqueries(ctx *PlanContext, node *Node) error {
+	for _, n := range node.Ancestors {
+		if err := generateUpqueries(ctx, n); err != nil {
+			return err
+		}
 	}
 
-	return q.sel, nil
+	switch node.Op.(type) {
+	case *NodeTableRef, *Table, *View:
+	default:
+		q := newQueryBuilder(ctx)
+		err := buildQuery(node, q)
+		if err != nil {
+			if errors.Is(err, ErrUpqueryNotSupported) {
+				return nil
+			}
+			return err
+		}
+		q.sortTables()
+		node.Upquery = q.sel
+	}
+	return nil
 }
 
 var ErrUpqueryNotSupported = errors.New("can't build upquery")
@@ -127,7 +136,7 @@ func (f *Filter) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
 	if err != nil {
 		return err
 	}
-	qb.addPredicate(f.Predicates)
+	sqlparserx.AddSelectPredicate(qb.sel, f.Predicates)
 	return nil
 }
 

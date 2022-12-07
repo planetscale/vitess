@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/journal"
@@ -263,7 +262,7 @@ func (dec *decoder) next() error {
 		return err
 	}
 
-	buf, err := ioutil.ReadAll(r)
+	buf, err := io.ReadAll(r)
 	if err != nil {
 		return err
 	}
