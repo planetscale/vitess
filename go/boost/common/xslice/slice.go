@@ -216,6 +216,15 @@ func FilterMap[T1, T2 any](
 	return ret
 }
 
+func Find[T any](s []T, fn func(T) bool) (T, bool) {
+	for _, e := range s {
+		if fn(e) {
+			return e, true
+		}
+	}
+	return *new(T), false
+}
+
 // Fold accumulates values starting with given initial value and applying
 // given function to current accumulator and each element.
 func Fold[T, R any](s []T, initial R, fn func(R, T) R) R {

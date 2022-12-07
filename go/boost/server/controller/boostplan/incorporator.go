@@ -51,16 +51,15 @@ func (inc *Incorporator) AddParsedQuery(keyspace string, stmt sqlparser.Statemen
 }
 
 func (inc *Incorporator) addSelectQuery(keyspace, name string, sel sqlparser.Statement, mig Migration, si *SchemaInformation) (*operators.QueryFlowParts, error) {
-	st, view, tr, err := inc.converter.Plan(si.Schema, si.Semantics(keyspace), sel, keyspace, name)
+	view, tr, err := inc.converter.Plan(si.Schema, si.Semantics(keyspace), sel, keyspace, name)
 	if err != nil {
 		return nil, err
 	}
 
 	q := &operators.Query{
-		Name:     name,
-		Roots:    view.Roots(),
-		View:     view,
-		SemTable: st,
+		Name:  name,
+		Roots: view.Roots(),
+		View:  view,
 	}
 
 	qfp, err := queryToFlowParts(mig, tr, q)

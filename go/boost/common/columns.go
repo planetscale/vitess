@@ -7,29 +7,50 @@ import (
 	"vitess.io/vitess/go/hack"
 )
 
-type ColumnSet string
+type Columns string
 
-func NewColumnSet(cols []int) ColumnSet {
+func ColumnsFrom(cols []int) Columns {
 	var buf []byte
 	for _, col := range cols {
 		buf = appendUvarint(buf, uint64(col))
 	}
-	return *(*ColumnSet)(unsafe.Pointer(&buf))
+	return *(*Columns)(unsafe.Pointer(&buf))
 }
 
-func (c ColumnSet) ToSlice() (out []int) {
+func (c Columns) ForEach(yield func(int)) {
 	buf := hack.StringBytes(string(c))
 	for {
 		val, n := binary.Uvarint(buf)
-		if n == 0 {
+		if n <= 0 {
+			if n < 0 {
+				panic("invalid encoding for Columns")
+			}
 			return
 		}
-		if n < 0 {
-			panic("invalid varint")
-		}
-		out = append(out, int(val))
+		yield(int(val))
 		buf = buf[n:]
 	}
+}
+
+func (c Columns) Contains(target int) bool {
+	buf := hack.StringBytes(string(c))
+	for {
+		val, n := binary.Uvarint(buf)
+		if n <= 0 {
+			return false
+		}
+		if int(val) == target {
+			return true
+		}
+		buf = buf[n:]
+	}
+}
+
+func (c Columns) ToSlice() (out []int) {
+	c.ForEach(func(i int) {
+		out = append(out, i)
+	})
+	return
 }
 
 // appendUvarint appends the varint-encoded form of x,

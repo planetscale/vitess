@@ -42,6 +42,7 @@ const (
 	JoinPredicates
 	MultipleIn
 	Aggregation
+	NoFullGroupBy
 )
 
 type (
@@ -132,6 +133,8 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "multiple IN() clauses for a parameter are not supported: %v", sqlparser.CanonicalString(n.AST))
 	case Aggregation:
 		fmt.Fprintf(&sb, "group aggregation function '%s' is not supported", sqlparser.CanonicalString(n.AST))
+	case NoFullGroupBy:
+		fmt.Fprintf(&sb, "non aggregated column '%s' is not part of group by", sqlparser.CanonicalString(n.AST))
 	}
 
 	return sb.String()

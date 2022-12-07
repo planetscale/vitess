@@ -476,7 +476,7 @@ func (ctrl *Controller) applyRecipe(ctx context.Context, newrecipe *boostplan.Ve
 		return nil, err
 	}
 
-	err = mig.Commit(newrecipe.Upqueries())
+	err = mig.Commit()
 	if err != nil {
 		return nil, err
 	}

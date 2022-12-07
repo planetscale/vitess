@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	"math"
 	"os"
 	"regexp"
 	"sort"
@@ -53,7 +54,7 @@ import (
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
-	math "vitess.io/vitess/go/vt/vtorc/util"
+	vtmath "vitess.io/vitess/go/vt/vtorc/util"
 )
 
 const (
@@ -86,6 +87,13 @@ type QueryPatternAggregation struct {
 	SumCommitDuration  time.Duration
 	MaxCommitDuration  time.Duration
 
+	// DDSketch groups observed values into buckets of exponentially increasing width suitable for determining
+	// relative-accuracy quantiles.
+	//
+	// Approach based on https://arxiv.org/pdf/1908.10693.pdf. Only records positive values and doesn't do any bucket
+	// collapsing.
+	TotalDurationSketchBuckets map[uint32]uint32
+
 	StatementType string
 	Tables        []string
 	TablesUsed    []string
@@ -100,20 +108,28 @@ type QueryPatternKey struct {
 
 type Insights struct {
 	// configuration
-	DatabaseBranchPublicID string
-	Brokers                []string
-	Username               string
-	Password               string
-	MaxInFlight            uint
-	Interval               time.Duration
-	MaxPatterns            uint
-	RowsReadThreshold      uint
-	ResponseTimeThreshold  uint
-	MaxQueriesPerInterval  uint
-	KafkaText              bool // use human-readable pb, for tests and debugging
-	SendRawQueries         bool
-	MaxRawQueryLength      uint
-	ReorderThreshold       uint // alphabetize columns if >= this many redundant patterns in 15s
+	DatabaseBranchPublicID    string
+	Brokers                   []string
+	Username                  string
+	Password                  string
+	MaxInFlight               uint
+	Interval                  time.Duration
+	MaxPatterns               uint
+	RowsReadThreshold         uint
+	ResponseTimeThreshold     uint
+	MaxQueriesPerInterval     uint
+	KafkaText                 bool // use human-readable pb, for tests and debugging
+	SendRawQueries            bool
+	MaxRawQueryLength         uint
+	ReorderThreshold          uint // alphabetize columns if >= this many redundant patterns in 15s
+	SendTotalDurationSketches bool
+
+	// Sketches
+	TotalDurationSketchAlpha           float32
+	TotalDurationSketchUnits           int
+	TotalDurationSketchUnitsMultiplier float64
+	TotalDurationSketchGamma           float64
+	TotalDurationSketchLogGamma        float64
 
 	// state
 	KafkaWriter          *kafka.Writer
@@ -183,6 +199,10 @@ var (
 	// normalize more aggressively by alphabetizing INSERT columns if there are more than this many
 	// otherwise identical patterns in a single interval
 	insightsReorderThreshold = flag.Uint("insights_reorder_threshold", 5, "Reorder INSERT columns if more than this many redundant patterns in an interval")
+
+	insightsTotalDurationSketches    = flag.Bool("insights_total_duration_sketches", false, "Send quantile sketches for total query duration")
+	insightsTotalDurationSketchAlpha = flag.Float64("insights_total_duration_sketch_alpha", 0.01, "Relative accuracy for total query duration sketches")
+	insightsTotalDurationSketchUnits = flag.Int("insights_total_duration_sketch_units", -6, "Base 10 exponent for the units of the total query duration sketches, relative to seconds (0 = seconds, -3 = milliseconds, -6 = microseconds)")
 )
 
 func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
@@ -201,6 +221,9 @@ func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
 		time.Duration(*insightsFlushInterval)*time.Second,
 		*insightsKafkaText,
 		*insightsRawQueries,
+		*insightsTotalDurationSketches,
+		*insightsTotalDurationSketchAlpha,
+		*insightsTotalDurationSketchUnits,
 	)
 }
 
@@ -208,7 +231,9 @@ func initInsightsInner(logger *streamlog.StreamLogger,
 	brokers, publicID, username, password string,
 	bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold, maxQueriesPerInterval, maxRawQueryLength, reorderThreshold uint,
 	interval time.Duration,
-	kafkaText, sendRawQueries bool) (*Insights, error) {
+	kafkaText, sendRawQueries, sendTotalDurationSketches bool,
+	totalDurationSketchAlpha float64,
+	totalDurationSketchUnits int) (*Insights, error) {
 
 	if brokers == "" {
 		return nil, nil
@@ -218,21 +243,39 @@ func initInsightsInner(logger *streamlog.StreamLogger,
 		return nil, errors.New("-database_branch_public_id is required if Insights is enabled")
 	}
 
+	alpha := float32(totalDurationSketchAlpha)
+
+	if alpha <= 0.0 || alpha >= 1.0 {
+		return nil, errors.New("-insights_total_duration_sketch_alpha must be between 0.0 and 1.0 (exclusive)")
+	}
+
+	if totalDurationSketchUnits < -9 || totalDurationSketchUnits > 0 {
+		return nil, errors.New("-insights_total_duration_sketch_units must be between -9 and 0 (inclusive)")
+	}
+
+	gamma := (1 + totalDurationSketchAlpha) / (1 - totalDurationSketchAlpha)
+
 	insights := Insights{
-		DatabaseBranchPublicID: publicID,
-		Brokers:                strings.Split(brokers, ","),
-		Username:               username,
-		Password:               password,
-		MaxInFlight:            bufsize,
-		Interval:               interval,
-		MaxPatterns:            patternLimit,
-		RowsReadThreshold:      rowsReadThreshold,
-		ResponseTimeThreshold:  responseTimeThreshold,
-		MaxQueriesPerInterval:  maxQueriesPerInterval,
-		KafkaText:              kafkaText,
-		SendRawQueries:         sendRawQueries,
-		MaxRawQueryLength:      maxRawQueryLength,
-		ReorderThreshold:       reorderThreshold,
+		DatabaseBranchPublicID:             publicID,
+		Brokers:                            strings.Split(brokers, ","),
+		Username:                           username,
+		Password:                           password,
+		MaxInFlight:                        bufsize,
+		Interval:                           interval,
+		MaxPatterns:                        patternLimit,
+		RowsReadThreshold:                  rowsReadThreshold,
+		ResponseTimeThreshold:              responseTimeThreshold,
+		MaxQueriesPerInterval:              maxQueriesPerInterval,
+		KafkaText:                          kafkaText,
+		SendRawQueries:                     sendRawQueries,
+		MaxRawQueryLength:                  maxRawQueryLength,
+		ReorderThreshold:                   reorderThreshold,
+		SendTotalDurationSketches:          sendTotalDurationSketches,
+		TotalDurationSketchAlpha:           alpha,
+		TotalDurationSketchUnits:           totalDurationSketchUnits,
+		TotalDurationSketchUnitsMultiplier: math.Pow10(-9 - totalDurationSketchUnits),
+		TotalDurationSketchGamma:           gamma,
+		TotalDurationSketchLogGamma:        math.Log(gamma),
 	}
 	insights.Sender = insights.sendToKafka
 	err := insights.logToKafka(logger)
@@ -259,12 +302,18 @@ func argOrEnv(argVal, envKey string) string {
 	return os.Getenv(envKey)
 }
 
-func newPatternAggregation(statementType string, tables []string, tablesUsed []string) *QueryPatternAggregation {
-	return &QueryPatternAggregation{
+func (ii *Insights) newPatternAggregation(statementType string, tables []string, tablesUsed []string) *QueryPatternAggregation {
+	agg := QueryPatternAggregation{
 		StatementType: statementType,
 		Tables:        tables,
 		TablesUsed:    tablesUsed,
 	}
+
+	if ii.SendTotalDurationSketches {
+		agg.TotalDurationSketchBuckets = make(map[uint32]uint32)
+	}
+
+	return &agg
 }
 
 func (ii *Insights) startInterval() {
@@ -599,7 +648,7 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *u
 		// ls.StmtType, ls.Table and ls.TablesUsed depend only on the contents of sql, so we don't separately make them
 		// part of the key, and we don't track them as separate values in the QueryPatternAggregation values.
 		// In other words, we assume they don't change, so we only need to track a single value for each.
-		pa = newPatternAggregation(ls.StmtType, tables, ls.TablesUsed)
+		pa = ii.newPatternAggregation(ls.StmtType, tables, ls.TablesUsed)
 		ii.Aggregations[key] = pa
 
 		if ciHash != nil && !ii.ReorderInsertColumns {
@@ -616,13 +665,13 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *u
 		pa.ErrorCount++
 	}
 	pa.SumShardQueries += ls.ShardQueries
-	pa.MaxShardQueries = math.MaxUInt64(pa.MaxShardQueries, ls.ShardQueries)
+	pa.MaxShardQueries = vtmath.MaxUInt64(pa.MaxShardQueries, ls.ShardQueries)
 	pa.SumRowsRead += ls.RowsRead
-	pa.MaxRowsRead = math.MaxUInt64(pa.MaxRowsRead, ls.RowsRead)
+	pa.MaxRowsRead = vtmath.MaxUInt64(pa.MaxRowsRead, ls.RowsRead)
 	pa.SumRowsAffected += ls.RowsAffected
-	pa.MaxRowsAffected = math.MaxUInt64(pa.MaxRowsAffected, ls.RowsAffected)
+	pa.MaxRowsAffected = vtmath.MaxUInt64(pa.MaxRowsAffected, ls.RowsAffected)
 	pa.SumRowsReturned += ls.RowsReturned
-	pa.MaxRowsReturned = math.MaxUInt64(pa.MaxRowsReturned, ls.RowsReturned)
+	pa.MaxRowsReturned = vtmath.MaxUInt64(pa.MaxRowsReturned, ls.RowsReturned)
 	pa.SumTotalDuration += ls.TotalTime()
 	pa.MaxTotalDuration = maxDuration(pa.MaxTotalDuration, ls.TotalTime())
 	pa.SumPlanDuration += ls.PlanTime
@@ -631,6 +680,18 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *u
 	pa.MaxExecuteDuration = maxDuration(pa.MaxExecuteDuration, ls.ExecuteTime)
 	pa.SumCommitDuration += ls.CommitTime
 	pa.MaxCommitDuration = maxDuration(pa.MaxCommitDuration, ls.CommitTime)
+
+	if ii.SendTotalDurationSketches {
+		unitDuration := float64(ls.TotalTime()) * ii.TotalDurationSketchUnitsMultiplier
+
+		// Round everything under 1 to 1 to avoid negative bucket indexes
+		if unitDuration < 1.0 {
+			unitDuration = 1.0
+		}
+
+		bucket := uint32(math.Ceil(math.Log(unitDuration) / ii.TotalDurationSketchLogGamma))
+		pa.TotalDurationSketchBuckets[bucket]++
+	}
 
 	return true
 }
@@ -767,7 +828,7 @@ func efficientlyTruncate(str string, maxLength int) string {
 
 	str = str[:maxLength]
 	idx := len(str) - 1
-	left := math.MaxInt(maxLength-3, 0)
+	left := vtmath.MaxInt(maxLength-3, 0)
 
 	// rewind past any multibyte continuation
 	for idx >= left && str[idx]&0xc0 == 0x80 {
@@ -863,6 +924,16 @@ func (ii *Insights) makeQueryPatternMessage(key QueryPatternKey, pa *QueryPatter
 		SumCommitDuration:      durationOrNil(pa.SumCommitDuration),
 		MaxCommitDuration:      durationOrNil(pa.MaxCommitDuration),
 		BoostQueryPublicId:     stringOrNil(key.BoostQueryPublicID),
+	}
+
+	if ii.SendTotalDurationSketches {
+		obj.TotalDurationSketch = &pbvtgate.QueryStatsBundle_DDSketch{
+			Gamma:   float32(ii.TotalDurationSketchGamma),
+			Sum:     float64(pa.SumTotalDuration) * ii.TotalDurationSketchUnitsMultiplier,
+			Units:   int32(ii.TotalDurationSketchUnits),
+			Count:   uint32(pa.QueryCount),
+			Buckets: pa.TotalDurationSketchBuckets,
+		}
 	}
 
 	var out []byte

@@ -2,7 +2,7 @@ package gcsbackup
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -32,7 +32,7 @@ func TestLabels(t *testing.T) {
 	t.Run("empty path", func(t *testing.T) {
 		var assert = require.New(t)
 
-		f, err := ioutil.TempFile(t.TempDir(), "empty_labels")
+		f, err := os.CreateTemp(t.TempDir(), "empty_labels")
 		assert.NoError(err)
 		assert.NoError(f.Close())
 
@@ -48,7 +48,7 @@ func TestLabels(t *testing.T) {
 func setupLabels(t testing.TB) string {
 	t.Helper()
 
-	f, err := ioutil.TempFile(t.TempDir(), "labels.*")
+	f, err := os.CreateTemp(t.TempDir(), "labels.*")
 	if err != nil {
 		t.Fatalf("tempfile: %s", err)
 	}

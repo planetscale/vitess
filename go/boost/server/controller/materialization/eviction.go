@@ -65,7 +65,7 @@ func (ep *EvictionPlan) MarshalJSON() ([]byte, error) {
 	}
 	type jsonQuery struct {
 		Name      string      `json:"name"`
-		Sql       string      `json:"sql"`
+		SQL       string      `json:"sql"`
 		MaxMemory int64       `json:"max_memory"`
 		CurMemory int64       `json:"cur_memory"`
 		Nodes     []*jsonNode `json:"nodes"`
@@ -75,7 +75,7 @@ func (ep *EvictionPlan) MarshalJSON() ([]byte, error) {
 	for _, root := range ep.roots {
 		jq := &jsonQuery{
 			Name:      root.view.Name,
-			Sql:       root.view.Sql,
+			SQL:       root.view.Sql,
 			MaxMemory: root.view.MaxMemoryUsage,
 			CurMemory: root.memTotal(),
 			Nodes:     nil,
@@ -185,13 +185,13 @@ type Eviction struct {
 }
 
 func (e *Eviction) MarshalJSON() ([]byte, error) {
-	type evictionJson struct {
+	type evictionJSON struct {
 		Domain string `json:"domain"`
 		Node   uint32 `json:"node"`
 		Evict  int64  `json:"evict"`
 	}
 
-	return json.Marshal(&evictionJson{
+	return json.Marshal(&evictionJSON{
 		Domain: fmt.Sprintf("%d/%d", e.Domain.Domain, e.Domain.Shard),
 		Node:   uint32(e.Node),
 		Evict:  e.Evict,

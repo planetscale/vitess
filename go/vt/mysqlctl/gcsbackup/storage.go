@@ -178,7 +178,12 @@ func (s *Storage) StartBackup(ctx context.Context, dir, name string) (backupstor
 		return nil, errors.New("gcsbackup: missing backup-id annotation")
 	}
 
-	return newHandle(s.bucket, s.kms, labels.BackupID, dir, name), nil
+	h := newHandle(s.bucket, s.kms, labels.BackupID, dir, name)
+	if err := h.init(ctx); err != nil {
+		return nil, err
+	}
+
+	return h, nil
 }
 
 // RemoveBackup implementation.

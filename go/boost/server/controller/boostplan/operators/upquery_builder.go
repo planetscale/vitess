@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"vitess.io/vitess/go/boost/dataflow/flownode"
+	"vitess.io/vitess/go/boost/server/controller/boostplan/sqlparserx"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -24,34 +24,6 @@ func newQueryBuilder(ctx *PlanContext) *queryBuilder {
 		tableNames: map[string]int{},
 		aliasMap:   map[semantics.TableSet]string{},
 	}
-}
-
-func (qb *queryBuilder) addKeys(keys []int) error {
-	exprs, err := qb.getOutputExprs()
-	if err != nil {
-		return err
-	}
-	for i, key := range keys {
-		qb.addPredicate(&sqlparser.ComparisonExpr{
-			Operator: sqlparser.EqualOp,
-			Left:     exprs[key],
-			Right:    sqlparser.Argument(fmt.Sprintf("v%d", i)),
-		})
-	}
-	return nil
-}
-
-func (qb *queryBuilder) getOutputExprs() ([]sqlparser.Expr, error) {
-	sel := sqlparser.GetFirstSelect(qb.sel)
-	var exprs []sqlparser.Expr
-	for _, expr := range sel.SelectExprs {
-		ae, ok := expr.(*sqlparser.AliasedExpr)
-		if !ok {
-			return nil, NewBug("generated query should only use AliasesExpr")
-		}
-		exprs = append(exprs, ae.Expr)
-	}
-	return exprs, nil
 }
 
 func (qb *queryBuilder) sortTables() {
@@ -103,17 +75,6 @@ func (qb *queryBuilder) addTableExpr(
 	qb.sel = sel
 }
 
-func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
-	sel := qb.sel.(*sqlparser.Select)
-	if sel.Where == nil {
-		sel.AddWhere(expr)
-		return
-	}
-	for _, exp := range sqlparser.SplitAndExpression(nil, expr) {
-		sel.AddWhere(exp)
-	}
-}
-
 func (qb *queryBuilder) rewriteColNames(expr sqlparser.Expr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -159,7 +120,7 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 		sel.Where = &sqlparser.Where{Type: sqlparser.WhereClause, Expr: predicate}
 	}
 
-	qb.addPredicate(onCondition)
+	sqlparserx.AddSelectPredicate(qb.sel, onCondition)
 }
 
 func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser.Expr) {
@@ -209,8 +170,8 @@ func (qb *queryBuilder) clearOutput() error {
 	return nil
 }
 
-func (qb *queryBuilder) replaceProjections(projections []flownode.Projection) error {
-	oldSel, err := qb.getOutputExprs()
+func (qb *queryBuilder) replaceProjections(projections []Projection) error {
+	oldSel, err := sqlparserx.SelectOutputExprs(qb.sel)
 	if err != nil {
 		return err
 	}
@@ -220,14 +181,12 @@ func (qb *queryBuilder) replaceProjections(projections []flownode.Projection) er
 		return err
 	}
 
-	for _, projection := range projections {
-		switch proj := projection.(type) {
-		case flownode.ProjectedCol:
-			expr := oldSel[proj]
+	for _, proj := range projections {
+		switch proj.Kind {
+		case ProjectionColumn:
+			expr := oldSel[proj.Column]
 			err = qb.addProjection(expr)
-		case *flownode.ProjectedExpr:
-			err = qb.addProjection(proj.AST)
-		case *flownode.ProjectedLiteral:
+		case ProjectionLiteral, ProjectionEval:
 			err = qb.addProjection(proj.AST)
 		default:
 			err = NewBug(fmt.Sprintf("unexpected projection on generated query %T", proj))

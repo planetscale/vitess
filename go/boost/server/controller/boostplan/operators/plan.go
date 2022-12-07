@@ -19,14 +19,13 @@ type (
 )
 
 func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt sqlparser.Statement, keyspace, name string) (
-	semTable *semantics.SemTable,
 	view *Node,
 	usage *TableReport,
 	err error,
 ) {
-	semTable, err = conv.semanticAnalyze(stmt, keyspace, si)
+	semTable, err := conv.semanticAnalyze(stmt, keyspace, si)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	tableReport := computeColumnUsage(semTable)
@@ -81,7 +80,8 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 
 	node.ConnectOutputs()
 
-	return semTable, node, tableReport, nil
+	// TODO: call generateUpqueries on the view once we're ready to use the upquery output
+	return node, tableReport, nil
 }
 
 func addStringButKeepItUnique(in []string, n string) []string {

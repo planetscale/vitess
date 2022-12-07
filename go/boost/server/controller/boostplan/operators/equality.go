@@ -21,19 +21,7 @@ func (g *GroupBy) Equals(st *semantics.SemTable, op Operator) bool {
 	if !g.Grouping.Equals(st, other.Grouping, false) {
 		return false
 	}
-
-	if len(g.Aggregations) != len(other.Aggregations) {
-		return false
-	}
-
-	for i, aggregation := range g.Aggregations {
-		o := other.Aggregations[i]
-		if !sqlparser.EqualsAggrFunc(aggregation, o) {
-			return false
-		}
-	}
-
-	return true
+	return g.Aggregations.Equals(st, other.Aggregations, false)
 }
 
 func (v *View) Equals(st *semantics.SemTable, op Operator) bool {

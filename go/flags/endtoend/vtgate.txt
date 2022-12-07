@@ -77,6 +77,9 @@ Usage of vtgate:
       --insights_reorder_threshold uint                                  Reorder INSERT columns if more than this many redundant patterns in an interval (default 5)
       --insights_rows_read_threshold uint                                Report individual transactions that read (scan) at least this many rows (default 10000)
       --insights_rt_threshold uint                                       Report individual queries that take at least this many milliseconds (default 1000)
+      --insights_total_duration_sketch_alpha float                       Relative accuracy for total query duration sketches (default 0.01)
+      --insights_total_duration_sketch_units int                         Base 10 exponent for the units of the total query duration sketches, relative to seconds (0 = seconds, -3 = milliseconds, -6 = microseconds) (default -6)
+      --insights_total_duration_sketches                                 Send quantile sketches for total query duration
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)

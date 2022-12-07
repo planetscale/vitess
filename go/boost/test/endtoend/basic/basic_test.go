@@ -28,7 +28,7 @@ func TestEndtoendBasicWithExternalBase(t *testing.T) {
 			b: {0, 1},
 		}
 		u := flownode.NewUnion(emits)
-		c := mig.AddIngredient("c", []string{"c1", "c2"}, u)
+		c := mig.AddIngredient("c", []string{"c1", "c2"}, u, nil)
 		mig.MaintainAnonymous(c, []int{0})
 		return nil
 	})

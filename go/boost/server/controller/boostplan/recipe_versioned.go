@@ -128,10 +128,6 @@ func (r *VersionedRecipe) IsLeafAddress(ni graph.NodeIdx) bool {
 	return r.inc.IsLeafAddress(ni)
 }
 
-func (r *VersionedRecipe) Upqueries() *Upqueries {
-	return NewUpqueryPlanner(r.inc)
-}
-
 func (r *VersionedRecipe) Version() int64 {
 	return r.version
 }

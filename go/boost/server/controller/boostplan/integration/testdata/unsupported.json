@@ -100,6 +100,16 @@
       "Keyspace": "main",
       "SQL": "SELECT STD(users.id) FROM users",
       "Error": "query not supported by boost: group aggregation function 'STD(`users`.`id`)' is not supported"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select count(*), aid from votes where uid = :v1 group by aid",
+      "Error": "partially overlapping partial indices; parent = 2, pcols = []int{1}, child = 2, cols = []int{0, 1}, conflict = 0"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select count(*), aid from votes where uid = :v1",
+      "Error": "query not supported by boost: non aggregated column '`aid`' is not part of group by"
     }
   ]
 }

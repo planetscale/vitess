@@ -70,7 +70,7 @@ func testBasic(t *testing.T, g *boosttest.Cluster) {
 			b: {0, 1},
 		}
 		u := flownode.NewUnion(emits)
-		c := mig.AddIngredient("c", []string{"a", "b"}, u)
+		c := mig.AddIngredient("c", []string{"a", "b"}, u, nil)
 		mig.MaintainAnonymous(c, []int{0})
 		return nil
 	})
@@ -168,11 +168,7 @@ func testBroadRecursingSubquery(t *testing.T, g *boosttest.Cluster) {
 		join := mig.AddIngredient("join", []string{"base_col", "join_col", "reader_col"},
 			flownode.NewJoin(x, y, flownode.JoinTypeOuter,
 				[2]int{1, 0},
-				[]flownode.JoinSource{
-					flownode.JoinSourceLeft(0),
-					flownode.JoinSourceBoth(1, 0),
-					flownode.JoinSourceLeft(2),
-				}))
+				[][2]int{{0, -1}, {1, 0}, {2, -1}}), nil)
 
 		mig.Maintain("reader", join, []int{2}, []boostpb.ViewParameter{{Name: "k0"}}, 0)
 		return nil
@@ -216,11 +212,11 @@ func TestShardedInterdomainAncestors(t *testing.T) {
 		a := mig.AddBase("a", []string{"a", "b"}, flownode.NewBase(nil, schema, nil))
 
 		u1 := flownode.NewUnion(map[graph.NodeIdx][]int{a: {0, 1}})
-		b := mig.AddIngredient("b", []string{"a", "b"}, u1)
+		b := mig.AddIngredient("b", []string{"a", "b"}, u1, nil)
 		mig.MaintainAnonymous(b, []int{0})
 
 		u2 := flownode.NewUnion(map[graph.NodeIdx][]int{a: {0, 1}})
-		c := mig.AddIngredient("c", []string{"a", "b"}, u2)
+		c := mig.AddIngredient("c", []string{"a", "b"}, u2, nil)
 		mig.MaintainAnonymous(c, []int{0})
 
 		return nil
@@ -255,7 +251,7 @@ func TestWithMaterialization(t *testing.T) {
 			a: {0, 1},
 			b: {0, 1},
 		})
-		c := mig.AddIngredient("c", []string{"a", "b"}, u)
+		c := mig.AddIngredient("c", []string{"a", "b"}, u, nil)
 		mig.MaintainAnonymous(c, []int{0})
 		return nil
 	})
@@ -320,7 +316,7 @@ func TestWithPartialMaterialization(t *testing.T) {
 			a: {0, 1},
 			b: {0, 1},
 		})
-		c := mig.AddIngredient("c", []string{"a", "b"}, u)
+		c := mig.AddIngredient("c", []string{"a", "b"}, u, nil)
 		mig.MaintainAnonymous(c, []int{0})
 		return nil
 	})

@@ -2,14 +2,12 @@ package operators
 
 import (
 	"vitess.io/vitess/go/boost/graph"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Query struct {
-	Name     string
-	Roots    []*Node
-	View     *Node
-	SemTable *semantics.SemTable
+	Name  string
+	Roots []*Node
+	View  *Node
 }
 
 func (q *Query) Leaf() graph.NodeIdx {

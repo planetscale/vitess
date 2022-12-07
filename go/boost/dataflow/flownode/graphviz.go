@@ -14,6 +14,8 @@ type GraphvizOptions struct {
 }
 
 func (n *Node) RenderGraphviz(gvz *graphviz.Node, options GraphvizOptions) {
+	gvz.Attr["tooltip"] = graphviz.JSON(n.ToProto())
+
 	switch n.shardedBy.Mode {
 	case boostpb.Sharding_ByColumn, boostpb.Sharding_Random:
 		gvz.Attr["style"] = "filled,dashed"

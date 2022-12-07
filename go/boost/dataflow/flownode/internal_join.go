@@ -39,21 +39,16 @@ const (
 	preprocessedNeither
 )
 
-type JoinSource struct {
-	Left  int
-	Right int
+func JoinSourceLeft(col int) [2]int {
+	return [2]int{col, -1}
 }
 
-func JoinSourceLeft(col int) JoinSource {
-	return JoinSource{Left: col, Right: -1}
+func JoinSourceRight(col int) [2]int {
+	return [2]int{-1, col}
 }
 
-func JoinSourceRight(col int) JoinSource {
-	return JoinSource{Left: -1, Right: col}
-}
-
-func JoinSourceBoth(left, right int) JoinSource {
-	return JoinSource{Left: left, Right: right}
+func JoinSourceBoth(left, right int) [2]int {
+	return [2]int{left, right}
 }
 
 type emission = boostpb.Node_InternalJoin_Emission
@@ -506,16 +501,16 @@ func (j *Join) generateRow(left boostpb.Row, right boostpb.Row, reusing preproce
 	return result.Finish()
 }
 
-func NewJoin(left, right graph.NodeIdx, kind JoinType, joinColumns [2]int, joinSources []JoinSource) *Join {
+func NewJoin(left, right graph.NodeIdx, kind JoinType, joinColumns [2]int, joinSources [][2]int) *Join {
 	var emit []emission
 	for _, e := range joinSources {
 		switch {
-		case e.Left >= 0 && e.Right >= 0:
-			emit = append(emit, emission{Left: true, Col: e.Left, MultiParent: true})
-		case e.Left >= 0:
-			emit = append(emit, emission{Left: true, Col: e.Left})
-		case e.Right >= 0:
-			emit = append(emit, emission{Left: false, Col: e.Right})
+		case e[0] >= 0 && e[1] >= 0:
+			emit = append(emit, emission{Left: true, Col: e[0], MultiParent: true})
+		case e[0] >= 0:
+			emit = append(emit, emission{Left: true, Col: e[0]})
+		case e[1] >= 0:
+			emit = append(emit, emission{Left: false, Col: e[1]})
 		}
 	}
 

@@ -161,7 +161,7 @@ func P(vals ...any) {
 	_, _ = fmt.Fprintf(&buf, "%s @ %s\n", p.Position(), p.Fn())
 	for i, v := range vals {
 		header, _ := fmt.Fprintf(&buf, "    [%d] %s = ", i, p.Arg(i))
-		opt := litter.Options{Indent: "    ", IndentPrefix: strings.Repeat(" ", header)}
+		opt := litter.Options{Indent: "    ", IndentPrefix: strings.Repeat(" ", header), DisablePointerReplacement: true}
 		litter.NewDumpState(reflect.ValueOf(v), &opt, &buf).Dump(v)
 		buf.WriteString("\n")
 	}

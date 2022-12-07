@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
@@ -208,7 +207,7 @@ func loadTags() (map[string]string, error) {
 		return nil, fmt.Errorf("%v was not specified", annotationsFilePath)
 	}
 
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("can't read file %v: %v", filePath, err)
 	}

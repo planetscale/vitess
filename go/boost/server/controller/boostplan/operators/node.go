@@ -23,7 +23,8 @@ type (
 		Ancestors []*Node `json:",omitempty"` // this is the old Ancestors
 		Children  []*Node `json:",omitempty"` // this is the old Children
 
-		Flow FlowNode
+		Flow    FlowNode
+		Upquery sqlparser.SelectStatement
 	}
 
 	Column struct {

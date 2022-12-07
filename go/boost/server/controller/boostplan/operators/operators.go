@@ -1,7 +1,6 @@
 package operators
 
 import (
-	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -68,7 +67,7 @@ type (
 		// These are the columns that will be compared.
 		// The size of these two slices must be the same
 		On   [2]int
-		Emit []flownode.JoinSource
+		Emit [][2]int
 
 		doesNotIntroduceColumn
 		dontKeepsAncestorColumns
@@ -99,7 +98,7 @@ type (
 
 		// These are not filled in at creation,
 		// but rather after the operator tree has stopped iterating
-		Projections []flownode.Projection
+		Projections []Projection
 
 		// This is the table(s) that are on the outer side of the join
 		OuterSide semantics.TableSet
@@ -109,15 +108,25 @@ type (
 	}
 
 	GroupBy struct {
-		Grouping     Columns
-		Aggregations []sqlparser.AggrFunc
+		// Aggregations will contain AggrFuncs, plus any columns that are returned but not in the grouping clause
+		Aggregations Columns
 		TableID      semantics.TableSet
+		Grouping     Columns
 
 		GroupingIdx       []int
 		ScalarAggregation bool
 		AggregationsIdx   []int
 
 		dontKeepsAncestorColumns
+	}
+
+	ProjectionKind int
+
+	Projection struct {
+		Kind   ProjectionKind
+		AST    sqlparser.Expr
+		Eval   evalengine.Expr
+		Column int
 	}
 
 	Project struct {
@@ -128,7 +137,7 @@ type (
 
 		// These are not filled in at creation,
 		// but rather after the operator tree has stopped iterating
-		Projections []flownode.Projection
+		Projections []Projection
 
 		dontKeepsAncestorColumns
 	}
@@ -200,6 +209,12 @@ type (
 const (
 	SameTree TreeState = false
 	NewTree  TreeState = true
+)
+
+const (
+	ProjectionColumn ProjectionKind = iota
+	ProjectionLiteral
+	ProjectionEval
 )
 
 var _ Operator = (*Table)(nil)

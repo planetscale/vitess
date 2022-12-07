@@ -148,8 +148,8 @@ func (mig *migrationTracker) Activate(recipe *boostplan.VersionedRecipe, schema 
 	return result, err
 }
 
-func (mig *migrationTracker) Commit(up *boostplan.Upqueries) error {
-	err := mig.Migration.Commit(up)
+func (mig *migrationTracker) Commit() error {
+	err := mig.Migration.Commit()
 	mig.trackCommit(err)
 	return err
 }
