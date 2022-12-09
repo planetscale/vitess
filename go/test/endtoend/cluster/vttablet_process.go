@@ -176,6 +176,21 @@ func (vttablet *VttabletProcess) GetStatus() string {
 	return ""
 }
 
+// GetGoroutineDemp returns /debug/pprof/profile endpoint result
+func (vttablet *VttabletProcess) GetGoroutineDump() string {
+	URL := fmt.Sprintf("http://%s:%d/debug/pprof/goroutine?debug=2", vttablet.TabletHostname, vttablet.Port)
+	resp, err := http.Get(URL)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 200 {
+		respByte, _ := io.ReadAll(resp.Body)
+		return string(respByte)
+	}
+	return ""
+}
+
 // GetVars gets the debug vars as map
 func (vttablet *VttabletProcess) GetVars() map[string]any {
 	resp, err := http.Get(vttablet.VerifyURL)

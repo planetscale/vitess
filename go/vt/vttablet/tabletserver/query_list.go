@@ -30,7 +30,10 @@ import (
 
 // QueryDetail is a simple wrapper for Query, Context and a killable conn.
 type QueryDetail struct {
-	ctx    context.Context
+	ctx context.Context
+	// cancel func for the context stored in the QueryDetail
+	// may be nil. nil check required before using
+	cancel context.CancelFunc
 	conn   killable
 	connID int64
 	start  time.Time
