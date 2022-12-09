@@ -21,6 +21,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/openark/golib/log"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
@@ -181,18 +182,25 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 	var fields []*querypb.Field
 	for {
 		ser, err := stream.Recv()
+		rowslen := 0
+		if ser != nil && ser.Result != nil {
+			rowslen = len(ser.Result.Rows)
+		}
+		log.Errorf("Received from stream - len = %v,err = %v", rowslen, err)
 		if err != nil {
 			return tabletconn.ErrorFromGRPC(err)
 		}
 		if fields == nil {
 			fields = ser.Result.Fields
 		}
+		log.Errorf("Started callback")
 		if err := callback(sqltypes.CustomProto3ToResult(fields, ser.Result)); err != nil {
 			if err == nil || err == io.EOF {
 				return nil
 			}
 			return err
 		}
+		log.Errorf("Finished callback")
 	}
 }
 

@@ -213,6 +213,9 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 
 	resultSent := false
 	for attempt := 1; attempt <= 2; attempt++ {
+		if query == "select * from t1" {
+			log.Errorf("Started stream once")
+		}
 		err := dbc.streamOnce(
 			ctx,
 			query,
@@ -226,6 +229,9 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 			alloc,
 			streamBufferSize,
 		)
+		if query == "select * from t1" {
+			log.Errorf("Error in stream once - %v", err)
+		}
 		switch {
 		case err == nil:
 			// Success.
@@ -267,7 +273,7 @@ func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*
 
 	done, wg := dbc.setDeadline(ctx)
 	err := dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
-
+	log.Errorf("error from dbc.conn.ExecuteStreamFetch - %v", err)
 	if done != nil {
 		close(done)
 		wg.Wait()

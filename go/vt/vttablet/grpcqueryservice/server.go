@@ -19,6 +19,7 @@ package grpcqueryservice
 import (
 	"context"
 
+	"github.com/openark/golib/log"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -65,9 +66,12 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.ImmediateCallerId,
 	)
 	err = q.server.StreamExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
-		return stream.Send(&querypb.StreamExecuteResponse{
+		log.Errorf("Sending a stream now with %d rows", len(reply.Rows))
+		err2 := stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
+		log.Errorf("Finished sending a stream now, error = %v", err)
+		return err2
 	})
 	return vterrors.ToGRPC(err)
 }
