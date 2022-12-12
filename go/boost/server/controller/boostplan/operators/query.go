@@ -5,9 +5,9 @@ import (
 )
 
 type Query struct {
-	Name  string
-	Roots []*Node
-	View  *Node
+	PublicID string
+	Roots    []*Node
+	View     *Node
 }
 
 func (q *Query) Leaf() graph.NodeIdx {
@@ -28,10 +28,6 @@ func (qfp *QueryFlowParts) GetTableReport() *TableReport {
 
 func (qfp *QueryFlowParts) Leaf() graph.NodeIdx {
 	return qfp.QueryLeaf
-}
-
-func (qfp *QueryFlowParts) GetName() string {
-	return qfp.Name
 }
 
 func (q *Query) Optimize(mapping Mapping, sec bool) (*Query, []*Node) {

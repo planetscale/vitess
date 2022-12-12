@@ -1,6 +1,9 @@
 package boostplan
 
 import (
+	"errors"
+	"fmt"
+
 	"go.uber.org/multierr"
 
 	"vitess.io/vitess/go/boost/boostpb"
@@ -12,7 +15,6 @@ import (
 
 type QFP interface {
 	Leaf() graph.NodeIdx
-	GetName() string
 	GetTableReport() *operators.TableReport
 }
 
@@ -33,20 +35,10 @@ func BlankRecipe() *VersionedRecipe {
 	}
 }
 
-func (r *VersionedRecipe) NodeAddrFor(name string) (graph.NodeIdx, bool) {
-	if r.inc == nil {
-		panic("recipe not applied")
-	}
-	if alias, ok := r.ResolveAlias(name); ok {
-		return r.inc.GetQueryAddress(alias)
-	}
-	return r.inc.GetQueryAddress(name)
-}
-
 func (r *VersionedRecipe) Activate(mig Migration, schema *SchemaInformation) (*ActivationResult, error) {
-	var added []QueryID
-	var removed []QueryID
-	var unchanged []QueryID
+	var added []QueryHash
+	var removed []QueryHash
+	var unchanged []QueryHash
 
 	if r.prior == nil {
 		added, removed, unchanged = r.ComputeDelta(newRecipe())
@@ -73,26 +65,26 @@ func (r *VersionedRecipe) Activate(mig Migration, schema *SchemaInformation) (*A
 	// add new queries to the Soup graph carried by `mig`, and reflect state in the
 	// incorporator in `inc`. `NodeIndex`es for new nodes are collected in `new_nodes` to be
 	// returned to the caller (who may use them to obtain mutators and getters)
-	var errors []error
+	var errs []error
 	for _, qid := range added {
 		q := r.GetQuery(qid)
+
+		if q.PublicId == "" {
+			errs = append(errs, errors.New("query has no public id"))
+			continue
+		}
 		stmt := sqlparser.CloneStatement(q.Statement)
-		qfp, err := r.inc.AddParsedQuery(q.Keyspace, stmt, q.Name, true, mig, schema)
+		qfp, err := r.inc.AddParsedQuery(q.Keyspace, stmt, q.PublicId, mig, schema)
 		if err != nil {
-			errors = append(errors, &QueryScopedError{err, q})
+			errs = append(errs, &QueryScopedError{err, q})
 			continue
 		}
 
-		// If the user provided us with a query name, use that.
-		// If not, use the name internally used by the QFP.
-		var queryName string
-		if q.Name != "" {
-			queryName = q.Name
-		} else {
-			queryName = qfp.GetName()
+		if _, exists := activation.NodesAdded[q.PublicId]; exists {
+			errs = append(errs, fmt.Errorf("query with public id %q already exists", q.PublicId))
+			continue
 		}
-
-		activation.NodesAdded[queryName] = qfp.Leaf()
+		activation.NodesAdded[q.PublicId] = qfp.Leaf()
 		activation.QueriesAdded = append(activation.QueriesAdded, q)
 	}
 
@@ -103,14 +95,14 @@ func (r *VersionedRecipe) Activate(mig Migration, schema *SchemaInformation) (*A
 		case *sqlparser.CreateTable:
 			panic("CreateTable statements are implicit and should never be removed")
 		default:
-			if rm := r.inc.RemoveQuery(oldq.Name); rm != graph.InvalidNode {
+			if rm := r.inc.RemoveQuery(oldq.PublicId); rm != graph.InvalidNode {
 				activation.NodesRemoved = append(activation.NodesRemoved, rm)
 				activation.QueriesRemoved = append(activation.QueriesRemoved, oldq)
 			}
 		}
 	}
 
-	return activation, multierr.Combine(errors...)
+	return activation, multierr.Combine(errs...)
 }
 
 func (r *VersionedRecipe) revert() *VersionedRecipe {

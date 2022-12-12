@@ -62,7 +62,7 @@ func TestFilter(t *testing.T) {
 
 		var fields = []string{"x", "y"}
 		g := NewMockGraph(t)
-		s := g.AddBase("source", fields, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
+		s := g.AddBase("source", fields, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar))
 		g.SetOp("filter", fields, NewFilter(s.AsGlobal(), filters), materialized)
 		return g
 	}

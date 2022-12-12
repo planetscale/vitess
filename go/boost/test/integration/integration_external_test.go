@@ -45,8 +45,8 @@ func SetupExternal(t *testing.T, options ...boosttest.Option) *boosttest.Cluster
 func TestMaterializationWithIgnoredPackets(t *testing.T) {
 	const Recipe = `
 CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, PRIMARY KEY(pk));
-SELECT /*vt+ VIEW=v_partial PUBLIC */ num.a FROM num WHERE num.pk = :primary;
-SELECT /*vt+ VIEW=v_full PUBLIC */ SUM(num.a) FROM num;
+SELECT /*vt+ VIEW=v_partial */ num.a FROM num WHERE num.pk = :primary;
+SELECT /*vt+ VIEW=v_full */ SUM(num.a) FROM num;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe), boosttest.WithFakeExecutorLatency(100*time.Millisecond))
@@ -65,8 +65,8 @@ SELECT /*vt+ VIEW=v_full PUBLIC */ SUM(num.a) FROM num;
 func TestMaterializationWithIgnoredPacketsAndMultiplePartial(t *testing.T) {
 	const Recipe = `
 CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY KEY(pk));
-SELECT /*vt+ VIEW=v_sum_a PUBLIC */ SUM(num.a) FROM num WHERE num.b = :b;
-SELECT /*vt+ VIEW=v_sum_b PUBLIC */ SUM(num.b) FROM num WHERE num.a = :a;
+SELECT /*vt+ VIEW=v_sum_a */ SUM(num.a) FROM num WHERE num.b = :b;
+SELECT /*vt+ VIEW=v_sum_b */ SUM(num.b) FROM num WHERE num.a = :a;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe), boosttest.WithFakeExecutorLatency(100*time.Millisecond))
@@ -99,9 +99,9 @@ func TestProjections(t *testing.T) {
 	f FLOAT, g DOUBLE, h DECIMAL,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=op0 PUBLIC */ num.a, num.a + num.b, 420 FROM num WHERE num.a = :x;
-	SELECT /*vt+ VIEW=op1 PUBLIC */ num.a, num.a + num.b, 420 FROM num;
-	SELECT /*vt+ VIEW=op3 PUBLIC */ col1 + col2, 420 FROM (SELECT a as col1, a+b as col2 FROM num) apa WHERE col1 = :x;
+	SELECT num.a, num.a + num.b, 420 FROM num WHERE num.a = :x;
+	SELECT num.a, num.a + num.b, 420 FROM num;
+	SELECT col1 + col2, 420 FROM (SELECT a as col1, a+b as col2 FROM num) apa WHERE col1 = :x;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -110,21 +110,21 @@ func TestProjections(t *testing.T) {
 		g.TestExecute("INSERT INTO num (a, b, c, d, e, f, g, h) VALUES (%d, %d, %d, %d, %d, %d, %d, %d)", i, i, i, i, i, i, i, i)
 	}
 
-	g.View("op0").Lookup(1).Expect([]sqltypes.Row{
+	g.View("q0").Lookup(1).Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
 	})
 
-	g.View("op0").Lookup("1").Expect([]sqltypes.Row{
+	g.View("q0").Lookup("1").Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
 	})
 
-	g.View("op1").Lookup().Expect([]sqltypes.Row{
+	g.View("q1").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
 		{sqltypes.NewInt32(2), sqltypes.NewInt64(4), sqltypes.NewInt64(420)},
 		{sqltypes.NewInt32(3), sqltypes.NewInt64(6), sqltypes.NewInt64(420)},
 	})
 
-	g.View("op3").Lookup(1).Expect([]sqltypes.Row{
+	g.View("q2").Lookup(1).Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(3), sqltypes.NewInt64(420)},
 	})
 }
@@ -137,7 +137,7 @@ func TestProjectionsWithMigration(t *testing.T) {
 	    b SMALLINT, 
 	    PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=op0 PUBLIC */ num.a, num.a + num.b, 420 FROM num WHERE num.a = :x;
+	SELECT num.a, num.a + num.b, 420 FROM num WHERE num.a = :x;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -146,14 +146,14 @@ func TestProjectionsWithMigration(t *testing.T) {
 		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i, i)
 	}
 
-	g.View("op0").Lookup(1).Expect([]sqltypes.Row{
+	g.View("q0").Lookup(1).Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
 	})
 
 	g.AlterRecipe(recipe, "alter table num add column c bigint")
 
 	recipe.Queries = append(recipe.Queries, &vtboost.CachedQuery{
-		Name:     "op1",
+		PublicId: "q1",
 		Sql:      "SELECT num.c, num.a + num.b, 420 FROM num WHERE num.a = :x",
 		Keyspace: testrecipe.DefaultKeyspace,
 	})
@@ -163,10 +163,10 @@ func TestProjectionsWithMigration(t *testing.T) {
 	g.TestExecute("INSERT INTO num (a, b, c) VALUES (%d, %d, %d)", 10, 10, 666)
 	boosttest.Settle()
 
-	g.View("op0").Lookup(1).Expect([]sqltypes.Row{
+	g.View("q0").Lookup(1).Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(1), sqltypes.NewInt64(2), sqltypes.NewInt64(420)},
 	})
-	g.View("op1").Lookup(10).Expect([]sqltypes.Row{
+	g.View("q1").Lookup(10).Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(666), sqltypes.NewInt64(20), sqltypes.NewInt64(420)},
 	})
 }
@@ -179,7 +179,7 @@ func TestMidFlowUpqueries(t *testing.T) {
 	    a INT,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=upquery PUBLIC */ count(num.a) FROM num WHERE a = ?;
+	SELECT count(num.a) FROM num WHERE a = ?;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -189,7 +189,7 @@ func TestMidFlowUpqueries(t *testing.T) {
 	}
 	g.TestExecute("INSERT INTO num (a, b) VALUES (null, 100)")
 
-	g.View("upquery").Lookup(2).Expect([]sqltypes.Row{
+	g.View("q0").Lookup(2).Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(4)},
 	})
 }
@@ -202,7 +202,7 @@ func TestMidFlowUpqueriesFully(t *testing.T) {
 	    a INT,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=upquery PUBLIC */ count(num.a), sum(num.b) FROM num;
+	SELECT count(num.a), sum(num.b) FROM num;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t)
@@ -216,7 +216,7 @@ func TestMidFlowUpqueriesFully(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	g.ApplyRecipeEx(recipe, false, true)
 
-	g.View("upquery").Lookup().Expect([]sqltypes.Row{
+	g.View("q0").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(12), sqltypes.NewDecimal("7900")},
 	})
 }
@@ -229,9 +229,9 @@ func TestAggregations(t *testing.T) {
 	    a INT,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=op0 PUBLIC */ count(num.a), count(*) FROM num;
-	SELECT /*vt+ VIEW=op1 PUBLIC */ b, count(num.a), count(*) FROM num GROUP BY b;
-	SELECT /*vt+ VIEW=op2 PUBLIC */ count(num.a), count(*) FROM num WHERE a = ?;
+	SELECT count(num.a), count(*) FROM num;
+	SELECT b, count(num.a), count(*) FROM num GROUP BY b;
+	SELECT count(num.a), count(*) FROM num WHERE a = ?;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -241,18 +241,18 @@ func TestAggregations(t *testing.T) {
 	}
 	g.TestExecute("INSERT INTO num (a, b) VALUES (null, 100)")
 
-	g.View("op0").Lookup().Expect([]sqltypes.Row{
+	g.View("q0").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(3), sqltypes.NewInt64(4)},
 	})
-	g.View("op1").Lookup().Expect([]sqltypes.Row{
+	g.View("q1").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(100), sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
 		{sqltypes.NewInt32(200), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 		{sqltypes.NewInt32(300), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 	})
-	g.View("op2").Lookup(2).Expect([]sqltypes.Row{
+	g.View("q2").Lookup(2).Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 	})
-	g.View("op2").Lookup(420).Expect([]sqltypes.Row{
+	g.View("q2").Lookup(420).Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(0), sqltypes.NewInt64(0)},
 	})
 }
@@ -265,9 +265,9 @@ func TestAggregationsAverage(t *testing.T) {
 	    a INT,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=op0 PUBLIC */ avg(num.a) FROM num;
-	SELECT /*vt+ VIEW=op1 PUBLIC */ b, avg(num.a) FROM num GROUP BY b;
-	SELECT /*vt+ VIEW=op2 PUBLIC */ count(num.a), avg(num.a) FROM num;
+	SELECT avg(num.a) FROM num;
+	SELECT b, avg(num.a) FROM num GROUP BY b;
+	SELECT count(num.a), avg(num.a) FROM num;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -277,15 +277,15 @@ func TestAggregationsAverage(t *testing.T) {
 	}
 	g.TestExecute("INSERT INTO num (a, b) VALUES (null, 100)")
 
-	g.View("op0").Lookup().Expect([]sqltypes.Row{
+	g.View("q0").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewDecimal("2.0000")},
 	})
-	g.View("op1").Lookup().Expect([]sqltypes.Row{
+	g.View("q1").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(100), sqltypes.NewDecimal("1.0000")},
 		{sqltypes.NewInt32(200), sqltypes.NewDecimal("2.0000")},
 		{sqltypes.NewInt32(300), sqltypes.NewDecimal("3.0000")},
 	})
-	g.View("op2").Lookup().Expect([]sqltypes.Row{
+	g.View("q2").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(3), sqltypes.NewDecimal("2.0000")},
 	})
 }
@@ -298,9 +298,9 @@ func TestAggregationsWithFullExternalReplay(t *testing.T) {
 	    a INT,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=op0 PUBLIC */ count(num.a), count(*) FROM num;
-	SELECT /*vt+ VIEW=op1 PUBLIC */ b, count(num.a), count(*) FROM num GROUP BY b;
-	SELECT /*vt+ VIEW=op2 PUBLIC */ count(num.a), count(*) FROM num WHERE a = ?;
+	SELECT count(num.a), count(*) FROM num;
+	SELECT b, count(num.a), count(*) FROM num GROUP BY b;
+	SELECT count(num.a), count(*) FROM num WHERE a = ?;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t)
@@ -314,15 +314,15 @@ func TestAggregationsWithFullExternalReplay(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	g.ApplyRecipeEx(recipe, false, true)
 
-	g.View("op0").Lookup().Expect([]sqltypes.Row{
+	g.View("q0").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(3), sqltypes.NewInt64(4)},
 	})
-	g.View("op1").Lookup().Expect([]sqltypes.Row{
+	g.View("q1").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt32(100), sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
 		{sqltypes.NewInt32(200), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 		{sqltypes.NewInt32(300), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 	})
-	g.View("op2").Lookup(2).Expect([]sqltypes.Row{
+	g.View("q2").Lookup(2).Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 	})
 }
@@ -342,11 +342,13 @@ func TestStarIsOK(t *testing.T) {
 }
 
 func TestAggregationPermutations(t *testing.T) {
+	t.Skipf("disabled: MIN/MAX support")
+
 	const RecipeTemplate = `
 	CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a {{.Type}}, b {{.Type}}, PRIMARY KEY(pk));
-	SELECT /*vt+ VIEW=view_min PUBLIC */ MIN(num.a) FROM num{{if .Filter}} WHERE {{.Filter}}{{end}}{{if .Group}} GROUP BY {{.Group}}{{end}};
-	SELECT /*vt+ VIEW=view_max PUBLIC */ MAX(num.a) FROM num{{if .Filter}} WHERE {{.Filter}}{{end}}{{if .Group}} GROUP BY {{.Group}}{{end}};
-	SELECT /*vt+ VIEW=view_sum PUBLIC */ SUM(num.a) FROM num{{if .Filter}} WHERE {{.Filter}}{{end}}{{if .Group}} GROUP BY {{.Group}}{{end}};
+	SELECT MIN(num.a) FROM num{{if .Filter}} WHERE {{.Filter}}{{end}}{{if .Group}} GROUP BY {{.Group}}{{end}};
+	SELECT MAX(num.a) FROM num{{if .Filter}} WHERE {{.Filter}}{{end}}{{if .Group}} GROUP BY {{.Group}}{{end}};
+	SELECT SUM(num.a) FROM num{{if .Filter}} WHERE {{.Filter}}{{end}}{{if .Group}} GROUP BY {{.Group}}{{end}};
 `
 	recipeTemplate := template.Must(template.New("recipe").Parse(RecipeTemplate))
 
@@ -385,32 +387,34 @@ func TestAggregationPermutations(t *testing.T) {
 				g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i, i%4)
 			}
 
-			g.View("view_min").Lookup().ExpectStr(qq.Min)
-			g.View("view_max").Lookup().ExpectStr(qq.Max)
-			g.View("view_sum").Lookup().ExpectStr(qq.Sum)
+			g.View("q0").Lookup().ExpectStr(qq.Min)
+			g.View("q1").Lookup().ExpectStr(qq.Max)
+			g.View("q2").Lookup().ExpectStr(qq.Sum)
 		})
 	}
 }
 
 func TestCustomBaseTypes(t *testing.T) {
+	t.Skipf("disabled: MIN/MAX support")
+
 	const Recipe = `
 CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 	a INT, b SMALLINT, c TINYINT, d MEDIUMINT, e BIGINT,
 	f FLOAT, g DOUBLE, h DECIMAL,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=identity PUBLIC */ num.a, num.b, num.c, num.d, num.e, num.f, num.g, num.h
+	SELECT /*vt+ VIEW=identity */ num.a, num.b, num.c, num.d, num.e, num.f, num.g, num.h
 	FROM num WHERE num.pk = :primary;
 
-	SELECT /*vt+ VIEW=summed_g PUBLIC */ SUM(num.g) FROM num;
+	SELECT /*vt+ VIEW=summed_g */ SUM(num.g) FROM num;
 	
-	SELECT /*vt+ VIEW=max_a PUBLIC */ MAX(num.a) FROM num;
-	SELECT /*vt+ VIEW=max_g PUBLIC */ MAX(num.g) FROM num;
+	SELECT /*vt+ VIEW=max_a */ MAX(num.a) FROM num;
+	SELECT /*vt+ VIEW=max_g */ MAX(num.g) FROM num;
 	
-	SELECT /*vt+ VIEW=min_a PUBLIC */ MIN(num.a) FROM num;
-	SELECT /*vt+ VIEW=min_g PUBLIC */ MIN(num.g) FROM num;
-	SELECT /*vt+ VIEW=summed_a PUBLIC */ SUM(num.a) FROM num;
-	SELECT /*vt+ VIEW=multi PUBLIC */ SUM(num.a), MIN(num.g) FROM num;
+	SELECT /*vt+ VIEW=min_a */ MIN(num.a) FROM num;
+	SELECT /*vt+ VIEW=min_g */ MIN(num.g) FROM num;
+	SELECT /*vt+ VIEW=summed_a */ SUM(num.a) FROM num;
+	SELECT /*vt+ VIEW=multi */ SUM(num.a), MIN(num.g) FROM num;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -440,7 +444,7 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 	a INT, b SMALLINT,
 	PRIMARY KEY(pk));
 
-SELECT /*vt+ VIEW=summed PUBLIC */ a, SUM(b) FROM num GROUP BY a HAVING a = 2 AND SUM(b) > 10;
+SELECT a, SUM(b) FROM num GROUP BY a HAVING a = 2 AND SUM(b) > 10;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -458,7 +462,7 @@ SELECT /*vt+ VIEW=summed PUBLIC */ a, SUM(b) FROM num GROUP BY a HAVING a = 2 AN
 		g.TestExecute("INSERT INTO num (a, b) VALUES (1, %d), (2, %d)", i, i*i)
 	}
 
-	g.View("summed").Lookup().Expect([]sqltypes.Row{{sqltypes.NewInt32(2), sqltypes.NewDecimal("14")}})
+	g.View("q0").Lookup().Expect([]sqltypes.Row{{sqltypes.NewInt32(2), sqltypes.NewDecimal("14")}})
 }
 
 func TestTopK(t *testing.T) {
@@ -468,10 +472,10 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 	b INT,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=top PUBLIC */ a, b FROM num WHERE a = ? ORDER BY b LIMIT 3;
-	SELECT /*vt+ VIEW=top_with_bogokey PUBLIC */ a, b FROM num ORDER BY b LIMIT 3;
-	SELECT /*vt+ VIEW=top_without_key PUBLIC */ pk FROM num WHERE a = ? ORDER BY b LIMIT 3;
-	SELECT /*vt+ VIEW=top_multi PUBLIC */ pk FROM num WHERE a IN ::a ORDER BY b LIMIT 4;
+	SELECT /*vt+ VIEW=top */ a, b FROM num WHERE a = ? ORDER BY b LIMIT 3;
+	SELECT /*vt+ VIEW=top_with_bogokey */ a, b FROM num ORDER BY b LIMIT 3;
+	SELECT /*vt+ VIEW=top_without_key */ pk FROM num WHERE a = ? ORDER BY b LIMIT 3;
+	SELECT /*vt+ VIEW=top_multi */ pk FROM num WHERE a IN ::a ORDER BY b LIMIT 4;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -537,9 +541,9 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 	b INT,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=distinct PUBLIC */ DISTINCT a, b FROM num;
-	SELECT /*vt+ VIEW=distinct2 PUBLIC */ DISTINCT a, b FROM num WHERE b = ?;
-    SELECT /*vt+ VIEW=union_distinct PUBLIC */ a, b FROM num UNION DISTINCT SELECT a, b FROM num; 
+	SELECT /*vt+ VIEW=distinct */ DISTINCT a, b FROM num;
+	SELECT /*vt+ VIEW=distinct2 */ DISTINCT a, b FROM num WHERE b = ?;
+    SELECT /*vt+ VIEW=union_distinct */ a, b FROM num UNION DISTINCT SELECT a, b FROM num; 
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -584,14 +588,14 @@ func TestAggregation(t *testing.T) {
 	queries := `
 CREATE TABLE vote (id bigint NOT NULL AUTO_INCREMENT, article_id bigint, user bigint, PRIMARY KEY(id));
 
-SELECT /*vt+ VIEW=caseaggr PUBLIC */ user, sum(CASE WHEN article_id = 5 THEN 1 ELSE 0 END) AS sum FROM vote GROUP BY user
+SELECT user, sum(CASE WHEN article_id = 5 THEN 1 ELSE 0 END) AS sum FROM vote GROUP BY user
 `
 	recipe := testrecipe.LoadSQL(t, queries)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
 
 	g.TestExecute("INSERT INTO vote(id, article_id, user) VALUES (1, 1, 1), (2, 5, 2), (3, 2, 2), (4, 5, 2)")
 
-	g.View("caseaggr").Lookup().Expect([]sqltypes.Row{
+	g.View("q0").Lookup().Expect([]sqltypes.Row{
 		{sqltypes.NewInt64(2), sqltypes.NewDecimal("2")},
 		{sqltypes.NewInt64(1), sqltypes.NewDecimal("0")},
 	})
@@ -609,8 +613,8 @@ func TestBasicEx(t *testing.T) {
 
 	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
-		a := mig.AddBase("a", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, executor.Keyspace()))
-		b := mig.AddBase("b", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, executor.Keyspace()))
+		a := mig.AddBase("a", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, executor.Keyspace(), "a"))
+		b := mig.AddBase("b", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, executor.Keyspace(), "b"))
 
 		emits := map[graph.NodeIdx][]int{
 			a: {0, 1},
@@ -618,7 +622,7 @@ func TestBasicEx(t *testing.T) {
 		}
 		u := flownode.NewUnion(emits)
 		c := mig.AddIngredient("c", []string{"c1", "c2"}, u, nil)
-		mig.MaintainAnonymous(c, []int{0})
+		mig.Maintain("", "c", c, []int{0}, nil, 0)
 		return nil
 	})
 	require.NoError(t, err, "migration failed")
@@ -837,8 +841,7 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY
 	}
 
 	recipe.Queries = append(recipe.Queries, &vtboost.CachedQuery{
-		PublicId: "deadbeef",
-		Name:     "q1",
+		PublicId: "q1",
 		Sql:      "SELECT a + 1 FROM num WHERE pk = :x",
 		Keyspace: testrecipe.DefaultKeyspace,
 	})
@@ -849,8 +852,7 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY
 	clientQ1.Lookup(1).Expect([]sqltypes.Row{{sqltypes.NewInt64(2)}})
 
 	recipe.Queries = append(recipe.Queries, &vtboost.CachedQuery{
-		PublicId: "c0ffe",
-		Name:     "q2",
+		PublicId: "q2",
 		Sql:      "SELECT a * 2 FROM num WHERE pk = :x",
 		Keyspace: testrecipe.DefaultKeyspace,
 	})
@@ -862,7 +864,7 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY
 	clientQ2 := g.View("q2")
 	clientQ2.Lookup(1).Expect([]sqltypes.Row{{sqltypes.NewInt64(2)}})
 
-	recipe.Queries = xslice.Filter(recipe.Queries, func(q *vtboost.CachedQuery) bool { return q.Name != "q1" })
+	recipe.Queries = xslice.Filter(recipe.Queries, func(q *vtboost.CachedQuery) bool { return q.PublicId != "q1" })
 	g.ApplyRecipe(recipe)
 
 	time.Sleep(100 * time.Millisecond)
@@ -914,7 +916,7 @@ CREATE TABLE mike (
   CHARSET utf8mb4,
   COLLATE utf8mb4_0900_ai_ci;
 
-select /*vt+ VIEW=query */ id from mike where season = ?;
+select id from mike where season = ?;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -928,7 +930,7 @@ select /*vt+ VIEW=query */ id from mike where season = ?;
 
 	boosttest.Settle()
 
-	g.View("query").Lookup("fall-69").Expect([]sqltypes.Row{{sqltypes.NewUint32(70)}})
+	g.View("q0").Lookup("fall-69").Expect([]sqltypes.Row{{sqltypes.NewUint32(70)}})
 }
 
 func TestCollationsInJoins(t *testing.T) {
@@ -936,13 +938,13 @@ func TestCollationsInJoins(t *testing.T) {
 CREATE TABLE article (id bigint, title varchar(255) collate TEST_COLLATION, PRIMARY KEY(id));
 CREATE TABLE vote (id bigint NOT NULL AUTO_INCREMENT, article_title varchar(255) collate TEST_COLLATION, user bigint, PRIMARY KEY(id));
 
-SELECT /*vt+ VIEW=complexjoin PUBLIC */ article.id, article.title, votecount.votes AS votes
+SELECT /*vt+ VIEW=complexjoin */ article.id, article.title, votecount.votes AS votes
 FROM article
     LEFT JOIN (SELECT vote.article_title, COUNT(vote.user) AS votes
                FROM vote GROUP BY vote.article_title) AS votecount
     ON (article.title = votecount.article_title) WHERE article.title = :article_title;
 
-select /*vt+ VIEW=simplejoin PUBLIC */ article.id, article.title, vote.id, vote.article_title 
+select /*vt+ VIEW=simplejoin */ article.id, article.title, vote.id, vote.article_title 
 	FROM article LEFT JOIN vote ON (article.title = vote.article_title) WHERE article.title = :article_title;
 `
 
@@ -1012,9 +1014,9 @@ func TestOuterJoinWithLiteralComparison(t *testing.T) {
 CREATE TABLE article (id bigint NOT NULL AUTO_INCREMENT, foo bigint, title varchar(255), PRIMARY KEY(id));
 CREATE TABLE vote (id bigint NOT NULL AUTO_INCREMENT, foo bigint, article_title varchar(255), user bigint, PRIMARY KEY(id));
 
-SELECT /*vt+ VIEW=outer2 PUBLIC */ article.foo, vote.foo FROM article LEFT JOIN vote ON vote.article_title="ticket_price" AND article.foo = vote.foo;
-SELECT /*vt+ VIEW=outer1 PUBLIC */ article.foo, vote.foo FROM article LEFT JOIN vote ON article.title="ticket_price" AND article.foo = vote.foo;
-SELECT /*vt+ VIEW=inner PUBLIC */ article.foo, vote.foo FROM article JOIN vote ON vote.article_title="ticket_price" AND article.foo = vote.foo;
+SELECT article.foo, vote.foo FROM article LEFT JOIN vote ON article.title="ticket_price" AND article.foo = vote.foo;
+SELECT article.foo, vote.foo FROM article LEFT JOIN vote ON vote.article_title="ticket_price" AND article.foo = vote.foo;
+SELECT article.foo, vote.foo FROM article JOIN vote ON vote.article_title="ticket_price" AND article.foo = vote.foo;
 `
 
 	recipe := testrecipe.LoadSQL(t, Recipe)
@@ -1023,19 +1025,19 @@ SELECT /*vt+ VIEW=inner PUBLIC */ article.foo, vote.foo FROM article JOIN vote O
 	g.TestExecute("INSERT INTO `article` (foo, title) VALUES (1, 'first'), (2, 'ticket_price')")
 	g.TestExecute("INSERT INTO `vote` (foo, article_title) VALUES (1, 'ticket_price'), (2, 'apa')")
 
-	g.View("outer1").Lookup().Expect(
+	g.View("q0").Lookup().Expect(
 		[]sqltypes.Row{
 			{sqltypes.NewInt64(1), sqltypes.NULL},
 			{sqltypes.NewInt64(2), sqltypes.NewInt64(2)},
 		})
 
-	g.View("outer2").Lookup().Expect(
+	g.View("q1").Lookup().Expect(
 		[]sqltypes.Row{
 			{sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 			{sqltypes.NewInt64(2), sqltypes.NULL},
 		})
 
-	g.View("inner").Lookup().Expect(
+	g.View("q2").Lookup().Expect(
 		[]sqltypes.Row{
 			{sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 		})
@@ -1084,7 +1086,7 @@ func TestUpqueryInPlan(t *testing.T) {
 	col_int INT, col_double DOUBLE, col_decimal DECIMAL, col_char VARCHAR(255),
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=upquery PUBLIC */ conv.pk FROM conv WHERE conv.col_char IN ::x;
+	SELECT conv.pk FROM conv WHERE conv.col_char IN ::x;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -1093,7 +1095,7 @@ func TestUpqueryInPlan(t *testing.T) {
 		g.TestExecute("INSERT INTO conv (col_int, col_double, col_decimal, col_char) VALUES (%d, %f, %f, 'string-%d')", i, float64(i), float64(i), i)
 	}
 
-	g.View("upquery").LookupBvar([]any{"string-1", "string-2"}).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}})
+	g.View("q0").LookupBvar([]any{"string-1", "string-2"}).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}})
 }
 
 func TestMultipleUpqueries(t *testing.T) {
@@ -1102,8 +1104,8 @@ func TestMultipleUpqueries(t *testing.T) {
 	a BIGINT, b BIGINT, c BIGINT,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=upquery0 PUBLIC */ tbl.pk FROM tbl WHERE tbl.a = :a and tbl.b = :b and tbl.c = :c;
-	SELECT /*vt+ VIEW=upquery1 PUBLIC */ tbl.pk FROM tbl WHERE tbl.a IN ::a and tbl.b = :b;
+	SELECT tbl.pk FROM tbl WHERE tbl.a = :a and tbl.b = :b and tbl.c = :c;
+	SELECT tbl.pk FROM tbl WHERE tbl.a IN ::a and tbl.b = :b;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -1112,10 +1114,10 @@ func TestMultipleUpqueries(t *testing.T) {
 		g.TestExecute("INSERT INTO tbl (a, b, c) VALUES (%d, %d, %d)", i, i%4, i*10)
 	}
 
-	upquery0 := g.View("upquery0")
+	upquery0 := g.View("q0")
 	upquery0.Lookup(1, 1, 10).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
 
-	upquery1 := g.View("upquery1")
+	upquery1 := g.View("q1")
 	upquery1.LookupBvar([]any{4, 8, 12}, 0).Expect(
 		[]sqltypes.Row{
 			{sqltypes.NewInt64(4)},
@@ -1130,10 +1132,10 @@ func TestTypeConversions(t *testing.T) {
 	col_int INT, col_double DOUBLE, col_decimal DECIMAL, col_char VARCHAR(255),
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=conv0 PUBLIC */ conv.pk FROM conv WHERE conv.col_int = :x;
-	SELECT /*vt+ VIEW=conv1 PUBLIC */ conv.pk FROM conv WHERE conv.col_double = :x;
-	SELECT /*vt+ VIEW=conv2 PUBLIC */ conv.pk FROM conv WHERE conv.col_char = :x;
-	SELECT /*vt+ VIEW=conv3 PUBLIC */ conv.pk FROM conv WHERE conv.col_char IN ::x;
+	SELECT conv.pk FROM conv WHERE conv.col_int = :x;
+	SELECT conv.pk FROM conv WHERE conv.col_double = :x;
+	SELECT conv.pk FROM conv WHERE conv.col_char = :x;
+	SELECT conv.pk FROM conv WHERE conv.col_char IN ::x;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -1142,26 +1144,26 @@ func TestTypeConversions(t *testing.T) {
 		g.TestExecute("INSERT INTO conv (col_int, col_double, col_decimal, col_char) VALUES (%d, %f, %f, 'string-%d')", i, float64(i), float64(i), i)
 	}
 
-	conv0 := g.View("conv0")
+	conv0 := g.View("q0")
 	conv0.Lookup("1").Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
 	conv0.Lookup("1.0").Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
 	conv0.Lookup(1.0).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
 	conv0.Lookup("1.5").Expect([]sqltypes.Row{})
 	conv0.Lookup(1.5).Expect([]sqltypes.Row{})
 
-	conv1 := g.View("conv1")
+	conv1 := g.View("q1")
 	conv1.Lookup("1").Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
 	conv1.Lookup("1.0").Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
 	conv1.Lookup(1.0).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
 	conv1.Lookup("1.5").Expect([]sqltypes.Row{})
 	conv1.Lookup(1.5).Expect([]sqltypes.Row{})
 
-	conv2 := g.View("conv2")
+	conv2 := g.View("q2")
 	conv2.Lookup("string-1").Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
 	conv2.Lookup(1).ExpectError()
 	conv2.Lookup(1.0).ExpectError()
 
-	conv3 := g.View("conv3")
+	conv3 := g.View("q3")
 	conv3.LookupBvar([]any{"string-1", "string-2"}).ExpectLen(2)
 	conv3.LookupBvar([]any{"string-1", 1}).ExpectError()
 }
@@ -1172,7 +1174,7 @@ func TestDeletedReader(t *testing.T) {
 	a BIGINT, b BIGINT, c BIGINT,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=upquery0 PUBLIC */ tbl.pk FROM tbl WHERE tbl.a = :a and tbl.b = :b and tbl.c = :c;
+	SELECT tbl.pk FROM tbl WHERE tbl.a = :a and tbl.b = :b and tbl.c = :c;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -1181,7 +1183,7 @@ func TestDeletedReader(t *testing.T) {
 		g.TestExecute("INSERT INTO tbl (a, b, c) VALUES (%d, %d, %d)", i, i%4, i*10)
 	}
 
-	upquery0 := g.View("upquery0")
+	upquery0 := g.View("q0")
 	upquery0.Lookup(1, 1, 10).Expect([]sqltypes.Row{{sqltypes.NewInt64(1)}})
 
 	g.ApplyRecipeEx(&testrecipe.Recipe{}, false, true)
@@ -1192,7 +1194,7 @@ func TestDeletedReader(t *testing.T) {
 func TestEmptyPartialMaterializationAggregations(t *testing.T) {
 	const Recipe = `
 CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY KEY(pk));
-SELECT /*vt+ VIEW=agg0 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num WHERE num.a = :a;
+SELECT SUM(num.a), COUNT(num.b) FROM num WHERE num.a = :a;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
@@ -1201,7 +1203,7 @@ SELECT /*vt+ VIEW=agg0 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num WHERE num.a =
 		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i, 10*i)
 	}
 
-	agg0 := g.View("agg0")
+	agg0 := g.View("q0")
 	agg0.Lookup(2).Expect([]sqltypes.Row{{sqltypes.NewDecimal("2"), sqltypes.NewInt64(1)}})
 	agg0.Lookup(420).Expect([]sqltypes.Row{{sqltypes.NULL, sqltypes.NewInt64(0)}})
 }
@@ -1209,19 +1211,19 @@ SELECT /*vt+ VIEW=agg0 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num WHERE num.a =
 func TestEmptyFullMaterializationAggregations(t *testing.T) {
 	const Recipe = `
 CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY KEY(pk));
-SELECT /*vt+ VIEW=agg0 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num;
-SELECT /*vt+ VIEW=agg1 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num GROUP BY num.a;
-SELECT /*vt+ VIEW=agg2 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num WHERE num.pk = :pk;
-SELECT /*vt+ VIEW=agg3 PUBLIC */ SUM(num.a), COUNT(num.b) FROM num WHERE num.pk = :pk GROUP BY num.pk;
+SELECT SUM(num.a), COUNT(num.b) FROM num;
+SELECT SUM(num.a), COUNT(num.b) FROM num GROUP BY num.a;
+SELECT SUM(num.a), COUNT(num.b) FROM num WHERE num.pk = :pk;
+SELECT SUM(num.a), COUNT(num.b) FROM num WHERE num.pk = :pk GROUP BY num.pk;
 `
 
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
 
-	agg0 := g.View("agg0")
-	agg1 := g.View("agg1")
-	agg2 := g.View("agg2")
-	agg3 := g.View("agg3")
+	agg0 := g.View("q0")
+	agg1 := g.View("q1")
+	agg2 := g.View("q2")
+	agg3 := g.View("q3")
 
 	agg0.Lookup().Expect([]sqltypes.Row{{sqltypes.NULL, sqltypes.NewInt64(0)}})
 	agg1.Lookup().Expect(nil)

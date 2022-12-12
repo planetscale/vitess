@@ -19,6 +19,7 @@ type ExternalBase struct {
 	schema     []boostpb.Type
 	keySchema  []boostpb.Type
 	keyspace   string
+	table      string
 
 	recents         map[vthash.Hash]mysql.Mysql56GTIDSet
 	inflight        map[*inflight]struct{}
@@ -164,6 +165,10 @@ func (base *ExternalBase) Keyspace() string {
 	return base.keyspace
 }
 
+func (base *ExternalBase) Table() string {
+	return base.table
+}
+
 func (base *ExternalBase) BeginUpquery(ctx context.Context, slot uint8, keyed []int, keys map[boostpb.Row]bool) {
 	if slot == 0 {
 		panic("slot 0 should be reserved")
@@ -248,7 +253,7 @@ func (base *ExternalBase) FinishUpquery(ctx context.Context, m *boostpb.Packet_R
 	}
 }
 
-func NewExternalBase(primaryKey []int, schema []boostpb.Type, keyspace string) *ExternalBase {
+func NewExternalBase(primaryKey []int, schema []boostpb.Type, keyspace, table string) *ExternalBase {
 	if primaryKey == nil {
 		panic("NewExternalBase without primary key")
 	}
@@ -266,6 +271,7 @@ func NewExternalBase(primaryKey []int, schema []boostpb.Type, keyspace string) *
 		schema:     schema,
 		keySchema:  keySchema,
 		keyspace:   keyspace,
+		table:      table,
 		inflight:   map[*inflight]struct{}{},
 		recents:    map[vthash.Hash]mysql.Mysql56GTIDSet{},
 	}
@@ -275,6 +281,7 @@ func (base *ExternalBase) ToProto() *boostpb.Node_ExternalBase {
 	pbase := &boostpb.Node_ExternalBase{
 		PrimaryKey: base.primaryKey,
 		Keyspace:   base.keyspace,
+		Table:      base.table,
 		Schema:     base.schema,
 	}
 	return pbase
@@ -282,5 +289,5 @@ func (base *ExternalBase) ToProto() *boostpb.Node_ExternalBase {
 
 func NewExternalBaseFromProto(base *boostpb.Node_ExternalBase) *ExternalBase {
 	// TODO: handle defaultValues
-	return NewExternalBase(base.PrimaryKey, base.Schema, base.Keyspace)
+	return NewExternalBase(base.PrimaryKey, base.Schema, base.Keyspace, base.Table)
 }

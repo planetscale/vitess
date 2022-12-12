@@ -31,7 +31,7 @@ var (
 )
 
 type View struct {
-	name      string
+	publicID  string
 	node      graph.NodeIdx
 	schema    []*querypb.Field
 	keySchema []*querypb.Field
@@ -62,7 +62,7 @@ func (v *View) addShards(shards []string, rpcs *common.SyncMap[string, drpc.Conn
 
 func NewViewClientFromProto(pb *vtboostpb.Materialization_ViewDescriptor, rpcs *common.SyncMap[string, drpc.Conn]) (*View, error) {
 	v := &View{
-		name:      pb.Name,
+		publicID:  pb.PublicId,
 		node:      graph.NodeIdx(pb.Node),
 		schema:    pb.Schema,
 		keySchema: pb.KeySchema,
@@ -87,15 +87,12 @@ func NewViewClientFromProto(pb *vtboostpb.Materialization_ViewDescriptor, rpcs *
 }
 
 func (v *View) PublicQueryID() string {
-	if v.metrics == nil {
-		return ""
-	}
-	return v.metrics.publicQueryID
+	return v.publicID
 }
 
-func (v *View) CollectMetrics(publicID string, hitrate *metrics.RateCounter) {
+func (v *View) CollectMetrics(hitrate *metrics.RateCounter) {
 	v.metrics = &scopedMetrics{
-		publicQueryID: publicID,
+		publicQueryID: v.publicID,
 		hitrate:       hitrate,
 	}
 }
@@ -289,10 +286,6 @@ func (v *View) fixResult(rows []boostpb.Row) *sqltypes.Result {
 		}
 	}
 	return rr
-}
-
-func (v *View) TableName() string {
-	return v.name
 }
 
 func (v *View) Fields() []*query.Field {

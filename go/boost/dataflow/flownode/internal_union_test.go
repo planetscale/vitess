@@ -14,8 +14,8 @@ import (
 func TestUnion(t *testing.T) {
 	setup := func(t *testing.T) (*MockGraph, boostpb.IndexPair, boostpb.IndexPair) {
 		g := NewMockGraph(t)
-		l := g.AddBase("left", []string{"l0", "l1"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
-		r := g.AddBase("right", []string{"r0", "r1", "r2"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.VarChar), nil)
+		l := g.AddBase("left", []string{"l0", "l1"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar))
+		r := g.AddBase("right", []string{"r0", "r1", "r2"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.VarChar))
 		emits := map[graph.NodeIdx][]int{
 			l.AsGlobal(): {0, 1},
 			r.AsGlobal(): {0, 2},

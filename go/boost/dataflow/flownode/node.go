@@ -18,7 +18,7 @@ type Stats struct {
 }
 
 type Node struct {
-	Name   string
+	name   string
 	index  boostpb.IndexPair
 	domain boostpb.DomainIndex
 
@@ -46,7 +46,7 @@ type Internal interface {
 
 func New(name string, fields []string, inner NodeImpl) *Node {
 	return &Node{
-		Name:      name,
+		name:      name,
 		domain:    boostpb.InvalidDomainIndex,
 		index:     boostpb.EmptyIndexPair(),
 		fields:    fields,
@@ -64,7 +64,7 @@ func (n *Node) Index() boostpb.IndexPair {
 }
 
 func (n *Node) Mirror(inner NodeImpl) *Node {
-	return New(n.Name, slices.Clone(n.fields), inner)
+	return New(n.name, slices.Clone(n.fields), inner)
 }
 
 func (n *Node) NamedMirror(inner NodeImpl, name string) *Node {
@@ -162,7 +162,7 @@ func (n *Node) Finalize(g *graph.Graph[*Node]) *Node {
 	n.ResolveSchema(g)
 
 	var final = &Node{
-		Name:      n.Name,
+		name:      n.name,
 		index:     n.index,
 		domain:    n.domain,
 		fields:    n.fields,

@@ -76,22 +76,24 @@ func NewRecipeFromSQL(t testing.TB, keyspace, recipesql string) *Recipe {
 
 	var queries []*vtboost.CachedQuery
 	var ddls []string
-	for n, piece := range pieces {
+	for _, piece := range pieces {
 		stmt, _, err := sqlparser.Parse2(piece)
 		if err != nil {
-			t.Fatalf("failed to parse query %d in recipe: %v\nquery: %s", n, err, piece)
+			t.Fatalf("failed to parse query %d in recipe: %v\nquery: %s", len(queries), err, piece)
 		}
 
 		switch expr := stmt.(type) {
 		case sqlparser.SelectStatement:
 			query := &vtboost.CachedQuery{
-				Name:     "",
+				PublicId: fmt.Sprintf("q%d", len(queries)),
 				Sql:      piece,
 				Keyspace: keyspace,
 			}
 
 			dir := expr.GetParsedComments().Directives()
-			query.Name, _ = dir.GetString("VIEW", "")
+			if name, ok := dir.GetString("VIEW", ""); ok {
+				query.PublicId = name
+			}
 			queries = append(queries, query)
 
 		case *sqlparser.CreateTable:

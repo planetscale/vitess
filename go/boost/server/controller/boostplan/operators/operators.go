@@ -143,6 +143,7 @@ type (
 	}
 
 	View struct {
+		PublicID   string
 		Parameters []Parameter
 		Columns    Columns
 

@@ -1,6 +1,8 @@
 package boostplan
 
 import (
+	"github.com/google/uuid"
+
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -27,7 +29,7 @@ func NewTestIncorporator(schemaInfo *SchemaInformation, mig Migration) *TestInco
 }
 
 func (ti *TestIncorporator) add(keyspace string, stmt sqlparser.Statement) (*operators.TableReport, error) {
-	qfp, err := ti.inc.AddParsedQuery(keyspace, stmt, "", true, ti.mig, ti.schema)
+	qfp, err := ti.inc.AddParsedQuery(keyspace, stmt, uuid.NewString(), ti.mig, ti.schema)
 	if err != nil {
 		return nil, err
 	}

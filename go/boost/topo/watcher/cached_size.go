@@ -31,8 +31,8 @@ func (cached *View) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(192)
 	}
-	// field name string
-	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field publicID string
+	size += hack.RuntimeAllocSize(int64(len(cached.publicID)))
 	// field schema []*vitess.io/vitess/go/vt/proto/query.Field
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.schema)) * int64(8))

@@ -11,7 +11,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStatement, name string) (*Node, error) {
+func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStatement, publicID string) (*Node, error) {
 	node, params, columns, err := conv.selectStmtToOperator(ctx, stmt)
 	if err != nil {
 		return nil, err
@@ -27,11 +27,12 @@ func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStateme
 	pushDownParameter(ctx.SemTable, node, params)
 
 	view := &View{
+		PublicID:   publicID,
 		Parameters: params,
 		Columns:    columns,
 	}
 
-	viewNode := conv.NewNode(name, view, []*Node{node})
+	viewNode := conv.NewNode("view", view, []*Node{node})
 
 	return viewNode, nil
 }

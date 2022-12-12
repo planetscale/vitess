@@ -3,7 +3,6 @@ package materialization
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync/atomic"
 
 	"go.uber.org/zap"
@@ -319,12 +318,6 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 			stack = stack[:len(stack)-1]
 
 			childN := g.Value(child)
-
-			// allow views to force full
-			if strings.HasPrefix(childN.Name, "FULL_") {
-				stack = stack[:0]
-				able = false
-			}
 
 			if mat.have.contains(child) {
 				// materialized child -- don't need to keep walking along this path

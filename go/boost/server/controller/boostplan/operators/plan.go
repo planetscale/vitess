@@ -18,7 +18,7 @@ type (
 	}
 )
 
-func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt sqlparser.Statement, keyspace, name string) (
+func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt sqlparser.Statement, keyspace, publicID string) (
 	view *Node,
 	usage *TableReport,
 	err error,
@@ -37,12 +37,11 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 
 	ctx := &PlanContext{
 		SemTable: semTable,
-		Name:     name,
 		DDL:      ddl,
 	}
 
 	// First step is to build an operator tree from the AST
-	node, err := conv.toOperator(ctx, sel, name)
+	node, err := conv.toOperator(ctx, sel, publicID)
 	if err != nil {
 		return
 	}
@@ -135,7 +134,6 @@ type PlanContext struct {
 	SemTable  *semantics.SemTable
 	Signature QuerySignature
 	Query     *sqlparser.Select
-	Name      string
 	NodeCount int
 	DDL       DDLSchema
 }

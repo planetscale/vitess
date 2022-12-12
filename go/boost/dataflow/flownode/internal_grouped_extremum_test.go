@@ -13,7 +13,7 @@ import (
 func TestGroupedExtremum(t *testing.T) {
 	setup := func(t *testing.T, op AggregationKind, materialize bool) *MockGraph {
 		g := NewMockGraph(t)
-		s := g.AddBase("source", []string{"x", "y"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64), nil)
+		s := g.AddBase("source", []string{"x", "y"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64))
 		grp := NewGrouped(s.AsGlobal(), false, []int{0}, []AggrExpr{AggregationOver(op, 1)})
 		g.SetOp("agg", []string{"x", "ys"}, grp, materialize)
 		return g

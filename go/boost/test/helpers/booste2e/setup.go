@@ -84,7 +84,7 @@ func WithCachedQueries(queriesSql ...string) Option {
 		}
 		for _, sql := range queriesSql {
 			test.Recipe.Queries = append(test.Recipe.Queries, &vtboost.CachedQuery{
-				Name:     fmt.Sprintf("anonymous_query_%d", len(test.Recipe.Queries)),
+				PublicId: fmt.Sprintf("anonymous_query_%d", len(test.Recipe.Queries)),
 				Sql:      sql,
 				Keyspace: test.Keyspace,
 			})

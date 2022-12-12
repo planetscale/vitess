@@ -17,7 +17,6 @@ func TestTopk(t *testing.T) {
 			"source",
 			[]string{"x", "y", "z"},
 			boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.Int64),
-			nil,
 		)
 		g.SetOp(
 			"topk",

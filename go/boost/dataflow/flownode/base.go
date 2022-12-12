@@ -9,7 +9,6 @@ import (
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -18,12 +17,22 @@ var _ AnyBase = (*Base)(nil)
 
 type Base struct {
 	primaryKey []int
+	table      string
 	schema     []boostpb.Type
 	dropped    []int
 	unmodified bool
 }
 
 func (base *Base) dataflow() {}
+
+func (base *Base) Keyspace() string {
+	// all fake bases are on the same empty keyspace
+	return ""
+}
+
+func (base *Base) Table() string {
+	return base.table
+}
 
 func (base *Base) Schema() []boostpb.Type {
 	if base.schema == nil {
@@ -204,8 +213,9 @@ func (base *Base) SuggestIndexes(n graph.NodeIdx) map[graph.NodeIdx][]int {
 	return map[graph.NodeIdx][]int{n: base.primaryKey}
 }
 
-func NewBase(primaryKey []int, schema []boostpb.Type, defaults []sqltypes.Value) *Base {
+func NewBase(table string, primaryKey []int, schema []boostpb.Type) *Base {
 	return &Base{
+		table:      table,
 		primaryKey: primaryKey,
 		schema:     schema,
 		unmodified: true,
@@ -214,6 +224,7 @@ func NewBase(primaryKey []int, schema []boostpb.Type, defaults []sqltypes.Value)
 
 func (base *Base) ToProto() *boostpb.Node_Base {
 	return &boostpb.Node_Base{
+		Table:      base.table,
 		PrimaryKey: base.primaryKey,
 		Schema:     base.schema,
 		Dropped:    base.dropped,
@@ -223,6 +234,7 @@ func (base *Base) ToProto() *boostpb.Node_Base {
 
 func NewBaseFromProto(base *boostpb.Node_Base) *Base {
 	return &Base{
+		table:      base.Table,
 		primaryKey: base.PrimaryKey,
 		schema:     base.Schema,
 		dropped:    base.Dropped,

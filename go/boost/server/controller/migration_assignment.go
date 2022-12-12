@@ -1,8 +1,6 @@
 package controller
 
 import (
-	"strings"
-
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostpb"
@@ -113,10 +111,6 @@ func (mig *migration) assign(topolist []graph.NodeIdx) {
 				if friendlyBase != nil {
 					return friendlyBase.Domain()
 				}
-				return nextdomain()
-			}
-
-			if strings.HasPrefix(g.Value(node).Name, "BOUNDARY_") {
 				return nextdomain()
 			}
 

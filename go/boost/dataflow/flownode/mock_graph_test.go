@@ -8,7 +8,6 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
-	"vitess.io/vitess/go/sqltypes"
 )
 
 type MockGraph struct {
@@ -37,8 +36,8 @@ func NewMockGraph(t testing.TB) *MockGraph {
 	}
 }
 
-func (mg *MockGraph) AddBase(name string, fields []string, schema []boostpb.Type, defaults []sqltypes.Value) boostpb.IndexPair {
-	i := NewBase(nil, schema, defaults)
+func (mg *MockGraph) AddBase(name string, fields []string, schema []boostpb.Type) boostpb.IndexPair {
+	i := NewBase(name, nil, schema)
 	global := mg.graph.AddNode(New(name, fields, i))
 	mg.graph.AddEdge(mg.source, global)
 

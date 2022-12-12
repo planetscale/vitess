@@ -1940,7 +1940,11 @@ func (d *Domain) buildUpquery(query *strings.Builder, n *flownode.Node) {
 		sqlescape.WriteEscapeID(query, f)
 	}
 	query.WriteString(" FROM ")
-	sqlescape.WriteEscapeID(query, n.Name)
+	if base := n.AsExternalBase(); base != nil {
+		sqlescape.WriteEscapeID(query, base.Table())
+	} else {
+		panic("unexpected upquery on node")
+	}
 }
 
 func (d *Domain) buildUpqueryFiltered(n *flownode.Node, cols []int, keys map[boostpb.Row]bool) (string, map[string]*querypb.BindVariable) {

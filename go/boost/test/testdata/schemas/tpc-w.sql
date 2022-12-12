@@ -16,72 +16,72 @@ CREATE TABLE shopping_cart_line ( scl_sc_id int not null, scl_qty int, scl_i_id 
 # modified getBestSellers
 # SELECT i_id, i_title, a_fname, a_lname, SUM(ol_qty) AS total_qty FROM item, author, order_line WHERE item.i_id = order_line.ol_i_id AND item.i_a_id = author.a_id AND order_line.ol_o_id > 2588667 AND item.i_subject = ? GROUP BY i_id, i_title, a_fname, a_lname ORDER BY total_qty DESC limit 50;
 
-SELECT /*vt+ VIEW=getBestSellers PUBLIC */  i_id, i_title, a_fname, a_lname FROM item, author, order_line WHERE item.i_id = order_line.ol_i_id AND item.i_a_id = author.a_id AND order_line.ol_o_id > 2588667 AND item.i_subject = ?;
+SELECT /*vt+ VIEW=getBestSellers */  i_id, i_title, a_fname, a_lname FROM item, author, order_line WHERE item.i_id = order_line.ol_i_id AND item.i_a_id = author.a_id AND order_line.ol_o_id > 2588667 AND item.i_subject = ?;
 
 # getMostRecentOrder.lines
-SELECT /*vt+ VIEW=getMostRecentOrderLines PUBLIC */  * FROM order_line, item WHERE ol_o_id = ? AND ol_i_id = i_id;
+SELECT /*vt+ VIEW=getMostRecentOrderLines */  * FROM order_line, item WHERE ol_o_id = ? AND ol_i_id = i_id;
 
 # getName
-SELECT /*vt+ VIEW=getName PUBLIC */  c_fname,c_lname FROM customer WHERE c_id = ?;
+SELECT /*vt+ VIEW=getName */  c_fname,c_lname FROM customer WHERE c_id = ?;
 
 # getBook
-SELECT /*vt+ VIEW=getBook PUBLIC */  * FROM item,author WHERE item.i_a_id = author.a_id AND i_id = ?;
+SELECT /*vt+ VIEW=getBook */  * FROM item,author WHERE item.i_a_id = author.a_id AND i_id = ?;
 
 # getCustomer
-SELECT /*vt+ VIEW=getCustomer PUBLIC */  * FROM customer, address, country WHERE customer.c_addr_id = address.addr_id AND address.addr_co_id = country.co_id AND customer.c_uname = ?;
+SELECT /*vt+ VIEW=getCustomer */  * FROM customer, address, country WHERE customer.c_addr_id = address.addr_id AND address.addr_co_id = country.co_id AND customer.c_uname = ?;
 
 # doSubjectSearch
-SELECT /*vt+ VIEW=doSubjectSearch PUBLIC */  * FROM item, author WHERE item.i_a_id = author.a_id AND item.i_subject = ? ORDER BY item.i_title limit 50;
+SELECT /*vt+ VIEW=doSubjectSearch */  * FROM item, author WHERE item.i_a_id = author.a_id AND item.i_subject = ? ORDER BY item.i_title limit 50;
 
 # doTitleSearch
-# SELECT /*vt+ VIEW=doTitleSearch PUBLIC */  * FROM item, author WHERE item.i_a_id = author.a_id AND substring(soundex(item.i_title),0,4)=substring(soundex(?),0,4) ORDER BY item.i_title limit 50;
-# SELECT /*vt+ VIEW=doTitleSearch PUBLIC */  * FROM item, author WHERE item.i_a_id = author.a_id AND substring(soundex(item.i_title),1,4)=substring(soundex(?),1,4) ORDER BY item.i_title limit 50;
-# SELECT /*vt+ VIEW=doTitleSearch PUBLIC */  * FROM item, author WHERE item.i_a_id = author.a_id AND item.i_title LIKE ? ORDER BY item.i_title limit 50;
+# SELECT /*vt+ VIEW=doTitleSearch */  * FROM item, author WHERE item.i_a_id = author.a_id AND substring(soundex(item.i_title),0,4)=substring(soundex(?),0,4) ORDER BY item.i_title limit 50;
+# SELECT /*vt+ VIEW=doTitleSearch */  * FROM item, author WHERE item.i_a_id = author.a_id AND substring(soundex(item.i_title),1,4)=substring(soundex(?),1,4) ORDER BY item.i_title limit 50;
+# SELECT /*vt+ VIEW=doTitleSearch */  * FROM item, author WHERE item.i_a_id = author.a_id AND item.i_title LIKE ? ORDER BY item.i_title limit 50;
 
 # doAuthorSearch
-# SELECT /*vt+ VIEW=doAuthorSearch PUBLIC */  * FROM author, item WHERE substring(soundex(author.a_lname),0,4)=substring(soundex(?),0,4) AND item.i_a_id = author.a_id ORDER BY item.i_title limit 50;
-# SELECT /*vt+ VIEW=doAuthorSearch PUBLIC */  * FROM author, item WHERE substring(soundex(author.a_lname),1,4)=substring(soundex(?),1,4) AND item.i_a_id = author.a_id ORDER BY item.i_title limit 50;
-# SELECT /*vt+ VIEW=doAuthorSearch PUBLIC */  * FROM author, item WHERE author.a_lname LIKE ? AND item.i_a_id = author.a_id ORDER BY item.i_title limit 50;
+# SELECT /*vt+ VIEW=doAuthorSearch */  * FROM author, item WHERE substring(soundex(author.a_lname),0,4)=substring(soundex(?),0,4) AND item.i_a_id = author.a_id ORDER BY item.i_title limit 50;
+# SELECT /*vt+ VIEW=doAuthorSearch */  * FROM author, item WHERE substring(soundex(author.a_lname),1,4)=substring(soundex(?),1,4) AND item.i_a_id = author.a_id ORDER BY item.i_title limit 50;
+# SELECT /*vt+ VIEW=doAuthorSearch */  * FROM author, item WHERE author.a_lname LIKE ? AND item.i_a_id = author.a_id ORDER BY item.i_title limit 50;
 
 # getNewProducts
-SELECT /*vt+ VIEW=getNewProducts PUBLIC */  i_id, i_title, a_fname, a_lname FROM item, author WHERE item.i_a_id = author.a_id AND item.i_subject = ? ORDER BY item.i_pub_date DESC,item.i_title limit 50;
+SELECT /*vt+ VIEW=getNewProducts */  i_id, i_title, a_fname, a_lname FROM item, author WHERE item.i_a_id = author.a_id AND item.i_subject = ? ORDER BY item.i_pub_date DESC,item.i_title limit 50;
 
 # getBestSellers
-# SELECT /*vt+ VIEW=getBestSellers PUBLIC */  i_id, i_title, a_fname, a_lname FROM item, author, order_line WHERE item.i_id = order_line.ol_i_id AND item.i_a_id = author.a_id AND order_line.ol_o_id > (SELECT MAX(o_id)-3333 FROM orders) AND item.i_subject = ? GROUP BY i_id, i_title, a_fname, a_lname ORDER BY SUM(ol_qty) DESC limit 50;
+# SELECT /*vt+ VIEW=getBestSellers */  i_id, i_title, a_fname, a_lname FROM item, author, order_line WHERE item.i_id = order_line.ol_i_id AND item.i_a_id = author.a_id AND order_line.ol_o_id > (SELECT MAX(o_id)-3333 FROM orders) AND item.i_subject = ? GROUP BY i_id, i_title, a_fname, a_lname ORDER BY SUM(ol_qty) DESC limit 50;
 
 # getRelated
-# SELECT /*vt+ VIEW=getRelated PUBLIC */  J.i_id,J.i_thumbnail from item I, item J where (I.i_related1 = J.i_id or I.i_related2 = J.i_id or I.i_related3 = J.i_id or I.i_related4 = J.i_id or I.i_related5 = J.i_id) and I.i_id = ?;
+# SELECT /*vt+ VIEW=getRelated */  J.i_id,J.i_thumbnail from item I, item J where (I.i_related1 = J.i_id or I.i_related2 = J.i_id or I.i_related3 = J.i_id or I.i_related4 = J.i_id or I.i_related5 = J.i_id) and I.i_id = ?;
 
 # adminUpdate
 # UPDATE item SET i_cost = ?, i_image = ?, i_thumbnail = ?, i_pub_date = CURRENT_DATE WHERE i_id = ?;
 # adminUpdate.related
-# SELECT /*vt+ VIEW=adminUpdateRelated PUBLIC */  ol_i_id FROM orders, order_line WHERE orders.o_id = order_line.ol_o_id AND NOT (order_line.ol_i_id = ?) AND orders.o_c_id IN (SELECT o_c_id FROM orders, order_line WHERE orders.o_id = order_line.ol_o_id AND orders.o_id > (SELECT MAX(o_id)-10000 FROM orders) AND order_line.ol_i_id = ?) GROUP BY ol_i_id ORDER BY SUM(ol_qty) DESC limit 5;
+# SELECT /*vt+ VIEW=adminUpdateRelated */  ol_i_id FROM orders, order_line WHERE orders.o_id = order_line.ol_o_id AND NOT (order_line.ol_i_id = ?) AND orders.o_c_id IN (SELECT o_c_id FROM orders, order_line WHERE orders.o_id = order_line.ol_o_id AND orders.o_id > (SELECT MAX(o_id)-10000 FROM orders) AND order_line.ol_i_id = ?) GROUP BY ol_i_id ORDER BY SUM(ol_qty) DESC limit 5;
 # UPDATE item SET i_related1 = ?, i_related2 = ?, i_related3 = ?, i_related4 = ?, i_related5 = ? WHERE i_id = ?;
 
 # getUserName
-SELECT /*vt+ VIEW=getUserName PUBLIC */  c_uname FROM customer WHERE c_id = ?;
+SELECT /*vt+ VIEW=getUserName */  c_uname FROM customer WHERE c_id = ?;
 
 # getPassword
-SELECT /*vt+ VIEW=getPassword PUBLIC */  c_passwd FROM customer WHERE c_uname = ?;
+SELECT /*vt+ VIEW=getPassword */  c_passwd FROM customer WHERE c_uname = ?;
 
 # getRelated1
-SELECT /*vt+ VIEW=getRelated1 PUBLIC */  i_related1 FROM item where i_id = ?;
+SELECT /*vt+ VIEW=getRelated1 */  i_related1 FROM item where i_id = ?;
 
 # getMostRecentOrder.id
-SELECT /*vt+ VIEW=getMostRecentOrderId PUBLIC */  o_id FROM customer, orders WHERE customer.c_id = orders.o_c_id AND c_uname = ? ORDER BY o_date, orders.o_id DESC limit 1;
+SELECT /*vt+ VIEW=getMostRecentOrderId */  o_id FROM customer, orders WHERE customer.c_id = orders.o_c_id AND c_uname = ? ORDER BY o_date, orders.o_id DESC limit 1;
 
 # getMostRecentOrder.order
-SELECT /*vt+ VIEW=getMostRecentOrderOrder PUBLIC */  orders.*, customer.*, cc_xacts.cx_type, ship.addr_street1 AS ship_addr_street1, ship.addr_street2 AS ship_addr_street2, ship.addr_state AS ship_addr_state, ship.addr_zip AS ship_addr_zip, ship_co.co_name AS ship_co_name, bill.addr_street1 AS bill_addr_street1, bill.addr_street2 AS bill_addr_street2, bill.addr_state AS bill_addr_state, bill.addr_zip AS bill_addr_zip, bill_co.co_name AS bill_co_name FROM customer, orders, cc_xacts, address AS ship, country AS ship_co, bill, bill_co WHERE orders.o_id = ? AND cx_o_id = orders.o_id AND customer.c_id = orders.o_c_id AND orders.o_bill_addr_id = bill.addr_id AND bill.addr_co_id = bill_co.co_id AND orders.o_ship_addr_id = ship.addr_id AND ship.addr_co_id = ship_co.co_id;
+SELECT /*vt+ VIEW=getMostRecentOrderOrder */  orders.*, customer.*, cc_xacts.cx_type, ship.addr_street1 AS ship_addr_street1, ship.addr_street2 AS ship_addr_street2, ship.addr_state AS ship_addr_state, ship.addr_zip AS ship_addr_zip, ship_co.co_name AS ship_co_name, bill.addr_street1 AS bill_addr_street1, bill.addr_street2 AS bill_addr_street2, bill.addr_state AS bill_addr_state, bill.addr_zip AS bill_addr_zip, bill_co.co_name AS bill_co_name FROM customer, orders, cc_xacts, address AS ship, country AS ship_co, bill, bill_co WHERE orders.o_id = ? AND cx_o_id = orders.o_id AND customer.c_id = orders.o_c_id AND orders.o_bill_addr_id = bill.addr_id AND bill.addr_co_id = bill_co.co_id AND orders.o_ship_addr_id = ship.addr_id AND ship.addr_co_id = ship_co.co_id;
 
 # createEmptyCart
-SELECT /*vt+ VIEW=createEmptyCart PUBLIC */  COUNT(*) FROM shopping_cart;
+SELECT /*vt+ VIEW=createEmptyCart */  COUNT(*) FROM shopping_cart;
 # createEmptyCart.insert
 #INSERT into shopping_cart (sc_id, sc_time) VALUES ((SELECT COUNT(*) FROM shopping_cart), CURRENT_TIMESTAMP);
 # createEmptyCart.insert.v2
 #INSERT into shopping_cart (sc_id, sc_time) VALUES (?, CURRENT_TIMESTAMP);
 
 # addItem
-SELECT /*vt+ VIEW=addItem PUBLIC */  scl_qty FROM shopping_cart_line WHERE scl_sc_id = ? AND scl_i_id = ?;
+SELECT /*vt+ VIEW=addItem */  scl_qty FROM shopping_cart_line WHERE scl_sc_id = ? AND scl_i_id = ?;
 # addItem.update
 #UPDATE shopping_cart_line SET scl_qty = ? WHERE scl_sc_id = ? AND scl_i_id = ?;
 # addItem.put
@@ -93,13 +93,13 @@ SELECT /*vt+ VIEW=addItem PUBLIC */  scl_qty FROM shopping_cart_line WHERE scl_s
 #UPDATE shopping_cart_line SET scl_qty = ? WHERE scl_sc_id = ? AND scl_i_id = ?;
 
 # addRandomItemToCartIfNecessary
-SELECT /*vt+ VIEW=addRandomItemToCartIfNecessary PUBLIC */  COUNT(*) from shopping_cart_line where scl_sc_id = ?;
+SELECT /*vt+ VIEW=addRandomItemToCartIfNecessary */  COUNT(*) from shopping_cart_line where scl_sc_id = ?;
 
 # resetCartTime
 #UPDATE shopping_cart SET sc_time = CURRENT_TIMESTAMP WHERE sc_id = ?;
 
 # getCart
-SELECT /*vt+ VIEW=getCart PUBLIC */  * FROM shopping_cart_line, item WHERE scl_i_id = item.i_id AND scl_sc_id = ?;
+SELECT /*vt+ VIEW=getCart */  * FROM shopping_cart_line, item WHERE scl_i_id = item.i_id AND scl_sc_id = ?;
 
 # refreshSession
 #UPDATE customer SET c_login = NOW(), c_expiration = (CURRENT_TIMESTAMP + INTERVAL 2 HOUR) WHERE c_id = ?;
@@ -107,16 +107,16 @@ SELECT /*vt+ VIEW=getCart PUBLIC */  * FROM shopping_cart_line, item WHERE scl_i
 # createNewCustomer
 #INSERT into customer (c_id, c_uname, c_passwd, c_fname, c_lname, c_addr_id, c_phone, c_email, c_since, c_last_login, c_login, c_expiration, c_discount, c_balance, c_ytd_pmt, c_birthdate, c_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 # createNewCustomer.maxId
-SELECT /*vt+ VIEW=createNewCustomerMaxId PUBLIC */  max(c_id) FROM customer;
+SELECT /*vt+ VIEW=createNewCustomerMaxId */  max(c_id) FROM customer;
 
 # getCDiscount
-SELECT /*vt+ VIEW=getCDiscount PUBLIC */  c_discount FROM customer WHERE customer.c_id = ?;
+SELECT /*vt+ VIEW=getCDiscount */  c_discount FROM customer WHERE customer.c_id = ?;
 
 # getCAddrId
-SELECT /*vt+ VIEW=getCAddrId PUBLIC */  c_addr_id FROM customer WHERE customer.c_id = ?;
+SELECT /*vt+ VIEW=getCAddrId */  c_addr_id FROM customer WHERE customer.c_id = ?;
 
 # getCAddr
-SELECT /*vt+ VIEW=getCAddr PUBLIC */  c_addr_id FROM customer WHERE customer.c_id = ?;
+SELECT /*vt+ VIEW=getCAddr */  c_addr_id FROM customer WHERE customer.c_id = ?;
 
 # enterCCXact
 #INSERT into cc_xacts (cx_o_id, cx_type, cx_num, cx_name, cx_expire, cx_xact_amt, cx_xact_date, cx_co_id) VALUES (?, ?, ?, ?, ?, ?, CURRENT_DATE, (SELECT co_id FROM address, country WHERE addr_id = ? AND addr_co_id = co_id));
@@ -125,31 +125,31 @@ SELECT /*vt+ VIEW=getCAddr PUBLIC */  c_addr_id FROM customer WHERE customer.c_i
 #DELETE FROM shopping_cart_line WHERE scl_sc_id = ?;
 
 # enterAddress.id
-SELECT /*vt+ VIEW=enterAddressId PUBLIC */  co_id FROM country WHERE co_name = ?;
+SELECT /*vt+ VIEW=enterAddressId */  co_id FROM country WHERE co_name = ?;
 # enterAddress.match
-# SELECT /*vt+ VIEW=enterAddressMatch PUBLIC */  addr_id FROM address WHERE addr_street1 = ? AND addr_street2 = ? AND addr_city = ? AND addr_state = ? AND addr_zip = ? AND addr_co_id = ?;
+# SELECT /*vt+ VIEW=enterAddressMatch */  addr_id FROM address WHERE addr_street1 = ? AND addr_street2 = ? AND addr_city = ? AND addr_state = ? AND addr_zip = ? AND addr_co_id = ?;
 # enterAddress.insert
 #INSERT into address (addr_id, addr_street1, addr_street2, addr_city, addr_state, addr_zip, addr_co_id) VALUES (?, ?, ?, ?, ?, ?, ?);
 # enterAddress.maxId
-SELECT /*vt+ VIEW=enterAddressMaxId PUBLIC */  max(addr_id) FROM address;
+SELECT /*vt+ VIEW=enterAddressMaxId */  max(addr_id) FROM address;
 
 # enterOrder.insert
 #INSERT into orders (o_id, o_c_id, o_date, o_sub_total, o_tax, o_total, o_ship_type, o_ship_date, o_bill_addr_id, o_ship_addr_id, o_status) VALUES (?, ?, CURRENT_DATE, ?, 8.25, ?, ?, CURRENT_DATE + INTERVAL ? DAY, ?, ?, 'Pending');
 # enterOrder.maxId
-SELECT /*vt+ VIEW=enterOrderMaxId PUBLIC */  count(o_id) FROM orders;
+SELECT /*vt+ VIEW=enterOrderMaxId */  count(o_id) FROM orders;
 
 # addOrderLine
 #INSERT into order_line (ol_id, ol_o_id, ol_i_id, ol_qty, ol_discount, ol_comments) VALUES (?, ?, ?, ?, ?, ?);
 
 # getStock
-SELECT /*vt+ VIEW=getStock PUBLIC */  i_stock FROM item WHERE i_id = ?;
+SELECT /*vt+ VIEW=getStock */  i_stock FROM item WHERE i_id = ?;
 
 # setStock
 #UPDATE item SET i_stock = ? WHERE i_id = ?;
 
 # verifyDBConsistency.custId
-SELECT /*vt+ VIEW=verifyDBConsistencyCustId PUBLIC */  c_id FROM customer;
+SELECT /*vt+ VIEW=verifyDBConsistencyCustId */  c_id FROM customer;
 # verifyDBConsistency.itemId
-SELECT /*vt+ VIEW=verifyDBConsistencyItemId PUBLIC */  i_id FROM item;
+SELECT /*vt+ VIEW=verifyDBConsistencyItemId */  i_id FROM item;
 # verifyDBConsistency.addrId
-SELECT /*vt+ VIEW=verifyDBConsistencyAddrId PUBLIC */  addr_id FROM address;
+SELECT /*vt+ VIEW=verifyDBConsistencyAddrId */  addr_id FROM address;

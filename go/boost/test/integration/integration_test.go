@@ -62,8 +62,8 @@ func TestBasic(t *testing.T) {
 func testBasic(t *testing.T, g *boosttest.Cluster) {
 	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
-		a := mig.AddBase("a", []string{"a", "b"}, flownode.NewBase([]int{0}, schema, nil))
-		b := mig.AddBase("b", []string{"a", "b"}, flownode.NewBase([]int{0}, schema, nil))
+		a := mig.AddBase("a", []string{"a", "b"}, flownode.NewBase("a", []int{0}, schema))
+		b := mig.AddBase("b", []string{"a", "b"}, flownode.NewBase("b", []int{0}, schema))
 
 		emits := map[graph.NodeIdx][]int{
 			a: {0, 1},
@@ -71,7 +71,7 @@ func testBasic(t *testing.T, g *boosttest.Cluster) {
 		}
 		u := flownode.NewUnion(emits)
 		c := mig.AddIngredient("c", []string{"a", "b"}, u, nil)
-		mig.MaintainAnonymous(c, []int{0})
+		mig.Maintain("", "c", c, []int{0}, nil, 0)
 		return nil
 	})
 	require.NoError(t, err, "migration failed")
@@ -105,8 +105,8 @@ func testShardedSuffle(t *testing.T, g *boosttest.Cluster) {
 	// that that shuffle happens correctly.
 	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
-		a := mig.AddBase("base", []string{"id", "non_id"}, flownode.NewBase([]int{0}, schema, nil))
-		mig.MaintainAnonymous(a, []int{1})
+		a := mig.AddBase("base", []string{"id", "non_id"}, flownode.NewBase("base", []int{0}, schema))
+		mig.Maintain("", "base", a, []int{1}, nil, 0)
 		return nil
 	})
 	require.NoError(t, err)
@@ -162,15 +162,15 @@ func testBroadRecursingSubquery(t *testing.T, g *boosttest.Cluster) {
 		schemaX := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64, sqltypes.Int64)
 		schemaY := boostpb.TestSchema(sqltypes.Int64)
 
-		x := mig.AddBase("base_x", []string{"base_col", "join_col", "reader_col"}, flownode.NewBase([]int{0}, schemaX, nil))
-		y := mig.AddBase("base_y", []string{"id"}, flownode.NewBase([]int{0}, schemaY, nil))
+		x := mig.AddBase("base_x", []string{"base_col", "join_col", "reader_col"}, flownode.NewBase("base_x", []int{0}, schemaX))
+		y := mig.AddBase("base_y", []string{"id"}, flownode.NewBase("base_y", []int{0}, schemaY))
 
 		join := mig.AddIngredient("join", []string{"base_col", "join_col", "reader_col"},
 			flownode.NewJoin(x, y, flownode.JoinTypeOuter,
 				[2]int{1, 0},
 				[][2]int{{0, -1}, {1, 0}, {2, -1}}), nil)
 
-		mig.Maintain("reader", join, []int{2}, []boostpb.ViewParameter{{Name: "k0"}}, 0)
+		mig.Maintain("", "reader", join, []int{2}, nil, 0)
 		return nil
 	})
 	require.NoError(t, err)
@@ -209,15 +209,15 @@ func TestShardedInterdomainAncestors(t *testing.T) {
 
 	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
-		a := mig.AddBase("a", []string{"a", "b"}, flownode.NewBase(nil, schema, nil))
+		a := mig.AddBase("a", []string{"a", "b"}, flownode.NewBase("a", nil, schema))
 
 		u1 := flownode.NewUnion(map[graph.NodeIdx][]int{a: {0, 1}})
 		b := mig.AddIngredient("b", []string{"a", "b"}, u1, nil)
-		mig.MaintainAnonymous(b, []int{0})
+		mig.Maintain("", "b", b, []int{0}, nil, 0)
 
 		u2 := flownode.NewUnion(map[graph.NodeIdx][]int{a: {0, 1}})
 		c := mig.AddIngredient("c", []string{"a", "b"}, u2, nil)
-		mig.MaintainAnonymous(c, []int{0})
+		mig.Maintain("", "c", c, []int{0}, nil, 0)
 
 		return nil
 	})
@@ -245,14 +245,14 @@ func TestWithMaterialization(t *testing.T) {
 
 	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
-		a := mig.AddBase("a", []string{"a", "b"}, flownode.NewBase(nil, schema, nil))
-		b := mig.AddBase("b", []string{"a", "b"}, flownode.NewBase(nil, schema, nil))
+		a := mig.AddBase("a", []string{"a", "b"}, flownode.NewBase("a", nil, schema))
+		b := mig.AddBase("b", []string{"a", "b"}, flownode.NewBase("b", nil, schema))
 		u := flownode.NewUnion(map[graph.NodeIdx][]int{
 			a: {0, 1},
 			b: {0, 1},
 		})
 		c := mig.AddIngredient("c", []string{"a", "b"}, u, nil)
-		mig.MaintainAnonymous(c, []int{0})
+		mig.Maintain("", "c", c, []int{0}, nil, 0)
 		return nil
 	})
 	require.NoError(t, err)
@@ -298,8 +298,8 @@ func TestWithPartialMaterialization(t *testing.T) {
 
 	err := g.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
-		a = mig.AddBase("a", []string{"a", "b"}, flownode.NewBase(nil, schema, nil))
-		b = mig.AddBase("b", []string{"a", "b"}, flownode.NewBase(nil, schema, nil))
+		a = mig.AddBase("a", []string{"a", "b"}, flownode.NewBase("a", nil, schema))
+		b = mig.AddBase("b", []string{"a", "b"}, flownode.NewBase("b", nil, schema))
 		return nil
 	})
 	require.NoError(t, err)
@@ -317,7 +317,7 @@ func TestWithPartialMaterialization(t *testing.T) {
 			b: {0, 1},
 		})
 		c := mig.AddIngredient("c", []string{"a", "b"}, u, nil)
-		mig.MaintainAnonymous(c, []int{0})
+		mig.Maintain("", "c", c, []int{0}, nil, 0)
 		return nil
 	})
 	require.NoError(t, err)

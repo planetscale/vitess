@@ -233,6 +233,13 @@ func (m *Materialization_ViewDescriptor) MarshalToSizedBufferVT(dAtA []byte) (in
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.PublicId) > 0 {
+		i -= len(m.PublicId)
+		copy(dAtA[i:], m.PublicId)
+		i = encodeVarint(dAtA, i, uint64(len(m.PublicId)))
+		i--
+		dAtA[i] = 0x4a
+	}
 	if m.TopkLimit != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.TopkLimit))
 		i--
@@ -309,13 +316,6 @@ func (m *Materialization_ViewDescriptor) MarshalToSizedBufferVT(dAtA []byte) (in
 		i = encodeVarint(dAtA, i, uint64(m.Node))
 		i--
 		dAtA[i] = 0x10
-	}
-	if len(m.Name) > 0 {
-		i -= len(m.Name)
-		copy(dAtA[i:], m.Name)
-		i = encodeVarint(dAtA, i, uint64(len(m.Name)))
-		i--
-		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -2014,10 +2014,6 @@ func (m *Materialization_ViewDescriptor) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Name)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
 	if m.Node != 0 {
 		n += 1 + sov(uint64(m.Node))
 	}
@@ -2051,6 +2047,10 @@ func (m *Materialization_ViewDescriptor) SizeVT() (n int) {
 	}
 	if m.TopkLimit != 0 {
 		n += 1 + sov(uint64(m.TopkLimit))
+	}
+	l = len(m.PublicId)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -3213,38 +3213,6 @@ func (m *Materialization_ViewDescriptor) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: Materialization_ViewDescriptor: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Name = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Node", wireType)
@@ -3529,6 +3497,38 @@ func (m *Materialization_ViewDescriptor) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PublicId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PublicId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
