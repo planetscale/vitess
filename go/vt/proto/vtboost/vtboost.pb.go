@@ -870,6 +870,7 @@ type DescribeRecipeRequest struct {
 
 	Uuid string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
 	// Types that are assignable to Request:
+	//
 	//	*DescribeRecipeRequest_Graphviz
 	Request isDescribeRecipeRequest_Request `protobuf_oneof:"request"`
 }
@@ -943,6 +944,7 @@ type DescribeRecipeResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*DescribeRecipeResponse_Graphviz
 	Response isDescribeRecipeResponse_Response `protobuf_oneof:"response"`
 }

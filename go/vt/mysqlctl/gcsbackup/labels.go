@@ -79,8 +79,7 @@ func load(path string) (*labels, error) {
 //
 // Usage:
 //
-//   split("a,, b,c ") // => {"a", "b", "c"}
-//
+//	split("a,, b,c ") // => {"a", "b", "c"}
 func split(str string) (ret []string) {
 	for _, part := range strings.Split(str, ",") {
 		if part := strings.TrimSpace(part); part != "" {
