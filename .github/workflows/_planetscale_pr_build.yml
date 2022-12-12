@@ -96,7 +96,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.18.7
+          go-version: 1.19.4
 
       - name: Set credentials for private go deps
         env:
