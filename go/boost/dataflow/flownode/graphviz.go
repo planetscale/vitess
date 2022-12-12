@@ -74,9 +74,9 @@ func (n *Node) RenderGraphviz(gvz *graphviz.Node, options GraphvizOptions) {
 		gvz.Row(addr, "(dropped)")
 		return
 	case *Base:
-		gvz.Row(addr, graphviz.Fmt("<B>%s</B>", n.Name), materialized)
+		gvz.Row(addr, graphviz.Fmt("<B>%s</B>", impl.Table()), materialized)
 	case *ExternalBase:
-		gvz.Row(addr, graphviz.Fmt("<B>%s</B> <I>(external)</I>", n.Name))
+		gvz.Row(addr, graphviz.Fmt("%s.<B>%s</B> <I>(external)</I>", impl.Keyspace(), impl.Table()))
 		gvz.Row(impl.keyspace)
 	case *Ingress:
 		gvz.Row(addr, materialized)
@@ -94,10 +94,10 @@ func (n *Node) RenderGraphviz(gvz *graphviz.Node, options GraphvizOptions) {
 		} else {
 			key = fmt.Sprintf("%v", impl.Key())
 		}
-		gvz.Row(addr, graphviz.Fmt("<B>%s</B>", n.Name), materialized)
+		gvz.Row(addr, graphviz.Fmt("<B>%s</B>", impl.PublicID()), materialized)
 		gvz.Row("(reader / ⚷: " + key + ")")
 	case Internal:
-		gvz.Row(addr, n.Name, materialized)
+		gvz.Row(addr, n.name, materialized)
 		gvz.Row(graphviz.Fmt("<FONT POINT-SIZE=\"10\">%s</FONT>", impl.Description()))
 	}
 

@@ -35,7 +35,7 @@ message Materialization {
   };
 
   message ViewDescriptor {
-    string name = 1;
+    reserved 1; // was: name
     uint32 node = 2;
     repeated query.Field schema = 3;
     repeated query.Field key_schema = 4;
@@ -44,6 +44,7 @@ message Materialization {
     repeated int64 topk_order_cols = 6;
     repeated bool topk_order_desc = 7;
     int64 topk_limit = 8;
+    string public_id = 9;
   };
 };
 

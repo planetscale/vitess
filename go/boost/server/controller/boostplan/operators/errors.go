@@ -43,6 +43,7 @@ const (
 	MultipleIn
 	Aggregation
 	NoFullGroupBy
+	NoExtremum
 )
 
 type (
@@ -135,6 +136,8 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "group aggregation function '%s' is not supported", sqlparser.CanonicalString(n.AST))
 	case NoFullGroupBy:
 		fmt.Fprintf(&sb, "non aggregated column '%s' is not part of group by", sqlparser.CanonicalString(n.AST))
+	case NoExtremum:
+		fmt.Fprintf(&sb, "MIN() / MAX() is currently not supported: %s", sqlparser.CanonicalString(n.AST))
 	}
 
 	return sb.String()

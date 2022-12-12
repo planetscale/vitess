@@ -20,8 +20,8 @@ func TestEndtoendBasicWithExternalBase(t *testing.T) {
 
 	err := tt.BoostTestCluster.Controller().Migrate(context.Background(), func(mig controller.Migration) error {
 		schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64)
-		a := mig.AddBase("a", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, tt.Keyspace))
-		b := mig.AddBase("b", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, tt.Keyspace))
+		a := mig.AddBase("a", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, tt.Keyspace, "a"))
+		b := mig.AddBase("b", []string{"c1", "c2"}, flownode.NewExternalBase([]int{0}, schema, tt.Keyspace, "b"))
 
 		emits := map[graph.NodeIdx][]int{
 			a: {0, 1},
@@ -29,7 +29,7 @@ func TestEndtoendBasicWithExternalBase(t *testing.T) {
 		}
 		u := flownode.NewUnion(emits)
 		c := mig.AddIngredient("c", []string{"c1", "c2"}, u, nil)
-		mig.MaintainAnonymous(c, []int{0})
+		mig.Maintain("", "c", c, []int{0}, nil, 0)
 		return nil
 	})
 	require.NoError(t, err, "migration failed")

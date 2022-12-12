@@ -39,7 +39,7 @@ create table region (r_regionkey int, r_name char(25),
 
 # Q01
 # param 1: "DELTA", randomly selected within [60, 120].
-select /*vt+ VIEW=query_01 PUBLIC */ 
+select /*vt+ VIEW=query_01 */ 
               l_returnflag,
               l_linestatus,
               sum(l_quantity) as sum_qty,
@@ -66,7 +66,7 @@ select /*vt+ VIEW=query_01 PUBLIC */
 # param 2: "TYPE", randomly selected within the list [TIN, NICKEL, BRASS, STEEL, COPPER].
 # param 3: "REGION", randomly selected from region names.
 # param 4: "REGION", identical to param 3.
-select /*vt+ VIEW=query_02 PUBLIC */ 
+select /*vt+ VIEW=query_02 */ 
               s_acctbal,
               s_name,
               n_name,
@@ -114,7 +114,7 @@ select /*vt+ VIEW=query_02 PUBLIC */
 # param 1: "SEGMENT", randomly selected from [AUTOMOBILE, BUILDING, FURNITURE, MACHINERY, HOUSEHOLD].
 # param 2: "DATE", randomly selected day within [1995-03-01 .. 1995-03-31].
 # param 3: "DATE", identical to param 3.
-select /*vt+ VIEW=query_03 PUBLIC */ 
+select /*vt+ VIEW=query_03 */ 
               l_orderkey,
               sum(l_extendedprice * (1 - l_discount)) as revenue,
               o_orderdate,
@@ -140,7 +140,7 @@ select /*vt+ VIEW=query_03 PUBLIC */
 # Q04
 # param 1: "DATE", the first day of a randomly selected month between the first month of 1993 and the 10th month of 1997.
 # param 2: "DATE", identical to param 1.
-select /*vt+ VIEW=query_04 PUBLIC */ 
+select /*vt+ VIEW=query_04 */ 
               o_orderpriority,
               count(*) as order_count
           from
@@ -166,7 +166,7 @@ select /*vt+ VIEW=query_04 PUBLIC */
 # param 1: "REGION", randomly selected from region names.
 # param 2: "DATE", first of January of a randomly selected year within [1993 .. 1997].
 # param 3: "DATE", identical to param 2.
-select /*vt+ VIEW=query_05 PUBLIC */ 
+select /*vt+ VIEW=query_05 */ 
               n_name,
               sum(l_extendedprice * (1 - l_discount)) as revenue
           from
@@ -197,7 +197,7 @@ select /*vt+ VIEW=query_05 PUBLIC */
 # param 3: "DISCOUNT", randomly selected within [0.02 .. 0.09].
 # param 4: "DISCOUNT", identical to param 3.
 # param 5: "QUANTITY", randomly selected within [24 .. 25].
-select /*vt+ VIEW=query_06 PUBLIC */ 
+select /*vt+ VIEW=query_06 */ 
               sum(l_extendedprice * l_discount) as revenue
           from
               lineitem
@@ -212,7 +212,7 @@ select /*vt+ VIEW=query_06 PUBLIC */
 # param 2: "NATION2", randomly selected from nation names, but different from param 1.
 # param 3: "NATION1", identical to param 1.
 # param 4: "NATION2", identical to param 2.
-select /*vt+ VIEW=query_07 PUBLIC */ 
+select /*vt+ VIEW=query_07 */ 
               supp_nation,
               cust_nation,
               l_year,
@@ -256,7 +256,7 @@ select /*vt+ VIEW=query_07 PUBLIC */
 # param 1: "NATION", randomly selected from nation names.
 # param 2: "REGION", the region for the nation in param 1.
 # param 3: "TYPE", random 3-syllable string from possible types (§4.2.2.13).
-select /*vt+ VIEW=query_08 PUBLIC */ 
+select /*vt+ VIEW=query_08 */ 
               o_year,
               sum(case
                       when nation = '?' then volume
@@ -296,7 +296,7 @@ select /*vt+ VIEW=query_08 PUBLIC */
 
 # Q09
 # param 1: randomly selected from permissible components of p_name in parts.
-select /*vt+ VIEW=query_09 PUBLIC */ 
+select /*vt+ VIEW=query_09 */ 
               nation,
               o_year,
               sum(amount) as sum_profit
@@ -332,7 +332,7 @@ select /*vt+ VIEW=query_09 PUBLIC */
 # Q10
 # param 1: "DATE", the first day of a randomly selected month from the second month of 1993 to the first month of 1995.
 # param 2: "DATE", identical to param 1.
-select /*vt+ VIEW=query_10 PUBLIC */ 
+select /*vt+ VIEW=query_10 */ 
               c_custkey,
               c_name,
               sum(l_extendedprice * (1 - l_discount)) as revenue,
@@ -368,7 +368,7 @@ select /*vt+ VIEW=query_10 PUBLIC */
 # param 1: "NATION", randomly selected from nation names.
 # param 2: "FRACTION", chosen as 0.0001 / SF.
 # param 3: "NATION", identical to param 1.
-select /*vt+ VIEW=query_11 PUBLIC */ 
+select /*vt+ VIEW=query_11 */ 
               ps_partkey,
               sum(ps_supplycost * ps_availqty) as value
           from
@@ -397,7 +397,7 @@ select /*vt+ VIEW=query_11 PUBLIC */
               value desc;
 
 # Q12
-select /*vt+ VIEW=query_12 PUBLIC */ 
+select /*vt+ VIEW=query_12 */ 
               l_shipmode,
               sum(case
                       when o_orderpriority = '1-URGENT'
@@ -427,7 +427,7 @@ select /*vt+ VIEW=query_12 PUBLIC */
               l_shipmode;
 
 # Q13
-select /*vt+ VIEW=query_13 PUBLIC */ 
+select /*vt+ VIEW=query_13 */ 
               c_count,
               count(*) as custdist
           from
@@ -449,7 +449,7 @@ select /*vt+ VIEW=query_13 PUBLIC */
               c_count desc;
 
 # Q14
-select /*vt+ VIEW=query_14 PUBLIC */ 
+select /*vt+ VIEW=query_14 */ 
                       100.00 * sum(case
                                        when p_type like 'PROMO%'
                                            then l_extendedprice * (1 - l_discount)
@@ -465,7 +465,7 @@ select /*vt+ VIEW=query_14 PUBLIC */
 
 # Q15
 # create view revenue:s (supplier_no, total_revenue) as
-select /*vt+ VIEW=revenue_s PUBLIC */
+select /*vt+ VIEW=revenue_s */
                l_suppkey,
                sum(l_extendedprice * (1 - l_discount))
            from
@@ -476,7 +476,7 @@ select /*vt+ VIEW=revenue_s PUBLIC */
            group by
                l_suppkey;
 # actual query
-select /*vt+ VIEW=query_15 PUBLIC */ 
+select /*vt+ VIEW=query_15 */ 
               s_suppkey,
               s_name,
               s_address,
@@ -497,7 +497,7 @@ select /*vt+ VIEW=query_15 PUBLIC */
               s_suppkey;
 
 # Q16
-select /*vt+ VIEW=query_16 PUBLIC */ 
+select /*vt+ VIEW=query_16 */ 
               p_brand,
               p_type,
               p_size,
@@ -529,7 +529,7 @@ select /*vt+ VIEW=query_16 PUBLIC */
               p_size;
 
 # Q17
-select /*vt+ VIEW=query_17 PUBLIC */ 
+select /*vt+ VIEW=query_17 */ 
                   sum(l_extendedprice) / 7.0 as avg_yearly
           from
               lineitem,
@@ -548,7 +548,7 @@ select /*vt+ VIEW=query_17 PUBLIC */
           );
 
 # Q18
-select /*vt+ VIEW=query_18 PUBLIC */ 
+select /*vt+ VIEW=query_18 */ 
               c_name,
               c_custkey,
               o_orderkey,
@@ -582,7 +582,7 @@ select /*vt+ VIEW=query_18 PUBLIC */
               o_orderdate;
 
 # Q19
-select /*vt+ VIEW=query_19 PUBLIC */ 
+select /*vt+ VIEW=query_19 */ 
               sum(l_extendedprice* (1 - l_discount)) as revenue
           from
               lineitem,
@@ -619,7 +619,7 @@ select /*vt+ VIEW=query_19 PUBLIC */
                   );
 
 # Q20
-select /*vt+ VIEW=query_20 PUBLIC */ 
+select /*vt+ VIEW=query_20 */ 
               s_name,
               s_address
           from
@@ -658,7 +658,7 @@ select /*vt+ VIEW=query_20 PUBLIC */
               s_name;
 
 # Q21
-select /*vt+ VIEW=query_21 PUBLIC */ 
+select /*vt+ VIEW=query_21 */ 
               s_name,
               count(*) as numwait
           from
@@ -699,7 +699,7 @@ select /*vt+ VIEW=query_21 PUBLIC */
               s_name;
 
 # Q22
-select /*vt+ VIEW=query_22 PUBLIC */ 
+select /*vt+ VIEW=query_22 */ 
               cntrycode,
               count(*) as numcust,
               sum(c_acctbal) as totacctbal

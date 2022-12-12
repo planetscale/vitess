@@ -12,7 +12,7 @@ import (
 func TestDistinct(t *testing.T) {
 	setup := func(t *testing.T, materialized bool) *MockGraph {
 		g := NewMockGraph(t)
-		s := g.AddBase("source", []string{"x", "y", "z"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.Int64), nil)
+		s := g.AddBase("source", []string{"x", "y", "z"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.Int64))
 		g.SetOp(
 			"distinct",
 			[]string{"x", "y", "z"},

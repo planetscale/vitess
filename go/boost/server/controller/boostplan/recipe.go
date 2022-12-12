@@ -1,6 +1,7 @@
 package boostplan
 
 import (
+	"errors"
 	"fmt"
 
 	"golang.org/x/exp/slices"
@@ -10,12 +11,13 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-type QueryID uint64
+// QueryHash is a 64 bit hash that uniquely represents a query
+type QueryHash uint64
 
 type Recipe struct {
-	expressions map[QueryID]*CachedQuery
-	aliases     map[string]QueryID
-	sorted      []QueryID
+	expressions       map[QueryHash]*CachedQuery
+	queriesByPublicID map[string]QueryHash
+	sorted            []QueryHash
 }
 
 func (r *Recipe) AddQuery(query *vtboostpb.CachedQuery) error {
@@ -30,65 +32,38 @@ func (r *Recipe) AddQuery(query *vtboostpb.CachedQuery) error {
 		return &UnsupportedQueryTypeError{Query: stmt}
 	}
 
+	if query.PublicId == "" {
+		return errors.New("missing query public id")
+	}
+
 	var newQuery = &CachedQuery{
 		CachedQuery: query,
 		Statement:   stmt,
 	}
 
-	qid := newQuery.hash()
-	if _, ok := r.expressions[qid]; ok {
+	qh := newQuery.hash()
+	if _, ok := r.expressions[qh]; ok {
 		return nil
 	}
-	if newQuery.Name != "" {
-		if existingqid, ok := r.aliases[newQuery.Name]; ok {
-			if existingqid != qid {
-				return fmt.Errorf("a query named %q already exists", newQuery.Name)
-			}
-		}
-		r.aliases[newQuery.Name] = qid
-	}
-
-	r.expressions[qid] = newQuery
-	r.sorted = append(r.sorted, qid)
-	return nil
-}
-
-func (r *Recipe) RemoveQueryByPublicID(public string) error {
-	for qid, expr := range r.expressions {
-		if expr.PublicId == public {
-			delete(r.expressions, qid)
-			if expr.Name != "" {
-				delete(r.aliases, expr.Name)
-			}
-			if idx := slices.Index(r.sorted, qid); idx >= 0 {
-				r.sorted = slices.Delete(r.sorted, idx, idx+1)
-			}
-			return nil
+	if existingqid, ok := r.queriesByPublicID[newQuery.PublicId]; ok {
+		if existingqid != qh {
+			return fmt.Errorf("a query with public id %q already exists", newQuery.PublicId)
 		}
 	}
-	return &UnknownPublicIDError{PublicID: public}
-}
+	r.queriesByPublicID[newQuery.PublicId] = qh
 
-func (r *Recipe) RemoveQueryByName(name string) error {
-	qid, ok := r.aliases[name]
-	if !ok {
-		return &UnknownQueryError{Name: name}
-	}
-	delete(r.aliases, name)
-	delete(r.expressions, qid)
-	if idx := slices.Index(r.sorted, qid); idx >= 0 {
-		r.sorted = slices.Delete(r.sorted, idx, idx+1)
-	}
+	r.expressions[qh] = newQuery
+	r.sorted = append(r.sorted, qh)
 	return nil
 }
 
 func (r *Recipe) Reset() {
-	r.expressions = make(map[QueryID]*CachedQuery)
-	r.aliases = make(map[string]QueryID)
+	r.expressions = make(map[QueryHash]*CachedQuery)
+	r.queriesByPublicID = make(map[string]QueryHash)
 	r.sorted = nil
 }
 
-func (r *Recipe) ComputeDelta(other *Recipe) (added []QueryID, removed []QueryID, unchanged []QueryID) {
+func (r *Recipe) ComputeDelta(other *Recipe) (added []QueryHash, removed []QueryHash, unchanged []QueryHash) {
 	for _, qid := range r.sorted {
 		if _, contains := other.expressions[qid]; !contains {
 			added = append(added, qid)
@@ -104,22 +79,7 @@ func (r *Recipe) ComputeDelta(other *Recipe) (added []QueryID, removed []QueryID
 	return
 }
 
-func (r *Recipe) ResolveAlias(name string) (string, bool) {
-	if qid, ok := r.aliases[name]; ok {
-		rq := r.expressions[qid]
-		return rq.Name, true
-	}
-	return "", false
-}
-
-func (r *Recipe) GetExpressionByName(name string) (sqlparser.Statement, bool) {
-	if qid, ok := r.aliases[name]; ok {
-		return r.expressions[qid].Statement, true
-	}
-	return nil, false
-}
-
-func (r *Recipe) GetQuery(qid QueryID) *CachedQuery {
+func (r *Recipe) GetQuery(qid QueryHash) *CachedQuery {
 	return r.expressions[qid]
 }
 
@@ -156,8 +116,8 @@ func NewRecipeFromProto(queriespb []*vtboostpb.CachedQuery) (*Recipe, error) {
 
 func newRecipe() *Recipe {
 	return &Recipe{
-		expressions: make(map[QueryID]*CachedQuery),
-		aliases:     make(map[string]QueryID),
+		expressions:       make(map[QueryHash]*CachedQuery),
+		queriesByPublicID: make(map[string]QueryHash),
 	}
 }
 
@@ -166,8 +126,8 @@ type CachedQuery struct {
 	Statement sqlparser.Statement
 }
 
-func (c *CachedQuery) hash() QueryID {
+func (c *CachedQuery) hash() QueryHash {
 	var buf = sqlparser.NewTrackedBuffer(nil)
 	buf.WriteNode(c.Statement)
-	return QueryID(hack.RuntimeStrhash(buf.String(), 0x1234))
+	return QueryHash(hack.RuntimeStrhash(buf.String(), 0x1234))
 }

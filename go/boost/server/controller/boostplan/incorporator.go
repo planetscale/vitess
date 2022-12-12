@@ -37,29 +37,29 @@ func (inc *Incorporator) SetReuse(r boostpb.ReuseType) {
 	inc.reuseType = r
 }
 
-func (inc *Incorporator) AddParsedQuery(keyspace string, stmt sqlparser.Statement, name string, isLeaf bool, mig Migration, si *SchemaInformation) (QFP, error) {
-	if name == "" {
-		name = fmt.Sprintf("query_%d", len(inc.leafs))
+func (inc *Incorporator) AddParsedQuery(keyspace string, stmt sqlparser.Statement, id string, mig Migration, si *SchemaInformation) (QFP, error) {
+	if id == "" {
+		return nil, fmt.Errorf("missing ID for parsed query")
 	}
 
 	switch stmt.(type) {
 	case sqlparser.SelectStatement:
-		return inc.addSelectQuery(keyspace, name, stmt, mig, si)
+		return inc.addSelectQuery(keyspace, id, stmt, mig, si)
 	default:
 		return nil, &UnsupportedQueryTypeError{Query: stmt}
 	}
 }
 
-func (inc *Incorporator) addSelectQuery(keyspace, name string, sel sqlparser.Statement, mig Migration, si *SchemaInformation) (*operators.QueryFlowParts, error) {
-	view, tr, err := inc.converter.Plan(si.Schema, si.Semantics(keyspace), sel, keyspace, name)
+func (inc *Incorporator) addSelectQuery(keyspace, id string, sel sqlparser.Statement, mig Migration, si *SchemaInformation) (*operators.QueryFlowParts, error) {
+	view, tr, err := inc.converter.Plan(si.Schema, si.Semantics(keyspace), sel, keyspace, id)
 	if err != nil {
 		return nil, err
 	}
 
 	q := &operators.Query{
-		Name:  name,
-		Roots: view.Roots(),
-		View:  view,
+		PublicID: id,
+		Roots:    view.Roots(),
+		View:     view,
 	}
 
 	qfp, err := queryToFlowParts(mig, tr, q)
@@ -67,7 +67,7 @@ func (inc *Incorporator) addSelectQuery(keyspace, name string, sel sqlparser.Sta
 		return nil, err
 	}
 
-	inc.leafs[name] = q
+	inc.leafs[id] = q
 	return qfp, nil
 }
 
@@ -75,13 +75,13 @@ func (inc *Incorporator) UpgradeSchema(newVersion int64) {
 	inc.converter.UpgradeSchema(newVersion)
 }
 
-func (inc *Incorporator) RemoveQuery(name string) graph.NodeIdx {
-	query, ok := inc.leafs[name]
+func (inc *Incorporator) RemoveQuery(id string) graph.NodeIdx {
+	query, ok := inc.leafs[id]
 	if !ok {
 		return graph.InvalidNode
 	}
-	delete(inc.leafs, name)
-	inc.converter.RemoveQuery(name)
+	delete(inc.leafs, id)
+	inc.converter.RemoveQueryByPublicID(id)
 
 	for _, nid := range inc.leafs {
 		if nid.Leaf() == query.Leaf() {
@@ -94,14 +94,6 @@ func (inc *Incorporator) RemoveQuery(name string) graph.NodeIdx {
 
 func (inc *Incorporator) EnableReuse(reuse boostpb.ReuseType) {
 	inc.reuseType = reuse
-}
-
-func (inc *Incorporator) GetQueryAddress(name string) (graph.NodeIdx, bool) {
-	if na, ok := inc.leafs[name]; ok {
-		return na.Leaf(), true
-	}
-
-	return inc.converter.GetView(name)
 }
 
 func (inc *Incorporator) IsLeafAddress(ni graph.NodeIdx) bool {

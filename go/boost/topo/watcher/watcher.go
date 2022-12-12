@@ -558,7 +558,7 @@ func (ac *clusterClient) updateMaterializations(leader vtboostpb.DRPCControllerS
 		if err != nil {
 			continue
 		}
-		view.CollectMetrics(m.Query.PublicId, ac.hitrate)
+		view.CollectMetrics(ac.hitrate)
 		hashedQuery := hashMaterializedQuery(m.Query.Keyspace, m.NormalizedSql)
 		res[hashedQuery] = &cachedMaterialization{
 			view:              view,

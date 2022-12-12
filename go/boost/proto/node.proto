@@ -59,8 +59,9 @@ message Node {
   Sharding sharding = 10;
 
   message Base {
-    repeated int64 primary_key = 1 [(gogoproto.casttype) = "int"];
-    repeated int64 dropped = 2 [(gogoproto.casttype) = "int"];
+    string table = 1;
+    repeated int64 primary_key = 2 [(gogoproto.casttype) = "int"];
+    repeated int64 dropped = 3 [(gogoproto.casttype) = "int"];
     bool unmodified = 4;
     repeated Type schema = 5 [(gogoproto.nullable) = false];
   };
@@ -68,16 +69,18 @@ message Node {
   message ExternalBase {
     repeated int64 primary_key = 1 [(gogoproto.casttype) = "int"];
     string keyspace = 2;
-    repeated Type schema = 3 [(gogoproto.nullable) = false];
+    string table = 3;
+    repeated Type schema = 4 [(gogoproto.nullable) = false];
   };
 
   message Ingress {};
   message Egress {};
 
   message Reader {
-    uint32 for_node = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
-    repeated int64 state = 2 [(gogoproto.casttype) = "int"];
-    repeated ViewParameter parameters = 3 [(gogoproto.nullable) = false];
+    string public_id = 1;
+    uint32 for_node = 2 [(gogoproto.casttype) = "GraphNodeIdx"];
+    repeated int64 state = 3 [(gogoproto.casttype) = "int"];
+    repeated ViewParameter parameters = 4 [(gogoproto.nullable) = false];
 
     repeated OrderedColumn topk_order = 5 [(gogoproto.nullable) = false];
     int64 topk_limit = 6 [(gogoproto.casttype) = "int"];

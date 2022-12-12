@@ -64,7 +64,7 @@ func (ep *EvictionPlan) MarshalJSON() ([]byte, error) {
 		MemPerShard []int64 `json:"memory_per_shard,omitempty"`
 	}
 	type jsonQuery struct {
-		Name      string      `json:"name"`
+		PublicID  string      `json:"public_id"`
 		SQL       string      `json:"sql"`
 		MaxMemory int64       `json:"max_memory"`
 		CurMemory int64       `json:"cur_memory"`
@@ -74,7 +74,7 @@ func (ep *EvictionPlan) MarshalJSON() ([]byte, error) {
 	var qq []*jsonQuery
 	for _, root := range ep.roots {
 		jq := &jsonQuery{
-			Name:      root.view.Name,
+			PublicID:  root.view.PublicId,
 			SQL:       root.view.Sql,
 			MaxMemory: root.view.MaxMemoryUsage,
 			CurMemory: root.memTotal(),
@@ -105,17 +105,18 @@ func NewEvictionPlan() *EvictionPlan {
 }
 
 func (ep *EvictionPlan) LoadRecipe(g *graph.Graph[*flownode.Node], mat *Materialization, rcp *boostplan.Recipe) {
-	viewsByName := make(map[string]*boostplan.CachedQuery)
+	viewsByPublicID := make(map[string]*boostplan.CachedQuery)
 	for _, v := range rcp.GetAllPublicViews() {
-		viewsByName[v.Name] = v
+		viewsByPublicID[v.PublicId] = v
 	}
 
 	g.ForEachValue(func(root *flownode.Node) bool {
-		if !root.IsReader() {
+		r := root.AsReader()
+		if r == nil {
 			return true
 		}
 
-		view, ok := viewsByName[root.Name]
+		view, ok := viewsByPublicID[r.PublicID()]
 		if !ok {
 			return true
 		}
@@ -252,7 +253,7 @@ func (ep *EvictionPlan) Evictions() []Eviction {
 	var evictions []Eviction
 
 	for _, root := range ep.roots {
-		max, ok := ep.limits[root.view.Name]
+		max, ok := ep.limits[root.view.PublicId]
 		if !ok {
 			max = root.view.MaxMemoryUsage
 		}

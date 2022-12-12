@@ -18,10 +18,10 @@ func TestGraphKeys(t *testing.T) {
 		g := new(graph.Graph[*flownode.Node])
 		src := g.AddNode(flownode.New("source", []string{"dummy"}, &flownode.Source{}))
 
-		a := g.AddNode(flownode.New("a", []string{"a1", "a2"}, flownode.NewBase(nil, nil, nil)))
+		a := g.AddNode(flownode.New("a", []string{"a1", "a2"}, flownode.NewBase("a", nil, nil)))
 		g.AddEdge(src, a)
 
-		b := g.AddNode(flownode.New("b", []string{"b1", "b2"}, flownode.NewBase(nil, nil, nil)))
+		b := g.AddNode(flownode.New("b", []string{"b1", "b2"}, flownode.NewBase("b", nil, nil)))
 		g.AddEdge(src, b)
 
 		return g, a, b

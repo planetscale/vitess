@@ -8,7 +8,7 @@ import (
 
 func (n *Node) ToProto() *boostpb.Node {
 	pnode := &boostpb.Node{
-		Name:     n.Name,
+		Name:     n.name,
 		Index:    &n.index,
 		Domain:   n.domain,
 		Fields:   n.fields,
@@ -56,7 +56,7 @@ func (n *Node) ToProto() *boostpb.Node {
 
 func NodeFromProto(v *boostpb.Node) *Node {
 	node := &Node{
-		Name:      v.Name,
+		name:      v.Name,
 		index:     *v.Index,
 		domain:    v.Domain,
 		fields:    v.Fields,

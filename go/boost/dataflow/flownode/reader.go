@@ -19,6 +19,7 @@ type Reader struct {
 	// not serialized
 	writer *backlog.Writer
 
+	publicID   string
 	forNode    graph.NodeIdx
 	state      []int
 	parameters []boostpb.ViewParameter
@@ -192,6 +193,7 @@ func NewReader(forNode graph.NodeIdx) *Reader {
 
 func (r *Reader) ToProto() *boostpb.Node_Reader {
 	return &boostpb.Node_Reader{
+		PublicId:       r.publicID,
 		ForNode:        r.forNode,
 		State:          r.state,
 		Parameters:     r.parameters,
@@ -202,9 +204,18 @@ func (r *Reader) ToProto() *boostpb.Node_Reader {
 	}
 }
 
+func (r *Reader) SetPublicID(id string) {
+	r.publicID = id
+}
+
+func (r *Reader) PublicID() string {
+	return r.publicID
+}
+
 func NewReaderFromProto(r *boostpb.Node_Reader) *Reader {
 	return &Reader{
 		writer:         nil,
+		publicID:       r.PublicId,
 		forNode:        r.ForNode,
 		state:          r.State,
 		parameters:     r.Parameters,

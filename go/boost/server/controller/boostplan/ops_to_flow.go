@@ -18,8 +18,7 @@ import (
 type Migration interface {
 	AddIngredient(name string, fields []string, impl flownode.NodeImpl, upquerySQL sqlparser.SelectStatement) graph.NodeIdx
 	AddBase(name string, fields []string, b flownode.AnyBase) graph.NodeIdx
-	Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int)
-	MaintainAnonymous(n graph.NodeIdx, key []int)
+	Maintain(name, publicID string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int)
 }
 
 func queryToFlowParts(mig Migration, tr *operators.TableReport, query *operators.Query) (*operators.QueryFlowParts, error) {
@@ -69,7 +68,7 @@ func queryToFlowParts(mig Migration, tr *operators.TableReport, query *operators
 	}
 
 	return &operators.QueryFlowParts{
-		Name:        query.Name,
+		Name:        query.PublicID,
 		NewNodes:    newNodes,
 		ReusedNodes: reusedNodes,
 		QueryLeaf:   query.Leaf(),
@@ -190,9 +189,9 @@ func makeViewOpNode(mig Migration, node *operators.Node, op *operators.View) (op
 	}
 
 	if len(op.ParametersIdx) > 0 {
-		mig.Maintain(node.Name, na, op.ParametersIdx, parameters, len(op.Columns))
+		mig.Maintain(node.Name, op.PublicID, na, op.ParametersIdx, parameters, len(op.Columns))
 	} else {
-		mig.Maintain(node.Name, na, []int{0}, nil, len(op.Columns))
+		mig.Maintain(node.Name, op.PublicID, na, []int{0}, nil, len(op.Columns))
 	}
 
 	switch parent.Flow.Age {
@@ -230,9 +229,9 @@ func makeGroupByOpNode(mig Migration, node *operators.Node, op *operators.GroupB
 		case *sqlparser.CountStar:
 			kind = flownode.AggregationCountStar
 		case *sqlparser.Min:
-			kind = flownode.ExtremumMin
+			return operators.FlowNode{}, &operators.UnsupportedError{AST: aggr, Type: operators.NoExtremum}
 		case *sqlparser.Max:
-			kind = flownode.ExtremumMax
+			return operators.FlowNode{}, &operators.UnsupportedError{AST: aggr, Type: operators.NoExtremum}
 		case *sqlparser.Avg:
 			var sumOffset = -1
 			var countOffset = -1
@@ -504,7 +503,7 @@ func makeBaseOpNode(mig Migration, node *operators.Node, op *operators.Table) (o
 		keyColumnIds = append(keyColumnIds, id)
 	}
 
-	base := flownode.NewExternalBase(keyColumnIds, columnTypes, op.Keyspace)
+	base := flownode.NewExternalBase(keyColumnIds, columnTypes, op.Keyspace, op.TableName)
 	address := mig.AddBase(node.Name, columnNames, base)
 	return operators.FlowNode{Age: operators.FlowNodeNew, Address: address}, nil
 }

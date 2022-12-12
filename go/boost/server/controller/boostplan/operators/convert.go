@@ -42,12 +42,9 @@ func (conv *Converter) Clone() *Converter {
 }
 
 func (conv *Converter) NewNode(name string, op Operator, inputs []*Node) *Node {
-	switch op.(type) {
-	case *Table, *View:
-		// We don't want to uniquefy these nodes
-	default:
-		name = fmt.Sprintf("%s%d", name, conv.count)
-	}
+	// always uniquefy all node names
+	name = fmt.Sprintf("%s%d", name, conv.count)
+
 	n := &Node{
 		Name:      name,
 		Version:   conv.version,
@@ -156,20 +153,6 @@ func (conv *Converter) makeTableNode(keyspace, name string, spec *sqlparser.Tabl
 	}
 }
 
-func (conv *Converter) GetView(name string) (graph.NodeIdx, bool) {
-	if v, ok := conv.current[name]; ok {
-		return conv.GetFlowNodeAddress(name, v)
-	}
-	return graph.InvalidNode, false
-}
-
-func (conv *Converter) GetFlowNodeAddress(name string, version int64) (graph.NodeIdx, bool) {
-	if node, ok := conv.nodes[noderef{name, version}]; ok {
-		return node.Flow.Address, true
-	}
-	return graph.InvalidNode, false
-}
-
 func (conv *Converter) UpgradeSchema(newversion int64) {
 	if newversion <= conv.version {
 		panic("schema version is not newer than the existing")
@@ -177,15 +160,25 @@ func (conv *Converter) UpgradeSchema(newversion int64) {
 	conv.version = newversion
 }
 
-func (conv *Converter) RemoveQuery(name string) {
-	v, ok := conv.current[name]
+func (conv *Converter) findViewByPublicID(id string) (noderef, *Node, bool) {
+	for nref, nn := range conv.nodes {
+		switch op := nn.Op.(type) {
+		case *View:
+			if op.PublicID == id {
+				return nref, nn, true
+			}
+		}
+	}
+	return noderef{}, nil, false
+}
+
+func (conv *Converter) RemoveQueryByPublicID(id string) {
+	nref, leaf, ok := conv.findViewByPublicID(id)
 	if !ok {
 		panic("tried to remove unknown query")
 	}
-	delete(conv.current, name)
 
-	nref := noderef{name, v}
-	leaf := conv.nodes[nref]
+	delete(conv.current, nref.name)
 	delete(conv.nodes, nref)
 
 	var deque []*Node
@@ -209,7 +202,7 @@ func (conv *Converter) RemoveQuery(name string) {
 func newTableRef(st *semantics.SemTable, tableNode *Node, v int64, id semantics.TableSet, hints sqlparser.IndexHints) (*Node, error) {
 	op := &NodeTableRef{TableID: id, Node: tableNode, Hints: hints}
 	n := &Node{
-		Name:    tableNode.Name,
+		Name:    "external_base",
 		Version: v,
 		Op:      op,
 		Flow:    FlowNode{Address: graph.InvalidNode},

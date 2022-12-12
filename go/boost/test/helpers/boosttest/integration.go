@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"reflect"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -59,7 +58,6 @@ type Cluster struct {
 
 	cachedConns   *common.SyncMap[string, drpc.Conn]
 	cachedDomains *common.SyncMap[string, boostrpc.DomainClient]
-	cachedNodes   map[string][]*flownode.Node
 
 	Config        *boostpb.Config
 	Instances     uint
@@ -170,7 +168,6 @@ func New(t testing.TB, options ...Option) *Cluster {
 		t:             t,
 		cachedConns:   common.NewSyncMap[string, drpc.Conn](),
 		cachedDomains: common.NewSyncMap[string, boostrpc.DomainClient](),
-		cachedNodes:   make(map[string][]*flownode.Node),
 		localCell:     DefaultLocalCell,
 
 		Instances: 1,
@@ -365,43 +362,10 @@ func (c *Cluster) FindGraphNodes(check func(n *flownode.Node) bool) []*flownode.
 	for _, n := range found {
 		shards := common.UnwrapOr(n.Sharding().TryGetShards(), 1)
 		if int(shards) != len(found) {
-			c.t.Fatalf("node %q has %d shards, but only %d shards found in all active domains", n.Name, shards, len(found))
+			c.t.Fatalf("node has %d shards, but only %d shards found in all active domains", shards, len(found))
 		}
 	}
 	return found
-}
-
-func (c *Cluster) WaitForNode(kind, name string, wantProcessed uint64) {
-	cachedname := fmt.Sprintf("%s(%q)", kind, name)
-
-	nodes, ok := c.cachedNodes[cachedname]
-	if !ok {
-		nodes = c.FindGraphNodes(func(n *flownode.Node) bool {
-			return n.Name == name && n.Kind() == kind
-		})
-		c.cachedNodes[cachedname] = nodes
-	}
-
-	tick := time.NewTicker(time.Millisecond)
-	defer tick.Stop()
-
-	timeout := time.NewTimer(5 * time.Second)
-	defer timeout.Stop()
-
-	for {
-		var processed uint64
-		for _, n := range nodes {
-			processed += atomic.LoadUint64(&n.Stats.Processed)
-		}
-		if processed >= wantProcessed {
-			return
-		}
-		select {
-		case <-timeout.C:
-			c.t.Fatalf("timed out while waiting for %s to process %d packets (processed=%d)", cachedname, wantProcessed, processed)
-		case <-tick.C:
-		}
-	}
 }
 
 func (c *Cluster) shutdown() {
@@ -687,7 +651,19 @@ func (c *Cluster) View(name string) *TestView {
 func (c *Cluster) Table(name string) *TestTable {
 	c.t.Helper()
 
-	descriptor, err := c.Controller().GetTableDescriptor_(name)
+	var descriptor *boostpb.TableDescriptor
+	var err error
+
+	if c.defaultRecipe != nil {
+		for ks := range c.defaultRecipe.DDL {
+			descriptor, err = c.Controller().GetTableDescriptor_(ks, name)
+			if err == nil {
+				break
+			}
+		}
+	} else {
+		descriptor, err = c.Controller().GetTableDescriptor_("", name)
+	}
 	require.NoError(c.t, err)
 
 	table, err := worker.NewTableClientFromProto(descriptor, c.cachedDomains)

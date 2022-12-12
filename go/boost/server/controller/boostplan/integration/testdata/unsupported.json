@@ -110,6 +110,11 @@
       "Keyspace": "main",
       "SQL": "select count(*), aid from votes where uid = :v1",
       "Error": "query not supported by boost: non aggregated column '`aid`' is not part of group by"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select max(uid) from votes",
+      "Error": "query not supported by boost: MIN() / MAX() is currently not supported: MAX(`uid`)"
     }
   ]
 }

@@ -86,11 +86,11 @@ func (srv *Server) waitForClusterState(ctx context.Context) error {
 
 // GetTableDescriptor_ returns the internal table descriptor for the given table.
 // This function is only exported to be usable by integration tests
-func (srv *Server) GetTableDescriptor_(name string) (*boostpb.TableDescriptor, error) {
+func (srv *Server) GetTableDescriptor_(keyspace, name string) (*boostpb.TableDescriptor, error) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
-	bld := srv.inner.tableDescriptor(name)
+	bld := srv.inner.tableDescriptor(keyspace, name)
 	if bld == nil {
 		return nil, fmt.Errorf("unknown table: %q", name)
 	}
@@ -99,13 +99,13 @@ func (srv *Server) GetTableDescriptor_(name string) (*boostpb.TableDescriptor, e
 
 // GetViewDescriptor_ returns the internal view descriptor for the given view.
 // This function is only exported to be usable by integration tests
-func (srv *Server) GetViewDescriptor_(name string) (*vtboostpb.Materialization_ViewDescriptor, error) {
+func (srv *Server) GetViewDescriptor_(id string) (*vtboostpb.Materialization_ViewDescriptor, error) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
-	bld := srv.inner.viewDescriptorForName(name)
+	bld := srv.inner.viewDescriptorForPublicID(id)
 	if bld == nil {
-		return nil, fmt.Errorf("unknown view: %q", name)
+		return nil, fmt.Errorf("unknown view for ID: %q", id)
 	}
 	return bld, nil
 }

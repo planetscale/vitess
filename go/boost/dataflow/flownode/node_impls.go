@@ -22,12 +22,19 @@ func (n *Node) AsSource() *Source {
 
 type AnyBase interface {
 	NodeImpl
+	Keyspace() string
+	Table() string
 	Schema() []boostpb.Type
 }
 
 func (n *Node) IsAnyBase() bool {
 	_, ok := n.impl.(AnyBase)
 	return ok
+}
+
+func (n *Node) AsAnyBase() AnyBase {
+	base, _ := n.impl.(AnyBase)
+	return base
 }
 
 func (n *Node) IsBase() bool {

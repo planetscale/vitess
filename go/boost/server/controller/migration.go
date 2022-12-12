@@ -137,8 +137,16 @@ func (mig *migration) ensureReaderFor(na graph.NodeIdx, name string, connect fun
 	return rn
 }
 
-func (mig *migration) Maintain(name string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int) {
+func (mig *migration) Maintain(name, publicID string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int) {
+	// allocate default values for parameters; used in tests
+	if parameters == nil {
+		for i := range key {
+			parameters = append(parameters, boostpb.ViewParameter{Name: fmt.Sprintf("k%d", i)})
+		}
+	}
+
 	mig.ensureReaderFor(na, name, func(reader *flownode.Reader) {
+		reader.SetPublicID(publicID)
 		reader.OnConnected(mig.graph, key, parameters, colLen)
 	})
 }
@@ -373,7 +381,7 @@ func (mig *migration) describeExternalTable(node graph.NodeIdx) *boostpb.Externa
 		Addr:         base.LocalAddr(),
 		KeyIsPrimary: false,
 		Key:          nil,
-		TableName:    base.Name,
+		TableName:    base.AsExternalBase().Table(),
 		Columns:      slices.Clone(base.Fields()),
 		Schema:       slices.Clone(base.Schema()),
 		Keyspace:     base.AsExternalBase().Keyspace(),
@@ -416,18 +424,6 @@ func (mig *migration) streamSetup(newnodes map[graph.NodeIdx]bool) error {
 	}
 
 	return nil
-}
-
-func (mig *migration) MaintainAnonymous(n graph.NodeIdx, key []int) {
-	var params []boostpb.ViewParameter
-	for i := range key {
-		params = append(params, boostpb.ViewParameter{
-			Name: fmt.Sprintf("k%d", i),
-		})
-	}
-	mig.ensureReaderFor(n, "", func(r *flownode.Reader) {
-		r.OnConnected(mig.graph, key, params, 0)
-	})
 }
 
 func (mig *migration) Activate(recipe *boostplan.VersionedRecipe, schema *boostplan.SchemaInformation) (*boostplan.ActivationResult, error) {

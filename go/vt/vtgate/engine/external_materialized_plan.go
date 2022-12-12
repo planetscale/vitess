@@ -38,7 +38,7 @@ func (e *externalPlanPrimitive) GetKeyspaceName() string {
 }
 
 func (e *externalPlanPrimitive) GetTableName() string {
-	return e.view.TableName()
+	return ""
 }
 
 func (e *externalPlanPrimitive) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {

@@ -207,44 +207,24 @@ func (ctrl *Controller) placeDomain(ctx context.Context, idx boostpb.DomainIndex
 	return domainrpc.NewHandle(idx, domainshards), nil
 }
 
-func (ctrl *Controller) outputs() map[string]graph.NodeIdx {
-	var outputs = make(map[string]graph.NodeIdx)
-
-	ext := ctrl.ingredients.Externals(graph.DirectionOutgoing)
-	for ext.Next() {
-		node := ctrl.ingredients.Value(ext.Current)
-		if r := node.AsReader(); r != nil {
-			outputs[node.Name] = r.IsFor()
-		}
-	}
-	return outputs
-}
-
-func (ctrl *Controller) inputs() map[string]graph.NodeIdx {
-	var inputs = make(map[string]graph.NodeIdx)
+func (ctrl *Controller) tableDescriptor(keyspace, table string) *boostpb.TableDescriptor {
+	var base *flownode.Node
 
 	neigh := ctrl.ingredients.NeighborsDirected(graph.Source, graph.DirectionOutgoing)
 	for neigh.Next() {
-		base := ctrl.ingredients.Value(neigh.Current)
-		if !base.IsAnyBase() {
-			panic("root in the graph it not a base ???")
-		}
-		inputs[base.Name] = neigh.Current
-	}
-	return inputs
-}
+		n := ctrl.ingredients.Value(neigh.Current)
 
-func (ctrl *Controller) tableDescriptor(name string) *boostpb.TableDescriptor {
-	node, ok := ctrl.recipe.NodeAddrFor(name)
-	if !ok {
-		inputs := ctrl.inputs()
-		node, ok = inputs[name]
-		if !ok {
-			return nil
+		if ab := n.AsAnyBase(); ab != nil {
+			if ab.Keyspace() == keyspace && ab.Table() == table {
+				base = n
+				break
+			}
 		}
 	}
+	if base == nil {
+		return nil
+	}
 
-	base := ctrl.ingredients.Value(node)
 	dom := ctrl.domains[base.Domain()]
 	baseOperator := base.AsBase()
 	dropped := baseOperator.GetDropped()
@@ -256,12 +236,12 @@ func (ctrl *Controller) tableDescriptor(name string) *boostpb.TableDescriptor {
 		KeyIsPrimary: false,
 		Key:          nil,
 		Dropped:      dropped,
-		TableName:    base.Name,
+		TableName:    base.AsAnyBase().Table(),
 		Columns:      nil,
 		Schema:       slices.Clone(base.Schema()),
 	}
 
-	key := base.SuggestIndexes(node)[node]
+	key := base.SuggestIndexes(base.GlobalAddr())[base.GlobalAddr()]
 	if key == nil {
 		if col, _, ok := base.Sharding().ByColumn(); ok {
 			key = []int{col}
@@ -287,8 +267,7 @@ func (ctrl *Controller) tableDescriptor(name string) *boostpb.TableDescriptor {
 	return tbl
 }
 
-func (ctrl *Controller) viewDescriptor(nodeIdx graph.NodeIdx) *vtboostpb.Materialization_ViewDescriptor {
-	node := ctrl.ingredients.Value(nodeIdx)
+func (ctrl *Controller) viewDescriptor(node *flownode.Node) *vtboostpb.Materialization_ViewDescriptor {
 	reader := node.AsReader()
 	domain := ctrl.domains[node.Domain()]
 	if domain == nil {
@@ -331,8 +310,8 @@ func (ctrl *Controller) viewDescriptor(nodeIdx graph.NodeIdx) *vtboostpb.Materia
 	orderCols, orderColsDesc, orderLimit := reader.Order()
 
 	return &vtboostpb.Materialization_ViewDescriptor{
-		Name:          node.Name,
-		Node:          uint32(nodeIdx),
+		PublicId:      reader.PublicID(),
+		Node:          uint32(node.GlobalAddr()),
 		Schema:        schema,
 		KeySchema:     keySchema,
 		Shards:        shards,
@@ -342,59 +321,33 @@ func (ctrl *Controller) viewDescriptor(nodeIdx graph.NodeIdx) *vtboostpb.Materia
 	}
 }
 
-func (ctrl *Controller) viewDescriptorForName(name string) *vtboostpb.Materialization_ViewDescriptor {
-	node, ok := ctrl.recipe.NodeAddrFor(name)
-	if !ok {
-		// if the recipe doesn't know about this query, traverse the graph.
-		// we need this do deal with manually constructed graphs (e.g., in tests).
-		outputs := ctrl.outputs()
-		node, ok = outputs[name]
-		if !ok {
-			return nil
+func (ctrl *Controller) viewDescriptorForPublicID(id string) *vtboostpb.Materialization_ViewDescriptor {
+	ext := ctrl.ingredients.Externals(graph.DirectionOutgoing)
+	for ext.Next() {
+		nn := ctrl.ingredients.Value(ext.Current)
+		if r := nn.AsReader(); r != nil && r.PublicID() == id {
+			return ctrl.viewDescriptor(nn)
 		}
 	}
-
-	if alias, ok := ctrl.recipe.ResolveAlias(name); ok {
-		name = alias
-	}
-
-	r, ok := ctrl.findViewFor(node, name)
-	if !ok {
-		return nil
-	}
-
-	return ctrl.viewDescriptor(r)
-}
-
-func (ctrl *Controller) findViewFor(node graph.NodeIdx, name string) (graph.NodeIdx, bool) {
-	bfs := graph.NewBFSVisitor(ctrl.ingredients, node)
-	for bfs.Next() {
-		n := ctrl.ingredients.Value(bfs.Current)
-		if r := n.AsReader(); r != nil {
-			if r.IsFor() == node && n.Name == name {
-				return bfs.Current, true
-			}
-		}
-	}
-	return graph.InvalidNode, false
+	return nil
 }
 
 func (ctrl *Controller) GetMaterializations() ([]*vtboostpb.Materialization, error) {
-	viewsByName := make(map[string]*boostplan.CachedQuery)
+	viewsByPublicID := make(map[string]*boostplan.CachedQuery)
 	var res []*vtboostpb.Materialization
 	for _, v := range ctrl.recipe.GetAllPublicViews() {
-		viewsByName[v.Name] = v
+		viewsByPublicID[v.PublicId] = v
 	}
 
 	ctrl.ingredients.ForEachValue(func(n *flownode.Node) bool {
-		if n.IsReader() {
-			view, ok := viewsByName[n.Name]
+		if r := n.AsReader(); r != nil {
+			view, ok := viewsByPublicID[r.PublicID()]
 			if !ok {
 				return true
 			}
 
 			normalizedSQL := topowatcher.ParametrizeQuery(view.Statement)
-			viewDescriptor := ctrl.viewDescriptor(n.GlobalAddr())
+			viewDescriptor := ctrl.viewDescriptor(n)
 			bounds, fullyMaterialized := topowatcher.GenerateBoundsForQuery(view.Statement, viewDescriptor.KeySchema)
 
 			res = append(res, &vtboostpb.Materialization{
