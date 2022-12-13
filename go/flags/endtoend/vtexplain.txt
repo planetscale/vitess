@@ -4,7 +4,6 @@ Usage of vtexplain:
       --database_branch_public_id string             The public ID of the database branch this cluster hosts, used for Insights
       --dbname string                                Optional database target to override normal routing
       --default_tablet_type topodatapb.TabletType    The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
-      --enable-boost                                 Enable boost integration; requires a valid topo connection. This Vitess process will find the local Boost cluster via topo
       --execution-mode string                        The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")
   -h, --help                                         display usage and exit
       --insights_flush_interval uint                 Send aggregated metrics for all query patterns every N seconds (default 15)

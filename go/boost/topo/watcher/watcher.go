@@ -18,15 +18,17 @@ package watcher
 
 import (
 	"context"
-	"flag"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 	"storj.io/drpc"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/netutil"
 
@@ -45,9 +47,16 @@ import (
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-var (
-	EnableBoostIntegration = flag.Bool("enable-boost", false, "Enable boost integration; requires a valid topo connection. This Vitess process will find the local Boost cluster via topo")
-)
+var EnableBoostIntegration = false
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&EnableBoostIntegration, "enable-boost", EnableBoostIntegration, "Enable boost integration; requires a valid topo connection. This Vitess process will find the local Boost cluster via topo")
+}
+
+func init() {
+	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vtctld", registerFlags)
+}
 
 type ControllerDialer func(string) (vtboostpb.DRPCControllerServiceClient, error)
 

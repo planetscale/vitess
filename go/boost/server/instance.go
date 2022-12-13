@@ -11,6 +11,8 @@ import (
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
 
+	"vitess.io/vitess/go/vt/discovery"
+
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/server/controller"
 	"vitess.io/vitess/go/boost/server/worker"
@@ -107,10 +109,12 @@ func resolveAndLoadKeyspace(ctx context.Context, log *zap.Logger, srvResolver *s
 	}
 }
 
-func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, ts *topo.Server, localCell string, schemaTrackingUser string) error {
+func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, ts *topo.Server, localCell string, cellsToWatch string, schemaTrackingUser string, hcRetryDelay time.Duration, hcTimeout time.Duration) error {
 	resilientServer := srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
-	log.Info("configuring external gateway for upqueries", zap.String("cell", localCell), zap.String("cells_to_watch", vtgate.CellsToWatch))
-	gateway := vtgate.NewTabletGateway(ctx, nil, resilientServer, localCell)
+	log.Info("configuring external gateway for upqueries", zap.String("cell", localCell), zap.String("cells_to_watch", cellsToWatch))
+
+	hc := discovery.NewHealthCheck(ctx, hcRetryDelay, hcTimeout, ts, localCell, cellsToWatch)
+	gateway := vtgate.NewTabletGateway(ctx, hc, resilientServer, localCell)
 
 	tabletTypesToWait := []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}
 	srvResolver := srvtopo.NewResolver(resilientServer, gateway, localCell)
