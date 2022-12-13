@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/vtgate"
 )
 
 const DefaultLocalCell = "zone1"
@@ -216,10 +215,7 @@ func New(t testing.TB, options ...Option) *Cluster {
 			s.Worker.SetExecutor(cluster.Executor)
 			s.Worker.SetResolver(testexecutor.NewResolver(cluster.Executor))
 		case cluster.externalExecutor:
-			if cluster.cellsToWatch != "" {
-				vtgate.CellsToWatch = cluster.cellsToWatch
-			}
-			err := s.ConfigureVitessExecutor(ctx, logger, cluster.Topo, cluster.localCell, cluster.schemaChangeUser)
+			err := s.ConfigureVitessExecutor(ctx, logger, cluster.Topo, cluster.localCell, cluster.cellsToWatch, cluster.schemaChangeUser, 2*time.Millisecond, time.Minute)
 			if err != nil {
 				t.Fatal(err)
 			}

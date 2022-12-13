@@ -24,12 +24,17 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Set implements flag.Value for UpqueryMode
-func (f *UpqueryMode) Set(strVal string) error {
+// Set implements pflag.Value for UpqueryMode
+func (um *UpqueryMode) Set(strVal string) error {
 	v, ok := UpqueryMode_value[strVal]
 	if !ok {
 		return fmt.Errorf("invalid UpqueryMode: %q", strVal)
 	}
-	*f = UpqueryMode(v)
+	*um = UpqueryMode(v)
 	return nil
+}
+
+// Type implements pflag.Type for UpqueryMode
+func (um *UpqueryMode) Type() string {
+	return um.String()
 }

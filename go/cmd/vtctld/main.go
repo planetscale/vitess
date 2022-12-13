@@ -56,7 +56,7 @@ func main() {
 	ts = topo.Open()
 	defer ts.Close()
 
-	if *boostwatcher.EnableBoostIntegration {
+	if boostwatcher.EnableBoostIntegration {
 		boost = boostclient.NewClient(ts)
 	}
 

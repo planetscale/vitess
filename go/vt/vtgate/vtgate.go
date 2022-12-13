@@ -282,7 +282,7 @@ func Init(
 	}
 
 	var boost *boostwatcher.Watcher
-	if *boostwatcher.EnableBoostIntegration {
+	if boostwatcher.EnableBoostIntegration {
 		ts, _ := serv.GetTopoServer()
 		boost = boostwatcher.NewWatcher(ts)
 		executor.mats = engine.NewMaterializationClient(boost)
