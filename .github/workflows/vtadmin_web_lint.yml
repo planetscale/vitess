@@ -7,10 +7,6 @@ on:
     paths:
       - '.github/workflows/vtadmin_web_lint.yml'
       - 'web/vtadmin/**'
-  pull_request:
-    paths:
-      - '.github/workflows/vtadmin_web_lint.yml'
-      - 'web/vtadmin/**'
 
 jobs:
   lint:
