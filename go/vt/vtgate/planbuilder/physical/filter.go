@@ -66,3 +66,8 @@ func (f *Filter) Clone() abstract.PhysicalOperator {
 		Predicates: predicatesClone,
 	}
 }
+
+// TablesUsed implements the PhysicalOperator interface
+func (f *Filter) TablesUsed() []string {
+	return f.Source.TablesUsed()
+}

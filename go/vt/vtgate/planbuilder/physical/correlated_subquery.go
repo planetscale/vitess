@@ -88,6 +88,11 @@ func (s *SubQueryOp) Clone() abstract.PhysicalOperator {
 	return result
 }
 
+// TablesUsed implements the PhysicalOperator interface
+func (s *SubQueryOp) TablesUsed() []string {
+	return append(s.Outer.TablesUsed(), s.Inner.TablesUsed()...)
+}
+
 func (c *CorrelatedSubQueryOp) TableID() semantics.TableSet {
 	return c.Inner.TableID().Merge(c.Outer.TableID())
 }
@@ -120,4 +125,9 @@ func (c *CorrelatedSubQueryOp) Clone() abstract.PhysicalOperator {
 		LHSColumns: columns,
 	}
 	return result
+}
+
+// TablesUsed implements the PhysicalOperator interface
+func (c *CorrelatedSubQueryOp) TablesUsed() []string {
+	return append(c.Outer.TablesUsed(), c.Inner.TablesUsed()...)
 }

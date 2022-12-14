@@ -52,6 +52,13 @@ type (
 
 		// TargetDestination specifies an explicit target destination tablet type
 		TargetDestination key.Destination
+
+		// Alternates contains alternate routes to equivalent sources in
+		// other keyspaces.
+		Alternates map[*vindexes.Keyspace]*Route
+
+		// Routes that have been merged into this one.
+		MergedWith []*Route
 	}
 
 	// VindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
@@ -727,4 +734,29 @@ func (r *Route) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsE
 	}
 
 	return r.haveMatchingVindex(ctx, node, vdValue, column, val, opcodeF, justTheVindex)
+}
+
+// TablesUsed returns tables used by MergedWith routes, which are not included
+// in Inputs() and thus not a part of the operator tree
+func (r *Route) TablesUsed() []string {
+	addString, collect := abstract.CollectSortedUniqueStrings()
+	for _, mw := range r.MergedWith {
+		for _, u := range mw.TablesUsed() {
+			addString(u)
+		}
+	}
+
+	return append(collect(), r.Source.TablesUsed()...)
+}
+
+func (r *Route) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Route {
+	if keyspace.Name == r.Keyspace.Name {
+		return nil
+	}
+
+	if route, ok := r.Alternates[keyspace]; ok {
+		return route
+	}
+
+	return nil
 }

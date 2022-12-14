@@ -73,3 +73,14 @@ func (u *Union) Clone() abstract.PhysicalOperator {
 	}
 	return &newOp
 }
+
+// TablesUsed implements the PhysicalOperator interface
+func (u *Union) TablesUsed() []string {
+	add, collect := abstract.CollectSortedUniqueStrings()
+	for _, source := range u.Sources {
+		for _, tbl := range source.TablesUsed() {
+			add(tbl)
+		}
+	}
+	return collect()
+}

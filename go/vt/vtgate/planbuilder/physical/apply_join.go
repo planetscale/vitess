@@ -98,3 +98,8 @@ func (a *ApplyJoin) Clone() abstract.PhysicalOperator {
 		LHSColumns: lhsColumns,
 	}
 }
+
+// TablesUsed implements the PhysicalOperator interface
+func (a *ApplyJoin) TablesUsed() []string {
+	return append(a.LHS.TablesUsed(), a.RHS.TablesUsed()...)
+}

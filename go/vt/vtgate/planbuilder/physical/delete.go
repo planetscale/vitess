@@ -75,3 +75,10 @@ func (d *Delete) GetQTable() *abstract.QueryTable {
 func (d *Delete) GetVTable() *vindexes.Table {
 	return d.VTable
 }
+
+func (d *Delete) TablesUsed() []string {
+	if d.VTable != nil {
+		return abstract.SingleQualifiedIdentifier(d.VTable.Keyspace, d.VTable.Name)
+	}
+	return nil
+}

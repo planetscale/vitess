@@ -117,3 +117,9 @@ func (v *Vindex) CheckValid() error {
 func (v *Vindex) Compact(*semantics.SemTable) (LogicalOperator, error) {
 	return v, nil
 }
+
+// TablesUsed implements the Operator interface.
+// It is not keyspace-qualified.
+func (v *Vindex) TablesUsed() []string {
+	return []string{v.Table.Table.Name.String()}
+}

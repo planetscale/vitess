@@ -1029,6 +1029,7 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("user_msgs"),
 			buildVarCharRow("user_seq"),
 			buildVarCharRow("wo_lu_idx"),
+			buildVarCharRow("zip_detail"),
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)

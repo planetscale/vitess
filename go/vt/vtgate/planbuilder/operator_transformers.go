@@ -109,6 +109,30 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 	}, nil
 }
 
+func routeToEngineRoute(ctx *plancontext.PlanningContext, op *physical.Route) (*engine.Route, error) {
+	tableNames, err := getAllTableNames(op)
+	if err != nil {
+		return nil, err
+	}
+	var vindex vindexes.Vindex
+	var values []evalengine.Expr
+	if op.SelectedVindex() != nil {
+		vindex = op.Selected.FoundVindex
+		values = op.Selected.Values
+	}
+	return &engine.Route{
+		TableName: strings.Join(tableNames, ", "),
+		RoutingParameters: &engine.RoutingParameters{
+			Opcode:              op.RouteOpCode,
+			Keyspace:            op.Keyspace,
+			Vindex:              vindex,
+			Values:              values,
+			SysTableTableName:   op.SysTableTableName,
+			SysTableTableSchema: op.SysTableTableSchema,
+		},
+	}, nil
+}
+
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (logicalPlan, error) {
 	switch src := op.Source.(type) {
 	case *physical.Update:
