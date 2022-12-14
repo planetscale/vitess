@@ -89,3 +89,11 @@ func (to *Table) GetQTable() *abstract.QueryTable {
 func (to *Table) GetVTable() *vindexes.Table {
 	return to.VTable
 }
+
+// TablesUsed implements the PhysicalOperator interface
+func (to *Table) TablesUsed() []string {
+	if sqlparser.SystemSchema(to.QTable.Table.Qualifier.String()) {
+		return nil
+	}
+	return abstract.SingleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
+}

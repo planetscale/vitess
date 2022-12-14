@@ -91,3 +91,9 @@ func optimizeVindex(ctx *plancontext.PlanningContext, op *abstract.Vindex) (abst
 		Value:  op.Value,
 	}, nil
 }
+
+// TablesUsed implements the Operator interface.
+// It is not keyspace-qualified.
+func (v *Vindex) TablesUsed() []string {
+	return []string{v.Table.Table.Name.String()}
+}

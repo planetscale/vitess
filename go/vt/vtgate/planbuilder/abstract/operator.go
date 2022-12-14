@@ -56,6 +56,9 @@ type (
 		Cost() int
 		// Clone creates a copy of the operator that can be updated without changing the original
 		Clone() PhysicalOperator
+		// TablesUsed returns the actual keyspace/table used. This could have changes from what the vschema original
+		// because of reference tables and routing rules
+		TablesUsed() []string
 	}
 
 	// IntroducesTable is used to make it possible to gather information about the table an operator introduces

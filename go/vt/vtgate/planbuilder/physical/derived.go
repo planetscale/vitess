@@ -120,3 +120,8 @@ func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 func (d *Derived) IsMergeable(ctx *plancontext.PlanningContext) bool {
 	return isMergeable(ctx, d.Query, d)
 }
+
+// TablesUsed implements the PhysicalOperator interface
+func (d *Derived) TablesUsed() []string {
+	return d.Source.TablesUsed()
+}

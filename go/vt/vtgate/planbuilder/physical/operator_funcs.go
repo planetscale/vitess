@@ -369,3 +369,12 @@ func BreakExpressionInLHSandRHS(
 	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
 	return
 }
+
+func TablesUsed(op abstract.PhysicalOperator) []string {
+	add, collect := abstract.CollectSortedUniqueStrings()
+	for _, tbl := range op.TablesUsed() {
+		add(tbl)
+	}
+
+	return collect()
+}

@@ -80,3 +80,10 @@ func (u *Update) GetQTable() *abstract.QueryTable {
 func (u *Update) GetVTable() *vindexes.Table {
 	return u.VTable
 }
+
+func (u *Update) TablesUsed() []string {
+	if u.VTable != nil {
+		return abstract.SingleQualifiedIdentifier(u.VTable.Keyspace, u.VTable.Name)
+	}
+	return nil
+}
