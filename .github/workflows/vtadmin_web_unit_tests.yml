@@ -7,10 +7,6 @@ on:
     paths:
       - '.github/workflows/vtadmin_web_unit_tests.yml'
       - 'web/vtadmin/**'
-  pull_request:
-    paths:
-      - '.github/workflows/vtadmin_web_unit_tests.yml'
-      - 'web/vtadmin/**'
 
 jobs:
   unit-tests:

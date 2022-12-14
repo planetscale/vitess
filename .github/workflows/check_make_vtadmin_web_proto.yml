@@ -1,5 +1,5 @@
 name: check_make_vtadmin_web_proto
-on: [push, pull_request]
+on: [push]
 jobs:
 
   build:
