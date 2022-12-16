@@ -328,6 +328,14 @@ func TestNormalize(t *testing.T) {
 			"bv2": sqltypes.Int64BindVariable(10),
 			"id":  sqltypes.Int64BindVariable(10),
 		},
+	}, {
+		// we don't want to replace literals on the select expressions of a derived table
+		// these expressions can be referenced from the outside,
+		// and changing them to bindvars can change the meaning of the query
+		// example of problematic query: select tmp.`1` from (select 1) as tmp
+		in:      `select * from (select 12) as t`,
+		outstmt: `select * from (select 12 from dual) as t`,
+		outbv:   map[string]*querypb.BindVariable{},
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
