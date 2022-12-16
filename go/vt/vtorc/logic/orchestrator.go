@@ -259,10 +259,6 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		return
 	}
 
-	if forceDiscovery {
-		log.Infof("Force discovered - %+v", instance)
-	}
-
 	_ = discoveryMetrics.Append(&discovery.Metric{
 		Timestamp:       time.Now(),
 		InstanceKey:     instanceKey,
