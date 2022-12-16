@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -38,15 +39,14 @@ import (
 // keyspaces and shards.
 
 var (
-	// DefaultLockTimeout is a good value to use as a default for
-	// locking a shard / keyspace.
-	// Now used only for unlock operations
-	defaultLockTimeout = 30 * time.Second
+	// LockTimeout is the maximum duration for which a
+	// shard / keyspace lock can be acquired for.
+	LockTimeout = flag.Duration("lock-timeout", 45*time.Second, "Maximum time for which a shard/keyspace lock can be acquired for")
 
 	// RemoteOperationTimeout is used for operations where we have to
 	// call out to another process.
 	// Used for RPC calls (including topo server calls)
-	RemoteOperationTimeout = flag.Duration("remote_operation_timeout", 30*time.Second, "time to wait for a remote operation")
+	RemoteOperationTimeout = flag.Duration("remote_operation_timeout", 15*time.Second, "time to wait for a remote operation")
 )
 
 // Lock describes a long-running lock on a keyspace or a shard.
@@ -122,13 +122,14 @@ var locksKey locksKeyType
 // * changing a keyspace sharding info fields (is this one necessary?)
 // * changing a keyspace 'ServedFrom' field (is this one necessary?)
 // * resharding operations:
-//   * horizontal resharding: includes changing the shard's 'ServedType',
+//   - horizontal resharding: includes changing the shard's 'ServedType',
 //     as well as the associated horizontal resharding operations.
-//   * vertical resharding: includes changing the keyspace 'ServedFrom'
+//   - vertical resharding: includes changing the keyspace 'ServedFrom'
 //     field, as well as the associated vertical resharding operations.
-//   * 'vtctl SetShardIsPrimaryServing' emergency operations
-//   * 'vtctl SetShardTabletControl' emergency operations
-//   * 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete' emergency operations
+//   - 'vtctl SetShardIsPrimaryServing' emergency operations
+//   - 'vtctl SetShardTabletControl' emergency operations
+//   - 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete' emergency operations
+//
 // * keyspace-wide schema changes
 func (ts *Server) LockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
@@ -233,7 +234,7 @@ func CheckKeyspaceLockedAndRenew(ctx context.Context, keyspace string) error {
 func (l *Lock) lockKeyspace(ctx context.Context, ts *Server, keyspace string) (LockDescriptor, error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, l.Action)
 
-	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, getLockTimeout())
 	defer cancel()
 
 	span, ctx := trace.NewSpan(ctx, "TopoServer.LockKeyspaceForAction")
@@ -254,10 +255,8 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, 
 	// Detach from the parent timeout, but copy the trace span.
 	// We need to still release the lock even if the parent
 	// context timed out.
-	// Note that we are not using the user provided RemoteOperationTimeout
-	// here because it is possible that that timeout is too short.
 	ctx = trace.CopySpan(context.TODO(), ctx)
-	ctx, cancel := context.WithTimeout(ctx, defaultLockTimeout)
+	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
 	defer cancel()
 
 	span, ctx := trace.NewSpan(ctx, "TopoServer.UnlockKeyspaceForAction")
@@ -286,12 +285,12 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, 
 // UpdateShardFields, which is not locking the shard object. The
 // current list of actions that lock a shard are:
 // * all Vitess-controlled re-parenting operations:
-//   * InitShardPrimary
-//   * PlannedReparentShard
-//   * EmergencyReparentShard
-// * operations that we don't want to conflict with re-parenting:
-//   * DeleteTablet when it's the shard's current primary
+//   - InitShardPrimary
+//   - PlannedReparentShard
+//   - EmergencyReparentShard
 //
+// * operations that we don't want to conflict with re-parenting:
+//   - DeleteTablet when it's the shard's current primary
 func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)
 	if !ok {
@@ -374,7 +373,7 @@ func CheckShardLocked(ctx context.Context, keyspace, shard string) error {
 func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string) (LockDescriptor, error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, l.Action)
 
-	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, getLockTimeout())
 	defer cancel()
 
 	span, ctx := trace.NewSpan(ctx, "TopoServer.LockShardForAction")
@@ -395,10 +394,8 @@ func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string
 func (l *Lock) unlockShard(ctx context.Context, ts *Server, keyspace, shard string, lockDescriptor LockDescriptor, actionError error) error {
 	// Detach from the parent timeout, but copy the trace span.
 	// We need to still release the lock even if the parent context timed out.
-	// Note that we are not using the user provided RemoteOperationTimeout
-	// here because it is possible that that timeout is too short.
 	ctx = trace.CopySpan(context.TODO(), ctx)
-	ctx, cancel := context.WithTimeout(ctx, defaultLockTimeout)
+	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
 	defer cancel()
 
 	span, ctx := trace.NewSpan(ctx, "TopoServer.UnlockShardForAction")
@@ -416,4 +413,16 @@ func (l *Lock) unlockShard(ctx context.Context, ts *Server, keyspace, shard stri
 		l.Status = "Done"
 	}
 	return lockDescriptor.Unlock(ctx)
+}
+
+// getLockTimeout is shim code used for backward compatibility with v15
+// This code can be removed in v17+ and LockTimeout can be used directly
+func getLockTimeout() time.Duration {
+	if _flag.IsFlagProvided("lock-timeout") {
+		return *LockTimeout
+	}
+	if _flag.IsFlagProvided("remote_operation_timeout") {
+		return *RemoteOperationTimeout
+	}
+	return *LockTimeout
 }

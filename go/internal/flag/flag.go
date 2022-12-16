@@ -24,6 +24,7 @@ limitations under the License.
 package flag
 
 import (
+	"flag"
 	goflag "flag"
 	"os"
 	"reflect"
@@ -51,6 +52,17 @@ func Parse() {
 	// Finally, warn on deprecated flag usage.
 	warnOnSingleDashLongFlags(goflag.CommandLine, os.Args, log.Warningf)
 	warnOnMixedPositionalAndFlagArguments(goflag.Args(), log.Warningf)
+}
+
+// IsFlagProvided returns if the given flag has been provided by the user explicitly or not
+func IsFlagProvided(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
 }
 
 // Args returns the positional arguments with the first double-dash ("--")
@@ -126,6 +138,7 @@ func warnOnMixedPositionalAndFlagArguments(posargs []string, warningf func(msg s
 }
 
 // From the standard library documentation:
+//
 //	> If a Value has an IsBoolFlag() bool method returning true, the
 //	> command-line parser makes -name equivalent to -name=true rather than
 //	> using the next command-line argument.

@@ -135,6 +135,8 @@ Usage of vtgate:
 	keep running at least this long after SIGTERM before stopping (default 50ms)
   --legacy_replication_lag_algorithm
 	use the legacy algorithm when selecting the vttablets for serving (default true)
+  --lock-timeout duration
+	Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
   --lock_heartbeat_time duration
 	If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
   --log_backtrace_at value
@@ -238,7 +240,7 @@ Usage of vtgate:
   --normalize_queries
 	Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
   --onclose_timeout duration
-	wait no more than this for OnClose handlers before stopping (default 1ns)
+	wait no more than this for OnClose handlers before stopping (default 10s)
   --onterm_timeout duration
 	wait no more than this for OnTermSync handlers before stopping (default 10s)
   --opentsdb_uri string
@@ -266,7 +268,7 @@ Usage of vtgate:
   --redact-debug-ui-queries
 	redact full queries and bind variables from debug UI
   --remote_operation_timeout duration
-	time to wait for a remote operation (default 30s)
+	time to wait for a remote operation (default 15s)
   --retry-count int
 	retry count (default 2)
   --schema_change_signal

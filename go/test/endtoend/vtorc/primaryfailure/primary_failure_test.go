@@ -32,7 +32,7 @@ import (
 // covers the test case master-failover from orchestrator
 func TestDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s"}, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -58,12 +58,20 @@ func TestDownPrimary(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 
-	// Make the current primary database unavailable.
+	// Make the rdonly vttablet unavailable
+	err := rdonly.VttabletProcess.TearDown()
+	require.NoError(t, err)
+	err = rdonly.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+	// Make the current primary vttablet unavailable.
+	err = curPrimary.VttabletProcess.TearDown()
+	require.NoError(t, err)
 	err := curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 	defer func() {
-		// we remove the tablet from our global list since its mysqlctl process has stopped and cannot be reused for other tests
+		// we remove the tablet from our global list
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
+		utils.PermanentlyRemoveVttablet(clusterInfo, rdonly)
 	}()
 
 	// check that the replica gets promoted

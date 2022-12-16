@@ -658,6 +658,9 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 
 	// Read the tablet information from the database to find the shard and keyspace of the tablet
 	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		log.Error("Failed to read tablet information - %v", err)
+	}
 
 	var candidateTabletAlias *topodatapb.TabletAlias
 	if candidateInstanceKey != nil {
@@ -689,6 +692,8 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 			log.Warningf("ERS - %s", value)
 		case logutilpb.Level_ERROR:
 			log.Errorf("ERS - %s", value)
+		default:
+			log.Info("ERS - %s", value)
 		}
 		AuditTopologyRecovery(topologyRecovery, value)
 	})).ReparentShard(ctx,
@@ -701,6 +706,9 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 			PreventCrossCellPromotion: config.Config.PreventCrossDataCenterPrimaryFailover,
 		},
 	)
+	if err != nil {
+		log.Errorf("Error running ERS - %v", err)
+	}
 
 	// We should refresh the tablet information again to update our information.
 	RefreshTablets(true /* forceRefresh */)
