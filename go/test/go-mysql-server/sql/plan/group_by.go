@@ -22,7 +22,7 @@ import (
 	"github.com/cespare/xxhash"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	errors "gopkg.in/src-d/go-errors.v1"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"vitess.io/vitess/go/test/go-mysql-server/sql"
 	"vitess.io/vitess/go/test/go-mysql-server/sql/expression"
@@ -237,7 +237,7 @@ func (i *groupByIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 	var err error
 	for j, a := range i.selectedExprs {
-		i.buf[j], err = newAggregationBuffer(a)
+		i.buf[j], err = newAggregationBuffer(ctx, a)
 		if err != nil {
 			return nil, err
 		}
@@ -333,7 +333,7 @@ func (i *groupByGroupingIter) compute(ctx *sql.Context) error {
 		if sql.ErrKeyNotFound.Is(err) {
 			b = make([]sql.AggregationBuffer, len(i.selectedExprs))
 			for j, a := range i.selectedExprs {
-				b[j], err = newAggregationBuffer(a)
+				b[j], err = newAggregationBuffer(ctx, a)
 				if err != nil {
 					return err
 				}
@@ -400,12 +400,25 @@ func groupingKey(
 	row sql.Row,
 ) (uint64, error) {
 	hash := xxhash.New()
-	for _, expr := range exprs {
+	for i, expr := range exprs {
 		v, err := expr.Eval(ctx, row)
 		if err != nil {
 			return 0, err
 		}
-		_, err = hash.Write(([]byte)(fmt.Sprintf("%#v,", v)))
+
+		if i > 0 {
+			// separate each expression in the grouping key with a nil byte
+			if _, err = hash.Write([]byte{0}); err != nil {
+				return 0, err
+			}
+		}
+
+		switch t := expr.Type().(type) {
+		case sql.StringType:
+			err = t.Collation().WriteWeightString(hash, v.(string))
+		default:
+			_, err = fmt.Fprintf(hash, "%v", v)
+		}
 		if err != nil {
 			return 0, err
 		}
@@ -414,11 +427,15 @@ func groupingKey(
 	return hash.Sum64(), nil
 }
 
-func newAggregationBuffer(expr sql.Expression) (sql.AggregationBuffer, error) {
+func newAggregationBuffer(ctx *sql.Context, expr sql.Expression) (sql.AggregationBuffer, error) {
 	switch n := expr.(type) {
 	case sql.Aggregation:
 		return n.NewBuffer()
 	default:
+		if _, err := expr.Eval(ctx, nil); err == nil {
+			// if this expr can be statically evaluated, aggregate it as a constant
+			return aggregation.NewConst(expr).NewBuffer()
+		}
 		// The semantics for a non-aggregation in a group by node is Last.
 		return aggregation.NewLast(expr).NewBuffer()
 	}

@@ -1,6 +1,9 @@
 package aggregation
 
-import "vitess.io/vitess/go/test/go-mysql-server/optgen/cmd/support"
+import (
+	"vitess.io/vitess/go/test/go-mysql-server/optgen/cmd/support"
+	"vitess.io/vitess/go/test/go-mysql-server/sql"
+)
 
 //go:generate optgen -out unary_aggs.og.go -pkg aggregation aggs unary_aggs.go
 
@@ -24,6 +27,10 @@ var UnaryAggDefs support.GenDefs = []support.AggDef{ // alphabetically sorted
 		Name:    "BitXor",
 		Desc:    "returns the bitwise XOR of all bits in expr.",
 		RetType: "sql.Uint64",
+	},
+	{
+		Name: "Const",
+		Desc: "returns a constant value regardless of the sequence of elements of an aggregation",
 	},
 	{
 		Name:    "Count",
@@ -56,5 +63,25 @@ var UnaryAggDefs support.GenDefs = []support.AggDef{ // alphabetically sorted
 		Name:     "Sum",
 		Desc:     "returns the sum of expr in all rows",
 		Nullable: false,
+		RetType:  "a.sumType()",
 	},
+}
+
+var defaultIntegerSumType = sql.MustCreateDecimalType(33, 0)
+
+func (a *Sum) sumType() sql.Type {
+	if sql.VitessCompat {
+		switch tt := a.Child.Type().(type) {
+		case sql.NumberType:
+			if tt.IsFloat() {
+				return sql.Float64
+			}
+			return defaultIntegerSumType
+		case sql.DecimalType:
+			return tt
+		default:
+			panic("unexpected Sum type")
+		}
+	}
+	return a.Child.Type()
 }

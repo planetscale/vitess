@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/test/go-mysql-server/memory"
 	"vitess.io/vitess/go/test/go-mysql-server/sql"
@@ -152,6 +153,83 @@ func TestGroupByAggregationGrouping(t *testing.T) {
 	expected := []sql.Row{
 		{int64(3), false},
 		{int64(2), false},
+	}
+
+	require.Equal(expected, rows)
+}
+
+func TestGroupByLiterals(t *testing.T) {
+	require := require.New(t)
+	ctx := sql.NewEmptyContext()
+
+	childSchema := sql.Schema{
+		{Name: "col1", Type: sql.LongText},
+	}
+
+	child := memory.NewTable("test", sql.NewPrimaryKeySchema(childSchema), nil)
+
+	p := NewGroupBy(
+		[]sql.Expression{
+			aggregation.NewConst(expression.NewLiteral(int64(420), sql.Int64)),
+			aggregation.NewCount(expression.NewGetField(0, sql.LongText, "col1", true)),
+		},
+		nil,
+		NewResolvedTable(child, nil, nil),
+	)
+
+	rows, err := sql.NodeToRows(ctx, p)
+	require.NoError(err)
+
+	expected := []sql.Row{
+		{int64(420), int64(0)},
+	}
+
+	require.Equal(expected, rows)
+}
+
+func TestGroupByCollations(t *testing.T) {
+	require := require.New(t)
+	ctx := sql.NewEmptyContext()
+
+	colType := sql.MustCreateString(query.Type_VARCHAR, 255, sql.Collation_utf8mb4_0900_ai_ci)
+
+	childSchema := sql.Schema{
+		{Name: "col1", Type: colType},
+		{Name: "col2", Type: sql.Int64},
+	}
+
+	child := memory.NewTable("test", sql.NewPrimaryKeySchema(childSchema), nil)
+
+	rows := []sql.Row{
+		sql.NewRow("col1_1", int64(1111)),
+		sql.NewRow("Col1_1", int64(1111)),
+		sql.NewRow("col1_2", int64(4444)),
+		sql.NewRow("col1_1", int64(1111)),
+		sql.NewRow("Col1_2", int64(4444)),
+	}
+
+	for _, r := range rows {
+		require.NoError(child.Insert(sql.NewEmptyContext(), r))
+	}
+
+	p := NewGroupBy(
+		[]sql.Expression{
+			aggregation.NewSum(
+				expression.NewGetFieldWithTable(1, sql.Int64, "test", "col2", false),
+			),
+		},
+		[]sql.Expression{
+			expression.NewGetFieldWithTable(0, colType, "test", "col1", false),
+		},
+		NewResolvedTable(child, nil, nil),
+	)
+
+	rows, err := sql.NodeToRows(ctx, p)
+	require.NoError(err)
+
+	expected := []sql.Row{
+		{float64(3333)},
+		{float64(8888)},
 	}
 
 	require.Equal(expected, rows)
