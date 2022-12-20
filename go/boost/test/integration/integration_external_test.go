@@ -232,6 +232,7 @@ func TestAggregations(t *testing.T) {
 	SELECT count(num.a), count(*) FROM num;
 	SELECT b, count(num.a), count(*) FROM num GROUP BY b;
 	SELECT count(num.a), count(*) FROM num WHERE a = ?;
+	SELECT count(a) FROM num GROUP BY b;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))

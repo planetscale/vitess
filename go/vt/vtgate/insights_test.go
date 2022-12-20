@@ -18,10 +18,13 @@ package vtgate
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/time/rate"
 
 	"vitess.io/vitess/go/vt/callerid"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -86,7 +89,9 @@ func setup(t *testing.T, brokers, publicID, username, password string, options s
 		defaultUint(options.patternLimit, 10000),
 		defaultUint(options.rowsReadThreshold, 1000),
 		defaultUint(options.responseTimeThreshold, 1000),
-		defaultUint(options.maxPerInterval, 100),
+		defaultUint(options.maxPerInterval, 10000),
+		0.1,
+		1000,
 		defaultUint(options.maxRawQuerySize, 64),
 		5,
 		15*time.Second,
@@ -99,6 +104,70 @@ func setup(t *testing.T, brokers, publicID, username, password string, options s
 		t.Cleanup(func() { insights.Drain() })
 	}
 	return insights, err
+}
+
+func TestLimiter(t *testing.T) {
+	limiter := limiter{global: rate.NewLimiter(rate.Every(1*time.Second), 6), intervalMax: 2}
+
+	t0 := time.Now()
+	t1 := t0.Add(1 * time.Second)
+	t2 := t0.Add(2 * time.Second)
+	t3 := t0.Add(3 * time.Second)
+	t4 := t0.Add(4 * time.Second)
+
+	tests := []struct {
+		t              time.Time
+		intervalRemain int
+		global         int
+		tick           bool
+		runAllow       bool
+		allow          bool
+	}{
+		{t: t0, intervalRemain: 2, global: 4, tick: true},
+		{t: t0, intervalRemain: 1, global: 4, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 0, global: 4, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 0, global: 4, runAllow: true, allow: false},
+		{t: t0, intervalRemain: 2, global: 2, tick: true},
+		{t: t0, intervalRemain: 1, global: 2, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 2, global: 1, tick: true},
+		{t: t0, intervalRemain: 1, global: 1, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 0, global: 1, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 0, global: 1, runAllow: true, allow: false},
+		{t: t0, intervalRemain: 1, global: 0, tick: true},
+		{t: t0, intervalRemain: 0, global: 0, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 0, global: 0, runAllow: true, allow: false},
+		{t: t0, intervalRemain: 0, global: 0, tick: true},
+		{t: t1, intervalRemain: 0, global: 1},
+		{t: t1, intervalRemain: 1, global: 0, tick: true},
+		{t: t2, intervalRemain: 1, global: 1},
+		{t: t2, intervalRemain: 2, global: 0, tick: true},
+		{t: t2, intervalRemain: 1, global: 0, runAllow: true, allow: true},
+		{t: t3, intervalRemain: 1, global: 1},
+		{t: t3, intervalRemain: 2, global: 0, tick: true},
+		{t: t4, intervalRemain: 2, global: 1, tick: true},
+	}
+
+	for _, tc := range tests {
+		name := fmt.Sprintf("t=%v/remain=%v/global=%v/tick=%v/runAllow=%v/allow=%v",
+			tc.t.Sub(t0),
+			tc.intervalRemain,
+			tc.global,
+			tc.tick,
+			tc.runAllow,
+			tc.allow)
+		t.Run(name, func(t *testing.T) {
+			if tc.tick {
+				limiter.tickAt(tc.t)
+			}
+
+			if tc.runAllow {
+				assert.Equal(t, tc.allow, limiter.allow())
+			}
+
+			assert.Equal(t, tc.intervalRemain, limiter.intervalRemain)
+			assert.Equal(t, tc.global, int(limiter.global.TokensAt(tc.t)))
+		})
+	}
 }
 
 func TestInsightsNeedsDatabaseBranchID(t *testing.T) {
@@ -929,22 +998,22 @@ func TestErrorNormalization(t *testing.T) {
 		{
 			name:   "Normalizes elapsed time and query id",
 			input:  "vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: 20.000937445s, killing query ID 135243 (CallerID: planetscale-admin)",
-			output: "vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: <time>, killing query ID <id> (CallerID: planetscale-admin)",
+			output: "vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: <time>, killing query ID <id>",
 		},
 		{
 			name:   "Normalizes transaction id and ended at time",
 			input:  "vttablet: rpc error: code = Aborted desc = transaction 1656362196194291371: ended at 2022-06-30 20:34:09.614 UTC (unlocked closed connection) (CallerID: planetscale-admin)",
-			output: "vttablet: rpc error: code = Aborted desc = transaction <transaction>: ended at <time> (unlocked closed connection) (CallerID: planetscale-admin)",
+			output: "vttablet: rpc error: code = Aborted desc = transaction <transaction>: ended at <time> (unlocked closed connection)",
 		},
 		{
 			name:   "Normalizes connection id",
 			input:  "target: taobench-8.20-40.primary: vttablet: rpc error: code = Unavailable desc = conn 299286: Write(packet) failed: write unix @->/vt/socket/mysql.sock: write: broken pipe (errno 2006) (sqlstate HY000) (CallerID: planetscale-admin)",
-			output: "target: taobench-8.20-40.primary: vttablet: rpc error: code = Unavailable desc = conn <conn>: Write(packet) failed: write unix @->/vt/socket/mysql.sock: write: broken pipe (errno 2006) (sqlstate HY000) (CallerID: planetscale-admin)",
+			output: "target: taobench-8.20-40.primary: vttablet: rpc error: code = Unavailable desc = conn <conn>: Write(packet) failed: write unix @->/vt/socket/mysql.sock: write: broken pipe (errno 2006) (sqlstate HY000)",
 		},
 		{
 			name:   "Normalizes the the table path",
 			input:  "target: gomy_backend_production.-.primary: vttablet: rpc error: code = ResourceExhausted desc = The table '/vt/vtdataroot/vt_0955681468/tmp/#sql351_1df_2' is full (errno 1114) (sqlstate HY000) (CallerID: planetscale-admin)",
-			output: "target: gomy_backend_production.-.primary: vttablet: rpc error: code = ResourceExhausted desc = The table <table> is full (errno 1114) (sqlstate HY000) (CallerID: planetscale-admin)",
+			output: "target: gomy_backend_production.-.primary: vttablet: rpc error: code = ResourceExhausted desc = The table <table> is full (errno 1114) (sqlstate HY000)",
 		},
 		{
 			name:   "Normalizes the row number",

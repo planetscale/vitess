@@ -14,6 +14,8 @@ Usage of vtexplain:
       --insights_kafka_username string               Username for the Kafka endpoint
       --insights_max_queries_per_interval uint       Limit on individual queries reported per flush interval (default 100)
       --insights_pattern_limit uint                  Maximum number of unique patterns to track in a flush interval (default 1000)
+      --insights_queries_limiter_burst uint          Burst limit on individual queries reported (default 2000)
+      --insights_queries_limiter_rate float          Limit on (average) queries reported per second (default 0.1)
       --insights_raw_queries                         Send unnormalized SQL for individually reported queries
       --insights_raw_queries_max_length uint         Maximum size for unnormalized SQL (default 8192)
       --insights_reorder_threshold uint              Reorder INSERT columns if more than this many redundant patterns in an interval (default 5)

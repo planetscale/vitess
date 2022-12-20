@@ -44,6 +44,7 @@ jobs:
         ref:
           - main
           - latest
+          - latest-15.0
         image:
           - mysql80
         include:
@@ -65,6 +66,19 @@ jobs:
           # Vitess build context causes tar header problem with containerd
           driver: docker
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.GH_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.GH_AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::997601596833:role/ci
+          role-skip-session-tagging: true
+          role-duration-seconds: 1800
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
       - name: Login to Artifact Registry
         uses: docker/login-action@v2
         with:
@@ -83,6 +97,7 @@ jobs:
         with:
           images: |
             ${{ format('us-docker.pkg.dev/planetscale-registry/{0}/vitess/lite', matrix.ref == 'main' && 'prod' || 'dev') }}
+            ${{ format('997601596833.dkr.ecr.us-east-1.amazonaws.com/{0}/vitess', matrix.ref == 'main' && 'main' || 'branch') }}
           flavor: |
             latest=${{ matrix.default == 'true' }}
             prefix=${{ matrix.image }}-,onlatest=true
@@ -90,6 +105,8 @@ jobs:
           tags: |
             type=raw,value={{date 'YYYY-MM-DD'}}.${{ steps.determine-sha.outputs.sha }}
             type=raw,value=head,enable=${{ matrix.ref == 'latest' }}
+            type=raw,value=latest-15.0,enable=${{ matrix.ref == 'latest-15.0'}}
+            type=raw,value=head-15.0,enable=${{ matrix.ref == 'latest-15.0'}}
 
       - name: Build and push
         id: build

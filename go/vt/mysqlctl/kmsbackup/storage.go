@@ -14,12 +14,14 @@ import (
 
 	"github.com/planetscale/common-libs/files"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 )
 
@@ -124,6 +126,9 @@ func (f *FilesBackupStorage) StartBackup(ctx context.Context, dir string, name s
 		return nil, err
 	}
 
+	log.Infof("Starting backup with id = %s, bucket = %s, root = %s, name = %s.",
+		backupID, f.bucket, dir, name)
+
 	return handle, nil
 }
 
@@ -157,7 +162,28 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 
 	rootPath := path.Join("/", backupID, dir)
 
-	sess, err := session.NewSession()
+	cfg := aws.NewConfig().
+		// Nice to have logs from the AWS SDK in the VT log format.
+		WithLogger(aws.LoggerFunc(func(args ...interface{}) {
+			cargs := make([]interface{}, len(args)+1)
+			cargs[0] = "AWS SDK:"
+			for i := range args {
+				cargs[i+1] = args[i]
+			}
+			log.Info(cargs...)
+		})).
+		// By default, AWS SDK logging is turned off.
+		//
+		// Turn on some useful logging to make it easier to debug AWS API request failures.
+		// - LogDebugWithRequestErrors logs SDK failures to build, send, validate,
+		//   or unmarshal requests.
+		// - LogDebugWithRequestRetries logs when the SDK will retry requests.
+		//
+		// See: https://github.com/aws/aws-sdk-go/blob/v1.44.143/aws/defaults/defaults.go#L62
+		// See: https://github.com/aws/aws-sdk-go/blob/v1.44.143/aws/logger.go#L66-L73
+		WithLogLevel(aws.LogDebugWithRequestErrors | aws.LogDebugWithRequestRetries)
+
+	sess, err := session.NewSession(cfg)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to initialize aws session")
 	}
