@@ -294,7 +294,10 @@ func (conv *Converter) buildAggregation(ctx *PlanContext, sel *sqlparser.Select,
 	// we mark it as a grouping column. if we can't find the column, we add a new one
 	for _, expr := range sel.GroupBy {
 		if col, isCol := expr.(*sqlparser.ColName); isCol && col.Qualifier.IsEmpty() {
-			expr = colMap[col.Name.String()]
+			e, found := colMap[col.Name.String()]
+			if found {
+				expr = e
+			}
 		}
 		for i, col := range ownCols {
 			if col.EqualsAST(ctx.SemTable, expr, true) {

@@ -8,11 +8,13 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/planetscale/common-libs/files"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -114,6 +116,21 @@ func (f *filesBackupHandle) AddFile(ctx context.Context, filename string, approx
 	f.filesAdded[filePath] = approxFileSize
 	f.filesMu.Unlock()
 
+	wrapCreate := func(ctx context.Context, path string, truncate bool, options ...files.CreateOption) (
+		io.WriteCloser,
+		error,
+	) {
+		wrcloser, err := f.fs.Create(ctx, filePath, true, files.WithSizeHint(approxFileSize))
+		if err != nil {
+			if awsErr, ok := err.(awserr.Error); ok {
+				log.Warningf("AWS Error error = %s, code = %s, message = %s, original error = %v",
+					awsErr.Error(), awsErr.Code(), awsErr.Message(), awsErr.OrigErr)
+			}
+			return nil, err
+		}
+		return wrcloser, nil
+	}
+
 	// since the manifest file is added last(see // go/vt/mysqlctl/builtinbackupengine.go),
 	// once we got the manifest file, we make sure:
 	//  * to upload the SIZE file
@@ -126,7 +143,7 @@ func (f *filesBackupHandle) AddFile(ctx context.Context, filename string, approx
 			return nil, fmt.Errorf("kmsbackup.AddFile - uploading SIZE file has failed: %v", err)
 		}
 
-		wrcloser, err := f.fs.Create(ctx, filePath, true, files.WithSizeHint(approxFileSize))
+		wrcloser, err := wrapCreate(ctx, filePath, true, files.WithSizeHint(approxFileSize))
 		if err != nil {
 			return nil, err
 		}
@@ -144,7 +161,7 @@ func (f *filesBackupHandle) AddFile(ctx context.Context, filename string, approx
 		}
 	}
 
-	return f.fs.Create(ctx, filePath, true, files.WithSizeHint(approxFileSize))
+	return wrapCreate(ctx, filePath, true, files.WithSizeHint(approxFileSize))
 }
 
 // ReadFile satisfiles backupstorage.BackupHandle.

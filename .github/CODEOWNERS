@@ -29,6 +29,7 @@ bootstrap.sh @deepthi
 /go/vt/dbconnpool @harshit-gangal
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi @mattlord @rsajwani
+/go/vt/mysqlctl/kmsbackup @yields
 /go/vt/proto @harshit-gangal
 /go/vt/proto/vtadmin @ajm188 @notfelineit
 /go/vt/schema @shlomi-noach

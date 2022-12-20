@@ -30,6 +30,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
@@ -66,6 +68,40 @@ const (
 	UsernameVar           = "INSIGHTS_KAFKA_USERNAME"
 	PasswordVar           = "INSIGHTS_KAFKA_PASSWORD"
 )
+
+// Two-tiered rate limiter, used to limit produce rate of Query messages. Overall rate is held to the limit/burst
+// specified in the global limiter, but prevent clients from immediately burning through the burst capacity by only
+// allowing #intervalMax per interval.
+type limiter struct {
+	global         *rate.Limiter
+	intervalMax    int
+	intervalRemain int
+}
+
+func (lim *limiter) allow() bool {
+	if lim.intervalRemain > 0 {
+		lim.intervalRemain--
+		return true
+	}
+
+	return false
+}
+
+// Advance to the next interval, pulling tokens from the global limiter as necessary
+func (lim *limiter) tick() {
+	lim.tickAt(time.Now())
+}
+
+func (lim *limiter) tickAt(t time.Time) {
+	take := lim.intervalMax - lim.intervalRemain
+
+	available := int(lim.global.TokensAt(t))
+	if take > available {
+		take = available
+	}
+	lim.global.AllowN(t, take)
+	lim.intervalRemain += take
+}
 
 type QueryPatternAggregation struct {
 	QueryCount         uint64
@@ -151,6 +187,8 @@ type Insights struct {
 
 	// hooks
 	Sender func([]byte, string, string) error
+
+	LogQueriesLimiter limiter
 }
 
 var (
@@ -172,6 +210,12 @@ var (
 
 	// insightsRowsReadThreshold is the threshold on the number of rows read (scanned) above which individual queries are reported
 	insightsRowsReadThreshold = flag.Uint("insights_rows_read_threshold", 10000, "Report individual transactions that read (scan) at least this many rows")
+
+	// insightsQueriesLimitierRate is the average rate of the token bucket limiter on individual query messages sent to insights
+	insightsQueriesLimiterRate = flag.Float64("insights_queries_limiter_rate", 0.1, "Limit on (average) queries reported per second")
+
+	// insightsQueriesLimitierBurst is the burst capacity of the token bucket limiter on individual query messages sent to insights
+	insightsQueriesLimiterBurst = flag.Uint("insights_queries_limiter_burst", 2000, "Burst limit on individual queries reported")
 
 	// insightsMaxQueriesPerInterval is the maximum number of individual queries that can be reported per interval.  Interesting queries above this threshold
 	// will simply not be reported until the next interval begins.
@@ -216,6 +260,8 @@ func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
 		*insightsRowsReadThreshold,
 		*insightsRTThreshold,
 		*insightsMaxQueriesPerInterval,
+		*insightsQueriesLimiterRate,
+		*insightsQueriesLimiterBurst,
 		*insightsRawQueriesMaxLength,
 		*insightsReorderThreshold,
 		time.Duration(*insightsFlushInterval)*time.Second,
@@ -229,7 +275,11 @@ func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
 
 func initInsightsInner(logger *streamlog.StreamLogger,
 	brokers, publicID, username, password string,
-	bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold, maxQueriesPerInterval, maxRawQueryLength, reorderThreshold uint,
+	bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold uint,
+	maxQueriesPerInterval uint,
+	insightsQueriesLimiterRate float64,
+	insightsQueriesLimiterBurst uint,
+	maxRawQueryLength, reorderThreshold uint,
 	interval time.Duration,
 	kafkaText, sendRawQueries, sendTotalDurationSketches bool,
 	totalDurationSketchAlpha float64,
@@ -255,6 +305,11 @@ func initInsightsInner(logger *streamlog.StreamLogger,
 
 	gamma := (1 + totalDurationSketchAlpha) / (1 - totalDurationSketchAlpha)
 
+	limiter := limiter{
+		global:      rate.NewLimiter(rate.Limit(insightsQueriesLimiterRate), int(insightsQueriesLimiterBurst)),
+		intervalMax: int(maxQueriesPerInterval),
+	}
+
 	insights := Insights{
 		DatabaseBranchPublicID:             publicID,
 		Brokers:                            strings.Split(brokers, ","),
@@ -265,7 +320,7 @@ func initInsightsInner(logger *streamlog.StreamLogger,
 		MaxPatterns:                        patternLimit,
 		RowsReadThreshold:                  rowsReadThreshold,
 		ResponseTimeThreshold:              responseTimeThreshold,
-		MaxQueriesPerInterval:              maxQueriesPerInterval,
+		LogQueriesLimiter:                  limiter,
 		KafkaText:                          kafkaText,
 		SendRawQueries:                     sendRawQueries,
 		MaxRawQueryLength:                  maxRawQueryLength,
@@ -282,6 +337,7 @@ func initInsightsInner(logger *streamlog.StreamLogger,
 	if err != nil {
 		return nil, err
 	}
+
 	return &insights, nil
 }
 
@@ -317,6 +373,7 @@ func (ii *Insights) newPatternAggregation(statementType string, tables []string,
 }
 
 func (ii *Insights) startInterval() {
+	ii.LogQueriesLimiter.tick()
 	ii.QueriesThisInterval = 0
 	ii.Aggregations = make(map[QueryPatternKey]*QueryPatternAggregation)
 	ii.PeriodStart = time.Now()
@@ -566,7 +623,8 @@ func (ii *Insights) handleMessage(record interface{}) {
 	if !ii.shouldSendToInsights(ls) {
 		return
 	}
-	if ii.QueriesThisInterval >= ii.MaxQueriesPerInterval {
+
+	if !ii.LogQueriesLimiter.allow() {
 		ii.LogMaxQueriesExceeded++
 		return
 	}
@@ -1049,6 +1107,7 @@ var normalizations = []struct {
 	{regexp.MustCompile(`The table ('[^\s]+')`), `<table>`},
 	{regexp.MustCompile(`at row ([\d]+)`), `<row>`},
 	{regexp.MustCompile(`at position ([\d]+)`), `<position>`},
+	{regexp.MustCompile(`( \(CallerID: [^\s]+\))$`), ``},
 }
 
 // Remove highly variable components of error messages (i.e. query ids, dates, etc) so that errors can be grouped
