@@ -1,9 +1,8 @@
 [
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
-    "plan": {
-
-    }
+    "comment": "",
+    "query": "select t.table_schema from information_schema.tables t join information_schema.columns c where t.table_name = c.table_name and t.table_schema = c.table_schema and t.table_schema = 'user'",
+    "v3-plan": {},
+    "gen4-plan": {}
   }
 ]

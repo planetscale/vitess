@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -31,54 +33,87 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+type infoSchemaRouting struct {
+	// The following two fields are used when routing information_schema queries
+	SysTableTableSchema []evalengine.Expr
+	SysTableTableName   map[string]evalengine.Expr
+}
+
+func (i *infoSchemaRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, ctx.ReservedVars)
+	if err != nil || out == nil {
+		return err
+	}
+
+	if i.SysTableTableName == nil {
+		i.SysTableTableName = map[string]evalengine.Expr{}
+	}
+
+	if isTableSchema {
+		i.SysTableTableSchema = append(i.SysTableTableSchema, out)
+	} else {
+		i.SysTableTableName[bvName] = out
+	}
+	return nil
+}
+
+func (i *infoSchemaRouting) OpCode() engine.Opcode {
+	return engine.DBA
+}
+
+func (i *infoSchemaRouting) Clone() routing {
+	return &infoSchemaRouting{
+		SysTableTableSchema: slices.Clone(i.SysTableTableSchema),
+		SysTableTableName:   maps.Clone(i.SysTableTableName),
+	}
+}
+
+func (i *infoSchemaRouting) AddQueryTablePredicates(ctx *plancontext.PlanningContext, qt *QueryTable) error {
+	for _, predicate := range qt.Predicates {
+		err := i.UpdateRoutingLogic(ctx, predicate)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func createInfSchemaPhysOp(ctx *plancontext.PlanningContext, table *QueryTable) (ops.Operator, error) {
 	ks, err := ctx.VSchema.AnyKeyspace()
 	if err != nil {
 		return nil, err
 	}
-	schemaNameExprs, tableNameExprs, err := findApplicablePredicates(ctx, table.Predicates)
-	if err != nil {
-		return nil, err
-	}
+	return &Route{
+		Routing: &infoSchemaRouting{},
+		Source: &Table{
+			QTable: table,
+			VTable: &vindexes.Table{
+				Name:     table.Table.Name,
+				Keyspace: ks,
+			},
+		},
+		Keyspace: ks,
+	}, nil
 
-	if len(schemaNameExprs) > 0 {
-		// we have at least one predicate that we can use to send the query to the correct KS
-		return sendToSingleKS(table, ks, tableNameExprs, schemaNameExprs)
-	}
-
-	nameFor := schemaColNameFor(table.Table.Name.String())
-	if nameFor == "" {
-		// This table doesn't have a column that contains the schema/keyspace name.
-		// we can send the query to any keyspace, and it will hopefully return something useful
-		return sendToArbitraryKeyspace(ctx, table)
-	}
-
-	// we have to concatenate results from all keyspaces
-	return createInfSchemaUnion(ctx, table, nameFor, schemaNameExprs, tableNameExprs)
-}
-
-func (r *Route) findSysInfoRoutingPredicatesGen4(predicates []sqlparser.Expr, reservedVars *sqlparser.ReservedVars) error {
-	for _, pred := range predicates {
-		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, reservedVars)
-		if err != nil {
-			return err
-		}
-		if out == nil {
-			// we didn't find a predicate to use for routing, continue to look for next predicate
-			continue
-		}
-
-		if r.SysTableTableName == nil {
-			r.SysTableTableName = map[string]evalengine.Expr{}
-		}
-
-		if isTableSchema {
-			r.SysTableTableSchema = append(r.SysTableTableSchema, out)
-		} else {
-			r.SysTableTableName[bvName] = out
-		}
-	}
-	return nil
+	//schemaNameExprs, tableNameExprs, err := findApplicablePredicates(ctx, table.Predicates)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//if len(schemaNameExprs) > 0 {
+	//	// we have at least one predicate that we can use to send the query to the correct KS
+	//	return sendToSingleKS(table, ks, tableNameExprs, schemaNameExprs)
+	//}
+	//
+	//nameFor := schemaColNameFor(table.Table.Name.String())
+	//if nameFor == "" {
+	//	// This table doesn't have a column that contains the schema/keyspace name.
+	//	// we can send the query to any keyspace, and it will hopefully return something useful
+	//	return sendToArbitraryKeyspace(ctx, table)
+	//}
+	//
+	//// we have to concatenate results from all keyspaces
+	//return createInfSchemaUnion(ctx, table, nameFor, schemaNameExprs, tableNameExprs)
 }
 
 func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, evalengine.Expr, error) {
@@ -154,57 +189,57 @@ func findApplicablePredicates(
 	return
 }
 
-func createInfSchemaUnion(
-	ctx *plancontext.PlanningContext,
-	table *QueryTable,
-	nameFor string,
-	schemaNameExprs []evalengine.Expr,
-	tableNameExprs map[string]evalengine.Expr,
-) (ops.Operator, error) {
-	// We don't have enough info to send the query to a single keyspace, so we have to create a UNION.
-	// We're basically changing a query like this:
-	// Original: SELECT TABLE_NAME from information_schema.tables
-	// Plan:
-	// vtgate-union:
-	// 	 KS0: SELECT TABLE_NAME from information_schema.tables
-	//   KS1: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
-	// 	 KS2: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
-	keyspaces, err := ctx.VSchema.AllKeyspaces()
-	if err != nil {
-		return nil, err
-	}
-	var routes []ops.Operator
-
-	for i, ks := range keyspaces {
-		tbl := &Table{
-			QTable: table,
-			VTable: &vindexes.Table{
-				Name:     table.Table.Name,
-				Keyspace: ks,
-			},
-		}
-
-		var route ops.Operator = &Route{
-			RouteOpCode:         engine.DBA,
-			Source:              tbl,
-			Keyspace:            ks,
-			SysTableTableName:   tableNameExprs,
-			SysTableTableSchema: schemaNameExprs,
-		}
-		if i > 0 {
-			route, err = route.AddPredicate(ctx, schemaNameComparison(nameFor))
-			if err != nil {
-				return nil, err
-			}
-		}
-		routes = append(routes, route)
-	}
-	union := &Union{
-		Sources:  routes,
-		Distinct: false,
-	}
-	return union, nil
-}
+//func createInfSchemaUnion(
+//	ctx *plancontext.PlanningContext,
+//	table *QueryTable,
+//	nameFor string,
+//	schemaNameExprs []evalengine.Expr,
+//	tableNameExprs map[string]evalengine.Expr,
+//) (ops.Operator, error) {
+//	// We don't have enough info to send the query to a single keyspace, so we have to create a UNION.
+//	// We're basically changing a query like this:
+//	// Original: SELECT TABLE_NAME from information_schema.tables
+//	// Plan:
+//	// vtgate-union:
+//	// 	 KS0: SELECT TABLE_NAME from information_schema.tables
+//	//   KS1: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
+//	// 	 KS2: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
+//	keyspaces, err := ctx.VSchema.AllKeyspaces()
+//	if err != nil {
+//		return nil, err
+//	}
+//	var routes []ops.Operator
+//
+//	for i, ks := range keyspaces {
+//		tbl := &Table{
+//			QTable: table,
+//			VTable: &vindexes.Table{
+//				Name:     table.Table.Name,
+//				Keyspace: ks,
+//			},
+//		}
+//
+//		var route ops.Operator = &Route{
+//			RouteOpCode:         engine.DBA,
+//			Source:              tbl,
+//			Keyspace:            ks,
+//			SysTableTableName:   tableNameExprs,
+//			SysTableTableSchema: schemaNameExprs,
+//		}
+//		if i > 0 {
+//			route, err = route.AddPredicate(ctx, schemaNameComparison(nameFor))
+//			if err != nil {
+//				return nil, err
+//			}
+//		}
+//		routes = append(routes, route)
+//	}
+//	union := &Union{
+//		Sources:  routes,
+//		Distinct: false,
+//	}
+//	return union, nil
+//}
 
 var (
 	// these are filled in by the init() function below
@@ -319,44 +354,44 @@ func schemaColNames() map[string][]string {
 	return schemaColName80
 }
 
-func sendToArbitraryKeyspace(ctx *plancontext.PlanningContext, table *QueryTable) (ops.Operator, error) {
-	// we are querying a information_schema table that does not have any column that defines the schema.
-	// The best we can do is to send it to any arbitraty keyspace.
-	ks, err := ctx.VSchema.AnyKeyspace()
-	if err != nil {
-		return nil, err
-	}
+//func sendToArbitraryKeyspace(ctx *plancontext.PlanningContext, table *QueryTable) (ops.Operator, error) {
+//	// we are querying a information_schema table that does not have any column that defines the schema.
+//	// The best we can do is to send it to any arbitraty keyspace.
+//	ks, err := ctx.VSchema.AnyKeyspace()
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	return &Route{
+//		RouteOpCode: engine.DBA,
+//		Source: &Table{
+//			QTable: table,
+//			VTable: &vindexes.Table{
+//				Name:     table.Table.Name,
+//				Keyspace: ks,
+//			},
+//		},
+//		Keyspace: ks,
+//	}, nil
+//}
 
-	return &Route{
-		RouteOpCode: engine.DBA,
-		Source: &Table{
-			QTable: table,
-			VTable: &vindexes.Table{
-				Name:     table.Table.Name,
-				Keyspace: ks,
-			},
-		},
-		Keyspace: ks,
-	}, nil
-}
-
-func sendToSingleKS(table *QueryTable, ks *vindexes.Keyspace, SysTableTableName map[string]evalengine.Expr, SysTableTableSchema []evalengine.Expr) (ops.Operator, error) {
-	// if we have enough info to send the query to a single keyspace,
-	// we create a single route and are done with it
-	return &Route{
-		RouteOpCode: engine.DBA,
-		Source: &Table{
-			QTable: table,
-			VTable: &vindexes.Table{
-				Name:     table.Table.Name,
-				Keyspace: ks,
-			},
-		},
-		Keyspace:            ks,
-		SysTableTableName:   SysTableTableName,
-		SysTableTableSchema: SysTableTableSchema,
-	}, nil
-}
+//func sendToSingleKS(table *QueryTable, ks *vindexes.Keyspace, SysTableTableName map[string]evalengine.Expr, SysTableTableSchema []evalengine.Expr) (ops.Operator, error) {
+//	// if we have enough info to send the query to a single keyspace,
+//	// we create a single route and are done with it
+//	return &Route{
+//		RouteOpCode: engine.DBA,
+//		Source: &Table{
+//			QTable: table,
+//			VTable: &vindexes.Table{
+//				Name:     table.Table.Name,
+//				Keyspace: ks,
+//			},
+//		},
+//		Keyspace:            ks,
+//		SysTableTableName:   SysTableTableName,
+//		SysTableTableSchema: SysTableTableSchema,
+//	}, nil
+//}
 
 func schemaColNameFor(tableName string) string {
 	cols := schemaColNames()[strings.ToUpper(tableName)]
