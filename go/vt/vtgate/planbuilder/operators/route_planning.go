@@ -516,6 +516,10 @@ func tryMerge(
 		}
 	}
 
+	if aRoute.Routing.CanMerge(bRoute.Routing) {
+		return merger(aRoute, bRoute)
+	}
+
 	switch aRoute.RouteOpCode {
 	case engine.Unsharded, engine.DBA:
 		if aRoute.RouteOpCode == bRoute.RouteOpCode && sameKeyspace {
