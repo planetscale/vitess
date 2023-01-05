@@ -410,7 +410,7 @@ func gen4DeleteStmtPlanner(
 
 func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) (err error) {
 	// Rewrite routed tables
-	_ = sqlparser.Rewrite(stmt, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.Rewrite(stmt, func(cursor *sqlparser.RewriteCursor) bool {
 		aliasTbl, isAlias := cursor.Node().(*sqlparser.AliasedTableExpr)
 		if !isAlias {
 			return err == nil

@@ -454,8 +454,8 @@ func ReplaceExpr(root, from, to Expr) Expr {
 	return expr
 }
 
-func replaceExpr(from, to Expr) func(cursor *Cursor) bool {
-	return func(cursor *Cursor) bool {
+func replaceExpr(from, to Expr) func(cursor Cursor) bool {
+	return func(cursor Cursor) bool {
 		if cursor.Node() == from {
 			cursor.Replace(to)
 		}
@@ -2151,7 +2151,7 @@ func RemoveKeyspaceFromColName(expr Expr) Expr {
 
 // RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
 func RemoveKeyspace(in SQLNode) SQLNode {
-	return Rewrite(in, nil, func(cursor *Cursor) bool {
+	return Rewrite(in, nil, func(cursor Cursor) bool {
 		switch col := cursor.Node().(type) {
 		case *ColName:
 			if !col.Qualifier.Qualifier.IsEmpty() {

@@ -51,46 +51,56 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	return parent.SQLNode
 }
 
-// RootNode is the root node of the AST when rewriting. It is the first element of the tree.
-type RootNode struct {
-	SQLNode
-}
+type (
+	// RootNode is the root node of the AST when rewriting. It is the first element of the tree.
+	RootNode struct {
+		SQLNode
+	}
 
-// An ApplyFunc is invoked by Rewrite for each node n, even if n is nil,
-// before and/or after the node's children, using a Cursor describing
-// the current node and providing operations on it.
-//
-// The return value of ApplyFunc controls the syntax tree traversal.
-// See Rewrite for details.
-type ApplyFunc func(*Cursor) bool
+	// An ApplyFunc is invoked by Rewrite for each node n, even if n is nil,
+	// before and/or after the node's children, using a RewriteCursor describing
+	// the current node and providing operations on it.
+	//
+	// The return value of ApplyFunc controls the syntax tree traversal.
+	// See Rewrite for details.
+	ApplyFunc func(Cursor) bool
 
-// A Cursor describes a node encountered during Apply.
-// Information about the node and its parent is available
-// from the Node and Parent methods.
-type Cursor struct {
-	parent   SQLNode
-	replacer replacerFunc
-	node     SQLNode
+	Cursor interface {
+		Node() SQLNode
+		Parent() SQLNode
+		Replace(newNode SQLNode)
+		ReplacerF() func(newNode SQLNode)
+		ReplaceAndRevisit(newNode SQLNode)
+	}
 
-	// marks that the node has been replaced, and the new node should be visited
-	revisit bool
-}
+	// A RewriteCursor describes a node encountered during Apply.
+	// Information about the node and its parent is available
+	// from the Node and Parent methods.
+	RewriteCursor struct {
+		parent   SQLNode
+		replacer replacerFunc
+		node     SQLNode
+
+		// marks that the node has been replaced, and the new node should be visited
+		revisit bool
+	}
+)
 
 // Node returns the current Node.
-func (c *Cursor) Node() SQLNode { return c.node }
+func (c *RewriteCursor) Node() SQLNode { return c.node }
 
 // Parent returns the parent of the current Node.
-func (c *Cursor) Parent() SQLNode { return c.parent }
+func (c *RewriteCursor) Parent() SQLNode { return c.parent }
 
 // Replace replaces the current node in the parent field with this new object. The use needs to make sure to not
 // replace the object with something of the wrong type, or the visitor will panic.
-func (c *Cursor) Replace(newNode SQLNode) {
+func (c *RewriteCursor) Replace(newNode SQLNode) {
 	c.replacer(newNode, c.parent)
 	c.node = newNode
 }
 
 // ReplacerF returns a replace func that will work even when the cursor has moved to a different node.
-func (c *Cursor) ReplacerF() func(newNode SQLNode) {
+func (c *RewriteCursor) ReplacerF() func(newNode SQLNode) {
 	replacer := c.replacer
 	parent := c.parent
 	return func(newNode SQLNode) {
@@ -101,7 +111,7 @@ func (c *Cursor) ReplacerF() func(newNode SQLNode) {
 // ReplaceAndRevisit replaces the current node in the parent field with this new object.
 // When used, this will abort the visitation of the current node - no post or children visited,
 // and the new node visited.
-func (c *Cursor) ReplaceAndRevisit(newNode SQLNode) {
+func (c *RewriteCursor) ReplaceAndRevisit(newNode SQLNode) {
 	switch newNode.(type) {
 	case SelectExprs:
 	default:

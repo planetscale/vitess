@@ -310,7 +310,7 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 // SELECT foo FROM (SELECT id+42 as foo FROM user) as t
 // We need `foo` to be translated to `id+42` on the inside of the derived table
 func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
-	newExpr := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
+	newExpr := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.RewriteCursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			exp, err := vt.getExprFor(node.Name.String())

@@ -1096,7 +1096,7 @@ func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) erro
 	if err != nil {
 		return err
 	}
-	sqlparser.Rewrite(rb.Select, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(rb.Select, func(cursor *sqlparser.RewriteCursor) bool {
 		if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
 			removeKeyspaceFromSelectExpr(aliasedExpr)
 		}

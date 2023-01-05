@@ -34,7 +34,7 @@ type earlyRewriter struct {
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 }
 
-func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
+func (r *earlyRewriter) down(cursor *sqlparser.RewriteCursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {
@@ -107,7 +107,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.SelectExprs) error {
+func (r *earlyRewriter) expandStar(cursor *sqlparser.RewriteCursor, node sqlparser.SelectExprs) error {
 	currentScope := r.scoper.currentScope()
 	var selExprs sqlparser.SelectExprs
 	changed := false
@@ -143,12 +143,12 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 //     HAVING/ORDER BY clause is inside an aggregation function
 //
 // This is a fucking weird scoping rule, but it's what MySQL seems to do... ¯\_(ツ)_/¯
-func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
+func rewriteHavingAndOrderBy(cursor *sqlparser.RewriteCursor, node sqlparser.SQLNode) {
 	sel, isSel := cursor.Parent().(*sqlparser.Select)
 	if !isSel {
 		return
 	}
-	sqlparser.Rewrite(node, func(inner *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(node, func(inner *sqlparser.RewriteCursor) bool {
 		switch col := inner.Node().(type) {
 		case *sqlparser.Subquery:
 			return false
@@ -169,7 +169,7 @@ func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
 					}
 
 					safeToRewrite := true
-					sqlparser.Rewrite(ae.Expr, func(cursor *sqlparser.Cursor) bool {
+					sqlparser.Rewrite(ae.Expr, func(cursor *sqlparser.RewriteCursor) bool {
 						switch cursor.Node().(type) {
 						case *sqlparser.ColName:
 							safeToRewrite = false
@@ -230,7 +230,7 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 // realCloneOfColNames clones all the expressions including ColName.
 // Since sqlparser.CloneRefOfColName does not clone col names, this method is needed.
 func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
-	return sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
+	return sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.RewriteCursor) bool {
 		switch exp := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			newColName := *exp

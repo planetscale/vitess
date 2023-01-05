@@ -115,7 +115,7 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 
 	abort := false
 
-	sqlparser.Rewrite(in, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(in, func(cursor *sqlparser.RewriteCursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.Union:
 			if _, ok := cursor.Parent().(*sqlparser.RootNode); ok {
@@ -139,7 +139,7 @@ func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectS
 			cursor.Replace(node)
 		}
 		return true
-	}, func(*sqlparser.Cursor) bool {
+	}, func(*sqlparser.RewriteCursor) bool {
 		return !abort
 	})
 
@@ -178,7 +178,7 @@ func getTables(in sqlparser.SelectStatement, currentDB string, si semantics.Sche
 
 func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
 	simplified := false
-	sqlparser.Rewrite(in, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(in, func(cursor *sqlparser.RewriteCursor) bool {
 		se, ok := cursor.Node().(*sqlparser.StarExpr)
 		if !ok {
 			return true
@@ -213,7 +213,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 	shouldKeepExpr := func(expr sqlparser.Expr) bool {
 		return !semTable.RecursiveDeps(expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr)
 	}
-	sqlparser.Rewrite(clone, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(clone, func(cursor *sqlparser.RewriteCursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.JoinTableExpr:
 			lft, ok := node.LeftExpr.(*sqlparser.AliasedTableExpr)
@@ -319,10 +319,10 @@ func newExprCursor(expr sqlparser.Expr, replace func(replaceWith sqlparser.Expr)
 // such as visiting and being able to change individual expressions in a AND tree
 func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expressionCursor) bool) {
 	abort := false
-	post := func(*sqlparser.Cursor) bool {
+	post := func(*sqlparser.RewriteCursor) bool {
 		return !abort
 	}
-	pre := func(cursor *sqlparser.Cursor) bool {
+	pre := func(cursor *sqlparser.RewriteCursor) bool {
 		if abort {
 			return true
 		}

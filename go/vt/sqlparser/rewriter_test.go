@@ -30,10 +30,10 @@ func BenchmarkVisitLargeExpression(b *testing.B) {
 
 	depth := 0
 	for i := 0; i < b.N; i++ {
-		_ = Rewrite(exp, func(cursor *Cursor) bool {
+		_ = Rewrite(exp, func(cursor Cursor) bool {
 			depth++
 			return true
-		}, func(cursor *Cursor) bool {
+		}, func(cursor Cursor) bool {
 			depth--
 			return true
 		})
@@ -45,7 +45,7 @@ func TestReplaceWorksInLaterCalls(t *testing.T) {
 	stmt, err := Parse(q)
 	require.NoError(t, err)
 	count := 0
-	Rewrite(stmt, func(cursor *Cursor) bool {
+	Rewrite(stmt, func(cursor Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *Select:
 			node.SelectExprs[0] = &AliasedExpr{
@@ -69,7 +69,7 @@ func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {
 	stmt, err := Parse(q)
 	require.NoError(t, err)
 	count := 0
-	Rewrite(stmt, func(cursor *Cursor) bool {
+	Rewrite(stmt, func(cursor Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case SelectExprs:
 			if len(node) != 1 {
@@ -101,7 +101,7 @@ func TestChangeValueTypeGivesError(t *testing.T) {
 			require.Equal(t, "[BUG] tried to replace 'On' on 'JoinCondition'", r)
 		}
 	}()
-	_ = Rewrite(parse, func(cursor *Cursor) bool {
+	_ = Rewrite(parse, func(cursor Cursor) bool {
 		_, ok := cursor.Node().(*ComparisonExpr)
 		if ok {
 			cursor.Replace(&NullVal{}) // this is not a valid replacement because the container is a value type

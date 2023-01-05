@@ -48,7 +48,7 @@ var typeInt32 = Type{Type: sqltypes.Int32}
 var decimal = Type{Type: sqltypes.Decimal}
 var floatval = Type{Type: sqltypes.Float64}
 
-func (t *typer) up(cursor *sqlparser.Cursor) error {
+func (t *typer) up(cursor *sqlparser.RewriteCursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Literal:
 		switch node.Type {

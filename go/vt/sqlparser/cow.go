@@ -16,12 +16,49 @@ limitations under the License.
 
 package sqlparser
 
-type cow struct {
-	old, new SQLNode
+// RewriteCOW allows for Copy On Write rewriting of the AST
+func RewriteCOW(
+	node SQLNode,                       // the root of the node we will vist
+	apply ApplyFunc,                    // the visitor function
+	cloned func(before, after SQLNode), // any nodes that are copied because a child was replaced will be seen by this function
+) SQLNode {
+	c := &cowCursor{
+		f:        apply,
+		node:     node,
+		parent:   nil,
+		replaced: nil,
+		cloned:   cloned,
+	}
+
+	return nil
+}
+
+type cowCursor struct {
+	f        ApplyFunc
+	node     SQLNode // the current node we are visiting
+	parent   SQLNode // the parent of the current node
+	replaced SQLNode // if the user did a Replace, we have the new node here
 	cloned   func(old, new SQLNode)
 }
 
-func COW(root, old, new SQLNode, cloned func(old, new SQLNode)) SQLNode {
-	// c := cow{old: old, new: new, cloned: cloned}
-	return nil
+func (c *cowCursor) Node() SQLNode {
+	return c.node
 }
+
+func (c *cowCursor) Parent() SQLNode {
+	return c.parent
+}
+
+func (c *cowCursor) Replace(newNode SQLNode) {
+	c.replaced = newNode
+}
+
+func (c *cowCursor) ReplacerF() func(SQLNode) {
+	panic("COW rewrite does not support this")
+}
+
+func (c *cowCursor) ReplaceAndRevisit(SQLNode) {
+	panic("COW rewrite does not support this")
+}
+
+var _ Cursor = (*cowCursor)(nil)

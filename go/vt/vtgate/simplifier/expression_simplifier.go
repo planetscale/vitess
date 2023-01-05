@@ -80,7 +80,7 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) (smallestKnown sqlparser.Expr)
 
 func getNodesAtLevel(e sqlparser.Expr, level int) (result []sqlparser.Expr, replaceF []func(node sqlparser.SQLNode)) {
 	lvl := 0
-	pre := func(cursor *sqlparser.Cursor) bool {
+	pre := func(cursor *sqlparser.RewriteCursor) bool {
 
 		if expr, isExpr := cursor.Node().(sqlparser.Expr); level == lvl && isExpr {
 			result = append(result, expr)
@@ -89,7 +89,7 @@ func getNodesAtLevel(e sqlparser.Expr, level int) (result []sqlparser.Expr, repl
 		lvl++
 		return true
 	}
-	post := func(cursor *sqlparser.Cursor) bool {
+	post := func(cursor *sqlparser.RewriteCursor) bool {
 		lvl--
 		return true
 	}
@@ -99,14 +99,14 @@ func getNodesAtLevel(e sqlparser.Expr, level int) (result []sqlparser.Expr, repl
 
 func depth(e sqlparser.Expr) (depth int) {
 	lvl := 0
-	pre := func(cursor *sqlparser.Cursor) bool {
+	pre := func(cursor *sqlparser.RewriteCursor) bool {
 		lvl++
 		if lvl > depth {
 			depth = lvl
 		}
 		return true
 	}
-	post := func(cursor *sqlparser.Cursor) bool {
+	post := func(cursor *sqlparser.RewriteCursor) bool {
 		lvl--
 		return true
 	}

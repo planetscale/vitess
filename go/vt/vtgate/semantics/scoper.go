@@ -57,7 +57,7 @@ func newScoper() *scoper {
 	}
 }
 
-func (s *scoper) down(cursor *sqlparser.Cursor) error {
+func (s *scoper) down(cursor *sqlparser.RewriteCursor) error {
 	node := cursor.Node()
 	switch node := node.(type) {
 	case *sqlparser.Update, *sqlparser.Delete:
@@ -149,7 +149,7 @@ func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
 	return l
 }
 
-func (s *scoper) up(cursor *sqlparser.Cursor) error {
+func (s *scoper) up(cursor *sqlparser.RewriteCursor) error {
 	node := cursor.Node()
 	switch node := node.(type) {
 	case sqlparser.OrderBy:

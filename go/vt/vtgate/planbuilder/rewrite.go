@@ -39,7 +39,7 @@ func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.Reserved
 	return nil
 }
 
-func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
+func (r *rewriter) rewriteDown(cursor *sqlparser.RewriteCursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
 		rewriteHavingClause(node)
@@ -97,7 +97,7 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
+func (r *rewriter) rewriteUp(cursor *sqlparser.RewriteCursor) bool {
 	switch cursor.Node().(type) {
 	case *sqlparser.Subquery:
 		r.inSubquery--
@@ -105,7 +105,7 @@ func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
 	return r.err == nil
 }
 
-func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.ComparisonExpr) error {
+func rewriteInSubquery(cursor *sqlparser.RewriteCursor, r *rewriter, node *sqlparser.ComparisonExpr) error {
 	subq, exp := semantics.GetSubqueryAndOtherSide(node)
 	if subq == nil || exp == nil {
 		return nil
@@ -124,7 +124,7 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 	return nil
 }
 
-func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) error {
+func rewriteSubquery(cursor *sqlparser.RewriteCursor, r *rewriter, node *sqlparser.Subquery) error {
 	semTableSQ, found := r.semTable.SubqueryRef[node]
 	if !found {
 		return vterrors.VT13001("got subquery that was not in the subq map")
@@ -139,7 +139,7 @@ func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subq
 	return nil
 }
 
-func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlparser.ExistsExpr) error {
+func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.RewriteCursor, node *sqlparser.ExistsExpr) error {
 	semTableSQ, found := r.semTable.SubqueryRef[node.Subquery]
 	if !found {
 		return vterrors.VT13001("got subquery that was not in the subq map")
@@ -175,7 +175,7 @@ func rewriteHavingClause(node *sqlparser.Select) {
 	for _, expr := range exprs {
 		hasAggr := sqlparser.ContainsAggregation(expr)
 		if !hasAggr {
-			sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+			sqlparser.Rewrite(expr, func(cursor *sqlparser.RewriteCursor) bool {
 				visitColName(cursor.Node(), selectExprMap, func(original sqlparser.Expr) {
 					if sqlparser.ContainsAggregation(original) {
 						hasAggr = true
@@ -187,7 +187,7 @@ func rewriteHavingClause(node *sqlparser.Select) {
 		if hasAggr {
 			node.AddHaving(expr)
 		} else {
-			sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+			sqlparser.Rewrite(expr, func(cursor *sqlparser.RewriteCursor) bool {
 				visitColName(cursor.Node(), selectExprMap, func(original sqlparser.Expr) {
 					cursor.Replace(original)
 				})
