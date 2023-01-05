@@ -45,10 +45,10 @@ func BenchmarkRewriteLargeExpression(b *testing.B) {
 			exp := newGenerator(int64(i*100), i).expression()
 			count := 0
 			for i := 0; i < b.N; i++ {
-				_ = Rewrite(exp, func(_ *Cursor) bool {
+				_ = Rewrite(exp, func(_ Cursor) bool {
 					count++
 					return true
-				}, func(_ *Cursor) bool {
+				}, func(_ Cursor) bool {
 					count--
 					return true
 				})

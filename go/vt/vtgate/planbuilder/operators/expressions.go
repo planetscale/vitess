@@ -31,7 +31,7 @@ func BreakExpressionInLHSandRHS(
 	lhs semantics.TableSet,
 ) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
 	rewrittenExpr = sqlparser.CloneExpr(expr)
-	_ = sqlparser.Rewrite(rewrittenExpr, nil, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.Rewrite(rewrittenExpr, nil, func(cursor *sqlparser.RewriteCursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			deps := ctx.SemTable.RecursiveDeps(node)

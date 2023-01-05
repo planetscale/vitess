@@ -318,7 +318,7 @@ func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, err
 	return inner.bindVars, nil
 }
 
-func (er *astRewriter) rewrite(cursor *Cursor) bool {
+func (er *astRewriter) rewrite(cursor Cursor) bool {
 	// Add SET_VAR comment to this node if it supports it and is needed
 	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint && er.setVarComment != "" {
 		newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(er.setVarComment)
@@ -475,7 +475,7 @@ func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
 	return false, i
 }
 
-func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *Variable) {
+func (er *astRewriter) sysVarRewrite(cursor Cursor, node *Variable) {
 	lowered := node.Name.Lowered()
 
 	var found bool
@@ -511,7 +511,7 @@ func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *Variable) {
 	}
 }
 
-func (er *astRewriter) udvRewrite(cursor *Cursor, node *Variable) {
+func (er *astRewriter) udvRewrite(cursor Cursor, node *Variable) {
 	udv := strings.ToLower(node.Name.CompliantName())
 	cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
 	er.bindVars.AddUserDefVar(udv)
@@ -525,7 +525,7 @@ var funcRewrites = map[string]string{
 	"row_count":      RowCountName,
 }
 
-func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
+func (er *astRewriter) funcRewrite(cursor Cursor, node *FuncExpr) {
 	bindVar, found := funcRewrites[node.Name.Lowered()]
 	if found {
 		if bindVar == DBVarName && !er.shouldRewriteDatabaseFunc {
@@ -540,7 +540,7 @@ func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 	}
 }
 
-func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
+func (er *astRewriter) unnestSubQueries(cursor Cursor, subquery *Subquery) {
 	if _, isExists := cursor.Parent().(*ExistsExpr); isExists {
 		return
 	}
@@ -603,7 +603,7 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	cursor.Replace(rewritten)
 }
 
-func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
+func (er *astRewriter) existsRewrite(cursor Cursor, node *ExistsExpr) {
 	switch node := node.Subquery.Select.(type) {
 	case *Select:
 		if node.Limit == nil {

@@ -96,7 +96,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	for i := range u.Sources {
 		predicate := sqlparser.CloneExpr(expr)
 		var err error
-		predicate = sqlparser.Rewrite(predicate, func(cursor *sqlparser.Cursor) bool {
+		predicate = sqlparser.Rewrite(predicate, func(cursor *sqlparser.RewriteCursor) bool {
 			col, ok := cursor.Node().(*sqlparser.ColName)
 			if !ok {
 				return err == nil

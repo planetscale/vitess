@@ -333,7 +333,7 @@ func rewriteColumnsInSubqueryOpForJoin(
 	resultInnerOp := innerOp
 	var rewriteError error
 	// go over the entire expression in the subquery
-	sqlparser.Rewrite(subQueryInner.ExtractedSubquery.Original, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(subQueryInner.ExtractedSubquery.Original, func(cursor *sqlparser.RewriteCursor) bool {
 		sqlNode := cursor.Node()
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
@@ -387,7 +387,7 @@ func createCorrelatedSubqueryOp(
 	var lhsCols []*sqlparser.ColName
 	for _, pred := range preds {
 		var rewriteError error
-		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
+		sqlparser.Rewrite(pred, func(cursor *sqlparser.RewriteCursor) bool {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.ColName:
 				nodeDeps := ctx.SemTable.RecursiveDeps(node)

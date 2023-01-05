@@ -162,7 +162,7 @@ func showTableRewrite(show *sqlparser.ShowBasic, dbName string) {
 	if filter == nil {
 		return
 	}
-	_ = sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.Rewrite(filter, func(cursor *sqlparser.RewriteCursor) bool {
 		switch n := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {

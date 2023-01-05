@@ -161,7 +161,7 @@ func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser
 }
 
 func (qb *queryBuilder) rewriteExprForDerivedTable(expr sqlparser.Expr, dtName string) {
-	sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(expr, func(cursor *sqlparser.RewriteCursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			hasTable := qb.hasTable(node.Qualifier.Name.String())
@@ -236,7 +236,7 @@ func (h *Horizon) toSQL(qb *queryBuilder) error {
 	if err != nil {
 		return err
 	}
-	sqlparser.Rewrite(qb.sel, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(qb.sel, func(cursor *sqlparser.RewriteCursor) bool {
 		if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
 			removeKeyspaceFromSelectExpr(aliasedExpr)
 		}
@@ -365,7 +365,7 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		if err != nil {
 			return err
 		}
-		sqlparser.Rewrite(qb.sel, func(cursor *sqlparser.Cursor) bool {
+		sqlparser.Rewrite(qb.sel, func(cursor *sqlparser.RewriteCursor) bool {
 			if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
 				removeKeyspaceFromSelectExpr(aliasedExpr)
 			}

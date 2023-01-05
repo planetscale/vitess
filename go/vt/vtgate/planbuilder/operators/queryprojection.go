@@ -186,8 +186,8 @@ func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 }
 
 // Rewrite will go through an expression, add aggregations to the QP, and rewrite them to use column offset
-func (ar *AggrRewriter) Rewrite() func(*sqlparser.Cursor) bool {
-	return func(cursor *sqlparser.Cursor) bool {
+func (ar *AggrRewriter) Rewrite() func(*sqlparser.RewriteCursor) bool {
+	return func(cursor *sqlparser.RewriteCursor) bool {
 		if ar.Err != nil {
 			return false
 		}

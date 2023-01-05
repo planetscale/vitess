@@ -60,7 +60,7 @@ func newNormalizer(reserved *ReservedVars, bindVars map[string]*querypb.BindVari
 // WalkStatement is the top level walk function.
 // If it encounters a Select, it switches to a mode
 // where variables are deduped.
-func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
+func (nz *normalizer) WalkStatement(cursor Cursor) bool {
 	switch node := cursor.Node().(type) {
 	// no need to normalize the statement types
 	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
@@ -90,7 +90,7 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 }
 
 // WalkSelect normalizes the AST in Select mode.
-func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
+func (nz *normalizer) WalkSelect(cursor Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *Select:
 		_, isDerived := cursor.Parent().(*DerivedTable)
@@ -143,7 +143,7 @@ func validateLiteral(node *Literal) (err error) {
 	return err
 }
 
-func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
+func (nz *normalizer) convertLiteralDedup(node *Literal, cursor Cursor) {
 	err := validateLiteral(node)
 	if err != nil {
 		nz.err = err
@@ -191,7 +191,7 @@ func keyFor(bval *querypb.BindVariable, lit *Literal) string {
 }
 
 // convertLiteral converts an Literal without the dedup.
-func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
+func (nz *normalizer) convertLiteral(node *Literal, cursor Cursor) {
 	err := validateLiteral(node)
 	if err != nil {
 		nz.err = err

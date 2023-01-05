@@ -96,7 +96,7 @@ func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
 	del.TableExprs = sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: tbl}}
 	del.Targets = nil
 	if del.Where != nil {
-		_ = sqlparser.Rewrite(del.Where, func(cursor *sqlparser.Cursor) bool {
+		_ = sqlparser.Rewrite(del.Where, func(cursor *sqlparser.RewriteCursor) bool {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.ColName:
 				if !node.Qualifier.IsEmpty() {

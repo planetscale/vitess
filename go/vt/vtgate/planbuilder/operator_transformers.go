@@ -636,7 +636,7 @@ type subQReplacer struct {
 	replaced          bool
 }
 
-func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
+func (sqr *subQReplacer) replacer(cursor *sqlparser.RewriteCursor) bool {
 	ext, ok := cursor.Node().(*sqlparser.ExtractedSubquery)
 	if !ok {
 		return true

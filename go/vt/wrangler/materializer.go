@@ -123,7 +123,7 @@ func shouldInclude(table string, excludes []string) bool {
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
 	externalCluster string, dropForeignKeys bool, sourceTimeZone, onDDL string, sourceShards []string) error {
-	//FIXME validate tableSpecs, allTables, excludeTables
+	// FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
 	var err error
@@ -1094,9 +1094,9 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			var err error
 			mu.Lock()
 			if len(sourceDDLs) == 0 {
-				//only get ddls for tables, once and lazily: if we need to copy the schema from source to target
-				//we copy schemas from primaries on the source keyspace
-				//and we have found use cases where user just has a replica (no primary) in the source keyspace
+				// only get ddls for tables, once and lazily: if we need to copy the schema from source to target
+				// we copy schemas from primaries on the source keyspace
+				// and we have found use cases where user just has a replica (no primary) in the source keyspace
 				sourceDDLs, err = mz.getSourceTableDDLs(ctx)
 			}
 			mu.Unlock()
@@ -1172,7 +1172,7 @@ func stripTableForeignKeys(ddl string) (string, error) {
 		return "", err
 	}
 
-	stripFKConstraints := func(cursor *sqlparser.Cursor) bool {
+	stripFKConstraints := func(cursor *sqlparser.RewriteCursor) bool {
 		switch node := cursor.Node().(type) {
 		case sqlparser.DDLStatement:
 			if node.GetTableSpec() != nil {
@@ -1201,7 +1201,7 @@ func stripTableConstraints(ddl string) (string, error) {
 		return "", err
 	}
 
-	stripConstraints := func(cursor *sqlparser.Cursor) bool {
+	stripConstraints := func(cursor *sqlparser.RewriteCursor) bool {
 		switch node := cursor.Node().(type) {
 		case sqlparser.DDLStatement:
 			if node.GetTableSpec() != nil {

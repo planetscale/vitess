@@ -41,7 +41,7 @@ func newTableCollector(scoper *scoper, si SchemaInformation, currentDb string) *
 	}
 }
 
-func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
+func (tc *tableCollector) up(cursor *sqlparser.RewriteCursor) error {
 	node, ok := cursor.Node().(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return nil

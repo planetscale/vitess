@@ -58,7 +58,7 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 	}
 }
 
-func (b *binder) up(cursor *sqlparser.Cursor) error {
+func (b *binder) up(cursor *sqlparser.RewriteCursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
@@ -203,7 +203,7 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 	b.direct[subq] = subqDirectDeps.KeepOnly(tablesToKeep)
 }
 
-func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *scope, subq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
+func (b *binder) createExtractedSubquery(cursor *sqlparser.RewriteCursor, currScope *scope, subq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
 	if currScope.stmt == nil {
 		return nil, NewError(Buggy, "unable to bind subquery to select statement")
 	}

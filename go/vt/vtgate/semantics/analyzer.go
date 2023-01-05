@@ -120,7 +120,7 @@ func (a *analyzer) setError(err error) {
 	}
 }
 
-func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
+func (a *analyzer) analyzeDown(cursor *sqlparser.RewriteCursor) bool {
 	// If we have an error we keep on going down the tree without checking for anything else
 	// this way we can abort when we come back up.
 	if !a.shouldContinue() {
@@ -149,7 +149,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
+func (a *analyzer) analyzeUp(cursor *sqlparser.RewriteCursor) bool {
 	if !a.shouldContinue() {
 		return false
 	}
@@ -211,26 +211,26 @@ func checkUnionColumns(union *sqlparser.Union) error {
 errors that happen when we are evaluating SELECT expressions are saved until we know
 if we can merge everything into a single route or not
 */
-func (a *analyzer) enterProjection(cursor *sqlparser.Cursor) {
+func (a *analyzer) enterProjection(cursor *sqlparser.RewriteCursor) {
 	_, ok := cursor.Node().(sqlparser.SelectExprs)
 	if ok && isParentSelect(cursor) {
 		a.inProjection++
 	}
 }
 
-func (a *analyzer) leaveProjection(cursor *sqlparser.Cursor) {
+func (a *analyzer) leaveProjection(cursor *sqlparser.RewriteCursor) {
 	_, ok := cursor.Node().(sqlparser.SelectExprs)
 	if ok && isParentSelect(cursor) {
 		a.inProjection--
 	}
 }
 
-func isParentSelect(cursor *sqlparser.Cursor) bool {
+func isParentSelect(cursor *sqlparser.RewriteCursor) bool {
 	_, isSelect := cursor.Parent().(*sqlparser.Select)
 	return isSelect
 }
 
-func isParentSelectStatement(cursor *sqlparser.Cursor) bool {
+func isParentSelectStatement(cursor *sqlparser.RewriteCursor) bool {
 	_, isSelect := cursor.Parent().(sqlparser.SelectStatement)
 	return isSelect
 }
@@ -256,7 +256,7 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	return a.err
 }
 
-func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
+func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.RewriteCursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Update:
 		if len(node.TableExprs) != 1 {
