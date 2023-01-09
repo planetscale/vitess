@@ -320,7 +320,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // Type Tokens
 %token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
-%token <str> REAL DOUBLE FLOAT_TYPE DECIMAL_TYPE NUMERIC
+%token <str> REAL DOUBLE FLOAT_TYPE FLOAT4_TYPE FLOAT8_TYPE DECIMAL_TYPE NUMERIC
 %token <str> TIME TIMESTAMP DATETIME YEAR
 %token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
 %token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
@@ -544,7 +544,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnCharset> charset_opt
 %type <str> collate_opt
 %type <boolean> binary_opt
-%type <LengthScaleOption> float_length_opt decimal_length_opt
+%type <LengthScaleOption> double_length_opt float_length_opt decimal_length_opt
 %type <boolean> unsigned_opt zero_fill_opt without_valid_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
@@ -1979,19 +1979,31 @@ int_type:
   }
 
 decimal_type:
-REAL float_length_opt
+REAL double_length_opt
   {
     $$ = ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
-| DOUBLE float_length_opt
+| DOUBLE double_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| FLOAT8_TYPE double_length_opt
   {
     $$ = ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | FLOAT_TYPE float_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| FLOAT4_TYPE float_length_opt
   {
     $$ = ColumnType{Type: string($1)}
     $$.Length = $2.Length
@@ -2155,7 +2167,7 @@ length_opt:
     $$ = NewIntLiteral($2)
   }
 
-float_length_opt:
+double_length_opt:
   {
     $$ = LengthScaleOption{}
   }
@@ -2164,6 +2176,18 @@ float_length_opt:
     $$ = LengthScaleOption{
         Length: NewIntLiteral($2),
         Scale: NewIntLiteral($4),
+    }
+  }
+
+float_length_opt:
+double_length_opt
+  {
+    $$ = $1
+  }
+| '(' INTEGRAL ')'
+  {
+    $$ = LengthScaleOption{
+        Length: NewIntLiteral($2),
     }
   }
 
