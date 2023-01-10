@@ -414,6 +414,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowOther(in, f)
 	case *ShowThrottledApps:
 		return VisitRefOfShowThrottledApps(in, f)
+	case *ShowThrottlerStatus:
+		return VisitRefOfShowThrottlerStatus(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Std:
@@ -3282,6 +3284,15 @@ func VisitRefOfShowThrottledApps(in *ShowThrottledApps, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfShowThrottlerStatus(in *ShowThrottlerStatus, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4681,6 +4692,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfShowMigrationLogs(in, f)
 	case *ShowThrottledApps:
 		return VisitRefOfShowThrottledApps(in, f)
+	case *ShowThrottlerStatus:
+		return VisitRefOfShowThrottlerStatus(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *TruncateTable:
