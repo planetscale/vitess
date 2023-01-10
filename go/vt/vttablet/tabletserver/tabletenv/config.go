@@ -310,6 +310,7 @@ type TabletConfig struct {
 	TxThrottlerHealthCheckCells []string `json:"-"`
 
 	EnableLagThrottler bool `json:"-"`
+	EnableTableGC      bool `json:"-"` // can be turned off programmatically by tests
 
 	TransactionLimitConfig `json:"-"`
 
@@ -559,6 +560,7 @@ var defaultConfig = TabletConfig{
 
 	EnforceStrictTransTables: true,
 	EnableOnlineDDL:          true,
+	EnableTableGC:            true,
 
 	RowStreamer: RowStreamerConfig{
 		MaxInnoDBTrxHistLen: 1000000,
