@@ -46,7 +46,10 @@ var (
 	}
 )
 
-func TestGetReplicationAnalysis(t *testing.T) {
+// TestGetReplicationAnalysisDecision tests the code of GetReplicationAnalysis decision-making. It doesn't check the SQL query
+// run by it. It only checks the analysis part after the rows have been read. This tests fakes the db and explicitly returns the
+// rows that are specified in the test.
+func TestGetReplicationAnalysisDecision(t *testing.T) {
 	tests := []struct {
 		name       string
 		info       []*test.InfoForRecoveryAnalysis
@@ -481,10 +484,52 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			}},
 			// We will ignore these keyspaces too until the durability policy is set in the topo server
 			codeWanted: NoProblem,
+		}, {
+			// If the database_instance table for a tablet is empty (discovery of MySQL information hasn't happened yet or failed)
+			// then we shouldn't run a failure fix on it until the discovery succeeds
+			name: "Empty database_instance table",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy:              "semi_sync",
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+				SemiSyncPrimaryEnabled:        1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				IsInvalid:        1,
+				DurabilityPolicy: "semi_sync",
+			}},
+			codeWanted: NoProblem,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			oldDB := db.Db
+			defer func() {
+				db.Db = oldDB
+			}()
+
 			var rowMaps []sqlutils.RowMap
 			for _, analysis := range tt.info {
 				analysis.SetValuesFromTabletInfo()
@@ -576,6 +621,77 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 				require.NoError(t, err)
 				require.EqualValues(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Count())
 			}
+		})
+	}
+}
+
+// TestGetReplicationAnalysis tests the entire GetReplicationAnalysis. It inserts data into the database and runs the function.
+// The database is not faked. This is intended to give more test coverage. This test is more comprehensive but more expensive than TestGetReplicationAnalysisDecision.
+// This test is somewhere between a unit test, and an end-to-end test. It is specifically useful for testing situations which are hard to come by in end-to-end test, but require
+// real-world data to test specifically.
+func TestGetReplicationAnalysis(t *testing.T) {
+	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
+	tests := []struct {
+		name       string
+		sql        []string
+		codeWanted AnalysisCode
+	}{
+		{
+			name:       "No additions",
+			sql:        nil,
+			codeWanted: NoProblem,
+		}, {
+			name: "Removing Primary Tablet's Vitess record",
+			sql: []string{
+				// This query removes the primary tablet's vitess_tablet record
+				`delete from vitess_tablet where port = 6714`,
+			},
+			codeWanted: ClusterHasNoPrimary,
+		}, {
+			name: "Removing Primary Tablet's MySQL record",
+			sql: []string{
+				// This query removes the primary tablet's database_instance record
+				`delete from database_instance where port = 6714`,
+			},
+			// As long as we have the vitess record stating that this tablet is the primary
+			// It would be incorrect to run a PRS.
+			// This situation only happens when we haven't been able to read the MySQL information even once for this tablet.
+			// So it is likely a new tablet.
+			codeWanted: NoProblem,
+		}, {
+			name: "Removing Replica Tablet's MySQL record",
+			sql: []string{
+				// This query removes the replica tablet's database_instance record
+				`delete from database_instance where port = 6711`,
+			},
+			// As long as we don't have the MySQL information, we shouldn't do anything.
+			// We should wait for the MySQL information to be refreshed once.
+			// This situation only happens when we haven't been able to read the MySQL information even once for this tablet.
+			// So it is likely a new tablet.
+			codeWanted: NoProblem,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Each test should clear the database. The easiest way to do that is to run all the initialization commands again
+			defer func() {
+				db.ClearOrchestratorDatabase()
+			}()
+
+			for _, query := range append(initialSQL, tt.sql...) {
+				_, err := db.ExecOrchestrator(query)
+				require.NoError(t, err)
+			}
+
+			got, err := GetReplicationAnalysis("", &ReplicationAnalysisHints{})
+			require.NoError(t, err)
+			if tt.codeWanted == NoProblem {
+				require.Len(t, got, 0)
+				return
+			}
+			require.Len(t, got, 1)
+			require.Equal(t, tt.codeWanted, got[0].Analysis)
 		})
 	}
 }
