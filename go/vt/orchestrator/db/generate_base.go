@@ -853,6 +853,7 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS vitess_tablet (
+			alias varchar(256) NOT NULL,
 			hostname varchar(128) CHARACTER SET ascii NOT NULL,
 			port smallint(5) unsigned NOT NULL,
 			keyspace varchar(128) CHARACTER SET ascii NOT NULL,
@@ -861,6 +862,7 @@ var generateSQLBase = []string{
 			tablet_type smallint(5) NOT NULL,
 			primary_timestamp timestamp NOT NULL,
 			info varchar(512) CHARACTER SET ascii NOT NULL,
+			UNIQUE (alias),
 			PRIMARY KEY (hostname, port)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
