@@ -103,6 +103,11 @@
     },
     {
       "Keyspace": "main",
+      "SQL": "SELECT MAX(users.id) FROM users FOR UPDATE",
+      "Error": "query not supported by boost: row locking with ' for update' is not supported"
+    },
+    {
+      "Keyspace": "main",
       "SQL": "select count(*), aid from votes where uid = :v1 group by aid",
       "Error": "partially overlapping partial indices; parent = 2, pcols = []int{1}, child = 2, cols = []int{0, 1}, conflict = 0"
     },

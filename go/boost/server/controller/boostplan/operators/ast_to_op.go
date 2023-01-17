@@ -221,6 +221,13 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 		return true
 	}, nil)
 
+	if sel.Lock != sqlparser.NoLock {
+		errors = append(errors, &UnsupportedError{
+			AST:  sel,
+			Type: Lock,
+		})
+	}
+
 	return multierr.Combine(errors...)
 }
 
