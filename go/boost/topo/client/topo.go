@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/exp/slices"
 	"google.golang.org/grpc/codes"
 
 	"vitess.io/vitess/go/boost/boostrpc"
@@ -357,6 +358,35 @@ func (c *Client) Purge(ctx context.Context, _ *vtboostpb.PurgeRequest) (*vtboost
 	}
 
 	return &vtboostpb.PurgeResponse{}, nil
+}
+
+func (c *Client) SetScience(ctx context.Context, req *vtboostpb.SetScienceRequest) (*vtboostpb.SetScienceResponse, error) {
+	clusters, err := boosttopo.Load[vtboostpb.ClusterStates](ctx, c.ts, boosttopo.PathClusterState)
+	if err != nil {
+		if topo.IsErrType(err, topo.NoNode) {
+			return nil, &Error{ErrNoClusterStates, err}
+		}
+
+		return nil, err
+	}
+
+	reqClusters := req.GetClusters()
+	for _, cluster := range clusters.GetClusters() {
+		// checking if the current cluster is the one we want to SetScience on
+		if len(reqClusters) > 0 && !slices.Contains(reqClusters, cluster.GetUuid()) {
+			continue
+		}
+
+		_, err = boosttopo.Update(ctx, c.ts, boosttopo.PathControllerState(cluster.GetUuid()), func(controllerState *vtboostpb.ControllerState) error {
+			controllerState.Science = req.GetScience()
+			return nil
+		})
+		if err != nil {
+			log.Warningf("boosttopo.Update: failed to update Controller state: %v", err)
+		}
+	}
+
+	return &vtboostpb.SetScienceResponse{}, nil
 }
 
 // An Error is a structured error used to generate RPC response codes when boost

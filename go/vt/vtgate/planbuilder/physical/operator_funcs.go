@@ -198,7 +198,7 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op abstract.PhysicalOpe
 		for _, col := range columns {
 			exists := false
 			for idx, opCol := range op.Columns {
-				if sqlparser.EqualsRefOfColName(col, opCol) {
+				if sqlparser.EqualsRefOfColName(col, opCol, nil) {
 					exists = true
 					offsets = append(offsets, idx)
 					break
@@ -215,7 +215,7 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op abstract.PhysicalOpe
 		op.Source = newSrc
 		return op, ints, err
 	case *Vindex:
-		idx, err := op.PushOutputColumns(columns)
+		idx, err := op.PushOutputColumns(ctx, columns)
 		return op, idx, err
 	case *Derived:
 		var noQualifierNames []*sqlparser.ColName
@@ -295,7 +295,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op a
 
 		var keep []sqlparser.Expr
 		for _, e := range sqlparser.SplitAndExpression(nil, op.Predicate) {
-			if !sqlparser.EqualsExpr(expr, e) {
+			if !ctx.SemTable.EqualsExpr(expr, e) {
 				keep = append(keep, e)
 				isRemoved = true
 			}
@@ -309,7 +309,7 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op a
 	case *Filter:
 		idx := -1
 		for i, predicate := range op.Predicates {
-			if sqlparser.EqualsExpr(predicate, expr) {
+			if ctx.SemTable.EqualsExpr(predicate, expr) {
 				idx = i
 			}
 		}
@@ -348,7 +348,7 @@ func BreakExpressionInLHSandRHS(
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			deps := ctx.SemTable.RecursiveDeps(node)
-			if deps.NumberOfTables() == 0 {
+			if deps.IsEmpty() {
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
 				return false
 			}

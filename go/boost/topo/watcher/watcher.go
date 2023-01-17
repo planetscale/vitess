@@ -19,10 +19,10 @@ package watcher
 import (
 	"context"
 	"math"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -74,8 +74,8 @@ type Watcher struct {
 	failoverCancel context.CancelFunc
 
 	clusterClients *common.SyncMap[string, *clusterClient]
-	clusterState   unsafe.Pointer
-	primary        unsafe.Pointer
+	clusterState   atomic.Pointer[globalState]
+	primary        atomic.Pointer[clusterClient]
 }
 
 // NewWatcher returns a TopologyWatcher that monitors all
@@ -91,8 +91,11 @@ func NewWatcher(ts *topo.Server) *Watcher {
 	return nw
 }
 
-func (nw *Watcher) loadClusterState() *globalState {
-	return (*globalState)(atomic.LoadPointer(&nw.clusterState))
+func (nw *Watcher) GetScience() *Science {
+	if ac := nw.primary.Load(); ac != nil {
+		return ac.science.Load()
+	}
+	return nil
 }
 
 type DebugClusterState struct {
@@ -107,7 +110,7 @@ type DebugMaterialization struct {
 }
 
 func (nw *Watcher) DebugState() map[string]*DebugClusterState {
-	cstate := nw.loadClusterState()
+	cstate := nw.clusterState.Load()
 	if cstate == nil {
 		return nil
 	}
@@ -132,7 +135,7 @@ func (nw *Watcher) DebugState() map[string]*DebugClusterState {
 }
 
 func (nw *Watcher) Version() string {
-	cstate := nw.loadClusterState()
+	cstate := nw.clusterState.Load()
 	if cstate == nil {
 		return ""
 	}
@@ -248,7 +251,7 @@ func (nw *Watcher) watchForFailover(ctx context.Context, oldState, newState *glo
 				if math.Abs(oldRate-newRate) <= FailoverRateDelta {
 					log.Infof("boost.Watcher: failing over! from %s (rate=%0.5f) to %s (rate=%0.5f), total duration %v",
 						oldState.primary.uuid, oldRate, newState.primary.uuid, newRate, time.Since(start))
-					nw.updatePrimary(ctx, &nw.primary, newState.primary)
+					nw.updatePrimary(ctx, newState.primary)
 					return
 				}
 
@@ -257,15 +260,15 @@ func (nw *Watcher) watchForFailover(ctx context.Context, oldState, newState *glo
 				newRate := newState.primary.hitrate.Rate()
 				log.Infof("boost.Watcher: failing over! from %s (rate=%0.5f) to %s (rate=%0.5f), forced failover after %v",
 					oldState.primary.uuid, oldRate, newState.primary.uuid, newRate, time.Since(start))
-				nw.updatePrimary(ctx, &nw.primary, newState.primary)
+				nw.updatePrimary(ctx, newState.primary)
 				return
 			}
 		}
 	}(failoverCtx)
 }
 
-func (nw *Watcher) updatePrimary(ctx context.Context, ptr *unsafe.Pointer, primary *clusterClient) {
-	atomic.StorePointer(ptr, unsafe.Pointer(primary))
+func (nw *Watcher) updatePrimary(ctx context.Context, primary *clusterClient) {
+	nw.primary.Store(primary)
 	if err := nw.updateTopoVtgates(ctx, primary.uuid); err != nil {
 		log.Warningf("failed to update topo with vtgates using cluster: %v", err)
 	}
@@ -340,14 +343,14 @@ func (nw *Watcher) updateAvailableClusters(ctx context.Context, w *topo.WatchDat
 		})
 	}
 
-	oldState := (*globalState)(atomic.SwapPointer(&nw.clusterState, unsafe.Pointer(newState)))
+	oldState := nw.clusterState.Swap(newState)
 	switch {
 	case newState.primary == nil:
 		log.Warningf("boost.Watcher: cluster state has no active primary")
 
 	case oldState == nil || oldState.primary == nil:
 		log.Infof("boost.Watcher: forced failover from <nil> to %s", newState.primary.uuid)
-		nw.updatePrimary(ctx, &nw.primary, newState.primary)
+		nw.updatePrimary(ctx, newState.primary)
 
 	case oldState.primary != newState.primary:
 		nw.watchForFailover(ctx, oldState, newState)
@@ -404,7 +407,7 @@ func (nw *Watcher) GetCachedQuery(keyspace string, query sqlparser.Statement, bv
 
 	res.hash = hashMaterializedQuery(keyspace, res.Normalized)
 
-	activeCluster := (*clusterClient)(atomic.LoadPointer(&nw.primary))
+	activeCluster := nw.primary.Load()
 	if activeCluster == nil {
 		return nil, false
 	}
@@ -428,7 +431,7 @@ func (nw *Watcher) GetCachedQuery(keyspace string, query sqlparser.Statement, bv
 }
 
 func (nw *Watcher) Warmup(query *MaterializedQuery, warmup func(*View)) {
-	state := nw.loadClusterState()
+	state := nw.clusterState.Load()
 	for _, cluster := range state.clusters {
 		if cluster.state != vtboostpb.ClusterState_WARMING {
 			continue
@@ -463,6 +466,8 @@ type clusterClient struct {
 	mats          *common.SyncMap[vthash.Hash, *cachedMaterialization]
 	hitrate       *metrics.RateCounter
 	recipeVersion int64
+
+	science atomic.Pointer[Science]
 }
 
 func (ac *clusterClient) start(ctx context.Context, conn topo.Conn, wg *sync.WaitGroup) {
@@ -590,6 +595,9 @@ func (ac *clusterClient) processControllerState(data *topo.WatchData) error {
 	if err := proto.Unmarshal(data.Contents, &state); err != nil {
 		return err
 	}
+
+	ac.updateScience(state.Science)
+
 	if ac.recipeVersion == state.RecipeVersion {
 		return nil
 	}
@@ -611,4 +619,33 @@ func (ac *clusterClient) Close() {
 	ac.rpcs.ForEach(func(_ string, conn drpc.Conn) {
 		conn.Close()
 	})
+}
+
+func (ac *clusterClient) updateScience(science *vtboostpb.Science) {
+	if science == nil {
+		ac.science.Store(nil)
+		return
+	}
+	xp := &Science{ac: ac, globalRate: science.ComparisonSampleRate, failureMode: science.FailureMode}
+	ac.science.Store(xp)
+}
+
+type Science struct {
+	ac          *clusterClient
+	globalRate  float64
+	failureMode vtboostpb.Science_FailureMode
+}
+
+func (sc *Science) CompareQuery() bool {
+	if sc == nil || sc.globalRate == 0.0 {
+		return false
+	}
+	if sc.globalRate == 1.0 {
+		return true
+	}
+	return rand.Float64() < sc.globalRate
+}
+
+func (sc *Science) GetFailureMode() vtboostpb.Science_FailureMode {
+	return sc.failureMode
 }

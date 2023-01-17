@@ -42,6 +42,7 @@ type DRPCControllerServiceClient interface {
 	ReadyCheck(ctx context.Context, in *ReadyRequest) (*ReadyResponse, error)
 	Graphviz(ctx context.Context, in *GraphvizRequest) (*GraphvizResponse, error)
 	GetMaterializations(ctx context.Context, in *MaterializationsRequest) (*MaterializationsResponse, error)
+	SetScience(ctx context.Context, in *SetScienceRequest) (*SetScienceResponse, error)
 }
 
 type drpcControllerServiceClient struct {
@@ -90,11 +91,21 @@ func (c *drpcControllerServiceClient) GetMaterializations(ctx context.Context, i
 	return out, nil
 }
 
+func (c *drpcControllerServiceClient) SetScience(ctx context.Context, in *SetScienceRequest) (*SetScienceResponse, error) {
+	out := new(SetScienceResponse)
+	err := c.cc.Invoke(ctx, "/vtboost.ControllerService/SetScience", drpcEncoding_File_vtboost_proto{}, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 type DRPCControllerServiceServer interface {
 	GetRecipe(context.Context, *GetRecipeRequest) (*GetRecipeResponse, error)
 	ReadyCheck(context.Context, *ReadyRequest) (*ReadyResponse, error)
 	Graphviz(context.Context, *GraphvizRequest) (*GraphvizResponse, error)
 	GetMaterializations(context.Context, *MaterializationsRequest) (*MaterializationsResponse, error)
+	SetScience(context.Context, *SetScienceRequest) (*SetScienceResponse, error)
 }
 
 type DRPCControllerServiceUnimplementedServer struct{}
@@ -115,9 +126,13 @@ func (s *DRPCControllerServiceUnimplementedServer) GetMaterializations(context.C
 	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
+func (s *DRPCControllerServiceUnimplementedServer) SetScience(context.Context, *SetScienceRequest) (*SetScienceResponse, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
+}
+
 type DRPCControllerServiceDescription struct{}
 
-func (DRPCControllerServiceDescription) NumMethods() int { return 4 }
+func (DRPCControllerServiceDescription) NumMethods() int { return 5 }
 
 func (DRPCControllerServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Receiver, interface{}, bool) {
 	switch n {
@@ -157,6 +172,15 @@ func (DRPCControllerServiceDescription) Method(n int) (string, drpc.Encoding, dr
 						in1.(*MaterializationsRequest),
 					)
 			}, DRPCControllerServiceServer.GetMaterializations, true
+	case 4:
+		return "/vtboost.ControllerService/SetScience", drpcEncoding_File_vtboost_proto{},
+			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
+				return srv.(DRPCControllerServiceServer).
+					SetScience(
+						ctx,
+						in1.(*SetScienceRequest),
+					)
+			}, DRPCControllerServiceServer.SetScience, true
 	default:
 		return "", nil, nil, nil, false
 	}
@@ -224,6 +248,22 @@ type drpcControllerService_GetMaterializationsStream struct {
 }
 
 func (x *drpcControllerService_GetMaterializationsStream) SendAndClose(m *MaterializationsResponse) error {
+	if err := x.MsgSend(m, drpcEncoding_File_vtboost_proto{}); err != nil {
+		return err
+	}
+	return x.CloseSend()
+}
+
+type DRPCControllerService_SetScienceStream interface {
+	drpc.Stream
+	SendAndClose(*SetScienceResponse) error
+}
+
+type drpcControllerService_SetScienceStream struct {
+	drpc.Stream
+}
+
+func (x *drpcControllerService_SetScienceStream) SendAndClose(m *SetScienceResponse) error {
 	if err := x.MsgSend(m, drpcEncoding_File_vtboost_proto{}); err != nil {
 		return err
 	}

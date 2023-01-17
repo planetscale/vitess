@@ -45,7 +45,7 @@ func NewTraceToFile(path string) *Trace {
 	_, _ = bufw.WriteString("[\n")
 
 	return &Trace{
-		ticks:  new(int64),
+		ticks:  new(atomic.Int64),
 		closer: file,
 		out:    bufw,
 		json:   json.NewEncoder(bufw),
@@ -53,7 +53,7 @@ func NewTraceToFile(path string) *Trace {
 }
 
 type Trace struct {
-	ticks *int64
+	ticks *atomic.Int64
 
 	mu     sync.Mutex
 	closer io.Closer
@@ -87,7 +87,7 @@ func (t *Trace) t() int64 {
 	if t.ticks == nil {
 		return time.Now().UnixMicro()
 	}
-	return atomic.AddInt64(t.ticks, 1)
+	return t.ticks.Add(1)
 }
 
 func (r *Root) pid() int64 {

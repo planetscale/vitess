@@ -79,7 +79,11 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 
 	node.ConnectOutputs()
 
-	// TODO: call generateUpqueries on the view once we're ready to use the upquery output
+	err = generateUpqueries(ctx, node)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return node, tableReport, nil
 }
 

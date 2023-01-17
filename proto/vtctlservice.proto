@@ -358,4 +358,7 @@ service Vtctld {
   // when an associated database branch is already deleted. Calling BoostPurge
   // after boost data has already been purged is a no-op.
   rpc BoostPurge(vtboost.PurgeRequest) returns (vtboost.PurgeResponse);
+
+  // BoostSetScience sets the science of Boost.
+  rpc BoostSetScience(vtboost.SetScienceRequest) returns (vtboost.SetScienceResponse);
 }

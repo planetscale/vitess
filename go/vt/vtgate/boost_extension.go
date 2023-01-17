@@ -1,6 +1,8 @@
 package vtgate
 
-import "vitess.io/vitess/go/vt/sysvars"
+import (
+	"vitess.io/vitess/go/vt/sysvars"
+)
 
 // boostEnabled implements the Boost check on Safe Session
 func (session *SafeSession) boostEnabled() bool {

@@ -3,7 +3,6 @@ package flownode
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 
 	"golang.org/x/exp/slices"
 
@@ -228,7 +227,9 @@ func (n *Node) Process(ctx context.Context, input *FlowInput, output *FlowOutput
 		}()
 	}
 
-	defer atomic.AddUint64(&n.Stats.Processed, 1)
+	defer func() {
+		n.Stats.Processed++
+	}()
 
 	var addr = n.LocalAddr()
 	var gaddr = n.index.AsGlobal()

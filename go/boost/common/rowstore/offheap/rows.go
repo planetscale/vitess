@@ -1,10 +1,10 @@
 package offheap
 
 import (
+	"sync/atomic"
 	"unsafe"
 
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common"
 )
 
 // Rows are used as the linked list for rows in the hash table
@@ -22,7 +22,7 @@ type Rows struct {
 const rowsSize = unsafe.Sizeof(Rows{})
 
 // New allocates a new Rows with the given hash and initial row.
-func New(row boostpb.Row, memsize *common.AtomicInt64) *Rows {
+func New(row boostpb.Row, memsize *atomic.Int64) *Rows {
 	hdr := (*Rows)(DefaultAllocator.alloc(rowsSize + uintptr(len(row))))
 	hdr.next = nil
 	hdr.size = uint32(len(row))
@@ -36,13 +36,13 @@ func New(row boostpb.Row, memsize *common.AtomicInt64) *Rows {
 
 // freeSelf frees only the current node and nothing else in the linked list.
 // Should be used for a node that is detached from the linked list.
-func (r *Rows) freeSelf(memsize *common.AtomicInt64) {
+func (r *Rows) freeSelf(memsize *atomic.Int64) {
 	memsize.Add(-r.memsize())
 	DefaultAllocator.free(unsafe.Pointer(r))
 }
 
 // Free releases the memory allocated for the entire linked list in Rows.
-func (r *Rows) Free(memsize *common.AtomicInt64) {
+func (r *Rows) Free(memsize *atomic.Int64) {
 	free := r
 	for free != nil {
 		next := free.next
@@ -57,7 +57,7 @@ func (r *Rows) memsize() int64 {
 
 // Insert adds a new element at the header of the linked list
 // and returns the new Rows entry created.
-func (r *Rows) Insert(row boostpb.Row, memsize *common.AtomicInt64) *Rows {
+func (r *Rows) Insert(row boostpb.Row, memsize *atomic.Int64) *Rows {
 	next := New(row, memsize)
 	if r == nil {
 		return next
@@ -70,7 +70,7 @@ func (r *Rows) Insert(row boostpb.Row, memsize *common.AtomicInt64) *Rows {
 // Remove drops the given row from the linked list. It returns
 // a new linked list as it might be dropping the first element
 // of the linked list.
-func (r *Rows) Remove(srow boostpb.Row, memsize *common.AtomicInt64) (*Rows, bool) {
+func (r *Rows) Remove(srow boostpb.Row, memsize *atomic.Int64) (*Rows, bool) {
 	var prev *Rows = nil
 	var cur = r
 

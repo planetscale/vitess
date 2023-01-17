@@ -212,6 +212,11 @@ func (client *localVtctldClient) BoostRemoveCluster(ctx context.Context, in *vtb
 	return client.s.BoostRemoveCluster(ctx, in)
 }
 
+// BoostSetScience is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BoostSetScience(ctx context.Context, in *vtboostpb.SetScienceRequest, opts ...grpc.CallOption) (*vtboostpb.SetScienceResponse, error) {
+	return client.s.BoostSetScience(ctx, in)
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	return client.s.ChangeTabletType(ctx, in)

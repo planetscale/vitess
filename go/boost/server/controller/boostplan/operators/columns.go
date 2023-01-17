@@ -299,7 +299,7 @@ outer:
 			return Columns{}, NewBug("can't push non-columns to a table")
 		}
 		tblID := ctx.SemTable.DirectDeps(colName)
-		if tblID.Equals(n.TableID) {
+		if tblID == n.TableID {
 			for _, colSpec := range tbl.ColumnSpecs {
 				if colSpec.Column.Name.Equal(colName.Name) {
 					continue outer

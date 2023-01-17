@@ -2,18 +2,18 @@ package state
 
 import (
 	"math/rand"
+	"sync/atomic"
 
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 )
 
 type Memory struct {
 	state   []*singleState
 	byTag   map[boostpb.Tag]int
-	memSize common.AtomicInt64
+	memSize atomic.Int64
 }
 
 func (m *Memory) EvictKeys(tag boostpb.Tag, keys []boostpb.Row) []int {
@@ -187,7 +187,7 @@ func (m *Memory) Free() {
 	}
 }
 
-func (m *Memory) StateSizeAtomic() *common.AtomicInt64 {
+func (m *Memory) StateSizeAtomic() *atomic.Int64 {
 	return &m.memSize
 }
 

@@ -7,7 +7,7 @@ import (
 )
 
 type RateCounter struct {
-	period uint64
+	period atomic.Uint64
 
 	mu    sync.Mutex
 	hits  VariableEWMA
@@ -23,14 +23,14 @@ func NewRateCounter(age time.Duration) *RateCounter {
 
 func (r *RateCounter) Register(hit bool) {
 	if hit {
-		atomic.AddUint64(&r.period, (1<<32)|1)
+		r.period.Add((1 << 32) | 1)
 	} else {
-		atomic.AddUint64(&r.period, 1)
+		r.period.Add(1)
 	}
 }
 
 func (r *RateCounter) Tick() {
-	period := atomic.SwapUint64(&r.period, 0)
+	period := r.period.Swap(0)
 	hits := float64(period >> 32)
 	calls := float64(period & 0xFFFFFFFF)
 

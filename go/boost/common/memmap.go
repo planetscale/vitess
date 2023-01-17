@@ -2,8 +2,7 @@ package common
 
 import (
 	"sync"
-
-	"go.uber.org/atomic"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/boost/boostpb"
 )
@@ -16,14 +15,14 @@ type memstatkey struct {
 
 type MemoryStats struct {
 	mu    sync.Mutex
-	usage map[memstatkey]*AtomicInt64
+	usage map[memstatkey]*atomic.Int64
 }
 
 func NewMemStats() *MemoryStats {
-	return &MemoryStats{usage: map[memstatkey]*AtomicInt64{}}
+	return &MemoryStats{usage: map[memstatkey]*atomic.Int64{}}
 }
 
-func (m *MemoryStats) Register(domain boostpb.DomainIndex, shard *uint, node boostpb.GraphNodeIdx, memory *AtomicInt64) {
+func (m *MemoryStats) Register(domain boostpb.DomainIndex, shard *uint, node boostpb.GraphNodeIdx, memory *atomic.Int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.usage[memstatkey{dom: domain, shard: UnwrapOr(shard, 0), node: node}] = memory
@@ -46,7 +45,3 @@ func (m *MemoryStats) ToProto() *boostpb.MemoryStatsResponse {
 	}
 	return &resp
 }
-
-// AtomicInt64 is an atomic Int64 type
-// TODO: switch to the standard libary's builtin type when we upgrade to Go 1.19
-type AtomicInt64 = atomic.Int64

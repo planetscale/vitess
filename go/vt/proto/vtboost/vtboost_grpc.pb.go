@@ -26,6 +26,7 @@ type ControllerServiceClient interface {
 	ReadyCheck(ctx context.Context, in *ReadyRequest, opts ...grpc.CallOption) (*ReadyResponse, error)
 	Graphviz(ctx context.Context, in *GraphvizRequest, opts ...grpc.CallOption) (*GraphvizResponse, error)
 	GetMaterializations(ctx context.Context, in *MaterializationsRequest, opts ...grpc.CallOption) (*MaterializationsResponse, error)
+	SetScience(ctx context.Context, in *SetScienceRequest, opts ...grpc.CallOption) (*SetScienceResponse, error)
 }
 
 type controllerServiceClient struct {
@@ -72,6 +73,15 @@ func (c *controllerServiceClient) GetMaterializations(ctx context.Context, in *M
 	return out, nil
 }
 
+func (c *controllerServiceClient) SetScience(ctx context.Context, in *SetScienceRequest, opts ...grpc.CallOption) (*SetScienceResponse, error) {
+	out := new(SetScienceResponse)
+	err := c.cc.Invoke(ctx, "/vtboost.ControllerService/SetScience", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControllerServiceServer is the server API for ControllerService service.
 // All implementations must embed UnimplementedControllerServiceServer
 // for forward compatibility
@@ -80,6 +90,7 @@ type ControllerServiceServer interface {
 	ReadyCheck(context.Context, *ReadyRequest) (*ReadyResponse, error)
 	Graphviz(context.Context, *GraphvizRequest) (*GraphvizResponse, error)
 	GetMaterializations(context.Context, *MaterializationsRequest) (*MaterializationsResponse, error)
+	SetScience(context.Context, *SetScienceRequest) (*SetScienceResponse, error)
 	mustEmbedUnimplementedControllerServiceServer()
 }
 
@@ -98,6 +109,9 @@ func (UnimplementedControllerServiceServer) Graphviz(context.Context, *GraphvizR
 }
 func (UnimplementedControllerServiceServer) GetMaterializations(context.Context, *MaterializationsRequest) (*MaterializationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMaterializations not implemented")
+}
+func (UnimplementedControllerServiceServer) SetScience(context.Context, *SetScienceRequest) (*SetScienceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetScience not implemented")
 }
 func (UnimplementedControllerServiceServer) mustEmbedUnimplementedControllerServiceServer() {}
 
@@ -184,6 +198,24 @@ func _ControllerService_GetMaterializations_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControllerService_SetScience_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetScienceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServiceServer).SetScience(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtboost.ControllerService/SetScience",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServiceServer).SetScience(ctx, req.(*SetScienceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ControllerService_ServiceDesc is the grpc.ServiceDesc for ControllerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -206,6 +238,10 @@ var ControllerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMaterializations",
 			Handler:    _ControllerService_GetMaterializations_Handler,
+		},
+		{
+			MethodName: "SetScience",
+			Handler:    _ControllerService_SetScience_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

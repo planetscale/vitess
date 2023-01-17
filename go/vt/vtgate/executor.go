@@ -1117,14 +1117,21 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	if canMaterialize {
 		if materializedPlan, queryID, ok := e.mats.GetPlan(vcursor, statement, bindVars); ok {
 			logStats.BoostQueryID = queryID
+			if boostCmp, isBoostCmp := materializedPlan.Instructions.(*engine.BoostCompare); isBoostCmp {
+				gen4Plan, err := e.cacheAndBuildStatement(ctx, vcursor, query, statement, qo, logStats, reservedVars, bindVarNeeds, stmt)
+				if err != nil {
+					return nil, err
+				}
+				boostCmp.Gen4 = gen4Plan.Instructions
+			}
 			return materializedPlan, nil
 		}
 	}
 
-	return e.cacheAndBuildStatement(ctx, vcursor, query, statement, qo, logStats, stmt, reservedVars, bindVarNeeds)
+	return e.cacheAndBuildStatement(ctx, vcursor, query, statement, qo, logStats, reservedVars, bindVarNeeds, stmt)
 }
 
-func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorImpl, query string, statement sqlparser.Statement, qo iQueryOption, logStats *logstats.LogStats, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
+func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorImpl, query string, statement sqlparser.Statement, qo iQueryOption, logStats *logstats.LogStats, reservedVars *sqlparser.ReservedVars, bindVarNeeds *sqlparser.BindVarNeeds, stmt sqlparser.Statement) (*engine.Plan, error) {
 	planHash := sha256.New()
 	_, _ = planHash.Write([]byte(vcursor.planPrefixKey(ctx)))
 	_, _ = planHash.Write([]byte{':'})
