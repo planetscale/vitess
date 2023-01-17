@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
-
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"google.golang.org/protobuf/proto"
@@ -503,9 +502,10 @@ func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	for k, v := range session.SystemVariables {
-		if !sysvars.IsVitessAware(k) {
-			f(k, v)
+		if sysvars.IsVitessAware(k) {
+			continue
 		}
+		f(k, v)
 	}
 }
 
@@ -546,12 +546,16 @@ func (session *SafeSession) SetReservedConn(reservedConn bool) {
 }
 
 // SetPreQueries returns the prequeries that need to be run when reserving a connection
-func (session *SafeSession) SetPreQueries() (result []string) {
+func (session *SafeSession) SetPreQueries() []string {
+	// extract keys
 	var keys []string
+	sysVars := make(map[string]string)
 	session.GetSystemVariables(func(k string, v string) {
 		keys = append(keys, k)
+		sysVars[k] = v
 	})
 
+	// if not system variables to set, return
 	if len(keys) == 0 {
 		return nil
 	}
@@ -564,10 +568,10 @@ func (session *SafeSession) SetPreQueries() (result []string) {
 	first := true
 	for _, k := range keys {
 		if first {
-			preQuery.WriteString(fmt.Sprintf("set @@%s = %s", k, session.SystemVariables[k]))
+			preQuery.WriteString(fmt.Sprintf("set %s = %s", k, sysVars[k]))
 			first = false
 		} else {
-			preQuery.WriteString(fmt.Sprintf(", @@%s = %s", k, session.SystemVariables[k]))
+			preQuery.WriteString(fmt.Sprintf(", %s = %s", k, sysVars[k]))
 		}
 	}
 	return []string{preQuery.String()}

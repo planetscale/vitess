@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -47,6 +48,7 @@ type (
 		// SET transaction_mode = two_pc => SET transaction_mode = 'two_pc'
 		identifierAsString bool
 		supportSetVar      bool
+		storageCase        sysvars.StorageCase
 	}
 )
 
@@ -78,7 +80,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 				Expr: evalExpr,
 			}
 			setOps = append(setOps, setOp)
-		case sqlparser.SessionScope:
+		case sqlparser.NextTxScope, sqlparser.SessionScope:
 			planFunc, err := sysvarPlanningFuncs.Get(expr)
 			if err != nil {
 				return nil, err
@@ -88,6 +90,12 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 				return nil, err
 			}
 			setOps = append(setOps, setOp)
+			if expr.Var.Scope == sqlparser.NextTxScope {
+				// This is to keep the backward compatibility.
+				// 'transaction_isolation' was added as a reserved connection system variable, so it used to change the setting at session level already.
+				// logging warning now to
+				vschema.PlannerWarning("converted 'next transaction' scope to 'session' scope")
+			}
 		case sqlparser.VitessMetadataScope:
 			value, err := getValueFor(expr)
 			if err != nil {
@@ -179,6 +187,8 @@ func buildSetOpReservedConn(s setting) planFunc {
 			return nil, err
 		}
 
+		value = provideAppliedCase(value, s.storageCase)
+
 		return &engine.SysVarReservedConn{
 			Name:              expr.Var.Name.Lowered(),
 			Keyspace:          ks,
@@ -187,6 +197,16 @@ func buildSetOpReservedConn(s setting) planFunc {
 			SupportSetVar:     s.supportSetVar,
 		}, nil
 	}
+}
+
+func provideAppliedCase(value string, storageCase sysvars.StorageCase) string {
+	switch storageCase {
+	case sysvars.SCUpper:
+		return strings.ToUpper(value)
+	case sysvars.SCLower:
+		return strings.ToLower(value)
+	}
+	return value
 }
 
 const defaultNotSupportedErrFmt = "DEFAULT not supported for @@%s"
