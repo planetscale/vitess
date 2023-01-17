@@ -51912,6 +51912,9 @@ export namespace binlogdata {
 
         /** Rule source_unique_key_target_columns */
         source_unique_key_target_columns?: (string|null);
+
+        /** Rule convert_int_to_enum */
+        convert_int_to_enum?: ({ [k: string]: boolean }|null);
     }
 
     /** Represents a Rule. */
@@ -51943,6 +51946,9 @@ export namespace binlogdata {
 
         /** Rule source_unique_key_target_columns. */
         public source_unique_key_target_columns: string;
+
+        /** Rule convert_int_to_enum. */
+        public convert_int_to_enum: { [k: string]: boolean };
 
         /**
          * Creates a new Rule instance using the specified properties.
