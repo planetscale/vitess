@@ -26,12 +26,6 @@ func EqualsSQLNode(inA, inB SQLNode, f ASTComparison) bool {
 		return false
 	}
 	switch a := inA.(type) {
-	case AccessMode:
-		b, ok := inB.(AccessMode)
-		if !ok {
-			return false
-		}
-		return a == b
 	case *AddColumns:
 		b, ok := inB.(*AddColumns)
 		if !ok {
@@ -590,12 +584,6 @@ func EqualsSQLNode(inA, inB SQLNode, f ASTComparison) bool {
 			return false
 		}
 		return EqualsRefOfIsExpr(a, b, f)
-	case IsolationLevel:
-		b, ok := inB.(IsolationLevel)
-		if !ok {
-			return false
-		}
-		return a == b
 	case *JSONArrayExpr:
 		b, ok := inB.(*JSONArrayExpr)
 		if !ok {
@@ -1154,12 +1142,6 @@ func EqualsSQLNode(inA, inB SQLNode, f ASTComparison) bool {
 			return false
 		}
 		return EqualsSetExprs(a, b, f)
-	case *SetTransaction:
-		b, ok := inB.(*SetTransaction)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfSetTransaction(a, b, f)
 	case *Show:
 		b, ok := inB.(*Show)
 		if !ok {
@@ -3800,19 +3782,6 @@ func EqualsSetExprs(a, b SetExprs, f ASTComparison) bool {
 	return true
 }
 
-// EqualsRefOfSetTransaction does deep equals between the two objects.
-func EqualsRefOfSetTransaction(a, b *SetTransaction, f ASTComparison) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsRefOfParsedComments(a.Comments, b.Comments, f) &&
-		a.Scope == b.Scope &&
-		EqualsSliceOfCharacteristic(a.Characteristics, b.Characteristics, f)
-}
-
 // EqualsRefOfShow does deep equals between the two objects.
 func EqualsRefOfShow(a, b *Show, f ASTComparison) bool {
 	if a == b {
@@ -5135,33 +5104,6 @@ func EqualsCallable(inA, inB Callable, f ASTComparison) bool {
 	}
 }
 
-// EqualsCharacteristic does deep equals between the two objects.
-func EqualsCharacteristic(inA, inB Characteristic, f ASTComparison) bool {
-	if inA == nil && inB == nil {
-		return true
-	}
-	if inA == nil || inB == nil {
-		return false
-	}
-	switch a := inA.(type) {
-	case AccessMode:
-		b, ok := inB.(AccessMode)
-		if !ok {
-			return false
-		}
-		return a == b
-	case IsolationLevel:
-		b, ok := inB.(IsolationLevel)
-		if !ok {
-			return false
-		}
-		return a == b
-	default:
-		// this should never happen
-		return false
-	}
-}
-
 // EqualsColTuple does deep equals between the two objects.
 func EqualsColTuple(inA, inB ColTuple, f ASTComparison) bool {
 	if inA == nil && inB == nil {
@@ -6302,12 +6244,6 @@ func EqualsStatement(inA, inB Statement, f ASTComparison) bool {
 			return false
 		}
 		return EqualsRefOfSet(a, b, f)
-	case *SetTransaction:
-		b, ok := inB.(*SetTransaction)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfSetTransaction(a, b, f)
 	case *Show:
 		b, ok := inB.(*Show)
 		if !ok {
@@ -6797,19 +6733,6 @@ func EqualsSliceOfTableExpr(a, b []TableExpr, f ASTComparison) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !EqualsTableExpr(a[i], b[i], f) {
-			return false
-		}
-	}
-	return true
-}
-
-// EqualsSliceOfCharacteristic does deep equals between the two objects.
-func EqualsSliceOfCharacteristic(a, b []Characteristic, f ASTComparison) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !EqualsCharacteristic(a[i], b[i], f) {
 			return false
 		}
 	}
