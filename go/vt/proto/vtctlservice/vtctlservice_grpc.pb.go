@@ -451,6 +451,8 @@ type VtctldClient interface {
 	// when an associated database branch is already deleted. Calling BoostPurge
 	// after boost data has already been purged is a no-op.
 	BoostPurge(ctx context.Context, in *vtboost.PurgeRequest, opts ...grpc.CallOption) (*vtboost.PurgeResponse, error)
+	// BoostSetScience sets the science of Boost.
+	BoostSetScience(ctx context.Context, in *vtboost.SetScienceRequest, opts ...grpc.CallOption) (*vtboost.SetScienceResponse, error)
 }
 
 type vtctldClient struct {
@@ -1376,6 +1378,15 @@ func (c *vtctldClient) BoostPurge(ctx context.Context, in *vtboost.PurgeRequest,
 	return out, nil
 }
 
+func (c *vtctldClient) BoostSetScience(ctx context.Context, in *vtboost.SetScienceRequest, opts ...grpc.CallOption) (*vtboost.SetScienceResponse, error) {
+	out := new(vtboost.SetScienceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/BoostSetScience", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VtctldServer is the server API for Vtctld service.
 // All implementations must embed UnimplementedVtctldServer
 // for forward compatibility
@@ -1694,6 +1705,8 @@ type VtctldServer interface {
 	// when an associated database branch is already deleted. Calling BoostPurge
 	// after boost data has already been purged is a no-op.
 	BoostPurge(context.Context, *vtboost.PurgeRequest) (*vtboost.PurgeResponse, error)
+	// BoostSetScience sets the science of Boost.
+	BoostSetScience(context.Context, *vtboost.SetScienceRequest) (*vtboost.SetScienceResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
 
@@ -1982,6 +1995,9 @@ func (UnimplementedVtctldServer) BoostRemoveCluster(context.Context, *vtboost.Re
 }
 func (UnimplementedVtctldServer) BoostPurge(context.Context, *vtboost.PurgeRequest) (*vtboost.PurgeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BoostPurge not implemented")
+}
+func (UnimplementedVtctldServer) BoostSetScience(context.Context, *vtboost.SetScienceRequest) (*vtboost.SetScienceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BoostSetScience not implemented")
 }
 func (UnimplementedVtctldServer) mustEmbedUnimplementedVtctldServer() {}
 
@@ -3697,6 +3713,24 @@ func _Vtctld_BoostPurge_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_BoostSetScience_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtboost.SetScienceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).BoostSetScience(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/BoostSetScience",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).BoostSetScience(ctx, req.(*vtboost.SetScienceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Vtctld_ServiceDesc is the grpc.ServiceDesc for Vtctld service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -4067,6 +4101,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BoostPurge",
 			Handler:    _Vtctld_BoostPurge_Handler,
+		},
+		{
+			MethodName: "BoostSetScience",
+			Handler:    _Vtctld_BoostSetScience_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

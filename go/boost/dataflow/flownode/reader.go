@@ -3,11 +3,11 @@ package flownode
 import (
 	"context"
 	"math/rand"
+	"sync/atomic"
 
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/dataflow/backlog"
 	"vitess.io/vitess/go/boost/dataflow/trace"
 	"vitess.io/vitess/go/boost/graph"
@@ -178,7 +178,7 @@ func (r *Reader) KeySchema() []boostpb.Type {
 	return r.writer.KeySchema()
 }
 
-func (r *Reader) StateSizeAtomic() *common.AtomicInt64 {
+func (r *Reader) StateSizeAtomic() *atomic.Int64 {
 	return r.writer.StateSizeAtomic()
 }
 

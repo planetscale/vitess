@@ -1,7 +1,8 @@
 package backlog
 
 import (
-	"vitess.io/vitess/go/boost/common"
+	"sync/atomic"
+
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -45,7 +46,7 @@ func (c *Changelog) Free(r *offheap.ConcurrentRows) {
 	c.freelist = append(c.freelist, r)
 }
 
-func (c *Changelog) ApplyChanges(writetable, readtable offheap.CRowsTable, memsize *common.AtomicInt64, wk *waker) {
+func (c *Changelog) ApplyChanges(writetable, readtable offheap.CRowsTable, memsize *atomic.Int64, wk *waker) {
 	ops := c.ops
 	diffs := c.diffs
 	tombstones := c.tombstones

@@ -8,14 +8,13 @@ import (
 	"sync/atomic"
 
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
 type lrstore struct {
 	mu     sync.RWMutex
-	active [2]int64
+	active [2]atomic.Int64
 	epoch  uintptr
 
 	tables      [2]offheap.CRowsTable
@@ -35,17 +34,17 @@ func newLrstore() *lrstore {
 func (st *lrstore) rStart() (offheap.CRowsTable, uintptr) {
 	st.mu.RLock()
 	lr := st.epoch & 0x1
-	atomic.AddInt64(&st.active[lr], 1)
+	st.active[lr].Add(1)
 	st.mu.RUnlock()
 
 	return st.tables[lr], lr
 }
 
 func (st *lrstore) rFinish(lr uintptr) {
-	atomic.AddInt64(&st.active[lr&0x1], -1)
+	st.active[lr&0x1].Add(-1)
 }
 
-func (st *lrstore) wRefresh(memsize *common.AtomicInt64, force bool) {
+func (st *lrstore) wRefresh(memsize *atomic.Int64, force bool) {
 	if !force && st.changelog.IsEmpty() {
 		return
 	}
@@ -55,7 +54,7 @@ func (st *lrstore) wRefresh(memsize *common.AtomicInt64, force bool) {
 	st.epoch++
 	st.mu.Unlock()
 
-	for atomic.LoadInt64(&st.active[lr]) > 0 {
+	for st.active[lr].Load() > 0 {
 		runtime.Gosched()
 	}
 
@@ -66,7 +65,7 @@ func (st *lrstore) wRefresh(memsize *common.AtomicInt64, force bool) {
 	// writetable.AssertEquals(readtable)
 }
 
-func (st *lrstore) wClear(key boostpb.Row, schema []boostpb.Type, memsize *common.AtomicInt64) {
+func (st *lrstore) wClear(key boostpb.Row, schema []boostpb.Type, memsize *atomic.Int64) {
 	h := key.Hash(&st.writeHasher, schema)
 
 	tbl := st.tables[(st.epoch+1)&0x1]
@@ -99,7 +98,7 @@ func (st *lrstore) rFound(key boostpb.Row, schema []boostpb.Type) bool {
 	return found
 }
 
-func (st *lrstore) wAdd(rs []boostpb.Record, colLen int, pk []int, schema []boostpb.Type, memsize *common.AtomicInt64) {
+func (st *lrstore) wAdd(rs []boostpb.Record, colLen int, pk []int, schema []boostpb.Type, memsize *atomic.Int64) {
 	epoch := st.epoch + 1
 	tbl := st.tables[epoch&0x1]
 
@@ -142,7 +141,7 @@ func (st *lrstore) wEvict(_ *rand.Rand, bytesToEvict int64) {
 	})
 }
 
-func (st *lrstore) free(memsize *common.AtomicInt64) {
+func (st *lrstore) free(memsize *atomic.Int64) {
 	st.wRefresh(memsize, true)
 
 	st.tables[0].ForEach(func(rows *offheap.ConcurrentRows) {

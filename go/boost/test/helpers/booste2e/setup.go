@@ -26,10 +26,18 @@ import (
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	// etcd2topo rpcs
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 )
 
-var flagGtidMode = boostpb.UpqueryMode_SELECT_GTID
+var (
+	flagGtidMode = boostpb.UpqueryMode_SELECT_GTID
+
+	testBoostScience = &vtboost.Science{
+		ComparisonSampleRate: 1,
+		FailureMode:          vtboost.Science_ERROR,
+	}
+)
 
 func init() {
 	flag.Var(&flagGtidMode, "gtid-mode", "GTID tracking mode for upqueries (options are 'SELECT_GTID', 'TRACK_GTID')")
@@ -77,12 +85,12 @@ func WithDDL(ddl string) Option {
 	}
 }
 
-func WithCachedQueries(queriesSql ...string) Option {
+func WithCachedQueries(queriesSQL ...string) Option {
 	return func(test *Test) {
 		if test.Recipe == nil {
 			test.Recipe = &vtboost.Recipe{Version: 1}
 		}
-		for _, sql := range queriesSql {
+		for _, sql := range queriesSQL {
 			test.Recipe.Queries = append(test.Recipe.Queries, &vtboost.CachedQuery{
 				PublicId: fmt.Sprintf("anonymous_query_%d", len(test.Recipe.Queries)),
 				Sql:      sql,
@@ -187,6 +195,13 @@ func (test *Test) setupBoost() {
 		)
 	}
 
+	_, err = test.BoostTopo.SetScience(context.Background(), &vtboost.SetScienceRequest{
+		Science: testBoostScience,
+	})
+	if err != nil {
+		test.Fatal(err)
+	}
+
 	if test.Recipe != nil && len(test.Recipe.Queries) > 0 {
 		_, err = test.BoostTopo.PutRecipe(context.Background(), &vtboost.PutRecipeRequest{Recipe: test.Recipe})
 		if err != nil {
@@ -208,6 +223,7 @@ func (test *Test) setupCluster() {
 	test.configurePlanetScaleACLs()
 
 	// Start topo server
+	test.Vitess.VtctldExtraArgs = []string{"--enable-boost"}
 	err := test.Vitess.StartTopo()
 	if err != nil {
 		test.Fatalf("failed to StartTopo(): %v", err)
@@ -221,7 +237,6 @@ func (test *Test) setupCluster() {
 	}
 	test.Vitess.VtGateExtraArgs = []string{"--enable-boost", "--schema_change_signal"}
 	test.Vitess.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
-	test.Vitess.VtctldExtraArgs = []string{"--enable-boost"}
 	err = test.Vitess.StartKeyspace(*keyspace, test.Shards, 0, false)
 	if err != nil {
 		test.Fatalf("failed to StartKeyspace(): %v", err)
@@ -286,7 +301,7 @@ func (test *Test) ToggleBoost(enable bool) {
 // auth plugin statically returns "userData1" as the username. In real
 // PSDB production this value is not present but that doesn't matter
 // for the test here.
-var vtStaticAclTemplate = template.Must(template.New("vitess_acl").Parse(`
+var vtStaticACLTemplate = template.Must(template.New("vitess_acl").Parse(`
 	"table_groups":
 	[
 	    {
@@ -329,7 +344,7 @@ func (test *Test) configurePlanetScaleACLs() {
 	}
 	defer aclFile.Close()
 
-	err = vtStaticAclTemplate.Execute(aclFile, map[string]any{
+	err = vtStaticACLTemplate.Execute(aclFile, map[string]any{
 		"Username": test.SchemaChangeUser,
 	})
 	if err != nil {

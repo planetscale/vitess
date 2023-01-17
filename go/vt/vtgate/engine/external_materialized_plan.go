@@ -107,6 +107,13 @@ func (mat *MaterializationClient) GetPlan(vcursor VCursor, query sqlparser.State
 		BindVarNeeds: &sqlparser.BindVarNeeds{},
 	}
 
+	if xp := mat.watcher.GetScience(); xp.CompareQuery() {
+		plan.Instructions = &BoostCompare{
+			Boost:       plan.Instructions,
+			failureMode: xp.GetFailureMode(),
+		}
+	}
+
 	go func() {
 		mat.watcher.Warmup(cached, func(view *boostwatcher.View) {
 			_, err := view.LookupByBindVar(context.Background(), cached.Args, false)

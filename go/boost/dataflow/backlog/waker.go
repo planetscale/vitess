@@ -13,7 +13,7 @@ import (
 
 type condvar struct {
 	mu sync.Mutex
-	ch unsafe.Pointer
+	ch atomic.Pointer[chan struct{}]
 }
 
 func hash32(hash vthash.Hash) uint32 {
@@ -22,7 +22,7 @@ func hash32(hash vthash.Hash) uint32 {
 
 func (c *condvar) Init() {
 	n := make(chan struct{})
-	c.ch = unsafe.Pointer(&n)
+	c.ch.Store(&n)
 }
 
 func (c *condvar) Wait(ctx context.Context) error {
@@ -37,14 +37,12 @@ func (c *condvar) Wait(ctx context.Context) error {
 }
 
 func (c *condvar) NotifyChan() <-chan struct{} {
-	ptr := atomic.LoadPointer(&c.ch)
-	return *((*chan struct{})(ptr))
+	return *c.ch.Load()
 }
 
 func (c *condvar) Broadcast() {
 	n := make(chan struct{})
-	ptrOld := atomic.SwapPointer(&c.ch, unsafe.Pointer(&n))
-	close(*(*chan struct{})(ptrOld))
+	close(*c.ch.Swap(&n))
 }
 
 const wakerSize = 32

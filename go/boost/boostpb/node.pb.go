@@ -5,11 +5,13 @@ package boostpb
 
 import (
 	fmt "fmt"
-	_ "github.com/gogo/protobuf/gogoproto"
-	proto "github.com/gogo/protobuf/proto"
 	io "io"
 	math "math"
 	math_bits "math/bits"
+
+	_ "github.com/gogo/protobuf/gogoproto"
+	proto "github.com/gogo/protobuf/proto"
+
 	vitess_io_vitess_go_mysql_collations "vitess.io/vitess/go/mysql/collations"
 	vitess_io_vitess_go_sqltypes "vitess.io/vitess/go/sqltypes"
 )

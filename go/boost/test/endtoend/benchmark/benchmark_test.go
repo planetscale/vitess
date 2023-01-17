@@ -8,10 +8,10 @@ import (
 	"io"
 	"math/rand"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/boost/test/helpers/booste2e"

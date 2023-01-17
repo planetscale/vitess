@@ -43,11 +43,11 @@ func (node *Node) Covers() semantics.TableSet {
 	ts := semantics.EmptyTableSet()
 
 	if tbl := node.Op.IntroducesTableID(); tbl != nil {
-		ts.MergeInPlace(*tbl)
+		ts = ts.Merge(*tbl)
 	}
 
 	for _, input := range node.Ancestors {
-		ts.MergeInPlace(input.Covers())
+		ts = ts.Merge(input.Covers())
 	}
 	return ts
 }
@@ -172,7 +172,7 @@ func (col *Column) EqualsAST(semTable *semantics.SemTable, other sqlparser.Expr,
 				}
 
 				thisID := semTable.DirectDeps(thisCol)
-				if thisID.Equals(otherID) {
+				if thisID == otherID {
 					return true
 				}
 
@@ -183,7 +183,7 @@ func (col *Column) EqualsAST(semTable *semantics.SemTable, other sqlparser.Expr,
 		}
 	default:
 		for _, thisExpr := range col.AST {
-			if sqlparser.EqualsExpr(thisExpr, other) {
+			if semTable.EqualsExpr(thisExpr, other) {
 				return true
 			}
 		}
@@ -220,7 +220,7 @@ func equalAccordingToSchemaTable(semTable *semantics.SemTable, a, b *sqlparser.C
 		if err != nil {
 			return false
 		}
-		if sqlparser.EqualsTableName(name1, name2) {
+		if sqlparser.EqualsTableName(name1, name2, nil) {
 			return true
 		}
 	case *semantics.RealTable:

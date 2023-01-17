@@ -68,7 +68,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	var err error
-	hp.qp, err = abstract.CreateQPFromSelect(hp.sel)
+	hp.qp, err = abstract.CreateQPFromSelect(ctx, hp.sel)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 		selectExprDep := semTable.RecursiveDeps(selectExpr.Expr)
 
 		// Check that the two expressions have the same dependencies
-		if !selectExprDep.Equals(exprDep) {
+		if selectExprDep != exprDep {
 			continue
 		}
 
@@ -213,7 +213,7 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 			return i
 		}
 
-		if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
+		if semTable.EqualsExpr(selectExpr.Expr, expr.Expr) {
 			// the expressions are not ColName, so we just compare the expressions
 			return i
 		}
@@ -259,7 +259,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 
 	var order []abstract.OrderBy
 	if hp.qp.CanPushDownSorting {
-		hp.qp.AlignGroupByAndOrderBy()
+		hp.qp.AlignGroupByAndOrderBy(ctx)
 		// the grouping order might have changed, so we reload the grouping expressions
 		grouping = hp.qp.GetGrouping()
 		order = hp.qp.OrderExprs
@@ -280,14 +280,14 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	}
 
 	if hp.sel.Having != nil {
-		rewriter := hp.qp.AggrRewriter()
+		rewriter := hp.qp.AggrRewriter(ctx)
 		sqlparser.Rewrite(hp.sel.Having.Expr, rewriter.Rewrite(), nil)
 		if rewriter.Err != nil {
 			return nil, rewriter.Err
 		}
 	}
 
-	aggregationExprs, err := hp.qp.AggregationExpressions()
+	aggregationExprs, err := hp.qp.AggregationExpressions(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -514,7 +514,7 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 		if distinctExpr == nil {
 			distinctExpr = innerWS
 		} else {
-			if !sqlparser.EqualsExpr(distinctExpr, innerWS) {
+			if !ctx.SemTable.EqualsExpr(distinctExpr, innerWS) {
 				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr.Original))
 				return nil, nil, nil, err
 			}
@@ -668,7 +668,7 @@ func isSpecialOrderBy(o abstract.OrderBy) bool {
 
 func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []abstract.OrderBy, plan *routeGen4, hasStar bool) (logicalPlan, error) {
 	for _, order := range orderExprs {
-		err := checkOrderExprCanBePlannedInScatter(plan, order, hasStar)
+		err := checkOrderExprCanBePlannedInScatter(ctx, plan, order, hasStar)
 		if err != nil {
 			return nil, err
 		}
@@ -697,7 +697,7 @@ func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []abstract
 
 // checkOrderExprCanBePlannedInScatter verifies that the given order by expression can be planned.
 // It checks if the expression exists in the plan's select list when the query is a scatter.
-func checkOrderExprCanBePlannedInScatter(plan *routeGen4, order abstract.OrderBy, hasStar bool) error {
+func checkOrderExprCanBePlannedInScatter(ctx *plancontext.PlanningContext, plan *routeGen4, order abstract.OrderBy, hasStar bool) error {
 	if !hasStar {
 		return nil
 	}
@@ -705,7 +705,7 @@ func checkOrderExprCanBePlannedInScatter(plan *routeGen4, order abstract.OrderBy
 	found := false
 	for _, expr := range sel.SelectExprs {
 		aliasedExpr, isAliasedExpr := expr.(*sqlparser.AliasedExpr)
-		if isAliasedExpr && sqlparser.EqualsExpr(aliasedExpr.Expr, order.Inner.Expr) {
+		if isAliasedExpr && ctx.SemTable.EqualsExpr(aliasedExpr.Expr, order.Inner.Expr) {
 			found = true
 			break
 		}
@@ -825,7 +825,7 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 	}
 
 	for _, order := range orderExprs {
-		offset, woffset, found := findExprInOrderedAggr(plan, order)
+		offset, woffset, found := findExprInOrderedAggr(ctx, plan, order)
 		if !found {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected to find the order by expression (%s) in orderedAggregate", sqlparser.String(order.Inner))
 		}
@@ -842,16 +842,16 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 	return ms, nil
 }
 
-func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (keyCol int, weightStringCol int, found bool) {
+func findExprInOrderedAggr(ctx *plancontext.PlanningContext, plan *orderedAggregate, order abstract.OrderBy) (keyCol int, weightStringCol int, found bool) {
 	for _, key := range plan.groupByKeys {
-		if sqlparser.EqualsExpr(order.WeightStrExpr, key.Expr) ||
-			sqlparser.EqualsExpr(order.Inner.Expr, key.Expr) {
+		if ctx.SemTable.EqualsExpr(order.WeightStrExpr, key.Expr) ||
+			ctx.SemTable.EqualsExpr(order.Inner.Expr, key.Expr) {
 			return key.KeyCol, key.WeightStringCol, true
 		}
 	}
 	for _, aggregate := range plan.aggregates {
-		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
-			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
+		if ctx.SemTable.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
+			ctx.SemTable.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
 			return aggregate.Col, -1, true
 		}
 	}
@@ -936,7 +936,7 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 		}
 		found := false
 		for _, grpParam := range currPlan.groupByKeys {
-			if sqlparser.EqualsExpr(expr, grpParam.Expr) {
+			if semTable.EqualsExpr(expr, grpParam.Expr) {
 				found = true
 				oa.groupByKeys = append(oa.groupByKeys, grpParam)
 				break
@@ -946,7 +946,7 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 			continue
 		}
 		for _, aggrParam := range currPlan.aggregates {
-			if sqlparser.EqualsExpr(expr, aggrParam.Expr) {
+			if semTable.EqualsExpr(expr, aggrParam.Expr) {
 				found = true
 				oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1, CollationID: semTable.CollationForExpr(expr)})
 				break

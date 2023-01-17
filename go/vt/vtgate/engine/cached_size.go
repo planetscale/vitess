@@ -61,6 +61,24 @@ func (cached *AlterVSchema) CachedSize(alloc bool) int64 {
 	size += cached.AlterVschemaDDL.CachedSize(true)
 	return size
 }
+func (cached *BoostCompare) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Boost vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Boost.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Gen4 vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Gen4.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *CheckCol) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

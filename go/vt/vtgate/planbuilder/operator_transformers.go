@@ -67,7 +67,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.Physic
 			ctx:               ctx,
 			plan:              plan,
 		}
-		ast := sqlparser.AndExpressions(op.Predicates...)
+		ast := ctx.SemTable.AndExpressions(op.Predicates...)
 		predicate, err := evalengine.Translate(ast, scl)
 		if err != nil {
 			return nil, err

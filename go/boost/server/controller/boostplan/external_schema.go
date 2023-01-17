@@ -2,6 +2,7 @@ package boostplan
 
 import (
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
@@ -136,4 +137,36 @@ func (d *ddlWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table
 
 func (d *ddlWrapper) ConnCollation() collations.ID {
 	return collations.Unknown
+}
+
+type RawDDL struct {
+	Keyspace string
+	SQL      string
+}
+
+func LoadExternalDDLSchema(ddls []RawDDL) (*DDLSchema, error) {
+	schema := &DDLSchema{
+		Specs: make(map[string]map[string]*sqlparser.TableSpec),
+	}
+
+	for _, ddl := range ddls {
+		ks, ok := schema.Specs[ddl.Keyspace]
+		if !ok {
+			ks = make(map[string]*sqlparser.TableSpec)
+			schema.Specs[ddl.Keyspace] = ks
+		}
+
+		stmt, err := sqlparser.ParseStrictDDL(ddl.SQL)
+		if err != nil {
+			return nil, err
+		}
+
+		switch stmt := stmt.(type) {
+		case *sqlparser.CreateTable:
+			ks[stmt.Table.Name.String()] = stmt.TableSpec
+		default:
+			return nil, fmt.Errorf("unexpected type: %T", stmt)
+		}
+	}
+	return schema, nil
 }

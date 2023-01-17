@@ -2,9 +2,9 @@ package state
 
 import (
 	"math/rand"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -33,7 +33,7 @@ func newSingleState(columns []int, schema []boostpb.Type, partial bool) *singleS
 	}
 }
 
-func (ss *singleState) insertRow(r boostpb.Row, memsize *common.AtomicInt64) bool {
+func (ss *singleState) insertRow(r boostpb.Row, memsize *atomic.Int64) bool {
 	key := r.HashWithKeySchema(&ss.hasher, ss.key, ss.keyschema)
 
 	rows, ok := ss.state.Get(key)
@@ -52,7 +52,7 @@ func (ss *singleState) insertRow(r boostpb.Row, memsize *common.AtomicInt64) boo
 	return true
 }
 
-func (ss *singleState) removeRow(r boostpb.Row, memsize *common.AtomicInt64) bool {
+func (ss *singleState) removeRow(r boostpb.Row, memsize *atomic.Int64) bool {
 	key := r.HashWithKeySchema(&ss.hasher, ss.key, ss.keyschema)
 	rows, ok := ss.state.Get(key)
 	if !ok {
@@ -79,7 +79,7 @@ func (ss *singleState) lookup(r boostpb.Row) (*offheap.Rows, bool) {
 	}
 }
 
-func (ss *singleState) markHole(r boostpb.Row, memsize *common.AtomicInt64) {
+func (ss *singleState) markHole(r boostpb.Row, memsize *atomic.Int64) {
 	key := r.Hash(&ss.hasher, ss.keyschema)
 	old, ok := ss.state.Get(key)
 	if !ok {
@@ -90,7 +90,7 @@ func (ss *singleState) markHole(r boostpb.Row, memsize *common.AtomicInt64) {
 	ss.state.Remove(key)
 }
 
-func (ss *singleState) markFilled(r boostpb.Row, memsize *common.AtomicInt64) {
+func (ss *singleState) markFilled(r boostpb.Row, memsize *atomic.Int64) {
 	key := r.Hash(&ss.hasher, ss.keyschema)
 	if rows, ok := ss.state.Get(key); ok {
 		rows.Free(memsize)
@@ -98,7 +98,7 @@ func (ss *singleState) markFilled(r boostpb.Row, memsize *common.AtomicInt64) {
 	ss.state.Set(key, nil)
 }
 
-func (ss *singleState) evict(k boostpb.Row, memsize *common.AtomicInt64) {
+func (ss *singleState) evict(k boostpb.Row, memsize *atomic.Int64) {
 	key := k.Hash(&ss.hasher, ss.keyschema)
 	if old, ok := ss.state.Get(key); ok {
 		old.Free(memsize)
@@ -106,13 +106,13 @@ func (ss *singleState) evict(k boostpb.Row, memsize *common.AtomicInt64) {
 	}
 }
 
-func (ss *singleState) evictKeys(keys []boostpb.Row, memsize *common.AtomicInt64) {
+func (ss *singleState) evictKeys(keys []boostpb.Row, memsize *atomic.Int64) {
 	for _, k := range keys {
 		ss.evict(k, memsize)
 	}
 }
 
-func (ss *singleState) evictRandomKeys(_ *rand.Rand, target int64, memsize *common.AtomicInt64) (evicted []boostpb.Row) {
+func (ss *singleState) evictRandomKeys(_ *rand.Rand, target int64, memsize *atomic.Int64) (evicted []boostpb.Row) {
 	ss.state.Evict(func(_ vthash.Hash, rows *offheap.Rows) bool {
 		rows.ForEach(func(r boostpb.Row) {
 			evicted = append(evicted, r.Extract(ss.key))

@@ -75,29 +75,51 @@ func (qb *queryBuilder) addTableExpr(
 	qb.sel = sel
 }
 
-func (qb *queryBuilder) rewriteColNames(expr sqlparser.Expr) error {
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
+func (qb *queryBuilder) rewriteColNames(expr sqlparser.Expr) (sqlparser.Expr, error) {
+	var err error
+	newExpr := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			id := qb.ctx.SemTable.DirectDeps(node)
 			alias, ok := qb.aliasMap[id]
 			if !ok {
-				return false, NewBug("should be in the alias map")
+				err = NewBug("should be in the alias map")
+				return false
 			}
-			node.Qualifier.Name = sqlparser.NewIdentifierCS(alias)
-			node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
+			newCol := &sqlparser.ColName{
+				Name: node.Name,
+				Qualifier: sqlparser.TableName{
+					Name:      sqlparser.NewIdentifierCS(alias),
+					Qualifier: sqlparser.NewIdentifierCS(""),
+				},
+			}
+
+			cursor.Replace(newCol)
+			qb.ctx.SemTable.Direct[newCol] = id
+			qb.ctx.SemTable.Recursive[newCol] = id
 		}
-		return true, nil
-	}, expr)
+		return err == nil
+	}, nil).(sqlparser.Expr)
+	return newExpr, err
 }
 
 func (qb *queryBuilder) addProjection(projection sqlparser.Expr) error {
-	err := qb.rewriteColNames(projection)
+	projection, err := qb.rewriteColNames(projection)
 	if err != nil {
 		return err
 	}
 	sel := qb.sel.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: projection})
+	return nil
+}
+
+func (qb *queryBuilder) addGrouping(grouping sqlparser.Expr) error {
+	grouping, err := qb.rewriteColNames(grouping)
+	if err != nil {
+		return err
+	}
+	sel := qb.sel.(*sqlparser.Select)
+	sel.GroupBy = append(sel.GroupBy, grouping)
 	return nil
 }
 
@@ -187,7 +209,7 @@ func (qb *queryBuilder) replaceProjections(projections []Projection) error {
 			expr := oldSel[proj.Column]
 			err = qb.addProjection(expr)
 		case ProjectionLiteral, ProjectionEval:
-			err = qb.addProjection(proj.AST)
+			err = qb.addProjection(proj.Original)
 		default:
 			err = NewBug(fmt.Sprintf("unexpected projection on generated query %T", proj))
 		}

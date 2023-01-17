@@ -65,12 +65,12 @@ func (v *Vindex) Clone() abstract.PhysicalOperator {
 
 var _ abstract.PhysicalOperator = (*Vindex)(nil)
 
-func (v *Vindex) PushOutputColumns(columns []*sqlparser.ColName) ([]int, error) {
+func (v *Vindex) PushOutputColumns(ctx *plancontext.PlanningContext, columns []*sqlparser.ColName) ([]int, error) {
 	idxs := make([]int, len(columns))
 outer:
 	for i, newCol := range columns {
 		for j, existingCol := range v.Columns {
-			if sqlparser.EqualsExpr(newCol, existingCol) {
+			if ctx.SemTable.EqualsExpr(newCol, existingCol) {
 				idxs[i] = j
 				continue outer
 			}

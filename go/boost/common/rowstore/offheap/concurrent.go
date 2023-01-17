@@ -5,7 +5,6 @@ import (
 	"unsafe"
 
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common"
 )
 
 // ConcurrentRows are used for the swapping concurrent reading
@@ -16,7 +15,7 @@ import (
 // row data.
 type ConcurrentRows struct {
 	next     *ConcurrentRows
-	sizemask uint32
+	sizemask atomic.Uint32
 }
 
 // concurrentRowsSize is the size of the object header defined above.
@@ -33,11 +32,11 @@ const flagEpochPosition = 31
 // NewConcurrent creates a new concurrent row with the given has and row data.
 // It allocates the row with the needed size for the row and initializes the
 // header correctly.
-func NewConcurrent(row boostpb.Row, memsize *common.AtomicInt64) *ConcurrentRows {
+func NewConcurrent(row boostpb.Row, memsize *atomic.Int64) *ConcurrentRows {
 	alloc := concurrentRowsSize + uintptr(len(row))
 	hdr := (*ConcurrentRows)(DefaultAllocator.alloc(alloc))
 	hdr.next = nil
-	hdr.sizemask = uint32(len(row))
+	hdr.sizemask.Store(uint32(len(row)))
 
 	ary := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(hdr), concurrentRowsSize)), len(row))
 	copy(ary, row)
@@ -67,7 +66,7 @@ func (cr *ConcurrentRows) ForEachInternal_(each func(rows *ConcurrentRows)) {
 
 // SizeMask_ is a helper for tests to get the size mask value
 func (cr *ConcurrentRows) SizeMask_() uint32 {
-	return cr.sizemask
+	return cr.sizemask.Load()
 }
 
 func (cr *ConcurrentRows) memsize() int64 {
@@ -79,7 +78,7 @@ func (cr *ConcurrentRows) memsize() int64 {
 // a tombstone marker should still be seen as valid value and not yet
 // as deleted. So we only remove the tombstone mask to get the size.
 func (cr *ConcurrentRows) writesize() int {
-	return int(cr.sizemask & (flagTombstone - 1))
+	return int(cr.sizemask.Load() & (flagTombstone - 1))
 }
 
 // readsize returns the size of the row when treating it as part
@@ -88,7 +87,7 @@ func (cr *ConcurrentRows) writesize() int {
 // the current epoch matches. Otherwise we still need to see the value
 // to guarantee consistencies when deletes are visible.
 func (cr *ConcurrentRows) readsize(epoch uintptr) int {
-	sz := atomic.LoadUint32(&cr.sizemask)
+	sz := cr.sizemask.Load()
 	if sz&flagTombstone != 0 {
 		if sz>>flagEpochPosition == uint32(epoch&0x1) {
 			return 0
@@ -104,12 +103,12 @@ func (cr *ConcurrentRows) readsize(epoch uintptr) int {
 //
 // When no tombstone is set, we delete the entire linked list. This is used
 // during cleanup.
-func (cr *ConcurrentRows) Free(memsize *common.AtomicInt64) {
+func (cr *ConcurrentRows) Free(memsize *atomic.Int64) {
 	if cr == nil {
 		return
 	}
 
-	if cr.sizemask&flagTombstone != 0 {
+	if cr.sizemask.Load()&flagTombstone != 0 {
 		memsize.Add(-cr.memsize())
 		DefaultAllocator.free(unsafe.Pointer(cr))
 		return
@@ -136,7 +135,7 @@ func (cr *ConcurrentRows) TotalMemorySize() (total int64) {
 // If the current value is the empty sentinel value, we return
 // the next element directly. We don't keep the sentinel entry
 // at the end of the linked list.
-func (cr *ConcurrentRows) Insert(row boostpb.Row, epoch uintptr, memsize *common.AtomicInt64) (new *ConcurrentRows, free *ConcurrentRows) {
+func (cr *ConcurrentRows) Insert(row boostpb.Row, epoch uintptr, memsize *atomic.Int64) (new *ConcurrentRows, free *ConcurrentRows) {
 	next := NewConcurrent(row, memsize)
 	if cr == nil {
 		return next, cr
@@ -154,7 +153,7 @@ func (cr *ConcurrentRows) Tombstone(row boostpb.Row, epoch uintptr) *ConcurrentR
 	var cur = cr
 	for cur != nil {
 		if cur.writesize() == len(row) && cur.AllocUnsafe() == row {
-			cur.sizemask |= flagTombstone | uint32(epoch&0x1)<<flagEpochPosition
+			cur.sizemask.Store(cr.sizemask.Load() | flagTombstone | uint32(epoch&0x1)<<flagEpochPosition)
 			return cur
 		}
 		cur = cur.next
@@ -166,7 +165,7 @@ func (cr *ConcurrentRows) Tombstone(row boostpb.Row, epoch uintptr) *ConcurrentR
 // list since the given entry can also be the first element of the linked list.
 // If we have zero entries left, we return the empty marker so we can store that in
 // the hash table.
-func (cr *ConcurrentRows) Remove(rowp *ConcurrentRows, memsize *common.AtomicInt64) (*ConcurrentRows, *ConcurrentRows) {
+func (cr *ConcurrentRows) Remove(rowp *ConcurrentRows, memsize *atomic.Int64) (*ConcurrentRows, *ConcurrentRows) {
 	var prev *ConcurrentRows = nil
 	var cur *ConcurrentRows = cr
 

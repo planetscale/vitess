@@ -1,4 +1,4 @@
-package integration
+package operators_test
 
 import (
 	"fmt"
@@ -8,25 +8,24 @@ import (
 
 	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
-	"vitess.io/vitess/go/boost/server/controller/boostplan/integration/utils"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/upquery"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestOpsToAST(t *testing.T) {
-	t.Skipf("disabled: upqueries are not enabled yet")
-
-	var schemaBasic = utils.LoadExternalDDLSchema(t, []utils.RawDDL{
+	schemaBasic, err := boostplan.LoadExternalDDLSchema([]boostplan.RawDDL{
 		{Keyspace: "ks", SQL: "create table user (id int, a bigint, primary key(id))"},
 		{Keyspace: "ks", SQL: "create table product (id int, price bigint, primary key(id))"},
 	})
+	require.NoError(t, err)
 
-	var schemaAlbums = utils.LoadExternalDDLSchema(t, []utils.RawDDL{
-		{Keyspace: "ks", SQL: "CREATE TABLE friend (usera int, userb int, primary key(usera, userb));"},
-		{Keyspace: "ks", SQL: "CREATE TABLE album (a_id varchar(255), u_id int, public tinyint(1), primary key(a_id));"},
-		{Keyspace: "ks", SQL: "CREATE TABLE photo (p_id varchar(255), album varchar(255), primary key(p_id));"},
-	})
+	// TODO: use when we add support for UNION upqueries
+	// var schemaAlbums = utils.LoadExternalDDLSchema(t, []utils.RawDDL{
+	// 	{Keyspace: "ks", SQL: "CREATE TABLE friend (usera int, userb int, primary key(usera, userb));"},
+	// 	{Keyspace: "ks", SQL: "CREATE TABLE album (a_id varchar(255), u_id int, public tinyint(1), primary key(a_id));"},
+	// 	{Keyspace: "ks", SQL: "CREATE TABLE photo (p_id varchar(255), album varchar(255), primary key(p_id));"},
+	// })
 
 	c := operators.NewConverter()
 	grandParent := func(n *operators.Node) *operators.Node {
@@ -42,6 +41,12 @@ func TestOpsToAST(t *testing.T) {
 		res    string
 		get    func(n *operators.Node) *operators.Node
 	}{{
+		schema: schemaBasic,
+		query:  "select id, id+a, 420 from user",
+		keys:   []int{2},
+		res:    "select ks_user_0.id, ks_user_0.id + ks_user_0.a, 420, 0 from ks.`user` as ks_user_0 where 420 = :vtg0",
+		get:    parent,
+	}, {
 		schema: schemaBasic,
 		query:  "select u1.id, u2.a from user u1 join user u2 on u1.a = u2.id",
 		keys:   []int{2},
@@ -71,7 +76,8 @@ func TestOpsToAST(t *testing.T) {
 		keys:   []int{2},
 		res: "select count(*), ks_user_0.a, ks_product_0.price " +
 			"from ks.`user` as ks_user_0, ks.product as ks_product_0 " +
-			"where ks_user_0.id = ks_product_0.id and ks_product_0.price = :vtg0",
+			"where ks_user_0.id = ks_product_0.id and ks_product_0.price = :vtg0 " +
+			"group by ks_user_0.a, ks_product_0.price",
 		get: parent,
 	}, {
 		schema: schemaBasic,
@@ -97,17 +103,6 @@ func TestOpsToAST(t *testing.T) {
 		keys:   []int{},
 		res:    "select ks_user_0.id, 0, ks_user_0.a from ks.`user` as ks_user_0 order by a asc limit 10",
 		get:    parent,
-	}, {
-		schema: schemaAlbums,
-		query: `
-(SELECT /*vt+ VIEW=album_friends */ album.a_id AS aid, friend.userb AS uid
- FROM album JOIN friend ON (album.u_id = friend.usera)
- WHERE album.public = 0)
-UNION ALL
-(SELECT album.a_id AS aid, friend.usera AS uid
- FROM album JOIN friend ON (album.u_id = friend.userb)
- WHERE album.public = 0)`,
-		get: parent,
 	}}
 
 	for i, testCase := range testCases {

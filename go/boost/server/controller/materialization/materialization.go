@@ -35,7 +35,7 @@ type Materialization struct {
 	partial        map[graph.NodeIdx]bool
 	partialEnabled bool
 
-	tagGenerator uint32 // atomic
+	tagGenerator atomic.Uint32
 }
 
 func NewMaterialization() *Materialization {
@@ -819,7 +819,7 @@ func (mat *Materialization) setup(mig Migration, ni graph.NodeIdx, indexOn [][]i
 }
 
 func (mat *Materialization) nextTag() boostpb.Tag {
-	return boostpb.Tag(atomic.AddUint32(&mat.tagGenerator, 1) - 1)
+	return boostpb.Tag(mat.tagGenerator.Add(1) - 1)
 }
 
 func (mat *Materialization) GetStatus(node *flownode.Node) boostpb.MaterializationStatus {

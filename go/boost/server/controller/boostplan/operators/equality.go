@@ -35,7 +35,7 @@ func (f *Filter) Equals(st *semantics.SemTable, op Operator) bool {
 	}
 
 	// TODO: we could split the predicates into ANDed atoms and compare these. The order doesn't really matter
-	return sqlparser.EqualsExpr(f.Predicates, other.Predicates)
+	return st.EqualsExpr(f.Predicates, other.Predicates)
 }
 
 func (n *NullFilter) Equals(st *semantics.SemTable, op Operator) bool {
@@ -44,7 +44,7 @@ func (n *NullFilter) Equals(st *semantics.SemTable, op Operator) bool {
 		return false
 	}
 
-	return sqlparser.EqualsExpr(n.Predicates, other.Predicates)
+	return st.EqualsExpr(n.Predicates, other.Predicates)
 }
 
 func (j *Join) Equals(st *semantics.SemTable, op Operator) bool {
@@ -55,7 +55,7 @@ func (j *Join) Equals(st *semantics.SemTable, op Operator) bool {
 	if j.Inner != other.Inner {
 		return false
 	}
-	if !sqlparser.EqualsExpr(j.Predicates, other.Predicates) {
+	if !st.EqualsExpr(j.Predicates, other.Predicates) {
 		return false
 	}
 	return true
@@ -95,7 +95,7 @@ func (t *TopK) Equals(st *semantics.SemTable, op Operator) bool {
 		return false
 	}
 
-	return t.K == other.K && sqlparser.EqualsOrderBy(t.Order, other.Order)
+	return t.K == other.K && sqlparser.EqualsOrderBy(t.Order, other.Order, nil)
 }
 
 func (d *Distinct) Equals(st *semantics.SemTable, op Operator) bool {

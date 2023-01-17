@@ -123,10 +123,11 @@ type (
 	ProjectionKind int
 
 	Projection struct {
-		Kind   ProjectionKind
-		AST    sqlparser.Expr
-		Eval   evalengine.Expr
-		Column int
+		Kind     ProjectionKind
+		AST      sqlparser.Expr
+		Eval     evalengine.Expr
+		Original sqlparser.Expr
+		Column   int
 	}
 
 	Project struct {

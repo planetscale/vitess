@@ -2,14 +2,14 @@ package backlog
 
 import (
 	"math/rand"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/boost/boostpb"
-	"vitess.io/vitess/go/boost/common"
 )
 
 type Writer struct {
 	store   *lrstore
-	memsize common.AtomicInt64
+	memsize atomic.Int64
 	partial bool
 
 	primaryKey []int
@@ -92,7 +92,7 @@ func (w *Writer) KeySchema() []boostpb.Type {
 	return w.keySchema
 }
 
-func (w *Writer) StateSizeAtomic() *common.AtomicInt64 {
+func (w *Writer) StateSizeAtomic() *atomic.Int64 {
 	return &w.memsize
 }
 

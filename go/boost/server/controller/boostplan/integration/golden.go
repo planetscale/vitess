@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
-	"vitess.io/vitess/go/boost/server/controller/boostplan/integration/utils"
 )
 
 type TestQuery struct {
@@ -24,7 +23,7 @@ type GoldenTestCase struct {
 }
 
 type rawTestcase struct {
-	DDL     []utils.RawDDL
+	DDL     []boostplan.RawDDL
 	Queries []*TestQuery
 }
 
@@ -40,7 +39,10 @@ func LoadGoldenTest(t *testing.T, path string) *GoldenTestCase {
 		t.Fatal(err)
 	}
 
-	extschema := utils.LoadExternalDDLSchema(t, testcase.DDL)
+	extschema, err := boostplan.LoadExternalDDLSchema(testcase.DDL)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	return &GoldenTestCase{
 		SchemaInformation: &boostplan.SchemaInformation{

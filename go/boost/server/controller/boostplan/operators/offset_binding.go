@@ -228,15 +228,16 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 		if err != nil {
 			return err
 		}
+		var proj Projection
 		switch expr := ast.(type) {
 		case *sqlparser.ColName, sqlparser.AggrFunc:
 			offset, err := input.ExprLookup(semTable, expr)
 			if err != nil {
 				return err
 			}
-			p.Projections = append(p.Projections, Projection{Kind: ProjectionColumn, Column: offset})
+			proj = Projection{Kind: ProjectionColumn, Column: offset}
 		case *sqlparser.Literal:
-			p.Projections = append(p.Projections, Projection{Kind: ProjectionLiteral, AST: expr})
+			proj = Projection{Kind: ProjectionLiteral, AST: expr}
 		default:
 			newExpr, err := rewriteColNamesToOffsets(semTable, node.Ancestors[0], expr)
 			if err != nil {
@@ -246,8 +247,10 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 			if err != nil {
 				return &UnsupportedError{AST: expr, Type: EvalEngineNotSupported}
 			}
-			p.Projections = append(p.Projections, Projection{Kind: ProjectionEval, AST: newExpr, Eval: eexpr})
+			proj = Projection{Kind: ProjectionEval, AST: newExpr, Eval: eexpr}
 		}
+		proj.Original = ast
+		p.Projections = append(p.Projections, proj)
 	}
 	return nil
 }
@@ -266,7 +269,7 @@ func (n *NullFilter) PlanOffsets(node *Node, st *semantics.SemTable) error {
 		col, ok := ast.(*sqlparser.ColName)
 		deps := st.DirectDeps(col)
 
-		if ok && !deps.Equals(n.OuterSide) {
+		if ok && deps != n.OuterSide {
 			// if we have a bare column and it comes from the inner side of the join, we can just pass it through
 			offset, err := input.ExprLookup(st, col)
 			if err != nil {
@@ -291,7 +294,7 @@ func (n *NullFilter) PlanOffsets(node *Node, st *semantics.SemTable) error {
 			}
 
 			offsetExpr := sqlparser.NewOffset(offset, col)
-			if !st.DirectDeps(col).Equals(n.OuterSide) {
+			if st.DirectDeps(col) != n.OuterSide {
 				// columns from the inner side can just pass through
 				cursor.Replace(offsetExpr)
 				return false

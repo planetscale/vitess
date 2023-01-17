@@ -108,6 +108,10 @@ func (f *fakeControllerClient) ReadyCheck(ctx context.Context, in *vtboost.Ready
 	panic("should not be called")
 }
 
+func (f *fakeControllerClient) SetScience(ctx context.Context, in *vtboost.SetScienceRequest) (*vtboost.SetScienceResponse, error) {
+	panic("should not be called")
+}
+
 func (f *fakeControllerClient) Graphviz(ctx context.Context, in *vtboost.GraphvizRequest) (*vtboost.GraphvizResponse, error) {
 	panic("should not be called")
 }

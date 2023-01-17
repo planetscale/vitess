@@ -192,6 +192,15 @@ func (client *gRPCVtctldClient) BoostRemoveCluster(ctx context.Context, in *vtbo
 	return client.c.BoostRemoveCluster(ctx, in, opts...)
 }
 
+// BoostSetScience is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BoostSetScience(ctx context.Context, in *vtboostpb.SetScienceRequest, opts ...grpc.CallOption) (*vtboostpb.SetScienceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BoostSetScience(ctx, in, opts...)
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	if client.c == nil {

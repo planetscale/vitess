@@ -238,7 +238,7 @@ func markOther(st *semantics.SemTable, col sqlparser.Expr, tableID semantics.Tab
 		case *sqlparser.Subquery:
 			return false
 		case sqlparser.Expr:
-			if sqlparser.EqualsSQLNode(col, node) {
+			if st.EqualsExpr(col, node) {
 				st.Direct[node] = tableID
 			}
 		}

@@ -2340,5 +2340,23 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "systable union query in derived table with constraint on outside (without star projection)",
+    "query": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
+    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "gen4-plan": "can't push predicates on concatenate"
+  },
+  {
+    "comment": "pushes predicate on both sides of UNION",
+    "query": "select * from (select name, id as foo from user union select 'extra', user_id from user_extra) X where X.foo = 3",
+    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "gen4-plan": "can't push predicates on concatenate"
+  },
+  {
+    "comment": "systable union query in derived table with constraint on outside (star projection)",
+    "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
+    "v3-plan": "symbol constraint_name not found in table or subquery",
+    "gen4-plan": "can't push predicates on concatenate"
   }
 ]

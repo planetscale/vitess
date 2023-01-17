@@ -172,6 +172,26 @@ message PurgeRequest{}
 
 message PurgeResponse{}
 
+message SetScienceRequest {
+  Science science = 1;
+
+  // List of clusters on which the SetScienceRequest should be applied.
+  // SetScienceRequest will be applied to every clusters if the list is empty.
+  repeated string clusters = 2;
+};
+message SetScienceResponse {};
+
+message Science {
+  double comparison_sample_rate = 1;
+
+  enum FailureMode {
+    LOG = 0;
+    ERROR = 1;
+  };
+
+  FailureMode failure_mode = 2;
+};
+
 message ControllerState {
   string leader = 1;
   int64 epoch = 2;
@@ -203,6 +223,8 @@ message ControllerState {
   };
 
   map<int64, RecipeStatus> recipe_version_status = 4;
+
+  Science science = 5;
 };
 
 message TopoWorkerEntry {
@@ -216,4 +238,5 @@ service ControllerService {
   rpc ReadyCheck(ReadyRequest) returns (ReadyResponse);
   rpc Graphviz(GraphvizRequest) returns (GraphvizResponse);
   rpc GetMaterializations(MaterializationsRequest) returns (MaterializationsResponse);
+  rpc SetScience(SetScienceRequest) returns (SetScienceResponse);
 };

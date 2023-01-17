@@ -18,7 +18,7 @@ func generateUpqueries(ctx *PlanContext, node *Node) error {
 	}
 
 	switch node.Op.(type) {
-	case *NodeTableRef, *Table, *View:
+	case *NodeTableRef, *Table:
 	default:
 		q := newQueryBuilder(ctx)
 		err := buildQuery(node, q)
@@ -107,15 +107,15 @@ func (t *Table) AddToQueryBuilder([]*queryBuilder, *Node) error {
 
 func (j *Join) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
 	qb := builders[0]
-	err := qb.rewriteColNames(j.Predicates)
+	pred, err := qb.rewriteColNames(j.Predicates)
 	if err != nil {
 		return err
 	}
 	qbR := builders[1]
 	if j.Inner {
-		qb.joinInnerWith(qbR, j.Predicates)
+		qb.joinInnerWith(qbR, pred)
 	} else {
-		qb.joinOuterWith(qbR, j.Predicates)
+		qb.joinOuterWith(qbR, pred)
 	}
 	err = qb.clearOutput()
 	if err != nil {
@@ -132,11 +132,11 @@ func (j *Join) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
 
 func (f *Filter) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
 	qb := builders[0]
-	err := qb.rewriteColNames(f.Predicates)
+	pred, err := qb.rewriteColNames(f.Predicates)
 	if err != nil {
 		return err
 	}
-	sqlparserx.AddSelectPredicate(qb.sel, f.Predicates)
+	sqlparserx.AddSelectPredicate(qb.sel, pred)
 	return nil
 }
 
@@ -151,9 +151,14 @@ func (n *NullFilter) AddToQueryBuilder(builders []*queryBuilder, this *Node) err
 		return NewBug("expected to find a join as the last table in the from clause")
 	}
 
-	jt.Condition.On = sqlparser.AndExpressions(jt.Condition.On, n.Predicates)
+	pred, err := qb.rewriteColNames(n.Predicates)
+	if err != nil {
+		return err
+	}
 
-	err := qb.clearOutput()
+	jt.Condition.On = sqlparser.AndExpressions(jt.Condition.On, pred)
+
+	err = qb.clearOutput()
 	if err != nil {
 		return err
 	}
@@ -175,6 +180,12 @@ func (g *GroupBy) AddToQueryBuilder(builders []*queryBuilder, n *Node) error {
 	}
 	for _, col := range n.Columns {
 		err := qb.addProjection(col.AST[0])
+		if err != nil {
+			return err
+		}
+	}
+	for _, col := range g.Grouping {
+		err := qb.addGrouping(col.AST[0])
 		if err != nil {
 			return err
 		}

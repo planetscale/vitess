@@ -4475,6 +4475,10 @@ func (s *VtctldServer) BoostPurge(ctx context.Context, request *vtboost.PurgeReq
 	return boostDo(s.boost.Purge(ctx, request))
 }
 
+func (s *VtctldServer) BoostSetScience(ctx context.Context, request *vtboost.SetScienceRequest) (*vtboost.SetScienceResponse, error) {
+	return boostDo(s.boost.SetScience(ctx, request))
+}
+
 // boostDo captures the results of boost RPC calls and unpacks any
 // boostclient.Error to produce a matching gRPC status code error.
 func boostDo[T any](t T, err error) (T, error) {

@@ -118,17 +118,21 @@ func (qg *QueryGraph) getPredicateByDeps(ts semantics.TableSet) ([]sqlparser.Exp
 	}
 	return nil, false
 }
-func (qg *QueryGraph) addJoinPredicates(ts semantics.TableSet, expr sqlparser.Expr) {
+func (qg *QueryGraph) addJoinPredicates(semTable *semantics.SemTable, ts semantics.TableSet, predicate sqlparser.Expr) {
 	for _, join := range qg.innerJoins {
 		if join.deps == ts {
-			join.exprs = append(join.exprs, expr)
+			if semTable.ContainsExpr(predicate, join.exprs) {
+				return
+			}
+
+			join.exprs = append(join.exprs, predicate)
 			return
 		}
 	}
 
 	qg.innerJoins = append(qg.innerJoins, &innerJoin{
 		deps:  ts,
-		exprs: []sqlparser.Expr{expr},
+		exprs: []sqlparser.Expr{predicate},
 	})
 }
 
@@ -138,21 +142,23 @@ func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *seman
 	case 0:
 		qg.addNoDepsPredicate(predicate)
 	case 1:
-		found := qg.addToSingleTable(deps, predicate)
+		found := qg.addToSingleTable(semTable, deps, predicate)
 		if !found {
 			// this could be a predicate that only has dependencies from outside this QG
-			qg.addJoinPredicates(deps, predicate)
+			qg.addJoinPredicates(semTable, deps, predicate)
 		}
 	default:
-		qg.addJoinPredicates(deps, predicate)
+		qg.addJoinPredicates(semTable, deps, predicate)
 	}
 	return nil
 }
 
-func (qg *QueryGraph) addToSingleTable(table semantics.TableSet, predicate sqlparser.Expr) bool {
+func (qg *QueryGraph) addToSingleTable(semTable *semantics.SemTable, table semantics.TableSet, predicate sqlparser.Expr) bool {
 	for _, t := range qg.Tables {
 		if table == t.ID {
-			t.Predicates = append(t.Predicates, predicate)
+			if !semTable.ContainsExpr(predicate, t.Predicates) {
+				t.Predicates = append(t.Predicates, predicate)
+			}
 			return true
 		}
 	}
