@@ -17,13 +17,12 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
@@ -86,10 +85,6 @@ func (rm *replManager) SetTabletType(tabletType topodatapb.TabletType) {
 		return
 	}
 	log.Info("Replication Manager: starting")
-	// Run an immediate check to fix replication if it was broken.
-	// A higher caller may already have te action lock. So, we use
-	// a code path that avoids it.
-	rm.checkActionLocked()
 	rm.ticks.Start(rm.check)
 }
 
