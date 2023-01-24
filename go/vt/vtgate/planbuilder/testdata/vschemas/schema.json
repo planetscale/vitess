@@ -55,6 +55,9 @@
           "type": "hash_test",
           "owner": "user"
         },
+        "hash_test": {
+          "type": "hash_test"
+        },
         "kid_index": {
           "type": "hash_test",
           "owner": "multicolvin"
@@ -170,6 +173,30 @@
               "type": "VARCHAR"
             }
           ]
+        },
+        "customer": {
+          "column_vindexes": [
+            {
+              "column": "id",
+              "name": "hash_test"
+            }
+          ],
+          "auto_increment": {
+            "column": "id",
+            "sequence": "seq"
+          }
+        },
+        "corder": {
+          "column_vindexes": [
+            {
+              "column": "cust_id",
+              "name": "hash_test"
+            }
+          ],
+          "auto_increment": {
+            "column": "id",
+            "sequence": "seq"
+          }
         },
         "user_metadata": {
           "column_vindexes": [
