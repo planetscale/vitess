@@ -44,7 +44,6 @@ jobs:
         ref:
           - main
           - latest
-          - latest-15.0
         image:
           - mysql80
         include:
@@ -105,8 +104,6 @@ jobs:
           tags: |
             type=raw,value={{date 'YYYY-MM-DD'}}.${{ steps.determine-sha.outputs.sha }}
             type=raw,value=head,enable=${{ matrix.ref == 'latest' }}
-            type=raw,value=latest-15.0,enable=${{ matrix.ref == 'latest-15.0'}}
-            type=raw,value=head-15.0,enable=${{ matrix.ref == 'latest-15.0'}}
 
       - name: Build and push
         id: build
