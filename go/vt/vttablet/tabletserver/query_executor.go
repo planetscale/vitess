@@ -511,12 +511,19 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 		}
 	}
 
-	defer func() {
-		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
-			log.Errorf("failed to reload schema %v", err)
-		}
-	}()
-
+	isTemporaryTable := false
+	if ddlStmt, ok := qre.plan.FullStmt.(sqlparser.DDLStatement); ok {
+		isTemporaryTable = ddlStmt.IsTemporary()
+	}
+	if !isTemporaryTable {
+		// Temporary tables are limited to the session creating them. There is no need to Reload()
+		// the table because other connections will not be able to see the table anyway.
+		defer func() {
+			if err := qre.tsv.se.Reload(qre.ctx); err != nil {
+				log.Errorf("failed to reload schema %v", err)
+			}
+		}()
+	}
 	sql := qre.query
 	// If FullQuery is not nil, then the DDL query was fully parsed
 	// and we should use the ast to generate the query instead.
