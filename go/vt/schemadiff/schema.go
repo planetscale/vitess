@@ -171,6 +171,7 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 // normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
 // It validates some cross-entity constraints, and orders entity based on dependencies (e.g. tables, views that read from tables, 2nd level views, etc.)
 func (s *Schema) normalize() error {
+	fmt.Printf("=========== normalize\n")
 	s.named = make(map[string]Entity, len(s.tables)+len(s.views))
 	s.sorted = make([]Entity, 0, len(s.tables)+len(s.views))
 	// Verify no two entities share same name
@@ -296,7 +297,13 @@ func (s *Schema) normalize() error {
 				handledAnyViewsInIteration = true
 
 				for _, depName := range dependentNames {
-					s.viewDependencies[name] = append(s.viewDependencies[name], s.Entity(depName))
+					fmt.Printf("=========== depname of %v: %v\n", name, depName)
+					depEntity := s.Entity(depName)
+					if depEntity == nil {
+						fmt.Printf("=========== depname NOT FOUND: %v\n", depName)
+						return &EntityNotFoundError{Name: depName}
+					}
+					s.viewDependencies[name] = append(s.viewDependencies[name], depEntity)
 				}
 			}
 		}
@@ -786,14 +793,25 @@ func (s *Schema) ValidateViewReferences() error {
 	var allerrors error
 	availableColumns := tablesColumnsMap{}
 
-	for _, e := range s.Entities() {
-		entityColumns, err := s.getEntityColumnNames(e.Name(), availableColumns)
+	referencedEntities := map[string]bool{}
+	for _, entities := range s.viewDependencies {
+		for _, entity := range entities {
+			referencedEntities[entity.Name()] = true
+		}
+	}
+	for _, entities := range s.fkDependencies {
+		for _, entity := range entities {
+			referencedEntities[entity.Name()] = true
+		}
+	}
+	for entityName := range referencedEntities {
+		entityColumns, err := s.getEntityColumnNames(entityName, availableColumns)
 		if err != nil {
 			return err
 		}
-		availableColumns[e.Name()] = map[string]struct{}{}
+		availableColumns[entityName] = map[string]struct{}{}
 		for _, col := range entityColumns {
-			availableColumns[e.Name()][col.Lowered()] = struct{}{}
+			availableColumns[entityName][col.Lowered()] = struct{}{}
 		}
 	}
 
@@ -967,6 +985,7 @@ func (s *Schema) getEntityColumnNames(entityName string, availableColumns tables
 	columnNames []*sqlparser.IdentifierCI,
 	err error,
 ) {
+	fmt.Printf("=========== getEntityColumnNames: %v\n", entityName)
 	entity := s.Entity(entityName)
 	if entity == nil {
 		if strings.ToLower(entityName) == "dual" {
