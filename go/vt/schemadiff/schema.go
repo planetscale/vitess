@@ -42,6 +42,9 @@ type Schema struct {
 
 	foreignKeyParents  []*CreateTableEntity // subset of tables
 	foreignKeyChildren []*CreateTableEntity // subset of tables
+
+	viewDependencies map[string]([]Entity)
+	fkDependencies   map[string]([]Entity)
 }
 
 // newEmptySchema is used internally to initialize a Schema object
@@ -54,6 +57,9 @@ func newEmptySchema() *Schema {
 
 		foreignKeyParents:  []*CreateTableEntity{},
 		foreignKeyChildren: []*CreateTableEntity{},
+
+		viewDependencies: map[string]([]Entity){},
+		fkDependencies:   map[string]([]Entity){},
 	}
 	return schema
 }
@@ -250,6 +256,10 @@ func (s *Schema) normalize() error {
 				s.sorted = append(s.sorted, t)
 				dependencyLevels[t.Name()] = iterationLevel
 				handledAnyTablesInIteration = true
+
+				for _, depName := range referencedTableNames {
+					s.fkDependencies[name] = append(s.fkDependencies[name], s.Entity(depName))
+				}
 			}
 		}
 		if !handledAnyTablesInIteration {
@@ -284,6 +294,10 @@ func (s *Schema) normalize() error {
 				s.sorted = append(s.sorted, v)
 				dependencyLevels[v.Name()] = iterationLevel
 				handledAnyViewsInIteration = true
+
+				for _, depName := range dependentNames {
+					s.viewDependencies[name] = append(s.viewDependencies[name], s.Entity(depName))
+				}
 			}
 		}
 		if !handledAnyViewsInIteration {
@@ -625,6 +639,14 @@ func (s *Schema) copy() *Schema {
 	}
 	dup.sorted = make([]Entity, len(s.sorted))
 	copy(dup.sorted, s.sorted)
+	dup.viewDependencies = make(map[string][]Entity)
+	for k, v := range s.viewDependencies {
+		dup.viewDependencies[k] = v
+	}
+	dup.fkDependencies = make(map[string][]Entity)
+	for k, v := range s.fkDependencies {
+		dup.fkDependencies[k] = v
+	}
 	return dup
 }
 
@@ -759,8 +781,6 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 	}
 	return dup, nil
 }
-
-// TODO
 
 func (s *Schema) ValidateViewReferences() error {
 	var allerrors error
@@ -987,13 +1007,10 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, availableColumns tables
 					columnNames = append(columnNames, &name)
 				}
 			} else {
-				dependentNames, err := getViewDependentTableNames(v.CreateView)
-				if err != nil {
-					return false, err
-				}
+				referencedEntities := s.viewDependencies[v.Name()]
 				// add all columns from all referenced tables and views
-				for _, entityName := range dependentNames {
-					for colName := range availableColumns[entityName] {
+				for _, entity := range referencedEntities {
+					for colName := range availableColumns[entity.Name()] {
 						name := sqlparser.NewIdentifierCI(colName)
 						columnNames = append(columnNames, &name)
 					}
