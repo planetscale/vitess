@@ -790,7 +790,7 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 }
 
 func (s *Schema) ValidateViewReferences() error {
-	var allerrors error
+	var errs error
 	availableColumns := tablesColumnsMap{}
 
 	referencedEntities := map[string]bool{}
@@ -807,7 +807,7 @@ func (s *Schema) ValidateViewReferences() error {
 	for entityName := range referencedEntities {
 		entityColumns, err := s.getEntityColumnNames(entityName, availableColumns)
 		if err != nil {
-			return err
+			errs = multierr.Append(errs, err)
 		}
 		availableColumns[entityName] = map[string]struct{}{}
 		for _, col := range entityColumns {
@@ -823,18 +823,18 @@ func (s *Schema) ValidateViewReferences() error {
 		tableAliases := map[string]string{}
 		tableReferences := map[string]struct{}{}
 		err := gatherTableInformationForView(view, availableColumns, tableReferences, tableAliases)
-		allerrors = multierr.Append(allerrors, err)
+		errs = multierr.Append(errs, err)
 
 		// Now we can walk the view again and check each column expression
 		// to see if there's an existing column referenced.
 		err = gatherColumnReferenceInformationForView(view, availableColumns, tableReferences, tableAliases)
-		allerrors = multierr.Append(allerrors, err)
+		errs = multierr.Append(errs, err)
 	}
-	return allerrors
+	return errs
 }
 
 func gatherTableInformationForView(view *CreateViewEntity, availableColumns tablesColumnsMap, tableReferences map[string]struct{}, tableAliases map[string]string) error {
-	var allerrors error
+	var errs error
 	tableErrors := make(map[string]struct{})
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -853,7 +853,7 @@ func gatherTableInformationForView(view *CreateViewEntity, availableColumns tabl
 					View:  view.Name(),
 					Table: aliased,
 				}
-				allerrors = multierr.Append(allerrors, err)
+				errs = multierr.Append(errs, err)
 				tableErrors[aliased] = struct{}{}
 				return true, nil
 			}
@@ -868,11 +868,11 @@ func gatherTableInformationForView(view *CreateViewEntity, availableColumns tabl
 		// parsing error. Forget about any view dependency issues we may have found. This is way more important
 		return err
 	}
-	return allerrors
+	return errs
 }
 
 func gatherColumnReferenceInformationForView(view *CreateViewEntity, availableColumns tablesColumnsMap, tableReferences map[string]struct{}, tableAliases map[string]string) error {
-	var allerrors error
+	var errs error
 	qualifiedColumnErrors := make(map[string]map[string]struct{})
 	unqualifiedColumnErrors := make(map[string]struct{})
 
@@ -881,10 +881,10 @@ func gatherColumnReferenceInformationForView(view *CreateViewEntity, availableCo
 		case *sqlparser.ColName:
 			if node.Qualifier.IsEmpty() {
 				err := verifyUnqualifiedColumn(view, availableColumns, tableReferences, node.Name, unqualifiedColumnErrors)
-				allerrors = multierr.Append(allerrors, err)
+				errs = multierr.Append(errs, err)
 			} else {
 				err := verifyQualifiedColumn(view, availableColumns, tableAliases, node, qualifiedColumnErrors)
-				allerrors = multierr.Append(allerrors, err)
+				errs = multierr.Append(errs, err)
 			}
 		}
 		return true, nil
@@ -893,7 +893,7 @@ func gatherColumnReferenceInformationForView(view *CreateViewEntity, availableCo
 		// parsing error. Forget about any view dependency issues we may have found. This is way more important
 		return err
 	}
-	return allerrors
+	return errs
 }
 
 func verifyUnqualifiedColumn(view *CreateViewEntity, availableColumns tablesColumnsMap, tableReferences map[string]struct{}, nodeName sqlparser.IdentifierCI, unqualifiedColumnErrors map[string]struct{}) error {
