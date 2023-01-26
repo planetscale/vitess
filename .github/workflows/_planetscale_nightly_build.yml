@@ -105,6 +105,26 @@ jobs:
             type=raw,value={{date 'YYYY-MM-DD'}}.${{ steps.determine-sha.outputs.sha }}
             type=raw,value=head,enable=${{ matrix.ref == 'latest' }}
 
+        # This is a hack to let us retrieve the new image version being built
+        # by this job, which is necessary because the GitHub Actions API
+        # doesn't expose either step or job outputs.
+        #
+        # The Temporal workflow which runs this build job will search through
+        # the steps for one with a known prefix ("New Docker image version
+        # is:") and extract the templated version string.
+        #
+        # We could do something similar using Workflow Artifacts, but this was
+        # simpler to build and is sufficient for now. If there's a good reason
+        # to switch to them in future, definitely don't feel tied to this
+        # implementation.
+        #
+        # See:
+        #
+        # https://docs.github.com/en/rest/actions/workflow-jobs?apiVersion=2022-11-28#get-a-job-for-a-workflow-run
+      - name: "New Docker image version is: ${{steps.meta.outputs.version}}"
+        run: |
+          echo "New Docker image version is: ${{steps.meta.outputs.version}}"
+
       - name: Build and push
         id: build
         uses: docker/build-push-action@v3
