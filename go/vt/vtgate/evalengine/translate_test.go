@@ -100,6 +100,9 @@ func TestTranslateSimplification(t *testing.T) {
 		{"date'2022'", err(`incorrect DATE value: '2022'`), err(`incorrect DATE value: '2022'`)},
 		{"time'2022-10-03'", err(`incorrect TIME value: '2022-10-03'`), err(`incorrect TIME value: '2022-10-03'`)},
 		{"timestamp'2022-10-03'", err(`incorrect DATETIME value: '2022-10-03'`), err(`incorrect DATETIME value: '2022-10-03'`)},
+		{"12 between 5 and 20", ok("(INT64(12) >= INT64(5)) AND (INT64(12) <= INT64(20))"), ok(`INT64(1)`)},
+		{"12 not between 5 and 20", ok("(INT64(12) < INT64(5)) OR (INT64(12) > INT64(20))"), ok(`INT64(0)`)},
+		{"2 not between 5 and 20", ok("(INT64(2) < INT64(5)) OR (INT64(2) > INT64(20))"), ok(`INT64(1)`)},
 	}
 
 	for _, tc := range testCases {
