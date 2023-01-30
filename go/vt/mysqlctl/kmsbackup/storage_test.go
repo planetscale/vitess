@@ -2,33 +2,15 @@ package kmsbackup
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"math/rand"
 	"os"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-
-	"github.com/planetscale/common-libs/files"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-var (
-	awsCredFile    = flag.String("aws-credentials-file", "", "AWS Credentials file")
-	awsCredProfile = flag.String("aws-credentials-profile", "", "Profile for AWS Credentials")
-	awsS3Bucket    = flag.String("aws-s3-bucket", "planetscale-vitess-private-ci", "Bucket to use for S3 for AWS Credentials")
-)
-
-func TestMain(m *testing.M) {
-	flag.Parse()
-	os.Exit(m.Run())
-}
 
 func TestFileBackupStorage_ListBackups(t *testing.T) {
 	ctx := context.Background()
@@ -210,13 +192,13 @@ func TestFilesBackupStorage_StartBackup_uploadSizeFile(t *testing.T) {
 
 	w, err := handle.AddFile(ctx, "ssfile", 10)
 	require.NoError(t, err)
-	w.Write([]byte("test content"))
+	_, err = w.Write([]byte("test content"))
 	require.NoError(t, err)
-	w.Close()
+	require.NoError(t, w.Close())
 
 	w, err = handle.AddFile(ctx, backupManifestFileName, 10)
 	require.NoError(t, err)
-	w.Close()
+	require.NoError(t, w.Close())
 
 	input := []byte("20")
 	r, err := handle.ReadFile(ctx, "SIZE")
@@ -225,53 +207,4 @@ func TestFilesBackupStorage_StartBackup_uploadSizeFile(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, input, output)
 	r.Close()
-
-}
-
-func testFilesBackupStorage(t *testing.T) *FilesBackupStorage {
-	t.Helper()
-
-	region := "us-east-1"
-	bucket := *awsS3Bucket
-	arn := "not-used"
-
-	testDir := t.TempDir()
-
-	fs, err := files.NewLocalFiles(testDir)
-	require.NoError(t, err)
-
-	if *awsCredFile != "" {
-		sess, err := session.NewSession(&aws.Config{
-			Credentials: credentials.NewSharedCredentials(*awsCredFile, *awsCredProfile),
-			Region:      aws.String(region),
-		})
-		require.NoError(t, err)
-
-		fs = files.NewS3Files(sess, region, bucket, "")
-	} else {
-		t.Logf("s3 integration is disabled, using local filesystem abstraction")
-	}
-
-	f := &FilesBackupStorage{
-		region:           region,
-		bucket:           bucket,
-		arn:              arn,
-		files:            fs,
-		unencryptedFiles: fs,
-	}
-
-	return f
-}
-
-// createTempFile creates a temp file with the provided contents
-// and returns the name of the file.
-func createTempFile(t *testing.T, content string) string {
-	t.Helper()
-	tmpfile, err := os.CreateTemp("", "backup_labels_test")
-	require.NoError(t, err)
-	defer tmpfile.Close()
-
-	_, err = tmpfile.Write([]byte(content))
-	require.NoError(t, err)
-	return tmpfile.Name()
 }
