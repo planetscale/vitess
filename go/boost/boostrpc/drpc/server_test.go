@@ -501,48 +501,6 @@ func TestServer(t *testing.T) {
 	})
 }
 
-func ExampleNewServer() {
-	// Get RPC service
-	myService := sampleServiceProvider()
-
-	// Server options
-	opts := []Option{
-		WithPort(8080),
-		WithServiceProvider(myService),
-	}
-
-	// Create new server
-	srv, err := NewServer(opts...)
-	if err != nil {
-		panic(err)
-	}
-
-	// Wait for requests in the background
-	go func() {
-		_ = srv.Start()
-	}()
-
-	// ... do something else ...
-}
-
-func ExampleNewClient() {
-	// Client connection
-	cl, err := NewClient("tcp", ":8080")
-	if err != nil {
-		panic(err)
-	}
-
-	// RPC client
-	client := sampleV1.NewDRPCEchoAPIClient(cl)
-
-	// Consume the RPC service
-	res, _ := client.Ping(context.Background(), &emptypb.Empty{})
-	fmt.Printf("ping: %+v", res)
-
-	// Close client connection when no longer required
-	_ = cl.Close()
-}
-
 type fooServiceProvider struct {
 	// By embedding the handler instance the type itself provides the
 	// implementation required when registering the element as a service

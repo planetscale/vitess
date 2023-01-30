@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -13,13 +14,16 @@ import (
 	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/boostrpc"
+	"vitess.io/vitess/go/boost/boostrpc/packet"
+	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/boost/common"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/domain"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/server/controller/domainrpc"
 	"vitess.io/vitess/go/boost/server/controller/materialization"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
@@ -29,23 +33,23 @@ import (
 )
 
 type Controller struct {
-	ingredients *graph.Graph[*flownode.Node]
+	g *graph.Graph[*flownode.Node]
 
 	uuid               uuid.UUID
 	nDomains           uint
-	sharding           *uint
-	epoch              boostpb.Epoch
+	shardCount         *uint
+	epoch              service.Epoch
 	quorum             uint
 	heartbeatEvery     time.Duration
 	healthcheckEvery   time.Duration
 	lastCheckedWorkers time.Time
 
-	domainConfig    *boostpb.DomainConfig
-	materialization *materialization.Materialization
+	domainConfig    *config.Domain
+	mat             *materialization.Materialization
 	recipe          *boostplan.VersionedRecipe
-	domains         map[boostpb.DomainIndex]*domainrpc.Handle
-	domainNodes     map[boostpb.DomainIndex][]graph.NodeIdx
-	remap           map[boostpb.DomainIndex]map[graph.NodeIdx]boostpb.IndexPair
+	domains         map[dataflow.DomainIdx]*domainrpc.Handle
+	domainNodeMap   map[dataflow.DomainIdx][]graph.NodeIdx
+	remap           map[dataflow.DomainIdx]map[graph.NodeIdx]dataflow.IndexPair
 	chanCoordinator *boostrpc.ChannelCoordinator
 
 	workersReady        bool
@@ -59,49 +63,47 @@ type Controller struct {
 	BuildDomain domain.BuilderFn
 }
 
-func NewController(log *zap.Logger, uuid uuid.UUID, config *boostpb.Config, state *vtboostpb.ControllerState, ts *toposerver.Server) *Controller {
+var _ MigrationTarget = (*Controller)(nil)
+
+func NewController(log *zap.Logger, uuid uuid.UUID, cfg *config.Config, state *vtboostpb.ControllerState, ts *toposerver.Server) (*Controller, error) {
 	g := new(graph.Graph[*flownode.Node])
 
-	// the Source node has no relevant fields; it just acts as a root for the whole DAG
-	if !g.AddNode(flownode.New("source", []string{"void"}, &flownode.Source{})).IsSource() {
-		panic("expected initial node to be Source")
+	// the Root node has no relevant fields; it just acts as a root for the whole DAG
+	if !g.AddNode(flownode.New("root", []string{"void"}, &flownode.Root{})).IsRoot() {
+		return nil, errors.New("failed to add initial root node")
 	}
 
-	mat := materialization.NewMaterialization()
-	if !config.PartialEnabled {
-		mat.DisablePartial()
-	}
-
+	mat := materialization.NewMaterialization(cfg.Materialization)
 	recipe := boostplan.BlankRecipe()
-	recipe.EnableReuse(config.Reuse)
+	recipe.EnableReuse(cfg.Reuse)
 
-	var sharding *uint
-	if config.Shards > 0 {
-		sharding = &config.Shards
+	var shardCount *uint
+	if cfg.Shards > 0 {
+		shardCount = &cfg.Shards
 	}
 
 	return &Controller{
-		ingredients:        g,
+		g:                  g,
 		uuid:               uuid,
-		sharding:           sharding,
-		epoch:              boostpb.Epoch(state.Epoch),
-		quorum:             config.Quorum,
-		heartbeatEvery:     config.HeartbeatEvery,
-		healthcheckEvery:   config.HealthcheckEvery,
+		shardCount:         shardCount,
+		epoch:              service.Epoch(state.Epoch),
+		quorum:             cfg.Quorum,
+		heartbeatEvery:     cfg.HeartbeatEvery,
+		healthcheckEvery:   cfg.HealthcheckEvery,
 		lastCheckedWorkers: time.Now(),
-		domainConfig:       config.DomainConfig,
-		materialization:    mat,
+		domainConfig:       cfg.Domain,
+		mat:                mat,
 		recipe:             recipe,
-		domains:            make(map[boostpb.DomainIndex]*domainrpc.Handle),
-		domainNodes:        make(map[boostpb.DomainIndex][]graph.NodeIdx),
-		remap:              make(map[boostpb.DomainIndex]map[graph.NodeIdx]boostpb.IndexPair),
+		domains:            make(map[dataflow.DomainIdx]*domainrpc.Handle),
+		domainNodeMap:      make(map[dataflow.DomainIdx][]graph.NodeIdx),
+		remap:              make(map[dataflow.DomainIdx]map[graph.NodeIdx]dataflow.IndexPair),
 		chanCoordinator:    boostrpc.NewChannelCoordinator(),
 		workers:            make(map[domainrpc.WorkerID]*domainrpc.Worker),
 		readAddrs:          make(map[domainrpc.WorkerID]string),
 		topo:               ts,
 		log:                log.With(zap.Int64("epoch", state.Epoch)),
 		BuildDomain:        domain.ToProto,
-	}
+	}, nil
 }
 
 func (ctrl *Controller) IsReady() bool {
@@ -120,18 +122,21 @@ func (ctrl *Controller) registerWorker(req *vtboostpb.TopoWorkerEntry) {
 	ctrl.readAddrs[workerid] = req.ReaderAddr
 }
 
-func (ctrl *Controller) placeDomain(ctx context.Context, idx boostpb.DomainIndex, maybeShardNumber *uint, innodes []nodeWithAge) (*domainrpc.Handle, error) {
+func (ctrl *Controller) domainPlace(ctx context.Context, idx dataflow.DomainIdx, maybeShardNumber *uint, innodes []nodeWithAge) error {
 	nodes := new(flownode.Map)
 
 	for _, n := range innodes {
-		node := ctrl.ingredients.Value(n.Idx).Finalize(ctrl.ingredients)
+		node, err := ctrl.g.Value(n.Idx).Finalize(ctrl.g)
+		if err != nil {
+			return err
+		}
 		nodes.Insert(node.LocalAddr(), node)
 	}
 
 	var (
 		shards       = common.UnwrapOr(maybeShardNumber, 1)
 		domainshards = make([]domainrpc.ShardHandle, shards)
-		announce     = make([]*boostpb.DomainDescriptor, shards)
+		announce     = make([]*service.DomainDescriptor, shards)
 		workers      = maps.Values(ctrl.workers)
 		wg           errgroup.Group
 	)
@@ -155,8 +160,8 @@ func (ctrl *Controller) placeDomain(ctx context.Context, idx boostpb.DomainIndex
 				return fmt.Errorf("no healthy workers available")
 			}
 
-			var request = &boostpb.AssignDomainRequest{
-				From: &boostpb.WorkerSource{
+			var request = &service.AssignDomainRequest{
+				From: &service.WorkerSource{
 					Epoch:      ctrl.epoch,
 					SourceUuid: ctrl.uuid.String(),
 				},
@@ -174,7 +179,7 @@ func (ctrl *Controller) placeDomain(ctx context.Context, idx boostpb.DomainIndex
 				return err
 			}
 
-			announce[shardN] = &boostpb.DomainDescriptor{
+			announce[shardN] = &service.DomainDescriptor{
 				Id:    idx,
 				Shard: shardN,
 				Addr:  resp.Addr,
@@ -185,86 +190,27 @@ func (ctrl *Controller) placeDomain(ctx context.Context, idx boostpb.DomainIndex
 	}
 
 	if err := wg.Wait(); err != nil {
-		return nil, err
+		return err
 	}
 
 	ctrl.log.Info("placed new domain", idx.Zap(), zap.Int("shard_count", len(domainshards)), zap.Any("shards", domainshards))
 
 	for _, endpoint := range ctrl.workers {
 		for _, dd := range announce {
-			if _, err := endpoint.Client.DomainBooted(ctx, &boostpb.DomainBootedRequest{
-				From: &boostpb.WorkerSource{
+			if _, err := endpoint.Client.DomainBooted(ctx, &service.DomainBootedRequest{
+				From: &service.WorkerSource{
 					SourceUuid: ctrl.uuid.String(),
 					Epoch:      ctrl.epoch,
 				},
 				Domain: dd,
 			}); err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
 
-	return domainrpc.NewHandle(idx, domainshards), nil
-}
-
-func (ctrl *Controller) tableDescriptor(keyspace, table string) *boostpb.TableDescriptor {
-	var base *flownode.Node
-
-	neigh := ctrl.ingredients.NeighborsDirected(graph.Source, graph.DirectionOutgoing)
-	for neigh.Next() {
-		n := ctrl.ingredients.Value(neigh.Current)
-
-		if ab := n.AsAnyBase(); ab != nil {
-			if ab.Keyspace() == keyspace && ab.Table() == table {
-				base = n
-				break
-			}
-		}
-	}
-	if base == nil {
-		return nil
-	}
-
-	dom := ctrl.domains[base.Domain()]
-	baseOperator := base.AsBase()
-	dropped := baseOperator.GetDropped()
-
-	tbl := &boostpb.TableDescriptor{
-		Txs:          nil,
-		Node:         base.GlobalAddr(),
-		Addr:         base.LocalAddr(),
-		KeyIsPrimary: false,
-		Key:          nil,
-		Dropped:      dropped,
-		TableName:    base.AsAnyBase().Table(),
-		Columns:      nil,
-		Schema:       slices.Clone(base.Schema()),
-	}
-
-	key := base.SuggestIndexes(base.GlobalAddr())[base.GlobalAddr()]
-	if key == nil {
-		if col, _, ok := base.Sharding().ByColumn(); ok {
-			key = []int{col}
-		}
-	} else {
-		tbl.KeyIsPrimary = true
-	}
-	tbl.Key = key
-
-	for s := uint(0); s < dom.Shards(); s++ {
-		tbl.Txs = append(tbl.Txs, &boostpb.DomainDescriptor{
-			Id:    base.Domain(),
-			Shard: s,
-			Addr:  ctrl.chanCoordinator.GetAddr(base.Domain(), s),
-		})
-	}
-	for n, f := range base.Fields() {
-		if _, ok := dropped[n]; !ok {
-			tbl.Columns = append(tbl.Columns, f)
-		}
-	}
-
-	return tbl
+	ctrl.domains[idx] = domainrpc.NewHandle(idx, domainshards)
+	return nil
 }
 
 func (ctrl *Controller) viewDescriptor(node *flownode.Node) *vtboostpb.Materialization_ViewDescriptor {
@@ -287,7 +233,7 @@ func (ctrl *Controller) viewDescriptor(node *flownode.Node) *vtboostpb.Materiali
 			flags |= uint32(querypb.MySqlFlag_MULTIPLE_KEY_FLAG)
 		}
 
-		tt := node.ColumnType(ctrl.ingredients, col)
+		tt := node.Schema()[col]
 		keySchema = append(keySchema, &querypb.Field{
 			Name:    params[i].Name,
 			Type:    tt.T,
@@ -299,7 +245,7 @@ func (ctrl *Controller) viewDescriptor(node *flownode.Node) *vtboostpb.Materiali
 	var fields = node.Fields()
 	var schema []*querypb.Field
 	for col := 0; col < reader.PublicColumnLength(); col++ {
-		tt := node.ColumnType(ctrl.ingredients, col)
+		tt := node.Schema()[col]
 		schema = append(schema, &querypb.Field{
 			Name:    fields[col],
 			Type:    tt.T,
@@ -321,15 +267,15 @@ func (ctrl *Controller) viewDescriptor(node *flownode.Node) *vtboostpb.Materiali
 	}
 }
 
-func (ctrl *Controller) viewDescriptorForPublicID(id string) *vtboostpb.Materialization_ViewDescriptor {
-	ext := ctrl.ingredients.Externals(graph.DirectionOutgoing)
+func (ctrl *Controller) viewDescriptorForPublicID(id string) (*vtboostpb.Materialization_ViewDescriptor, error) {
+	ext := ctrl.g.Externals(graph.DirectionOutgoing)
 	for ext.Next() {
-		nn := ctrl.ingredients.Value(ext.Current)
+		nn := ctrl.g.Value(ext.Current)
 		if r := nn.AsReader(); r != nil && r.PublicID() == id {
-			return ctrl.viewDescriptor(nn)
+			return ctrl.viewDescriptor(nn), nil
 		}
 	}
-	return nil
+	return nil, fmt.Errorf("no such view: %s", id)
 }
 
 func (ctrl *Controller) GetMaterializations() ([]*vtboostpb.Materialization, error) {
@@ -339,7 +285,8 @@ func (ctrl *Controller) GetMaterializations() ([]*vtboostpb.Materialization, err
 		viewsByPublicID[v.PublicId] = v
 	}
 
-	ctrl.ingredients.ForEachValue(func(n *flownode.Node) bool {
+	var err error
+	ctrl.g.ForEachValue(func(n *flownode.Node) bool {
 		if r := n.AsReader(); r != nil {
 			view, ok := viewsByPublicID[r.PublicID()]
 			if !ok {
@@ -348,7 +295,12 @@ func (ctrl *Controller) GetMaterializations() ([]*vtboostpb.Materialization, err
 
 			normalizedSQL := topowatcher.ParametrizeQuery(view.Statement)
 			viewDescriptor := ctrl.viewDescriptor(n)
-			bounds, fullyMaterialized := topowatcher.GenerateBoundsForQuery(view.Statement, viewDescriptor.KeySchema)
+			var bounds []*vtboostpb.Materialization_Bound
+			var fullyMaterialized bool
+			bounds, fullyMaterialized, err = topowatcher.GenerateBoundsForQuery(view.Statement, viewDescriptor.KeySchema)
+			if err != nil {
+				return false
+			}
 
 			res = append(res, &vtboostpb.Materialization{
 				Query:             view.CachedQuery,
@@ -361,10 +313,10 @@ func (ctrl *Controller) GetMaterializations() ([]*vtboostpb.Materialization, err
 		return true
 	})
 
-	return res, nil
+	return res, err
 }
 
-func (ctrl *Controller) ModifyRecipe(ctx context.Context, recipepb *vtboostpb.Recipe, si *boostplan.SchemaInformation, migrate Migrator) (*boostplan.ActivationResult, error) {
+func (ctrl *Controller) ModifyRecipe(ctx context.Context, recipepb *vtboostpb.Recipe, si *boostplan.SchemaInformation) (*boostplan.ActivationResult, error) {
 	if recipepb.Version <= ctrl.recipe.Version() {
 		return &boostplan.ActivationResult{}, nil
 	}
@@ -374,22 +326,22 @@ func (ctrl *Controller) ModifyRecipe(ctx context.Context, recipepb *vtboostpb.Re
 		return nil, err
 	}
 
-	return ctrl.applyRecipe(ctx, newrecipe, si, migrate)
+	return ctrl.applyRecipe(ctx, newrecipe, si)
 }
 
 func (ctrl *Controller) cleanupRecipe(ctx context.Context, activation *boostplan.ActivationResult) error {
-	var removedBases []graph.NodeIdx
+	var removedTables []graph.NodeIdx
 	var removedOther []graph.NodeIdx
 	for _, ni := range activation.NodesRemoved {
-		if ctrl.ingredients.Value(ni).IsAnyBase() {
-			removedBases = append(removedBases, ni)
+		if ctrl.g.Value(ni).IsTable() {
+			removedTables = append(removedTables, ni)
 		} else {
 			removedOther = append(removedOther, ni)
 		}
 	}
 
 	var topoRemovals []graph.NodeIdx
-	var topo = graph.NewTopoVisitor(ctrl.ingredients)
+	var topo = graph.NewTopoVisitor(ctrl.g)
 	for topo.Next() {
 		if slices.Contains(removedOther, topo.Current) {
 			topoRemovals = append(topoRemovals, topo.Current)
@@ -404,13 +356,13 @@ func (ctrl *Controller) cleanupRecipe(ctx context.Context, activation *boostplan
 		}
 	}
 
-	for _, base := range removedBases {
-		children := ctrl.ingredients.NeighborsDirected(base, graph.DirectionOutgoing).Count()
+	for _, table := range removedTables {
+		children := ctrl.g.NeighborsDirected(table, graph.DirectionOutgoing).Count()
 		if children != 0 {
-			panic("trying to remove base that still had children")
+			return fmt.Errorf("trying to remove table with children: %v", table)
 		}
 
-		if err := ctrl.removeNodes(ctx, []graph.NodeIdx{base}); err != nil {
+		if err := ctrl.removeNodes(ctx, []graph.NodeIdx{table}); err != nil {
 			removalErrors = append(removalErrors, err)
 		}
 	}
@@ -418,18 +370,19 @@ func (ctrl *Controller) cleanupRecipe(ctx context.Context, activation *boostplan
 	return multierr.Combine(removalErrors...)
 }
 
-func (ctrl *Controller) applyRecipe(ctx context.Context, newrecipe *boostplan.VersionedRecipe, si *boostplan.SchemaInformation, migrate Migrator) (*boostplan.ActivationResult, error) {
+func (ctrl *Controller) applyRecipe(ctx context.Context, newrecipe *boostplan.VersionedRecipe, si *boostplan.SchemaInformation) (*boostplan.ActivationResult, error) {
 	ctrl.log.Info("applying new recipe", zap.Int64("version", newrecipe.Version()))
 
-	mig := migrate(ctx, ctrl)
+	var activation *boostplan.ActivationResult
+
+	mig := NewMigration(ctx, ctrl.log, ctrl)
 	mig = NewTrackedMigration(mig, ctrl)
+	err := safeMigration(mig, func(mig Migration) error {
+		var err error
+		activation, err = mig.Activate(newrecipe, si)
+		return err
+	})
 
-	activation, err := mig.Activate(newrecipe, si)
-	if err != nil {
-		return nil, err
-	}
-
-	err = mig.Commit()
 	if err != nil {
 		return nil, err
 	}
@@ -442,12 +395,12 @@ func (ctrl *Controller) applyRecipe(ctx context.Context, newrecipe *boostplan.Ve
 }
 
 func (ctrl *Controller) removeNodes(ctx context.Context, removals []graph.NodeIdx) error {
-	var domainRemovals = make(map[boostpb.DomainIndex][]boostpb.LocalNodeIndex)
+	var domainRemovals = make(map[dataflow.DomainIdx][]dataflow.LocalNodeIdx)
 
 	for _, ni := range removals {
 		ctrl.log.Debug("removed node", ni.Zap())
 
-		node := ctrl.ingredients.Value(ni)
+		node := ctrl.g.Value(ni)
 		node.Remove()
 
 		dom := node.Domain()
@@ -457,16 +410,10 @@ func (ctrl *Controller) removeNodes(ctx context.Context, removals []graph.NodeId
 	for dom, nodes := range domainRemovals {
 		ctrl.log.Debug("notifying domain of node removals", dom.Zap())
 
-		var pkt boostpb.Packet
-		pkt.Inner = &boostpb.Packet_RemoveNodes_{
-			RemoveNodes: &boostpb.Packet_RemoveNodes{
-				Nodes: nodes,
-			},
+		pkt := &packet.RemoveNodesRequest{
+			Nodes: nodes,
 		}
-
-		err := ctrl.domains[dom].SendToHealthy(ctx, &pkt, ctrl.workers)
-		if err != nil {
-			// TODO: ignore error if worker is down for good
+		if err := ctrl.domains[dom].Client(ctx, ctrl.workers).RemoveNodes(pkt); err != nil {
 			return err
 		}
 	}
@@ -477,13 +424,13 @@ func (ctrl *Controller) removeLeaf(ctx context.Context, leaf graph.NodeIdx) erro
 	var removals []graph.NodeIdx
 	var start = leaf
 
-	if ctrl.ingredients.Value(leaf).IsSource() {
+	if ctrl.g.Value(leaf).IsRoot() {
 		panic("trying to remove source")
 	}
 
 	ctrl.log.Info("computing removals", leaf.ZapField("remove_node"))
 
-	nchildren := ctrl.ingredients.NeighborsDirected(leaf, graph.DirectionOutgoing).Count()
+	nchildren := ctrl.g.NeighborsDirected(leaf, graph.DirectionOutgoing).Count()
 	if nchildren > 0 {
 		// This query leaf node has children -- typically, these are readers, but they can also
 		// include egress nodes or other, dependent queries. We need to find the actual reader,
@@ -494,9 +441,9 @@ func (ctrl *Controller) removeLeaf(ctx context.Context, leaf graph.NodeIdx) erro
 		}
 
 		var readers []graph.NodeIdx
-		var bfs = graph.NewBFSVisitor(ctrl.ingredients, leaf)
+		var bfs = graph.NewBFSVisitor(ctrl.g, leaf)
 		for bfs.Next() {
-			n := ctrl.ingredients.Value(bfs.Current)
+			n := ctrl.g.Value(bfs.Current)
 			if r := n.AsReader(); r != nil && r.IsFor() == leaf {
 				readers = append(readers, bfs.Current)
 			}
@@ -511,7 +458,7 @@ func (ctrl *Controller) removeLeaf(ctx context.Context, leaf graph.NodeIdx) erro
 		ctrl.log.Debug("removing query leaf", leaf.ZapField("node"), readers[0].ZapField("really"))
 	}
 
-	if ctrl.ingredients.NeighborsDirected(leaf, graph.DirectionOutgoing).Count() != 0 {
+	if ctrl.g.NeighborsDirected(leaf, graph.DirectionOutgoing).Count() != 0 {
 		panic("node should have no children left")
 	}
 
@@ -520,17 +467,17 @@ func (ctrl *Controller) removeLeaf(ctx context.Context, leaf graph.NodeIdx) erro
 		node := nodes[len(nodes)-1]
 		nodes = nodes[:len(nodes)-1]
 
-		parents := ctrl.ingredients.NeighborsDirected(node, graph.DirectionIncoming)
+		parents := ctrl.g.NeighborsDirected(node, graph.DirectionIncoming)
 		for parents.Next() {
 			parent := parents.Current
-			edge := ctrl.ingredients.FindEdge(parent, node)
-			ctrl.ingredients.RemoveEdge(edge)
+			edge := ctrl.g.FindEdge(parent, node)
+			ctrl.g.RemoveEdge(edge)
 
-			pp := ctrl.ingredients.Value(parent)
-			if !pp.IsSource() &&
-				!pp.IsAnyBase() &&
+			pp := ctrl.g.Value(parent)
+			if !pp.IsRoot() &&
+				!pp.IsTable() &&
 				(parent == start || !ctrl.recipe.IsLeafAddress(parent)) &&
-				ctrl.ingredients.NeighborsDirected(parent, graph.DirectionOutgoing).Count() == 0 {
+				ctrl.g.NeighborsDirected(parent, graph.DirectionOutgoing).Count() == 0 {
 				nodes = append(nodes, parent)
 			}
 		}
@@ -546,12 +493,12 @@ func (ctrl *Controller) PrepareEvictionPlan(ctx context.Context) (*materializati
 	var wg errgroup.Group
 	var ep = materialization.NewEvictionPlan()
 
-	ep.LoadRecipe(ctrl.ingredients, ctrl.materialization, ctrl.recipe.Recipe)
+	ep.LoadRecipe(ctrl.g, ctrl.mat, ctrl.recipe.Recipe)
 
 	for _, wrk := range ctrl.workers {
 		client := wrk.Client
 		wg.Go(func() error {
-			resp, err := client.MemoryStats(ctx, &boostpb.MemoryStatsRequest{})
+			resp, err := client.MemoryStats(ctx, &service.MemoryStatsRequest{})
 			if err != nil {
 				return err
 			}
@@ -590,11 +537,9 @@ func (ctrl *Controller) PerformDistributedEviction(ctx context.Context, forceLim
 			continue
 		}
 
-		err = dom.ProcessAsync(ctx, &boostpb.Packet{
-			Inner: &boostpb.Packet_Evict_{Evict: &boostpb.Packet_Evict{
-				Node:     ev.Local,
-				NumBytes: ev.Evict,
-			}},
+		_, err = dom.Evict(ctx, &packet.EvictRequest{
+			Node:     ev.Local,
+			NumBytes: ev.Evict,
 		})
 		if err != nil {
 			errs = append(errs, err)
@@ -605,4 +550,63 @@ func (ctrl *Controller) PerformDistributedEviction(ctx context.Context, forceLim
 		return nil, multierr.Combine(errs...)
 	}
 	return plan, nil
+}
+
+func (ctrl *Controller) graph() *graph.Graph[*flownode.Node] {
+	return ctrl.g
+}
+
+func (ctrl *Controller) sharding() *uint {
+	return ctrl.shardCount
+}
+
+func (ctrl *Controller) materialization() *materialization.Materialization {
+	return ctrl.mat
+}
+
+func (ctrl *Controller) domainMapping(dom dataflow.DomainIdx) map[graph.NodeIdx]dataflow.IndexPair {
+	rm, ok := ctrl.remap[dom]
+	if !ok {
+		rm = make(map[graph.NodeIdx]dataflow.IndexPair)
+		ctrl.remap[dom] = rm
+	}
+	return rm
+}
+
+func (ctrl *Controller) domainNodes() map[dataflow.DomainIdx][]graph.NodeIdx {
+	return ctrl.domainNodeMap
+}
+
+func (ctrl *Controller) domainNext() dataflow.DomainIdx {
+	next := dataflow.DomainIdx(ctrl.nDomains)
+	ctrl.nDomains++
+	return next
+}
+
+func (ctrl *Controller) domainExists(idx dataflow.DomainIdx) bool {
+	_, ok := ctrl.domains[idx]
+	return ok
+}
+
+func (ctrl *Controller) domainShards(idx dataflow.DomainIdx) uint {
+	return ctrl.domains[idx].Shards()
+}
+
+func (ctrl *Controller) domainAssignStream(ctx context.Context, req *service.AssignStreamRequest) error {
+	// TODO; do not pick a worker at random
+	for _, worker := range ctrl.workers {
+		if _, err := worker.Client.AssignStream(ctx, req); err != nil {
+			return err
+		}
+		break
+	}
+	return nil
+}
+
+func (ctrl *Controller) domainClient(ctx context.Context, idx dataflow.DomainIdx) domainrpc.Client {
+	return ctrl.domains[idx].Client(ctx, ctrl.workers)
+}
+
+func (ctrl *Controller) domainShardClient(ctx context.Context, idx dataflow.DomainIdx, shard uint) domainrpc.Client {
+	return ctrl.domains[idx].ShardClient(ctx, shard, ctrl.workers)
 }

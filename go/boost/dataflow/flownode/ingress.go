@@ -3,9 +3,10 @@ package flownode
 import (
 	"context"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/packet"
+	"vitess.io/vitess/go/boost/dataflow"
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/boost/dataflow/processing"
-	"vitess.io/vitess/go/boost/dataflow/trace"
 	"vitess.io/vitess/go/boost/graph"
 )
 
@@ -13,34 +14,28 @@ type Ingress struct{}
 
 func (*Ingress) dataflow() {}
 
-func (*Ingress) ToProto() *boostpb.Node_Ingress {
-	return &boostpb.Node_Ingress{}
+func (*Ingress) ToProto() *flownodepb.Node_Ingress {
+	return &flownodepb.Node_Ingress{}
 }
 
-func NewIngressFromProto(_ *boostpb.Node_Ingress) *Ingress {
+func NewIngressFromProto(_ *flownodepb.Node_Ingress) *Ingress {
 	return &Ingress{}
 }
 
 type EgressTx struct {
 	node  graph.NodeIdx
-	local boostpb.LocalNodeIndex
-	dest  boostpb.DomainAddr
+	local dataflow.LocalNodeIdx
+	dest  dataflow.DomainAddr
 }
 
 type Egress struct {
 	txs  []EgressTx
-	tags map[boostpb.Tag]graph.NodeIdx
+	tags map[dataflow.Tag]graph.NodeIdx
 }
 
 func (e *Egress) dataflow() {}
 
-func (e *Egress) Process(ctx context.Context, m **boostpb.Packet, shard uint, output processing.Executor) error {
-	if trace.T {
-		var span *trace.Span
-		ctx, span = trace.WithSpan(ctx, "Egress.Process", *m)
-		defer span.Close()
-	}
-
+func (e *Egress) Process(ctx context.Context, m *packet.ActiveFlowPacket, shard uint, output processing.Executor) error {
 	if len(e.txs) == 0 {
 		panic("Egress.Process without any transactions")
 	}
@@ -49,7 +44,7 @@ func (e *Egress) Process(ctx context.Context, m **boostpb.Packet, shard uint, ou
 	txn := len(e.txs) - 1
 
 	var replayTo graph.NodeIdx = graph.InvalidNode
-	if t := (*m).Tag(); t != boostpb.TagNone {
+	if t := m.Tag(); t != dataflow.TagNone {
 		var ok bool
 		replayTo, ok = e.tags[t]
 		if !ok {
@@ -67,21 +62,20 @@ func (e *Egress) Process(ctx context.Context, m **boostpb.Packet, shard uint, ou
 			}
 		}
 
-		var pkt *boostpb.Packet
+		var data packet.ActiveFlowPacket
 		if last {
-			pkt = *m
-			*m = nil
+			data = m.Take()
 		} else {
-			pkt = (*m).CloneData()
+			data = m.Clone()
 		}
 
 		// src is usually ignored and overwritten by ingress
 		// *except* if the ingress is marked as a shard merger
 		// in which case it wants to know about the shard
-		pkt.Link().Src = boostpb.LocalNodeIndex(shard)
-		pkt.Link().Dst = tx.local
+		data.Link().Src = dataflow.LocalNodeIdx(shard)
+		data.Link().Dst = tx.local
 
-		if err := output.Send(ctx, tx.dest, pkt); err != nil {
+		if err := output.Send(ctx, tx.dest, data.Inner); err != nil {
 			return err
 		}
 		if last {
@@ -91,27 +85,27 @@ func (e *Egress) Process(ctx context.Context, m **boostpb.Packet, shard uint, ou
 	return nil
 }
 
-func (e *Egress) AddTx(dstG graph.NodeIdx, dstL boostpb.LocalNodeIndex, addr boostpb.DomainAddr) {
+func (e *Egress) AddTx(dstG graph.NodeIdx, dstL dataflow.LocalNodeIdx, addr dataflow.DomainAddr) {
 	e.txs = append(e.txs, EgressTx{node: dstG, local: dstL, dest: addr})
 }
 
-func (e *Egress) AddTag(tag boostpb.Tag, dst graph.NodeIdx) {
+func (e *Egress) AddTag(tag dataflow.Tag, dst graph.NodeIdx) {
 	e.tags[tag] = dst
 }
 
 func NewEgress() *Egress {
 	return &Egress{
-		tags: make(map[boostpb.Tag]graph.NodeIdx),
+		tags: make(map[dataflow.Tag]graph.NodeIdx),
 	}
 }
 
-func (e *Egress) ToProto() *boostpb.Node_Egress {
+func (e *Egress) ToProto() *flownodepb.Node_Egress {
 	if len(e.txs) > 0 || len(e.tags) > 0 {
 		panic("unsupported: serializing stateful egress")
 	}
-	return &boostpb.Node_Egress{}
+	return &flownodepb.Node_Egress{}
 }
 
-func NewEgressFromProto(_ *boostpb.Node_Egress) *Egress {
+func NewEgressFromProto(_ *flownodepb.Node_Egress) *Egress {
 	return NewEgress()
 }

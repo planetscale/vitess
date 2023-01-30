@@ -3,6 +3,7 @@ package watcher
 import (
 	"bytes"
 	"errors"
+	"fmt"
 
 	"golang.org/x/exp/slices"
 
@@ -14,9 +15,9 @@ import (
 
 var errMismatch = errors.New("not matched")
 
-func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field) (bounds []*vtboostpb.Materialization_Bound, fullyMaterialized bool) {
+func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field) (bounds []*vtboostpb.Materialization_Bound, fullyMaterialized bool, err error) {
 	var arguments int
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName, sqlparser.TableName:
 			// Common node types that never contain expressions but create a lot of object
@@ -27,7 +28,7 @@ func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field
 				return f.Name == string(node) && (f.Flags&uint32(querypb.MySqlFlag_MULTIPLE_KEY_FLAG)) == 0
 			})
 			if pos < 0 {
-				panic("did not find placeholder in Key Schema")
+				return false, fmt.Errorf("did not find placeholder in key schema for argument %v", sqlparser.CanonicalString(node))
 			}
 			bounds = append(bounds, &vtboostpb.Materialization_Bound{Name: string(node), Pos: int64(pos)})
 			arguments++
@@ -36,7 +37,7 @@ func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field
 				return f.Name == string(node) && (f.Flags&uint32(querypb.MySqlFlag_MULTIPLE_KEY_FLAG)) != 0
 			})
 			if pos < 0 {
-				panic("did not find placeholder in Key Schema")
+				return false, fmt.Errorf("did not find placeholder in key schema for list argument %v", sqlparser.CanonicalString(node))
 			}
 			bounds = append(bounds, &vtboostpb.Materialization_Bound{Name: string(node), Pos: int64(pos), Multi: true})
 			arguments++
@@ -47,9 +48,13 @@ func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field
 		return true, nil
 	}, stmt)
 
+	if err != nil {
+		return nil, false, err
+	}
+
 	if arguments == 0 {
 		if len(keySchema) != 1 || keySchema[0].Name != "bogokey" {
-			panic("fully materialized view without bogokey")
+			return nil, false, fmt.Errorf("unexpected schema for fully materialized view %v", keySchema)
 		}
 		fullyMaterialized = true
 	}
@@ -103,7 +108,7 @@ func matchParametrizedQuery(keyOut []*querypb.BindVariable, stmt sqlparser.State
 				return false, errMismatch
 			}
 			if bound.BoundValue != nil {
-				panic("BoundValue in tuple?")
+				return false, fmt.Errorf("bound value for node %v in tuple: %v", sqlparser.String(node), bound)
 			}
 			keyOut[bound.Pos] = bv2
 		}

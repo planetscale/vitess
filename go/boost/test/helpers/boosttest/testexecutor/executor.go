@@ -21,25 +21,24 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func Default(t *testing.T, options ...Option) *Executor {
+func Default(t *testing.T) *Executor {
 	return New(t, []*querypb.Target{
 		{
 			Keyspace:   testrecipe.DefaultKeyspace,
 			Shard:      "-",
 			TabletType: topodatapb.TabletType_PRIMARY,
 		},
-	}, options...)
+	})
 }
 
-type Option func(ex *Executor)
-
-func WithVStreamLatency(latency time.Duration) Option {
-	return func(ex *Executor) {
-		ex.vstreamLatency = latency
-	}
+type Options struct {
+	QueryLatency        time.Duration
+	VStreamRowLatency   time.Duration
+	VStreamStartLatency time.Duration
+	MaxBatchSize        int
 }
 
-func New(t *testing.T, targets []*querypb.Target, options ...Option) *Executor {
+func New(t *testing.T, targets []*querypb.Target) *Executor {
 	ks := targets[0].Keyspace
 	fakeTargets := make(map[string]*memTarget, len(targets))
 	for _, target := range targets {
@@ -48,32 +47,24 @@ func New(t *testing.T, targets []*querypb.Target, options ...Option) *Executor {
 		}
 		fakeTargets[targetName(target)] = newMemoryTarget(t, target)
 	}
+
 	ex := &Executor{
 		t:        t,
 		keyspace: ks,
 		targets:  fakeTargets,
 	}
-
-	for _, opt := range options {
-		opt(ex)
-	}
 	return ex
 }
 
+func (ex *Executor) Configure(configure func(options *Options)) {
+	configure(&ex.options)
+}
+
 type Executor struct {
-	keyspace       string
-	t              *testing.T
-	targets        map[string]*memTarget
-	vstreamLatency time.Duration
-	maxBatchSize   int
-}
-
-func (ex *Executor) SetVStreamLatency(latency time.Duration) {
-	ex.vstreamLatency = latency
-}
-
-func (ex *Executor) SetMaxBatchSize(maxBatchSize int) {
-	ex.maxBatchSize = maxBatchSize
+	keyspace string
+	t        *testing.T
+	targets  map[string]*memTarget
+	options  Options
 }
 
 func (ex *Executor) CloseSession(ctx context.Context, safeSession *vtgate.SafeSession) error {
@@ -87,11 +78,20 @@ func (ex *Executor) StreamExecute(ctx context.Context, method string, safeSessio
 	if cid := callerid.ImmediateCallerIDFromContext(ctx); cid == nil {
 		ex.t.Fatalf("missing: ImmediateCallerID passed on context")
 	}
+	if ex.options.QueryLatency > 0 {
+		time.Sleep(ex.options.QueryLatency)
+	}
 	for _, tgt := range ex.targets {
 		if tgt.target.TabletType == topodatapb.TabletType_PRIMARY {
-			results, err := ex.target(tgt.target).execute(sql, bvars)
+			client := ex.target(tgt.target)
+
+			results, err := client.execute(sql, bvars)
 			if err != nil {
 				return err
+			}
+
+			if options := safeSession.GetOptions(); options != nil && options.TransactionIsolation == querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY {
+				results.SessionStateChanges = client.gtid.current()
 			}
 
 			if err := callback(results.Metadata()); err != nil {
@@ -99,12 +99,12 @@ func (ex *Executor) StreamExecute(ctx context.Context, method string, safeSessio
 			}
 
 			rows := results.Rows
-			if ex.maxBatchSize > 0 {
-				for len(rows) >= ex.maxBatchSize {
-					if err := callback(&sqltypes.Result{Rows: rows[:ex.maxBatchSize]}); err != nil {
+			if batch := ex.options.MaxBatchSize; batch > 0 {
+				for len(rows) >= batch {
+					if err := callback(&sqltypes.Result{Rows: rows[:batch]}); err != nil {
 						return err
 					}
-					rows = rows[ex.maxBatchSize:]
+					rows = rows[batch:]
 				}
 			}
 			return callback(&sqltypes.Result{Rows: rows})

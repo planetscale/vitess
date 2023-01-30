@@ -6,9 +6,10 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/boost/common/graphviz"
 	"vitess.io/vitess/go/boost/common/humanize"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
@@ -18,14 +19,14 @@ type nodeUsage struct {
 	ptr         *flownode.Node
 	memPerShard []int64
 	memTotal    int64
-	roots       map[boostpb.GraphNodeIdx]struct{}
-	status      boostpb.MaterializationStatus
+	roots       map[dataflow.NodeIdx]struct{}
+	status      dataflow.MaterializationStatus
 }
 
 func (n *nodeUsage) evict(evictions []Eviction, evict int64) []Eviction {
 	for s := 0; s < len(n.memPerShard); s++ {
 		evictions = append(evictions, Eviction{
-			Domain: boostpb.DomainAddr{
+			Domain: dataflow.DomainAddr{
 				Domain: n.ptr.Domain(),
 				Shard:  uint(s),
 			},
@@ -38,7 +39,7 @@ func (n *nodeUsage) evict(evictions []Eviction, evict int64) []Eviction {
 }
 
 type rootUsage struct {
-	root  boostpb.GraphNodeIdx
+	root  dataflow.NodeIdx
 	view  *boostplan.CachedQuery
 	nodes []*nodeUsage
 }
@@ -51,7 +52,7 @@ func (ru *rootUsage) memTotal() (total int64) {
 }
 
 type EvictionPlan struct {
-	nodes  map[boostpb.GraphNodeIdx]*nodeUsage
+	nodes  map[dataflow.NodeIdx]*nodeUsage
 	roots  []*rootUsage
 	limits map[string]int64
 }
@@ -100,7 +101,7 @@ func (ep *EvictionPlan) MarshalJSON() ([]byte, error) {
 
 func NewEvictionPlan() *EvictionPlan {
 	return &EvictionPlan{
-		nodes: map[boostpb.GraphNodeIdx]*nodeUsage{},
+		nodes: map[dataflow.NodeIdx]*nodeUsage{},
 	}
 }
 
@@ -123,8 +124,8 @@ func (ep *EvictionPlan) LoadRecipe(g *graph.Graph[*flownode.Node], mat *Material
 
 		var (
 			rootAddr = root.GlobalAddr()
-			queue    = []boostpb.GraphNodeIdx{rootAddr}
-			seen     = map[boostpb.GraphNodeIdx]bool{graph.InvalidNode: true}
+			queue    = []dataflow.NodeIdx{rootAddr}
+			seen     = map[dataflow.NodeIdx]bool{graph.InvalidNode: true}
 			walk     []*nodeUsage
 		)
 
@@ -142,7 +143,7 @@ func (ep *EvictionPlan) LoadRecipe(g *graph.Graph[*flownode.Node], mat *Material
 				usage = &nodeUsage{
 					ptr:         node,
 					memPerShard: make([]int64, node.Sharding().GetShards()),
-					roots:       map[boostpb.GraphNodeIdx]struct{}{},
+					roots:       map[dataflow.NodeIdx]struct{}{},
 					status:      mat.GetStatus(node),
 				}
 				ep.nodes[nodeAddr] = usage
@@ -161,7 +162,7 @@ func (ep *EvictionPlan) LoadRecipe(g *graph.Graph[*flownode.Node], mat *Material
 	})
 }
 
-func (ep *EvictionPlan) LoadMemoryStats(resp *boostpb.MemoryStatsResponse) error {
+func (ep *EvictionPlan) LoadMemoryStats(resp *service.MemoryStatsResponse) error {
 	for _, usage := range resp.NodeUsage {
 		if node, ok := ep.nodes[usage.Node]; ok {
 			if node.ptr.Domain() != usage.Domain.Domain {
@@ -179,9 +180,9 @@ func (ep *EvictionPlan) LoadMemoryStats(resp *boostpb.MemoryStatsResponse) error
 }
 
 type Eviction struct {
-	Domain boostpb.DomainAddr
-	Node   boostpb.GraphNodeIdx
-	Local  boostpb.LocalNodeIndex
+	Domain dataflow.DomainAddr
+	Node   dataflow.NodeIdx
+	Local  dataflow.LocalNodeIdx
 	Evict  int64
 }
 
@@ -202,7 +203,7 @@ func (e *Eviction) MarshalJSON() ([]byte, error) {
 func (ep *EvictionPlan) evictOnRoot(evictions []Eviction, root *rootUsage, evictBytes int64) []Eviction {
 	candidates := make([]*nodeUsage, 0, len(root.nodes))
 	for _, cand := range root.nodes {
-		if cand.status == boostpb.MaterializationPartial {
+		if cand.status == dataflow.MaterializationPartial {
 			candidates = append(candidates, cand)
 		}
 	}
@@ -278,7 +279,7 @@ func (ep *EvictionPlan) RenderGraphviz(gvz *graphviz.Graph[graph.NodeIdx], query
 	}
 
 	for idx, usage := range ep.nodes {
-		if idx.IsSource() {
+		if idx.IsRoot() {
 			continue
 		}
 		if node, ok := gvz.Node(idx); ok {

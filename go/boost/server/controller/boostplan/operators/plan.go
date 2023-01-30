@@ -30,18 +30,14 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 
 	tableReport := computeColumnUsage(semTable)
 
-	sel, isSel := stmt.(sqlparser.SelectStatement)
-	if !isSel {
-		panic("not a SelectStatement")
-	}
-
 	ctx := &PlanContext{
 		SemTable: semTable,
 		DDL:      ddl,
 	}
 
 	// First step is to build an operator tree from the AST
-	node, err := conv.toOperator(ctx, sel, publicID)
+	// We already verified earlier that this is a select statement.
+	node, err := conv.toOperator(ctx, stmt.(sqlparser.SelectStatement), publicID)
 	if err != nil {
 		return
 	}
@@ -79,9 +75,9 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 
 	node.ConnectOutputs()
 
-	err = generateUpqueries(ctx, node)
+	err = node.generateUpqueries(ctx)
 	if err != nil {
-		return nil, nil, err
+		return
 	}
 
 	return node, tableReport, nil

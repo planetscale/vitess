@@ -4,7 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"go.uber.org/multierr"
+
+	"vitess.io/vitess/go/boost/boostrpc/packet"
+	"vitess.io/vitess/go/boost/dataflow"
+
 	"vitess.io/vitess/go/boost/boostrpc"
 )
 
@@ -21,11 +25,11 @@ func NewShardHandle(id WorkerID, client boostrpc.DomainClient) ShardHandle {
 }
 
 type Handle struct {
-	idx    boostpb.DomainIndex
+	idx    dataflow.DomainIdx
 	shards []ShardHandle
 }
 
-func NewHandle(idx boostpb.DomainIndex, shards []ShardHandle) *Handle {
+func NewHandle(idx dataflow.DomainIdx, shards []ShardHandle) *Handle {
 	return &Handle{
 		idx:    idx,
 		shards: shards,
@@ -40,35 +44,115 @@ func (h *Handle) Assignment(shard uint) WorkerID {
 	return h.shards[shard].worker
 }
 
-func (h *Handle) SendToHealthy(ctx context.Context, p *boostpb.Packet, workers map[WorkerID]*Worker) error {
-	for _, shrd := range h.shards {
-		if workers[shrd.worker].Healthy {
-			if err := shrd.client.ProcessAsync(ctx, p); err != nil {
-				return err
-			}
-		} else {
-			return fmt.Errorf("worker %s is not currently healthy", shrd.worker)
-		}
-	}
-	return nil
+type Client interface {
+	Ready(request *packet.ReadyRequest) error
+	PrepareState(request *packet.PrepareStateRequest) error
+	StartReplay(request *packet.StartReplayRequest) error
+	WaitForReplay() error
+	SetupReplayPath(request *packet.SetupReplayPathRequest) error
+	UpdateEgress(request *packet.UpdateEgressRequest) error
+	AddNode(request *packet.AddNodeRequest) error
+	RemoveNodes(request *packet.RemoveNodesRequest) error
+	UpdateSharder(request *packet.UpdateSharderRequest) error
 }
 
-func (h *Handle) SendToHealthySync(ctx context.Context, p *boostpb.SyncPacket, workers map[WorkerID]*Worker) error {
-	for _, shrd := range h.shards {
-		if workers[shrd.worker].Healthy {
-			if err := shrd.client.ProcessSync(ctx, p); err != nil {
-				return err
-			}
-		} else {
-			return fmt.Errorf("worker %s is not currently healthy", shrd.worker)
-		}
+func (h *Handle) Client(ctx context.Context, workers map[WorkerID]*Worker) Client {
+	return &client{
+		ctx:     ctx,
+		shards:  h.shards,
+		workers: workers,
 	}
-	return nil
 }
 
-func (h *Handle) SendToHealthyShard(ctx context.Context, i uint, p *boostpb.Packet, workers map[WorkerID]*Worker) error {
-	if workers[h.shards[i].worker].Healthy {
-		return h.shards[i].client.ProcessAsync(ctx, p)
+func (h *Handle) ShardClient(ctx context.Context, i uint, workers map[WorkerID]*Worker) Client {
+	return &client{
+		ctx:     ctx,
+		shards:  []ShardHandle{h.shards[i]},
+		workers: workers,
 	}
-	return fmt.Errorf("tried to send packet to failed worker; ignoring")
+}
+
+type client struct {
+	ctx     context.Context
+	shards  []ShardHandle
+	workers map[WorkerID]*Worker
+}
+
+func (c *client) Ready(request *packet.ReadyRequest) error {
+	return c.send(func(d boostrpc.DomainClient) error {
+		_, err := d.Ready(c.ctx, request)
+		return err
+	})
+}
+
+func (c *client) PrepareState(request *packet.PrepareStateRequest) error {
+	return c.send(func(d boostrpc.DomainClient) error {
+		_, err := d.PrepareState(c.ctx, request)
+		return err
+	})
+}
+
+func (c *client) StartReplay(request *packet.StartReplayRequest) error {
+	return c.send(func(d boostrpc.DomainClient) error {
+		_, err := d.StartReplay(c.ctx, request)
+		return err
+	})
+}
+
+func (c *client) WaitForReplay() error {
+	return c.send(func(d boostrpc.DomainClient) error {
+		_, err := d.WaitForReplay(c.ctx, &packet.WaitForReplayRequest{})
+		return err
+	})
+}
+
+func (c *client) SetupReplayPath(request *packet.SetupReplayPathRequest) error {
+	return c.send(func(d boostrpc.DomainClient) error {
+		_, err := d.SetupReplayPath(c.ctx, request)
+		return err
+	})
+}
+
+func (c *client) UpdateEgress(request *packet.UpdateEgressRequest) error {
+	return c.send(func(d boostrpc.DomainClient) error {
+		_, err := d.UpdateEgress(c.ctx, request)
+		return err
+	})
+}
+
+func (c *client) UpdateSharder(request *packet.UpdateSharderRequest) error {
+	return c.send(func(d boostrpc.DomainClient) error {
+		_, err := d.UpdateSharder(c.ctx, request)
+		return err
+	})
+}
+
+func (c *client) AddNode(request *packet.AddNodeRequest) error {
+	return c.send(func(d boostrpc.DomainClient) error {
+		_, err := d.AddNode(c.ctx, request)
+		return err
+	})
+}
+
+func (c *client) RemoveNodes(request *packet.RemoveNodesRequest) error {
+	return c.send(func(d boostrpc.DomainClient) error {
+		_, err := d.RemoveNodes(c.ctx, request)
+		return err
+	})
+}
+
+func (c *client) send(call func(d boostrpc.DomainClient) error) error {
+	var errs []error
+	for _, shrd := range c.shards {
+		var err error
+		if c.workers[shrd.worker].Healthy {
+			err = call(shrd.client)
+		} else {
+			err = fmt.Errorf("worker %s is not currently healthy", shrd.worker)
+		}
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return multierr.Combine(errs...)
 }

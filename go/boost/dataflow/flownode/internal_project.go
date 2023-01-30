@@ -5,11 +5,13 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/domain/replay"
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -21,7 +23,7 @@ var _ ingredientQueryThrough = (*Project)(nil)
 
 type (
 	Project struct {
-		src  boostpb.IndexPair
+		src  dataflow.IndexPair
 		cols int
 
 		projections []Projection
@@ -29,9 +31,9 @@ type (
 
 	Projection interface {
 		describe() string
-		build(env *evalengine.ExpressionEnv, row boostpb.Row, output *boostpb.RowBuilder)
+		build(env *evalengine.ExpressionEnv, row sql.Row, output *sql.RowBuilder)
 		ToProto() string
-		Type(g *graph.Graph[*Node], src boostpb.IndexPair) boostpb.Type
+		Type(g *graph.Graph[*Node], src dataflow.IndexPair) (sql.Type, error)
 	}
 
 	ProjectedExpr struct {
@@ -42,12 +44,12 @@ type (
 	ProjectedCol int
 
 	ProjectedLiteral struct {
-		V   boostpb.Value
+		V   sql.Value
 		AST *sqlparser.Literal
 	}
 )
 
-func (p *Project) QueryThrough(columns []int, key boostpb.Row, nodes *Map, states *state.Map) (RowIterator, bool, MaterializedState) {
+func (p *Project) QueryThrough(columns []int, key sql.Row, nodes *Map, states *state.Map) (RowIterator, bool, MaterializedState) {
 	inCols := columns
 	proj := p.projections
 
@@ -79,8 +81,8 @@ func (p *Project) QueryThrough(columns []int, key boostpb.Row, nodes *Map, state
 	var env evalengine.ExpressionEnv
 	env.DefaultCollation = collations.Default()
 
-	rows.ForEach(func(row boostpb.Row) {
-		builder := boostpb.NewRowBuilder(len(proj))
+	rows.ForEach(func(row sql.Row) {
+		builder := sql.NewRowBuilder(len(proj))
 		for _, col := range proj {
 			col.build(&env, row, &builder)
 		}
@@ -147,7 +149,7 @@ func (p *Project) ParentColumns(col int) []NodeColumn {
 	return []NodeColumn{nc}
 }
 
-func (p *Project) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
+func (p *Project) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
 	if len(p.projections) == 0 {
 		return g.Value(p.src.AsGlobal()).ColumnType(g, col)
 	}
@@ -166,11 +168,12 @@ func (p *Project) Description() string {
 	return "π[" + strings.Join(cols, ", ") + "]"
 }
 
-func (p *Project) OnConnected(graph *graph.Graph[*Node]) {
+func (p *Project) OnConnected(graph *graph.Graph[*Node]) error {
 	p.cols = len(graph.Value(p.src.AsGlobal()).Fields())
+	return nil
 }
 
-func (p *Project) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]boostpb.IndexPair) {
+func (p *Project) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]dataflow.IndexPair) {
 	p.src.Remap(remap)
 
 	// Eliminate emit specifications which require no permutation of
@@ -190,17 +193,17 @@ func (p *Project) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]boostpb.Inde
 	p.projections = []Projection{}
 }
 
-func (p *Project) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
+func (p *Project) OnInput(you *Node, ex processing.Executor, from dataflow.LocalNodeIdx, rs []sql.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
 	if emit := p.projections; len(emit) > 0 {
 		var env evalengine.ExpressionEnv
 		env.DefaultCollation = collations.Default()
 
 		for i, record := range rs {
-			builder := boostpb.NewRowBuilder(len(emit))
+			builder := sql.NewRowBuilder(len(emit))
 			for _, col := range emit {
 				col.build(&env, record.Row, &builder)
 			}
-			rs[i] = builder.Finish().ToRecord(record.Positive)
+			rs[i] = builder.Finish().ToOffsetRecord(record.Offset, record.Positive)
 			env.Row = nil
 		}
 	}
@@ -213,13 +216,13 @@ func (p *Project) Emits() []Projection {
 
 func NewProject(src graph.NodeIdx, projections []Projection) *Project {
 	return &Project{
-		src:         boostpb.NewIndexPair(src),
+		src:         dataflow.NewIndexPair(src),
 		cols:        0,
 		projections: projections,
 	}
 }
 
-func NewProjectFromProto(proj *boostpb.Node_InternalProject) (*Project, error) {
+func NewProjectFromProto(proj *flownodepb.Node_InternalProject) (*Project, error) {
 	expressions := make([]Projection, len(proj.Projections))
 	for i, expression := range proj.Projections {
 		expr, err := sqlparser.ParseExpr(expression)
@@ -254,19 +257,19 @@ func NewProjectFromProto(proj *boostpb.Node_InternalProject) (*Project, error) {
 	}, nil
 }
 
-func (p *Project) ToProto() *boostpb.Node_InternalProject {
+func (p *Project) ToProto() *flownodepb.Node_InternalProject {
 	expressions := make([]string, len(p.projections))
 	for i, e := range p.projections {
 		expressions[i] = e.ToProto()
 	}
-	return &boostpb.Node_InternalProject{
+	return &flownodepb.Node_InternalProject{
 		Src:         &p.src,
 		Cols:        p.cols,
 		Projections: expressions,
 	}
 }
 
-func (col ProjectedCol) Type(g *graph.Graph[*Node], src boostpb.IndexPair) boostpb.Type {
+func (col ProjectedCol) Type(g *graph.Graph[*Node], src dataflow.IndexPair) (sql.Type, error) {
 	return g.Value(src.AsGlobal()).ColumnType(g, int(col))
 }
 
@@ -278,7 +281,7 @@ func (col ProjectedCol) ToProto() string {
 	return sqlparser.String(&sqlparser.Offset{V: int(col)})
 }
 
-func (col ProjectedCol) build(env *evalengine.ExpressionEnv, row boostpb.Row, output *boostpb.RowBuilder) {
+func (col ProjectedCol) build(env *evalengine.ExpressionEnv, row sql.Row, output *sql.RowBuilder) {
 	output.Add(row.ValueAt(int(col)))
 }
 
@@ -291,11 +294,14 @@ func defaultCollationForType(t sqltypes.Type) collations.ID {
 	}
 }
 
-func (expr *ProjectedExpr) Type(g *graph.Graph[*Node], src boostpb.IndexPair) boostpb.Type {
+func (expr *ProjectedExpr) Type(g *graph.Graph[*Node], src dataflow.IndexPair) (sql.Type, error) {
 	var env = evalengine.EmptyExpressionEnv()
 
 	var parent = g.Value(src.AsGlobal())
-	parent.ResolveSchema(g)
+	_, err := parent.ResolveSchema(g)
+	if err != nil {
+		return sql.Type{}, err
+	}
 
 	for _, tt := range parent.Schema() {
 		env.Row = append(env.Row, sqltypes.MakeTrusted(tt.T, nil))
@@ -303,12 +309,12 @@ func (expr *ProjectedExpr) Type(g *graph.Graph[*Node], src boostpb.IndexPair) bo
 
 	tt, err := env.TypeOf(expr.EvalExpr)
 	if err != nil {
-		panic(err)
+		return sql.Type{}, err
 	}
 	// FIXME: there are some expressions for which the evalengine can resolve
 	// a non-default collation (e.g. an explicitly COLLATE('str'), but we have
 	// no way of accessing this data right now
-	return boostpb.Type{T: tt, Collation: defaultCollationForType(tt)}
+	return sql.Type{T: tt, Collation: defaultCollationForType(tt)}, nil
 }
 
 func (expr *ProjectedExpr) describe() string {
@@ -319,7 +325,7 @@ func (expr *ProjectedExpr) ToProto() string {
 	return sqlparser.String(expr.AST)
 }
 
-func (expr *ProjectedExpr) build(env *evalengine.ExpressionEnv, row boostpb.Row, output *boostpb.RowBuilder) {
+func (expr *ProjectedExpr) build(env *evalengine.ExpressionEnv, row sql.Row, output *sql.RowBuilder) {
 	if env.Row == nil {
 		env.Row = row.ToVitess()
 	}
@@ -330,9 +336,9 @@ func (expr *ProjectedExpr) build(env *evalengine.ExpressionEnv, row boostpb.Row,
 	output.AddVitess(er.Value())
 }
 
-func (lit *ProjectedLiteral) Type(*graph.Graph[*Node], boostpb.IndexPair) boostpb.Type {
+func (lit *ProjectedLiteral) Type(*graph.Graph[*Node], dataflow.IndexPair) (sql.Type, error) {
 	tt := lit.V.Type()
-	return boostpb.Type{T: tt, Collation: defaultCollationForType(tt)}
+	return sql.Type{T: tt, Collation: defaultCollationForType(tt)}, nil
 }
 
 func (lit *ProjectedLiteral) describe() string {
@@ -343,7 +349,7 @@ func (lit *ProjectedLiteral) ToProto() string {
 	return sqlparser.String(lit.AST)
 }
 
-func (lit *ProjectedLiteral) build(env *evalengine.ExpressionEnv, row boostpb.Row, output *boostpb.RowBuilder) {
+func (lit *ProjectedLiteral) build(env *evalengine.ExpressionEnv, row sql.Row, output *sql.RowBuilder) {
 	output.Add(lit.V)
 }
 
@@ -353,7 +359,7 @@ func ProjectedLiteralFromAST(expr *sqlparser.Literal) (*ProjectedLiteral, error)
 		return nil, err
 	}
 	return &ProjectedLiteral{
-		V:   boostpb.ValueFromVitess(lit),
+		V:   sql.ValueFromVitess(lit),
 		AST: expr,
 	}, nil
 }

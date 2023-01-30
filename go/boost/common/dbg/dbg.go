@@ -9,12 +9,12 @@ import (
 	"go/token"
 	"os"
 	"path"
-	"reflect"
 	"runtime"
 	"strings"
 	"sync"
 
-	"vitess.io/vitess/go/boost/common/dbg/litter"
+	"github.com/kr/pretty"
+	"github.com/kr/text"
 )
 
 type params struct {
@@ -141,12 +141,7 @@ func V[Val any](v Val) Val {
 	if _, f, lineno, ok := runtime.Caller(1); ok {
 		p = defaultCache.resolve(f, lineno)
 	}
-
-	var buf bytes.Buffer
-	_, _ = fmt.Fprintf(&buf, "[%s]: %s = ", p.ShortPosition(), p.Arg(0))
-	litter.NewDumpState(reflect.ValueOf(v), &litter.Options{}, &buf).Dump(v)
-	buf.WriteString("\n")
-	_, _ = buf.WriteTo(os.Stdout)
+	_, _ = fmt.Fprintf(os.Stdout, "[%s]: %s = %# v\n", p.ShortPosition(), p.Arg(0), pretty.Formatter(v))
 	return v
 }
 
@@ -160,26 +155,10 @@ func P(vals ...any) {
 	var buf bytes.Buffer
 	_, _ = fmt.Fprintf(&buf, "%s @ %s\n", p.Position(), p.Fn())
 	for i, v := range vals {
-		header, _ := fmt.Fprintf(&buf, "    [%d] %s = ", i, p.Arg(i))
-		opt := litter.Options{Indent: "    ", IndentPrefix: strings.Repeat(" ", header), DisablePointerReplacement: true}
-		litter.NewDumpState(reflect.ValueOf(v), &opt, &buf).Dump(v)
-		buf.WriteString("\n")
-	}
+		indent, _ := fmt.Fprintf(&buf, "    [%d] %s = ", i, p.Arg(i))
 
+		w := text.NewIndentWriter(&buf, nil, bytes.Repeat([]byte{' '}, indent))
+		fmt.Fprintf(w, "%# v\n", pretty.Formatter(v))
+	}
 	_, _ = buf.WriteTo(os.Stdout)
-}
-
-func DumpTo(path string, vals ...any) {
-	f, err := os.Create(path)
-	if err != nil {
-		panic(err)
-	}
-	defer func() {
-		_ = f.Close()
-	}()
-	for _, v := range vals {
-		opt := litter.Options{Indent: "    "}
-		litter.NewDumpState(reflect.ValueOf(v), &opt, f).Dump(v)
-		_, _ = f.WriteString("\n")
-	}
 }

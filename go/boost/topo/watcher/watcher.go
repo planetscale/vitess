@@ -143,11 +143,11 @@ func (nw *Watcher) Version() string {
 }
 
 // Start starts the topology watcher
-func (nw *Watcher) Start() {
+func (nw *Watcher) Start() error {
 	// If the cell doesn't exist, this will return ErrNoNode.
 	cellConn, err := nw.ts.ConnForCell(context.Background(), topo.GlobalCell)
 	if err != nil {
-		panic("boost.Watcher: failed to find GlobalCell in topology")
+		return err
 	}
 
 	var ctx context.Context
@@ -195,6 +195,7 @@ func (nw *Watcher) Start() {
 			}
 		}
 	}()
+	return nil
 }
 
 type clusterState struct {
@@ -475,11 +476,10 @@ func (ac *clusterClient) start(ctx context.Context, conn topo.Conn, wg *sync.Wai
 
 	log.Infof("boost.Watcher: started watcher for cluster %s", ac.uuid)
 
-	var err error
-
 	election, err := conn.NewLeaderParticipation(boosttopo.PathLeader(ac.uuid), "")
 	if err != nil {
-		panic("failed to create LeaderParticipation")
+		log.Errorf("failed to start NewLeaderParticipation: %v", err)
+		return
 	}
 
 	wg.Add(1)

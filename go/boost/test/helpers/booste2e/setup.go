@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
 	"vitess.io/vitess/go/boost/topo/client"
@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	flagGtidMode = boostpb.UpqueryMode_SELECT_GTID
+	flagGtidMode = config.UpqueryMode_SELECT_GTID
 
 	testBoostScience = &vtboost.Science{
 		ComparisonSampleRate: 1,
@@ -187,7 +187,9 @@ func (test *Test) setupBoost() {
 			boosttest.WithTopoServer(test.Topo),
 			boosttest.WithTabletManager(tmclient.NewTabletManagerClient()),
 			boosttest.WithShards(0),
-			boosttest.WithUpqueryMode(flagGtidMode),
+			boosttest.WithCustomBoostConfig(func(cfg *config.Config) {
+				cfg.Domain.UpqueryMode = flagGtidMode
+			}),
 			boosttest.WithVitessExecutor(),
 			boosttest.WithSchemaChangeUser("root"),
 			boosttest.WithLocalCell(test.Cell),

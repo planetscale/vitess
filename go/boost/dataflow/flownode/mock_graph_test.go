@@ -4,10 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/packet"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/sql"
 )
 
 type MockGraph struct {
@@ -15,41 +17,53 @@ type MockGraph struct {
 
 	graph  *graph.Graph[*Node]
 	source graph.NodeIdx
-	nut    boostpb.IndexPair
+	nut    dataflow.IndexPair
 	states *state.Map
 	nodes  *Map
-	remap  map[graph.NodeIdx]boostpb.IndexPair
+	remap  map[graph.NodeIdx]dataflow.IndexPair
 }
 
 func NewMockGraph(t testing.TB) *MockGraph {
 	gr := new(graph.Graph[*Node])
-	source := gr.AddNode(New("source", []string{"dummy"}, &Source{}))
+	source := gr.AddNode(New("root", []string{"dummy"}, &Root{}))
 
 	return &MockGraph{
 		t:      t,
 		graph:  gr,
 		source: source,
-		nut:    boostpb.EmptyIndexPair(),
+		nut:    dataflow.EmptyIndexPair(),
 		states: new(state.Map),
 		nodes:  new(Map),
-		remap:  make(map[graph.NodeIdx]boostpb.IndexPair),
+		remap:  make(map[graph.NodeIdx]dataflow.IndexPair),
 	}
 }
 
-func (mg *MockGraph) AddBase(name string, fields []string, schema []boostpb.Type) boostpb.IndexPair {
-	i := NewBase(name, nil, schema)
-	global := mg.graph.AddNode(New(name, fields, i))
+type mockBase struct {
+	schema []sql.Type
+}
+
+func (m *mockBase) Schema() []sql.Type {
+	return m.schema
+}
+
+func (m *mockBase) dataflow() {}
+
+func (mg *MockGraph) AddBase(name string, fields []string, schema []sql.Type) dataflow.IndexPair {
+	global := mg.graph.AddNode(New(name, fields, &mockBase{schema: schema}))
 	mg.graph.AddEdge(mg.source, global)
 
-	remap := make(map[graph.NodeIdx]boostpb.IndexPair)
-	local := boostpb.LocalNodeIndex(len(mg.remap))
+	remap := make(map[graph.NodeIdx]dataflow.IndexPair)
+	local := dataflow.LocalNodeIdx(len(mg.remap))
 
-	ip := boostpb.NewIndexPair(global)
+	ip := dataflow.NewIndexPair(global)
 	ip.SetLocal(local)
 
 	nn := mg.graph.Value(global)
 	nn.SetFinalizedAddr(ip)
-	nn.ResolveSchema(mg.graph)
+	_, err := nn.ResolveSchema(mg.graph)
+	if err != nil {
+		mg.t.Fatalf("failed to resolve schema: %v", err)
+	}
 
 	remap[global] = ip
 	nn.OnCommit(remap)
@@ -64,7 +78,10 @@ func (mg *MockGraph) SetOp(name string, fields []string, i Internal, materialize
 		mg.t.Fatalf("only one node under test is supported")
 	}
 
-	i.OnConnected(mg.graph)
+	err := i.OnConnected(mg.graph)
+	if err != nil {
+		mg.t.Fatalf("failed to connect graph: %v", err)
+	}
 	parents := i.Ancestors()
 
 	if len(parents) == 0 {
@@ -72,7 +89,7 @@ func (mg *MockGraph) SetOp(name string, fields []string, i Internal, materialize
 	}
 
 	global := mg.graph.AddNode(New(name, fields, i))
-	local := boostpb.LocalNodeIndex(len(mg.remap))
+	local := dataflow.LocalNodeIdx(len(mg.remap))
 	if materialized {
 		mg.states.Insert(local, state.NewMemoryState())
 	}
@@ -80,24 +97,27 @@ func (mg *MockGraph) SetOp(name string, fields []string, i Internal, materialize
 		mg.graph.AddEdge(parent, global)
 	}
 
-	ip := boostpb.NewIndexPair(global)
+	ip := dataflow.NewIndexPair(global)
 	ip.SetLocal(local)
 
 	mg.remap[global] = ip
 	nn := mg.graph.Value(global)
 	nn.SetFinalizedAddr(ip)
-	nn.ResolveSchema(mg.graph)
+	_, err = nn.ResolveSchema(mg.graph)
+	if err != nil {
+		mg.t.Fatalf("failed to resolve schema: %v", err)
+	}
 	nn.OnCommit(mg.remap)
 
 	idx := nn.SuggestIndexes(global)
 	for tbl, col := range idx {
 		tbl := mg.graph.Value(tbl)
 		if st := mg.states.Get(tbl.LocalAddr()); st != nil {
-			st.AddKey(col, tbl.Schema(), nil)
+			st.AddKey(col, tbl.Schema(), nil, false)
 		}
 	}
 
-	var unused []boostpb.LocalNodeIndex
+	var unused []dataflow.LocalNodeIdx
 	for _, ni := range mg.remap {
 		ni := mg.graph.Value(ni.AsGlobal()).LocalAddr()
 		if st := mg.states.Get(ni); st != nil && !st.IsUseful() {
@@ -109,7 +129,7 @@ func (mg *MockGraph) SetOp(name string, fields []string, i Internal, materialize
 	}
 
 	mg.graph.ForEachValue(func(node *Node) bool {
-		if !node.IsSource() {
+		if !node.IsRoot() {
 			node.AddTo(0)
 		}
 		return true
@@ -124,8 +144,14 @@ func (mg *MockGraph) SetOp(name string, fields []string, i Internal, materialize
 			continue
 		}
 
-		node := mg.graph.Value(topo.Current).Finalize(mg.graph)
+		node, err := mg.graph.Value(topo.Current).Finalize(mg.graph)
+		if err != nil {
+			mg.t.Fatalf("failed to finalize node: %v", err)
+		}
 		mg.nodes.Insert(node.LocalAddr(), node)
+		if err := node.OnDeploy(); err != nil {
+			mg.t.Fatalf("failed to Deploy node: %v", err)
+		}
 	}
 }
 
@@ -136,13 +162,13 @@ func (mg *MockGraph) Node() *Node {
 type DummyExecutor struct {
 }
 
-func (d *DummyExecutor) Send(ctx context.Context, dest boostpb.DomainAddr, m *boostpb.Packet) error {
+func (d *DummyExecutor) Send(ctx context.Context, dest dataflow.DomainAddr, m packet.FlowPacket) error {
 	return nil
 }
 
-func (mg *MockGraph) One(src boostpb.IndexPair, u []boostpb.Record, remember bool) []boostpb.Record {
+func (mg *MockGraph) One(src dataflow.IndexPair, u []sql.Record, remember bool) []sql.Record {
 	if mg.nut.IsEmpty() {
-		panic("no node being tested right now")
+		mg.t.Fatal("no node being tested right now")
 	}
 
 	var ex DummyExecutor
@@ -153,7 +179,7 @@ func (mg *MockGraph) One(src boostpb.IndexPair, u []boostpb.Record, remember boo
 		mg.t.Fatal(err)
 	}
 	if len(m.Misses) != 0 {
-		panic("miss during local integration test")
+		mg.t.Fatal("miss during local integration test")
 	}
 
 	u = m.Records
@@ -161,17 +187,17 @@ func (mg *MockGraph) One(src boostpb.IndexPair, u []boostpb.Record, remember boo
 		return u
 	}
 
-	Materialize(&u, boostpb.TagNone, mg.states.Get(id.AsLocal()))
-	return u
+	st := mg.states.Get(id.AsLocal())
+	return st.ProcessRecords(u, dataflow.TagNone, nil)
 }
 
-func (mg *MockGraph) OneRow(src boostpb.IndexPair, r RecordLike, remember bool) []boostpb.Record {
-	return mg.One(src, []boostpb.Record{r.AsRecord()}, remember)
+func (mg *MockGraph) OneRow(src dataflow.IndexPair, r RecordLike, remember bool) []sql.Record {
+	return mg.One(src, []sql.Record{r.AsRecord()}, remember)
 }
 
-func (mg *MockGraph) NarrowBaseID() boostpb.IndexPair {
+func (mg *MockGraph) NarrowBaseID() dataflow.IndexPair {
 	if len(mg.remap) != 2 {
-		panic("expected remap = base + nut")
+		mg.t.Fatal("expected remap = base + nut")
 	}
 
 	for _, ip := range mg.remap {
@@ -180,23 +206,24 @@ func (mg *MockGraph) NarrowBaseID() boostpb.IndexPair {
 		}
 		return ip
 	}
-	panic("failed to narrow")
+	mg.t.Fatal("failed to narrow")
+	return dataflow.IndexPair{}
 }
 
-func (mg *MockGraph) NarrowOne(u []boostpb.Record, remember bool) []boostpb.Record {
+func (mg *MockGraph) NarrowOne(u []sql.Record, remember bool) []sql.Record {
 	src := mg.NarrowBaseID()
 	return mg.One(src, u, remember)
 }
 
 type RecordLike interface {
-	AsRecord() boostpb.Record
+	AsRecord() sql.Record
 }
 
-func (mg *MockGraph) NarrowOneRow(d RecordLike, remember bool) []boostpb.Record {
-	return mg.NarrowOne([]boostpb.Record{d.AsRecord()}, remember)
+func (mg *MockGraph) NarrowOneRow(d RecordLike, remember bool) []sql.Record {
+	return mg.NarrowOne([]sql.Record{d.AsRecord()}, remember)
 }
 
-func (mg *MockGraph) Seed(base boostpb.IndexPair, data RecordLike) {
+func (mg *MockGraph) Seed(base dataflow.IndexPair, data RecordLike) {
 	if mg.nut.IsEmpty() {
 		mg.t.Fatal("seed must happen after set_op")
 	}
@@ -213,14 +240,14 @@ func (mg *MockGraph) Seed(base boostpb.IndexPair, data RecordLike) {
 	// if the base node has state, keep it
 	if mg != nil {
 		st := mg.states.Get(base.AsLocal())
-		records := []boostpb.Record{data.AsRecord()}
-		st.ProcessRecords(&records, boostpb.TagNone)
+		records := []sql.Record{data.AsRecord()}
+		st.ProcessRecords(records, dataflow.TagNone, nil)
 	} else {
 		mg.t.Fatalf("unnecessary seed value for %v", base.AsGlobal())
 	}
 }
 
-func (mg *MockGraph) Unseed(base boostpb.IndexPair) {
+func (mg *MockGraph) Unseed(base dataflow.IndexPair) {
 	if mg.nut.IsEmpty() {
 		mg.t.Fatal("unseed must happen after set_op")
 	}
@@ -231,7 +258,7 @@ func (mg *MockGraph) Unseed(base boostpb.IndexPair) {
 	st := state.NewMemoryState()
 	for tbl, cols := range idx {
 		if tbl == base.AsGlobal() {
-			st.AddKey(cols, schema, nil)
+			st.AddKey(cols, schema, nil, false)
 		}
 	}
 

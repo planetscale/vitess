@@ -79,6 +79,8 @@ func (a *Sum) sumType() sql.Type {
 			return defaultIntegerSumType
 		case sql.DecimalType:
 			return tt
+		case sql.YearType:
+			return defaultIntegerSumType
 		default:
 			panic("unexpected Sum type")
 		}

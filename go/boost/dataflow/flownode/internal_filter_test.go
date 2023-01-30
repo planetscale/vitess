@@ -7,9 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -62,7 +63,7 @@ func TestFilter(t *testing.T) {
 
 		var fields = []string{"x", "y"}
 		g := NewMockGraph(t)
-		s := g.AddBase("source", fields, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar))
+		s := g.AddBase("source", fields, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar))
 		g.SetOp("filter", fields, NewFilter(s.AsGlobal(), filters), materialized)
 		return g
 	}
@@ -70,26 +71,26 @@ func TestFilter(t *testing.T) {
 	t.Run("it forwards with no filters", func(t *testing.T) {
 		g := setup(t, false, []FilterConditionTuple{})
 
-		left := boostpb.TestRow(1, "a")
+		left := sql.TestRow(1, "a")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(1, "b")
+		left = sql.TestRow(1, "b")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(2, "a")
+		left = sql.TestRow(2, "a")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
 	})
 
 	t.Run("it forwards", func(t *testing.T) {
 		g := setup(t, false, nil)
 
-		left := boostpb.TestRow(1, "a")
+		left := sql.TestRow(1, "a")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(1, "b")
-		assert.Equal(t, []boostpb.Record{}, g.NarrowOneRow(left, false))
+		left = sql.TestRow(1, "b")
+		assert.Equal(t, []sql.Record{}, g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(2, "a")
+		left = sql.TestRow(2, "a")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
 	})
 
@@ -108,17 +109,17 @@ func TestFilter(t *testing.T) {
 		}
 		g := setup(t, false, filters)
 
-		left := boostpb.TestRow(1, "a")
+		left := sql.TestRow(1, "a")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(1, "b")
-		assert.Equal(t, []boostpb.Record{}, g.NarrowOneRow(left, false))
+		left = sql.TestRow(1, "b")
+		assert.Equal(t, []sql.Record{}, g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(2, "a")
-		assert.Equal(t, []boostpb.Record{}, g.NarrowOneRow(left, false))
+		left = sql.TestRow(2, "a")
+		assert.Equal(t, []sql.Record{}, g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(2, "b")
-		assert.Equal(t, []boostpb.Record{}, g.NarrowOneRow(left, false))
+		left = sql.TestRow(2, "b")
+		assert.Equal(t, []sql.Record{}, g.NarrowOneRow(left, false))
 	})
 
 	t.Run("it suggests indices", func(t *testing.T) {
@@ -142,9 +143,9 @@ func TestFilter(t *testing.T) {
 	t.Run("it works with many", func(t *testing.T) {
 		g := setup(t, false, nil)
 
-		var many []boostpb.Record
+		var many []sql.Record
 		for i := 0; i < 10; i++ {
-			many = append(many, boostpb.TestRow(int64(i), "a").AsRecord())
+			many = append(many, sql.TestRow(int64(i), "a").AsRecord())
 		}
 
 		rs := g.NarrowOne(many, false)
@@ -166,16 +167,16 @@ func TestFilter(t *testing.T) {
 		}
 		g := setup(t, false, filters)
 
-		left := boostpb.TestRow(2, "b")
+		left := sql.TestRow(2, "b")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(2, "a")
-		assert.Equal(t, []boostpb.Record{}, g.NarrowOneRow(left, false))
+		left = sql.TestRow(2, "a")
+		assert.Equal(t, []sql.Record{}, g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(3, "b")
-		assert.Equal(t, []boostpb.Record{}, g.NarrowOneRow(left, false))
+		left = sql.TestRow(3, "b")
+		assert.Equal(t, []sql.Record{}, g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(1, "b")
+		left = sql.TestRow(1, "b")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
 	})
 
@@ -189,11 +190,11 @@ func TestFilter(t *testing.T) {
 		}
 		g := setup(t, false, filters)
 
-		left := boostpb.TestRow(2, 2)
+		left := sql.TestRow(2, 2)
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(2, "b")
-		assert.Equal(t, []boostpb.Record{}, g.NarrowOneRow(left, false))
+		left = sql.TestRow(2, "b")
+		assert.Equal(t, []sql.Record{}, g.NarrowOneRow(left, false))
 	})
 
 	t.Run("it works with IN list", func(t *testing.T) {
@@ -216,16 +217,16 @@ func TestFilter(t *testing.T) {
 		}
 		g := setup(t, false, filters)
 
-		left := boostpb.TestRow(2, "b")
+		left := sql.TestRow(2, "b")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(2, "a")
-		assert.Equal(t, []boostpb.Record{}, g.NarrowOneRow(left, false))
+		left = sql.TestRow(2, "a")
+		assert.Equal(t, []sql.Record{}, g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(3, "b")
-		assert.Equal(t, []boostpb.Record{}, g.NarrowOneRow(left, false))
+		left = sql.TestRow(3, "b")
+		assert.Equal(t, []sql.Record{}, g.NarrowOneRow(left, false))
 
-		left = boostpb.TestRow(42, "b")
+		left = sql.TestRow(42, "b")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
 	})
 
@@ -239,56 +240,56 @@ func TestFilter(t *testing.T) {
 		var cases = []struct {
 			name     string
 			filters  []FilterConditionTuple
-			input    []boostpb.Row
+			input    []sql.Row
 			expected int
 			column   int
-			key      boostpb.Row
+			key      sql.Row
 		}{
 			{
 				name:    "all",
 				filters: []FilterConditionTuple{cond0},
-				input: []boostpb.Row{
-					boostpb.TestRow(1, 2, 3),
+				input: []sql.Row{
+					sql.TestRow(1, 2, 3),
 				},
 				expected: 1,
 				column:   0,
-				key:      boostpb.TestRow(1),
+				key:      sql.TestRow(1),
 			},
 			{
 				name:    "all but filtered",
 				filters: []FilterConditionTuple{cond0},
-				input: []boostpb.Row{
-					boostpb.TestRow(2, 1, 3),
+				input: []sql.Row{
+					sql.TestRow(2, 1, 3),
 				},
 				expected: 0,
 				column:   0,
-				key:      boostpb.TestRow(1),
+				key:      sql.TestRow(1),
 			},
 		}
 
 		for _, tcase := range cases {
 			t.Run(tcase.name, func(t *testing.T) {
-				index := boostpb.IndexPair{
+				index := dataflow.IndexPair{
 					Global: 0,
 					Local:  0,
 				}
 
 				states := new(state.Map)
-				schema := boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64, sqltypes.Int64)
+				schema := sql.TestSchema(sqltypes.Int64, sqltypes.Int64, sqltypes.Int64)
 
 				st := state.NewMemoryState()
-				st.AddKey([]int{0}, schema, nil)
-				st.AddKey([]int{1}, schema, nil)
+				st.AddKey([]int{0}, schema, nil, false)
+				st.AddKey([]int{1}, schema, nil, false)
 
-				var records []boostpb.Record
+				var records []sql.Record
 				for _, r := range tcase.input {
 					records = append(records, r.ToRecord(true))
 				}
-				st.ProcessRecords(&records, boostpb.TagNone)
+				st.ProcessRecords(records, dataflow.TagNone, nil)
 				states.Insert(0, st)
 
 				project := NewFilter(0, tcase.filters)
-				remap := map[graph.NodeIdx]boostpb.IndexPair{0: index}
+				remap := map[graph.NodeIdx]dataflow.IndexPair{0: index}
 				project.OnCommit(0, remap)
 
 				iter, found, mat := project.QueryThrough([]int{tcase.column}, tcase.key, new(Map), states)

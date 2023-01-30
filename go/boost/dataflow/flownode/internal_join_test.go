@@ -6,16 +6,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestJoin(t *testing.T) {
-	setup := func(t *testing.T) (*MockGraph, boostpb.IndexPair, boostpb.IndexPair) {
+	setup := func(t *testing.T) (*MockGraph, dataflow.IndexPair, dataflow.IndexPair) {
 		g := NewMockGraph(t)
-		l := g.AddBase("left", []string{"l0", "l1"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar))
-		r := g.AddBase("right", []string{"r0", "r1"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar))
+		l := g.AddBase("left", []string{"l0", "l1"}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar))
+		r := g.AddBase("right", []string{"r0", "r1"}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar))
 		j := NewJoin(l.AsGlobal(), r.AsGlobal(), JoinTypeOuter, [2]int{0, 0}, [][2]int{{0, 0}, {1, -1}, {-1, 1}})
 		g.SetOp("join", []string{"j0", "j1", "j2"}, j, false)
 		return g, l, r
@@ -32,19 +33,19 @@ func TestJoin(t *testing.T) {
 	t.Run("it works", func(t *testing.T) {
 		j, l, r := setup(t)
 
-		lA1 := boostpb.TestRow(1, "a")
-		lB2 := boostpb.TestRow(2, "b")
-		lC3 := boostpb.TestRow(3, "c")
+		lA1 := sql.TestRow(1, "a")
+		lB2 := sql.TestRow(2, "b")
+		lC3 := sql.TestRow(3, "c")
 
-		rX1 := boostpb.TestRow(1, "x")
-		rY1 := boostpb.TestRow(1, "y")
-		rZ2 := boostpb.TestRow(2, "z")
-		rW3 := boostpb.TestRow(3, "w")
-		rV4 := boostpb.TestRow(4, "")
+		rX1 := sql.TestRow(1, "x")
+		rY1 := sql.TestRow(1, "y")
+		rZ2 := sql.TestRow(2, "z")
+		rW3 := sql.TestRow(3, "w")
+		rV4 := sql.TestRow(4, "")
 
-		rNop := []boostpb.Record{
-			boostpb.TestRow(3, "w").ToRecord(false),
-			boostpb.TestRow(3, "w").ToRecord(true),
+		rNop := []sql.Record{
+			sql.TestRow(3, "w").ToRecord(false),
+			sql.TestRow(3, "w").ToRecord(true),
 		}
 
 		j.Seed(r, rX1)
@@ -56,8 +57,8 @@ func TestJoin(t *testing.T) {
 		j.OneRow(r, rZ2, false)
 
 		// forward c3 from left; should produce [c3 + None] since no records in right are 3
-		nullr := []boostpb.Record{
-			boostpb.TestRow(3, "c", nil).ToRecord(true),
+		nullr := []sql.Record{
+			sql.TestRow(3, "c", nil).ToRecord(true),
 		}
 		j.Seed(l, lC3)
 
@@ -73,30 +74,30 @@ func TestJoin(t *testing.T) {
 		j.Seed(r, rW3)
 		rs = j.OneRow(r, rW3, false)
 
-		assert.Equal(t, []boostpb.Record{
-			boostpb.TestRow(3, "c", nil).ToRecord(false),
-			boostpb.TestRow(3, "c", "w").ToRecord(true),
-			boostpb.TestRow(3, "c", nil).ToRecord(false),
-			boostpb.TestRow(3, "c", "w").ToRecord(true),
+		assert.Equal(t, []sql.Record{
+			sql.TestRow(3, "c", nil).ToRecord(false),
+			sql.TestRow(3, "c", "w").ToRecord(true),
+			sql.TestRow(3, "c", nil).ToRecord(false),
+			sql.TestRow(3, "c", "w").ToRecord(true),
 		}, rs)
 
 		// Negative followed by positive should not trigger nulls.
 		// TODO: it shouldn't trigger any updates at all...
 		rs = j.One(r, rNop, false)
 
-		assert.Equal(t, []boostpb.Record{
-			boostpb.TestRow(3, "c", "w").ToRecord(false),
-			boostpb.TestRow(3, "c", "w").ToRecord(false),
-			boostpb.TestRow(3, "c", "w").ToRecord(true),
-			boostpb.TestRow(3, "c", "w").ToRecord(true),
+		assert.Equal(t, []sql.Record{
+			sql.TestRow(3, "c", "w").ToRecord(false),
+			sql.TestRow(3, "c", "w").ToRecord(false),
+			sql.TestRow(3, "c", "w").ToRecord(true),
+			sql.TestRow(3, "c", "w").ToRecord(true),
 		}, rs)
 
 		// forward from left with single matching record on right
 		j.Seed(l, lB2)
 		rs = j.OneRow(l, lB2, false)
 
-		assert.Equal(t, []boostpb.Record{
-			boostpb.TestRow(2, "b", "z").ToRecord(true),
+		assert.Equal(t, []sql.Record{
+			sql.TestRow(2, "b", "z").ToRecord(true),
 		}, rs)
 
 		// forward from left with two matching records on right
@@ -104,18 +105,18 @@ func TestJoin(t *testing.T) {
 		rs = j.OneRow(l, lA1, false)
 
 		assert.Len(t, rs, 2)
-		assert.ElementsMatch(t, []boostpb.Record{
-			boostpb.TestRow(1, "a", "x").ToRecord(true),
-			boostpb.TestRow(1, "a", "y").ToRecord(true),
+		assert.ElementsMatch(t, []sql.Record{
+			sql.TestRow(1, "a", "x").ToRecord(true),
+			sql.TestRow(1, "a", "y").ToRecord(true),
 		}, rs)
 
 		// forward from right with two matching records on left (and one more on right)
 		j.Seed(r, rW3)
 		rs = j.OneRow(r, rW3, false)
 
-		assert.Equal(t, []boostpb.Record{
-			boostpb.TestRow(3, "c", "w").ToRecord(true),
-			boostpb.TestRow(3, "c", "w").ToRecord(true),
+		assert.Equal(t, []sql.Record{
+			sql.TestRow(3, "c", "w").ToRecord(true),
+			sql.TestRow(3, "c", "w").ToRecord(true),
 		}, rs)
 
 		// unmatched forward from right should have no effect

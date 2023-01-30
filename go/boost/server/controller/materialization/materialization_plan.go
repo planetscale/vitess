@@ -5,11 +5,16 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/server/controller/config"
+
+	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/common"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func materializationPlanOnJoin(g *graph.Graph[*flownode.Node]) OnJoin {
@@ -47,9 +52,7 @@ func materializationPlanOnJoin(g *graph.Graph[*flownode.Node]) OnJoin {
 
 				alsoToSrc := true
 				for _, c := range cols[1:] {
-					if slices.IndexFunc(n.ParentColumns(c), func(pc1 flownode.NodeColumn) bool {
-						return pc1.Node == pc.Node && pc1.Column >= 0
-					}) < 0 {
+					if !slices.ContainsFunc(n.ParentColumns(c), func(pc1 flownode.NodeColumn) bool { return pc1.Node == pc.Node && pc1.Column >= 0 }) {
 						alsoToSrc = false
 					}
 				}
@@ -82,15 +85,15 @@ func materializationPlanOnJoin(g *graph.Graph[*flownode.Node]) OnJoin {
 }
 
 type pendingReplay struct {
-	tag          boostpb.Tag
-	source       boostpb.LocalNodeIndex
-	sourceDomain boostpb.DomainIndex
-	targetDomain boostpb.DomainIndex
+	tag          dataflow.Tag
+	source       dataflow.LocalNodeIdx
+	sourceDomain dataflow.DomainIdx
+	targetDomain dataflow.DomainIdx
 }
 
 type domainTag struct {
-	tag    boostpb.Tag
-	domain boostpb.DomainIndex
+	tag    dataflow.Tag
+	domain dataflow.DomainIdx
 }
 
 type pathGrouping struct {
@@ -99,9 +102,9 @@ type pathGrouping struct {
 }
 
 type pathSegment struct {
-	domain boostpb.DomainIndex
+	domain dataflow.DomainIdx
 	path   Path
-	setup  *boostpb.SyncPacket_SetupReplayPath
+	setup  *packet.SetupReplayPathRequest
 }
 
 func (ps *pathSegment) Equals(other *pathSegment) bool {
@@ -121,12 +124,95 @@ type Plan struct {
 
 	// output of the plan
 	tags    map[common.Columns][]domainTag
-	paths   map[boostpb.Tag][]*pathSegment
-	state   *boostpb.Packet_PrepareState
+	paths   map[dataflow.Tag][]*pathSegment
+	state   *packet.PrepareStateRequest
 	pending []pendingReplay
 }
 
-func (p *Plan) prepareReplayPath(mig Migration, tag boostpb.Tag, pi int, path []PathElement, pathGroupings map[pathGrouping]boostpb.Tag) (boostpb.DomainIndex, *pendingReplay, error) {
+func (p *Plan) prepareFastReplayPath(mig Migration, tag dataflow.Tag, path []PathElement) (dataflow.DomainIdx, *pendingReplay, error) {
+	g := mig.Graph()
+
+	lastPath := path[len(path)-1]
+	lastNode := g.Value(lastPath.Node)
+	lastDomain := lastNode.Domain()
+
+	// Decide whether we allow planning upqueries on a reader. This usually defaults to true, meaning that
+	// queries which are essentially pass-through (i.e. that contain only filters and projections) will backfill
+	// their misses via a mid-flow upquery, instead of replaying an individual row.
+	// Setting `MidflowUpqueryOnReader` to false makes these kind of queries slightly slower but allows us to test
+	// more surface for the individual row replay paths.
+	switch p.m.cfg.UpqueryMode {
+	case config.UpqueryGenerationMode_FULL_MIDFLOW_UPQUERIES:
+		// Allow all upqueries
+	case config.UpqueryGenerationMode_NO_MIDFLOW_UPQUERIES:
+		return dataflow.InvalidDomainIdx, nil, operators.ErrUpqueryNotSupported
+	case config.UpqueryGenerationMode_NO_READER_MIDFLOW_UPQUERIES:
+		if lastNode.IsReader() {
+			mig.Log().Debug("skipping reader node for fast replays", lastPath.Node.Zap())
+			return dataflow.InvalidDomainIdx, nil, operators.ErrUpqueryNotSupported
+		}
+	}
+
+	if !g.Value(path[0].Node).IsTable() {
+		mig.Log().Debug("only first level after bases supported for upqueries", path[0].Node.Zap(), lastPath.Node.Zap())
+		return dataflow.InvalidDomainIdx, nil, operators.ErrUpqueryNotSupported
+	}
+
+	upquery, ok := mig.GetUpquery(lastPath.Node)
+	if !ok {
+		mig.Log().Debug("skipping reader node for unsupported upquery", lastPath.Node.Zap())
+		return dataflow.InvalidDomainIdx, nil, operators.ErrUpqueryNotSupported
+	}
+
+	var pending *pendingReplay
+	var partial []int
+	if p.partial {
+		partial = lastPath.Columns
+	}
+
+	setup := &packet.SetupReplayPathRequest{
+		Tag:    tag,
+		Source: dataflow.ExternalSource,
+		Path: []*packet.ReplayPathSegment{
+			{
+				Node:       lastNode.LocalAddr(),
+				ForceTagTo: dataflow.TagNone,
+				PartialKey: partial,
+			},
+		},
+		PartialUnicastSharder: graph.InvalidNode,
+		Trigger: &packet.TriggerEndpoint{
+			Kind: packet.TriggerEndpoint_EXTERNAL,
+			Cols: partial,
+		},
+		Upquery:     sqlparser.CanonicalString(upquery),
+		LastSegment: true,
+	}
+
+	if partial == nil {
+		setup.NotifyDone = true
+		pending = &pendingReplay{
+			tag:          tag,
+			source:       lastNode.LocalAddr(),
+			sourceDomain: lastDomain,
+			targetDomain: lastDomain,
+		}
+	}
+
+	p.paths[tag] = []*pathSegment{{
+		domain: lastDomain,
+		path:   []PathElement{lastPath},
+		setup:  setup,
+	}}
+
+	if err := mig.Send(lastDomain).SetupReplayPath(setup); err != nil {
+		return dataflow.InvalidDomainIdx, nil, err
+	}
+
+	return lastDomain, pending, nil
+}
+
+func (p *Plan) prepareReplayPath(mig Migration, tag dataflow.Tag, pi int, path []PathElement, pathGroupings map[pathGrouping]dataflow.Tag) (dataflow.DomainIdx, *pendingReplay, error) {
 	g := mig.Graph()
 
 	// what key are we using for partial materialization (if any)?
@@ -150,11 +236,11 @@ func (p *Plan) prepareReplayPath(mig Migration, tag boostpb.Tag, pi int, path []
 	}
 
 	var segments []*pathSegment
-	var lastDomain = boostpb.InvalidDomainIndex
+	var lastDomain = dataflow.InvalidDomainIdx
 
 	for _, pe := range path {
 		dom := g.Value(pe.Node).Domain()
-		if lastDomain == boostpb.InvalidDomainIndex || dom != lastDomain {
+		if lastDomain == dataflow.InvalidDomainIdx || dom != lastDomain {
 			segments = append(segments, &pathSegment{domain: dom})
 			lastDomain = dom
 		}
@@ -171,7 +257,7 @@ func (p *Plan) prepareReplayPath(mig Migration, tag boostpb.Tag, pi int, path []
 	p.paths[tag] = segments
 
 	var pending *pendingReplay
-	var seen = make(map[boostpb.DomainIndex]struct{})
+	var seen = make(map[dataflow.DomainIdx]struct{})
 
 	for i, seg := range segments {
 		// TODO:
@@ -188,14 +274,14 @@ func (p *Plan) prepareReplayPath(mig Migration, tag boostpb.Tag, pi int, path []
 			iternodes = iternodes[1:]
 		}
 
-		var locals = make([]*boostpb.ReplayPathSegment, 0, len(iternodes))
+		var locals = make([]*packet.ReplayPathSegment, 0, len(iternodes))
 		for _, seg := range iternodes {
 			forceTag, ok := pathGroupings[pathGrouping{seg.Node, pi}]
 			if !ok {
-				forceTag = boostpb.TagNone
+				forceTag = dataflow.TagNone
 			}
 
-			locals = append(locals, &boostpb.ReplayPathSegment{
+			locals = append(locals, &packet.ReplayPathSegment{
 				Node:       g.Value(seg.Node).LocalAddr(),
 				ForceTagTo: forceTag,
 				PartialKey: seg.Columns,
@@ -209,20 +295,30 @@ func (p *Plan) prepareReplayPath(mig Migration, tag boostpb.Tag, pi int, path []
 			continue
 		}
 
-		seg.setup = &boostpb.SyncPacket_SetupReplayPath{
+		seg.setup = &packet.SetupReplayPathRequest{
 			Tag:                   tag,
-			Source:                boostpb.InvalidLocalNode,
+			Source:                dataflow.InvalidLocalNode,
 			Path:                  locals,
 			PartialUnicastSharder: partialUnicastSharder,
 			NotifyDone:            false,
-			Trigger:               nil,
+			Trigger:               &packet.TriggerEndpoint{Kind: packet.TriggerEndpoint_NONE},
+			LastSegment:           i == len(segments)-1,
 		}
 		if i == 0 {
-			seg.setup.Source = g.Value(seg.path[0].Node).LocalAddr()
+			source := seg.path[0].Node
+			seg.setup.Source = g.Value(source).LocalAddr()
+
+			if g.Value(source).IsTable() {
+				u, ok := mig.GetUpquery(source)
+				if !ok {
+					panic("external table without planned upquery")
+				}
+				seg.setup.Upquery = sqlparser.CanonicalString(u)
+			}
 		}
 
 		if partial != nil {
-			p.prepareSegmentPartial(g, segments, i, partial, seg.setup)
+			p.prepareSegmentPartial(mig, segments, i, partial, seg.setup)
 		} else {
 			// for full materializations, the last domain should report when it's done
 			if i == len(segments)-1 {
@@ -242,22 +338,17 @@ func (p *Plan) prepareReplayPath(mig Migration, tag boostpb.Tag, pi int, path []
 			// to tell it about this replay path so that it knows
 			// what path to forward replay packets on.
 			n := g.Value(seg.path[len(seg.path)-1].Node)
-
-			var pkt boostpb.Packet
-			pkt.Inner = &boostpb.Packet_UpdateEgress_{
-				UpdateEgress: &boostpb.Packet_UpdateEgress{
+			if n.IsEgress() {
+				pkt := &packet.UpdateEgressRequest{
 					Node:  n.LocalAddr(),
 					NewTx: nil,
-					NewTag: &boostpb.Packet_UpdateEgress_Tag{
+					NewTag: &packet.UpdateEgressRequest_Tag{
 						Tag:  tag,
 						Node: segments[i+1].path[0].Node,
 					},
-				},
-			}
-
-			if n.IsEgress() {
-				if err := mig.SendPacket(seg.domain, &pkt); err != nil {
-					return boostpb.InvalidDomainIndex, nil, err
+				}
+				if err := mig.Send(seg.domain).UpdateEgress(pkt); err != nil {
+					return dataflow.InvalidDomainIdx, nil, err
 				}
 			} else {
 				if !n.IsSharder() {
@@ -266,36 +357,31 @@ func (p *Plan) prepareReplayPath(mig Migration, tag boostpb.Tag, pi int, path []
 			}
 		}
 
-		var pkt boostpb.SyncPacket
-		pkt.Inner = &boostpb.SyncPacket_SetupReplayPath_{SetupReplayPath: seg.setup}
-		if err := mig.SendPacketSync(seg.domain, &pkt); err != nil {
-			return boostpb.InvalidDomainIndex, nil, err
+		if err := mig.Send(seg.domain).SetupReplayPath(seg.setup); err != nil {
+			return dataflow.InvalidDomainIdx, nil, err
 		}
 	}
 
 	return lastDomain, pending, nil
 }
 
-func (p *Plan) prepareSegmentPartial(g *graph.Graph[*flownode.Node], segments []*pathSegment, i int, partial []int, setup *boostpb.SyncPacket_SetupReplayPath) {
+func (p *Plan) prepareSegmentPartial(mig Migration, segments []*pathSegment, i int, partial []int, setup *packet.SetupReplayPathRequest) {
+	g := mig.Graph()
+
 	// for partial materializations, nodes need to know how to trigger replays
 	switch {
 	case len(segments) == 1:
-		setup.Trigger = &boostpb.TriggerEndpoint{
-			Trigger: &boostpb.TriggerEndpoint_Local_{
-				Local: &boostpb.TriggerEndpoint_Local{
-					Cols: partial,
-				},
-			},
+		setup.Trigger = &packet.TriggerEndpoint{
+			Kind: packet.TriggerEndpoint_LOCAL,
+			Cols: partial,
 		}
 	case i == 0:
 		// first domain needs to be told about partial replay trigger
-		setup.Trigger = &boostpb.TriggerEndpoint{
-			Trigger: &boostpb.TriggerEndpoint_Start_{
-				Start: &boostpb.TriggerEndpoint_Start{
-					Cols: partial,
-				},
-			},
+		setup.Trigger = &packet.TriggerEndpoint{
+			Kind: packet.TriggerEndpoint_START,
+			Cols: partial,
 		}
+
 	case i == len(segments)-1:
 		// if the source is sharded, we need to know whether we should ask all
 		// the shards, or just one. if the replay key is the same as the
@@ -339,7 +425,7 @@ func (p *Plan) prepareSegmentPartial(g *graph.Graph[*flownode.Node], segments []
 			}
 		}
 
-		var selection replay.SourceSelection
+		var selection *replay.SourceSelection
 
 		if lookupKeyToShard != nil {
 			// if we are not sharded, all is okay.
@@ -360,10 +446,10 @@ func (p *Plan) prepareSegmentPartial(g *graph.Graph[*flownode.Node], segments []
 			//    aliased in dst. because of this, it should be the case that
 			//    KeyShard == SameShard; if that were not the case, the value
 			//    in dst.x should never have reached dst in the first place.
-			selection = replay.SourceSelection{
-				Kind:        replay.SourceSelectionKeyShard,
-				NShards:     shards,
-				KeyItoShard: *lookupKeyToShard,
+			selection = &replay.SourceSelection{
+				Kind:          replay.SourceSelectionKeyShard,
+				NumShards:     shards,
+				KeyIdxToShard: *lookupKeyToShard,
 			}
 		} else {
 			// replay key != sharding key
@@ -387,16 +473,17 @@ func (p *Plan) prepareSegmentPartial(g *graph.Graph[*flownode.Node], segments []
 			}
 
 			if srcSharding.IsNone() || findMergers(segments) {
-				selection = replay.SourceSelection{Kind: replay.SourceSelectionAllShards, NShards: shards}
+				selection = &replay.SourceSelection{Kind: replay.SourceSelectionAllShards, NumShards: shards}
 			} else {
-				selection = replay.SourceSelection{Kind: replay.SourceSelectionSameShard}
+				selection = &replay.SourceSelection{Kind: replay.SourceSelectionSameShard}
 			}
 		}
 
-		setup.Trigger = &boostpb.TriggerEndpoint{Trigger: &boostpb.TriggerEndpoint_End_{End: &boostpb.TriggerEndpoint_End{
-			Selection: selection.ToProto(),
-			Domain:    segments[0].domain,
-		}}}
+		setup.Trigger = &packet.TriggerEndpoint{
+			Kind:            packet.TriggerEndpoint_END,
+			SourceSelection: selection,
+			Domain:          segments[0].domain,
+		}
 	}
 }
 
@@ -493,7 +580,7 @@ func (p *Plan) add(mig Migration, indexOn []int) error {
 
 	// find all paths through each union with the same suffix
 
-	var assignedTags []boostpb.Tag
+	var assignedTags []dataflow.Tag
 	for range paths {
 		assignedTags = append(assignedTags, p.m.nextTag())
 	}
@@ -527,7 +614,7 @@ func (p *Plan) add(mig Migration, indexOn []int) error {
 	}
 
 	// map each suffix-sharing group of paths at each union to one tag at that union
-	pathGroupings := make(map[pathGrouping]boostpb.Tag)
+	pathGroupings := make(map[pathGrouping]dataflow.Tag)
 	unionSuffixes.Scan(func(s *pathSuffix) bool {
 		// at this union, all the given paths share a suffix
 		// make all of the paths use a single identifier from that point on
@@ -542,9 +629,12 @@ func (p *Plan) add(mig Migration, indexOn []int) error {
 	for pi, path := range paths {
 		tag := assignedTags[pi]
 
-		lastDomain, pending, err := p.prepareReplayPath(mig, tag, pi, path, pathGroupings)
+		lastDomain, pending, err := p.prepareFastReplayPath(mig, tag, path)
 		if err != nil {
-			return err
+			lastDomain, pending, err = p.prepareReplayPath(mig, tag, pi, path, pathGroupings)
+			if err != nil {
+				return err
+			}
 		}
 
 		if !p.partial {
@@ -555,7 +645,6 @@ func (p *Plan) add(mig Migration, indexOn []int) error {
 		}
 		tags = append(tags, domainTag{tag, lastDomain})
 	}
-
 	p.tags[indexOnKey] = append(p.tags[indexOnKey], tags...)
 	return nil
 }
@@ -564,7 +653,7 @@ func (p *Plan) finalize(mig Migration) ([]pendingReplay, error) {
 	g := mig.Graph()
 	node := g.Value(p.node)
 
-	p.state = new(boostpb.Packet_PrepareState)
+	p.state = new(packet.PrepareStateRequest)
 	p.state.Node = node.LocalAddr()
 
 	if r := node.AsReader(); r != nil {
@@ -576,18 +665,18 @@ func (p *Plan) finalize(mig Migration) ([]pendingReplay, error) {
 			lastDomain := node.Domain()
 			numShards := mig.DomainShards(lastDomain)
 
-			p.state.State = &boostpb.Packet_PrepareState_PartialGlobal_{PartialGlobal: &boostpb.Packet_PrepareState_PartialGlobal{
+			p.state.State = &packet.PrepareStateRequest_PartialGlobal_{PartialGlobal: &packet.PrepareStateRequest_PartialGlobal{
 				Gid:  p.node,
 				Cols: len(node.Fields()),
 				Key:  r.Key(),
-				TriggerDomain: &boostpb.Packet_PrepareState_PartialGlobal_TriggerDomain{
+				TriggerDomain: &packet.PrepareStateRequest_PartialGlobal_TriggerDomain{
 					Domain: lastDomain,
 					Shards: numShards,
 				},
 			},
 			}
 		} else {
-			p.state.State = &boostpb.Packet_PrepareState_Global_{Global: &boostpb.Packet_PrepareState_Global{
+			p.state.State = &packet.PrepareStateRequest_Global_{Global: &packet.PrepareStateRequest_Global{
 				Gid:  p.node,
 				Cols: len(node.Fields()),
 				Key:  r.Key(),
@@ -595,31 +684,26 @@ func (p *Plan) finalize(mig Migration) ([]pendingReplay, error) {
 		}
 	} else {
 		if p.partial {
-			local := &boostpb.Packet_PrepareState_PartialLocal{}
+			local := &packet.PrepareStateRequest_PartialLocal{}
 			for k, paths := range p.tags {
-				var tags []boostpb.Tag
+				var tags []dataflow.Tag
 				for _, dt := range paths {
 					tags = append(tags, dt.tag)
 				}
-				local.Index = append(local.Index, &boostpb.Packet_PrepareState_PartialLocal_Index{
-					Key:  k.ToSlice(),
-					Tags: tags,
-				})
+				local.Index = append(local.Index, p.m.buildColumnIndex(g, p.node, k.ToSlice(), tags))
 			}
-			p.state.State = &boostpb.Packet_PrepareState_PartialLocal_{PartialLocal: local}
+
+			p.state.State = &packet.PrepareStateRequest_PartialLocal_{PartialLocal: local}
 		} else {
-			local := &boostpb.Packet_PrepareState_IndexedLocal{}
+			local := &packet.PrepareStateRequest_IndexedLocal{}
 			for k := range p.tags {
-				local.Index = append(local.Index, &boostpb.Packet_PrepareState_IndexedLocal_Index{
-					Key: k.ToSlice(),
-				})
+				local.Index = append(local.Index, p.m.buildColumnIndex(g, p.node, k.ToSlice(), nil))
 			}
-			p.state.State = &boostpb.Packet_PrepareState_IndexedLocal_{IndexedLocal: local}
+			p.state.State = &packet.PrepareStateRequest_IndexedLocal_{IndexedLocal: local}
 		}
 	}
 
-	pkt := &boostpb.Packet{Inner: &boostpb.Packet_PrepareState_{PrepareState: p.state}}
-	if err := mig.SendPacket(node.Domain(), pkt); err != nil {
+	if err := mig.Send(node.Domain()).PrepareState(p.state); err != nil {
 		return nil, err
 	}
 
@@ -713,6 +797,6 @@ func newMaterializationPlan(m *Materialization, node graph.NodeIdx) *Plan {
 		partial: m.partial[node],
 
 		tags:  make(map[common.Columns][]domainTag),
-		paths: make(map[boostpb.Tag][]*pathSegment),
+		paths: make(map[dataflow.Tag][]*pathSegment),
 	}
 }

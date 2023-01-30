@@ -10,12 +10,13 @@ import (
 	"golang.org/x/sync/errgroup"
 	"storj.io/drpc"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/boostrpc"
+	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/common/metrics"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -36,12 +37,12 @@ type View struct {
 	schema    []*querypb.Field
 	keySchema []*querypb.Field
 	addrs     []string
-	shards    []boostpb.DRPCReaderClient
+	shards    []service.DRPCReaderClient
 
-	topkOrder []boostpb.OrderedColumn
+	topkOrder []flownode.OrderedColumn
 	topkLimit int
 
-	shardKeyType boostpb.Type
+	shardKeyType sql.Type
 	metrics      *scopedMetrics
 }
 
@@ -55,7 +56,7 @@ func (v *View) addShards(shards []string, rpcs *common.SyncMap[string, drpc.Conn
 		}
 
 		v.addrs = append(v.addrs, addr)
-		v.shards = append(v.shards, boostpb.NewDRPCReaderClient(conn))
+		v.shards = append(v.shards, service.NewDRPCReaderClient(conn))
 	}
 	return nil
 }
@@ -72,10 +73,10 @@ func NewViewClientFromProto(pb *vtboostpb.Materialization_ViewDescriptor, rpcs *
 		if len(pb.KeySchema) != 1 {
 			return nil, fmt.Errorf("sharded view with composite primary key is unsupported")
 		}
-		v.shardKeyType = boostpb.TypeFromField(pb.KeySchema[0])
+		v.shardKeyType = sql.TypeFromField(pb.KeySchema[0])
 	}
 	for i, col := range pb.TopkOrderCols {
-		v.topkOrder = append(v.topkOrder, boostpb.OrderedColumn{
+		v.topkOrder = append(v.topkOrder, flownode.OrderedColumn{
 			Col:  int(col),
 			Desc: pb.TopkOrderDesc[i],
 		})
@@ -110,7 +111,7 @@ func (v *View) LookupByBindVar(ctx context.Context, key []*querypb.BindVariable,
 		}
 	}
 
-	keypb := boostpb.NewRowBuilder(len(key))
+	keypb := sql.NewRowBuilder(len(key))
 	for _, bvar := range key {
 		v, _ := sqltypes.BindVariableToValue(bvar)
 		keypb.AddVitess(v)
@@ -120,10 +121,10 @@ func (v *View) LookupByBindVar(ctx context.Context, key []*querypb.BindVariable,
 
 func (v *View) multiLookupForTuple(ctx context.Context, tuplePosition int, key []*querypb.BindVariable, block bool) (*sqltypes.Result, error) {
 	queryCount := len(key[tuplePosition].Values)
-	keypbs := make([]boostpb.Row, 0, queryCount)
+	keypbs := make([]sql.Row, 0, queryCount)
 
 	for q := 0; q < queryCount; q++ {
-		keypb := boostpb.NewRowBuilder(len(key))
+		keypb := sql.NewRowBuilder(len(key))
 
 		for i, bvar := range key {
 			var val sqltypes.Value
@@ -149,12 +150,16 @@ func (v *View) multiLookupForTuple(ctx context.Context, tuplePosition int, key [
 }
 
 func (v *View) Lookup(ctx context.Context, key []sqltypes.Value, block bool) (*sqltypes.Result, error) {
+	if len(key) != len(v.keySchema) {
+		return nil, fmt.Errorf("expected %d keys, got %d", len(v.keySchema), len(key))
+	}
+
 	for i, k := range key {
 		if err := v.canCoerce(k.Type(), i); err != nil {
 			return nil, err
 		}
 	}
-	return v.lookup(ctx, boostpb.RowFromVitess(key), block)
+	return v.lookup(ctx, sql.RowFromVitess(key), block)
 }
 
 func (v *View) canCoerce(from querypb.Type, fieldPos int) error {
@@ -169,8 +174,8 @@ func (v *View) canCoerce(from querypb.Type, fieldPos int) error {
 	return nil
 }
 
-func (v *View) lookup(ctx context.Context, key boostpb.Row, block bool) (*sqltypes.Result, error) {
-	request := &boostpb.ViewReadRequest{
+func (v *View) lookup(ctx context.Context, key sql.Row, block bool) (*sqltypes.Result, error) {
+	request := &service.ViewReadRequest{
 		TargetNode:  v.node,
 		TargetShard: 0,
 		Block:       block,
@@ -204,9 +209,9 @@ func (v *View) LookupByFields(ctx context.Context, keyByName map[string]sqltypes
 	return v.Lookup(ctx, plainkey, block)
 }
 
-func (v *View) lookupManyAndMerge(ctx context.Context, keys []boostpb.Row, block bool) (*sqltypes.Result, error) {
+func (v *View) lookupManyAndMerge(ctx context.Context, keys []sql.Row, block bool) (*sqltypes.Result, error) {
 	if len(v.shards) == 1 {
-		request := &boostpb.ViewReadManyRequest{
+		request := &service.ViewReadManyRequest{
 			TargetNode:  v.node,
 			TargetShard: 0,
 			Block:       block,
@@ -223,14 +228,14 @@ func (v *View) lookupManyAndMerge(ctx context.Context, keys []boostpb.Row, block
 		return v.fixResult(resp.Rows), nil
 	}
 
-	shardKeys := make([][]boostpb.Row, len(v.shards))
+	shardKeys := make([][]sql.Row, len(v.shards))
 	var hasher vthash.Hasher
 	for _, key := range keys {
 		shardn := key.ShardValue(&hasher, 0, v.shardKeyType, uint(len(v.shards)))
 		shardKeys[shardn] = append(shardKeys[shardn], key)
 	}
 
-	var mergedResults []boostpb.Row
+	var mergedResults []sql.Row
 	var wg errgroup.Group
 	var mu sync.Mutex
 
@@ -239,7 +244,7 @@ func (v *View) lookupManyAndMerge(ctx context.Context, keys []boostpb.Row, block
 			continue
 		}
 
-		request := &boostpb.ViewReadManyRequest{
+		request := &service.ViewReadManyRequest{
 			TargetNode:  v.node,
 			TargetShard: uint(shardi),
 			Block:       block,
@@ -268,13 +273,13 @@ func (v *View) lookupManyAndMerge(ctx context.Context, keys []boostpb.Row, block
 	return v.fixResult(mergedResults), nil
 }
 
-func (v *View) fixResult(rows []boostpb.Row) *sqltypes.Result {
+func (v *View) fixResult(rows []sql.Row) *sqltypes.Result {
 	rr := &sqltypes.Result{
 		Fields: v.schema,
 	}
 	if v.topkOrder != nil {
 		order := flownode.Order(v.topkOrder)
-		slices.SortFunc(rows, func(a, b boostpb.Row) bool {
+		slices.SortFunc(rows, func(a, b sql.Row) bool {
 			return order.Cmp(a, b) < 0
 		})
 		for _, r := range rows[:v.topkLimit] {

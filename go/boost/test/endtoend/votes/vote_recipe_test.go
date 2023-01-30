@@ -43,8 +43,8 @@ func TestEndtoendVoteRecipeWithExternalBase(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	awvc.Lookup(1).Expect([]sqltypes.Row{{sqltypes.NewInt64(1), sqltypes.NewVarChar("Article 1"), sqltypes.NewInt64(votesCount / articleCount)}})
-	awvc.Lookup(2).Expect([]sqltypes.Row{{sqltypes.NewInt64(2), sqltypes.NewVarChar("Article 2"), sqltypes.NewInt64(votesCount / articleCount)}})
+	awvc.Lookup(1).Expect(`[[INT64(1) VARCHAR("Article 1") INT64(10)]]`)
+	awvc.Lookup(2).Expect(`[[INT64(2) VARCHAR("Article 2") INT64(10)]]`)
 
 	tt.ExecuteFetch("SET @@boost_cached_queries = false")
 
@@ -95,7 +95,7 @@ func TestEndtoendVoteRecipeRemoval(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	rs = tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)
@@ -111,7 +111,7 @@ func TestEndtoendVoteRecipeRemoval(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	rs = tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)

@@ -11,10 +11,11 @@ import (
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
 
+	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/vt/discovery"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/server/controller"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/server/worker"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	"vitess.io/vitess/go/cache"
@@ -39,8 +40,8 @@ type Server struct {
 	cleanup func()
 }
 
-func (s *Server) StartLeadershipCampaign(ctx context.Context, state *vtboost.ControllerState) {
-	s.Controller.StartLeaderCampaign(ctx, state)
+func (s *Server) StartLeadershipCampaign(ctx context.Context, state *vtboost.ControllerState) error {
+	return s.Controller.StartLeaderCampaign(ctx, state)
 }
 
 func (s *Server) NewLeader(state *vtboost.ControllerState) {
@@ -55,9 +56,9 @@ func (s *Server) Stop() {
 	}
 }
 
-func NewBoostInstance(log *zap.Logger, ts *topo.Server, tmc toposerver.TabletManager, config *boostpb.Config, clusterID string) *Server {
-	if config == nil {
-		config = boostpb.DefaultConfig()
+func NewBoostInstance(log *zap.Logger, ts *topo.Server, tmc toposerver.TabletManager, cfg *config.Config, clusterID string) *Server {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
 	}
 
 	tp := toposerver.NewTopoServer(log, ts, tmc, clusterID)
@@ -65,8 +66,8 @@ func NewBoostInstance(log *zap.Logger, ts *topo.Server, tmc toposerver.TabletMan
 
 	server := &Server{
 		Topo:       tp,
-		Controller: controller.NewServer(log, instanceID, tp, config),
-		Worker:     worker.NewServer(log, instanceID, tp, config),
+		Controller: controller.NewServer(log, instanceID, tp, cfg),
+		Worker:     worker.NewServer(log, instanceID, tp, cfg),
 	}
 	return server
 }
@@ -168,7 +169,7 @@ func (s *Server) Serve(ctx context.Context, listen net.Listener) error {
 	if err := vtboost.DRPCRegisterControllerService(m, s.Controller); err != nil {
 		return err
 	}
-	if err := boostpb.DRPCRegisterWorkerService(m, s.Worker); err != nil {
+	if err := service.DRPCRegisterWorkerService(m, s.Worker); err != nil {
 		return err
 	}
 

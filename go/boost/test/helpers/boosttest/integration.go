@@ -14,17 +14,20 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/btree"
 	"go.uber.org/zap"
+	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
 	"storj.io/drpc"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/boostrpc"
+	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/common/graphviz"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/domain"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/server"
 	"vitess.io/vitess/go/boost/server/controller"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/server/controller/materialization"
 	"vitess.io/vitess/go/boost/server/worker"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testexecutor"
@@ -58,7 +61,7 @@ type Cluster struct {
 	cachedConns   *common.SyncMap[string, drpc.Conn]
 	cachedDomains *common.SyncMap[string, boostrpc.DomainClient]
 
-	Config        *boostpb.Config
+	Config        *config.Config
 	Instances     uint
 	UUID          string
 	RecipeVersion int64
@@ -71,6 +74,8 @@ type Cluster struct {
 	cellsToWatch     string
 	schemaChangeUser string
 	defaultRecipe    *testrecipe.Recipe
+	ignore           []string
+	seed             func(*Cluster)
 }
 
 type Option func(c *Cluster)
@@ -93,9 +98,9 @@ func WithMemoryTopo() Option {
 	}
 }
 
-func WithUpqueryMode(mode boostpb.UpqueryMode) Option {
+func WithCustomBoostConfig(configure func(cfg *config.Config)) Option {
 	return func(c *Cluster) {
-		c.Config.DomainConfig.UpqueryMode = mode
+		configure(c.Config)
 	}
 }
 
@@ -129,12 +134,12 @@ func WithFakeExecutor(executor *testexecutor.Executor) Option {
 	}
 }
 
-func WithFakeExecutorLatency(latency time.Duration) Option {
+func WithFakeExecutorOptions(configure func(options *testexecutor.Options)) Option {
 	return func(c *Cluster) {
 		if c.Executor == nil {
 			c.t.Fatalf("no FakeExecutor configured")
 		}
-		c.Executor.SetVStreamLatency(latency)
+		c.Executor.Configure(configure)
 	}
 }
 
@@ -162,6 +167,18 @@ func WithClusterUUID(uuid string) Option {
 	}
 }
 
+func Ignore(query ...string) Option {
+	return func(c *Cluster) {
+		c.ignore = append(c.ignore, query...)
+	}
+}
+
+func WithSeed(fn func(g *Cluster)) Option {
+	return func(c *Cluster) {
+		c.seed = fn
+	}
+}
+
 func New(t testing.TB, options ...Option) *Cluster {
 	var cluster = &Cluster{
 		t:             t,
@@ -170,10 +187,10 @@ func New(t testing.TB, options ...Option) *Cluster {
 		localCell:     DefaultLocalCell,
 
 		Instances: 1,
-		Config:    boostpb.DefaultConfig(),
+		Config:    config.DefaultConfig(),
 		UUID:      uuid.New().String(),
 	}
-	cluster.Config.Reuse = boostpb.ReuseType_NO_REUSE
+	cluster.Config.Reuse = config.ReuseType_NO_REUSE
 
 	for _, opt := range options {
 		opt(cluster)
@@ -196,7 +213,7 @@ func New(t testing.TB, options ...Option) *Cluster {
 	}
 
 	if cluster.Instances == 0 {
-		panic("need at least one node")
+		t.Fatal("need at least one node")
 	}
 
 	for n := uint(0); n < cluster.Instances; n++ {
@@ -281,19 +298,19 @@ func (c *Cluster) TestExecute(sqlwithparams string, args ...any) *sqltypes.Resul
 
 func (c *Cluster) checkDomainSerialization() {
 	ctrl := c.Controller()
-	ctrl.Inner().BuildDomain = func(idx boostpb.DomainIndex, shard, numShards uint, nodes *flownode.Map, config *boostpb.DomainConfig) (*boostpb.DomainBuilder, error) {
-		dom, err := domain.ToProto(idx, shard, numShards, nodes, config)
+	ctrl.Inner().BuildDomain = func(idx dataflow.DomainIdx, shard, numShards uint, nodes *flownode.Map, cfg *config.Domain) (*service.DomainBuilder, error) {
+		dom, err := domain.ToProto(idx, shard, numShards, nodes, cfg)
 		if err != nil {
 			return nil, err
 		}
 
-		converted := flownode.NewMapFromProto(dom.Nodes)
+		converted := flownode.MapFromProto(dom.Nodes)
 		options := []cmp.Option{
 			// btree.Map: compare keys and values directly, not the maps themselves
-			cmp.Comparer(func(a, b btree.Map[boostpb.LocalNodeIndex, []int]) bool {
+			cmp.Comparer(func(a, b btree.Map[dataflow.LocalNodeIdx, []int]) bool {
 				return reflect.DeepEqual(a.Keys(), b.Keys()) && reflect.DeepEqual(a.Values(), b.Values())
 			}),
-			cmp.Comparer(func(a, b btree.Map[boostpb.LocalNodeIndex, int]) bool {
+			cmp.Comparer(func(a, b btree.Map[dataflow.LocalNodeIdx, int]) bool {
 				return reflect.DeepEqual(a.Keys(), b.Keys()) && reflect.DeepEqual(a.Values(), b.Values())
 			}),
 			// btree.BTreeG: compare items directly, not the trees themselves
@@ -344,7 +361,7 @@ func (c *Cluster) FindGraphNodes(check func(n *flownode.Node) bool) []*flownode.
 	var found []*flownode.Node
 	for _, srv := range c.servers {
 		domains := srv.Worker.ActiveDomains()
-		domains.ForEach(func(_ boostpb.DomainAddr, dom *domain.Domain) {
+		domains.ForEach(func(_ dataflow.DomainAddr, dom *domain.Domain) {
 			for _, n := range dom.Nodes() {
 				if check(n) {
 					found = append(found, n)
@@ -386,58 +403,16 @@ func (c *Cluster) ViewGraphviz() {
 	graphviz.RenderGraphviz(c.t, gz.Dot)
 }
 
-type RowMismatchError struct {
-	err       error
-	want, got []sqltypes.Row
-}
-
-func (e *RowMismatchError) Error() string {
-	return fmt.Sprintf("results differ: %v\n\twant: %v\n\tgot:  %v", e.err, e.want, e.got)
-}
-
-func RowsEquals(want, got []sqltypes.Row) error {
-	if len(want) != len(got) {
-		return &RowMismatchError{
-			err:  fmt.Errorf("expected %d rows in result, got %d", len(want), len(got)),
-			want: want,
-			got:  got,
-		}
-	}
-
-	var matched = make([]bool, len(want))
-	for _, aa := range want {
-		var ok bool
-		for i, bb := range got {
-			if matched[i] {
-				continue
-			}
-			if reflect.DeepEqual(aa, bb) {
-				matched[i] = true
-				ok = true
-			}
-		}
-		if !ok {
-			return &RowMismatchError{
-				err:  fmt.Errorf("row %v is missing from result", aa),
-				want: want,
-				got:  got,
-			}
-		}
-	}
-	for _, m := range matched {
-		if !m {
-			panic("did not match properly?")
-		}
-	}
-	return nil
-}
-
 type TestView struct {
 	View *topowatcher.View
 	t    testing.TB
 }
 
 func (tv *TestView) LookupByFields(fields map[string]sqltypes.Value) *sqltypes.Result {
+	if tv == nil {
+		return nil
+	}
+
 	tv.t.Helper()
 
 	res, err := tv.View.LookupByFields(context.Background(), fields, true)
@@ -451,6 +426,10 @@ type Lookup struct {
 }
 
 func (tv *TestView) LookupBvar(govals ...any) *Lookup {
+	if tv == nil {
+		return nil
+	}
+
 	tv.t.Helper()
 
 	var bvar []*querypb.BindVariable
@@ -471,6 +450,10 @@ func (tv *TestView) LookupBvar(govals ...any) *Lookup {
 }
 
 func (tv *TestView) Lookup(govals ...any) *Lookup {
+	if tv == nil {
+		return nil
+	}
+
 	tv.t.Helper()
 
 	var values []sqltypes.Value
@@ -515,14 +498,39 @@ func (tv *TestView) Lookup(govals ...any) *Lookup {
 	}
 }
 
-func (l *Lookup) Expect(expected []sqltypes.Row) *sqltypes.Result {
+func (l *Lookup) ExpectRow(expected []sqltypes.Row) *sqltypes.Result {
+	if l == nil {
+		return nil
+	}
+
 	l.t.Helper()
 	return l.expect(func(result *sqltypes.Result) error {
 		return RowsEquals(expected, result.Rows)
 	})
 }
 
-func (l *Lookup) ExpectStr(expected string) *sqltypes.Result {
+func (l *Lookup) Expect(expected string) *sqltypes.Result {
+	if l == nil {
+		return nil
+	}
+
+	l.t.Helper()
+
+	expectedRows, err := ParseRows(expected)
+	if err != nil {
+		l.t.Fatalf("malformed row string: %s (%v)", expected, err)
+	}
+
+	return l.expect(func(result *sqltypes.Result) error {
+		return RowsEquals(expectedRows, result.Rows)
+	})
+}
+
+func (l *Lookup) ExpectSorted(expected string) *sqltypes.Result {
+	if l == nil {
+		return nil
+	}
+
 	l.t.Helper()
 	return l.expect(func(result *sqltypes.Result) error {
 		resultStr := fmt.Sprintf("%v", result.Rows)
@@ -533,19 +541,11 @@ func (l *Lookup) ExpectStr(expected string) *sqltypes.Result {
 	})
 }
 
-func (l *Lookup) ExpectSorted(expected []sqltypes.Row) *sqltypes.Result {
-	l.t.Helper()
-	return l.expect(func(result *sqltypes.Result) error {
-		expectedS := fmt.Sprintf("%v", expected)
-		resultS := fmt.Sprintf("%v", result.Rows)
-		if expectedS != resultS {
-			return fmt.Errorf("mismatch in sorted rows;\nwant: %s\ngot:  %s", expectedS, resultS)
-		}
-		return nil
-	})
-}
-
 func (l *Lookup) ExpectLen(expected int) *sqltypes.Result {
+	if l == nil {
+		return nil
+	}
+
 	l.t.Helper()
 	return l.expect(func(result *sqltypes.Result) error {
 		if len(result.Rows) != expected {
@@ -575,6 +575,10 @@ func (l *Lookup) expect(check func(result *sqltypes.Result) error) *sqltypes.Res
 }
 
 func (l *Lookup) ExpectError() {
+	if l == nil {
+		return
+	}
+
 	l.t.Helper()
 
 	_, err := l.try()
@@ -584,6 +588,10 @@ func (l *Lookup) ExpectError() {
 }
 
 func (l *Lookup) ExpectErrorEventually() {
+	if l == nil {
+		return
+	}
+
 	l.t.Helper()
 
 	for i := 0; i < 100; i++ {
@@ -592,35 +600,10 @@ func (l *Lookup) ExpectErrorEventually() {
 			l.t.Logf("failed after %d attempts: %v", i, err)
 			return
 		}
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	l.t.Fatalf("expected lookup to fail")
-}
-
-type TestTable struct {
-	Table *worker.Table
-	t     testing.TB
-}
-
-func (tt *TestTable) Insert(row sqltypes.Row) {
-	tt.t.Helper()
-
-	err := tt.Table.Insert(context.Background(), row)
-	require.NoError(tt.t, err)
-}
-
-func (tt *TestTable) BatchInsert(rows []sqltypes.Row) {
-	tt.t.Helper()
-
-	err := tt.Table.BatchInsert(context.Background(), rows)
-	require.NoError(tt.t, err)
-}
-
-func (tt *TestTable) Delete(key []sqltypes.Value) {
-	tt.t.Helper()
-
-	err := tt.Table.Delete(context.Background(), key)
-	require.NoError(tt.t, err)
 }
 
 func (c *Cluster) FindView(name string) *TestView {
@@ -638,56 +621,39 @@ func (c *Cluster) FindView(name string) *TestView {
 
 func (c *Cluster) View(name string) *TestView {
 	view := c.FindView(name)
-	if view == nil {
+	if view == nil && !slices.Contains(c.ignore, name) {
 		c.t.Fatalf("missing View in cluster: %q", name)
 	}
 	return view
 }
 
-func (c *Cluster) Table(name string) *TestTable {
-	c.t.Helper()
-
-	var descriptor *boostpb.TableDescriptor
-	var err error
-
-	if c.defaultRecipe != nil {
-		for ks := range c.defaultRecipe.DDL {
-			descriptor, err = c.Controller().GetTableDescriptor_(ks, name)
-			if err == nil {
-				break
-			}
-		}
-	} else {
-		descriptor, err = c.Controller().GetTableDescriptor_("", name)
+func (c *Cluster) ApplyRecipe(recipe *testrecipe.Recipe) {
+	if err := c.TryApplyRecipe(recipe); err != nil {
+		c.t.Fatalf("failed to PutRecipeWithOptions(): %v", err)
 	}
-	require.NoError(c.t, err)
-
-	table, err := worker.NewTableClientFromProto(descriptor, c.cachedDomains)
-	require.NoError(c.t, err)
-
-	return &TestTable{Table: table, t: c.t}
 }
 
-func (c *Cluster) ApplyRecipeEx(recipe *testrecipe.Recipe, mysql, boost bool) {
+func (c *Cluster) TryApplyRecipe(recipe *testrecipe.Recipe) error {
 	recipe.Update(c.t)
 
-	if mysql && c.Executor != nil && c.RecipeVersion == 0 {
+	if c.Executor != nil && c.RecipeVersion == 0 {
 		c.Executor.TestApplyRecipe(recipe)
-	}
-	if boost {
-		c.RecipeVersion++
-		recipepb := &vtboost.Recipe{
-			Queries: recipe.Queries,
-			Version: c.RecipeVersion,
-		}
-		if err := c.Controller().PutRecipeWithOptions(context.Background(), recipepb, recipe.SchemaInformation(), nil); err != nil {
-			c.t.Fatalf("failed to PutRecipeWithOptions(): %v", err)
-		}
-	}
-}
 
-func (c *Cluster) ApplyRecipe(recipe *testrecipe.Recipe) {
-	c.ApplyRecipeEx(recipe, true, true)
+		if c.seed != nil {
+			c.seed(c)
+		}
+	}
+
+	c.RecipeVersion++
+	recipepb := &vtboost.Recipe{Version: c.RecipeVersion}
+
+	for _, q := range recipe.Queries {
+		if !slices.Contains(c.ignore, q.PublicId) {
+			recipepb.Queries = append(recipepb.Queries, q)
+		}
+	}
+
+	return c.Controller().PutRecipeWithOptions(context.Background(), recipepb, recipe.SchemaInformation())
 }
 
 func (c *Cluster) AlterRecipe(recipe *testrecipe.Recipe, ddl string) {

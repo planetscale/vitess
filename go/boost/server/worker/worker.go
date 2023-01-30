@@ -14,29 +14,33 @@ import (
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/boostrpc"
+	"vitess.io/vitess/go/boost/boostrpc/packet"
+	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/boost/common"
-	"vitess.io/vitess/go/boost/dataflow/backlog"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/domain"
+	"vitess.io/vitess/go/boost/dataflow/view"
+	"vitess.io/vitess/go/boost/server/controller/config"
+	"vitess.io/vitess/go/boost/sql"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
 type Worker struct {
-	boostpb.DRPCReaderUnimplementedServer
+	service.DRPCReaderUnimplementedServer
 
 	log      *zap.Logger
 	executor domain.Executor
 	topo     *toposerver.Server
 	readers  *domain.Readers
 	coord    *boostrpc.ChannelCoordinator
-	domains  *common.SyncMap[boostpb.DomainAddr, *domain.Domain]
+	domains  *common.SyncMap[dataflow.DomainAddr, *domain.Domain]
 	stream   *EventProcessor
 	memstats *common.MemoryStats
 
-	epoch boostpb.Epoch
+	epoch service.Epoch
 	uuid  uuid.UUID
 	stats *workerStats
 
@@ -53,7 +57,7 @@ func (w *Worker) Stop() {
 	w.cancel()
 }
 
-func (w *Worker) ViewRead(ctx context.Context, req *boostpb.ViewReadRequest) (*boostpb.ViewReadResponse, error) {
+func (w *Worker) ViewRead(ctx context.Context, req *service.ViewReadRequest) (*service.ViewReadResponse, error) {
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(ctx, w.readTimeout)
 	defer cancel()
@@ -70,30 +74,30 @@ func (w *Worker) ViewRead(ctx context.Context, req *boostpb.ViewReadRequest) (*b
 
 	var (
 		hasher vthash.Hasher
-		rs     []boostpb.Row
+		rs     []sql.Row
 	)
-	ok = backlog.Lookup(reader, &hasher, req.Key, func(rows backlog.Rows) {
+	ok = view.Lookup(reader, &hasher, req.Key, func(rows view.Rows) {
 		rs = rows.Collect(rs)
 	})
 	if ok {
-		return &boostpb.ViewReadResponse{Rows: rs, Hits: 1}, nil
+		return &service.ViewReadResponse{Rows: rs, Hits: 1}, nil
 	}
 
 	if log := w.log.Check(zapcore.DebugLevel, "ViewRead trigger replay"); log != nil {
 		log.Write(req.Key.Zap("key"))
 	}
 
-	reader.Trigger([]boostpb.Row{req.Key})
+	reader.Trigger([]sql.Row{req.Key})
 	if !req.Block {
-		return &boostpb.ViewReadResponse{Hits: 0}, nil
+		return &service.ViewReadResponse{Hits: 0}, nil
 	}
 
 	for ctx.Err() == nil {
-		ok = backlog.BlockingLookup(ctx, reader, &hasher, req.Key, func(rows backlog.Rows) {
+		ok = view.BlockingLookup(ctx, reader, &hasher, req.Key, func(rows view.Rows) {
 			rs = rows.Collect(rs)
 		})
 		if ok {
-			return &boostpb.ViewReadResponse{Rows: rs}, nil
+			return &service.ViewReadResponse{Rows: rs}, nil
 		}
 	}
 
@@ -101,7 +105,7 @@ func (w *Worker) ViewRead(ctx context.Context, req *boostpb.ViewReadRequest) (*b
 	return nil, ctx.Err()
 }
 
-func (w *Worker) ViewReadMany(ctx context.Context, req *boostpb.ViewReadManyRequest) (*boostpb.ViewReadResponse, error) {
+func (w *Worker) ViewReadMany(ctx context.Context, req *service.ViewReadManyRequest) (*service.ViewReadResponse, error) {
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(ctx, w.readTimeout)
 	defer cancel()
@@ -114,15 +118,15 @@ func (w *Worker) ViewReadMany(ctx context.Context, req *boostpb.ViewReadManyRequ
 
 	var (
 		hasher  vthash.Hasher
-		pending []boostpb.Row
-		results boostpb.ViewReadResponse
+		pending []sql.Row
+		results service.ViewReadResponse
 	)
 
 	if log := w.log.Check(zapcore.DebugLevel, "ViewReadMany"); log != nil {
-		log.Write(boostpb.ZapRows("keys", req.Keys))
+		log.Write(sql.ZapRows("keys", req.Keys))
 	}
 
-	pending = backlog.LookupMany(reader, &hasher, req.Keys, func(rows backlog.Rows) {
+	pending = view.LookupMany(reader, &hasher, req.Keys, func(rows view.Rows) {
 		results.Rows = rows.Collect(results.Rows)
 		results.Hits++
 	})
@@ -131,7 +135,7 @@ func (w *Worker) ViewReadMany(ctx context.Context, req *boostpb.ViewReadManyRequ
 	}
 
 	if log := w.log.Check(zapcore.DebugLevel, "ViewReadMany trigger replay"); log != nil {
-		log.Write(boostpb.ZapRows("keys", pending))
+		log.Write(sql.ZapRows("keys", pending))
 	}
 
 	reader.Trigger(pending)
@@ -141,7 +145,7 @@ func (w *Worker) ViewReadMany(ctx context.Context, req *boostpb.ViewReadManyRequ
 
 	for ctx.Err() == nil && len(pending) > 0 {
 		key := pending[len(pending)-1]
-		ok = backlog.BlockingLookup(ctx, reader, &hasher, key, func(rows backlog.Rows) {
+		ok = view.BlockingLookup(ctx, reader, &hasher, key, func(rows view.Rows) {
 			results.Rows = rows.Collect(results.Rows)
 		})
 		if ok {
@@ -156,17 +160,11 @@ func (w *Worker) ViewReadMany(ctx context.Context, req *boostpb.ViewReadManyRequ
 	return nil, ctx.Err()
 }
 
-func (w *Worker) ViewSize(context.Context, *boostpb.ViewSizeRequest) (*boostpb.ViewSizeResponse, error) {
+func (w *Worker) ViewSize(context.Context, *service.ViewSizeRequest) (*service.ViewSizeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ViewSize not implemented")
 }
 
-type domainNopCloser struct {
-	*domain.Domain
-}
-
-func (domainNopCloser) Close() {}
-
-func (w *Worker) PlaceDomain(builder *boostpb.DomainBuilder) (*boostpb.AssignDomainResponse, error) {
+func (w *Worker) PlaceDomain(builder *service.DomainBuilder) (*service.AssignDomainResponse, error) {
 	domainListener, err := net.Listen("tcp", w.domainListenAddr)
 	if err != nil {
 		return nil, err
@@ -177,23 +175,29 @@ func (w *Worker) PlaceDomain(builder *boostpb.DomainBuilder) (*boostpb.AssignDom
 
 	d := domain.FromProto(w.log, builder, w.readers, w.coord, w.executor, w.memstats)
 
+	if err := d.OnDeploy(); err != nil {
+		return nil, err
+	}
+
+	replica := NewReplica(d, w.coord)
+
 	// need to register the domain with the local channel coordinator.
 	// local first to ensure that we don't unnecessarily give away remote for a
 	// local thing if there's a race
-	w.coord.InsertLocal(idx, shard, domainNopCloser{d})
+	w.coord.InsertLocal(idx, shard, replica)
 	w.coord.InsertRemote(idx, shard, domainListener.Addr().String())
 
 	// store the domain itself in our list of domains
-	w.domains.Set(boostpb.DomainAddr{Domain: idx, Shard: shard}, d)
+	w.domains.Set(dataflow.DomainAddr{Domain: idx, Shard: shard}, d)
 
-	replica := NewReplica(d, w.coord)
 	go replica.Reactor(w.ctx)
 
 	go func() {
 		m := drpcmux.New()
-		err := boostpb.DRPCRegisterInnerDomain(m, replica)
+		err := packet.DRPCRegisterDomain(m, replica)
 		if err != nil {
-			panic(err)
+			w.log.Error("packet.DRPCRegisterDomain() failed", zap.Error(err))
+			return
 		}
 
 		if err := drpcserver.New(m).Serve(w.ctx, domainListener); err != nil {
@@ -201,13 +205,13 @@ func (w *Worker) PlaceDomain(builder *boostpb.DomainBuilder) (*boostpb.AssignDom
 		}
 	}()
 
-	return &boostpb.AssignDomainResponse{
+	return &service.AssignDomainResponse{
 		Shard: shard,
 		Addr:  domainListener.Addr().String(),
 	}, nil
 }
 
-func (w *Worker) start(ctx context.Context, globalCfg *boostpb.Config, globalAddress string) error {
+func (w *Worker) start(ctx context.Context, globalCfg *config.Config, globalAddress string) error {
 	w.ctx, w.cancel = context.WithCancel(ctx)
 
 	readerListener, err := net.Listen("tcp", w.readerListenAddr)
@@ -217,7 +221,7 @@ func (w *Worker) start(ctx context.Context, globalCfg *boostpb.Config, globalAdd
 
 	go func() {
 		m := drpcmux.New()
-		err := boostpb.DRPCRegisterReader(m, w)
+		err := service.DRPCRegisterReader(m, w)
 		if err != nil {
 			panic(err)
 		}
@@ -263,6 +267,6 @@ func (w *Worker) start(ctx context.Context, globalCfg *boostpb.Config, globalAdd
 	return nil
 }
 
-func (w *Worker) AssignTables(request *boostpb.AssignStreamRequest) error {
+func (w *Worker) AssignTables(request *service.AssignStreamRequest) error {
 	return w.stream.AssignTables(w.ctx, request.Tables)
 }

@@ -12,6 +12,9 @@ import (
 )
 
 func init() {
+	// enable this flag so `go-mysql-server` results match MySQL's more closely
+	sql.VitessCompat = true
+
 	// Inject a custom `gtid_executed` into the default system variables used by
 	// the in-memory MySQL engine, so we can customize it per-call.
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
@@ -57,6 +60,8 @@ func (gt *GTIDTracker) Log(ctx *sql.Context, log *sql.TransactionLog) error {
 
 		changes = append(changes, rowchange)
 	}
+
+	gt.sequence++
 
 	ts := time.Now()
 	events := make([]*binlogdatapb.VEvent, 3)
@@ -110,7 +115,6 @@ func (gt *GTIDTracker) Log(ctx *sql.Context, log *sql.TransactionLog) error {
 			sub <- events[1:]
 		}
 	}
-	gt.sequence++
 	return nil
 }
 
@@ -133,6 +137,14 @@ func (gt *GTIDTracker) Subscribe(startpos string, sub chan []*binlogdatapb.VEven
 				break
 			}
 		}
+	}
+
+	sub <- []*binlogdatapb.VEvent{
+		{
+			Type:      binlogdatapb.VEventType_HEARTBEAT,
+			Timestamp: time.Now().Unix(),
+			Shard:     gt.shard,
+		},
 	}
 
 	gt.subs[sub] = map[string]struct{}{}

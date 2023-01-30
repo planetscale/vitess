@@ -3,32 +3,32 @@ package boostrpc
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/common"
+	"vitess.io/vitess/go/boost/dataflow"
 )
 
 type ChannelCoordinator struct {
-	locals *common.SyncMap[boostpb.DomainAddr, DomainClient]
-	remote *common.SyncMap[boostpb.DomainAddr, string]
+	locals *common.SyncMap[dataflow.DomainAddr, DomainClient]
+	remote *common.SyncMap[dataflow.DomainAddr, string]
 }
 
 func NewChannelCoordinator() *ChannelCoordinator {
 	return &ChannelCoordinator{
-		locals: common.NewSyncMap[boostpb.DomainAddr, DomainClient](),
-		remote: common.NewSyncMap[boostpb.DomainAddr, string](),
+		locals: common.NewSyncMap[dataflow.DomainAddr, DomainClient](),
+		remote: common.NewSyncMap[dataflow.DomainAddr, string](),
 	}
 }
 
-func (coord *ChannelCoordinator) InsertLocal(dom boostpb.DomainIndex, shard uint, domobj DomainClient) {
-	coord.locals.Set(boostpb.DomainAddr{Domain: dom, Shard: shard}, domobj)
+func (coord *ChannelCoordinator) InsertLocal(dom dataflow.DomainIdx, shard uint, domobj DomainClient) {
+	coord.locals.Set(dataflow.DomainAddr{Domain: dom, Shard: shard}, domobj)
 }
 
-func (coord *ChannelCoordinator) InsertRemote(dom boostpb.DomainIndex, shard uint, addr string) {
-	coord.remote.Set(boostpb.DomainAddr{Domain: dom, Shard: shard}, addr)
+func (coord *ChannelCoordinator) InsertRemote(dom dataflow.DomainIdx, shard uint, addr string) {
+	coord.remote.Set(dataflow.DomainAddr{Domain: dom, Shard: shard}, addr)
 }
 
-func (coord *ChannelCoordinator) GetClient(dom boostpb.DomainIndex, shard uint) (DomainClient, error) {
-	domaddr := boostpb.DomainAddr{Domain: dom, Shard: shard}
+func (coord *ChannelCoordinator) GetClient(dom dataflow.DomainIdx, shard uint) (DomainClient, error) {
+	domaddr := dataflow.DomainAddr{Domain: dom, Shard: shard}
 	if local, ok := coord.locals.Get(domaddr); ok {
 		return local, nil
 	}
@@ -38,7 +38,7 @@ func (coord *ChannelCoordinator) GetClient(dom boostpb.DomainIndex, shard uint) 
 	return nil, fmt.Errorf("unknown shard: %d:%d", dom, shard)
 }
 
-func (coord *ChannelCoordinator) GetAddr(dom boostpb.DomainIndex, shard uint) string {
-	addr, _ := coord.remote.Get(boostpb.DomainAddr{Domain: dom, Shard: shard})
+func (coord *ChannelCoordinator) GetAddr(dom dataflow.DomainIdx, shard uint) string {
+	addr, _ := coord.remote.Get(dataflow.DomainAddr{Domain: dom, Shard: shard})
 	return addr
 }

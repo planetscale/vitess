@@ -1,15 +1,17 @@
 syntax = "proto3";
-option go_package = "vitess.io/vitess/go/boost/boostpb";
+option go_package = "vitess.io/vitess/go/boost/boostrpc/packet";
 
 package packet;
 
-import "node.proto";
+import "dataflow.proto";
+import "flownode.proto";
+import "sql.proto";
 import "gogoproto/gogo.proto";
 
 message SourceChannelIdentifier {
   uint64 token = 1;
   uint64 epoch = 2;
-  uint32 tag = 3 [(gogoproto.casttype) = "Tag"];
+  uint32 tag = 3 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.Tag"];
 };
 
 message TableOperation{
@@ -21,261 +23,259 @@ message TableOperation{
   };
 
   Tag tag = 1;
-  string key = 2 [(gogoproto.casttype) = "Row"];
+  string key = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/sql.Row"];
 };
 
 message FlowInput {
-  uint32 dst = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
+  uint32 dst = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
   repeated TableOperation data = 2;
 };
 
 message Link {
-  uint32 src = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
-  uint32 dst = 2 [(gogoproto.casttype) = "LocalNodeIndex"];
+  uint32 src = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+  uint32 dst = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+};
+
+message ColumnIndex {
+  repeated int64 key = 1 [(gogoproto.casttype) = "int"];
+  repeated uint32 tags = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.Tag"];
+  bool is_primary = 3;
 };
 
 message ReplayPathSegment {
-  uint32 node = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
-  uint32 force_tag_to = 2 [(gogoproto.casttype) = "Tag"];
+  uint32 node = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+  uint32 force_tag_to = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.Tag"];
   repeated int64 partial_key = 3 [(gogoproto.casttype) = "int"];
 };
 
 message SourceSelection {
-  message KeyShard {
-    int64 key_i_to_shard = 1;
-    uint64 nshards = 2;
+  enum Kind {
+   KEY_SHARD = 0;
+   SAME_SHARD = 1;
+   ALL_SHARDS = 2;
   };
 
-  oneof selection {
-    KeyShard key_shard = 1;
-    bool same_shard = 2;
-    uint64 all_shards = 3;
-  }
+  Kind kind = 1;
+  uint64 num_shards = 2 [(gogoproto.casttype) = "uint"];
+  int64 key_idx_to_shard = 3 [(gogoproto.casttype) = "int"];
 }
 
 message TriggerEndpoint {
-  message Start {
-    repeated int64 cols = 1 [(gogoproto.casttype) = "int"];
-  };
-  message End {
-    SourceSelection selection =1;
-    uint64 domain = 2 [(gogoproto.casttype) = "DomainIndex"];
-  };
-  message Local {
-    repeated int64 cols = 1 [(gogoproto.casttype) = "int"];
+  enum Kind {
+    NONE = 0;
+    START = 1;
+    END = 2;
+    LOCAL = 3;
+    EXTERNAL = 4;
   };
 
-  oneof trigger {
-    Start start = 2;
-    End end = 3;
-    Local local = 4;
-  }
+  Kind kind = 1;
+  repeated int64 cols = 2 [(gogoproto.casttype) = "int"];
+  uint64 domain = 3 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.DomainIdx"];
+  SourceSelection source_selection = 4;
 };
 
-message Record {
-  string row = 1 [(gogoproto.casttype) = "Row"];
-  bool positive = 2;
+message SetupReplayPathRequest{
+  uint32 tag = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.Tag"];
+  uint32 source = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+  repeated ReplayPathSegment path = 3;
+  uint32 partial_unicast_sharder = 4 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
+  bool notify_done = 5;
+  TriggerEndpoint trigger = 6;
+  string upquery = 7;
+  bool last_segment = 8;
 };
 
-message SyncPacket {
-  message SetupReplayPath{
-    uint32 tag = 1 [(gogoproto.casttype) = "Tag"];
-    uint32 source = 2 [(gogoproto.casttype) = "LocalNodeIndex"];
-    repeated ReplayPathSegment path = 3;
-    uint32 partial_unicast_sharder = 4 [(gogoproto.casttype) = "GraphNodeIdx"];
-    bool notify_done = 5;
-    TriggerEndpoint trigger = 6;
+message ReadyRequest{
+  uint32 node = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+  repeated ColumnIndex index = 3;
+};
+
+message Input {
+  FlowInput inner = 1;
+  SourceChannelIdentifier src = 2;
+  repeated SourceChannelIdentifier senders = 3;
+};
+
+message Message {
+  message Seen {
+    int32 offset = 1;
+    uint32 tag = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.Tag"];
   };
 
-  message Ready{
-    uint32 node = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
+  Link link = 1;
+  repeated sql.Record records = 2 [(gogoproto.nullable) = false];
+  repeated Seen seen_tags = 3 [(gogoproto.nullable) = false];
+  string gtid = 4;
+};
 
-    message Index {
-      repeated int64 key = 1 [(gogoproto.casttype) = "int"];
-    }
-    repeated Index index = 3;
-  };
+message ReplayPiece {
+  Link link = 1;
+  uint32 tag = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.Tag"];
+  repeated sql.Record records = 3 [(gogoproto.nullable) = false];
 
-  message AddBaseColumn{ };
-  message DropBaseColumn{ };
-
-  oneof inner {
-    SetupReplayPath setup_replay_path = 1;
-    Ready ready = 2;
-    bool wait_for_replay = 3;
-
-    AddBaseColumn add_base_column = 10;
-    DropBaseColumn drop_base_column = 11;
-  }
-}
-
-message Packet {
-  message Input {
-    FlowInput inner = 1;
-    SourceChannelIdentifier src = 2;
-    repeated SourceChannelIdentifier senders = 3;
-  };
-  message Message {
-    Link link = 1;
-    repeated Record records = 2 [(gogoproto.nullable) = false];
-    bool ignored = 3;
-  };
-  message Vstream {
-    Link link = 1;
-    Record before = 2;
-    Record after = 3;
-    string gtid = 4;
-  };
-  message ReplayPiece {
-    Link link = 1;
-    uint32 tag = 2 [(gogoproto.casttype) = "Tag"];
-    repeated Record records = 3 [(gogoproto.nullable) = false];
-
-    message ContextPartial {
-      map<string, bool> for_keys = 1 [(gogoproto.castkey) = "Row"];
-      uint64 requesting_shard = 2 [(gogoproto.casttype) = "uint"];
-      bool unishard = 3;
-      bool ignore = 4;
-    };
-    message ContextRegular {
-      bool last = 1;
-    };
-    oneof context {
-      ContextPartial partial = 4;
-      ContextRegular regular = 5;
-      string failed = 7;
-    }
-
-    string gtid = 10;
-    uint32 upquery_slot = 11;
-  };
-  message Evict{
-    uint32 node = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
-    int64 num_bytes = 2;
-  };
-  message EvictKeys{
-    Link link = 1;
-    uint32 tag = 2 [(gogoproto.casttype) = "Tag"];
-    repeated string keys = 3 [(gogoproto.casttype) = "Row"];
-  };
-  message Finish{
-    uint32 tag = 1 [(gogoproto.casttype) = "Tag"];
-    uint32 node = 2 [(gogoproto.casttype) = "LocalNodeIndex"];
-  };
-  message AddNode{
-    node.Node node = 1;
-    repeated uint32 parents = 2 [(gogoproto.casttype) = "LocalNodeIndex"];
-  };
-  message RemoveNodes{
-    repeated uint32 nodes = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
-  };
-  message UpdateEgress{
-    uint32 node = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
-
-    message Tx {
-      uint32 node = 1;
-      uint32 local = 2;
-      node.DomainAddr domain = 3;
-    };
-    Tx new_tx = 2;
-
-    message Tag {
-      uint32 tag = 1 [(gogoproto.casttype) = "Tag"];
-      uint32 node = 2 [(gogoproto.casttype) = "GraphNodeIdx"];
-    };
-    Tag new_tag = 3;
-  };
-  message UpdateSharder{
-    message Tx {
-      uint32 local = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
-      node.DomainAddr domain = 2;
-    };
-
-    uint32 node = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
-    repeated Tx new_txs = 2;
-  };
-  message PrepareState {
-    uint32 node = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
-
-    message PartialLocal {
-      message Index {
-        repeated int64 key = 1 [(gogoproto.casttype) = "int"];
-        repeated uint32 tags = 2 [(gogoproto.casttype) = "Tag"];
-      }
-      repeated Index index = 1;
-    };
-
-    message IndexedLocal {
-      message Index {
-        repeated int64 key = 1 [(gogoproto.casttype) = "int"];
-      }
-      repeated Index index = 1;
-    };
-
-    message PartialGlobal {
-      uint32 gid = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
-      int32 cols = 2 [(gogoproto.casttype) = "int"];
-      repeated int64 key = 3 [(gogoproto.casttype) = "int"];
-
-      message TriggerDomain {
-        uint64 domain = 1 [(gogoproto.casttype) = "DomainIndex"];
-        uint64 shards = 2 [(gogoproto.casttype) = "uint"];
-      };
-      TriggerDomain trigger_domain = 4;
-    };
-
-    message Global {
-      uint32 gid = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
-      int32 cols = 2 [(gogoproto.casttype) = "int"];
-      repeated int64 key = 3 [(gogoproto.casttype) = "int"];
-    };
-
-    oneof state {
-      PartialLocal partial_local = 2;
-      IndexedLocal indexed_local = 3;
-      PartialGlobal partial_global = 4;
-      Global global = 5;
-    };
-  };
-
-  message RequestPartialReplay{
-    uint32 tag = 1 [(gogoproto.casttype) = "Tag"];
-    repeated string keys = 2 [(gogoproto.casttype) = "Row"];
+  message ContextPartial {
+    map<string, bool> for_keys = 1 [(gogoproto.castkey) = "vitess.io/vitess/go/boost/sql.Row"];
+    uint64 requesting_shard = 2 [(gogoproto.casttype) = "uint"];
     bool unishard = 3;
-    uint64 requesting_shard = 4 [(gogoproto.casttype) = "uint"];
+    bool ignore = 4;
   };
-  message RequestReaderReplay{
-    uint32 node = 1 [(gogoproto.casttype) = "LocalNodeIndex"];
-    repeated int64 cols = 2 [(gogoproto.casttype) = "int"];
-    repeated string keys = 3 [(gogoproto.casttype) = "Row"];
+  message ContextRegular {
+    bool last = 1;
   };
-  message StartReplay{
-    uint32 tag = 1 [(gogoproto.casttype) = "Tag"];
-    uint32 from = 2 [(gogoproto.casttype) = "LocalNodeIndex"];
+  message ContextReplace {
+    Link original_link = 1;
   };
+  oneof context {
+    ContextPartial partial = 4;
+    ContextRegular regular = 5;
+    ContextReplace replace = 6;
+  }
 
-  oneof inner {
-    Input input = 1;
-    Message message = 2;
-    Vstream vstream = 3;
-    ReplayPiece replay_piece = 4;
-    Evict evict = 5;
-    EvictKeys evict_keys = 6;
-
-    // Replay requests
-    RequestPartialReplay request_partial_replay = 10;
-    RequestReaderReplay request_reader_replay = 11;
-    StartReplay start_replay = 12;
-
-    // Control messages
-    AddNode add_node = 20;
-    Finish finish = 21;
-    RemoveNodes remove_nodes = 22;
-    UpdateEgress update_egress = 23;
-    UpdateSharder update_sharder = 24;
-    PrepareState prepare_state = 25;
+  message External {
+    string gtid = 1;
+    uint32 slot = 2;
+    bool intermediate = 3;
+    bool failed = 4;
   };
 
-  // Packet ID for tracing.
-  int32 id = 33;
-}
+  External external = 8;
+};
+
+message EvictRequest{
+  uint32 node = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+  int64 num_bytes = 2;
+};
+
+message EvictKeysRequest{
+  Link link = 1;
+  uint32 tag = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.Tag"];
+  repeated string keys = 3 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/sql.Row"];
+};
+
+message FinishReplayRequest{
+  uint32 tag = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.Tag"];
+  uint32 node = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+  string gtid = 3;
+  bool notify_done = 4;
+};
+
+message AddNodeRequest{
+  flownode.Node node = 1;
+  repeated uint32 parents = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+};
+
+message RemoveNodesRequest{
+  repeated uint32 nodes = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+};
+
+message UpdateEgressRequest{
+  uint32 node = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+
+  message Tx {
+    uint32 node = 1;
+    uint32 local = 2;
+    dataflow.DomainAddr domain = 3;
+  };
+  Tx new_tx = 2;
+
+  message Tag {
+    uint32 tag = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.Tag"];
+    uint32 node = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
+  };
+  Tag new_tag = 3;
+};
+
+message UpdateSharderRequest{
+  message Tx {
+    uint32 local = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+    dataflow.DomainAddr domain = 2;
+  };
+
+  uint32 node = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+  repeated Tx new_txs = 2;
+};
+
+message PrepareStateRequest {
+  uint32 node = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+
+  message PartialLocal {
+    repeated ColumnIndex index = 1;
+  };
+
+  message IndexedLocal {
+    repeated ColumnIndex index = 1;
+  };
+
+  message PartialGlobal {
+    uint32 gid = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
+    int32 cols = 2 [(gogoproto.casttype) = "int"];
+    repeated int64 key = 3 [(gogoproto.casttype) = "int"];
+
+    message TriggerDomain {
+      uint64 domain = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.DomainIdx"];
+      uint64 shards = 2 [(gogoproto.casttype) = "uint"];
+    };
+    TriggerDomain trigger_domain = 4;
+  };
+
+  message Global {
+    uint32 gid = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
+    int32 cols = 2 [(gogoproto.casttype) = "int"];
+    repeated int64 key = 3 [(gogoproto.casttype) = "int"];
+  };
+
+  oneof state {
+    PartialLocal partial_local = 2;
+    IndexedLocal indexed_local = 3;
+    PartialGlobal partial_global = 4;
+    Global global = 5;
+  };
+};
+
+message PartialReplayRequest{
+  uint32 tag = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.Tag"];
+  repeated string keys = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/sql.Row"];
+  bool unishard = 3;
+  uint64 requesting_shard = 4 [(gogoproto.casttype) = "uint"];
+};
+
+message ReaderReplayRequest{
+  uint32 node = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+  repeated int64 cols = 2 [(gogoproto.casttype) = "int"];
+  repeated string keys = 3 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/sql.Row"];
+};
+
+message StartReplayRequest{
+  uint32 tag = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.Tag"];
+  uint32 from = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+};
+
+message WaitForReplayRequest{}
+
+message Sync {};
+message Async {};
+
+service Domain {
+  rpc SendInput(Input) returns (Async);
+  rpc SendMessage(Message) returns (Async);
+  rpc SendReplayPiece(ReplayPiece) returns (Async);
+
+  rpc Evict(EvictRequest) returns (Async);
+  rpc EvictKeys(EvictKeysRequest) returns (Async);
+
+  rpc StartPartialReplay(PartialReplayRequest) returns (Async);
+  rpc StartReaderReplay(ReaderReplayRequest) returns (Async);
+  rpc StartReplay(StartReplayRequest) returns (Async);
+  rpc FinishReplay(FinishReplayRequest) returns (Async);
+
+  rpc AddNode(AddNodeRequest) returns (Async);
+  rpc RemoveNodes(RemoveNodesRequest) returns (Async);
+  rpc UpdateEgress(UpdateEgressRequest) returns (Async);
+  rpc UpdateSharder(UpdateSharderRequest) returns (Async);
+  rpc PrepareState(PrepareStateRequest) returns (Async);
+
+  rpc SetupReplayPath(SetupReplayPathRequest) returns (Sync);
+  rpc Ready(ReadyRequest) returns (Sync);
+  rpc WaitForReplay(WaitForReplayRequest) returns (Sync);
+};

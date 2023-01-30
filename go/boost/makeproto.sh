@@ -13,12 +13,13 @@ export GOBIN="$VTROOT/bin"
 go install ./proto/cmd/protoc-gen-go-boost
 go install storj.io/drpc/cmd/protoc-gen-go-drpc@latest
 
-protoc \
-  --go-boost_out=. --plugin protoc-gen-go-boost="${GOBIN}/protoc-gen-go-boost" \
-	--go-drpc_out=. --plugin protoc-gen-go-drpc="${GOBIN}/protoc-gen-go-drpc" \
-	--go-drpc_opt=protolib=vitess.io/vitess/go/boost/boostpb/drpccodec \
-  -I "$VTROOT/proto" -I ./proto \
-  ./proto/*.proto
+for pb in ./proto/*.proto; do
+  protoc \
+    --go-boost_out=. --plugin protoc-gen-go-boost="${GOBIN}/protoc-gen-go-boost" \
+    --go-drpc_out=. --plugin protoc-gen-go-drpc="${GOBIN}/protoc-gen-go-drpc" \
+    --go-drpc_opt=protolib=vitess.io/vitess/go/boost/boostrpc/codec \
+    -I "$VTROOT/proto" -I ./proto "$pb"
+done
 
-mv ./vitess.io/vitess/go/boost/boostpb/*.go boostpb/
+cp -Rf ./vitess.io/vitess/go/boost/* .
 rm -rf ./vitess.io

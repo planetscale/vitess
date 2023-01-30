@@ -1,7 +1,13 @@
 package offheap
 
 import (
+	"bytes"
+	"fmt"
+	"strings"
 	"unsafe"
+
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -36,6 +42,10 @@ func (t CRowsTable) Evict(evict func(h vthash.Hash, rows *ConcurrentRows) bool) 
 	}
 }
 
+func (t CRowsTable) Len() int {
+	return len(t)
+}
+
 type RowsTable map[vthash.Hash]uintptr
 
 func (t RowsTable) Set(hash vthash.Hash, value *Rows) {
@@ -64,4 +74,27 @@ func (t RowsTable) Evict(evict func(vthash.Hash, *Rows) bool) {
 			return
 		}
 	}
+}
+
+func (t RowsTable) GoString() string {
+	if len(t) == 0 {
+		return "RowsTable{}"
+	}
+
+	sorted := maps.Keys(t)
+	slices.SortFunc(sorted, func(a, b vthash.Hash) bool {
+		return bytes.Compare(a[:], b[:]) < 0
+	})
+
+	var w strings.Builder
+	w.WriteString("RowsTable{")
+	for i, hash := range sorted {
+		if i > 0 {
+			w.WriteByte(',')
+		}
+		cr := (*Rows)(unsafe.Pointer(t[hash]))
+		fmt.Fprintf(&w, "\n\t%x:\t%v", hash, cr.Collect(nil))
+	}
+	w.WriteString("\n}")
+	return w.String()
 }

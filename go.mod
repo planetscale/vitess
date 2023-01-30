@@ -119,6 +119,8 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/hashicorp/golang-lru v0.5.4
+	github.com/kr/pretty v0.3.1
+	github.com/kr/text v0.2.0
 	github.com/lestrrat-go/strftime v1.0.6
 	github.com/mitchellh/hashstructure v1.1.0
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
@@ -135,7 +137,7 @@ require (
 	go.uber.org/goleak v1.2.0
 	go.uber.org/multierr v1.8.0
 	go.uber.org/zap v1.23.0
-	golang.org/x/exp v0.0.0-20221114191408-850992195362
+	golang.org/x/exp v0.0.0-20230108222341-4b8118a2686a
 	golang.org/x/sync v0.1.0
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	storj.io/drpc v0.0.32
@@ -198,6 +200,7 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/rivo/uniseg v0.4.3 // indirect
+	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/afero v1.9.3 // indirect
 	github.com/spf13/cast v1.5.0 // indirect

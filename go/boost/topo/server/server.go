@@ -43,7 +43,7 @@ func NewTopoServer(log *zap.Logger, srv *topo.Server, tmc TabletManager, cluster
 }
 
 type LeadershipWatcher interface {
-	StartLeadershipCampaign(ctx context.Context, state *vtboostpb.ControllerState)
+	StartLeadershipCampaign(ctx context.Context, state *vtboostpb.ControllerState) error
 	NewLeader(state *vtboostpb.ControllerState)
 }
 
@@ -212,7 +212,10 @@ func (ts *Server) WatchLeadership(ctx context.Context, watcher LeadershipWatcher
 				if ctx.Err() != nil {
 					return nil
 				}
-				watcher.StartLeadershipCampaign(leadershipCtx, state)
+				err = watcher.StartLeadershipCampaign(leadershipCtx, state)
+				if err != nil {
+					return err
+				}
 				ts.log.Info("leadership campaign finished")
 			case topo.IsErrType(err, topo.Interrupted):
 				return nil

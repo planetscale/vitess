@@ -3,39 +3,41 @@ package flownode
 import (
 	"context"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/packet"
+	"vitess.io/vitess/go/boost/dataflow"
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/boost/dataflow/processing"
-	"vitess.io/vitess/go/boost/dataflow/trace"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
 var _ NodeImpl = (*Sharder)(nil)
 
-type SharderTx = boostpb.Packet_UpdateSharder_Tx
+type SharderTx = packet.UpdateSharderRequest_Tx
 
 type Sharder struct {
 	txs     []SharderTx
-	sharded map[uint]*boostpb.Packet
+	sharded map[uint]packet.ActiveFlowPacket
 	shardBy int
 }
 
 func NewSharder(col int) *Sharder {
 	return &Sharder{
-		sharded: make(map[uint]*boostpb.Packet),
+		sharded: make(map[uint]packet.ActiveFlowPacket),
 		shardBy: col,
 	}
 }
 
-func NewSharderFromProto(psharder *boostpb.Node_Sharder) *Sharder {
+func NewSharderFromProto(psharder *flownodepb.Node_Sharder) *Sharder {
 	sharder := NewSharder(psharder.ShardBy)
 	return sharder
 }
 
-func (s *Sharder) ToProto() *boostpb.Node_Sharder {
+func (s *Sharder) ToProto() *flownodepb.Node_Sharder {
 	if len(s.sharded) > 0 || len(s.txs) > 0 {
 		panic("unsupported")
 	}
-	return &boostpb.Node_Sharder{
+	return &flownodepb.Node_Sharder{
 		ShardBy: s.shardBy,
 	}
 }
@@ -46,32 +48,24 @@ func (s *Sharder) ShardedBy() int {
 	return s.shardBy
 }
 
-func (s *Sharder) Process(ctx context.Context, pkt **boostpb.Packet, index boostpb.LocalNodeIndex, schema []boostpb.Type, isSharded bool, isLastSharderForTag *bool, output processing.Executor) error {
-	if trace.T {
-		var span *trace.Span
-		ctx, span = trace.WithSpan(ctx, "Sharder.Process", *pkt)
-		defer span.Close()
-	}
-
-	m := *pkt
-	*pkt = nil
-
+func (s *Sharder) Process(ctx context.Context, pkt *packet.ActiveFlowPacket, index dataflow.LocalNodeIdx, schema []sql.Type, isSharded bool, isLastSharderForTag *bool, output processing.Executor) error {
 	var (
 		hasher      vthash.Hasher
+		m           = pkt.Take()
 		shardBy     = s.shardBy
 		shardByType = schema[s.shardBy]
 		shardCount  = uint(len(s.txs))
 	)
 
-	for _, record := range m.TakeData() {
+	for _, record := range m.TakeRecords() {
 		shard := record.Row.ShardValue(&hasher, shardBy, shardByType, shardCount)
 		p, ok := s.sharded[shard]
 		if !ok {
-			p = m.CloneData()
+			p = m.Clone()
 			s.sharded[shard] = p
 		}
-		p.MapData(func(records *[]boostpb.Record) {
-			*records = append(*records, record)
+		p.ReplaceRecords(func(rs []sql.Record) []sql.Record {
+			return append(rs, record)
 		})
 	}
 
@@ -105,12 +99,12 @@ func (s *Sharder) Process(ctx context.Context, pkt **boostpb.Packet, index boost
 	case destinationAll:
 		for shard := uint(0); shard < uint(len(s.txs)); shard++ {
 			if _, exists := s.sharded[shard]; !exists {
-				s.sharded[shard] = m.CloneData()
+				s.sharded[shard] = m.Clone()
 			}
 		}
 	case destinationOne:
 		if _, exists := s.sharded[destOne]; !exists {
-			s.sharded[destOne] = m.CloneData()
+			s.sharded[destOne] = m.Clone()
 		}
 		for k := range s.sharded {
 			if k != destOne {
@@ -137,15 +131,7 @@ func (s *Sharder) Process(ctx context.Context, pkt **boostpb.Packet, index boost
 			shard.Link().Src = index
 			shard.Link().Dst = tx.Local
 
-			if trace.T {
-				trace.GetSpan(ctx).Instant("Sharder.Send", map[string]any{
-					"Domain": tx.Domain.Domain,
-					"Shard":  tx.Domain.Shard,
-					"Input":  shard,
-				})
-			}
-
-			if err := output.Send(ctx, *tx.Domain, shard); err != nil {
+			if err := output.Send(ctx, *tx.Domain, shard.Inner); err != nil {
 				return err
 			}
 		}
@@ -157,6 +143,6 @@ func (s *Sharder) AddShardedTx(tx *SharderTx) {
 	s.txs = append(s.txs, *tx)
 }
 
-func (s *Sharder) ProcessEviction(columns []int, keys *[]boostpb.Row, addr boostpb.LocalNodeIndex, b bool, ex processing.Executor) {
+func (s *Sharder) ProcessEviction(columns []int, keys *[]sql.Row, addr dataflow.LocalNodeIdx, b bool, ex processing.Executor) {
 	panic("unimplemented")
 }

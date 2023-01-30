@@ -5,14 +5,18 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/boostrpc"
+	"vitess.io/vitess/go/boost/boostrpc/packet"
+	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/boost/common"
+	"vitess.io/vitess/go/boost/dataflow"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -23,9 +27,9 @@ import (
 )
 
 type ExternalTableClient struct {
-	desc        *boostpb.ExternalTableDescriptor
+	desc        *service.ExternalTableDescriptor
 	shardingKey int
-	makerecord  func(row *querypb.Row, sign bool) *boostpb.Record
+	makerecord  func(row *querypb.Row, sign bool) sql.Record
 	shards      []boostrpc.DomainClient
 	next        *ExternalTableClient
 
@@ -37,7 +41,7 @@ type srcmap struct {
 	t   sqltypes.Type
 }
 
-func computeSourceMap(oldColumns []string, oldFields []boostpb.Type, newFields []*querypb.Field) []srcmap {
+func computeSourceMap(oldColumns []string, oldFields []sql.Type, newFields []*querypb.Field) []srcmap {
 	newColIdx := make(map[string]int)
 	for idx, f := range newFields {
 		name := strings.ToLower(f.Name)
@@ -75,7 +79,7 @@ func (etc *ExternalTableClient) OnSchemaChange(newFields []*querypb.Field) {
 	}
 
 	etc.offsetCache = make([]int, len(newFields))
-	etc.makerecord = func(row *querypb.Row, sign bool) *boostpb.Record {
+	etc.makerecord = func(row *querypb.Row, sign bool) sql.Record {
 		var offset int
 		for i := 0; i < len(etc.offsetCache); i++ {
 			length := row.Lengths[i]
@@ -86,16 +90,16 @@ func (etc *ExternalTableClient) OnSchemaChange(newFields []*querypb.Field) {
 			offset += int(length)
 		}
 
-		build := boostpb.NewRowBuilder(len(mapping))
+		build := sql.NewRowBuilder(len(mapping))
 		for _, m := range mapping {
 			if m.col < 0 {
-				build.Add(boostpb.NULL)
+				build.Add(sql.NULL)
 				continue
 			}
 
 			length := int(row.Lengths[m.col])
 			if length < 0 {
-				build.Add(boostpb.NULL)
+				build.Add(sql.NULL)
 				continue
 			}
 
@@ -103,38 +107,37 @@ func (etc *ExternalTableClient) OnSchemaChange(newFields []*querypb.Field) {
 			build.AddVitess(sqltypes.MakeTrusted(m.t, row.Values[offset:offset+length]))
 		}
 
-		record := build.Finish().ToRecord(sign)
-		return &record
+		return build.Finish().ToRecord(sign)
+	}
+}
+
+func (etc *ExternalTableClient) adjustOffsets(rs []sql.Record) {
+	for i := range rs {
+		rs[i].Offset = int32(i)
 	}
 }
 
 func (etc *ExternalTableClient) OnEvent(ctx context.Context, events []*binlogdatapb.RowChange, gtid string) error {
 	if len(etc.shards) == 1 {
+		vstream := &packet.Message{
+			Link:    &packet.Link{Dst: etc.desc.Addr, Src: etc.desc.Addr},
+			Gtid:    gtid,
+			Records: make([]sql.Record, 0, len(events)),
+		}
 		for _, ev := range events {
-			var before *boostpb.Record
-			var after *boostpb.Record
 			if ev.Before != nil {
-				before = etc.makerecord(ev.Before, false)
+				vstream.Records = append(vstream.Records, etc.makerecord(ev.Before, false))
 			}
 			if ev.After != nil {
-				after = etc.makerecord(ev.After, true)
-			}
-			err := etc.shards[0].ProcessAsync(ctx, &boostpb.Packet{
-				Inner: &boostpb.Packet_Vstream_{Vstream: &boostpb.Packet_Vstream{
-					Link:   &boostpb.Link{Dst: etc.desc.Addr, Src: etc.desc.Addr},
-					Before: before,
-					After:  after,
-					Gtid:   gtid,
-				}},
-			})
-			if err != nil {
-				return err
+				vstream.Records = append(vstream.Records, etc.makerecord(ev.After, true))
 			}
 		}
-		return nil
+		vstream.Records = sql.OffsetRecords(vstream.Records)
+		_, err := etc.shards[0].SendMessage(ctx, vstream)
+		return err
 	}
 
-	shardWrites := make([][]*boostpb.Packet, len(etc.shards))
+	shardWrites := make([][]sql.Record, len(etc.shards))
 	shardKey := etc.shardingKey
 	shardType := etc.desc.Schema[shardKey]
 	shardCount := uint(len(etc.shards))
@@ -142,41 +145,39 @@ func (etc *ExternalTableClient) OnEvent(ctx context.Context, events []*binlogdat
 
 	for _, ev := range events {
 		var shard uint
-		var before *boostpb.Record
-		var after *boostpb.Record
+		var before bool
 
 		if ev.Before != nil {
-			before = etc.makerecord(ev.Before, false)
-			shard = before.Row.ShardValue(&hasher, shardKey, shardType, shardCount)
+			r := etc.makerecord(ev.Before, false)
+			shard = r.Row.ShardValue(&hasher, shardKey, shardType, shardCount)
+			before = true
+
+			shardWrites[shard] = append(shardWrites[shard], r)
 		}
 		if ev.After != nil {
-			after = etc.makerecord(ev.After, true)
-			shardn := after.Row.ShardValue(&hasher, shardKey, shardType, shardCount)
+			r := etc.makerecord(ev.After, true)
+			shard2 := r.Row.ShardValue(&hasher, shardKey, shardType, shardCount)
 
-			if ev.Before != nil && shardn != shard {
+			if before && shard2 != shard {
 				return fmt.Errorf("sharding key changed in update")
 			}
-			shard = shardn
+
+			shardWrites[shard2] = append(shardWrites[shard2], r)
 		}
-		shardWrites[shard] = append(shardWrites[shard], &boostpb.Packet{
-			Inner: &boostpb.Packet_Vstream_{Vstream: &boostpb.Packet_Vstream{
-				Link:   &boostpb.Link{Dst: etc.desc.Addr, Src: etc.desc.Addr},
-				Before: before,
-				After:  after,
-				Gtid:   gtid,
-			}},
-		})
 	}
 
-	for s, ps := range shardWrites {
-		if len(ps) == 0 {
+	for s, rs := range shardWrites {
+		if len(rs) == 0 {
 			continue
 		}
-		for _, p := range ps {
-			err := etc.shards[s].ProcessAsync(ctx, p)
-			if err != nil {
-				return err
-			}
+		pkt := &packet.Message{
+			Link:    &packet.Link{Dst: etc.desc.Addr, Src: etc.desc.Addr},
+			Records: sql.OffsetRecords(rs),
+			Gtid:    gtid,
+		}
+		_, err := etc.shards[s].SendMessage(ctx, pkt)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -198,6 +199,7 @@ type EventProcessor struct {
 type vstreamTarget struct {
 	pb       *querypb.Target
 	position string
+	started  atomic.Bool
 }
 
 func NewEventProcessor(log *zap.Logger, stats *workerStats, coord *boostrpc.ChannelCoordinator, resolver Resolver) *EventProcessor {
@@ -206,14 +208,14 @@ func NewEventProcessor(log *zap.Logger, stats *workerStats, coord *boostrpc.Chan
 		resolver: resolver,
 		sender: &DomainSenders{
 			coord: coord,
-			conns: common.NewSyncMap[boostpb.DomainAddr, boostrpc.DomainClient](),
+			conns: common.NewSyncMap[dataflow.DomainAddr, boostrpc.DomainClient](),
 		},
 		stats:  stats,
 		tables: make(map[string]*ExternalTableClient),
 	}
 }
 
-func NewExternalTableClientFromProto(pb *boostpb.ExternalTableDescriptor, sender *DomainSenders) (*ExternalTableClient, error) {
+func NewExternalTableClientFromProto(pb *service.ExternalTableDescriptor, sender *DomainSenders) (*ExternalTableClient, error) {
 	var shards = make([]boostrpc.DomainClient, 0, len(pb.Txs))
 
 	for _, addr := range pb.Txs {
@@ -238,9 +240,9 @@ func NewExternalTableClientFromProto(pb *boostpb.ExternalTableDescriptor, sender
 	}
 
 	schema := pb.Schema
-	makerecord := func(row *querypb.Row, sign bool) *boostpb.Record {
+	makerecord := func(row *querypb.Row, sign bool) sql.Record {
 		offset := int64(0)
-		build := boostpb.NewRowBuilder(len(schema))
+		build := sql.NewRowBuilder(len(schema))
 		for i, length := range row.Lengths {
 			if length < 0 {
 				build.AddVitess(sqltypes.NULL)
@@ -251,8 +253,7 @@ func NewExternalTableClientFromProto(pb *boostpb.ExternalTableDescriptor, sender
 			offset += length
 		}
 
-		record := build.Finish().ToRecord(sign)
-		return &record
+		return build.Finish().ToRecord(sign)
 	}
 
 	return &ExternalTableClient{
@@ -263,7 +264,7 @@ func NewExternalTableClientFromProto(pb *boostpb.ExternalTableDescriptor, sender
 	}, nil
 }
 
-func (ep *EventProcessor) AssignTables(ctx context.Context, tables []*boostpb.ExternalTableDescriptor) error {
+func (ep *EventProcessor) AssignTables(ctx context.Context, tables []*service.ExternalTableDescriptor) error {
 	ep.log.Info("assigning new vstream tables", zap.Int("num_tables", len(tables)))
 
 	if ep.cancel != nil {
@@ -320,12 +321,39 @@ func (ep *EventProcessor) process(ctx context.Context) error {
 			}
 
 			ep.wg.Add(1)
+			target.started.Store(false)
+
 			go func() {
 				ep.processTarget(newGenerationCtx, shard.Gateway, target, tables)
 			}()
 		}
 	}
-	return nil
+
+	tick := time.NewTicker(5 * time.Millisecond)
+	defer tick.Stop()
+
+	start := time.Now()
+	pending := ep.targets
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case now := <-tick.C:
+			starting := pending
+			pending = pending[:0]
+			for _, tgt := range starting {
+				if !tgt.started.Load() {
+					pending = append(pending, tgt)
+				}
+			}
+			if len(pending) == 0 {
+				return nil
+			}
+			if now.Sub(start) >= 5*time.Second {
+				return fmt.Errorf("timed out while waiting for %d streams to start", len(pending))
+			}
+		}
+	}
 }
 
 func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gateway, target *vstreamTarget, interestingTables []string) {
@@ -362,6 +390,7 @@ func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gat
 	var retries int
 	for {
 		err := gateway.VStream(ctx, request, func(events []*binlogdatapb.VEvent) error {
+			target.started.Store(true)
 			retries = 0
 
 			for _, ev := range events {

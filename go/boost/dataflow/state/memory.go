@@ -1,22 +1,94 @@
 package state
 
 import (
+	"fmt"
 	"math/rand"
+	"strings"
 	"sync/atomic"
 
+	"github.com/kr/text"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
+
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
+	"vitess.io/vitess/go/boost/sql"
 )
+
+type Map = dataflow.Map[Memory]
 
 type Memory struct {
 	state   []*singleState
-	byTag   map[boostpb.Tag]int
+	byTag   map[dataflow.Tag]int
 	memSize atomic.Int64
 }
 
-func (m *Memory) EvictKeys(tag boostpb.Tag, keys []boostpb.Row) []int {
+func (m *Memory) GoString() string {
+	if len(m.byTag) == 0 {
+		return "&Memory{}"
+	}
+
+	sorted := maps.Keys(m.byTag)
+	slices.Sort(sorted)
+
+	var w strings.Builder
+	w.WriteString("&Memory{")
+	for i, tag := range sorted {
+		if i > 0 {
+			w.WriteByte(',')
+		}
+		ss := m.state[m.byTag[tag]]
+		fmt.Fprintf(&w, "\n\t%d (key=%v, primary=%v", tag, ss.key, ss.primary)
+
+		if len(ss.related) > 0 {
+			w.WriteString(", rel=")
+			for i, rel := range ss.related {
+				if i > 0 {
+					w.WriteString(", ")
+				}
+				switch rel.relation {
+				case relationBroader:
+					fmt.Fprintf(&w, "broader%v", rel.key)
+				case relationSpecific:
+					fmt.Fprintf(&w, "specific%v", rel.key)
+				case relationNone:
+					fmt.Fprintf(&w, "none%v", rel.key)
+				}
+			}
+		}
+
+		state := text.Indent(ss.state.GoString(), "\t\t")
+		fmt.Fprintf(&w, "):\t%s", strings.TrimSpace(state))
+	}
+	w.WriteString("\n}")
+	return w.String()
+}
+
+func (m *Memory) MissingInOtherStates(rs []sql.Record, original dataflow.Tag, each func(tag dataflow.Tag, key []int, r sql.Record)) {
+	if len(rs) == 0 {
+		return
+	}
+
+	for tag, ssIdx := range m.byTag {
+		if tag == original {
+			continue
+		}
+
+		ss := m.state[ssIdx]
+		for _, r := range rs {
+			if !r.Positive {
+				continue
+			}
+			key := r.Row.Extract(ss.key)
+			if _, found := ss.lookup(key); !found {
+				each(tag, ss.key, r)
+			}
+		}
+	}
+}
+
+func (m *Memory) EvictKeys(tag dataflow.Tag, keys []sql.Row) []int {
 	if idx, ok := m.byTag[tag]; ok {
 		m.state[idx].evictKeys(keys, &m.memSize)
 		return m.state[idx].key
@@ -33,7 +105,7 @@ func (m *Memory) stateFor(cols []int) (int, bool) {
 	return 0, false
 }
 
-func (m *Memory) AddKey(columns []int, schema []boostpb.Type, partial []boostpb.Tag) {
+func (m *Memory) AddKey(columns []int, schema []sql.Type, partial []dataflow.Tag, primary bool) {
 	i, exists := m.stateFor(columns)
 	if !exists {
 		i = len(m.state)
@@ -47,20 +119,65 @@ func (m *Memory) AddKey(columns []int, schema []boostpb.Type, partial []boostpb.
 		return
 	}
 
-	m.state = append(m.state, newSingleState(columns, schema, partial != nil))
+	us := newSingleState(columns, schema, partial != nil, primary)
+	for _, them := range m.state {
+		keymapTheirs := overlapKeymap(us.key, them.key)
+		keymapOurs := overlapKeymap(them.key, us.key)
 
+		var stateOurs relatedState
+		var stateTheirs relatedState
+
+		switch {
+		case keymapOurs == nil && keymapTheirs == nil:
+			stateOurs = relatedState{relation: relationNone, singleState: them}
+			stateTheirs = relatedState{relation: relationNone, singleState: us}
+		case keymapOurs == nil && keymapTheirs != nil:
+			stateOurs = relatedState{relation: relationSpecific, singleState: them}
+			stateTheirs = relatedState{relation: relationBroader, singleState: us, keymap: keymapTheirs}
+		case keymapOurs != nil && keymapTheirs == nil:
+			stateOurs = relatedState{relation: relationBroader, singleState: them, keymap: keymapOurs}
+			stateTheirs = relatedState{relation: relationSpecific, singleState: us}
+		default:
+			panic("duplicated key in different states")
+		}
+
+		us.related = append(us.related, stateOurs)
+		them.related = append(them.related, stateTheirs)
+	}
+
+	m.state = append(m.state, us)
 	if len(m.state) > 1 && partial == nil {
-		newState := m.state[len(m.state)-1]
 		m.state[0].state.ForEach(func(rs *offheap.Rows) {
-			rs.ForEach(func(r boostpb.Row) {
-				newState.insertRow(r, &m.memSize)
+			rs.ForEach(func(r sql.Row) {
+				us.insertRow(r, true, &m.memSize)
 			})
 		})
 	}
 }
 
+func overlapKeymap(short, long []int) []int {
+	var keymap []int
+	for _, idx := range short {
+		i := slices.Index(long, idx)
+		if i < 0 {
+			return nil
+		}
+		keymap = append(keymap, i)
+	}
+	return keymap
+}
+
 func (m *Memory) IsUseful() bool {
 	return len(m.state) > 0
+}
+
+func (m *Memory) IsEmpty() bool {
+	for _, st := range m.state {
+		if !st.IsEmpty() {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *Memory) IsPartial() bool {
@@ -72,43 +189,40 @@ func (m *Memory) IsPartial() bool {
 	return false
 }
 
-func (m *Memory) ProcessRecords(records *[]boostpb.Record, partialTag boostpb.Tag) {
+type RecordMiss func(tag dataflow.Tag, key []int, record sql.Record)
+
+func (m *Memory) ProcessRecords(records []sql.Record, partialTag dataflow.Tag, miss RecordMiss) []sql.Record {
 	if m.IsPartial() {
-		rs := (*records)[:0]
-		for _, r := range *records {
-			var retain bool
+		return sql.FilterRecords(records, func(r sql.Record) bool {
 			if r.Positive {
-				retain = m.insert(r.Row, partialTag)
+				return m.insert(r, partialTag, miss)
 			} else {
-				retain = m.remove(r.Row)
+				return m.remove(r.Row)
 			}
-			if retain {
-				rs = append(rs, r)
-			}
-		}
-		*records = rs
+		})
 	} else {
-		for _, r := range *records {
+		return sql.FilterRecords(records, func(r sql.Record) bool {
 			if r.Positive {
-				m.insert(r.Row, boostpb.TagNone)
+				m.insert(r, dataflow.TagNone, nil)
 			} else {
 				m.remove(r.Row)
 			}
-		}
+			return true
+		})
 	}
 }
 
-func (m *Memory) MarkHole(key boostpb.Row, tag boostpb.Tag) {
+func (m *Memory) MarkHole(key sql.Row, tag dataflow.Tag) {
 	index := m.byTag[tag]
 	m.state[index].markHole(key, &m.memSize)
 }
 
-func (m *Memory) MarkFilled(key boostpb.Row, tag boostpb.Tag) {
+func (m *Memory) MarkFilled(key sql.Row, tag dataflow.Tag) {
 	index := m.byTag[tag]
 	m.state[index].markFilled(key, &m.memSize)
 }
 
-func (m *Memory) Lookup(columns []int, key boostpb.Row) (*offheap.Rows, bool) {
+func (m *Memory) Lookup(columns []int, key sql.Row) (*offheap.Rows, bool) {
 	if len(m.state) == 0 {
 		panic("lookup on uninitialized index")
 	}
@@ -116,7 +230,28 @@ func (m *Memory) Lookup(columns []int, key boostpb.Row) (*offheap.Rows, bool) {
 	if !ok {
 		panic("lookup on non-indexed column set")
 	}
-	return m.state[idx].lookup(key)
+	ss := m.state[idx]
+	if rows, hit := ss.lookup(key); hit {
+		return rows, true
+	}
+	if len(ss.related) == 0 {
+		return nil, false
+	}
+
+	for _, rel := range ss.related {
+		switch rel.relation {
+		case relationBroader:
+			if rel.keymap == nil {
+				panic("broader state without a keymap")
+			}
+			if _, found := rel.lookup(key.Extract(rel.keymap)); !found {
+				return nil, false
+			}
+		default:
+			return nil, false
+		}
+	}
+	return nil, true
 }
 
 func (m *Memory) Rows() (rows int) {
@@ -126,55 +261,75 @@ func (m *Memory) Rows() (rows int) {
 	return
 }
 
-func (m *Memory) ClonedState() (state []boostpb.Record) {
+func (m *Memory) ClonedState() (state []sql.Record) {
+	if len(m.state) == 0 {
+		return nil
+	}
+
 	table := m.state[0].state
-	state = make([]boostpb.Record, 0, len(table))
+	state = make([]sql.Record, 0, len(table))
 
 	table.ForEach(func(rows *offheap.Rows) {
-		rows.ForEach(func(r boostpb.Row) {
+		rows.ForEach(func(r sql.Row) {
 			state = append(state, r.ToRecord(true))
 		})
 	})
 	return
 }
 
-func (m *Memory) ClonedRecords() (records []boostpb.Row) {
+func (m *Memory) ClonedRecords() (records []sql.Row) {
 	m.state[0].state.ForEach(func(rs *offheap.Rows) {
 		records = rs.Collect(records)
 	})
 	return records
 }
 
-func (m *Memory) EvictRandomKeys(rng *rand.Rand, bytesToEvict int64) ([]int, []boostpb.Row) {
+func (m *Memory) EvictRandomKeys(rng *rand.Rand, bytesToEvict int64) ([]int, []sql.Row) {
 	idx := rand.Intn(len(m.state))
 	keys := m.state[idx].evictRandomKeys(rng, m.memSize.Load()-bytesToEvict, &m.memSize)
 	return m.state[idx].key, keys
 }
 
-func (m *Memory) insert(row boostpb.Row, tag boostpb.Tag) bool {
-	if tag != boostpb.TagNone {
-		i, ok := m.byTag[tag]
-		if !ok {
-			// got tagged insert for unknown tag. this will happen if a node on an old
-			// replay path is now materialized. must return true to avoid any records
-			// (which are destined for a downstream materialization) from being pruned.
-			return true
+func (m *Memory) insert(r sql.Record, tag dataflow.Tag, miss RecordMiss) bool {
+	if tag == dataflow.TagNone {
+		var hit bool
+		for _, st := range m.state {
+			if st.insertRow(r.Row, false, &m.memSize) {
+				hit = true
+			}
 		}
-		return m.state[i].insertRow(row, &m.memSize)
+		return hit
 	}
-	var hit bool
-	for _, st := range m.state {
-		if st.insertRow(row, &m.memSize) {
-			hit = true
+
+	i, ok := m.byTag[tag]
+	if !ok {
+		// got tagged insert for unknown tag. this will happen if a node on an old
+		// replay path is now materialized. must return true to avoid any records
+		// (which are destined for a downstream materialization) from being pruned.
+		return true
+	}
+	ss := m.state[i]
+	if ss.insertRow(r.Row, false, &m.memSize) {
+		for _, rel := range ss.related {
+			if rel.primary {
+				rel.insertRowByPrimaryKey(r.Row, &m.memSize)
+			} else if rel.relation == relationSpecific {
+				rel.insertRow(r.Row, true, &m.memSize)
+			} else if miss != nil && rel.isMissing(r.Row) {
+				miss(tag, rel.key, r)
+			}
 		}
+		return true
 	}
-	return hit
+	return false
 }
 
-func (m *Memory) remove(row boostpb.Row) bool {
+func (m *Memory) remove(row sql.Row) bool {
 	var hit bool
 	for _, s := range m.state {
-		hit = hit || s.removeRow(row, &m.memSize)
+		if s.removeRow(row, &m.memSize) {
+			hit = true
+		}
 	}
 	return hit
 }
@@ -191,8 +346,16 @@ func (m *Memory) StateSizeAtomic() *atomic.Int64 {
 	return &m.memSize
 }
 
+func (m *Memory) Replace(data []sql.Record) []sql.Record {
+	replaced := m.state[0].replaceAndLog(data, &m.memSize)
+	for _, ss := range m.state[1:] {
+		ss.replace(data, &m.memSize)
+	}
+	return replaced
+}
+
 func NewMemoryState() *Memory {
 	return &Memory{
-		byTag: make(map[boostpb.Tag]int),
+		byTag: make(map[dataflow.Tag]int),
 	}
 }

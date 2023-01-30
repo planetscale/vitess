@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/common/xslice"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -14,30 +14,30 @@ import (
 func TestVStreamSchemaMappings(t *testing.T) {
 	type simpletype struct {
 		Name string
-		Type boostpb.Type
+		Type sql.Type
 	}
 
 	var C1 = simpletype{
 		Name: "col1",
-		Type: boostpb.Type{
+		Type: sql.Type{
 			T: sqltypes.Int64,
 		},
 	}
 	var C2 = simpletype{
 		Name: "col2",
-		Type: boostpb.Type{
+		Type: sql.Type{
 			T: sqltypes.Int64,
 		},
 	}
 	var C3 = simpletype{
 		Name: "col3",
-		Type: boostpb.Type{
+		Type: sql.Type{
 			T: sqltypes.VarChar,
 		},
 	}
 	var C4 = simpletype{
 		Name: "col4",
-		Type: boostpb.Type{
+		Type: sql.Type{
 			T:       sqltypes.VarChar,
 			Default: "default4",
 		},
@@ -120,7 +120,7 @@ func TestVStreamSchemaMappings(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.Name, func(t *testing.T) {
 			oldColumns := xslice.Map(tc.Old, func(c simpletype) string { return c.Name })
-			oldFields := xslice.Map(tc.Old, func(c simpletype) boostpb.Type { return c.Type })
+			oldFields := xslice.Map(tc.Old, func(c simpletype) sql.Type { return c.Type })
 			newFields := xslice.Map(tc.New, func(c simpletype) *querypb.Field {
 				return &querypb.Field{
 					Name: c.Name,

@@ -9,7 +9,8 @@
 package controller
 
 import (
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/packet"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 )
@@ -17,7 +18,7 @@ import (
 // Add in ingress and egress nodes as appropriate in the graph to facilitate cross-domain
 // communication.
 func (mig *migration) addRouting(new map[graph.NodeIdx]bool, topolist []graph.NodeIdx) map[graph.NodeIdxPair]graph.NodeIdx {
-	g := mig.target.ingredients
+	g := mig.target.graph()
 
 	// find all new nodes in topological order. we collect first since we'll be mutating the graph
 	// below. it's convenient to have the nodes in topological order, because we then know that
@@ -52,13 +53,13 @@ func (mig *migration) addRouting(new map[graph.NodeIdx]bool, topolist []graph.No
 
 		for _, parent := range parents {
 			graphParent := g.Value(parent)
-			if graphParent.IsSource() || graphParent.Domain() == dom {
+			if graphParent.IsRoot() || graphParent.Domain() == dom {
 				continue
 			}
 
 			// parent is in other domain! does it already have an egress?
 			var ingress *graph.NodeIdx
-			if !parent.IsSource() {
+			if !parent.IsRoot() {
 				pchild := g.NeighborsDirected(parent, graph.DirectionOutgoing)
 
 			search:
@@ -90,7 +91,7 @@ func (mig *migration) addRouting(new map[graph.NodeIdx]bool, topolist []graph.No
 
 				// the ingress is sharded the same way as its target, but with remappings of parent
 				// columns applied
-				var sharding boostpb.Sharding
+				var sharding dataflow.Sharding
 				if sharder := graphParent.AsSharder(); sharder != nil {
 					parentOutSharding := sharder.ShardedBy()
 					// TODO(malte): below is ugly, but the only way to get the sharding width at
@@ -98,7 +99,7 @@ func (mig *migration) addRouting(new map[graph.NodeIdx]bool, topolist []graph.No
 					// Change this once we support per-subgraph sharding widths and
 					// the sharder knows how many children it is supposed to have.
 					if _, width, ok := g.Value(node).Sharding().ByColumn(); ok {
-						sharding = boostpb.NewShardingByColumn(parentOutSharding, width)
+						sharding = dataflow.NewShardingByColumn(parentOutSharding, width)
 					} else {
 						panic("unexpected sharding mode")
 					}
@@ -145,7 +146,7 @@ func (mig *migration) addRouting(new map[graph.NodeIdx]bool, topolist []graph.No
 				panic("ingress has more than one parent")
 			}
 
-			if sender.IsSource() {
+			if sender.IsRoot() {
 				// no need for egress from source
 				continue
 			}
@@ -199,7 +200,7 @@ func (mig *migration) addRouting(new map[graph.NodeIdx]bool, topolist []graph.No
 }
 
 func (mig *migration) routingConnect(new map[graph.NodeIdx]bool) error {
-	g := mig.target.ingredients
+	g := mig.target.graph()
 
 	for node := range new {
 		n := g.Value(node)
@@ -220,21 +221,19 @@ func (mig *migration) routingConnect(new map[graph.NodeIdx]bool) error {
 				shards := mig.DomainShards(n.Domain())
 				if shards != 1 && !senderNode.Sharding().IsNone() {
 					for s := uint(0); s < shards; s++ {
-						var pkt boostpb.Packet
-						pkt.Inner = &boostpb.Packet_UpdateEgress_{
-							UpdateEgress: &boostpb.Packet_UpdateEgress{
-								Node: senderNode.LocalAddr(),
-								NewTx: &boostpb.Packet_UpdateEgress_Tx{
-									Node:  uint32(node),
-									Local: uint32(n.LocalAddr()),
-									Domain: &boostpb.DomainAddr{
-										Domain: n.Domain(),
-										Shard:  s,
-									},
+						pkt := &packet.UpdateEgressRequest{
+							Node: senderNode.LocalAddr(),
+							NewTx: &packet.UpdateEgressRequest_Tx{
+								Node:  uint32(node),
+								Local: uint32(n.LocalAddr()),
+								Domain: &dataflow.DomainAddr{
+									Domain: n.Domain(),
+									Shard:  s,
 								},
 							},
 						}
-						if err := mig.SendPacketToShard(domain, s, &pkt); err != nil {
+
+						if err := mig.SendToShard(domain, s).UpdateEgress(pkt); err != nil {
 							return err
 						}
 					}
@@ -247,45 +246,42 @@ func (mig *migration) routingConnect(new map[graph.NodeIdx]bool) error {
 						panic("unsharded egress sending to a sharded child")
 					}
 
-					var pkt boostpb.Packet
-					pkt.Inner = &boostpb.Packet_UpdateEgress_{UpdateEgress: &boostpb.Packet_UpdateEgress{
+					pkt := &packet.UpdateEgressRequest{
 						Node: senderNode.LocalAddr(),
-						NewTx: &boostpb.Packet_UpdateEgress_Tx{
+						NewTx: &packet.UpdateEgressRequest_Tx{
 							Node:  uint32(node),
 							Local: uint32(n.LocalAddr()),
-							Domain: &boostpb.DomainAddr{
+							Domain: &dataflow.DomainAddr{
 								Domain: n.Domain(),
 								Shard:  0,
 							},
 						},
-					}}
-					if err := mig.SendPacket(domain, &pkt); err != nil {
+					}
+
+					if err := mig.Send(domain).UpdateEgress(pkt); err != nil {
 						return err
 					}
 				}
 			case senderNode.IsSharder():
 				domain := senderNode.Domain()
 				shards := mig.DomainShards(n.Domain())
-				update := &boostpb.Packet_UpdateSharder{
+				update := &packet.UpdateSharderRequest{
 					Node:   senderNode.LocalAddr(),
-					NewTxs: make([]*boostpb.Packet_UpdateSharder_Tx, 0, shards),
+					NewTxs: make([]*packet.UpdateSharderRequest_Tx, 0, shards),
 				}
 				for s := uint(0); s < shards; s++ {
-					update.NewTxs = append(update.NewTxs, &boostpb.Packet_UpdateSharder_Tx{
+					update.NewTxs = append(update.NewTxs, &packet.UpdateSharderRequest_Tx{
 						Local: n.LocalAddr(),
-						Domain: &boostpb.DomainAddr{
+						Domain: &dataflow.DomainAddr{
 							Domain: n.Domain(),
 							Shard:  s,
 						},
 					})
 				}
-
-				var pkt boostpb.Packet
-				pkt.Inner = &boostpb.Packet_UpdateSharder_{UpdateSharder: update}
-				if err := mig.SendPacket(domain, &pkt); err != nil {
+				if err := mig.Send(domain).UpdateSharder(update); err != nil {
 					return err
 				}
-			case senderNode.IsSource():
+			case senderNode.IsRoot():
 			// noop
 			default:
 				panic("ingress parent is not a sender")

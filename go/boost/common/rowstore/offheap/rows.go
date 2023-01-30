@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/sql"
 )
 
 // Rows are used as the linked list for rows in the hash table
@@ -22,7 +22,7 @@ type Rows struct {
 const rowsSize = unsafe.Sizeof(Rows{})
 
 // New allocates a new Rows with the given hash and initial row.
-func New(row boostpb.Row, memsize *atomic.Int64) *Rows {
+func New(row sql.Row, memsize *atomic.Int64) *Rows {
 	hdr := (*Rows)(DefaultAllocator.alloc(rowsSize + uintptr(len(row))))
 	hdr.next = nil
 	hdr.size = uint32(len(row))
@@ -57,7 +57,7 @@ func (r *Rows) memsize() int64 {
 
 // Insert adds a new element at the header of the linked list
 // and returns the new Rows entry created.
-func (r *Rows) Insert(row boostpb.Row, memsize *atomic.Int64) *Rows {
+func (r *Rows) Insert(row sql.Row, memsize *atomic.Int64) *Rows {
 	next := New(row, memsize)
 	if r == nil {
 		return next
@@ -70,7 +70,7 @@ func (r *Rows) Insert(row boostpb.Row, memsize *atomic.Int64) *Rows {
 // Remove drops the given row from the linked list. It returns
 // a new linked list as it might be dropping the first element
 // of the linked list.
-func (r *Rows) Remove(srow boostpb.Row, memsize *atomic.Int64) (*Rows, bool) {
+func (r *Rows) Remove(srow sql.Row, memsize *atomic.Int64) (*Rows, bool) {
 	var prev *Rows = nil
 	var cur = r
 
@@ -111,20 +111,20 @@ func (r *Rows) Len() (count int) {
 // First returns the first entry in the linked list.
 // This creates a copy that is safe to use outside
 // the context of managed memory.
-func (r *Rows) First() boostpb.Row {
+func (r *Rows) First() sql.Row {
 	if r == nil {
 		return ""
 	}
 
 	// TODO: consider unsafe yield to not allocate
 	bytes := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(r), rowsSize)), r.size)
-	return boostpb.Row(bytes)
+	return sql.Row(bytes)
 }
 
 // ForEach yields each row in the linked list. It is
 // safe to use this row as it yields a copy of the managed
 // memory.
-func (r *Rows) ForEach(each func(r boostpb.Row)) {
+func (r *Rows) ForEach(each func(r sql.Row)) {
 	for ; r != nil; r = r.next {
 		each(r.First())
 	}
@@ -133,7 +133,7 @@ func (r *Rows) ForEach(each func(r boostpb.Row)) {
 // Collect returns all rows in the linked list. It is
 // safe to use these rows as it returns a copy of the managed
 // memory.
-func (r *Rows) Collect(rows []boostpb.Row) []boostpb.Row {
+func (r *Rows) Collect(rows []sql.Row) []sql.Row {
 	for ; r != nil; r = r.next {
 		rows = append(rows, r.First())
 	}

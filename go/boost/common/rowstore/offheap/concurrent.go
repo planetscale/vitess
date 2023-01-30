@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/sql"
 )
 
 // ConcurrentRows are used for the swapping concurrent reading
@@ -32,7 +32,7 @@ const flagEpochPosition = 31
 // NewConcurrent creates a new concurrent row with the given has and row data.
 // It allocates the row with the needed size for the row and initializes the
 // header correctly.
-func NewConcurrent(row boostpb.Row, memsize *atomic.Int64) *ConcurrentRows {
+func NewConcurrent(row sql.Row, memsize *atomic.Int64) *ConcurrentRows {
 	alloc := concurrentRowsSize + uintptr(len(row))
 	hdr := (*ConcurrentRows)(DefaultAllocator.alloc(alloc))
 	hdr.next = nil
@@ -86,7 +86,7 @@ func (cr *ConcurrentRows) writesize() int {
 // a tombstone marker indicates we should ignore the entry, but only if
 // the current epoch matches. Otherwise we still need to see the value
 // to guarantee consistencies when deletes are visible.
-func (cr *ConcurrentRows) readsize(epoch uintptr) int {
+func (cr *ConcurrentRows) readsize(epoch uint64) int {
 	sz := cr.sizemask.Load()
 	if sz&flagTombstone != 0 {
 		if sz>>flagEpochPosition == uint32(epoch&0x1) {
@@ -135,7 +135,7 @@ func (cr *ConcurrentRows) TotalMemorySize() (total int64) {
 // If the current value is the empty sentinel value, we return
 // the next element directly. We don't keep the sentinel entry
 // at the end of the linked list.
-func (cr *ConcurrentRows) Insert(row boostpb.Row, epoch uintptr, memsize *atomic.Int64) (new *ConcurrentRows, free *ConcurrentRows) {
+func (cr *ConcurrentRows) Insert(row sql.Row, memsize *atomic.Int64) (new *ConcurrentRows, free *ConcurrentRows) {
 	next := NewConcurrent(row, memsize)
 	if cr == nil {
 		return next, cr
@@ -149,7 +149,7 @@ func (cr *ConcurrentRows) Insert(row boostpb.Row, epoch uintptr, memsize *atomic
 // here is the row we want to mark as tombstone that needs to be part of the
 // current linked list.
 // We use the current epoch to set the correct epoch bit on the tombstone.
-func (cr *ConcurrentRows) Tombstone(row boostpb.Row, epoch uintptr) *ConcurrentRows {
+func (cr *ConcurrentRows) Tombstone(row sql.Row, epoch uint64) *ConcurrentRows {
 	var cur = cr
 	for cur != nil {
 		if cur.writesize() == len(row) && cur.AllocUnsafe() == row {
@@ -165,7 +165,7 @@ func (cr *ConcurrentRows) Tombstone(row boostpb.Row, epoch uintptr) *ConcurrentR
 // list since the given entry can also be the first element of the linked list.
 // If we have zero entries left, we return the empty marker so we can store that in
 // the hash table.
-func (cr *ConcurrentRows) Remove(rowp *ConcurrentRows, memsize *atomic.Int64) (*ConcurrentRows, *ConcurrentRows) {
+func (cr *ConcurrentRows) Remove(rowp *ConcurrentRows) (*ConcurrentRows, *ConcurrentRows) {
 	var prev *ConcurrentRows = nil
 	var cur *ConcurrentRows = cr
 
@@ -191,7 +191,7 @@ found:
 
 // Len gets the length of the linked list of rows. It needs
 // to walk all the entries.
-func (cr *ConcurrentRows) Len(epoch uintptr) (count int) {
+func (cr *ConcurrentRows) Len(epoch uint64) (count int) {
 	if cr == nil || cr.readsize(epoch) == 0 {
 		return 0
 	}
@@ -205,24 +205,24 @@ func (cr *ConcurrentRows) Len(epoch uintptr) (count int) {
 // that will be backed by the off heap memory. This means it
 // is not safe to use this outside of contexts where it's known
 // that the memory won't be freed.
-func (cr *ConcurrentRows) AllocUnsafe() boostpb.Row {
+func (cr *ConcurrentRows) AllocUnsafe() sql.Row {
 	bytes := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(cr), rowsSize)), cr.writesize())
-	return boostpb.Row(*(*string)(unsafe.Pointer(&bytes)))
+	return sql.Row(*(*string)(unsafe.Pointer(&bytes)))
 }
 
 // alloc returns a new ConcurrentRows instance with the
 // given size. This creates a safe copy of the row
 // that can be used outside the context of managed memory.
-func (cr *ConcurrentRows) alloc(size int) boostpb.Row {
+func (cr *ConcurrentRows) alloc(size int) sql.Row {
 	bytes := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(cr), rowsSize)), size)
-	return boostpb.Row(bytes)
+	return sql.Row(bytes)
 }
 
 // ForEach walk the linked list of concurrent rows and calls
 // the callback for each entry. It yields an safe copied row that
 // can be referenced outside the context of the memory being known
 // as allocated.
-func (cr *ConcurrentRows) ForEach(epoch uintptr, each func(r boostpb.Row)) {
+func (cr *ConcurrentRows) ForEach(epoch uint64, each func(r sql.Row)) {
 	for ; cr != nil; cr = cr.next {
 		if sz := cr.readsize(epoch); sz != 0 {
 			each(cr.alloc(sz))
@@ -234,7 +234,7 @@ func (cr *ConcurrentRows) ForEach(epoch uintptr, each func(r boostpb.Row)) {
 // rows entry. The returned entries are safe to retain outside
 // the context of memory management, since they are copied
 // by this function.
-func (cr *ConcurrentRows) Collect(epoch uintptr, rows []boostpb.Row) []boostpb.Row {
+func (cr *ConcurrentRows) Collect(epoch uint64, rows []sql.Row) []sql.Row {
 	for ; cr != nil; cr = cr.next {
 		if sz := cr.readsize(epoch); sz != 0 {
 			rows = append(rows, cr.alloc(sz))

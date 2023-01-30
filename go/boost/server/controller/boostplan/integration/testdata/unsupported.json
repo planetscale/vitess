@@ -23,6 +23,14 @@
     {
       "Keyspace": "main",
       "SQL": "CREATE TABLE users_no_unique_key (id INT(32), age INT(32), name VARCHAR(40), address VARCHAR(40), metadata JSON)"
+    },
+    {
+      "Keyspace": "cars",
+      "SQL": "CREATE TABLE Car (cid int, pid int, PRIMARY KEY(cid))"
+    },
+    {
+      "Keyspace": "cars",
+      "SQL": "CREATE TABLE Price (pid int, price int, PRIMARY KEY(pid))"
     }
   ],
   "Queries": [
@@ -108,18 +116,13 @@
     },
     {
       "Keyspace": "main",
-      "SQL": "select count(*), aid from votes where uid = :v1 group by aid",
-      "Error": "partially overlapping partial indices; parent = 2, pcols = []int{1}, child = 2, cols = []int{0, 1}, conflict = 0"
-    },
-    {
-      "Keyspace": "main",
       "SQL": "select count(*), aid from votes where uid = :v1",
       "Error": "query not supported by boost: non aggregated column '`aid`' is not part of group by"
     },
     {
       "Keyspace": "main",
-      "SQL": "select max(uid) from votes",
-      "Error": "query not supported by boost: MIN() / MAX() is currently not supported: MAX(`uid`)"
+      "SQL": "select SUM(name) from users where id = :v1",
+      "Error": "unsupported type for SUM: VARCHAR"
     }
   ]
 }

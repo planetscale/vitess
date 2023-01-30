@@ -1,7 +1,9 @@
 package controller
 
 import (
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/packet"
+	"vitess.io/vitess/go/boost/dataflow"
+
 	"vitess.io/vitess/go/boost/graph"
 )
 
@@ -10,8 +12,8 @@ type nodeWithAge struct {
 	New bool
 }
 
-func (mig *migration) augmentationInform(nodes map[boostpb.DomainIndex][]nodeWithAge) error {
-	g := mig.target.ingredients
+func (mig *migration) augmentationInform(nodes map[dataflow.DomainIdx][]nodeWithAge) error {
+	g := mig.target.graph()
 
 	for domain, nodes := range nodes {
 		oldNodes := make(map[graph.NodeIdx]bool)
@@ -26,13 +28,16 @@ func (mig *migration) augmentationInform(nodes map[boostpb.DomainIndex][]nodeWit
 				continue
 			}
 			ni := nn.Idx
-			node := g.Value(ni).Finalize(g)
+			node, err := g.Value(ni).Finalize(g)
+			if err != nil {
+				return err
+			}
 
-			var oldParents []boostpb.LocalNodeIndex
+			var oldParents []dataflow.LocalNodeIdx
 			it := g.NeighborsDirected(ni, graph.DirectionIncoming)
 			for it.Next() {
 				ni := it.Current
-				if !ni.IsSource() && oldNodes[ni] {
+				if !ni.IsRoot() && oldNodes[ni] {
 					n := g.Value(ni)
 					if n.Domain() == domain {
 						oldParents = append(oldParents, n.LocalAddr())
@@ -40,14 +45,11 @@ func (mig *migration) augmentationInform(nodes map[boostpb.DomainIndex][]nodeWit
 				}
 			}
 
-			var pkt boostpb.Packet
-			pkt.Inner = &boostpb.Packet_AddNode_{
-				AddNode: &boostpb.Packet_AddNode{
-					Node:    node.ToProto(),
-					Parents: oldParents,
-				},
+			pkt := &packet.AddNodeRequest{
+				Node:    node.ToProto(),
+				Parents: oldParents,
 			}
-			if err := mig.SendPacket(domain, &pkt); err != nil {
+			if err := mig.Send(domain).AddNode(pkt); err != nil {
 				return err
 			}
 		}

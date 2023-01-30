@@ -182,6 +182,16 @@ func Filter[T any](s []T, fn func(T) bool) []T {
 	return ret
 }
 
+func FilterInPlace[T any](s []T, fn func(T) bool) []T {
+	filtered := s[:0]
+	for _, e := range s {
+		if fn(e) {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
+}
+
 // FilterIndexed returns the slice obtained after retaining only those elements
 // in the given slice for which the given function returns true. Predicate
 // receives the value as well as its index in the slice.

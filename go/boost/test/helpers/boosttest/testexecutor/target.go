@@ -94,7 +94,7 @@ func (target *memTarget) execute(querySQL string, variables map[string]*querypb.
 	}
 
 	// HACK: our in-memory SQL engine does not like the backticks around `gtid_executed`
-	querySQL = strings.Replace(querySQL, "@@global.`gtid_executed`", "@@global.gtid_executed", 1)
+	querySQL = strings.ReplaceAll(querySQL, "@@global.`gtid_executed`", "@@global.gtid_executed")
 
 	ctx := sql.NewContext(context.Background(), sql.WithServices(sql.Services{
 		LogTransaction: target.gtid.Log,
@@ -116,6 +116,7 @@ func (target *memTarget) execute(querySQL string, variables map[string]*querypb.
 
 	vtrows := rowsToVitess(ctx, schema, rows)
 	target.t.Logf("executed query %q with %d results", querySQL, len(vtrows))
+	target.t.Logf("\t%v", vtrows)
 
 	return &sqltypes.Result{
 		Fields: schemaToVitess(schema),
@@ -123,8 +124,12 @@ func (target *memTarget) execute(querySQL string, variables map[string]*querypb.
 	}, nil
 }
 
-func (target *memTarget) vstream(ctx context.Context, pos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error, latency time.Duration) error {
+func (target *memTarget) vstream(ctx context.Context, pos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error, options *Options) error {
 	stream := make(chan []*binlogdatapb.VEvent, 32)
+
+	if options.VStreamStartLatency > 0 {
+		time.Sleep(options.VStreamStartLatency)
+	}
 
 	if err := target.gtid.Subscribe(pos, stream); err != nil {
 		return err
@@ -168,8 +173,8 @@ func (target *memTarget) vstream(ctx context.Context, pos string, filter *binlog
 			if len(events) == 0 {
 				continue
 			}
-			if latency > 0 {
-				time.Sleep(latency)
+			if options.VStreamRowLatency > 0 {
+				time.Sleep(options.VStreamRowLatency)
 			}
 			if err := send(events); err != nil {
 				return err

@@ -6,9 +6,9 @@ import (
 
 	"go.uber.org/multierr"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -59,7 +59,10 @@ func (r *VersionedRecipe) Activate(mig Migration, schema *SchemaInformation) (*A
 	// tagged with the new version. If this recipe was just created, there is no need to
 	// upgrade the schema version, as the SqlIncorporator's version will still be at zero.
 	if r.version > 0 {
-		r.inc.UpgradeSchema(r.version)
+		err := r.inc.UpgradeSchema(r.version)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// add new queries to the Soup graph carried by `mig`, and reflect state in the
@@ -93,12 +96,15 @@ func (r *VersionedRecipe) Activate(mig Migration, schema *SchemaInformation) (*A
 
 		switch oldq.Statement.(type) {
 		case *sqlparser.CreateTable:
-			panic("CreateTable statements are implicit and should never be removed")
+			return nil, errors.New("cannot remove create table statements")
 		default:
-			if rm := r.inc.RemoveQuery(oldq.PublicId); rm != graph.InvalidNode {
-				activation.NodesRemoved = append(activation.NodesRemoved, rm)
-				activation.QueriesRemoved = append(activation.QueriesRemoved, oldq)
+			rm, err := r.inc.RemoveQuery(oldq.PublicId)
+			if err != nil {
+				errs = append(errs, &QueryScopedError{err, oldq})
+				continue
 			}
+			activation.NodesRemoved = append(activation.NodesRemoved, rm)
+			activation.QueriesRemoved = append(activation.QueriesRemoved, oldq)
 		}
 	}
 
@@ -112,7 +118,7 @@ func (r *VersionedRecipe) revert() *VersionedRecipe {
 	return BlankRecipe()
 }
 
-func (r *VersionedRecipe) EnableReuse(reuse boostpb.ReuseType) {
+func (r *VersionedRecipe) EnableReuse(reuse config.ReuseType) {
 	r.inc.EnableReuse(reuse)
 }
 

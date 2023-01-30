@@ -3,12 +3,12 @@ package controller
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 )
 
-func allShardingsAreNone(shardings map[graph.NodeIdx]boostpb.Sharding) bool {
+func allShardingsAreNone(shardings map[graph.NodeIdx]dataflow.Sharding) bool {
 	for _, sharding := range shardings {
 		if !sharding.IsNone() {
 			return false
@@ -17,16 +17,16 @@ func allShardingsAreNone(shardings map[graph.NodeIdx]boostpb.Sharding) bool {
 	return true
 }
 
-func anyShardingIsNone(shardings map[graph.NodeIdx]boostpb.Sharding) bool {
+func anyShardingIsNone(shardings map[graph.NodeIdx]dataflow.Sharding) bool {
 	for _, sharding := range shardings {
-		if sharding.Mode == boostpb.Sharding_ForcedNone {
+		if sharding.Mode == dataflow.Sharding_ForcedNone {
 			return true
 		}
 	}
 	return false
 }
 
-func firstSharding(shardings map[graph.NodeIdx]boostpb.Sharding) boostpb.Sharding {
+func firstSharding(shardings map[graph.NodeIdx]dataflow.Sharding) dataflow.Sharding {
 	for _, sh := range shardings {
 		return sh
 	}
@@ -34,12 +34,12 @@ func firstSharding(shardings map[graph.NodeIdx]boostpb.Sharding) boostpb.Shardin
 }
 
 func (mig *migration) shard(new map[graph.NodeIdx]bool, topoList []graph.NodeIdx, shardingFactor uint) ([]graph.NodeIdx, map[graph.NodeIdxPair]graph.NodeIdx, error) {
-	g := mig.target.ingredients
+	g := mig.target.graph()
 	swaps := make(map[graph.NodeIdxPair]graph.NodeIdx)
 
 nodes:
 	for _, node := range topoList {
-		inputShardings := make(map[graph.NodeIdx]boostpb.Sharding)
+		inputShardings := make(map[graph.NodeIdx]dataflow.Sharding)
 		it := g.NeighborsDirected(node, graph.DirectionIncoming)
 		for it.Next() {
 			inputShardings[it.Current] = g.Value(it.Current).Sharding()
@@ -49,7 +49,7 @@ nodes:
 
 		var needSharding map[graph.NodeIdx][]int
 		switch {
-		case graphNode.IsInternal() || graphNode.IsAnyBase():
+		case graphNode.IsInternal() || graphNode.IsTable():
 			needSharding = graphNode.SuggestIndexes(node)
 
 		case graphNode.IsReader():
@@ -64,16 +64,16 @@ nodes:
 				continue
 			}
 
-			var s boostpb.Sharding
+			var s dataflow.Sharding
 			ckey := graphNode.AsReader().Key()
 			if len(ckey) == 1 {
 				if graphNode.Fields()[ckey[0]] == "bogokey" {
-					s = boostpb.NewShardingForcedNone()
+					s = dataflow.NewShardingForcedNone()
 				} else {
-					s = boostpb.NewShardingByColumn(ckey[0], shardingFactor)
+					s = dataflow.NewShardingByColumn(ckey[0], shardingFactor)
 				}
 			} else {
-				s = boostpb.NewShardingForcedNone()
+				s = dataflow.NewShardingForcedNone()
 			}
 			if s.IsNone() {
 				mig.log.Debug("de-sharding prior to poorly keyed reader", node.Zap())
@@ -89,7 +89,7 @@ nodes:
 			graphNode.ShardBy(s)
 			continue
 
-		case graphNode.IsSource():
+		case graphNode.IsRoot():
 			continue
 
 		default:
@@ -97,16 +97,16 @@ nodes:
 		}
 
 		if len(needSharding) == 0 && (len(inputShardings) == 1 || allShardingsAreNone(inputShardings)) {
-			var s boostpb.Sharding
+			var s dataflow.Sharding
 			if anyShardingIsNone(inputShardings) {
-				s = boostpb.NewShardingForcedNone()
+				s = dataflow.NewShardingForcedNone()
 			} else {
 				s = firstSharding(inputShardings)
 			}
 
 			mig.log.Debug("preserving sharding for pass-through node", node.Zap())
 
-			if graphNode.IsInternal() || graphNode.IsAnyBase() {
+			if graphNode.IsInternal() || graphNode.IsTable() {
 				if c, shards, ok := s.ByColumn(); ok {
 					col, maxcol := 0, len(graphNode.Fields())
 					for col = 0; col < maxcol; col++ {
@@ -117,9 +117,9 @@ nodes:
 					}
 
 					if col < maxcol {
-						s = boostpb.NewShardingByColumn(col, shards)
+						s = dataflow.NewShardingByColumn(col, shards)
 					} else {
-						s = boostpb.NewShardingRandom(shards)
+						s = dataflow.NewShardingRandom(shards)
 					}
 				}
 			}
@@ -135,13 +135,13 @@ nodes:
 			}
 		}
 		if isComplex {
-			if !graphNode.IsAnyBase() {
+			if !graphNode.IsTable() {
 				// not supported yet -- force no sharding
 				// TODO: if we're sharding by a two-part key and need sharding by the *first* part
 				// of that key, we can probably re-use the existing sharding?
 				mig.log.Error("de-sharding for lack of multi-key sharding support", node.Zap())
 				for ni := range inputShardings {
-					mig.reshard(new, swaps, ni, node, boostpb.NewShardingForcedNone())
+					mig.reshard(new, swaps, ni, node, dataflow.NewShardingForcedNone())
 				}
 			}
 			continue
@@ -158,8 +158,8 @@ nodes:
 			if graphNode.Fields()[wantSharding] == "bogokey" {
 				mig.log.Debug("de-sharding node that operates on bogokey", node.Zap())
 				for ni := range inputShardings {
-					mig.reshard(new, swaps, ni, node, boostpb.NewShardingForcedNone())
-					inputShardings[ni] = boostpb.NewShardingForcedNone()
+					mig.reshard(new, swaps, ni, node, dataflow.NewShardingForcedNone())
+					inputShardings[ni] = dataflow.NewShardingForcedNone()
 				}
 				continue
 			}
@@ -168,7 +168,7 @@ nodes:
 			switch {
 			case graphNode.IsInternal():
 				resolved = graphNode.Resolve(wantSharding)
-			case graphNode.IsAnyBase():
+			case graphNode.IsTable():
 				resolved = nil
 			default:
 				resolved = make([]flownode.NodeColumn, 0, 4)
@@ -180,18 +180,18 @@ nodes:
 			}
 
 			switch {
-			case resolved == nil && !graphNode.IsAnyBase():
+			case resolved == nil && !graphNode.IsTable():
 				// weird operator -- needs an index in its output, which it generates.
 				// we need to have *no* sharding on our inputs!
 				for ni := range inputShardings {
-					mig.reshard(new, swaps, ni, node, boostpb.NewShardingForcedNone())
-					inputShardings[ni] = boostpb.NewShardingForcedNone()
+					mig.reshard(new, swaps, ni, node, dataflow.NewShardingForcedNone())
+					inputShardings[ni] = dataflow.NewShardingForcedNone()
 				}
 				// ok to continue since standard shard_by is None
 				continue
 
 			case resolved == nil:
-				graphNode.ShardBy(boostpb.NewShardingByColumn(wantSharding, shardingFactor))
+				graphNode.ShardBy(dataflow.NewShardingByColumn(wantSharding, shardingFactor))
 				continue
 
 			default:
@@ -221,9 +221,9 @@ nodes:
 				}
 
 				if canshard {
-					s := boostpb.NewShardingByColumn(wantSharding, shardingFactor)
+					s := dataflow.NewShardingByColumn(wantSharding, shardingFactor)
 					for ni, col := range wantShardingInput {
-						needShardingShard := boostpb.NewShardingByColumn(col, shardingFactor)
+						needShardingShard := dataflow.NewShardingByColumn(col, shardingFactor)
 						if inputShardings[ni] != needShardingShard {
 							mig.reshard(new, swaps, ni, node, needShardingShard)
 							inputShardings[ni] = needShardingShard
@@ -246,7 +246,7 @@ nodes:
 			for col := range graphNode.Fields() {
 				var srcs []flownode.NodeColumn
 
-				if graphNode.IsAnyBase() {
+				if graphNode.IsTable() {
 					srcs = nil
 				} else {
 					for _, src := range graphNode.ParentColumns(col) {
@@ -272,14 +272,14 @@ nodes:
 
 					allSame := true
 					for _, nc := range srcs {
-						if inputShardings[nc.Node] != boostpb.NewShardingByColumn(nc.Column, shardingFactor) {
+						if inputShardings[nc.Node] != dataflow.NewShardingByColumn(nc.Column, shardingFactor) {
 							allSame = false
 							break
 						}
 					}
 
 					if allSame {
-						graphNode.ShardBy(boostpb.NewShardingByColumn(col, shardingFactor))
+						graphNode.ShardBy(dataflow.NewShardingByColumn(col, shardingFactor))
 						continue nodes
 					}
 				} else {
@@ -311,12 +311,12 @@ nodes:
 
 					// `col` resolves to the same column we use to lookup in each ancestor
 					// so it's safe for us to shard by `col`!
-					s := boostpb.NewShardingByColumn(col, shardingFactor)
+					s := dataflow.NewShardingByColumn(col, shardingFactor)
 
 					// we have to ensure that each input is also sharded by that key
 					// specifically, some inputs may _not_ be sharded previously
 					for _, nc := range srcs {
-						needShardingShard := boostpb.NewShardingByColumn(nc.Column, shardingFactor)
+						needShardingShard := dataflow.NewShardingByColumn(nc.Column, shardingFactor)
 						if inputShardings[nc.Node] != needShardingShard {
 							mig.reshard(new, swaps, nc.Node, node, needShardingShard)
 							inputShardings[nc.Node] = needShardingShard
@@ -344,7 +344,7 @@ nodes:
 		}
 
 		// force everything to be unsharded...
-		sharding := boostpb.NewShardingForcedNone()
+		sharding := dataflow.NewShardingForcedNone()
 		for ni, inSharding := range inputShardings {
 			if !inSharding.IsNone() {
 				mig.reshard(new, swaps, ni, node, sharding)
@@ -380,27 +380,21 @@ nodes:
 			graphN := g.Value(n)
 			graphP := g.Value(p)
 
-			if graphP.IsSource() {
+			if graphP.IsRoot() {
 				panic("a sharder should never be placed right under the source")
 			}
 
 			// and that its children must be sharded somehow (otherwise what is the sharder doing?)
 			col := graphN.AsSharder().ShardedBy()
-			by := boostpb.NewShardingByColumn(col, shardingFactor)
+			by := dataflow.NewShardingByColumn(col, shardingFactor)
 
 			// we can only push sharding above newly created nodes that are not already sharded.
-			if !new[p] || graphP.Sharding().Mode != boostpb.Sharding_None {
+			if !new[p] || graphP.Sharding().Mode != dataflow.Sharding_None {
 				continue
 			}
 
-			if graphP.IsAnyBase() {
-				if k, ok := graphP.AsBase().Key(); ok {
-					if len(k) != 1 {
-						continue
-					}
-				}
-
-				// if the base has other children, sharding it may have other effects
+			if graphP.IsTable() {
+				// if the table has other children, sharding it may have other effects
 				if g.NeighborsDirected(p, graph.DirectionOutgoing).Count() != 1 {
 					// TODO: technically we could still do this if the other children were sharded by the same column.
 					continue
@@ -415,13 +409,13 @@ nodes:
 					// undo the swap that inserting the sharder in the first place generated
 					delete(swaps, graph.NodeIdxPair{One: c, Two: p})
 
-					// unwire the child from the sharder and wire to the base directly
+					// unwire the child from the sharder and wire to the table directly
 					e := g.FindEdge(n, c)
 					g.RemoveEdge(e)
 					g.AddEdge(p, c)
 				}
 
-				// also unwire the sharder from the base
+				// also unwire the sharder from the table
 				e := g.FindEdge(p, n)
 				g.RemoveEdge(e)
 
@@ -469,7 +463,7 @@ nodes:
 					// TODO: we *could* insert a de-shard here
 					continue sharders
 				}
-				csharding := boostpb.NewShardingByColumn(shrd.ShardedBy(), shardingFactor)
+				csharding := dataflow.NewShardingByColumn(shrd.ShardedBy(), shardingFactor)
 				if csharding == by {
 					remove = append(remove, c)
 				}
@@ -543,8 +537,8 @@ nodes:
 		p := g.NeighborsDirected(n, graph.DirectionIncoming).First()
 		mig.log.Error("preventing unsupported sharded shuffle", n.Zap())
 
-		mig.reshard(new, swaps, p, n, boostpb.NewShardingForcedNone())
-		g.Value(n).ShardBy(boostpb.NewShardingForcedNone())
+		mig.reshard(new, swaps, p, n, dataflow.NewShardingForcedNone())
+		g.Value(n).ShardBy(dataflow.NewShardingForcedNone())
 	}
 
 	var finalTopoList []graph.NodeIdx
@@ -552,7 +546,7 @@ nodes:
 	for topo.Next() {
 		node := topo.Current
 		graphNode := g.Value(node)
-		if graphNode.IsSource() || graphNode.IsDropped() {
+		if graphNode.IsRoot() || graphNode.IsDropped() {
 			continue
 		}
 		if !new[node] {
@@ -566,8 +560,8 @@ nodes:
 	return finalTopoList, swaps, nil
 }
 
-func (mig *migration) reshard(new map[graph.NodeIdx]bool, swaps map[graph.NodeIdxPair]graph.NodeIdx, src graph.NodeIdx, dst graph.NodeIdx, to boostpb.Sharding) {
-	g := mig.target.ingredients
+func (mig *migration) reshard(new map[graph.NodeIdx]bool, swaps map[graph.NodeIdxPair]graph.NodeIdx, src graph.NodeIdx, dst graph.NodeIdx, to dataflow.Sharding) {
+	g := mig.target.graph()
 	graphSrc := g.Value(src)
 
 	if graphSrc.Sharding().IsNone() && to.IsNone() {
@@ -605,7 +599,7 @@ func (mig *migration) reshard(new map[graph.NodeIdx]bool, swaps map[graph.NodeId
 }
 
 func (mig *migration) validateSharding(topoList []graph.NodeIdx, shardingFactor uint) error {
-	g := mig.target.ingredients
+	g := mig.target.graph()
 
 	// ensure that each node matches the sharding of each of its ancestors, unless the ancestor is
 	// a sharder or a shard merger
@@ -619,30 +613,30 @@ func (mig *migration) validateSharding(topoList []graph.NodeIdx, shardingFactor 
 		var inputs []graph.NodeIdx
 		it := g.NeighborsDirected(node, graph.DirectionIncoming)
 		for it.Next() {
-			if !g.Value(it.Current).IsSource() {
+			if !g.Value(it.Current).IsRoot() {
 				inputs = append(inputs, it.Current)
 			}
 		}
 
-		remap := func(nd *flownode.Node, pni graph.NodeIdx, ps boostpb.Sharding) boostpb.Sharding {
-			if nd.IsInternal() || nd.IsAnyBase() {
+		remap := func(nd *flownode.Node, pni graph.NodeIdx, ps dataflow.Sharding) dataflow.Sharding {
+			if nd.IsInternal() || nd.IsTable() {
 				if c, shards, ok := ps.ByColumn(); ok {
 					var maxcol = len(nd.Fields())
 					for col := 0; col < maxcol; col++ {
 						for _, pc := range nd.ParentColumns(col) {
 							if pc.Column != -1 {
 								if pc.Node == pni && pc.Column == c {
-									return boostpb.NewShardingByColumn(col, shards)
+									return dataflow.NewShardingByColumn(col, shards)
 								}
 								if !g.Value(pni).IsInternal() {
 									if graph.HasPathConnecting(g, pc.Node, pni) && pc.Column == c {
-										return boostpb.NewShardingByColumn(col, shards)
+										return dataflow.NewShardingByColumn(col, shards)
 									}
 								}
 							}
 						}
 					}
-					return boostpb.NewShardingRandom(shards)
+					return dataflow.NewShardingRandom(shards)
 				}
 			}
 			return ps
@@ -651,7 +645,7 @@ func (mig *migration) validateSharding(topoList []graph.NodeIdx, shardingFactor 
 		for _, inni := range inputs {
 			inNode := g.Value(inni)
 			if sharder := inNode.AsSharder(); sharder != nil {
-				inSharding := remap(n, inni, boostpb.NewShardingByColumn(sharder.ShardedBy(), shardingFactor))
+				inSharding := remap(n, inni, dataflow.NewShardingByColumn(sharder.ShardedBy(), shardingFactor))
 				if inSharding != n.Sharding() {
 					return fmt.Errorf("invalid sharding: %d shards to %s; %d shards to %s",
 						inni, inSharding.DebugString(), node, n.Sharding().DebugString(),
