@@ -12,6 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/aws/session"
+
 	"github.com/planetscale/common-libs/files"
 
 	"vitess.io/vitess/go/vt/log"
@@ -20,8 +24,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/aws/aws-sdk-go/aws/session"
 )
 
 const (
@@ -161,7 +163,9 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 
 	rootPath := path.Join("/", backupID, dir)
 
-	sess, err := session.NewSession()
+	cfg := request.WithRetryer(aws.NewConfig(), newKMSReadConnResetRetryer())
+
+	sess, err := session.NewSession(cfg)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to initialize aws session")
 	}

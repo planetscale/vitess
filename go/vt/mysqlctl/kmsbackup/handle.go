@@ -167,6 +167,9 @@ func (f *filesBackupHandle) AddFile(ctx context.Context, filename string, approx
 // ReadFile satisfiles backupstorage.BackupHandle.
 func (f *filesBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	filePath := path.Join(f.rootPath, filename)
+	if filename == backupSizeFileName {
+		return f.unencryptedFs.Open(ctx, filePath)
+	}
 	return f.fs.Open(ctx, filePath)
 }
 
