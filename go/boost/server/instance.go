@@ -11,6 +11,8 @@ import (
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
 
+	"vitess.io/vitess/go/streamlog"
+
 	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/vt/discovery"
 
@@ -60,6 +62,8 @@ func NewBoostInstance(log *zap.Logger, ts *topo.Server, tmc toposerver.TabletMan
 	if cfg == nil {
 		cfg = config.DefaultConfig()
 	}
+
+	vtgate.QueryLogger = streamlog.New("vtboost", 10)
 
 	tp := toposerver.NewTopoServer(log, ts, tmc, clusterID)
 	instanceID := uuid.New()
