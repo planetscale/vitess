@@ -6,16 +6,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestUnion(t *testing.T) {
-	setup := func(t *testing.T) (*MockGraph, boostpb.IndexPair, boostpb.IndexPair) {
+	setup := func(t *testing.T) (*MockGraph, dataflow.IndexPair, dataflow.IndexPair) {
 		g := NewMockGraph(t)
-		l := g.AddBase("left", []string{"l0", "l1"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar))
-		r := g.AddBase("right", []string{"r0", "r1", "r2"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.VarChar))
+		l := g.AddBase("left", []string{"l0", "l1"}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar))
+		r := g.AddBase("right", []string{"r0", "r1", "r2"}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.VarChar))
 		emits := map[graph.NodeIdx][]int{
 			l.AsGlobal(): {0, 1},
 			r.AsGlobal(): {0, 2},
@@ -35,13 +36,13 @@ func TestUnion(t *testing.T) {
 	t.Run("it works", func(t *testing.T) {
 		u, l, r := setup(t)
 
-		left := boostpb.TestRow(1, "a")
+		left := sql.TestRow(1, "a")
 		rsl := u.One(l, left.AsRecords(), false)
 		assert.Equal(t, left.AsRecords(), rsl)
 
-		right := boostpb.TestRow(1, "skipped", "x")
+		right := sql.TestRow(1, "skipped", "x")
 		rsr := u.One(r, right.AsRecords(), false)
-		assert.Equal(t, boostpb.TestRow(1, "x").AsRecords(), rsr)
+		assert.Equal(t, sql.TestRow(1, "x").AsRecords(), rsr)
 	})
 
 	t.Run("it suggests indices", func(t *testing.T) {

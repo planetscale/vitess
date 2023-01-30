@@ -3,6 +3,7 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -100,7 +101,8 @@ func (node *Node) ExprLookup(st *semantics.SemTable, expr sqlparser.Expr) (int, 
 		}
 	}
 
-	return -1, NewBug(fmt.Sprintf("column not found: %s", sqlparser.String(expr)))
+	dbg.Bug("column not found: %s", sqlparser.String(expr))
+	return -1, nil
 }
 
 func (node *Node) Equals(st *semantics.SemTable, other *Node) bool {
@@ -240,9 +242,7 @@ func equalAccordingToSchemaTable(semTable *semantics.SemTable, a, b *sqlparser.C
 }
 
 func (col *Column) SingleAST() (sqlparser.Expr, error) {
-	if len(col.AST) != 1 {
-		return nil, NewBug("assumed we would get a single AST here")
-	}
+	dbg.Assert(len(col.AST) == 1, "assumed we would get a single AST here")
 	return col.AST[0], nil
 }
 func (col *Column) Explain() (string, string) {
@@ -300,9 +300,7 @@ func (node *Node) ConnectOutputs() {
 	}
 }
 
-func (node *Node) FlowNodeAddr() (graph.NodeIdx, error) {
-	if !node.Flow.Valid() {
-		return graph.NodeIdx(0), NewBug("MIR node does not have an associated FlowNode")
-	}
-	return node.Flow.Address, nil
+func (node *Node) FlowNodeAddr() graph.NodeIdx {
+	dbg.Assert(node.Flow.Valid(), "MIR node does not have an associated FlowNode")
+	return node.Flow.Address
 }

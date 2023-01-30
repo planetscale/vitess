@@ -6,7 +6,7 @@ import (
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
@@ -16,7 +16,7 @@ type migrationTracker struct {
 	Migration
 
 	topo             *toposerver.Server
-	epoch            boostpb.Epoch
+	epoch            service.Epoch
 	newRecipeVersion int64
 }
 
@@ -124,7 +124,7 @@ func (mig *migrationTracker) trackCommit(commitErr error) {
 var errInvalidEpoch = errors.New("epoch race (somebody else already updated our controller state?)")
 
 func (mig *migrationTracker) updateRecipeStatus(state *vtboostpb.ControllerState, update func(status *vtboostpb.ControllerState_RecipeStatus)) error {
-	if boostpb.Epoch(state.Epoch) > mig.epoch {
+	if service.Epoch(state.Epoch) > mig.epoch {
 		return errInvalidEpoch
 	}
 	if state.RecipeVersionStatus == nil {

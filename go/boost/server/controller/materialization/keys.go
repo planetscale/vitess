@@ -75,7 +75,7 @@ func graphTrace(g *graph.Graph[*flownode.Node], onJoin OnJoin, path []PathElemen
 	}
 
 	n := g.Value(node)
-	if n.IsAnyBase() {
+	if n.IsTable() {
 		return [][]PathElement{path}
 	}
 

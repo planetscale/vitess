@@ -5,23 +5,23 @@ import (
 
 	"golang.org/x/exp/maps"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type Incorporator struct {
 	converter *operators.Converter
 	leafs     map[string]*operators.Query
-	reuseType boostpb.ReuseType
+	reuseType config.ReuseType
 }
 
 func NewIncorporator() *Incorporator {
 	return &Incorporator{
 		converter: operators.NewConverter(),
 		leafs:     make(map[string]*operators.Query),
-		reuseType: boostpb.ReuseType_FINKELSTEIN,
+		reuseType: config.ReuseType_FINKELSTEIN,
 	}
 }
 
@@ -33,13 +33,17 @@ func (inc *Incorporator) Clone() *Incorporator {
 	}
 }
 
-func (inc *Incorporator) SetReuse(r boostpb.ReuseType) {
+func (inc *Incorporator) SetReuse(r config.ReuseType) {
 	inc.reuseType = r
 }
 
 func (inc *Incorporator) AddParsedQuery(keyspace string, stmt sqlparser.Statement, id string, mig Migration, si *SchemaInformation) (QFP, error) {
 	if id == "" {
 		return nil, fmt.Errorf("missing ID for parsed query")
+	}
+
+	if keyspace == "" {
+		return nil, fmt.Errorf("missing keyspace for parsed query")
 	}
 
 	switch stmt.(type) {
@@ -71,28 +75,31 @@ func (inc *Incorporator) addSelectQuery(keyspace, id string, sel sqlparser.State
 	return qfp, nil
 }
 
-func (inc *Incorporator) UpgradeSchema(newVersion int64) {
-	inc.converter.UpgradeSchema(newVersion)
+func (inc *Incorporator) UpgradeSchema(newVersion int64) error {
+	return inc.converter.UpgradeSchema(newVersion)
 }
 
-func (inc *Incorporator) RemoveQuery(id string) graph.NodeIdx {
+func (inc *Incorporator) RemoveQuery(id string) (graph.NodeIdx, error) {
 	query, ok := inc.leafs[id]
 	if !ok {
-		return graph.InvalidNode
+		return graph.InvalidNode, fmt.Errorf("query %s not found", id)
 	}
 	delete(inc.leafs, id)
-	inc.converter.RemoveQueryByPublicID(id)
+	err := inc.converter.RemoveQueryByPublicID(id)
+	if err != nil {
+		return graph.InvalidNode, err
+	}
 
 	for _, nid := range inc.leafs {
 		if nid.Leaf() == query.Leaf() {
 			// More than one query uses this leaf! Don't remove it yet
-			return graph.InvalidNode
+			return graph.InvalidNode, fmt.Errorf("query %s is still in use", id)
 		}
 	}
-	return query.Leaf()
+	return query.Leaf(), nil
 }
 
-func (inc *Incorporator) EnableReuse(reuse boostpb.ReuseType) {
+func (inc *Incorporator) EnableReuse(reuse config.ReuseType) {
 	inc.reuseType = reuse
 }
 

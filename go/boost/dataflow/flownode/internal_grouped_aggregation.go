@@ -4,110 +4,262 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-type groupInt64 struct {
-	diffs []int64
-	kind  AggregationKind
-	over  int
+type agstateCount struct {
+	diffs  []int8
+	over   int
+	scalar bool
 }
 
-func (g *groupInt64) len() int {
+func (g *agstateCount) len() int {
 	return len(g.diffs)
 }
 
-func (g *groupInt64) reset() {
+func (g *agstateCount) reset() {
 	g.diffs = g.diffs[:0]
 }
 
-func (g *groupInt64) update(r boostpb.Record) {
-	switch g.kind {
-	case AggregationCountStar:
-		if r.Positive {
-			g.diffs = append(g.diffs, 1)
-		} else {
-			g.diffs = append(g.diffs, -1)
-		}
-	case AggregationCount:
-		valType := r.Row.ValueAt(g.over).Type()
-		if valType == sqltypes.Null {
+func (g *agstateCount) update(r sql.Record) {
+	if g.over >= 0 {
+		if r.Row.ValueAt(g.over).Type() == sqltypes.Null {
 			g.diffs = append(g.diffs, 0)
 			return
 		}
-		if r.Positive {
-			g.diffs = append(g.diffs, 1)
-		} else {
-			g.diffs = append(g.diffs, -1)
-		}
-	case AggregationSum:
-		val := r.Row.ValueAt(g.over)
-		if val.Type() == sqltypes.Null {
-			g.diffs = append(g.diffs, 0)
-			return
-		}
-		i, err := val.ToVitessUnsafe().ToInt64()
-		if err != nil {
-			panic(err)
-		}
-		if !r.Positive {
-			i = -i
-		}
-		g.diffs = append(g.diffs, i)
+	}
+	if r.Positive {
+		g.diffs = append(g.diffs, 1)
+	} else {
+		g.diffs = append(g.diffs, -1)
 	}
 }
 
-func (g *groupInt64) apply(current *boostpb.Value) boostpb.Value {
+func (g *agstateCount) aggregate(current *sql.Value) (sql.Value, agstatus) {
 	var n int64
 	if current != nil && current.Type() != sqltypes.Null {
 		var err error
-		n, err = strconv.ParseInt(current.RawStr(), 10, 64)
+		n, err = current.ToVitessUnsafe().ToInt64()
 		if err != nil {
 			panic(err)
 		}
 	}
 	for _, d := range g.diffs {
-		n += d
+		n += int64(d)
 	}
-	var tt sqltypes.Type
-	switch g.kind {
-	case AggregationCount, AggregationCountStar:
-		tt = sqltypes.Int64
-	case AggregationSum:
-		tt = sqltypes.Decimal
+	if !g.scalar && n == 0 {
+		return sql.NULL, aggregationEmpty
 	}
-	return boostpb.MakeValue(tt, func(buf []byte) []byte {
+	return sql.MakeValue(sqltypes.Int64, func(buf []byte) []byte {
 		return strconv.AppendInt(buf, n, 10)
-	})
+	}), aggregationOK
 }
 
-type groupFloat struct {
-	diffs []float64
-	over  int
+type agstateSumDecimal struct {
+	diffs  []evalengine.Decimal
+	over   int
+	offset int
+	scalar bool
 }
 
-func (g *groupFloat) len() int {
+func (g *agstateSumDecimal) len() int {
 	return len(g.diffs)
 }
 
-func (g *groupFloat) reset() {
+func (g *agstateSumDecimal) reset() {
+	// explicitly clear the Decimals to prevent GC leaks
+	for i := range g.diffs {
+		g.diffs[i] = evalengine.Decimal{}
+	}
+	g.diffs = g.diffs[:0]
+	g.offset = 0
+}
+
+func (g *agstateSumDecimal) update(r sql.Record) {
+	val := r.Row.ValueAt(g.over)
+
+	switch val.Type() {
+	case sqltypes.Null:
+		g.diffs = append(g.diffs, evalengine.DecimalZero)
+
+	case sqltypes.Decimal:
+		d, err := evalengine.NewDecimalFromMySQL(val.RawBytes())
+		if err != nil {
+			panic(err)
+		}
+		if r.Positive {
+			g.offset++
+		} else {
+			g.offset--
+			d.NegInPlace()
+		}
+		g.diffs = append(g.diffs, d)
+	default:
+		panic("unexpected value type")
+	}
+}
+
+func (g *agstateSumDecimal) aggregate(current *sql.Value) (sql.Value, agstatus) {
+	var tt sqltypes.Type
+	if current != nil {
+		tt = current.Type()
+	}
+
+	canBeEmpty := !g.scalar && g.offset <= 0
+
+	switch tt {
+	case sqltypes.Null:
+		return aggregateSumDecimal(canBeEmpty, g.diffs[0], g.diffs[1:], nil)
+	case sqltypes.Decimal:
+		d, err := evalengine.NewDecimalFromMySQL(current.RawBytes())
+		if err != nil {
+			panic(err)
+		}
+		return aggregateSumDecimal(canBeEmpty, d, g.diffs, nil)
+	default:
+		panic(fmt.Sprintf("unexpected current type: %s", current.Type()))
+	}
+}
+
+type agstateSumInt struct {
+	diffs  []int64
+	over   int
+	offset int
+	scalar bool
+}
+
+func (g *agstateSumInt) len() int {
+	return len(g.diffs)
+}
+
+func (g *agstateSumInt) reset() {
+	g.offset = 0
 	g.diffs = g.diffs[:0]
 }
 
-func (g *groupFloat) update(r boostpb.Record) {
+func (g *agstateSumInt) update(r sql.Record) {
+	val := r.Row.ValueAt(g.over)
+	tt := val.Type()
+
+	switch {
+	case tt == sqltypes.Null:
+		g.diffs = append(g.diffs, 0)
+	case sqltypes.IsIntegral(tt):
+		i, err := val.ToVitessUnsafe().ToInt64()
+		if err != nil {
+			panic(err)
+		}
+		if r.Positive {
+			g.offset++
+		} else {
+			i = -i
+			g.offset--
+		}
+		g.diffs = append(g.diffs, i)
+	default:
+		panic("unexpected value type")
+	}
+}
+
+func safeAdd64(a, b int64) (int64, bool) {
+	c := a + b
+	if (c > a) == (b > 0) {
+		return c, true
+	}
+	return a, false
+}
+
+func aggregateSumInt(zeroCanBeEmpty bool, sum int64, diffs []int64) (sql.Value, agstatus) {
+	var ok bool
+	for n, d := range diffs {
+		if sum, ok = safeAdd64(sum, d); !ok {
+			return aggregateSumDecimal(zeroCanBeEmpty, evalengine.NewDecimalFromInt(sum), nil, diffs[n:])
+		}
+	}
+	if zeroCanBeEmpty && sum == 0 {
+		return sql.NULL, aggregationMiss
+	}
+	return sql.MakeValue(sqltypes.Decimal, func(buf []byte) []byte {
+		return strconv.AppendInt(buf, sum, 10)
+	}), aggregationOK
+}
+
+func aggregateSumDecimal(zeroCanBeEmpty bool, sum evalengine.Decimal, diffD []evalengine.Decimal, diffI []int64) (sql.Value, agstatus) {
+	for _, d := range diffD {
+		sum = sum.Add(d)
+	}
+	for _, d := range diffI {
+		sum = sum.Add(evalengine.NewDecimalFromInt(d))
+	}
+	if zeroCanBeEmpty && sum.IsZero() {
+		return sql.NULL, aggregationMiss
+	}
+	return sql.MakeValue(sqltypes.Decimal, func(buf []byte) []byte {
+		return append(buf, sum.FormatMySQL(0)...)
+	}), aggregationOK
+}
+
+func (g *agstateSumInt) aggregate(current *sql.Value) (sql.Value, agstatus) {
+	var tt sqltypes.Type
+	if current != nil {
+		tt = current.Type()
+	}
+
+	zeroCanBeEmpty := !g.scalar && g.offset <= 0
+
+	switch tt {
+	case sqltypes.Null:
+		return aggregateSumInt(zeroCanBeEmpty, 0, g.diffs)
+	case sqltypes.Int64:
+		n, err := strconv.ParseInt(current.RawStr(), 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		return aggregateSumInt(zeroCanBeEmpty, n, g.diffs)
+	case sqltypes.Decimal:
+		d, err := evalengine.NewDecimalFromMySQL(current.RawBytes())
+		if err != nil {
+			panic(err)
+		}
+		return aggregateSumDecimal(zeroCanBeEmpty, d, nil, g.diffs)
+	default:
+		panic(fmt.Sprintf("unexpected current type: %s", current.Type()))
+	}
+}
+
+type agstateSumFloat struct {
+	diffs  []float64
+	over   int
+	offset int
+	scalar bool
+}
+
+func (g *agstateSumFloat) len() int {
+	return len(g.diffs)
+}
+
+func (g *agstateSumFloat) reset() {
+	g.offset = 0
+	g.diffs = g.diffs[:0]
+}
+
+func (g *agstateSumFloat) update(r sql.Record) {
 	f, err := r.Row.ValueAt(g.over).ToVitessUnsafe().ToFloat64()
 	if err != nil {
 		panic(err)
 	}
-	if !r.Positive {
+	if r.Positive {
+		g.offset++
+	} else {
+		g.offset--
 		f = -f
 	}
 	g.diffs = append(g.diffs, f)
 }
 
-func (g *groupFloat) apply(current *boostpb.Value) boostpb.Value {
+func (g *agstateSumFloat) aggregate(current *sql.Value) (sql.Value, agstatus) {
 	var n float64
 	if current != nil && current.Type() != sqltypes.Null {
 		n, _ = current.ToVitessUnsafe().ToFloat64()
@@ -115,71 +267,7 @@ func (g *groupFloat) apply(current *boostpb.Value) boostpb.Value {
 	for _, d := range g.diffs {
 		n += d
 	}
-	return boostpb.MakeValue(sqltypes.Float64, func(buf []byte) []byte {
+	return sql.MakeValue(sqltypes.Float64, func(buf []byte) []byte {
 		return evalengine.AppendFloat(buf, sqltypes.Float64, n)
-	})
+	}), aggregationOK
 }
-
-type groupedAggregator struct {
-	kind AggregationKind
-	over int
-}
-
-func (a *groupedAggregator) setup(parent *Node) {
-	if a.over >= len(parent.Fields()) {
-		panic("cannot aggregate over non-existing column")
-	}
-}
-
-func (a *groupedAggregator) state(tt boostpb.Type) aggregationState {
-	switch tt.T {
-	case sqltypes.Int64:
-		if a.kind == AggregationSum {
-			panic("SUM() aggregated as INT64 (should be DECIMAL)")
-		}
-		fallthrough
-	case sqltypes.Decimal:
-		return &groupInt64{kind: a.kind, over: a.over}
-	case sqltypes.Float64:
-		if a.kind == AggregationCount {
-			panic("COUNT() aggregated as Float64 (should be INT64)")
-		}
-		return &groupFloat{over: a.over}
-	default:
-		panic(fmt.Errorf("unexpected aggregation %v", tt.T))
-	}
-}
-
-// mysql> select count(*), count(id), sum(id), avg(id), min(id), max(id) from users where id = <id>;
-//+----------+-----------+---------+---------+---------+---------+
-//| count(*) | count(id) | sum(id) | avg(id) | min(id) | max(id) |
-//+----------+-----------+---------+---------+---------+---------+
-//|        0 |         0 |    NULL |    NULL |    NULL |    NULL |
-//+----------+-----------+---------+---------+---------+---------+
-//1 row in set (0.01 sec)
-
-var defaultValueZero = sqltypes.NewInt64(0)
-
-func (a *groupedAggregator) defaultValue() sqltypes.Value {
-	switch a.kind {
-	case AggregationCount, AggregationCountStar:
-		return defaultValueZero
-	default:
-		return sqltypes.NULL
-	}
-}
-
-func (a *groupedAggregator) description() string {
-	switch a.kind {
-	case AggregationCount:
-		return fmt.Sprintf("COUNT(%d)", a.over)
-	case AggregationCountStar:
-		return "COUNT(*)"
-	case AggregationSum:
-		return fmt.Sprintf("SUM(%d)", a.over)
-	default:
-		panic("unreachable")
-	}
-}
-
-var _ AggrExpr = (*groupedAggregator)(nil)

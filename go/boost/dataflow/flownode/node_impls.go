@@ -2,69 +2,30 @@ package flownode
 
 import (
 	"reflect"
-
-	"vitess.io/vitess/go/boost/boostpb"
 )
 
 func (n *Node) Kind() string {
 	return reflect.TypeOf(n.impl).Elem().Name()
 }
 
-func (n *Node) IsSource() bool {
-	_, ok := n.impl.(*Source)
+func (n *Node) IsRoot() bool {
+	_, ok := n.impl.(*Root)
 	return ok
 }
 
-func (n *Node) AsSource() *Source {
-	src, _ := n.impl.(*Source)
-	return src
-}
-
-type AnyBase interface {
-	NodeImpl
-	Keyspace() string
-	Table() string
-	Schema() []boostpb.Type
-}
-
-func (n *Node) IsAnyBase() bool {
-	_, ok := n.impl.(AnyBase)
+func (n *Node) IsTable() bool {
+	_, ok := n.impl.(*Table)
 	return ok
 }
 
-func (n *Node) AsAnyBase() AnyBase {
-	base, _ := n.impl.(AnyBase)
-	return base
-}
-
-func (n *Node) IsBase() bool {
-	_, ok := n.impl.(*Base)
-	return ok
-}
-
-func (n *Node) AsBase() *Base {
-	base, _ := n.impl.(*Base)
-	return base
-}
-
-func (n *Node) IsExternalBase() bool {
-	_, ok := n.impl.(*ExternalBase)
-	return ok
-}
-
-func (n *Node) AsExternalBase() *ExternalBase {
-	base, _ := n.impl.(*ExternalBase)
-	return base
+func (n *Node) AsTable() *Table {
+	tbl, _ := n.impl.(*Table)
+	return tbl
 }
 
 func (n *Node) IsDropped() bool {
 	_, ok := n.impl.(*Dropped)
 	return ok
-}
-
-func (n *Node) AsDropped() *Dropped {
-	dropped, _ := n.impl.(*Dropped)
-	return dropped
 }
 
 func (n *Node) IsInternal() bool {

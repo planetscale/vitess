@@ -54,7 +54,7 @@ func (cached *View) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
-	// field shards []vitess.io/vitess/go/boost/boostpb.DRPCReaderClient
+	// field shards []vitess.io/vitess/go/boost/boostrpc/service.DRPCReaderClient
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.shards)) * int64(16))
 		for _, elem := range cached.shards {
@@ -63,11 +63,11 @@ func (cached *View) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field topkOrder []vitess.io/vitess/go/boost/boostpb.OrderedColumn
+	// field topkOrder []vitess.io/vitess/go/boost/dataflow/flownode/flownodepb.OrderedColumn
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.topkOrder)) * int64(9))
 	}
-	// field shardKeyType vitess.io/vitess/go/boost/boostpb.Type
+	// field shardKeyType vitess.io/vitess/go/boost/sql.Type
 	size += cached.shardKeyType.CachedSize(false)
 	// field metrics *vitess.io/vitess/go/boost/topo/watcher.scopedMetrics
 	size += cached.metrics.CachedSize(true)

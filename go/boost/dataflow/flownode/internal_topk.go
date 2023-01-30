@@ -8,17 +8,20 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/domain/replay"
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-type Order []boostpb.OrderedColumn
+type OrderedColumn = flownodepb.OrderedColumn
+type Order []OrderedColumn
 
-func (ord Order) Cmp(a, b boostpb.Row) int {
+func (ord Order) Cmp(a, b sql.Row) int {
 	for _, oc := range ord {
 		if cmp := a.ValueAt(oc.Col).Cmp(b.ValueAt(oc.Col)); cmp != 0 {
 			if oc.Desc {
@@ -33,7 +36,8 @@ func (ord Order) Cmp(a, b boostpb.Row) int {
 var _ Internal = (*TopK)(nil)
 
 type TopK struct {
-	src boostpb.IndexPair
+	src       dataflow.IndexPair
+	srcSchema []sql.Type
 
 	keys  []int
 	order Order
@@ -44,10 +48,10 @@ func (t *TopK) internal() {}
 
 func (t *TopK) dataflow() {}
 
-func NewTopK(src graph.NodeIdx, order []boostpb.OrderedColumn, keys []int, k uint) *TopK {
+func NewTopK(src graph.NodeIdx, order []OrderedColumn, keys []int, k uint) *TopK {
 	sort.Ints(keys)
 	return &TopK{
-		src:   boostpb.NewIndexPair(src),
+		src:   dataflow.NewIndexPair(src),
 		keys:  keys,
 		order: order,
 		k:     k,
@@ -72,7 +76,7 @@ func (t *TopK) ParentColumns(col int) []NodeColumn {
 	return []NodeColumn{{t.src.AsGlobal(), col}}
 }
 
-func (t *TopK) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
+func (t *TopK) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
 	return g.Value(t.src.AsGlobal()).ColumnType(g, col)
 }
 
@@ -92,30 +96,32 @@ func (t *TopK) Description() string {
 	return fmt.Sprintf("ORDER BY %s LIMIT %d PARAMS %s", strings.Join(order, ", "), t.k, strings.Join(params, ", "))
 }
 
-func (t *TopK) OnConnected(graph *graph.Graph[*Node]) {
+func (t *TopK) OnConnected(graph *graph.Graph[*Node]) error {
+	var err error
+	t.srcSchema, err = graph.Value(t.src.AsGlobal()).ResolveSchema(graph)
+	return err
 }
 
-func (t *TopK) OnCommit(you graph.NodeIdx, remap map[graph.NodeIdx]boostpb.IndexPair) {
+func (t *TopK) OnCommit(you graph.NodeIdx, remap map[graph.NodeIdx]dataflow.IndexPair) {
 	t.src.Remap(remap)
 }
 
-func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
+func (t *TopK) OnInput(you *Node, ex processing.Executor, _ dataflow.LocalNodeIdx, rs []sql.Record, repl replay.Context, _ *Map, states *state.Map) (processing.Result, error) {
 	if len(rs) == 0 {
 		return processing.Result{Records: rs}, nil
 	}
 
 	groupBy := t.keys
-	pschema := domain.Get(from).schema
-	hashrs := make([]boostpb.HashedRecord, 0, len(rs))
+	hashrs := make([]sql.HashedRecord, 0, len(rs))
 
 	var hasher vthash.Hasher
 	for _, r := range rs {
-		hashrs = append(hashrs, boostpb.HashedRecord{
+		hashrs = append(hashrs, sql.HashedRecord{
 			Record: r,
-			Hash:   r.Row.HashWithKey(&hasher, groupBy, pschema),
+			Hash:   r.Row.HashWithKey(&hasher, groupBy, t.srcSchema),
 		})
 	}
-	slices.SortStableFunc(hashrs, func(a, b boostpb.HashedRecord) bool {
+	slices.SortStableFunc(hashrs, func(a, b sql.HashedRecord) bool {
 		return bytes.Compare(a.Hash[:], b.Hash[:]) < 0
 	})
 
@@ -126,32 +132,30 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 	}
 
 	type newrow struct {
-		row boostpb.Row
+		row sql.Row
 		new bool
 	}
 
 	var (
-		out     []boostpb.Record
-		grp     boostpb.Row
+		out     []sql.Record
+		grp     sql.Row
 		grpHash vthash.Hash
 		grpk    uint
 		missed  bool
+		flush   bool
 		current []newrow
 		misses  []processing.Miss
 		lookups []processing.Lookup
 	)
 
-	postGroup := func(out []boostpb.Record, current []newrow, grpk, k uint, order Order) []boostpb.Record {
+	postGroup := func(out []sql.Record, current []newrow, grpk, k uint, order Order) ([]sql.Record, bool) {
 		slices.SortFunc(current, func(a, b newrow) bool {
 			return order.Cmp(a.row, b.row) < 0
 		})
 
 		if grpk == k {
 			if len(current) < int(grpk) {
-				// there used to be k things in the group
-				// now there are fewer than k
-				// we don't know if querying would bring us back to k
-				panic("unimplemented")
+				return nil, true
 			}
 
 			// FIXME: if all the elements with the smallest value in the new topk are new,
@@ -200,19 +204,24 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 			}
 		}
 
-		return out
+		return out, false
 	}
 
 	replKey := repl.Key()
 	for _, r := range hashrs {
 		if r.Hash != grpHash {
 			if len(grp) > 0 {
-				out = postGroup(out, current, grpk, t.k, t.order)
+				out, flush = postGroup(out, current, grpk, t.k, t.order)
 				current = current[:0]
+
+				if flush {
+					goto handleRow
+				}
 			}
 
 			grp = r.Row.Extract(groupBy)
 			grpHash = r.Hash
+			flush = false
 
 			lookup, found := db.Lookup(groupBy, grp)
 			if !found {
@@ -228,19 +237,22 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 
 				missed = false
 				grpk = uint(lookup.Len())
-				lookup.ForEach(func(r boostpb.Row) {
+				lookup.ForEach(func(r sql.Row) {
 					current = append(current, newrow{row: r, new: false})
 				})
 			}
 		}
 
-		if missed {
+	handleRow:
+		if missed || flush {
 			misses = append(misses, processing.Miss{
 				On:         us.Local,
 				LookupIdx:  groupBy,
 				LookupCols: groupBy,
 				ReplayCols: replKey,
 				Record:     r,
+				Flush:      flush,
+				ForceTag:   dataflow.TagNone,
 			})
 		} else {
 			if r.Positive {
@@ -260,7 +272,18 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 		}
 	}
 	if len(grp) > 0 {
-		out = postGroup(out, current, grpk, t.k, t.order)
+		out, flush = postGroup(out, current, grpk, t.k, t.order)
+		if flush {
+			misses = append(misses, processing.Miss{
+				On:         us.Local,
+				LookupIdx:  groupBy,
+				LookupCols: groupBy,
+				ReplayCols: replKey,
+				Record:     hashrs[len(hashrs)-1],
+				Flush:      flush,
+				ForceTag:   dataflow.TagNone,
+			})
+		}
 	}
 	return processing.Result{
 		Records: out,
@@ -269,21 +292,23 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 	}, nil
 }
 
-func (t *TopK) ToProto() *boostpb.Node_InternalTopK {
-	pb := &boostpb.Node_InternalTopK{
-		Src:    &t.src,
-		K:      t.k,
-		Params: t.keys,
-		Order:  t.order,
+func (t *TopK) ToProto() *flownodepb.Node_InternalTopK {
+	pb := &flownodepb.Node_InternalTopK{
+		Src:       t.src,
+		SrcSchema: t.srcSchema,
+		K:         t.k,
+		Params:    t.keys,
+		Order:     t.order,
 	}
 	return pb
 }
 
-func NewTopKFromProto(pb *boostpb.Node_InternalTopK) *TopK {
+func NewTopKFromProto(pb *flownodepb.Node_InternalTopK) *TopK {
 	return &TopK{
-		src:   *pb.Src,
-		keys:  pb.Params,
-		order: pb.Order,
-		k:     pb.K,
+		src:       pb.Src,
+		srcSchema: pb.SrcSchema,
+		keys:      pb.Params,
+		order:     pb.Order,
+		k:         pb.K,
 	}
 }

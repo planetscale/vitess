@@ -8,33 +8,35 @@ import (
 	"github.com/tidwall/btree"
 	"golang.org/x/exp/maps"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/sql"
 )
 
 type unionEmitProject struct {
-	emit map[boostpb.IndexPair][]int
+	emit map[dataflow.IndexPair][]int
 
-	emitLeft btree.Map[boostpb.LocalNodeIndex, []int]
-	cols     map[boostpb.IndexPair]int
-	colsLeft btree.Map[boostpb.LocalNodeIndex, int]
+	emitLeft btree.Map[dataflow.LocalNodeIdx, []int]
+	cols     map[dataflow.IndexPair]int
+	colsLeft btree.Map[dataflow.LocalNodeIdx, int]
 }
 
-func (u *unionEmitProject) OnInput(from boostpb.LocalNodeIndex, rs []boostpb.Record) (processing.Result, error) {
-	var records = make([]boostpb.Record, 0, len(rs))
+func (u *unionEmitProject) OnInput(from dataflow.LocalNodeIdx, rs []sql.Record) (processing.Result, error) {
+	var records = make([]sql.Record, 0, len(rs))
 	mapping, ok := u.emitLeft.Get(from)
 	if !ok {
 		panic("missing mapping for EMIT")
 	}
 
 	for _, rec := range rs {
-		mappedRow := make([]boostpb.Value, 0, len(mapping))
+		mappedRow := make([]sql.Value, 0, len(mapping))
 		values := rec.Row.ToValues()
 		for _, col := range mapping {
 			mappedRow = append(mappedRow, values[col])
 		}
-		records = append(records, boostpb.NewRecord(mappedRow, rec.Positive))
+		records = append(records, sql.NewRecord(mappedRow, rec.Positive))
 	}
 	return processing.Result{
 		Records: records,
@@ -79,21 +81,24 @@ func (u *unionEmitProject) ParentColumns(col int) (pc []NodeColumn) {
 	return
 }
 
-func (u *unionEmitProject) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
-	var tt = boostpb.Type{T: -1}
+func (u *unionEmitProject) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
+	var tt = sql.Type{T: -1}
 	for src, emit := range u.emit {
-		t := g.Value(src.AsGlobal()).ColumnType(g, emit[col])
+		t, err := g.Value(src.AsGlobal()).ColumnType(g, emit[col])
+		if err != nil {
+			return sql.Type{}, err
+		}
 		if tt.T >= 0 && tt.T != t.T {
 			panic("wut")
 		}
 		tt = t
 	}
-	return tt
+	return tt, nil
 }
 
-func (u *unionEmitProject) OnCommit(remap map[graph.NodeIdx]boostpb.IndexPair) {
-	var mappedEmit = make(map[boostpb.IndexPair][]int, len(u.emit))
-	var mappedCols = make(map[boostpb.IndexPair]int, len(u.cols))
+func (u *unionEmitProject) OnCommit(remap map[graph.NodeIdx]dataflow.IndexPair) {
+	var mappedEmit = make(map[dataflow.IndexPair][]int, len(u.emit))
+	var mappedCols = make(map[dataflow.IndexPair]int, len(u.cols))
 
 	for k, v := range u.emit {
 		k.Remap(remap)
@@ -111,23 +116,24 @@ func (u *unionEmitProject) OnCommit(remap map[graph.NodeIdx]boostpb.IndexPair) {
 	u.cols = mappedCols
 }
 
-func (u *unionEmitProject) OnConnected(graph *graph.Graph[*Node]) {
+func (u *unionEmitProject) OnConnected(graph *graph.Graph[*Node]) error {
 	for n := range u.emit {
 		u.cols[n] = len(graph.Value(n.AsGlobal()).Fields())
 	}
+	return nil
 }
 
-func (u *unionEmitProject) ToProto() *boostpb.Node_InternalUnion_EmitProject {
-	pemit := &boostpb.Node_InternalUnion_EmitProject{}
+func (u *unionEmitProject) ToProto() *flownodepb.Node_InternalUnion_EmitProject {
+	pemit := &flownodepb.Node_InternalUnion_EmitProject{}
 	for k, v := range u.emit {
 		k := k
-		pemit.Emit = append(pemit.Emit, &boostpb.Node_InternalUnion_EmitProject_EmitTuple{
+		pemit.Emit = append(pemit.Emit, &flownodepb.Node_InternalUnion_EmitProject_EmitTuple{
 			Ip:      &k,
 			Columns: v,
 		})
 	}
-	u.emitLeft.Scan(func(k boostpb.LocalNodeIndex, v []int) bool {
-		pemit.EmitLeft = append(pemit.EmitLeft, &boostpb.Node_InternalUnion_EmitProject_EmitLeftTuple{
+	u.emitLeft.Scan(func(k dataflow.LocalNodeIdx, v []int) bool {
+		pemit.EmitLeft = append(pemit.EmitLeft, &flownodepb.Node_InternalUnion_EmitProject_EmitLeftTuple{
 			Index:   k,
 			Columns: v,
 		})
@@ -135,13 +141,13 @@ func (u *unionEmitProject) ToProto() *boostpb.Node_InternalUnion_EmitProject {
 	})
 	for k, v := range u.cols {
 		k := k
-		pemit.Cols = append(pemit.Cols, &boostpb.Node_InternalUnion_EmitProject_ColumnsTuple{
+		pemit.Cols = append(pemit.Cols, &flownodepb.Node_InternalUnion_EmitProject_ColumnsTuple{
 			Ip:     &k,
 			Column: v,
 		})
 	}
-	u.colsLeft.Scan(func(k boostpb.LocalNodeIndex, v int) bool {
-		pemit.ColsLeft = append(pemit.ColsLeft, &boostpb.Node_InternalUnion_EmitProject_ColumnsLeftTuple{
+	u.colsLeft.Scan(func(k dataflow.LocalNodeIdx, v int) bool {
+		pemit.ColsLeft = append(pemit.ColsLeft, &flownodepb.Node_InternalUnion_EmitProject_ColumnsLeftTuple{
 			Index:  k,
 			Column: v,
 		})
@@ -150,10 +156,10 @@ func (u *unionEmitProject) ToProto() *boostpb.Node_InternalUnion_EmitProject {
 	return pemit
 }
 
-func newUnionEmitProjectFromProto(pemit *boostpb.Node_InternalUnion_EmitProject) *unionEmitProject {
+func newUnionEmitProjectFromProto(pemit *flownodepb.Node_InternalUnion_EmitProject) *unionEmitProject {
 	emit := &unionEmitProject{
-		emit: make(map[boostpb.IndexPair][]int),
-		cols: make(map[boostpb.IndexPair]int),
+		emit: make(map[dataflow.IndexPair][]int),
+		cols: make(map[dataflow.IndexPair]int),
 	}
 	for _, e := range pemit.Emit {
 		emit.emit[*e.Ip] = e.Columns

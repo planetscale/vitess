@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -11,8 +12,8 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/server/controller/materialization"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
@@ -29,13 +30,13 @@ type Server struct {
 	cancel context.CancelFunc
 
 	uuid uuid.UUID
-	cfg  *boostpb.Config
+	cfg  *config.Config
 
 	wg errgroup.Group
 }
 
-func NewServer(log *zap.Logger, id uuid.UUID, ts *toposerver.Server, config *boostpb.Config) *Server {
-	return &Server{topo: ts, log: log, uuid: id, cfg: config}
+func NewServer(log *zap.Logger, id uuid.UUID, ts *toposerver.Server, cfg *config.Config) *Server {
+	return &Server{topo: ts, log: log, uuid: id, cfg: cfg}
 }
 
 func (srv *Server) RegisterWorker(ctx context.Context, worker *vtboostpb.TopoWorkerEntry) {
@@ -84,41 +85,26 @@ func (srv *Server) waitForClusterState(ctx context.Context) error {
 	return nil
 }
 
-// GetTableDescriptor_ returns the internal table descriptor for the given table.
-// This function is only exported to be usable by integration tests
-func (srv *Server) GetTableDescriptor_(keyspace, name string) (*boostpb.TableDescriptor, error) {
-	srv.mu.Lock()
-	defer srv.mu.Unlock()
-
-	bld := srv.inner.tableDescriptor(keyspace, name)
-	if bld == nil {
-		return nil, fmt.Errorf("unknown table: %q", name)
-	}
-	return bld, nil
-}
-
 // GetViewDescriptor_ returns the internal view descriptor for the given view.
 // This function is only exported to be usable by integration tests
 func (srv *Server) GetViewDescriptor_(id string) (*vtboostpb.Materialization_ViewDescriptor, error) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
-	bld := srv.inner.viewDescriptorForPublicID(id)
-	if bld == nil {
-		return nil, fmt.Errorf("unknown view for ID: %q", id)
-	}
-	return bld, nil
+	return srv.inner.viewDescriptorForPublicID(id)
 }
 
-func (srv *Server) Migrate(ctx context.Context, perform func(mig Migration) error) error {
+// Migrate_ runs a migration on this controller.
+// This function is only exported to be usable by integration tests
+func (srv *Server) Migrate_(ctx context.Context, perform func(mig Migration) error) error {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
 	if srv.inner == nil {
-		panic("tried to migrate without being a leader")
+		return errors.New("tried to migrate without being a leader")
 	}
 
-	mig := NewMigration(ctx, srv.inner)
+	mig := NewMigration(ctx, srv.inner.log, srv.inner)
 	if err := perform(mig); err != nil {
 		return err
 	}
@@ -141,11 +127,16 @@ func (srv *Server) ReadyCheck(context.Context, *vtboostpb.ReadyRequest) (*vtboos
 	return &vtboostpb.ReadyResponse{Ready: srv.IsReady()}, nil
 }
 
-func (srv *Server) StartLeaderCampaign(ctx context.Context, state *vtboostpb.ControllerState) {
+func (srv *Server) StartLeaderCampaign(ctx context.Context, state *vtboostpb.ControllerState) error {
 	srv.log.Info("Starting leader campaign", zap.Int64("epoch", state.Epoch))
 
 	srv.mu.Lock()
-	srv.inner = NewController(srv.log, srv.uuid, srv.cfg, state, srv.topo)
+	var err error
+	srv.inner, err = NewController(srv.log, srv.uuid, srv.cfg, state, srv.topo)
+	if err != nil {
+		srv.mu.Unlock()
+		return err
+	}
 	ctx, srv.cancel = context.WithCancel(ctx)
 	srv.mu.Unlock()
 
@@ -169,6 +160,7 @@ func (srv *Server) StartLeaderCampaign(ctx context.Context, state *vtboostpb.Con
 	srv.inner = nil
 	srv.cancel = nil
 	srv.mu.Unlock()
+	return nil
 }
 
 func (srv *Server) Stop() {
@@ -215,14 +207,14 @@ func (srv *Server) GetMaterializations(_ context.Context, _ *vtboostpb.Materiali
 }
 
 func (srv *Server) PutRecipe(ctx context.Context, recipe *vtboostpb.Recipe) error {
-	return srv.PutRecipeWithOptions(ctx, recipe, nil, nil)
+	return srv.PutRecipeWithOptions(ctx, recipe, nil)
 }
 
 func (srv *Server) defaultSchemaInfo() *boostplan.SchemaInformation {
 	return &boostplan.SchemaInformation{Schema: boostplan.NewDDLSchema(srv.topo)}
 }
 
-func (srv *Server) PutRecipeWithOptions(ctx context.Context, recipepb *vtboostpb.Recipe, si *boostplan.SchemaInformation, migrate Migrator) error {
+func (srv *Server) PutRecipeWithOptions(ctx context.Context, recipepb *vtboostpb.Recipe, si *boostplan.SchemaInformation) error {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
@@ -233,11 +225,7 @@ func (srv *Server) PutRecipeWithOptions(ctx context.Context, recipepb *vtboostpb
 	if si == nil {
 		si = srv.defaultSchemaInfo()
 	}
-	if migrate == nil {
-		migrate = NewMigration
-	}
-
-	_, err := srv.inner.ModifyRecipe(ctx, recipepb, si, migrate)
+	_, err := srv.inner.ModifyRecipe(ctx, recipepb, si)
 	return err
 }
 

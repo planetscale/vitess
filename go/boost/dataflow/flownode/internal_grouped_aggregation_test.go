@@ -5,15 +5,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestGroupedAggregation(t *testing.T) {
 	setup := func(t *testing.T, materialize bool) *MockGraph {
 		g := NewMockGraph(t)
-		s := g.AddBase("source", []string{"x", "y"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64))
-		grp := NewGrouped(s.AsGlobal(), false, []int{0}, []AggrExpr{AggregationOver(AggregationCount, 1)})
+		s := g.AddBase("source", []string{"x", "y"}, sql.TestSchema(sqltypes.Int64, sqltypes.Int64))
+		grp := NewGrouped(s.AsGlobal(), false, []int{0}, []Aggregation{{AggregationCount, 1}})
 
 		g.SetOp("identity", []string{"x", "ys"}, grp, materialize)
 		return g
@@ -21,8 +21,8 @@ func TestGroupedAggregation(t *testing.T) {
 
 	setupMulticol := func(t *testing.T, materialize bool) *MockGraph {
 		g := NewMockGraph(t)
-		s := g.AddBase("source", []string{"x", "y", "z"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.Int64, sqltypes.Int64))
-		grp := NewGrouped(s.AsGlobal(), false, []int{0, 2}, []AggrExpr{AggregationOver(AggregationCount, 1)})
+		s := g.AddBase("source", []string{"x", "y", "z"}, sql.TestSchema(sqltypes.Int64, sqltypes.Int64, sqltypes.Int64))
+		grp := NewGrouped(s.AsGlobal(), false, []int{0, 2}, []Aggregation{{AggregationCount, 1}})
 		g.SetOp("identity", []string{"x", "z", "ys"}, grp, materialize)
 		return g
 	}
@@ -30,20 +30,20 @@ func TestGroupedAggregation(t *testing.T) {
 	t.Run("it forwards", func(t *testing.T) {
 		c := setup(t, true)
 
-		u := boostpb.TestRow(1, 1).ToRecord(true)
-		rs := c.NarrowOne([]boostpb.Record{u}, true)
+		u := sql.TestRow(1, 1).ToRecord(true)
+		rs := c.NarrowOne([]sql.Record{u}, true)
 		assert.Len(t, rs, 1)
 		assert.Equal(t, u, rs[0])
 
-		u = boostpb.TestRow(2, 2).ToRecord(true)
-		rs = c.NarrowOne([]boostpb.Record{u}, true)
+		u = sql.TestRow(2, 2).ToRecord(true)
+		rs = c.NarrowOne([]sql.Record{u}, true)
 		assert.Len(t, rs, 1)
 		assert.Equal(t, true, rs[0].Positive)
 		assert.Equal(t, sqltypes.NewInt64(2), rs[0].Row.ValueAt(0).ToVitess())
 		assert.Equal(t, sqltypes.NewInt64(1), rs[0].Row.ValueAt(1).ToVitess())
 
-		u = boostpb.TestRow(1, 2).ToRecord(true)
-		rs = c.NarrowOne([]boostpb.Record{u}, true)
+		u = sql.TestRow(1, 2).ToRecord(true)
+		rs = c.NarrowOne([]sql.Record{u}, true)
 		assert.Len(t, rs, 2)
 		assert.Equal(t, false, rs[0].Positive)
 		assert.Equal(t, sqltypes.NewInt64(1), rs[0].Row.ValueAt(0).ToVitess())
@@ -52,8 +52,8 @@ func TestGroupedAggregation(t *testing.T) {
 		assert.Equal(t, sqltypes.NewInt64(1), rs[1].Row.ValueAt(0).ToVitess())
 		assert.Equal(t, sqltypes.NewInt64(2), rs[1].Row.ValueAt(1).ToVitess())
 
-		uu := []boostpb.Record{
-			boostpb.TestRow(1, 1).ToRecord(false),
+		uu := []sql.Record{
+			sql.TestRow(1, 1).ToRecord(false),
 		}
 		rs = c.NarrowOne(uu, true)
 		assert.Len(t, rs, 2)
@@ -64,47 +64,47 @@ func TestGroupedAggregation(t *testing.T) {
 		assert.Equal(t, sqltypes.NewInt64(1), rs[1].Row.ValueAt(0).ToVitess())
 		assert.Equal(t, sqltypes.NewInt64(1), rs[1].Row.ValueAt(1).ToVitess())
 
-		uu = []boostpb.Record{
-			boostpb.TestRow(1, 1).ToRecord(false),
-			boostpb.TestRow(1, 1).ToRecord(true),
-			boostpb.TestRow(1, 2).ToRecord(true),
-			boostpb.TestRow(2, 2).ToRecord(false),
-			boostpb.TestRow(2, 2).ToRecord(true),
-			boostpb.TestRow(2, 3).ToRecord(true),
-			boostpb.TestRow(2, 1).ToRecord(true),
-			boostpb.TestRow(3, 3).ToRecord(true),
+		uu = []sql.Record{
+			sql.TestRow(1, 1).ToRecord(false),
+			sql.TestRow(1, 1).ToRecord(true),
+			sql.TestRow(1, 2).ToRecord(true),
+			sql.TestRow(2, 2).ToRecord(false),
+			sql.TestRow(2, 2).ToRecord(true),
+			sql.TestRow(2, 3).ToRecord(true),
+			sql.TestRow(2, 1).ToRecord(true),
+			sql.TestRow(3, 3).ToRecord(true),
 		}
 		rs = c.NarrowOne(uu, true)
 		assert.Len(t, rs, 5)
 
-		assert.Contains(t, rs, boostpb.TestRow(1, 1).ToRecord(false))
-		assert.Contains(t, rs, boostpb.TestRow(1, 2).ToRecord(true))
-		assert.Contains(t, rs, boostpb.TestRow(2, 1).ToRecord(false))
-		assert.Contains(t, rs, boostpb.TestRow(2, 3).ToRecord(true))
-		assert.Contains(t, rs, boostpb.TestRow(3, 1).ToRecord(true))
+		assert.Contains(t, rs, sql.TestRow(1, 1).ToRecord(false))
+		assert.Contains(t, rs, sql.TestRow(1, 2).ToRecord(true))
+		assert.Contains(t, rs, sql.TestRow(2, 1).ToRecord(false))
+		assert.Contains(t, rs, sql.TestRow(2, 3).ToRecord(true))
+		assert.Contains(t, rs, sql.TestRow(3, 1).ToRecord(true))
 	})
 
 	t.Run("it groups by multiple columns", func(t *testing.T) {
 		c := setupMulticol(t, true)
 
-		u := boostpb.TestRow(1, 1, 2).ToRecord(true)
-		rs := c.NarrowOne([]boostpb.Record{u}, true)
+		u := sql.TestRow(1, 1, 2).ToRecord(true)
+		rs := c.NarrowOne([]sql.Record{u}, true)
 		assert.Len(t, rs, 1)
 		assert.Equal(t, true, rs[0].Positive)
 		assert.Equal(t, sqltypes.NewInt64(1), rs[0].Row.ValueAt(0).ToVitess())
 		assert.Equal(t, sqltypes.NewInt64(2), rs[0].Row.ValueAt(1).ToVitess())
 		assert.Equal(t, sqltypes.NewInt64(1), rs[0].Row.ValueAt(2).ToVitess())
 
-		u = boostpb.TestRow(2, 1, 2).ToRecord(true)
-		rs = c.NarrowOne([]boostpb.Record{u}, true)
+		u = sql.TestRow(2, 1, 2).ToRecord(true)
+		rs = c.NarrowOne([]sql.Record{u}, true)
 		assert.Len(t, rs, 1)
 		assert.Equal(t, true, rs[0].Positive)
 		assert.Equal(t, sqltypes.NewInt64(2), rs[0].Row.ValueAt(0).ToVitess())
 		assert.Equal(t, sqltypes.NewInt64(2), rs[0].Row.ValueAt(1).ToVitess())
 		assert.Equal(t, sqltypes.NewInt64(1), rs[0].Row.ValueAt(2).ToVitess())
 
-		u = boostpb.TestRow(1, 1, 2).ToRecord(true)
-		rs = c.NarrowOne([]boostpb.Record{u}, true)
+		u = sql.TestRow(1, 1, 2).ToRecord(true)
+		rs = c.NarrowOne([]sql.Record{u}, true)
 		assert.Len(t, rs, 2)
 		assert.Equal(t, false, rs[0].Positive)
 		assert.Equal(t, sqltypes.NewInt64(1), rs[0].Row.ValueAt(0).ToVitess())
@@ -115,8 +115,8 @@ func TestGroupedAggregation(t *testing.T) {
 		assert.Equal(t, sqltypes.NewInt64(2), rs[1].Row.ValueAt(1).ToVitess())
 		assert.Equal(t, sqltypes.NewInt64(2), rs[1].Row.ValueAt(2).ToVitess())
 
-		uu := []boostpb.Record{
-			boostpb.TestRow(1, 1, 2).ToRecord(false),
+		uu := []sql.Record{
+			sql.TestRow(1, 1, 2).ToRecord(false),
 		}
 		rs = c.NarrowOne(uu, true)
 		assert.Len(t, rs, 2)

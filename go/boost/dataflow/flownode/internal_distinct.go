@@ -8,17 +8,20 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/domain/replay"
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
 type Distinct struct {
-	src    boostpb.IndexPair
-	params []int
+	src       dataflow.IndexPair
+	srcSchema []sql.Type
+	params    []int
 }
 
 func (d *Distinct) internal() {}
@@ -28,7 +31,7 @@ func (d *Distinct) dataflow() {}
 func NewDistinct(src graph.NodeIdx, groupBy []int) *Distinct {
 	sort.Ints(groupBy)
 	return &Distinct{
-		src:    boostpb.NewIndexPair(src),
+		src:    dataflow.NewIndexPair(src),
 		params: groupBy,
 	}
 }
@@ -49,7 +52,7 @@ func (d *Distinct) ParentColumns(col int) []NodeColumn {
 	return []NodeColumn{{Node: d.src.AsGlobal(), Column: col}}
 }
 
-func (d *Distinct) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
+func (d *Distinct) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
 	return g.Value(d.src.AsGlobal()).ColumnType(g, col)
 }
 
@@ -61,50 +64,51 @@ func (d *Distinct) Description() string {
 	return fmt.Sprintf("Distinct (%s)", strings.Join(params, ", "))
 }
 
-func (d *Distinct) OnConnected(graph *graph.Graph[*Node]) {
+func (d *Distinct) OnConnected(graph *graph.Graph[*Node]) error {
+	var err error
+	d.srcSchema, err = graph.Value(d.src.AsGlobal()).ResolveSchema(graph)
+	return err
 }
 
-func (d *Distinct) OnCommit(you graph.NodeIdx, remap map[graph.NodeIdx]boostpb.IndexPair) {
+func (d *Distinct) OnCommit(you graph.NodeIdx, remap map[graph.NodeIdx]dataflow.IndexPair) {
 	d.src.Remap(remap)
 }
 
-func (d *Distinct) OnInput(you *Node, _ processing.Executor, _ boostpb.LocalNodeIndex, rs []boostpb.Record, _ replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
+func (d *Distinct) OnInput(you *Node, _ processing.Executor, _ dataflow.LocalNodeIdx, rs []sql.Record, _ replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
 	if len(rs) == 0 {
 		return processing.Result{Records: rs}, nil
 	}
 
 	groupBy := d.params
-	pschema := domain.Get(d.src.AsLocal()).Schema()
-	us := you.index
-	db := states.Get(us.Local)
+	db := states.Get(you.index.Local)
 	if db == nil {
 		panic("Distinct must have its own state materialized")
 	}
 
-	var hashrs = make([]boostpb.HashedRecord, 0, len(rs))
+	var hashrs = make([]sql.HashedRecord, 0, len(rs))
 	var hasher vthash.Hasher
 	for _, r := range rs {
 		if !r.Positive {
-			hashrs = append(hashrs, boostpb.HashedRecord{
+			hashrs = append(hashrs, sql.HashedRecord{
 				Record: r,
-				Hash:   r.Row.HashWithKey(&hasher, groupBy, pschema),
+				Hash:   r.Row.HashWithKey(&hasher, groupBy, d.srcSchema),
 			})
 		}
 	}
 	for _, r := range rs {
 		if r.Positive {
-			hashrs = append(hashrs, boostpb.HashedRecord{
+			hashrs = append(hashrs, sql.HashedRecord{
 				Record: r,
-				Hash:   r.Row.HashWithKey(&hasher, groupBy, pschema),
+				Hash:   r.Row.HashWithKey(&hasher, groupBy, d.srcSchema),
 			})
 		}
 	}
-	slices.SortStableFunc(hashrs, func(a, b boostpb.HashedRecord) bool {
+	slices.SortStableFunc(hashrs, func(a, b sql.HashedRecord) bool {
 		return bytes.Compare(a.Hash[:], b.Hash[:]) < 0
 	})
 
 	var output = rs[:0]
-	var prev boostpb.HashedRecord
+	var prev sql.HashedRecord
 
 	for _, rec := range hashrs {
 		if rec.Hash == prev.Hash && prev.Positive == rec.Positive {
@@ -132,17 +136,19 @@ func (d *Distinct) OnInput(you *Node, _ processing.Executor, _ boostpb.LocalNode
 	return processing.Result{Records: output}, nil
 }
 
-func (d *Distinct) ToProto() *boostpb.Node_InternalDistinct {
-	return &boostpb.Node_InternalDistinct{
-		Src:    &d.src,
-		Params: d.params,
+func (d *Distinct) ToProto() *flownodepb.Node_InternalDistinct {
+	return &flownodepb.Node_InternalDistinct{
+		Src:       d.src,
+		SrcSchema: d.srcSchema,
+		Params:    d.params,
 	}
 }
 
-func NewDistinctFromProto(distinct *boostpb.Node_InternalDistinct) *Distinct {
+func NewDistinctFromProto(distinct *flownodepb.Node_InternalDistinct) *Distinct {
 	return &Distinct{
-		src:    *distinct.Src,
-		params: distinct.Params,
+		src:       distinct.Src,
+		srcSchema: distinct.SrcSchema,
+		params:    distinct.Params,
 	}
 }
 

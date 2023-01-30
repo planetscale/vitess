@@ -5,11 +5,13 @@ import (
 
 	"github.com/tidwall/btree"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/domain/replay"
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/sql"
 )
 
 var _ Internal = (*Union)(nil)
@@ -30,18 +32,18 @@ type Union struct {
 }
 
 type unionreplayKey struct {
-	tag  boostpb.Tag
-	node boostpb.LocalNodeIndex
+	tag  dataflow.Tag
+	node dataflow.LocalNodeIdx
 }
 
 type UnionReplay struct {
 	// Key
-	tag          boostpb.Tag
-	replayingKey boostpb.Row
+	tag          dataflow.Tag
+	replayingKey sql.Row
 	shard        uint
 
 	// Value
-	buffered map[boostpb.LocalNodeIndex][]boostpb.Record
+	buffered map[dataflow.LocalNodeIdx][]sql.Record
 	evict    bool
 }
 
@@ -62,19 +64,19 @@ func compareReplays(a, b *UnionReplay) bool {
 }
 
 type ongoingWait struct {
-	started  map[boostpb.LocalNodeIndex]bool
+	started  map[dataflow.LocalNodeIdx]bool
 	finished int
-	buffered []boostpb.Record
+	buffered []sql.Record
 }
 
-func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, rpl replay.Context, n *Map, s *state.Map) (processing.RawResult, error) {
+func (u *Union) OnInputRaw(ex processing.Executor, from dataflow.LocalNodeIdx, rs []sql.Record, rpl replay.Context, n *Map, s *state.Map) (processing.RawResult, error) {
 	// NOTE: in the special case of us being a shard merge node (i.e., when
 	// self.emit.is_empty()), `from` will *actually* hold the shard index of
 	// the sharded egress that sent us this record. this should make everything
 	// below just work out.
 
 	switch {
-	case rpl.Partial == nil && rpl.Full == nil:
+	case rpl.Partial == nil && rpl.Regular == nil:
 		absorbForFull := false
 		if ongoing := u.wait; ongoing != nil {
 			// ongoing full replay. is this a record we need to not disappear (i.e.,
@@ -131,9 +133,9 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 		// since iterating over the buffered upquery responses includes a btree lookup, we
 		// want to do fewer of those, so we do those in the outer loop.
 		var (
-			lastTag   = boostpb.TagNone
+			lastTag   = dataflow.TagNone
 			replayKey []int
-			rkeyFrom  boostpb.LocalNodeIndex
+			rkeyFrom  dataflow.LocalNodeIdx
 		)
 
 		if _, all := u.emit.(*unionEmitAll); all {
@@ -154,13 +156,13 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 			}
 
 			// make sure we use the right key columns for this tag
-			if lastTag == boostpb.TagNone || lastTag != it.tag {
+			if lastTag == dataflow.TagNone || lastTag != it.tag {
 				replayKey = u.replayKey[unionreplayKey{it.tag, rkeyFrom}]
 			}
 			k := replayKey
 			lastTag = it.tag
 
-			replayHit := func(k []int, r boostpb.Record, replayingKey []boostpb.Value) bool {
+			replayHit := func(k []int, r sql.Record, replayingKey []sql.Value) bool {
 				keys := r.Row.ToValues()
 				for ki, c := range k {
 					if keys[c].Cmp(replayingKey[ki]) != 0 {
@@ -202,7 +204,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 		}
 		return &res, nil
 
-	case rpl.Full != nil:
+	case rpl.Regular != nil:
 		// this part is actually surpringly straightforward, but the *reason* it is
 		// straightforward is not. let's walk through what we know first:
 		//
@@ -256,7 +258,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 		// arm). feel free to go check. interestingly enough, it's also fine for us to
 		// still emit 2 (i.e., not capture it), since it'll just be dropped by the target
 		// domain.
-		last := *rpl.Full
+		last := rpl.Regular.Last
 		res, err := u.OnInput(nil, ex, from, rs, replay.Context{}, n, s)
 		if err != nil {
 			return nil, err
@@ -268,7 +270,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 			}
 
 			u.wait = &ongoingWait{
-				started:  map[boostpb.LocalNodeIndex]bool{from: true},
+				started:  map[dataflow.LocalNodeIdx]bool{from: true},
 				finished: 0,
 				buffered: rs,
 			}
@@ -316,7 +318,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 		unishard := rpl.Partial.Unishard
 		tag := rpl.Partial.Tag
 		isShardMerger := false
-		rkeyFrom := boostpb.LocalNodeIndex(0)
+		rkeyFrom := dataflow.LocalNodeIdx(0)
 
 		if _, all := u.emit.(*unionEmitAll); all {
 			if unishard {
@@ -351,7 +353,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 
 				u.replayKey[rk] = append(u.replayKey[rk], extend...)
 
-				emit.emitLeft.Scan(func(src boostpb.LocalNodeIndex, emission []int) bool {
+				emit.emitLeft.Scan(func(src dataflow.LocalNodeIdx, emission []int) bool {
 					if src != from {
 						var extend []int
 						for _, c := range keyCols {
@@ -365,16 +367,16 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 			// otherwise we already know the meta info for this tag
 		}
 
-		rsByKey := make(map[boostpb.Row][]boostpb.Record)
+		rsByKey := make(map[sql.Row][]sql.Record)
 		for _, r := range rs {
 			rr := r.Row.IndexWith(keyCols)
 			rsByKey[rr] = append(rsByKey[rr], r)
 		}
 
-		var released = make(map[boostpb.Row]bool)
-		var captured = make(map[boostpb.Row]bool)
+		var released = make(map[sql.Row]bool)
+		var captured = make(map[sql.Row]bool)
 		var toprocess []*UnionReplay
-		var finalrecords []boostpb.Record
+		var finalrecords []sql.Record
 
 		for key := range keys {
 			rs := rsByKey[key]
@@ -404,7 +406,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from boostpb.LocalNodeIndex, 
 					captured[key] = true
 				}
 			} else {
-				urp.buffered = make(map[boostpb.LocalNodeIndex][]boostpb.Record)
+				urp.buffered = make(map[dataflow.LocalNodeIdx][]sql.Record)
 				urp.buffered[from] = rs
 				if u.required == 1 {
 					toprocess = append(toprocess, urp)
@@ -511,7 +513,7 @@ func (u *Union) ParentColumns(col int) []NodeColumn {
 	return u.emit.ParentColumns(col)
 }
 
-func (u *Union) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
+func (u *Union) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
 	return u.emit.ColumnType(g, col)
 }
 
@@ -519,16 +521,16 @@ func (u *Union) Description() string {
 	return u.emit.Description()
 }
 
-func (u *Union) OnConnected(graph *graph.Graph[*Node]) {
-	u.emit.OnConnected(graph)
+func (u *Union) OnConnected(graph *graph.Graph[*Node]) error {
+	return u.emit.OnConnected(graph)
 }
 
-func (u *Union) OnCommit(you graph.NodeIdx, remap map[graph.NodeIdx]boostpb.IndexPair) {
+func (u *Union) OnCommit(you graph.NodeIdx, remap map[graph.NodeIdx]dataflow.IndexPair) {
 	u.me = you
 	u.emit.OnCommit(remap)
 }
 
-func (u *Union) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
+func (u *Union) OnInput(you *Node, ex processing.Executor, from dataflow.LocalNodeIdx, rs []sql.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
 	return u.emit.OnInput(from, rs)
 }
 
@@ -537,7 +539,7 @@ func (u *Union) IsShardMerger() bool {
 	return emitAll
 }
 
-func (u *Union) OnEviction(from boostpb.LocalNodeIndex, tag boostpb.Tag, keys []boostpb.Row) {
+func (u *Union) OnEviction(from dataflow.LocalNodeIdx, tag dataflow.Tag, keys []sql.Row) {
 	for _, key := range keys {
 		startKey := &UnionReplay{tag: tag, replayingKey: key, shard: 0}
 		u.replayPieces.Ascend(startKey, func(e *UnionReplay) bool {
@@ -568,25 +570,25 @@ type unionEmit interface {
 	Resolve(col int) []NodeColumn
 	Description() string
 	ParentColumns(col int) []NodeColumn
-	ColumnType(graph *graph.Graph[*Node], col int) boostpb.Type
-	OnCommit(remap map[graph.NodeIdx]boostpb.IndexPair)
-	OnConnected(graph *graph.Graph[*Node])
-	OnInput(from boostpb.LocalNodeIndex, rs []boostpb.Record) (processing.Result, error)
+	ColumnType(graph *graph.Graph[*Node], col int) (sql.Type, error)
+	OnCommit(remap map[graph.NodeIdx]dataflow.IndexPair)
+	OnConnected(graph *graph.Graph[*Node]) error
+	OnInput(from dataflow.LocalNodeIdx, rs []sql.Record) (processing.Result, error)
 }
 
 func NewUnion(emit map[graph.NodeIdx][]int) *Union {
-	var emitLocal = make(map[boostpb.IndexPair][]int, len(emit))
+	var emitLocal = make(map[dataflow.IndexPair][]int, len(emit))
 	for k, cols := range emit {
 		if !sort.IntsAreSorted(cols) {
 			panic("union does not support column reordering")
 		}
-		emitLocal[boostpb.NewIndexPair(k)] = cols
+		emitLocal[dataflow.NewIndexPair(k)] = cols
 	}
 
 	return &Union{
 		emit: &unionEmitProject{
 			emit: emitLocal,
-			cols: make(map[boostpb.IndexPair]int),
+			cols: make(map[dataflow.IndexPair]int),
 		},
 		required:     len(emit),
 		me:           graph.InvalidNode,
@@ -595,14 +597,14 @@ func NewUnion(emit map[graph.NodeIdx][]int) *Union {
 	}
 }
 
-func NewUnionDeshard(parent graph.NodeIdx, sharding boostpb.Sharding) *Union {
+func NewUnionDeshard(parent graph.NodeIdx, sharding dataflow.Sharding) *Union {
 	shards := sharding.TryGetShards()
 	if shards == nil {
 		panic("cannot create Union for this sharding mode")
 	}
 	return &Union{
 		emit: &unionEmitAll{
-			from:     boostpb.NewIndexPair(parent),
+			from:     dataflow.NewIndexPair(parent),
 			sharding: sharding,
 		},
 		required:     int(*shards),
@@ -612,30 +614,30 @@ func NewUnionDeshard(parent graph.NodeIdx, sharding boostpb.Sharding) *Union {
 	}
 }
 
-func (u *Union) ToProto() *boostpb.Node_InternalUnion {
+func (u *Union) ToProto() *flownodepb.Node_InternalUnion {
 	if len(u.replayKey) > 0 || u.replayPieces.Len() > 0 {
 		panic("unsupported")
 	}
 
-	punion := &boostpb.Node_InternalUnion{
+	punion := &flownodepb.Node_InternalUnion{
 		Required: u.required,
 		Me:       u.me,
 	}
 	switch e := u.emit.(type) {
 	case *unionEmitAll:
-		punion.Emit = &boostpb.Node_InternalUnion_All{All: e.ToProto()}
+		punion.Emit = &flownodepb.Node_InternalUnion_All{All: e.ToProto()}
 	case *unionEmitProject:
-		punion.Emit = &boostpb.Node_InternalUnion_Project{Project: e.ToProto()}
+		punion.Emit = &flownodepb.Node_InternalUnion_Project{Project: e.ToProto()}
 	}
 	return punion
 }
 
-func NewUnionFromProto(u *boostpb.Node_InternalUnion) *Union {
+func NewUnionFromProto(u *flownodepb.Node_InternalUnion) *Union {
 	var emit unionEmit
 	switch e := u.Emit.(type) {
-	case *boostpb.Node_InternalUnion_All:
+	case *flownodepb.Node_InternalUnion_All:
 		emit = newUnionEmitAllFromProto(e.All)
-	case *boostpb.Node_InternalUnion_Project:
+	case *flownodepb.Node_InternalUnion_Project:
 		emit = newUnionEmitProjectFromProto(e.Project)
 	}
 	return &Union{

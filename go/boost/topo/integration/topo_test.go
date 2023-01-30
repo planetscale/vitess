@@ -55,7 +55,7 @@ func (ins *FakeBoostInstance) PutRecipe(ctx context.Context, recipe *vtboost.Rec
 	return err
 }
 
-func (ins *FakeBoostInstance) StartLeadershipCampaign(ctx context.Context, state *vtboost.ControllerState) {
+func (ins *FakeBoostInstance) StartLeadershipCampaign(ctx context.Context, state *vtboost.ControllerState) error {
 	ins.mu.Lock()
 	ins.leader = true
 	ins.mu.Unlock()
@@ -71,6 +71,7 @@ func (ins *FakeBoostInstance) StartLeadershipCampaign(ctx context.Context, state
 	ins.mu.Lock()
 	ins.leader = false
 	ins.mu.Unlock()
+	return nil
 }
 
 func (ins *FakeBoostInstance) NewLeader(state *vtboost.ControllerState) {
@@ -179,7 +180,8 @@ func TestRecipeApplications(t *testing.T) {
 	watch.Dial = func(address string) (vtboost.DRPCControllerServiceClient, error) {
 		return instances[address].DialControllerClient()
 	}
-	watch.Start()
+	err = watch.Start()
+	require.NoError(t, err)
 	defer watch.Stop()
 
 	client := client.NewClient(ts)

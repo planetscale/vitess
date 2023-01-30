@@ -1,6 +1,7 @@
 package operators
 
 import (
+	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -121,7 +122,7 @@ func (conv *Converter) pushDownPredicateThroughJoin(ctx *PlanContext, filterNode
 				notPushedPredicates = append(notPushedPredicates, predicate)
 			}
 		default:
-			return nil, false, NewBug("weird dependencies for a predicate")
+			dbg.Bug("weird dependencies for a predicate")
 		}
 	}
 

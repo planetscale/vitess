@@ -3,13 +3,13 @@ package flownode
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/common/graphviz"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/mysql/collations"
 )
 
 type GraphvizOptions struct {
-	Materialization boostpb.MaterializationStatus
+	Materialization dataflow.MaterializationStatus
 	ShowSchema      bool
 }
 
@@ -17,7 +17,7 @@ func (n *Node) RenderGraphviz(gvz *graphviz.Node, options GraphvizOptions) {
 	gvz.Attr["tooltip"] = graphviz.JSON(n.ToProto())
 
 	switch n.shardedBy.Mode {
-	case boostpb.Sharding_ByColumn, boostpb.Sharding_Random:
+	case dataflow.Sharding_ByColumn, dataflow.Sharding_Random:
 		gvz.Attr["style"] = "filled,dashed"
 	default:
 		gvz.Attr["style"] = "filled"
@@ -31,28 +31,28 @@ func (n *Node) RenderGraphviz(gvz *graphviz.Node, options GraphvizOptions) {
 		}
 	)
 
-	if n.domain != boostpb.InvalidDomainIndex {
+	if n.domain != dataflow.InvalidDomainIdx {
 		gvz.Attr["fillcolor"] = fmt.Sprintf("/set312/%d", (n.domain%12)+1)
 	} else {
 		gvz.Attr["fillcolor"] = "white"
 	}
 
 	switch options.Materialization {
-	case boostpb.MaterializationNone:
-	case boostpb.MaterializationPartial:
+	case dataflow.MaterializationNone:
+	case dataflow.MaterializationPartial:
 		materialized = "◕"
-	case boostpb.MaterializationFull:
+	case dataflow.MaterializationFull:
 		materialized = "●"
 	}
 
 	switch n.shardedBy.Mode {
-	case boostpb.Sharding_ByColumn:
+	case dataflow.Sharding_ByColumn:
 		sharding = fmt.Sprintf("shard ⚷: %s / %d-way", n.fields[n.shardedBy.Col], n.shardedBy.Shards)
-	case boostpb.Sharding_Random:
+	case dataflow.Sharding_Random:
 		sharding = "shard randomly"
-	case boostpb.Sharding_None:
+	case dataflow.Sharding_None:
 		sharding = "unsharded"
-	case boostpb.Sharding_ForcedNone:
+	case dataflow.Sharding_ForcedNone:
 		sharding = "desharded to avoid SS"
 	}
 
@@ -67,16 +67,14 @@ func (n *Node) RenderGraphviz(gvz *graphviz.Node, options GraphvizOptions) {
 	}
 
 	switch impl := n.impl.(type) {
-	case *Source:
+	case *Root:
 		gvz.Row("(source)")
 		return
 	case *Dropped:
 		gvz.Row(addr, "(dropped)")
 		return
-	case *Base:
-		gvz.Row(addr, graphviz.Fmt("<B>%s</B>", impl.Table()), materialized)
-	case *ExternalBase:
-		gvz.Row(addr, graphviz.Fmt("%s.<B>%s</B> <I>(external)</I>", impl.Keyspace(), impl.Table()))
+	case *Table:
+		gvz.Row(addr, graphviz.Fmt("%s.<B>%s</B> <I>(external)</I>", impl.Keyspace(), impl.Name()))
 		gvz.Row(impl.keyspace)
 	case *Ingress:
 		gvz.Row(addr, materialized)

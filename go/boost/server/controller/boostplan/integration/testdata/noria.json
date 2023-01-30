@@ -124,10 +124,6 @@
     },
     {
       "Keyspace": "main",
-      "SQL": "SELECT friends.id, f2.friend AS fof FROM friends JOIN f2 ON friends.friend = f2.id WHERE friends.id = ?"
-    },
-    {
-      "Keyspace": "main",
       "SQL": "SELECT sum(votes.sign) AS sum FROM votes GROUP BY votes.uid HAVING sum > 0 "
     },
     {

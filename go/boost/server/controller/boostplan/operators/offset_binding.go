@@ -3,6 +3,7 @@ package operators
 import (
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -238,6 +239,8 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 			proj = Projection{Kind: ProjectionColumn, Column: offset}
 		case *sqlparser.Literal:
 			proj = Projection{Kind: ProjectionLiteral, AST: expr}
+		case *sqlparser.Offset:
+			proj = Projection{Kind: ProjectionColumn, Column: expr.V}
 		default:
 			newExpr, err := rewriteColNamesToOffsets(semTable, node.Ancestors[0], expr)
 			if err != nil {
@@ -355,8 +358,10 @@ func findOffsets(semTable *semantics.SemTable, input *Node) func(cursor *sqlpars
 				V:        offset,
 				Original: sqlparser.String(col),
 			})
+			return false
+		default:
+			return true
 		}
-		return true
 	}
 }
 
@@ -458,7 +463,8 @@ func (lu *lookup) ColumnLookup(col *sqlparser.ColName) (int, error) {
 			return i, nil
 		}
 	}
-	return -1, NewBug("column not found during lookup")
+	dbg.Bug("column not found during lookup")
+	return -1, nil
 }
 
 func (lu *lookup) CollationForExpr(expr sqlparser.Expr) collations.ID {

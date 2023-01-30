@@ -1,17 +1,19 @@
 package flownode
 
 import (
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/sql"
 )
 
 type unionEmitAll struct {
-	from     boostpb.IndexPair
-	sharding boostpb.Sharding
+	from     dataflow.IndexPair
+	sharding dataflow.Sharding
 }
 
-func (u *unionEmitAll) OnInput(_ boostpb.LocalNodeIndex, rs []boostpb.Record) (processing.Result, error) {
+func (u *unionEmitAll) OnInput(_ dataflow.LocalNodeIdx, rs []sql.Record) (processing.Result, error) {
 	return processing.Result{
 		Records: rs,
 	}, nil
@@ -33,24 +35,26 @@ func (u *unionEmitAll) ParentColumns(col int) []NodeColumn {
 	return []NodeColumn{{u.from.AsGlobal(), col}}
 }
 
-func (u *unionEmitAll) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
+func (u *unionEmitAll) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
 	return g.Value(u.from.AsGlobal()).ColumnType(g, col)
 }
 
-func (u *unionEmitAll) OnCommit(remap map[graph.NodeIdx]boostpb.IndexPair) {
+func (u *unionEmitAll) OnCommit(remap map[graph.NodeIdx]dataflow.IndexPair) {
 	u.from.Remap(remap)
 }
 
-func (u *unionEmitAll) OnConnected(graph *graph.Graph[*Node]) {}
+func (u *unionEmitAll) OnConnected(graph *graph.Graph[*Node]) error {
+	return nil
+}
 
-func (u *unionEmitAll) ToProto() *boostpb.Node_InternalUnion_EmitAll {
-	return &boostpb.Node_InternalUnion_EmitAll{
+func (u *unionEmitAll) ToProto() *flownodepb.Node_InternalUnion_EmitAll {
+	return &flownodepb.Node_InternalUnion_EmitAll{
 		From:     &u.from,
 		Sharding: &u.sharding,
 	}
 }
 
-func newUnionEmitAllFromProto(emit *boostpb.Node_InternalUnion_EmitAll) *unionEmitAll {
+func newUnionEmitAllFromProto(emit *flownodepb.Node_InternalUnion_EmitAll) *unionEmitAll {
 	return &unionEmitAll{
 		from:     *emit.From,
 		sharding: *emit.Sharding,

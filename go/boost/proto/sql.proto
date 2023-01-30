@@ -1,0 +1,19 @@
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/boost/sql";
+
+package sql;
+
+import "gogoproto/gogo.proto";
+
+message Record {
+  string row = 1 [(gogoproto.casttype) = "Row"];
+  int32 offset = 2;
+  bool positive = 3;
+};
+
+message Type {
+  int32 t = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/sqltypes.Type"];
+  uint32 collation = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/mysql/collations.ID"];
+  bool nullable = 3;
+  string default = 4 [(gogoproto.casttype) = "Value"];
+};

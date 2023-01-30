@@ -14,6 +14,8 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
+const DefaultFontName = "Arial"
+
 type Node struct {
 	Subgraph  string
 	Attr      map[string]string
@@ -50,7 +52,7 @@ func (n *Node) Row(col ...any) {
 	n.table = append(n.table, col)
 }
 
-func (n *Node) render(w io.Writer) {
+func (n *Node) renderTable(w io.Writer) {
 	var maxcol int
 	for _, r := range n.table {
 		if len(r) > maxcol {
@@ -135,9 +137,12 @@ func (g *Graph[I]) renderSubgraph(w io.Writer, name string, nodes map[I]*Node) {
 		for k, v := range node.Attr {
 			fmt.Fprintf(w, "%s=%q ", k, v)
 		}
-		fmt.Fprintf(w, "label=<\n")
-		node.render(w)
-		fmt.Fprintf(w, ">\n\t]\n")
+		if node.table != nil {
+			fmt.Fprintf(w, "label=<\n")
+			node.renderTable(w)
+			fmt.Fprintf(w, ">")
+		}
+		fmt.Fprintf(w, "\n\t]\n")
 	}
 
 	if name != "" {
@@ -150,7 +155,7 @@ func (g *Graph[I]) Render(w io.Writer) {
 	for k, v := range g.Attr {
 		fmt.Fprintf(w, "\t%s=%q\n", k, v)
 	}
-	fmt.Fprintf(w, "\tnode [shape=plain, fontsize=12]\n")
+	fmt.Fprintf(w, "\tnode [shape=plain, fontsize=12, fontname=%q]\n", DefaultFontName)
 
 	if g.Clustering {
 		var subgraphs = make(map[string]map[I]*Node)

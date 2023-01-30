@@ -297,7 +297,8 @@ func setup(t *testing.T) (*client.Client, *watcher.Watcher, *topo.Server) {
 		w = watcher.NewWatcher(ts)
 	)
 
-	w.Start()
+	err := w.Start()
+	require.NoError(t, err)
 	t.Cleanup(w.Stop)
 
 	return c, w, ts

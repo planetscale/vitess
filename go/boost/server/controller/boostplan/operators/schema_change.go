@@ -9,8 +9,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func tableSpecRequiresNewBase(oldSpec, newSpec *sqlparser.TableSpec) bool {
-	// any change on the number of columns requires a new base node
+func tableSpecRequiresNewTableNode(oldSpec, newSpec *sqlparser.TableSpec) bool {
+	// any change on the number of columns requires a new table node
 	if len(oldSpec.Columns) != len(newSpec.Columns) {
 		return true
 	}
@@ -22,7 +22,7 @@ func tableSpecRequiresNewBase(oldSpec, newSpec *sqlparser.TableSpec) bool {
 		if !sqlparser.EqualsIdentifierCI(oldColumn.Name, newColumn.Name, nil) {
 			return true
 		}
-		// if the type of the column has had a meaningful change, we need a new base node
+		// if the type of the column has had a meaningful change, we need a new table node
 		if columnTypeHasChanged(&oldColumn.Type, &newColumn.Type) {
 			return true
 		}

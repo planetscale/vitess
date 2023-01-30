@@ -43,7 +43,6 @@ const (
 	MultipleIn
 	Aggregation
 	NoFullGroupBy
-	NoExtremum
 	Lock
 )
 
@@ -60,14 +59,7 @@ type (
 		Keyspace, Table string
 		Columns         []string
 	}
-	BugError struct {
-		message string
-	}
 )
-
-func NewBug(message string) error {
-	return &BugError{message: message}
-}
 
 func (n *UnsupportedError) Error() string {
 	var sb strings.Builder
@@ -137,8 +129,6 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "group aggregation function '%s' is not supported", sqlparser.CanonicalString(n.AST))
 	case NoFullGroupBy:
 		fmt.Fprintf(&sb, "non aggregated column '%s' is not part of group by", sqlparser.CanonicalString(n.AST))
-	case NoExtremum:
-		fmt.Fprintf(&sb, "MIN() / MAX() is currently not supported: %s", sqlparser.CanonicalString(n.AST))
 	case Lock:
 		sel := n.AST.(*sqlparser.Select)
 		fmt.Fprintf(&sb, "row locking with '%s' is not supported", sel.Lock.ToString())
@@ -153,8 +143,4 @@ func (u *UnknownColumnsError) Error() string {
 
 func (n *NoUniqueKeyError) Error() string {
 	return fmt.Sprintf("table %s.%s has no unique non nullable key", n.Keyspace, n.Table)
-}
-
-func (b *BugError) Error() string {
-	return fmt.Sprintf("[BUG] %s", b.message)
 }

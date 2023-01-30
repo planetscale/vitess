@@ -7,16 +7,18 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/packet"
+	"vitess.io/vitess/go/boost/dataflow"
+	"vitess.io/vitess/go/boost/sql"
 )
 
 type Executor interface {
-	Send(ctx context.Context, dest boostpb.DomainAddr, m *boostpb.Packet) error
+	Send(ctx context.Context, dest dataflow.DomainAddr, pkt packet.FlowPacket) error
 }
 
 type Miss struct {
 	// The node we missed when looking up into.
-	On boostpb.LocalNodeIndex
+	On dataflow.LocalNodeIdx
 
 	/// The columns of `on` we were looking up on.
 	LookupIdx []int
@@ -28,7 +30,12 @@ type Miss struct {
 	ReplayCols []int
 
 	/// The record we were processing when we missed.
-	Record boostpb.HashedRecord
+	Record sql.HashedRecord
+
+	/// Indicates whether this miss should force downstream evictions.
+	Flush bool
+
+	ForceTag dataflow.Tag
 }
 
 func (miss *Miss) Compare(other *Miss) int {
@@ -53,19 +60,19 @@ func (miss *Miss) Compare(other *Miss) int {
 	return 0
 }
 
-func (miss *Miss) ReplayKey() boostpb.Row {
+func (miss *Miss) ReplayKey() sql.Row {
 	if miss.ReplayCols == nil {
 		return ""
 	}
-	row := boostpb.NewRowBuilder(len(miss.ReplayCols))
+	row := sql.NewRowBuilder(len(miss.ReplayCols))
 	for _, rc := range miss.ReplayCols {
 		row.Add(miss.Record.Row.ValueAt(rc))
 	}
 	return row.Finish()
 }
 
-func (miss *Miss) LookupKey() boostpb.Row {
-	row := boostpb.NewRowBuilder(len(miss.LookupCols))
+func (miss *Miss) LookupKey() sql.Row {
+	row := sql.NewRowBuilder(len(miss.LookupCols))
 	for _, rc := range miss.LookupCols {
 		row.Add(miss.Record.Row.ValueAt(rc))
 	}
@@ -79,17 +86,17 @@ func (miss Miss) String() string {
 
 type Lookup struct {
 	/// The node we looked up into.
-	On boostpb.LocalNodeIndex
+	On dataflow.LocalNodeIdx
 
 	/// The columns of `on` we were looking up on.
 	Cols []int
 
 	/// The key used for the lookup.
-	Key boostpb.Row
+	Key sql.Row
 }
 
 type Result struct {
-	Records []boostpb.Record
+	Records []sql.Record
 	Misses  []Miss
 	Lookups []Lookup
 }
@@ -97,9 +104,9 @@ type Result struct {
 func (*Result) rawResult() {}
 
 type ReplayPiece struct {
-	Rows     []boostpb.Record
-	Keys     map[boostpb.Row]bool
-	Captured map[boostpb.Row]bool
+	Rows     []sql.Record
+	Keys     map[sql.Row]bool
+	Captured map[sql.Row]bool
 }
 
 func (*ReplayPiece) rawResult() {}
@@ -109,7 +116,7 @@ type RawResult interface {
 }
 
 type FullReplay struct {
-	Records []boostpb.Record
+	Records []sql.Record
 	Last    bool
 }
 

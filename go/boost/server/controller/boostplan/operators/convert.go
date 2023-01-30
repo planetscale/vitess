@@ -5,6 +5,7 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/boost/graph"
@@ -111,6 +112,28 @@ func (conv *Converter) makeTableNode(keyspace, name string, spec *sqlparser.Tabl
 		}
 	}
 
+	// Check for `CREATE TABLE` format where the primary key
+	// is defined by an option directly on the column definition.
+	// Only relevant for testing since a production `CREATE TABLE`
+	// schema definition is always normalized in MySQL itself and will
+	// have a separate index definition for the primary key.
+	if primaryKey == nil {
+		for _, col := range spec.Columns {
+			// colKeyPrimary is not exported, but equal to 1
+			if col.Type.Options != nil && col.Type.Options.KeyOpt == 1 {
+				primaryKey = &sqlparser.IndexDefinition{
+					Columns: []*sqlparser.IndexColumn{{
+						Column: col.Name,
+						Length: col.Type.Length,
+					}},
+					Info: &sqlparser.IndexInfo{
+						Primary: true,
+					},
+				}
+			}
+		}
+	}
+
 	// If we have no primary key, we fall back to the first unique non-nullable key
 	// which can function as the primary key for Boost. This is a requirement we already
 	// enforce for online DDL as well, so it should always pass for any production
@@ -153,11 +176,12 @@ func (conv *Converter) makeTableNode(keyspace, name string, spec *sqlparser.Tabl
 	}
 }
 
-func (conv *Converter) UpgradeSchema(newversion int64) {
+func (conv *Converter) UpgradeSchema(newversion int64) error {
 	if newversion <= conv.version {
-		panic("schema version is not newer than the existing")
+		return fmt.Errorf("schema version is not newer than the existing: from %d to %d", conv.version, newversion)
 	}
 	conv.version = newversion
+	return nil
 }
 
 func (conv *Converter) findViewByPublicID(id string) (noderef, *Node, bool) {
@@ -172,10 +196,10 @@ func (conv *Converter) findViewByPublicID(id string) (noderef, *Node, bool) {
 	return noderef{}, nil, false
 }
 
-func (conv *Converter) RemoveQueryByPublicID(id string) {
+func (conv *Converter) RemoveQueryByPublicID(id string) error {
 	nref, leaf, ok := conv.findViewByPublicID(id)
 	if !ok {
-		panic("tried to remove unknown query")
+		return fmt.Errorf("query not found: %s", id)
 	}
 
 	delete(conv.current, nref.name)
@@ -197,6 +221,7 @@ func (conv *Converter) RemoveQueryByPublicID(id string) {
 		}
 		delete(conv.nodes, noderef{n.Name, n.Version})
 	}
+	return nil
 }
 
 func newTableRef(st *semantics.SemTable, tableNode *Node, v int64, id semantics.TableSet, hints sqlparser.IndexHints) (*Node, error) {
@@ -210,9 +235,8 @@ func newTableRef(st *semantics.SemTable, tableNode *Node, v int64, id semantics.
 	if ch, ok := tableNode.Op.(ColumnHolder); ok {
 		for _, column := range ch.GetColumns() {
 			ast, err := column.SingleAST()
-			if err != nil {
-				return nil, NewBug("table specs should not have multiple AST")
-			}
+			dbg.Assert(err == nil, "table specs should not have multiple AST")
+
 			st.Direct[ast] = id
 			n.Columns = append(n.Columns, &Column{
 				AST:  []sqlparser.Expr{ast},

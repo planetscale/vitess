@@ -1,11 +1,12 @@
 syntax = "proto3";
-option go_package = "vitess.io/vitess/go/boost/boostpb";
+option go_package = "vitess.io/vitess/go/boost/boostrpc/service";
 
 package service;
 
-import "packet.proto";
-import "node.proto";
-import "controller.proto";
+import "flownode.proto";
+import "dataflow.proto";
+import "config.proto";
+import "sql.proto";
 import "gogoproto/gogo.proto";
 
 message WorkerSource {
@@ -34,7 +35,7 @@ message AssignDomainResponse {
 };
 
 message DomainDescriptor {
-  uint64 id = 1 [(gogoproto.casttype) = "DomainIndex"];
+  uint64 id = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.DomainIdx"];
   uint64 shard = 2 [(gogoproto.casttype) = "uint"];
   string addr = 3;
 };
@@ -54,29 +55,27 @@ message AssignStreamRequest {
 
 message AssignStreamResponse {}
 
-message PacketResponse {};
-
 message ViewReadRequest {
-  uint32 target_node = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
+  uint32 target_node = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
   uint64 target_shard = 2 [(gogoproto.casttype) = "uint"];
-  string key = 3 [(gogoproto.casttype) = "Row"];
+  string key = 3 [(gogoproto.casttype) =  "vitess.io/vitess/go/boost/sql.Row"];
   bool block = 4;
 };
 
 message ViewReadManyRequest {
-  uint32 target_node = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
+  uint32 target_node = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
   uint64 target_shard = 2 [(gogoproto.casttype) = "uint"];
-  repeated string keys = 3 [(gogoproto.casttype) = "Row"];
+  repeated string keys = 3 [(gogoproto.casttype) =  "vitess.io/vitess/go/boost/sql.Row"];
   bool block = 4;
 };
 
 message ViewReadResponse {
-  repeated string rows = 1 [(gogoproto.casttype) = "Row"];
+  repeated string rows = 1 [(gogoproto.casttype) =  "vitess.io/vitess/go/boost/sql.Row"];
   int32 hits = 2;
 };
 
 message ViewSizeRequest {
-  uint32 target_node = 1 [(gogoproto.casttype) = "GraphNodeIdx"];
+  uint32 target_node = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
   int64 target_col = 2 [(gogoproto.casttype) = "int"];
 };
 
@@ -84,43 +83,31 @@ message ViewSizeResponse {
   int64 total_size = 1;
 }
 
-message TableDescriptor {
-  repeated DomainDescriptor txs = 1;
-  uint32 node = 2 [(gogoproto.casttype) = "GraphNodeIdx"];
-  uint32 addr = 3 [(gogoproto.casttype) = "LocalNodeIndex"];
-  bool key_is_primary = 4;
-  repeated int64 key = 5 [(gogoproto.casttype) = "int"];
-  map<int64, string> dropped = 6 [(gogoproto.castkey) = "int", (gogoproto.castvalue) = "Value"];
-  string table_name = 7;
-  repeated string columns = 8;
-  repeated node.Type schema = 9 [(gogoproto.nullable) = false];
-}
-
 message ExternalTableDescriptor {
-  repeated node.DomainAddr txs = 1;
-  uint32 node = 2 [(gogoproto.casttype) = "GraphNodeIdx"];
-  uint32 addr = 3 [(gogoproto.casttype) = "LocalNodeIndex"];
+  repeated dataflow.DomainAddr txs = 1;
+  uint32 node = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
+  uint32 addr = 3 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
   bool key_is_primary = 4;
   repeated int64 key = 5 [(gogoproto.casttype) = "int"];
   string table_name = 7;
   repeated string columns = 8;
-  repeated node.Type schema = 9 [(gogoproto.nullable) = false];
+  repeated sql.Type schema = 9 [(gogoproto.nullable) = false];
   string keyspace = 10;
 }
 
 message DomainBuilder {
-  uint64 index = 1 [(gogoproto.casttype) = "DomainIndex"];
+  uint64 index = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.DomainIdx"];
   uint64 shard = 2 [(gogoproto.casttype) = "uint"];
   uint64 num_shards = 3 [(gogoproto.casttype) = "uint"];
-  map<uint32, node.Node> nodes = 4 [(gogoproto.castkey) = "LocalNodeIndex"];
-  controller.DomainConfig config = 5;
+  map<uint32, flownode.Node> nodes = 4 [(gogoproto.castkey) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+  config.Domain config = 5;
 };
 
 message MemoryStatsRequest {}
 message MemoryStatsResponse {
   message MemUsage {
-    node.DomainAddr domain = 1 [(gogoproto.nullable) = false];
-    uint32 node = 2 [(gogoproto.casttype) = "GraphNodeIdx"];
+    dataflow.DomainAddr domain = 1 [(gogoproto.nullable) = false];
+    uint32 node = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
     int64 memory = 3;
   }
   repeated MemUsage node_usage = 1;
@@ -131,11 +118,6 @@ service WorkerService {
   rpc AssignStream(AssignStreamRequest) returns (AssignStreamResponse);
   rpc DomainBooted(DomainBootedRequest) returns (DomainBootedResponse);
   rpc MemoryStats(MemoryStatsRequest) returns (MemoryStatsResponse);
-};
-
-service InnerDomain {
-  rpc ProcessAsync(packet.Packet) returns(PacketResponse);
-  rpc ProcessSync(packet.SyncPacket) returns(PacketResponse);
 };
 
 service Reader {

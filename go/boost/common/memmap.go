@@ -4,13 +4,14 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/service"
+	"vitess.io/vitess/go/boost/dataflow"
 )
 
 type memstatkey struct {
-	dom   boostpb.DomainIndex
+	dom   dataflow.DomainIdx
 	shard uint
-	node  boostpb.GraphNodeIdx
+	node  dataflow.NodeIdx
 }
 
 type MemoryStats struct {
@@ -22,20 +23,20 @@ func NewMemStats() *MemoryStats {
 	return &MemoryStats{usage: map[memstatkey]*atomic.Int64{}}
 }
 
-func (m *MemoryStats) Register(domain boostpb.DomainIndex, shard *uint, node boostpb.GraphNodeIdx, memory *atomic.Int64) {
+func (m *MemoryStats) Register(domain dataflow.DomainIdx, shard *uint, node dataflow.NodeIdx, memory *atomic.Int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.usage[memstatkey{dom: domain, shard: UnwrapOr(shard, 0), node: node}] = memory
 }
 
-func (m *MemoryStats) ToProto() *boostpb.MemoryStatsResponse {
+func (m *MemoryStats) ToProto() *service.MemoryStatsResponse {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var resp boostpb.MemoryStatsResponse
+	var resp service.MemoryStatsResponse
 	for usage, mem := range m.usage {
-		resp.NodeUsage = append(resp.NodeUsage, &boostpb.MemoryStatsResponse_MemUsage{
-			Domain: boostpb.DomainAddr{
+		resp.NodeUsage = append(resp.NodeUsage, &service.MemoryStatsResponse_MemUsage{
+			Domain: dataflow.DomainAddr{
 				Domain: usage.dom,
 				Shard:  usage.shard,
 			},

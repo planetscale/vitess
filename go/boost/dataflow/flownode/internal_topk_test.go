@@ -5,18 +5,20 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestTopk(t *testing.T) {
-	setup := func(t *testing.T, desc bool) (*MockGraph, boostpb.IndexPair) {
-		cmprows := []boostpb.OrderedColumn{{Col: 2, Desc: desc}}
+	setup := func(t *testing.T, desc bool) (*MockGraph, dataflow.IndexPair) {
+		cmprows := []flownodepb.OrderedColumn{{Col: 2, Desc: desc}}
 		g := NewMockGraph(t)
 		s := g.AddBase(
 			"source",
 			[]string{"x", "y", "z"},
-			boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.Int64),
+			sql.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.Int64),
 		)
 		g.SetOp(
 			"topk",
@@ -27,13 +29,13 @@ func TestTopk(t *testing.T) {
 		return g, s
 	}
 
-	r12a := boostpb.TestRow(1, "z", 12)
-	r10a := boostpb.TestRow(2, "z", 10)
-	r11a := boostpb.TestRow(3, "z", 11)
-	r05a := boostpb.TestRow(4, "z", 5)
-	r15a := boostpb.TestRow(5, "z", 15)
-	r10b := boostpb.TestRow(6, "z", 10)
-	r10c := boostpb.TestRow(7, "z", 10)
+	r12a := sql.TestRow(1, "z", 12)
+	r10a := sql.TestRow(2, "z", 10)
+	r11a := sql.TestRow(3, "z", 11)
+	r05a := sql.TestRow(4, "z", 5)
+	r15a := sql.TestRow(5, "z", 15)
+	r10b := sql.TestRow(6, "z", 10)
+	r10c := sql.TestRow(7, "z", 10)
 
 	t.Run("it keeps topk", func(t *testing.T) {
 		g, _ := setup(t, false)
@@ -64,7 +66,7 @@ func TestTopk(t *testing.T) {
 		require.Equal(t, r11a.AsRecords(), a)
 
 		a = g.NarrowOneRow(r05a, true)
-		require.ElementsMatch(t, []boostpb.Record{r12a.ToRecord(false), r05a.ToRecord(true)}, a)
+		require.ElementsMatch(t, []sql.Record{r12a.ToRecord(false), r05a.ToRecord(true)}, a)
 
 		a = g.NarrowOneRow(r15a, true)
 		require.Len(t, a, 0)
@@ -87,7 +89,7 @@ func TestTopk(t *testing.T) {
 		g.Seed(s, r05a)
 
 		a := g.NarrowOneRow(r15a.ToRecord(false), true)
-		require.ElementsMatch(t, []boostpb.Record{r15a.ToRecord(false), r10a.ToRecord(true)}, a)
+		require.ElementsMatch(t, []sql.Record{r15a.ToRecord(false), r10a.ToRecord(true)}, a)
 
 		g.Unseed(s)
 
@@ -111,11 +113,11 @@ func TestTopk(t *testing.T) {
 	t.Run("it forwards reversed", func(t *testing.T) {
 		g, _ := setup(t, true)
 
-		r12 := boostpb.TestRow(1, "z", -12.123)
-		r10 := boostpb.TestRow(2, "z", 0.0431)
-		r11 := boostpb.TestRow(3, "z", -0.082)
-		r5 := boostpb.TestRow(4, "z", 5.601)
-		r15 := boostpb.TestRow(5, "z", -15.9)
+		r12 := sql.TestRow(1, "z", -12.123)
+		r10 := sql.TestRow(2, "z", 0.0431)
+		r11 := sql.TestRow(3, "z", -0.082)
+		r5 := sql.TestRow(4, "z", 5.601)
+		r15 := sql.TestRow(5, "z", -15.9)
 
 		a := g.NarrowOneRow(r12, true)
 		require.Equal(t, r12.AsRecords(), a)
@@ -127,7 +129,7 @@ func TestTopk(t *testing.T) {
 		require.Equal(t, r11.AsRecords(), a)
 
 		a = g.NarrowOneRow(r5, true)
-		require.ElementsMatch(t, []boostpb.Record{r12.ToRecord(false), r5.ToRecord(true)}, a)
+		require.ElementsMatch(t, []sql.Record{r12.ToRecord(false), r5.ToRecord(true)}, a)
 
 		a = g.NarrowOneRow(r15, true)
 		require.Len(t, a, 0)
@@ -154,11 +156,11 @@ func TestTopk(t *testing.T) {
 		g, _ := setup(t, false)
 		ni := g.Node().LocalAddr()
 
-		r1 := boostpb.TestRow(1, "z", 10)
-		r2 := boostpb.TestRow(2, "z", 10)
-		r3 := boostpb.TestRow(3, "z", 10)
-		r4 := boostpb.TestRow(4, "z", 5)
-		r4a := boostpb.TestRow(4, "z", 10)
+		r1 := sql.TestRow(1, "z", 10)
+		r2 := sql.TestRow(2, "z", 10)
+		r3 := sql.TestRow(3, "z", 10)
+		r4 := sql.TestRow(4, "z", 5)
+		r4a := sql.TestRow(4, "z", 10)
 
 		g.NarrowOneRow(r1, true)
 		g.NarrowOneRow(r2, true)
@@ -168,19 +170,19 @@ func TestTopk(t *testing.T) {
 		// anything
 		emit := g.NarrowOneRow(r4, true)
 		require.Equal(t, 3, g.states.Get(ni).Rows())
-		require.ElementsMatch(t, []boostpb.Record{r1.ToRecord(false), r4.ToRecord(true)}, emit)
+		require.ElementsMatch(t, []sql.Record{r1.ToRecord(false), r4.ToRecord(true)}, emit)
 
 		// should now have 3 rows in Top-K
 		// [2, z, 10]
 		// [3, z, 10]
 		// [4, z, 5]
 
-		emit = g.NarrowOne([]boostpb.Record{r4.ToRecord(false), r4a.ToRecord(true)}, true)
+		emit = g.NarrowOne([]sql.Record{r4.ToRecord(false), r4a.ToRecord(true)}, true)
 
 		// [4, z, 5] is now replaced by [4, z, 10] in the Top-K
-		require.ElementsMatch(t, []boostpb.Record{r4.ToRecord(false), r4a.ToRecord(true)}, emit)
+		require.ElementsMatch(t, []sql.Record{r4.ToRecord(false), r4a.ToRecord(true)}, emit)
 
-		emit = g.NarrowOne([]boostpb.Record{r4a.ToRecord(false), r4.ToRecord(true)}, true)
+		emit = g.NarrowOne([]sql.Record{r4a.ToRecord(false), r4.ToRecord(true)}, true)
 
 		// now [4, z, 5] is in, BUT we still only keep 3 elements
 		// and have to remove one of the existing ones

@@ -6,13 +6,17 @@ import (
 	"sync/atomic"
 
 	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/common/graphviz"
 	"vitess.io/vitess/go/boost/common/xslice"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/server/controller/config"
+	"vitess.io/vitess/go/boost/server/controller/domainrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -21,35 +25,30 @@ type Migration interface {
 
 	Log() *zap.Logger
 	Graph() *graph.Graph[*flownode.Node]
-	SendPacket(domain boostpb.DomainIndex, b *boostpb.Packet) error
-	SendPacketSync(domain boostpb.DomainIndex, b *boostpb.SyncPacket) error
-	DomainShards(domain boostpb.DomainIndex) uint
-	PlannedUpquery(node graph.NodeIdx) (sqlparser.SelectStatement, bool)
+	Send(domain dataflow.DomainIdx) domainrpc.Client
+	DomainShards(domain dataflow.DomainIdx) uint
+	GetUpquery(node graph.NodeIdx) (sqlparser.SelectStatement, bool)
 }
 
 type Materialization struct {
 	have  graphIndexMap
 	added graphIndexMap
 
-	plans          map[graph.NodeIdx]*Plan
-	partial        map[graph.NodeIdx]bool
-	partialEnabled bool
+	plans   map[graph.NodeIdx]*Plan
+	partial map[graph.NodeIdx]bool
+	cfg     *config.Materialization
 
 	tagGenerator atomic.Uint32
 }
 
-func NewMaterialization() *Materialization {
+func NewMaterialization(cfg *config.Materialization) *Materialization {
 	return &Materialization{
-		have:           make(graphIndexMap),
-		added:          make(graphIndexMap),
-		plans:          make(map[graph.NodeIdx]*Plan),
-		partial:        make(map[graph.NodeIdx]bool),
-		partialEnabled: true,
+		have:    make(graphIndexMap),
+		added:   make(graphIndexMap),
+		plans:   make(map[graph.NodeIdx]*Plan),
+		partial: make(map[graph.NodeIdx]bool),
+		cfg:     cfg,
 	}
-}
-
-func (mat *Materialization) DisablePartial() {
-	mat.partialEnabled = false
 }
 
 type indexSet [][]int
@@ -105,8 +104,8 @@ func mapIndices(n *flownode.Node, parent graph.NodeIdx, indices [][]int) error {
 	for _, index := range indices {
 		for c, col := range index {
 			if !n.IsInternal() {
-				if n.IsAnyBase() {
-					panic("???")
+				if n.IsTable() {
+					panic(fmt.Sprintf("unexpected table node: %+v", n))
 				}
 				continue
 			}
@@ -199,12 +198,6 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 			}
 		}
 
-		if len(indices) == 0 && n.IsBase() {
-			// we must *always* materialize base nodes
-			// so, just make up some column to index on
-			indices[ni] = coltuple{[]int{0}, true}
-		}
-
 		for ni, ct := range indices {
 			if ct.lookup {
 				lookupObligations.insert(ni, ct.cols)
@@ -269,7 +262,7 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 
 	for topo.Next() {
 		n := g.Value(topo.Current)
-		if n.IsSource() {
+		if n.IsRoot() {
 			continue
 		}
 		if n.IsDropped() {
@@ -295,11 +288,11 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 		// be the case, we need to keep moving up the ancestor tree of `ni`, and check at each
 		// stage that we can trace the key column back into each of our nearest
 		// materializations.
-		var able = mat.partialEnabled
+		var able = mat.cfg.PartialEnabled
 		var add = make(graphIndexMap)
 
 		nn := g.Value(ni)
-		if nn.IsAnyBase() {
+		if nn.IsTable() {
 			able = false
 		}
 		if nn.IsInternal() && nn.RequiresFullMaterialization() {
@@ -401,11 +394,10 @@ func (mat *Materialization) Commit(mig Migration, newnodes map[graph.NodeIdx]boo
 		return err
 	}
 
-	if err := mat.checkMaterializationOrdering(g); err != nil {
-		return err
-	}
+	added := maps.Clone(mat.added)
+	have := maps.Clone(mat.have)
 
-	if err := mat.checkPartialOverIndices(g); err != nil {
+	if err := mat.checkMaterializationOrdering(g); err != nil {
 		return err
 	}
 
@@ -421,7 +413,7 @@ func (mat *Materialization) Commit(mig Migration, newnodes map[graph.NodeIdx]boo
 
 	for topo.Next() {
 		n := g.Value(topo.Current)
-		if n.IsSource() || n.IsDropped() {
+		if n.IsRoot() || n.IsDropped() {
 			continue
 		}
 		if newnodes[topo.Current] {
@@ -439,7 +431,10 @@ func (mat *Materialization) Commit(mig Migration, newnodes map[graph.NodeIdx]boo
 		return err
 	}
 
-	mat.added.clear()
+	if err := mat.checkPartialOverIndices(g, added, have); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -462,20 +457,16 @@ func (mat *Materialization) makeNewNodes(mig Migration, toMake []graph.NodeIdx) 
 		// different domain before the parent has been readied. it's also important to avoid us
 		// returning before the graph is actually fully operational.
 
-		var indexProto []*boostpb.SyncPacket_Ready_Index
+		var indexProto []*packet.ColumnIndex
 		for _, idx := range indexOn {
-			indexProto = append(indexProto, &boostpb.SyncPacket_Ready_Index{Key: idx})
+			indexProto = append(indexProto, mat.buildColumnIndex(g, ni, idx, nil))
 		}
 
-		var pkt boostpb.SyncPacket
-		pkt.Inner = &boostpb.SyncPacket_Ready_{
-			Ready: &boostpb.SyncPacket_Ready{
-				Node:  n.LocalAddr(),
-				Index: indexProto,
-			},
+		pkt := &packet.ReadyRequest{
+			Node:  n.LocalAddr(),
+			Index: indexProto,
 		}
-
-		if err := mig.SendPacketSync(n.Domain(), &pkt); err != nil {
+		if err := mig.Send(n.Domain()).Ready(pkt); err != nil {
 			return err
 		}
 	}
@@ -524,23 +515,21 @@ func (mat *Materialization) reindexNodes(mig Migration, newnodes map[graph.NodeI
 				return err
 			}
 		} else {
-			var indexProto []*boostpb.Packet_PrepareState_IndexedLocal_Index
+			var indexProto []*packet.ColumnIndex
 			for _, idx := range indexOn {
-				indexProto = append(indexProto, &boostpb.Packet_PrepareState_IndexedLocal_Index{Key: idx})
+				indexProto = append(indexProto, mat.buildColumnIndex(g, node, idx, nil))
 			}
 
-			var pkt boostpb.Packet
-			pkt.Inner = &boostpb.Packet_PrepareState_{
-				PrepareState: &boostpb.Packet_PrepareState{
-					Node: n.LocalAddr(),
-					State: &boostpb.Packet_PrepareState_IndexedLocal_{
-						IndexedLocal: &boostpb.Packet_PrepareState_IndexedLocal{
-							Index: indexProto,
-						},
+			pkt := &packet.PrepareStateRequest{
+				Node: n.LocalAddr(),
+				State: &packet.PrepareStateRequest_IndexedLocal_{
+					IndexedLocal: &packet.PrepareStateRequest_IndexedLocal{
+						Index: indexProto,
 					},
 				},
 			}
-			if err := mig.SendPacket(n.Domain(), &pkt); err != nil {
+
+			if err := mig.Send(n.Domain()).PrepareState(pkt); err != nil {
 				return err
 			}
 		}
@@ -607,8 +596,8 @@ func (mat *Materialization) checkDuplicateColumns(g *graph.Graph[*flownode.Node]
 }
 
 // check that no node is partial over a subset of the indices in its parent
-func (mat *Materialization) checkPartialOverIndices(g *graph.Graph[*flownode.Node]) error {
-	for ni, added := range mat.added {
+func (mat *Materialization) checkPartialOverIndices(g *graph.Graph[*flownode.Node], addedNodes, have graphIndexMap) error {
+	for ni, added := range addedNodes {
 		if !mat.partial[ni] {
 			continue
 		}
@@ -619,11 +608,15 @@ func (mat *Materialization) checkPartialOverIndices(g *graph.Graph[*flownode.Nod
 				for _, pe := range path {
 					pni := pe.Node
 					columns := pe.Columns
-
 					if slices.Contains(columns, -1) {
 						break
 					} else if mat.partial[pni] {
-						for _, index := range mat.have[pni] {
+						for _, index := range have[pni] {
+
+							if mat.containsUpquery(pni, index) {
+								continue
+							}
+
 							// is this node partial over some of the child's partial
 							// columns, but not others? if so, we run into really sad
 							// situations where the parent could miss in its state despite
@@ -685,7 +678,7 @@ func (mat *Materialization) checkPartialOverIndices(g *graph.Graph[*flownode.Nod
 								}
 							}
 						}
-					} else if mat.have.contains(ni) {
+					} else if have.contains(ni) {
 						break
 					}
 				}
@@ -740,7 +733,8 @@ func (mat *Materialization) readyOne(mig Migration, ni graph.NodeIdx, indexOn []
 		log.Debug("new stateless node")
 	}
 
-	if n.IsAnyBase() {
+	// TODO: is this correct? the external table could have existing records
+	if n.IsTable() {
 		log.Debug("no need to replay empty new base")
 		return indexOn, nil
 	}
@@ -791,15 +785,13 @@ func (mat *Materialization) setup(mig Migration, ni graph.NodeIdx, indexOn [][]i
 
 	if len(pending) > 0 {
 		for n, pending := range pending {
-			var pkt boostpb.Packet
-			pkt.Inner = &boostpb.Packet_StartReplay_{
-				StartReplay: &boostpb.Packet_StartReplay{
-					Tag:  pending.tag,
-					From: pending.source,
-				}}
+			mig.Log().Debug("sending pending ReplayRequest", zap.Int("n", n), pending.tag.Zap(), pending.source.Zap(), pending.sourceDomain.Zap())
 
-			mig.Log().Debug("sending pending StartReplay", zap.Int("n", n), pending.tag.Zap(), pending.source.Zap(), pending.sourceDomain.Zap())
-			if err := mig.SendPacket(pending.sourceDomain, &pkt); err != nil {
+			pkt := &packet.StartReplayRequest{
+				Tag:  pending.tag,
+				From: pending.source,
+			}
+			if err := mig.Send(pending.sourceDomain).StartReplay(pkt); err != nil {
 				return err
 			}
 		}
@@ -808,21 +800,20 @@ func (mat *Materialization) setup(mig Migration, ni graph.NodeIdx, indexOn [][]i
 		// 		ideally we would ask the target domain to wait for a _specific replay tag_ to finish; our domain
 		//		is capable of waiting on specific tags to finish, but we don't really know what's going to be the
 		//		final tag for our replay once it reaches the target domain so we cannot explicitly wait for it.
-		var pkt = &boostpb.SyncPacket{Inner: &boostpb.SyncPacket_WaitForReplay{}}
 		var finishTarget = mig.Graph().Value(ni).Domain()
 		mig.Log().Debug("waiting for WaitForReplay", finishTarget.Zap())
-		if err := mig.SendPacketSync(finishTarget, pkt); err != nil {
+		if err := mig.Send(finishTarget).WaitForReplay(); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (mat *Materialization) nextTag() boostpb.Tag {
-	return boostpb.Tag(mat.tagGenerator.Add(1) - 1)
+func (mat *Materialization) nextTag() dataflow.Tag {
+	return dataflow.Tag(mat.tagGenerator.Add(1) - 1)
 }
 
-func (mat *Materialization) GetStatus(node *flownode.Node) boostpb.MaterializationStatus {
+func (mat *Materialization) GetStatus(node *flownode.Node) dataflow.MaterializationStatus {
 	var idx = node.GlobalAddr()
 	var isMaterialized bool
 	switch {
@@ -833,17 +824,18 @@ func (mat *Materialization) GetStatus(node *flownode.Node) boostpb.Materializati
 	}
 
 	if !isMaterialized {
-		return boostpb.MaterializationNone
+		return dataflow.MaterializationNone
 	} else if mat.partial[idx] {
-		return boostpb.MaterializationPartial
+		return dataflow.MaterializationPartial
 	} else {
-		return boostpb.MaterializationFull
+		return dataflow.MaterializationFull
 	}
 }
 
 func (mat *Materialization) RenderGraphviz(gvz *graphviz.Graph[graph.NodeIdx]) {
 	portLabels := []string{"w", "e"}
 	portCount := 0
+	external := graph.InvalidNode
 
 	for _, plan := range mat.plans {
 		for tag, replayPath := range plan.paths {
@@ -854,7 +846,24 @@ func (mat *Materialization) RenderGraphviz(gvz *graphviz.Graph[graph.NodeIdx]) {
 				setup := graphviz.JSON(seg.setup)
 				color := fmt.Sprintf("/spectral11/%d", (tag%11)+1)
 
-				addEdge := func(from, to PathElement) {
+				if seg.setup.Source == dataflow.ExternalSource {
+					if external == graph.InvalidNode {
+						external = graph.NodeIdx(dataflow.ExternalSource)
+						n := gvz.AddNode(external)
+						n.Attr["label"] = "Vitess Cluster\n(External)"
+						n.Attr["shape"] = "box3d"
+					}
+
+					edge := gvz.AddEdge(external, seg.path[0].Node)
+					edge.Attr["style"] = "dashed"
+					edge.Attr["xlabel"] = fmt.Sprintf("T%d", tag)
+					edge.Attr["labeltooltip"] = setup
+				}
+
+				for e := 0; e < len(seg.path)-1; e++ {
+					from := seg.path[e]
+					to := seg.path[e+1]
+
 					edge := gvz.AddEdge(from.Node, to.Node)
 					edge.Attr["xlabel"] = fmt.Sprintf("T%d (d%d, %v⇨%v)", tag, seg.domain, from.Columns, to.Columns)
 					edge.Attr["color"] = color
@@ -864,14 +873,69 @@ func (mat *Materialization) RenderGraphviz(gvz *graphviz.Graph[graph.NodeIdx]) {
 					edge.Attr["penwidth"] = "3"
 					edge.Attr["labeltooltip"] = setup
 				}
-
-				if len(seg.path) == 1 {
-					addEdge(seg.path[0], seg.path[0])
-				}
-				for e := 0; e < len(seg.path)-1; e++ {
-					addEdge(seg.path[e], seg.path[e+1])
-				}
 			}
 		}
 	}
+}
+
+func (mat *Materialization) containsUpquery(pni graph.NodeIdx, index []int) bool {
+	plan, ok := mat.plans[pni]
+	if !ok {
+		return false
+	}
+	for _, tagPath := range plan.paths {
+		trigger := tagPath[0].setup.Trigger
+		if trigger == nil {
+			continue
+		}
+		if trigger.Kind == packet.TriggerEndpoint_EXTERNAL {
+			if slices.Equal(index, trigger.Cols) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func walkIndices(g *graph.Graph[*flownode.Node], node graph.NodeIdx, column []int) bool {
+	us := g.Value(node)
+
+	switch {
+	case us.IsTable():
+		pk := slices.Clone(us.AsTable().PrimaryKey())
+		slices.Sort(pk)
+		return slices.Equal(column, pk)
+
+	case us.IsInternal():
+		var parent = graph.InvalidNode
+		var parentColumns []int
+		for _, c := range column {
+			cols := us.ParentColumns(c)
+			if len(cols) != 1 {
+				return false
+			}
+			if cols[0].Column < 0 {
+				return false
+			}
+			if parent != graph.InvalidNode && parent != cols[0].Node {
+				return false
+			}
+			parent = cols[0].Node
+			parentColumns = append(parentColumns, cols[0].Column)
+		}
+		slices.Sort(parentColumns)
+		return walkIndices(g, parent, parentColumns)
+
+	case us.IsEgress() || us.IsIngress() || us.IsReader():
+		parents := g.NeighborsDirected(node, graph.DirectionIncoming).Collect(nil)
+		return walkIndices(g, parents[0], column)
+
+	default:
+		panic("unexpected node")
+	}
+}
+
+func (mat *Materialization) buildColumnIndex(g *graph.Graph[*flownode.Node], node graph.NodeIdx, columns []int, tags []dataflow.Tag) *packet.ColumnIndex {
+	isPrimary := walkIndices(g, node, columns)
+	return &packet.ColumnIndex{Key: columns, Tags: tags, IsPrimary: isPrimary}
 }

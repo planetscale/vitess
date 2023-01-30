@@ -311,6 +311,16 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 // SELECT foo FROM (SELECT id+42 as foo FROM user) as t
 // We need `foo` to be translated to `id+42` on the inside of the derived table
 func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
+	return rewriteDerivedTableExpression(nil, expr, vt)
+}
+
+// RewriteDerivedTableExpressionWithDepsCopy does the same as RewriteDerivedTableExpression and
+// also copies the semantic dependencies from the old expression to the new expression.
+func RewriteDerivedTableExpressionWithDepsCopy(semTable *SemTable, expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
+	return rewriteDerivedTableExpression(semTable, expr, vt)
+}
+
+func rewriteDerivedTableExpression(semTable *SemTable, expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
 	newExpr := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
@@ -322,6 +332,9 @@ func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser
 				col := *node
 				col.Qualifier = sqlparser.TableName{}
 				cursor.Replace(&col)
+				if semTable != nil {
+					semTable.CopyDependencies(node, &col)
+				}
 			}
 			return false
 		}
@@ -408,11 +421,6 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 		tables = append(tables, vindexTable)
 	}
 	return ks, tables
-}
-
-func (st *SemTable) GetNextTableSet() TableSet {
-	st.Tables = append(st.Tables, nil)
-	return SingleTableSet(len(st.Tables) - 1)
 }
 
 // EqualsExpr compares two expressions using the semantic analysis information.

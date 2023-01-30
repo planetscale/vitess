@@ -116,7 +116,7 @@ func (f *fakeGateway) MessageAck(ctx context.Context, target *querypb.Target, na
 }
 
 func (f *fakeGateway) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
-	return f.executor.target(request.Target).vstream(ctx, request.Position, request.Filter, send, f.executor.vstreamLatency)
+	return f.executor.target(request.Target).vstream(ctx, request.Position, request.Filter, send, &f.executor.options)
 }
 
 func (f *fakeGateway) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {

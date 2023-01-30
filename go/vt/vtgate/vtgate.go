@@ -330,7 +330,10 @@ func Init(
 			st.Start()
 		}
 		if boost != nil {
-			boost.Start()
+			err := boost.Start()
+			if err != nil {
+				log.Fatalf("failed to start Boost: %v", err)
+			}
 		}
 	})
 	servenv.OnTerm(func() {

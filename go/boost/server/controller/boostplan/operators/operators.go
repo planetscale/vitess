@@ -26,9 +26,6 @@ type (
 		PlanOffsets(node *Node, st *semantics.SemTable) error
 
 		Equals(st *semantics.SemTable, op Operator) bool
-
-		// AddToQueryBuilder is used to reconstruct a query from the operator tree
-		AddToQueryBuilder(qb []*queryBuilder, this *Node) error
 	}
 
 	// ColumnHolder is used by operators that already at creation time know which columns they will have
@@ -131,9 +128,10 @@ type (
 	}
 
 	Project struct {
-		// TableID is set only we project a derived table, in which case the TableID equal
-		// the TableID of the derived table.
+		// TableID and Alias are only set when we project a derived table
 		TableID *semantics.TableSet
+		Alias   string
+
 		Columns Columns
 
 		// These are not filled in at creation,

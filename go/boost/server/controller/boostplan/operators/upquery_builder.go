@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/sqlparserx"
 
 	"vitess.io/vitess/go/vt/log"
@@ -81,15 +82,13 @@ func (qb *queryBuilder) rewriteColNames(expr sqlparser.Expr) (sqlparser.Expr, er
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			id := qb.ctx.SemTable.DirectDeps(node)
-			alias, ok := qb.aliasMap[id]
-			if !ok {
-				err = NewBug("should be in the alias map")
-				return false
-			}
+			tblAlias, ok := qb.aliasMap[id]
+			dbg.Assert(ok, "id %v should be in the alias map", id)
+
 			newCol := &sqlparser.ColName{
 				Name: node.Name,
 				Qualifier: sqlparser.TableName{
-					Name:      sqlparser.NewIdentifierCS(alias),
+					Name:      sqlparser.NewIdentifierCS(tblAlias),
 					Qualifier: sqlparser.NewIdentifierCS(""),
 				},
 			}
@@ -108,19 +107,35 @@ func (qb *queryBuilder) addProjection(projection sqlparser.Expr) error {
 	if err != nil {
 		return err
 	}
-	sel := qb.sel.(*sqlparser.Select)
-	sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: projection})
+	sel := sqlparser.GetFirstSelect(qb.sel)
+	ae := &sqlparser.AliasedExpr{Expr: projection}
+	if lit, ok := projection.(*sqlparser.Literal); ok && lit.Type == sqlparser.IntVal {
+		ae.As = sqlparser.NewIdentifierCI(getColNameForLiteral(lit))
+	}
+
+	sel.SelectExprs = append(sel.SelectExprs, ae)
 	return nil
 }
 
 func (qb *queryBuilder) addGrouping(grouping sqlparser.Expr) error {
-	grouping, err := qb.rewriteColNames(grouping)
-	if err != nil {
-		return err
+	if lit, ok := grouping.(*sqlparser.Literal); ok && lit.Type == sqlparser.IntVal {
+		// GROUP BY 1 is referring to the first column returned and not the literal value 1
+		grouping = sqlparser.NewColName(getColNameForLiteral(lit))
+	} else {
+		var err error
+		grouping, err = qb.rewriteColNames(grouping)
+		if err != nil {
+			return err
+		}
 	}
+
 	sel := qb.sel.(*sqlparser.Select)
 	sel.GroupBy = append(sel.GroupBy, grouping)
 	return nil
+}
+
+func getColNameForLiteral(lit *sqlparser.Literal) string {
+	return "literal-" + sqlparser.String(lit)
 }
 
 func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser.Expr) {
@@ -143,6 +158,13 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 	}
 
 	sqlparserx.AddSelectPredicate(qb.sel, onCondition)
+}
+
+func (qb *queryBuilder) unionWith(other *queryBuilder) {
+	qb.sel = &sqlparser.Union{
+		Left:  qb.sel,
+		Right: other.sel,
+	}
 }
 
 func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser.Expr) {
@@ -182,9 +204,47 @@ func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser
 	}
 }
 
+func (qb *queryBuilder) turnIntoDerived(name string, id semantics.TableSet) error {
+	// here we'll take the query that has been accumulated so far and
+	// use that as SELECT we stick into the derived table.
+	// We also need to return all the columns on the outside
+	//
+	// [SELECT tbl.a, tbl.b, 12 FROM tbl] would get turned into:
+	// [SELECT dt_0.a, dt_0.b, dt_0.`12` FROM (SELECT tbl.a, tbl.b, 12 FROM tbl) as dt_0]
+	alias := qb.getTableAlias(name)
+	qb.aliasMap[id] = alias
+
+	dt := &sqlparser.AliasedTableExpr{
+		Expr: &sqlparser.DerivedTable{Select: qb.sel},
+		As:   sqlparser.NewIdentifierCS(alias),
+	}
+
+	var selectExprs sqlparser.SelectExprs
+	for _, expr := range sqlparser.GetFirstSelect(qb.sel).SelectExprs {
+		ae, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			// it could be a `StarExpression`, and that means that we have a query that has not been expanded
+			// not expanded is already problematic for other reasons
+			return ErrUpqueryNotSupported
+		}
+		colName := &sqlparser.ColName{
+			Name:      sqlparser.NewIdentifierCI(ae.ColumnName()),
+			Qualifier: sqlparser.TableName{Name: sqlparser.NewIdentifierCS(alias)},
+		}
+		qb.ctx.SemTable.Direct[colName] = id
+		qb.ctx.SemTable.Recursive[colName] = id
+		selectExprs = append(selectExprs, &sqlparser.AliasedExpr{Expr: colName})
+	}
+	qb.sel = &sqlparser.Select{
+		SelectExprs: selectExprs,
+		From:        []sqlparser.TableExpr{dt},
+	}
+	return nil
+}
+
 func (qb *queryBuilder) clearOutput() error {
-	sel, ok := qb.sel.(*sqlparser.Select)
-	if !ok {
+	sel := sqlparser.GetFirstSelect(qb.sel)
+	if sel == nil {
 		// this probably means we have a UNION inside a derived table. not supported yet
 		return ErrUpqueryNotSupported
 	}
@@ -192,29 +252,68 @@ func (qb *queryBuilder) clearOutput() error {
 	return nil
 }
 
+func (qb *queryBuilder) getTableAlias(name string) string {
+	i := qb.tableNames[name]
+	qb.tableNames[name]++
+	return fmt.Sprintf("%s_%d", name, i)
+}
+
 func (qb *queryBuilder) replaceProjections(projections []Projection) error {
-	oldSel, err := sqlparserx.SelectOutputExprs(qb.sel)
-	if err != nil {
-		return err
+	var selects []*sqlparser.Select
+	var oldExpressions [][]sqlparser.Expr
+	queue := []sqlparser.SelectStatement{qb.sel}
+	for len(queue) > 0 {
+		this := queue[0]
+		queue = queue[1:]
+		switch stmt := this.(type) {
+		case *sqlparser.Select:
+			oldSel, err := sqlparserx.SelectOutputExprs(stmt)
+			if err != nil {
+				return err
+			}
+			oldExpressions = append(oldExpressions, oldSel)
+			selects = append(selects, stmt)
+			stmt.SelectExprs = nil
+		case *sqlparser.Union:
+			queue = append(queue, stmt.Left, stmt.Right)
+		}
 	}
 
-	err = qb.clearOutput()
-	if err != nil {
-		return err
+	addColumn := func(col int) error {
+		for idx, sel := range selects {
+			oldExpr := oldExpressions[idx][col]
+			expr, err := qb.rewriteColNames(oldExpr)
+			if err != nil {
+				return err
+			}
+			sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: expr})
+		}
+		return nil
+	}
+	addExpression := func(in sqlparser.Expr) error {
+		expr, err := qb.rewriteColNames(in)
+		if err != nil {
+			return err
+		}
+
+		for _, sel := range selects {
+			sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: expr})
+		}
+		return nil
 	}
 
 	for _, proj := range projections {
 		switch proj.Kind {
 		case ProjectionColumn:
-			expr := oldSel[proj.Column]
-			err = qb.addProjection(expr)
+			if err := addColumn(proj.Column); err != nil {
+				return err
+			}
 		case ProjectionLiteral, ProjectionEval:
-			err = qb.addProjection(proj.Original)
+			if err := addExpression(proj.Original); err != nil {
+				return err
+			}
 		default:
-			err = NewBug(fmt.Sprintf("unexpected projection on generated query %T", proj))
-		}
-		if err != nil {
-			return err
+			dbg.Bug("unexpected projection on generated query %T", proj)
 		}
 	}
 	return nil

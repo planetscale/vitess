@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sort"
 	"time"
 
@@ -11,10 +12,12 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/service"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
+	"vitess.io/vitess/go/boost/server/controller/domainrpc"
 	"vitess.io/vitess/go/boost/server/controller/materialization"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -23,8 +26,7 @@ type migration struct {
 	context.Context
 
 	log    *zap.Logger
-	target *Controller
-	graph  *graph.Graph[*flownode.Node]
+	target MigrationTarget
 
 	added     map[graph.NodeIdx]bool
 	readers   map[graph.NodeIdx]graph.NodeIdx
@@ -34,7 +36,11 @@ type migration struct {
 	uuid  uuid.UUID
 }
 
-func (mig *migration) PlannedUpquery(node graph.NodeIdx) (sqlparser.SelectStatement, bool) {
+func (mig *migration) AddUpquery(idx graph.NodeIdx, statement sqlparser.SelectStatement) {
+	mig.upqueries[idx] = statement
+}
+
+func (mig *migration) GetUpquery(node graph.NodeIdx) (sqlparser.SelectStatement, bool) {
 	sel, ok := mig.upqueries[node]
 	return sel, ok
 }
@@ -47,37 +53,31 @@ func (mig *migration) Log() *zap.Logger {
 }
 
 func (mig *migration) Graph() *graph.Graph[*flownode.Node] {
-	return mig.graph
+	return mig.target.graph()
 }
 
-func (mig *migration) SendPacket(domain boostpb.DomainIndex, pkt *boostpb.Packet) error {
-	ctrl := mig.target
-	return ctrl.domains[domain].SendToHealthy(mig, pkt, ctrl.workers)
+func (mig *migration) Send(domain dataflow.DomainIdx) domainrpc.Client {
+	return mig.target.domainClient(mig, domain)
 }
 
-func (mig *migration) SendPacketSync(domain boostpb.DomainIndex, pkt *boostpb.SyncPacket) error {
-	ctrl := mig.target
-	return ctrl.domains[domain].SendToHealthySync(mig, pkt, ctrl.workers)
+func (mig *migration) SendToShard(domain dataflow.DomainIdx, shard uint) domainrpc.Client {
+	return mig.target.domainShardClient(mig, domain, shard)
 }
 
-func (mig *migration) SendPacketToShard(domain boostpb.DomainIndex, shard uint, pkt *boostpb.Packet) error {
-	ctrl := mig.target
-	return ctrl.domains[domain].SendToHealthyShard(mig, shard, pkt, ctrl.workers)
-}
-
-func (mig *migration) DomainShards(domain boostpb.DomainIndex) uint {
-	return mig.target.domains[domain].Shards()
+func (mig *migration) DomainShards(domain dataflow.DomainIdx) uint {
+	return mig.target.domainShards(domain)
 }
 
 func (mig *migration) sortInTopoOrder(new map[graph.NodeIdx]bool) (topolist []graph.NodeIdx) {
+	g := mig.target.graph()
 	topolist = make([]graph.NodeIdx, 0, len(new))
-	topo := graph.NewTopoVisitor(mig.graph)
+	topo := graph.NewTopoVisitor(g)
 	for topo.Next() {
 		node := topo.Current
-		if node.IsSource() {
+		if node.IsRoot() {
 			continue
 		}
-		if mig.graph.Value(node).IsDropped() {
+		if g.Value(node).IsDropped() {
 			continue
 		}
 		if !new[node] {
@@ -88,76 +88,64 @@ func (mig *migration) sortInTopoOrder(new map[graph.NodeIdx]bool) (topolist []gr
 	return
 }
 
-func (mig *migration) AddIngredient(name string, fields []string, impl flownode.NodeImpl, upquerySQL sqlparser.SelectStatement) graph.NodeIdx {
+func (mig *migration) AddIngredient(name string, fields []string, impl flownode.NodeImpl) (graph.NodeIdx, error) {
+	g := mig.target.graph()
 	newNode := flownode.New(name, fields, impl)
-	newNode.OnConnected(mig.graph)
+
+	err := newNode.OnConnected(g)
+	if err != nil {
+		return graph.InvalidNode, err
+	}
 
 	parents := newNode.Ancestors()
 
-	ni := mig.graph.AddNode(newNode)
+	ni := g.AddNode(newNode)
 	mig.added[ni] = true
 	for _, parent := range parents {
-		mig.graph.AddEdge(parent, ni)
+		g.AddEdge(parent, ni)
 	}
 
-	if upquerySQL != nil {
-		mig.upqueries[ni] = upquerySQL
-	}
-
-	return ni
+	return ni, nil
 }
 
-func (mig *migration) AddBase(name string, fields []string, b flownode.AnyBase) graph.NodeIdx {
-	base := flownode.New(name, fields, b)
-	ni := mig.graph.AddNode(base)
+func (mig *migration) AddTable(name string, fields []string, t *flownode.Table) graph.NodeIdx {
+	g := mig.target.graph()
+	table := flownode.New(name, fields, t)
+	ni := g.AddNode(table)
 	mig.added[ni] = true
-	mig.graph.AddEdge(graph.Source, ni)
+	g.AddEdge(graph.Root, ni)
 	return ni
 }
 
-func (mig *migration) ensureReaderFor(na graph.NodeIdx, name string, connect func(r *flownode.Reader)) *flownode.Node {
-	fn, found := mig.readers[na]
-	if found {
-		return mig.graph.Value(fn)
+func (mig *migration) AddView(name string, na graph.NodeIdx, connect func(g *graph.Graph[*flownode.Node], r *flownode.Reader)) {
+	if _, found := mig.readers[na]; found {
+		return
 	}
+	g := mig.target.graph()
 	r := flownode.NewReader(na)
-	connect(r)
+	connect(g, r)
 
 	var rn *flownode.Node
 	if name != "" {
-		rn = mig.graph.Value(na).NamedMirror(r, name)
+		rn = g.Value(na).NamedMirror(r, name)
 	} else {
-		rn = mig.graph.Value(na).Mirror(r)
+		rn = g.Value(na).Mirror(r)
 	}
 
-	ri := mig.graph.AddNode(rn)
-	mig.graph.AddEdge(na, ri)
+	ri := g.AddNode(rn)
+	g.AddEdge(na, ri)
 	mig.added[ri] = true
 	mig.readers[na] = ri
-	return rn
-}
-
-func (mig *migration) Maintain(name, publicID string, na graph.NodeIdx, key []int, parameters []boostpb.ViewParameter, colLen int) {
-	// allocate default values for parameters; used in tests
-	if parameters == nil {
-		for i := range key {
-			parameters = append(parameters, boostpb.ViewParameter{Name: fmt.Sprintf("k%d", i)})
-		}
-	}
-
-	mig.ensureReaderFor(na, name, func(reader *flownode.Reader) {
-		reader.SetPublicID(publicID)
-		reader.OnConnected(mig.graph, key, parameters, colLen)
-	})
 }
 
 func (mig *migration) Commit() error {
 	target := mig.target
+	g := target.graph()
 	newNodes := maps.Clone(mig.added)
 	topo := mig.sortInTopoOrder(newNodes)
 
 	var swapped0 map[graph.NodeIdxPair]graph.NodeIdx
-	if sharding := target.sharding; sharding != nil {
+	if sharding := target.sharding(); sharding != nil {
 		var err error
 		topo, swapped0, err = mig.shard(newNodes, topo, *sharding)
 		if err != nil {
@@ -185,7 +173,7 @@ func (mig *migration) Commit() error {
 				// `src`, and then picking the *other*, since that must then be node
 				// below.
 
-				if mig.graph.FindEdge(src, instead) != graph.InvalidEdge {
+				if g.FindEdge(src, instead) != graph.InvalidEdge {
 					// src -> instead -> instead0 -> [children]
 					// from [children]'s perspective, we should use instead0 for from, so
 					// we can just ignore the `instead` swap.
@@ -213,18 +201,18 @@ func (mig *migration) Commit() error {
 		return sortedNew[i] < sortedNew[j]
 	})
 
-	changedDomains := make(map[boostpb.DomainIndex]struct{})
+	changedDomains := make(map[dataflow.DomainIdx]struct{})
 	for _, ni := range sortedNew {
-		node := mig.graph.Value(ni)
+		node := g.Value(ni)
 		if !node.IsDropped() {
 			changedDomains[node.Domain()] = struct{}{}
 		}
 	}
 
-	domainNewNodes := make(map[boostpb.DomainIndex][]graph.NodeIdx)
+	domainNewNodes := make(map[dataflow.DomainIdx][]graph.NodeIdx)
 	for _, ni := range sortedNew {
-		if !ni.IsSource() {
-			node := mig.graph.Value(ni)
+		if !ni.IsRoot() {
+			node := g.Value(ni)
 			if !node.IsDropped() {
 				dom := node.Domain()
 				domainNewNodes[dom] = append(domainNewNodes[dom], ni)
@@ -234,10 +222,8 @@ func (mig *migration) Commit() error {
 
 	// Assign local addresses to all new nodes, and initialize them
 	for dom, nodes := range domainNewNodes {
-		var nnodes int
-		if rm, ok := target.remap[dom]; ok {
-			nnodes = len(rm)
-		}
+		rm := target.domainMapping(dom)
+		nnodes := len(rm)
 
 		if len(nodes) == 0 {
 			continue
@@ -245,28 +231,23 @@ func (mig *migration) Commit() error {
 
 		// Give local addresses to every (new) node
 		for _, ni := range nodes {
-			ip := boostpb.NewIndexPair(ni)
-			ip.SetLocal(boostpb.LocalNodeIndex(nnodes))
-			mig.graph.Value(ni).SetFinalizedAddr(ip)
+			ip := dataflow.NewIndexPair(ni)
+			ip.SetLocal(dataflow.LocalNodeIdx(nnodes))
+			g.Value(ni).SetFinalizedAddr(ip)
 
-			if rm, ok := target.remap[dom]; ok {
-				rm[ni] = ip
-			} else {
-				target.remap[dom] = map[graph.NodeIdx]boostpb.IndexPair{ni: ip}
-			}
-
+			rm[ni] = ip
 			nnodes++
 		}
 
 		// Initialize each new node
 		for _, ni := range nodes {
-			node := mig.graph.Value(ni)
+			node := g.Value(ni)
 			if node.IsInternal() {
 				// Figure out all the remappings that have happened
 				// NOTE: this has to be *per node*, since a shared parent may be remapped
 				// differently to different children (due to sharding for example). we just
 				// allocate it once though.
-				remap := maps.Clone(target.remap[dom])
+				remap := maps.Clone(rm)
 				for pair, instead := range swapped {
 					dst := pair.One
 					src := pair.Two
@@ -274,7 +255,7 @@ func (mig *migration) Commit() error {
 						continue
 					}
 
-					remap[src] = target.remap[dom][instead]
+					remap[src] = rm[instead]
 				}
 
 				node.OnCommit(remap)
@@ -282,7 +263,7 @@ func (mig *migration) Commit() error {
 		}
 	}
 
-	if sharding := target.sharding; sharding != nil {
+	if sharding := target.sharding(); sharding != nil {
 		if err := mig.validateSharding(topo, *sharding); err != nil {
 			return err
 		}
@@ -307,19 +288,21 @@ func (mig *migration) Commit() error {
 	//
 	// etc.
 
+	domainNodes := target.domainNodes()
+
 	for ni := range newNodes {
-		n := mig.graph.Value(ni)
-		if !ni.IsSource() && !n.IsDropped() {
+		n := g.Value(ni)
+		if !ni.IsRoot() && !n.IsDropped() {
 			dom := n.Domain()
-			target.domainNodes[dom] = append(target.domainNodes[dom], ni)
+			domainNodes[dom] = append(domainNodes[dom], ni)
 		}
 	}
 
-	uninformedDomainNodes := make(map[boostpb.DomainIndex][]nodeWithAge)
+	uninformedDomainNodes := make(map[dataflow.DomainIdx][]nodeWithAge)
 	for di := range changedDomains {
 		var newnodes []nodeWithAge
 
-		for _, ni := range target.domainNodes[di] {
+		for _, ni := range domainNodes[di] {
 			_, found := newNodes[ni]
 			newnodes = append(newnodes, nodeWithAge{ni, found})
 		}
@@ -333,19 +316,18 @@ func (mig *migration) Commit() error {
 
 	// Boot up new domains (they'll ignore all updates for now)
 	for dom := range changedDomains {
-		if _, found := target.domains[dom]; found {
+		if target.domainExists(dom) {
 			continue
 		}
 
 		nodes := uninformedDomainNodes[dom]
 		delete(uninformedDomainNodes, dom)
 
-		numshards := mig.graph.Value(nodes[0].Idx).Sharding().TryGetShards()
-		d, err := target.placeDomain(mig, dom, numshards, nodes)
+		numshards := g.Value(nodes[0].Idx).Sharding().TryGetShards()
+		err := target.domainPlace(mig, dom, numshards, nodes)
 		if err != nil {
 			return err
 		}
-		target.domains[dom] = d
 	}
 
 	// Add any new nodes to existing domains (they'll also ignore all updates for now)
@@ -364,7 +346,7 @@ func (mig *migration) Commit() error {
 	}
 
 	// And now, the last piece of the puzzle -- set up materializations
-	if err := target.materialization.Commit(mig, newNodes); err != nil {
+	if err := target.materialization().Commit(mig, newNodes); err != nil {
 		return err
 	}
 
@@ -372,62 +354,70 @@ func (mig *migration) Commit() error {
 	return nil
 }
 
-func (mig *migration) describeExternalTable(node graph.NodeIdx) *boostpb.ExternalTableDescriptor {
-	base := mig.graph.Value(node)
-
-	tbl := &boostpb.ExternalTableDescriptor{
+func (mig *migration) describeExternalTable(node graph.NodeIdx) *service.ExternalTableDescriptor {
+	table := mig.target.graph().Value(node)
+	desc := &service.ExternalTableDescriptor{
 		Txs:          nil,
-		Node:         base.GlobalAddr(),
-		Addr:         base.LocalAddr(),
+		Node:         table.GlobalAddr(),
+		Addr:         table.LocalAddr(),
 		KeyIsPrimary: false,
 		Key:          nil,
-		TableName:    base.AsExternalBase().Table(),
-		Columns:      slices.Clone(base.Fields()),
-		Schema:       slices.Clone(base.Schema()),
-		Keyspace:     base.AsExternalBase().Keyspace(),
+		TableName:    table.AsTable().Name(),
+		Columns:      slices.Clone(table.Fields()),
+		Schema:       slices.Clone(table.Schema()),
+		Keyspace:     table.AsTable().Keyspace(),
 	}
 
-	key := base.SuggestIndexes(node)[node]
+	key := table.SuggestIndexes(node)[node]
 	if key == nil {
-		if col, _, ok := base.Sharding().ByColumn(); ok {
+		if col, _, ok := table.Sharding().ByColumn(); ok {
 			key = []int{col}
 		}
 	} else {
-		tbl.KeyIsPrimary = true
+		desc.KeyIsPrimary = true
 	}
-	tbl.Key = key
+	desc.Key = key
 
-	shards := mig.DomainShards(base.Domain())
+	shards := mig.DomainShards(table.Domain())
 	for s := uint(0); s < shards; s++ {
-		tbl.Txs = append(tbl.Txs, &boostpb.DomainAddr{Domain: base.Domain(), Shard: s})
+		desc.Txs = append(desc.Txs, &dataflow.DomainAddr{Domain: table.Domain(), Shard: s})
 	}
-	return tbl
+	return desc
 }
 
 func (mig *migration) streamSetup(newnodes map[graph.NodeIdx]bool) error {
-	var externals []*boostpb.ExternalTableDescriptor
+	g := mig.target.graph()
+	var externals []*service.ExternalTableDescriptor
 	for n := range newnodes {
-		node := mig.graph.Value(n)
-		if node.IsExternalBase() {
+		node := g.Value(n)
+		if node.IsTable() {
 			externals = append(externals, mig.describeExternalTable(n))
 		}
 	}
 
-	var request = boostpb.AssignStreamRequest{Tables: externals}
+	var request = service.AssignStreamRequest{Tables: externals}
 
-	// TODO; do not pick a worker at random
-	for _, worker := range mig.target.workers {
-		if _, err := worker.Client.AssignStream(mig, &request); err != nil {
-			return err
-		}
-		break
-	}
-
-	return nil
+	return mig.target.domainAssignStream(mig, &request)
 }
 
 func (mig *migration) Activate(recipe *boostplan.VersionedRecipe, schema *boostplan.SchemaInformation) (*boostplan.ActivationResult, error) {
 	return recipe.Activate(mig, schema)
+}
+
+type MigrationTarget interface {
+	graph() *graph.Graph[*flownode.Node]
+	sharding() *uint
+	materialization() *materialization.Materialization
+
+	domainNext() dataflow.DomainIdx
+	domainNodes() map[dataflow.DomainIdx][]graph.NodeIdx
+	domainMapping(dom dataflow.DomainIdx) map[graph.NodeIdx]dataflow.IndexPair
+	domainExists(idx dataflow.DomainIdx) bool
+	domainShards(idx dataflow.DomainIdx) uint
+	domainClient(ctx context.Context, idx dataflow.DomainIdx) domainrpc.Client
+	domainShardClient(ctx context.Context, idx dataflow.DomainIdx, shard uint) domainrpc.Client
+	domainPlace(ctx context.Context, idx dataflow.DomainIdx, maybeShardNumber *uint, innodes []nodeWithAge) error
+	domainAssignStream(ctx context.Context, req *service.AssignStreamRequest) error
 }
 
 type Migration interface {
@@ -438,19 +428,40 @@ type Migration interface {
 	Commit() error
 }
 
-type Migrator func(ctx context.Context, target *Controller) Migration
-
-func NewMigration(ctx context.Context, target *Controller) Migration {
+func NewMigration(ctx context.Context, log *zap.Logger, target MigrationTarget) Migration {
 	miguuid := uuid.New()
 	return &migration{
 		Context:   ctx,
-		log:       target.log.With(zap.String("migration", miguuid.String())),
+		log:       log.With(zap.String("migration", miguuid.String())),
 		target:    target,
-		graph:     target.ingredients,
 		added:     make(map[graph.NodeIdx]bool),
 		readers:   make(map[graph.NodeIdx]graph.NodeIdx),
 		upqueries: make(map[graph.NodeIdx]sqlparser.SelectStatement),
 		start:     time.Now(),
 		uuid:      miguuid,
 	}
+}
+
+type InternalError struct {
+	Err   error
+	Stack []byte
+}
+
+func (e *InternalError) Error() string {
+	return e.Err.Error()
+}
+
+func safeMigration(mig Migration, perform func(mig Migration) error) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = &InternalError{
+				Err:   fmt.Errorf("migration panicked: %v", r),
+				Stack: debug.Stack(),
+			}
+		}
+	}()
+	if err = perform(mig); err != nil {
+		return err
+	}
+	return mig.Commit()
 }

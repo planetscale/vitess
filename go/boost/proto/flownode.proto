@@ -1,0 +1,194 @@
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/boost/dataflow/flownode/flownodepb";
+
+package flownode;
+
+import "gogoproto/gogo.proto";
+import "sql.proto";
+import "dataflow.proto";
+
+message ViewParameter {
+  string name = 1;
+  bool multi = 2;
+};
+
+message OrderedColumn {
+  int64 col = 1 [(gogoproto.casttype) = "int"];
+  bool desc = 2;
+};
+
+message Node {
+  string name = 1;
+  dataflow.IndexPair index = 2;
+  uint64 domain = 3 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.DomainIdx"];
+
+  repeated string fields = 4;
+  repeated sql.Type schema = 5 [(gogoproto.nullable) = false];
+  repeated uint32 parents = 6 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+  repeated uint32 children = 7 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+
+  bool taken = 8;
+  dataflow.Sharding sharding = 10;
+
+  message Table {
+    repeated int64 primary_key = 1 [(gogoproto.casttype) = "int"];
+    string keyspace = 2;
+    string name = 3;
+    repeated sql.Type schema = 4 [(gogoproto.nullable) = false];
+  };
+
+  message Ingress {};
+  message Egress {};
+
+  message Reader {
+    string public_id = 1;
+    uint32 for_node = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
+    repeated int64 state = 3 [(gogoproto.casttype) = "int"];
+    repeated ViewParameter parameters = 4 [(gogoproto.nullable) = false];
+
+    repeated OrderedColumn topk_order = 5 [(gogoproto.nullable) = false];
+    int64 topk_limit = 6 [(gogoproto.casttype) = "int"];
+
+    int64 columns_for_view = 7 [(gogoproto.casttype) = "int"];
+    int64 columns_for_user = 8 [(gogoproto.casttype) = "int"];
+  };
+
+  message InternalUnion {
+    message EmitProject {
+      message EmitTuple {
+        dataflow.IndexPair ip = 1;
+        repeated int64 columns = 2 [(gogoproto.casttype) = "int"];
+      };
+      message EmitLeftTuple {
+        uint32 index = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+        repeated int64 columns = 2 [(gogoproto.casttype) = "int"];
+      };
+      message ColumnsTuple {
+        dataflow.IndexPair ip = 1;
+        int64 column = 2 [(gogoproto.casttype) = "int"];
+      };
+      message ColumnsLeftTuple {
+        uint32 index = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
+        int64 column = 2 [(gogoproto.casttype) = "int"];
+      };
+
+      repeated EmitTuple emit = 1;
+      repeated EmitLeftTuple emit_left = 2;
+      repeated ColumnsTuple cols = 3;
+      repeated ColumnsLeftTuple cols_left = 4;
+    };
+
+    message EmitAll {
+      dataflow.IndexPair from = 1;
+      dataflow.Sharding sharding = 2;
+    };
+
+    oneof emit {
+      EmitProject project = 1;
+      EmitAll all = 2;
+    }
+
+    int64 required = 3 [(gogoproto.casttype) = "int"];
+    uint32 me = 4 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
+  };
+
+  message InternalJoin {
+    dataflow.IndexPair left = 1 [(gogoproto.nullable) = false];
+    dataflow.IndexPair right = 2 [(gogoproto.nullable) = false];
+
+    int64 on0 = 3 [(gogoproto.casttype) = "int"];
+    int64 on1 = 4 [(gogoproto.casttype) = "int"];
+
+    message Emission {
+      int64 col = 1 [(gogoproto.casttype) = "int"];
+      bool left = 2;
+      bool multi_parent = 3;
+    }
+
+    repeated Emission emit = 5 [(gogoproto.nullable) = false];
+    repeated Emission in_place_left_emit = 6 [(gogoproto.nullable) = false];
+    repeated Emission in_place_right_emit = 7 [(gogoproto.nullable) = false];
+
+    enum JoinKind {
+      Left = 0;
+      Inner = 1;
+    }
+
+    JoinKind kind = 8;
+    sql.Type type = 9 [(gogoproto.nullable) = false];
+  }
+
+  message InternalGrouped {
+    dataflow.IndexPair src = 1 [(gogoproto.nullable) = false];
+    repeated sql.Type src_schema = 2 [(gogoproto.nullable) = false];
+    repeated Aggregation inner = 3 [(gogoproto.nullable) = false];
+    int64 cols = 4 [(gogoproto.casttype) = "int"];
+
+    bool scalar = 5;
+    repeated int64 group_by_key = 6 [(gogoproto.casttype) = "int"];
+    repeated int64 out_key = 7 [(gogoproto.casttype) = "int"];
+    repeated int64 colfix = 8 [(gogoproto.casttype) = "int"];
+
+    message Aggregation {
+      enum Kind {
+        Count = 0;
+        Sum = 2;
+        Min = 3;
+        Max = 4;
+      };
+
+      Kind kind = 1;
+      int64 over = 2 [(gogoproto.casttype) = "int"];
+    }
+  };
+
+  message InternalProject {
+    dataflow.IndexPair src = 1;
+    int64 cols = 3 [(gogoproto.casttype) = "int"];
+
+    repeated string projections = 4;
+  };
+
+  message InternalFilter {
+    message FilterExpr {
+      string expr = 1;
+      int64 col = 2 [(gogoproto.casttype) = "int"];
+    };
+    dataflow.IndexPair src = 1;
+    repeated FilterExpr filter = 2;
+  };
+
+  message InternalTopK {
+    dataflow.IndexPair src = 1 [(gogoproto.nullable) = false];
+    repeated sql.Type src_schema = 2 [(gogoproto.nullable) = false];
+    repeated OrderedColumn order = 3 [(gogoproto.nullable) = false];
+    uint64 K = 4 [(gogoproto.casttype) = "uint"];
+    repeated int64 params = 5 [(gogoproto.casttype) = "int"];
+  }
+
+  message InternalDistinct {
+    dataflow.IndexPair src = 1 [(gogoproto.nullable) = false];
+    repeated sql.Type src_schema = 2 [(gogoproto.nullable) = false];
+    repeated int64 params = 3 [(gogoproto.casttype) = "int"];
+  }
+
+  message Sharder {
+    int64 shard_by = 1 [(gogoproto.casttype) = "int"];
+  };
+
+  oneof impl {
+    Ingress ingress = 21;
+    Egress egress = 22;
+    Reader reader = 23;
+    Sharder sharder = 24;
+    Table table = 25;
+
+    InternalUnion union = 40;
+    InternalJoin join = 41;
+    InternalGrouped grouped = 42;
+    InternalProject project = 43;
+    InternalFilter filter = 44;
+    InternalTopK top_k = 45;
+    InternalDistinct distinct = 46;
+  };
+};

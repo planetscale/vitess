@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/boost/sql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/boost/dataflow/flownode"
@@ -16,12 +18,13 @@ import (
 func TestGraphKeys(t *testing.T) {
 	bases := func() (*graph.Graph[*flownode.Node], graph.NodeIdx, graph.NodeIdx) {
 		g := new(graph.Graph[*flownode.Node])
-		src := g.AddNode(flownode.New("source", []string{"dummy"}, &flownode.Source{}))
+		src := g.AddNode(flownode.New("source", []string{"dummy"}, &flownode.Root{}))
+		schema := sql.TestSchema(sqltypes.Int64, sqltypes.Int64)
 
-		a := g.AddNode(flownode.New("a", []string{"a1", "a2"}, flownode.NewBase("a", nil, nil)))
+		a := g.AddNode(flownode.New("a", []string{"a1", "a2"}, flownode.NewTable("", "a", []int{0}, schema)))
 		g.AddEdge(src, a)
 
-		b := g.AddNode(flownode.New("b", []string{"b1", "b2"}, flownode.NewBase("b", nil, nil)))
+		b := g.AddNode(flownode.New("b", []string{"b1", "b2"}, flownode.NewTable("", "b", []int{0}, schema)))
 		g.AddEdge(src, b)
 
 		return g, a, b

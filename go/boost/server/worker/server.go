@@ -8,11 +8,13 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/boostrpc"
+	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/boost/common"
-	"vitess.io/vitess/go/boost/dataflow/backlog"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/domain"
+	"vitess.io/vitess/go/boost/dataflow/view"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	"vitess.io/vitess/go/netutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -21,13 +23,13 @@ import (
 )
 
 type Server struct {
-	boostpb.DRPCWorkerServiceUnimplementedServer
+	service.DRPCWorkerServiceUnimplementedServer
 
 	uuid       uuid.UUID
 	globalAddr string
 
 	log      *zap.Logger
-	cfg      *boostpb.Config
+	cfg      *config.Config
 	topo     *toposerver.Server
 	active   *Worker
 	coord    *boostrpc.ChannelCoordinator
@@ -39,7 +41,7 @@ type Server struct {
 	cancel context.CancelFunc
 }
 
-func NewServer(log *zap.Logger, id uuid.UUID, topo *toposerver.Server, cfg *boostpb.Config) *Server {
+func NewServer(log *zap.Logger, id uuid.UUID, topo *toposerver.Server, cfg *config.Config) *Server {
 	worker := &Server{
 		log:    log.With(zap.String("worker_id", id.String())),
 		uuid:   id,
@@ -68,7 +70,7 @@ func (srv *Server) SetExecutor(executor domain.Executor) {
 	srv.executor = executor
 }
 
-func (srv *Server) AssignStream(ctx context.Context, request *boostpb.AssignStreamRequest) (*boostpb.AssignStreamResponse, error) {
+func (srv *Server) AssignStream(ctx context.Context, request *service.AssignStreamRequest) (*service.AssignStreamResponse, error) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
@@ -78,10 +80,10 @@ func (srv *Server) AssignStream(ctx context.Context, request *boostpb.AssignStre
 	if err := srv.active.AssignTables(request); err != nil {
 		return nil, err
 	}
-	return &boostpb.AssignStreamResponse{}, nil
+	return &service.AssignStreamResponse{}, nil
 }
 
-func (srv *Server) AssignDomain(ctx context.Context, request *boostpb.AssignDomainRequest) (*boostpb.AssignDomainResponse, error) {
+func (srv *Server) AssignDomain(ctx context.Context, request *service.AssignDomainRequest) (*service.AssignDomainResponse, error) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	if srv.active == nil {
@@ -97,7 +99,7 @@ func (srv *Server) AssignDomain(ctx context.Context, request *boostpb.AssignDoma
 	return resp, nil
 }
 
-func (srv *Server) DomainBooted(ctx context.Context, req *boostpb.DomainBootedRequest) (*boostpb.DomainBootedResponse, error) {
+func (srv *Server) DomainBooted(ctx context.Context, req *service.DomainBootedRequest) (*service.DomainBootedResponse, error) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
@@ -107,7 +109,7 @@ func (srv *Server) DomainBooted(ctx context.Context, req *boostpb.DomainBootedRe
 			srv.coord.InsertRemote(req.Domain.Id, req.Domain.Shard, req.Domain.Addr)
 		}
 	}
-	return &boostpb.DomainBootedResponse{}, nil
+	return &service.DomainBootedResponse{}, nil
 }
 
 func (srv *Server) LeaderChange(st *vtboostpb.ControllerState) {
@@ -135,9 +137,9 @@ func (srv *Server) LeaderChange(st *vtboostpb.ControllerState) {
 	srv.active = &Worker{
 		log:              srv.log.With(zap.Int64("epoch", st.Epoch)),
 		uuid:             srv.uuid,
-		epoch:            boostpb.Epoch(st.Epoch),
-		readers:          common.NewSyncMap[domain.ReaderID, *backlog.Reader](),
-		domains:          common.NewSyncMap[boostpb.DomainAddr, *domain.Domain](),
+		epoch:            service.Epoch(st.Epoch),
+		readers:          common.NewSyncMap[domain.ReaderID, *view.Reader](),
+		domains:          common.NewSyncMap[dataflow.DomainAddr, *domain.Domain](),
 		memstats:         common.NewMemStats(),
 		coord:            srv.coord,
 		executor:         srv.executor,
@@ -155,7 +157,7 @@ func (srv *Server) LeaderChange(st *vtboostpb.ControllerState) {
 	}
 }
 
-func (srv *Server) ActiveDomains() *common.SyncMap[boostpb.DomainAddr, *domain.Domain] {
+func (srv *Server) ActiveDomains() *common.SyncMap[dataflow.DomainAddr, *domain.Domain] {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
@@ -165,11 +167,11 @@ func (srv *Server) ActiveDomains() *common.SyncMap[boostpb.DomainAddr, *domain.D
 	return nil
 }
 
-func (srv *Server) MemoryStats(_ context.Context, _ *boostpb.MemoryStatsRequest) (*boostpb.MemoryStatsResponse, error) {
+func (srv *Server) MemoryStats(_ context.Context, _ *service.MemoryStatsRequest) (*service.MemoryStatsResponse, error) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	if srv.active == nil {
-		return &boostpb.MemoryStatsResponse{}, nil
+		return &service.MemoryStatsResponse{}, nil
 	}
 	return srv.active.memstats.ToProto(), nil
 }

@@ -9,3 +9,5 @@ CREATE TABLE b (
 	c2 bigint NOT NULL,
 	PRIMARY KEY (c1)
 );
+
+SELECT /*vt+ VIEW=c */ * FROM (SELECT c1, c2 FROM a UNION SELECT c1, c2 FROM b) AS u WHERE u.c1 = :a;

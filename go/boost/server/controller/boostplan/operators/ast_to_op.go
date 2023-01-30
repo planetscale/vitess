@@ -436,6 +436,7 @@ func (conv *Converter) buildFromTableExpr(ctx *PlanContext, tableExpr sqlparser.
 			if proj, isProj := node.Op.(*Project); isProj {
 				tblID := ctx.SemTable.TableSetFor(tableExpr)
 				proj.TableID = &tblID
+				proj.Alias = tableExpr.As.String()
 				node.Name = "derived_" + node.Name
 			}
 			return
@@ -585,7 +586,7 @@ func (conv *Converter) buildFromTableName(ctx *PlanContext, tableExpr *sqlparser
 		if err != nil {
 			return nil, err
 		}
-		if tableSpecRequiresNewBase(tableOp.Spec, tblSpec) {
+		if tableSpecRequiresNewTableNode(tableOp.Spec, tblSpec) {
 			tableNode, err = conv.makeTableNode(keyspace, name, tblSpec)
 			if err != nil {
 				return nil, err
@@ -659,6 +660,11 @@ func (conv *Converter) unionToOperator(
 		return nil, nil, Columns{}, err
 	}
 
+	unionCols := Columns{}
+	for x := range lftCols {
+		unionCols = unionCols.Add(ctx, ColumnFromAST(sqlparser.NewOffset(x, nil)))
+	}
+
 	unionOp := &Union{
 		InputColumns: inputColumns,
 		Columns:      lftCols,
@@ -670,7 +676,7 @@ func (conv *Converter) unionToOperator(
 		return projNode, parameters, lftCols, nil
 	}
 
-	return conv.NewNode("distinct", &Distinct{}, []*Node{projNode}), parameters, lftCols, nil
+	return conv.NewNode("distinct", &Distinct{}, []*Node{projNode}), parameters, unionCols, nil
 }
 
 func mapExpressionsToInputCols(ctx *PlanContext, stmt *sqlparser.Union) ([2]Columns, error) {

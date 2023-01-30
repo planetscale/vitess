@@ -3,6 +3,7 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -68,9 +69,7 @@ func pushToJoin(ctx *PlanContext, this *Node, needsColumns Columns) error {
 			return err
 		}
 	}
-	if count != len(needsColumns) {
-		return NewBug(fmt.Sprintf("incorrect number of pushed columns: got [%d], want [%d]", count, len(needsColumns)))
-	}
+	dbg.Assert(count == len(needsColumns), "incorrect number of pushed columns: got [%d], want [%d]", count, len(needsColumns))
 	return nil
 }
 
@@ -104,7 +103,7 @@ func (p *Project) AddColumns(ctx *PlanContext, col Columns) (needs Columns, err 
 			if err != nil {
 				return nil, err
 			}
-			needs = needs.Add(ctx, getColumnsInTree(ctx, ast)...)
+			needs = needs.Add(ctx, getColNamesInTree(ctx, ast)...)
 		}
 	}
 
@@ -128,17 +127,24 @@ func (p *Project) AddColumns(ctx *PlanContext, col Columns) (needs Columns, err 
 		if err != nil {
 			return nil, err
 		}
-		needs = needs.Add(ctx, getColumnsInTree(ctx, ast)...)
+
+		switch ast.(type) {
+		case *sqlparser.Offset:
+			needs = needs.Add(ctx, newCol)
+		default:
+			needs = needs.Add(ctx, getColNamesInTree(ctx, ast)...)
+		}
 	}
 	return
 }
 
 func (p *Project) rewriteDerivedExpression(semTable *semantics.SemTable, newCol *Column) (*Column, error) {
-	infoFor, err := semTable.TableInfoFor(*p.TableID)
+	tblID := semTable.DirectDeps(newCol.AST[0])
+	infoFor, err := semTable.TableInfoFor(tblID)
 	if err != nil {
 		return nil, err
 	}
-	newExpr, err := semantics.RewriteDerivedTableExpression(newCol.AST[0], infoFor)
+	newExpr, err := semantics.RewriteDerivedTableExpressionWithDepsCopy(semTable, newCol.AST[0], infoFor)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +261,7 @@ func (j *Join) AddColumns(ctx *PlanContext, col Columns) (Columns, error) {
 		j.JoinColumns = append(j.JoinColumns, add...)
 	}
 	j.EmitColumns = j.EmitColumns.Add(ctx, col...)
-	col = col.Add(ctx, getColumnsInTree(ctx, j.Predicates)...)
+	col = col.Add(ctx, getColNamesInTree(ctx, j.Predicates)...)
 	return col, nil
 }
 
@@ -295,9 +301,8 @@ outer:
 			return Columns{}, err
 		}
 		colName, ok := expr.(*sqlparser.ColName)
-		if !ok {
-			return Columns{}, NewBug("can't push non-columns to a table")
-		}
+		dbg.Assert(ok, "can't push non-columns to a table")
+
 		tblID := ctx.SemTable.DirectDeps(colName)
 		if tblID == n.TableID {
 			for _, colSpec := range tbl.ColumnSpecs {
@@ -323,12 +328,23 @@ outer:
 func (u *Union) AddColumns(ctx *PlanContext, col Columns) (Columns, error) {
 outer:
 	for _, c1 := range col {
+		ast, err := c1.SingleAST()
+		if err != nil {
+			return nil, err
+		}
+
+		if offset, ok := ast.(*sqlparser.Offset); ok {
+			dbg.Assert(len(u.Columns) > offset.V, "we don't have that many union columns")
+			continue
+		}
+
 		for _, c2 := range u.Columns {
 			if c1.Equals(ctx.SemTable, c2, true) {
 				continue outer
 			}
 		}
-		return nil, NewBug("got columns we did not expect for UNION")
+
+		dbg.Bug("got columns we did not expect for UNION")
 	}
 	return col, nil
 }
@@ -347,7 +363,7 @@ func (d *Distinct) AddColumns(_ *PlanContext, col Columns) (Columns, error) {
 	return col, nil
 }
 
-func getColumnsInTree(ctx *PlanContext, expr ...sqlparser.Expr) (col Columns) {
+func getColNamesInTree(ctx *PlanContext, expr ...sqlparser.Expr) (col Columns) {
 	var nodes []sqlparser.SQLNode
 	for _, s := range expr {
 		nodes = append(nodes, s)

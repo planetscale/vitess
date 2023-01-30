@@ -2,71 +2,86 @@ package operators
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/sqlparserx"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func generateUpqueries(ctx *PlanContext, node *Node) error {
-	for _, n := range node.Ancestors {
-		if err := generateUpqueries(ctx, n); err != nil {
+var ErrUpqueryNotSupported = errors.New("can't build upquery")
+
+func (n *Node) generateUpqueries(ctx *PlanContext) error {
+	for _, ancestor := range n.Ancestors {
+		if err := ancestor.generateUpqueries(ctx); err != nil {
 			return err
 		}
 	}
 
-	switch node.Op.(type) {
-	case *NodeTableRef, *Table:
-	default:
-		q := newQueryBuilder(ctx)
-		err := buildQuery(node, q)
-		if err != nil {
-			if errors.Is(err, ErrUpqueryNotSupported) {
-				return nil
-			}
-			return err
+	q := newQueryBuilder(ctx)
+	if err := n.addToQueryBuilder(q); err != nil {
+		if errors.Is(err, ErrUpqueryNotSupported) {
+			return nil
 		}
-		q.sortTables()
-		node.Upquery = q.sel
+		return err
 	}
+	q.sortTables()
+	n.Upquery = q.sel
+
+	if tref, ok := n.Op.(*NodeTableRef); ok {
+		tref.Node.Upquery = q.sel
+	}
+
 	return nil
 }
 
-var ErrUpqueryNotSupported = errors.New("can't build upquery")
+func (n *Node) addToQueryBuilder(qb *queryBuilder) error {
+	type UpqueryOperator interface {
+		Operator
+		addToQueryBuilder(qb *queryBuilder, this *Node) error
+	}
 
-func buildQuery(node *Node, qb *queryBuilder) error {
-	switch len(node.Ancestors) {
-	case 0:
-		return node.Op.AddToQueryBuilder([]*queryBuilder{qb}, node)
-	case 1:
-		err := buildQuery(node.Ancestors[0], qb)
+	type UpqueryOperator2 interface {
+		Operator
+		addToQueryBuilder2(qbLeft, qbRight *queryBuilder, this *Node) error
+	}
+
+	switch op := n.Op.(type) {
+	case UpqueryOperator:
+		switch len(n.Ancestors) {
+		case 0:
+		case 1:
+			err := n.Ancestors[0].addToQueryBuilder(qb)
+			if err != nil {
+				return err
+			}
+		default:
+			dbg.Bug("UpqueryOperator with >1 ancestors")
+		}
+		return op.addToQueryBuilder(qb, n)
+
+	case UpqueryOperator2:
+		dbg.Assert(len(n.Ancestors) == 2, "UpqueryOperator2 without 2 ancestors")
+
+		err := n.Ancestors[0].addToQueryBuilder(qb)
 		if err != nil {
 			return err
 		}
-		return node.Op.AddToQueryBuilder([]*queryBuilder{qb}, node)
-	case 2:
-		switch op := node.Op.(type) {
-		case *Union:
-			return ErrUpqueryNotSupported
-		case *Join:
-			err := buildQuery(node.Ancestors[0], qb)
-			if err != nil {
-				return err
-			}
-			qbR := newQueryBuilder(qb.ctx)
-			qbR.tableNames = qb.tableNames
-			qbR.aliasMap = qb.aliasMap
-			err = buildQuery(node.Ancestors[1], qbR)
-			if err != nil {
-				return err
-			}
-			return op.AddToQueryBuilder([]*queryBuilder{qb, qbR}, node)
-		}
-	}
+		qbR := newQueryBuilder(qb.ctx)
+		qbR.tableNames = qb.tableNames
+		qbR.aliasMap = qb.aliasMap
 
-	return nil
+		err = n.Ancestors[1].addToQueryBuilder(qbR)
+		if err != nil {
+			return err
+		}
+		return op.addToQueryBuilder2(qb, qbR, n)
+
+	default:
+		dbg.Bug("missing UpqueryOperator")
+		return nil
+	}
 }
 
 type tableSorter struct {
@@ -92,7 +107,10 @@ func (ts *tableSorter) Less(i, j int) bool {
 		return i < j
 	}
 
-	return ts.tbl.TableSetFor(left).TableOffset() < ts.tbl.TableSetFor(right).TableOffset()
+	tbl := ts.tbl
+	lft := tbl.TableSetFor(left)
+	rgt := tbl.TableSetFor(right)
+	return lft.TableOffset() < rgt.TableOffset()
 }
 
 // Swap implements the Sort interface
@@ -100,18 +118,16 @@ func (ts *tableSorter) Swap(i, j int) {
 	ts.sel.From[i], ts.sel.From[j] = ts.sel.From[j], ts.sel.From[i]
 }
 
-func (t *Table) AddToQueryBuilder([]*queryBuilder, *Node) error {
+func (t *Table) addToQueryBuilder(*queryBuilder, *Node) error {
 	// empty by design
 	return nil
 }
 
-func (j *Join) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
-	qb := builders[0]
+func (j *Join) addToQueryBuilder2(qb, qbR *queryBuilder, _ *Node) error {
 	pred, err := qb.rewriteColNames(j.Predicates)
 	if err != nil {
 		return err
 	}
-	qbR := builders[1]
 	if j.Inner {
 		qb.joinInnerWith(qbR, pred)
 	} else {
@@ -130,8 +146,12 @@ func (j *Join) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
 	return nil
 }
 
-func (f *Filter) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
-	qb := builders[0]
+func (u *Union) addToQueryBuilder2(qb1, qb2 *queryBuilder, _ *Node) error {
+	qb1.unionWith(qb2)
+	return nil
+}
+
+func (f *Filter) addToQueryBuilder(qb *queryBuilder, _ *Node) error {
 	pred, err := qb.rewriteColNames(f.Predicates)
 	if err != nil {
 		return err
@@ -140,16 +160,12 @@ func (f *Filter) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
 	return nil
 }
 
-func (n *NullFilter) AddToQueryBuilder(builders []*queryBuilder, this *Node) error {
-	qb := builders[0]
+func (n *NullFilter) addToQueryBuilder(qb *queryBuilder, this *Node) error {
 	sel, ok := qb.sel.(*sqlparser.Select)
-	if !ok {
-		return NewBug("null filter should always come after a join")
-	}
+	dbg.Assert(ok, "null filter should always come after a join")
+
 	jt, ok := sel.From[len(sel.From)-1].(*sqlparser.JoinTableExpr)
-	if !ok {
-		return NewBug("expected to find a join as the last table in the from clause")
-	}
+	dbg.Assert(ok, "expected to find a join as the last table in the from clause")
 
 	pred, err := qb.rewriteColNames(n.Predicates)
 	if err != nil {
@@ -173,8 +189,7 @@ func (n *NullFilter) AddToQueryBuilder(builders []*queryBuilder, this *Node) err
 	return nil
 }
 
-func (g *GroupBy) AddToQueryBuilder(builders []*queryBuilder, n *Node) error {
-	qb := builders[0]
+func (g *GroupBy) addToQueryBuilder(qb *queryBuilder, n *Node) error {
 	if err := qb.clearOutput(); err != nil {
 		return err
 	}
@@ -194,30 +209,27 @@ func (g *GroupBy) AddToQueryBuilder(builders []*queryBuilder, n *Node) error {
 	return nil
 }
 
-func (p *Project) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
-	if p.isDerivedTable() {
-		return ErrUpqueryNotSupported
+func (p *Project) addToQueryBuilder(qb *queryBuilder, _ *Node) error {
+	err := qb.replaceProjections(p.Projections)
+	if err != nil {
+		return err
 	}
-	qb := builders[0]
-	return qb.replaceProjections(p.Projections)
+	if p.isDerivedTable() {
+		return qb.turnIntoDerived(p.Alias, *p.TableID)
+	}
+	return nil
 }
 
-func (v *View) AddToQueryBuilder([]*queryBuilder, *Node) error {
+func (v *View) addToQueryBuilder(*queryBuilder, *Node) error {
 	// empty by design
 	return nil
 }
 
-func (n *NodeTableRef) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
+func (n *NodeTableRef) addToQueryBuilder(qb *queryBuilder, _ *Node) error {
 	tbl, isTbl := n.Node.Op.(*Table)
-	if !isTbl {
-		return NewBug("should be a table")
-	}
+	dbg.Assert(isTbl, "should be a table")
 
-	aliasPrefix := tbl.Keyspace + "_" + tbl.TableName
-	qb := builders[0]
-	i := qb.tableNames[aliasPrefix]
-	qb.tableNames[aliasPrefix]++
-	alias := fmt.Sprintf("%s_%d", aliasPrefix, i)
+	alias := qb.getTableAlias(tbl.Keyspace + "_" + tbl.TableName)
 	qb.aliasMap[n.TableID] = alias
 
 	qb.addTable(tbl.Keyspace, tbl.TableName, alias, n.TableID, n.Hints)
@@ -227,15 +239,11 @@ func (n *NodeTableRef) AddToQueryBuilder(builders []*queryBuilder, _ *Node) erro
 			return err
 		}
 		col, isCol := ast.(*sqlparser.ColName)
-		if !isCol {
-			return NewBug("should be a column")
-		}
+		dbg.Assert(isCol, "should be a column")
+
 		col.Qualifier.Name = sqlparser.NewIdentifierCS(alias)
 		col.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
 
-		if err != nil {
-			return err
-		}
 		err = qb.addProjection(ast)
 		if err != nil {
 			return err
@@ -244,12 +252,7 @@ func (n *NodeTableRef) AddToQueryBuilder(builders []*queryBuilder, _ *Node) erro
 	return nil
 }
 
-func (u *Union) AddToQueryBuilder([]*queryBuilder, *Node) error {
-	return ErrUpqueryNotSupported
-}
-
-func (t *TopK) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
-	qb := builders[0]
+func (t *TopK) addToQueryBuilder(qb *queryBuilder, _ *Node) error {
 	qb.sel.SetOrderBy(t.Order)
 	limit := &sqlparser.Limit{
 		Offset:   nil,
@@ -259,6 +262,14 @@ func (t *TopK) AddToQueryBuilder(builders []*queryBuilder, _ *Node) error {
 	return nil
 }
 
-func (d *Distinct) AddToQueryBuilder([]*queryBuilder, *Node) error {
-	return ErrUpqueryNotSupported
+func (d *Distinct) addToQueryBuilder(qb *queryBuilder, _ *Node) error {
+	switch stmt := qb.sel.(type) {
+	case *sqlparser.Select:
+		stmt.Distinct = true
+	case *sqlparser.Union:
+		stmt.Distinct = true
+	default:
+		dbg.Bug("expected select or union")
+	}
+	return nil
 }

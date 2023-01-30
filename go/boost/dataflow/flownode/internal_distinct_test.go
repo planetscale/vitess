@@ -5,14 +5,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestDistinct(t *testing.T) {
 	setup := func(t *testing.T, materialized bool) *MockGraph {
 		g := NewMockGraph(t)
-		s := g.AddBase("source", []string{"x", "y", "z"}, boostpb.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.Int64))
+		s := g.AddBase("source", []string{"x", "y", "z"}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.Int64))
 		g.SetOp(
 			"distinct",
 			[]string{"x", "y", "z"},
@@ -25,9 +25,9 @@ func TestDistinct(t *testing.T) {
 	t.Run("simple distinct", func(t *testing.T) {
 		g := setup(t, true)
 
-		r1 := boostpb.TestRow(1, "z", 1)
-		r2 := boostpb.TestRow(1, "z", 1)
-		r3 := boostpb.TestRow(1, "c", 2)
+		r1 := sql.TestRow(1, "z", 1)
+		r2 := sql.TestRow(1, "z", 1)
+		r3 := sql.TestRow(1, "c", 2)
 
 		a := g.NarrowOneRow(r1, true)
 		require.Equal(t, r1.AsRecords(), a)
@@ -42,9 +42,9 @@ func TestDistinct(t *testing.T) {
 	t.Run("distinct with negative record", func(t *testing.T) {
 		g := setup(t, true)
 
-		r1 := boostpb.TestRow(1, "z", 1)
-		r2 := boostpb.TestRow(2, "a", 2)
-		r3 := boostpb.TestRow(3, "c", 2)
+		r1 := sql.TestRow(1, "z", 1)
+		r2 := sql.TestRow(2, "a", 2)
+		r3 := sql.TestRow(3, "c", 2)
 
 		a := g.NarrowOneRow(r1, true)
 		require.Equal(t, r1.AsRecords(), a)
@@ -63,19 +63,19 @@ func TestDistinct(t *testing.T) {
 	t.Run("multiple records distinct", func(t *testing.T) {
 		g := setup(t, true)
 
-		r1 := boostpb.TestRow(1, "z", 1)
-		r2 := boostpb.TestRow(2, "a", 2)
-		r3 := boostpb.TestRow(3, "c", 2)
+		r1 := sql.TestRow(1, "z", 1)
+		r2 := sql.TestRow(2, "a", 2)
+		r3 := sql.TestRow(3, "c", 2)
 
-		a := g.NarrowOne([]boostpb.Record{
+		a := g.NarrowOne([]sql.Record{
 			r2.ToRecord(true),
 			r1.ToRecord(true),
 			r1.ToRecord(true),
 			r3.ToRecord(true),
 		}, true)
-		require.ElementsMatch(t, []boostpb.Record{r1.AsRecord(), r2.AsRecord(), r3.AsRecord()}, a)
+		require.ElementsMatch(t, []sql.Record{r1.AsRecord(), r2.AsRecord(), r3.AsRecord()}, a)
 
-		a = g.NarrowOne([]boostpb.Record{
+		a = g.NarrowOne([]sql.Record{
 			r1.ToRecord(false),
 			r3.ToRecord(true),
 		}, true)

@@ -2,34 +2,32 @@ package flownode
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/dataflow"
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
+	"vitess.io/vitess/go/boost/sql"
+
 	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-type JoinType = boostpb.Node_InternalJoin_JoinType
+type JoinKind = flownodepb.Node_InternalJoin_JoinKind
 
 const (
-	JoinTypeOuter = boostpb.Node_InternalJoin_Left
-	JoinTypeInner = boostpb.Node_InternalJoin_Inner
+	JoinTypeOuter = flownodepb.Node_InternalJoin_Left
+	JoinTypeInner = flownodepb.Node_InternalJoin_Inner
 )
-
-func ParserJoinTypeToFlowNodeJoinType(inner bool) JoinType {
-	if inner {
-		return JoinTypeInner
-	}
-	return JoinTypeOuter
-}
 
 type preprocessed int32
 
@@ -39,33 +37,22 @@ const (
 	preprocessedNeither
 )
 
-func JoinSourceLeft(col int) [2]int {
-	return [2]int{col, -1}
-}
-
-func JoinSourceRight(col int) [2]int {
-	return [2]int{-1, col}
-}
-
-func JoinSourceBoth(left, right int) [2]int {
-	return [2]int{left, right}
-}
-
-type emission = boostpb.Node_InternalJoin_Emission
+type emission = flownodepb.Node_InternalJoin_Emission
 
 var _ Internal = (*Join)(nil)
 var _ ingredientJoin = (*Join)(nil)
 
 type Join struct {
-	left  boostpb.IndexPair
-	right boostpb.IndexPair
+	left  dataflow.IndexPair
+	right dataflow.IndexPair
 
 	on               [2]int
 	emit             []emission
 	inPlaceLeftEmit  []emission
 	inPlaceRightEmit []emission
 
-	kind JoinType
+	kind JoinKind
+	tt   sql.Type
 }
 
 func (j *Join) internal() {}
@@ -123,7 +110,7 @@ func (j *Join) ParentColumns(col int) []NodeColumn {
 		}
 	}
 
-	var parent boostpb.IndexPair
+	var parent dataflow.IndexPair
 	if pcol.Left {
 		parent = j.left
 	} else {
@@ -132,29 +119,35 @@ func (j *Join) ParentColumns(col int) []NodeColumn {
 	return []NodeColumn{{parent.AsGlobal(), pcol.Col}}
 }
 
-func (j *Join) ColumnType(g *graph.Graph[*Node], col int) boostpb.Type {
+func (j *Join) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
 	parents := j.ParentColumns(col)
 	switch len(parents) {
 	case 1:
 		return g.Value(parents[0].Node).ColumnType(g, parents[0].Column)
 
 	case 2:
-		t1 := g.Value(parents[0].Node).ColumnType(g, parents[0].Column)
-		t2 := g.Value(parents[1].Node).ColumnType(g, parents[1].Column)
+		t1, err := g.Value(parents[0].Node).ColumnType(g, parents[0].Column)
+		if err != nil {
+			return sql.Type{}, err
+		}
+		t2, err := g.Value(parents[1].Node).ColumnType(g, parents[1].Column)
+		if err != nil {
+			return sql.Type{}, err
+		}
 
 		var comparisonType = t1.T
 		if t1.T != t2.T {
 			var err error
 			comparisonType, err = evalengine.CoerceTo(t1.T, t2.T)
 			if err != nil {
-				panic(err)
+				return sql.Type{}, err
 			}
 		}
-		return boostpb.Type{
+		return sql.Type{
 			T:         comparisonType,
 			Collation: t1.Collation, // TODO: We need to merge collations here instead
 			Nullable:  t1.Nullable || t2.Nullable,
-		}
+		}, nil
 
 	default:
 		panic("???")
@@ -185,16 +178,25 @@ func (j *Join) Description() string {
 	return fmt.Sprintf("[%v] %v:%v %v %v:%v", buf.String(), j.left, j.on[0], op, j.right, j.on[1])
 }
 
-func (j *Join) OnConnected(graph *graph.Graph[*Node]) {
-	// No-op
+func (j *Join) OnConnected(graph *graph.Graph[*Node]) error {
+	for col, pcol := range j.emit {
+		if (pcol.Left && pcol.Col == j.on[0]) || (!pcol.Left && pcol.Col == j.on[1]) {
+			j.tt, _ = j.ColumnType(graph, col)
+			break
+		}
+	}
+	if j.tt.T == sqltypes.Null {
+		return errors.New("did not resolve static type for JOIN columns")
+	}
+	return nil
 }
 
-func (j *Join) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]boostpb.IndexPair) {
+func (j *Join) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]dataflow.IndexPair) {
 	j.left.Remap(remap)
 	j.right.Remap(remap)
 }
 
-func (j *Join) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNodeIndex, rs []boostpb.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
+func (j *Join) OnInput(you *Node, ex processing.Executor, from dataflow.LocalNodeIdx, rs []sql.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
 	var misses []processing.Miss
 	var lookups []processing.Lookup
 
@@ -206,7 +208,7 @@ func (j *Join) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 		}, nil
 	}
 
-	var other boostpb.LocalNodeIndex
+	var other dataflow.LocalNodeIdx
 	var fromKey int
 	var otherKey int
 	if from == j.left.AsLocal() {
@@ -217,14 +219,6 @@ func (j *Join) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 		other = j.left.AsLocal()
 		fromKey = j.on[1]
 		otherKey = j.on[0]
-	}
-
-	var jointype boostpb.Type
-	for col, pcol := range j.emit {
-		if (pcol.Left && pcol.Col == j.on[0]) || (!pcol.Left && pcol.Col == j.on[1]) {
-			jointype = you.schema[col]
-			break
-		}
 	}
 
 	replayKeyCols := repl.Key()
@@ -255,12 +249,12 @@ func (j *Join) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 	// First, we want to be smart about multiple added/removed rows with the same join key
 	// value. For example, if we get a -, then a +, for the same key, we don't want to execute
 	// two queries. We'll do this by sorting the batch by our join key.
-	var hashrs = make([]boostpb.HashedRecord, 0, len(rs))
+	var hashrs = make([]sql.HashedRecord, 0, len(rs))
 	var hasher vthash.Hasher
 	for _, r := range rs {
-		hashrs = append(hashrs, boostpb.HashedRecord{
+		hashrs = append(hashrs, sql.HashedRecord{
 			Record: r,
-			Hash:   r.Row.HashValue(&hasher, fromKey, jointype),
+			Hash:   r.Row.HashValue(&hasher, fromKey, j.tt),
 		})
 	}
 	sort.SliceStable(hashrs, func(i, j int) bool {
@@ -275,7 +269,7 @@ func (j *Join) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 		newRightCount := -1
 		prevJoinKey := hashrs[at].Row.ValueAt(fromKey)
 		prevJoinHash := hashrs[at].Hash
-		prevJoinKeyRow := boostpb.RowFromValues([]boostpb.Value{prevJoinKey})
+		prevJoinKeyRow := sql.RowFromValues([]sql.Value{prevJoinKey})
 
 		if from == j.right.AsLocal() && j.kind == JoinTypeOuter {
 			rowBag, found, isMaterialized := nodeLookup(j.right.AsLocal(), []int{j.on[1]}, prevJoinKeyRow, domain, states)
@@ -335,8 +329,10 @@ func (j *Join) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 					LookupCols: []int{fromKey},
 					ReplayCols: replayKeyCols,
 					Record:     hashrs[i],
+					Flush:      true,
+					ForceTag:   dataflow.TagNone,
 				})
-				hashrs[i] = boostpb.HashedRecord{}
+				hashrs[i] = sql.HashedRecord{}
 			}
 			continue
 		}
@@ -394,8 +390,10 @@ func (j *Join) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 						LookupCols: []int{fromKey},
 						ReplayCols: replayKeyCols,
 						Record:     hashrs[i],
+						Flush:      true,
+						ForceTag:   dataflow.TagNone,
 					})
-					hashrs[i] = boostpb.HashedRecord{}
+					hashrs[i] = sql.HashedRecord{}
 				}
 				continue
 			}
@@ -427,7 +425,7 @@ func (j *Join) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 					continue
 				}
 
-				otherRows.ForEach(func(other boostpb.Row) {
+				otherRows.ForEach(func(other sql.Row) {
 					if makeNegativeNull {
 						joinrs = append(joinrs, j.generateNull(other).ToRecord(false))
 					}
@@ -469,20 +467,20 @@ func (j *Join) OnInput(you *Node, ex processing.Executor, from boostpb.LocalNode
 	}, nil
 }
 
-func (j *Join) generateNull(left boostpb.Row) boostpb.Row {
-	result := boostpb.NewRowBuilder(len(j.emit))
+func (j *Join) generateNull(left sql.Row) sql.Row {
+	result := sql.NewRowBuilder(len(j.emit))
 	for _, e := range j.emit {
 		if e.Left {
 			result.Add(left.ValueAt(e.Col))
 		} else {
-			result.Add(boostpb.NULL)
+			result.Add(sql.NULL)
 		}
 	}
 	return result.Finish()
 }
 
-func (j *Join) generateRow(left boostpb.Row, right boostpb.Row, reusing preprocessed) boostpb.Row {
-	result := boostpb.NewRowBuilder(len(j.emit))
+func (j *Join) generateRow(left sql.Row, right sql.Row, reusing preprocessed) sql.Row {
+	result := sql.NewRowBuilder(len(j.emit))
 	for i, e := range j.emit {
 		if e.Left {
 			if reusing == preprocessedLeft {
@@ -501,7 +499,7 @@ func (j *Join) generateRow(left boostpb.Row, right boostpb.Row, reusing preproce
 	return result.Finish()
 }
 
-func NewJoin(left, right graph.NodeIdx, kind JoinType, joinColumns [2]int, joinSources [][2]int) *Join {
+func NewJoin(left, right graph.NodeIdx, kind JoinKind, joinColumns [2]int, joinSources [][2]int) *Join {
 	var emit []emission
 	for _, e := range joinSources {
 		switch {
@@ -547,8 +545,8 @@ func NewJoin(left, right graph.NodeIdx, kind JoinType, joinColumns [2]int, joinS
 	}
 
 	return &Join{
-		left:             boostpb.NewIndexPair(left),
-		right:            boostpb.NewIndexPair(right),
+		left:             dataflow.NewIndexPair(left),
+		right:            dataflow.NewIndexPair(right),
 		on:               joinColumns,
 		emit:             emit,
 		inPlaceLeftEmit:  computeInPlaceEmit(emit, true),
@@ -557,27 +555,29 @@ func NewJoin(left, right graph.NodeIdx, kind JoinType, joinColumns [2]int, joinS
 	}
 }
 
-func (j *Join) ToProto() *boostpb.Node_InternalJoin {
-	return &boostpb.Node_InternalJoin{
-		Left:             &j.left,
-		Right:            &j.right,
+func (j *Join) ToProto() *flownodepb.Node_InternalJoin {
+	return &flownodepb.Node_InternalJoin{
+		Left:             j.left,
+		Right:            j.right,
 		On0:              j.on[0],
 		On1:              j.on[1],
 		Emit:             j.emit,
 		InPlaceLeftEmit:  j.inPlaceLeftEmit,
 		InPlaceRightEmit: j.inPlaceRightEmit,
 		Kind:             j.kind,
+		Type:             j.tt,
 	}
 }
 
-func NewJoinFromProto(pjoin *boostpb.Node_InternalJoin) *Join {
+func NewJoinFromProto(pjoin *flownodepb.Node_InternalJoin) *Join {
 	return &Join{
-		left:             *pjoin.Left,
-		right:            *pjoin.Right,
+		left:             pjoin.Left,
+		right:            pjoin.Right,
 		on:               [2]int{pjoin.On0, pjoin.On1},
 		emit:             pjoin.Emit,
 		inPlaceLeftEmit:  pjoin.InPlaceLeftEmit,
 		inPlaceRightEmit: pjoin.InPlaceRightEmit,
 		kind:             pjoin.Kind,
+		tt:               pjoin.Type,
 	}
 }

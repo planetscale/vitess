@@ -1,53 +1,38 @@
 package replay
 
 import (
-	"vitess.io/vitess/go/boost/boostpb"
 	"vitess.io/vitess/go/boost/boostrpc"
+	"vitess.io/vitess/go/boost/boostrpc/packet"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/server/controller/boostplan/upquery"
+	"vitess.io/vitess/go/boost/sql"
 )
 
 type Path struct {
-	Source                boostpb.LocalNodeIndex
-	Path                  []*boostpb.ReplayPathSegment
+	Source                dataflow.LocalNodeIdx
+	Path                  []*packet.ReplayPathSegment
 	NotifyDone            bool
 	PartialUnicastSharder graph.NodeIdx
-	Trigger               TriggerEndpoint
+	Trigger               *TriggerEndpoint
+	Upquery               *upquery.Upquery
 }
-
-type TriggerEndpoint interface {
-	trigger()
-}
-
-type TriggerStart struct {
-	Columns []int
-}
-
-func (*TriggerStart) trigger() {}
-
-type TriggerEnd struct {
-	Source  SourceSelection
-	Options []boostrpc.DomainClient
-}
-
-func (*TriggerEnd) trigger() {}
-
-type TriggerLocal struct {
-	Columns []int
-}
-
-func (*TriggerLocal) trigger() {}
 
 type Partial struct {
 	KeyCols         []int
-	Keys            map[boostpb.Row]bool
-	Tag             boostpb.Tag
+	Keys            map[sql.Row]bool
+	Tag             dataflow.Tag
 	RequestingShard uint
 	Unishard        bool
 }
 
+type Regular struct {
+	Last bool
+}
+
 type Context struct {
 	Partial *Partial
-	Full    *bool
+	Regular *Regular
 }
 
 func (ctx *Context) Key() []int {
@@ -57,26 +42,29 @@ func (ctx *Context) Key() []int {
 	return nil
 }
 
-type ReplayRequest struct {
-	Tag  boostpb.Tag
-	Data []boostpb.Row
+func (ctx *Context) Tag() dataflow.Tag {
+	if partial := ctx.Partial; partial != nil {
+		return partial.Tag
+	}
+	return dataflow.TagNone
 }
 
-type SourceSelectionKind int
+type ReplayRequest struct {
+	Tag  dataflow.Tag
+	Data []sql.Row
+}
+
+type SourceSelectionKind = packet.SourceSelection_Kind
 
 const (
-	SourceSelectionKeyShard SourceSelectionKind = iota
-	SourceSelectionSameShard
-	SourceSelectionAllShards
+	SourceSelectionKeyShard  = packet.SourceSelection_KEY_SHARD
+	SourceSelectionSameShard = packet.SourceSelection_SAME_SHARD
+	SourceSelectionAllShards = packet.SourceSelection_ALL_SHARDS
 )
 
-type SourceSelection struct {
-	Kind        SourceSelectionKind
-	NShards     uint
-	KeyItoShard int
-}
+type SourceSelection = packet.SourceSelection
 
-func (sel *SourceSelection) BuildOptions(coord *boostrpc.ChannelCoordinator, domain boostpb.DomainIndex, thisShard *uint) ([]boostrpc.DomainClient, error) {
+func sourceSelectionClients(sel *SourceSelection, coord *boostrpc.ChannelCoordinator, domain dataflow.DomainIdx, thisShard *uint) ([]boostrpc.DomainClient, error) {
 	shard := func(shardi uint) (boostrpc.DomainClient, error) {
 		return coord.GetClient(domain, shardi)
 	}
@@ -84,7 +72,7 @@ func (sel *SourceSelection) BuildOptions(coord *boostrpc.ChannelCoordinator, dom
 	var options []boostrpc.DomainClient
 	switch sel.Kind {
 	case SourceSelectionKeyShard, SourceSelectionAllShards:
-		for s := uint(0); s < sel.NShards; s++ {
+		for s := uint(0); s < sel.NumShards; s++ {
 			client, err := shard(s)
 			if err != nil {
 				return nil, err
@@ -104,63 +92,34 @@ func (sel *SourceSelection) BuildOptions(coord *boostrpc.ChannelCoordinator, dom
 	return options, nil
 }
 
-func (sel *SourceSelection) ToProto() *boostpb.SourceSelection {
-	var ps = &boostpb.SourceSelection{}
-	switch sel.Kind {
-	case SourceSelectionKeyShard:
-		ps.Selection = &boostpb.SourceSelection_KeyShard_{
-			KeyShard: &boostpb.SourceSelection_KeyShard{
-				KeyIToShard: int64(sel.KeyItoShard),
-				Nshards:     uint64(sel.NShards),
-			},
-		}
-	case SourceSelectionAllShards:
-		ps.Selection = &boostpb.SourceSelection_AllShards{
-			AllShards: uint64(sel.NShards),
-		}
-	case SourceSelectionSameShard:
-		ps.Selection = &boostpb.SourceSelection_SameShard{SameShard: true}
-	}
-	return ps
+type TriggerKind = packet.TriggerEndpoint_Kind
+
+const (
+	TriggerNone     = packet.TriggerEndpoint_NONE
+	TriggerStart    = packet.TriggerEndpoint_START
+	TriggerEnd      = packet.TriggerEndpoint_END
+	TriggerLocal    = packet.TriggerEndpoint_LOCAL
+	TriggerExternal = packet.TriggerEndpoint_EXTERNAL
+)
+
+type TriggerEndpoint struct {
+	packet.TriggerEndpoint
+	Clients []boostrpc.DomainClient
 }
 
-func SourceSelectionFromProto(sel *boostpb.SourceSelection) SourceSelection {
-	switch sel := sel.Selection.(type) {
-	case *boostpb.SourceSelection_AllShards:
-		return SourceSelection{
-			Kind:    SourceSelectionAllShards,
-			NShards: uint(sel.AllShards),
-		}
-	case *boostpb.SourceSelection_KeyShard_:
-		return SourceSelection{
-			Kind:        SourceSelectionKeyShard,
-			NShards:     uint(sel.KeyShard.Nshards),
-			KeyItoShard: int(sel.KeyShard.KeyIToShard),
-		}
-	case *boostpb.SourceSelection_SameShard:
-		return SourceSelection{Kind: SourceSelectionSameShard}
-	default:
-		panic("unexpected type in SourceSelection")
-	}
-}
+func TriggerEndpointFromProto(tp *packet.TriggerEndpoint, coord *boostrpc.ChannelCoordinator, thisShard *uint) (*TriggerEndpoint, error) {
+	var clients []boostrpc.DomainClient
 
-func TriggerEndpointFromProto(tp *boostpb.TriggerEndpoint, coord *boostrpc.ChannelCoordinator, thisShard *uint) (TriggerEndpoint, error) {
-	if tp == nil {
-		return nil, nil
-	}
-	switch trigger := tp.Trigger.(type) {
-	case *boostpb.TriggerEndpoint_Start_:
-		return &TriggerStart{Columns: trigger.Start.Cols}, nil
-	case *boostpb.TriggerEndpoint_Local_:
-		return &TriggerLocal{Columns: trigger.Local.Cols}, nil
-	case *boostpb.TriggerEndpoint_End_:
-		source := SourceSelectionFromProto(trigger.End.Selection)
-		options, err := source.BuildOptions(coord, trigger.End.Domain, thisShard)
+	if tp.SourceSelection != nil {
+		var err error
+		clients, err = sourceSelectionClients(tp.SourceSelection, coord, tp.Domain, thisShard)
 		if err != nil {
 			return nil, err
 		}
-		return &TriggerEnd{Source: source, Options: options}, nil
-	default:
-		panic("unexpected type in TriggerEndpoint")
 	}
+
+	return &TriggerEndpoint{
+		TriggerEndpoint: *tp,
+		Clients:         clients,
+	}, nil
 }

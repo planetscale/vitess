@@ -6,7 +6,7 @@ import (
 
 	"storj.io/drpc/drpcconn"
 
-	"vitess.io/vitess/go/boost/boostpb"
+	"vitess.io/vitess/go/boost/boostrpc/service"
 )
 
 // WorkerID is an UUID identifying this worker
@@ -15,7 +15,7 @@ type WorkerID string
 type Worker struct {
 	UUID          WorkerID
 	Healthy       bool
-	Client        boostpb.DRPCWorkerServiceClient
+	Client        service.DRPCWorkerServiceClient
 	LastHeartbeat time.Time
 
 	addr string
@@ -30,7 +30,7 @@ func NewWorker(id WorkerID, addr string) (*Worker, error) {
 	return &Worker{
 		UUID:          id,
 		Healthy:       true,
-		Client:        boostpb.NewDRPCWorkerServiceClient(drpcconn.New(conn)),
+		Client:        service.NewDRPCWorkerServiceClient(drpcconn.New(conn)),
 		LastHeartbeat: time.Now(),
 		addr:          addr,
 	}, nil

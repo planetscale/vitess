@@ -11,10 +11,8 @@ import (
 	"go.uber.org/zap"
 
 	"vitess.io/vitess/go/acl"
-
-	"vitess.io/vitess/go/boost/boostpb"
-
 	"vitess.io/vitess/go/boost/server"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats/prometheusbackend"
 	"vitess.io/vitess/go/vt/servenv"
@@ -36,7 +34,7 @@ var (
 	cell         string
 	cellsToWatch string
 	memoryLimit  int
-	config       = boostpb.DefaultConfig()
+	cfg          = config.DefaultConfig()
 
 	healthCheckRetryDelay = 2 * time.Millisecond
 	healthCheckTimeout    = time.Minute
@@ -64,12 +62,12 @@ func registerFlags(fs *pflag.FlagSet) {
 	// gtid-mode configures how GTID tracking is performed by upqueries; setting this to 'TRACK_GTID' requires a forked
 	// version of MySQL for now; the default value is 'SELECT_GTID', which works with any MySQL version even though we've
 	// seen it can produce inconsistencies under load
-	fs.Var(&config.DomainConfig.UpqueryMode, "gtid-mode", "GTID tracking mode for upqueries (options are 'SELECT_GTID', 'TRACK_GTID')")
+	fs.Var(&cfg.Domain.UpqueryMode, "gtid-mode", "GTID tracking mode for upqueries (options are 'SELECT_GTID', 'TRACK_GTID')")
 
 	// The default worker timeout value is set based on the timeout value for upqueries. This timeout
 	// is configured at the vttablet level with --queryserver-config-olap-transaction-timeout and defaults
 	// to 30 seconds. We add some additional buffer time here to then process the (potentially huge) results as well.
-	fs.DurationVar(&config.WorkerReadTimeout, "worker-read-timeout", 40*time.Second, "the timeout for blocking reads on a worker")
+	fs.DurationVar(&cfg.WorkerReadTimeout, "worker-read-timeout", 40*time.Second, "the timeout for blocking reads on a worker")
 
 	fs.BoolVar(&enableSchemaChangeSignal, "schema_change_signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	fs.StringVar(&schemaChangeUser, "schema_change_signal_user", schemaChangeUser, "User to be used to send down query to vttablet to retrieve schema changes")
@@ -120,7 +118,7 @@ func main() {
 		// library seems promising: https://github.com/containerd/cgroups.
 	}
 
-	boost := server.NewBoostInstance(log, ts, tmclient.NewTabletManagerClient(), config, clusterUUID)
+	boost := server.NewBoostInstance(log, ts, tmclient.NewTabletManagerClient(), cfg, clusterUUID)
 
 	if !enableSchemaChangeSignal {
 		log.Fatal("Schema tracking must be enabled.")
