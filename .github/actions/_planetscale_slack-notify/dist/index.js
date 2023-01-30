@@ -14129,7 +14129,7 @@ var __webpack_exports__ = {};
 // This entry need to be wrapped in an IIFE because it need to be isolated against other modules in the chunk.
 (() => {
 const core = __nccwpck_require__(2186);
-const { context, GitHub } = __nccwpck_require__(5438);
+const github = __nccwpck_require__(5438);
 const { IncomingWebhook } = __nccwpck_require__(1095);
 
 process.on("unhandledRejection", handleError);
@@ -14137,16 +14137,17 @@ main().catch(handleError);
 
 async function main() {
   const run_id = process.env.GITHUB_RUN_ID;
-  const github = new GitHub(process.env.GITHUB_TOKEN);
+  const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
+  const context = github.context;
 
-  const { data: wf_run } = await github.actions.getWorkflowRun({
+  const { data: wf_run } = await octokit.rest.actions.getWorkflowRun({
     owner: context.repo.owner,
     repo: context.repo.repo,
     run_id: run_id,
   });
   debug(JSON.stringify(wf_run, undefined, 2));
 
-  const { data: wf_jobs } = await github.actions.listJobsForWorkflowRun({
+  const { data: wf_jobs } = await octokit.rest.actions.listJobsForWorkflowRun({
     owner: context.repo.owner,
     repo: context.repo.repo,
     run_id: run_id,
