@@ -254,6 +254,9 @@ func (n *NodeTableRef) addToQueryBuilder(qb *queryBuilder, _ *Node) error {
 
 func (t *TopK) addToQueryBuilder(qb *queryBuilder, _ *Node) error {
 	qb.sel.SetOrderBy(t.Order)
+	if t.K < 0 {
+		return nil
+	}
 	limit := &sqlparser.Limit{
 		Offset:   nil,
 		Rowcount: sqlparser.NewIntLiteral(strconv.FormatInt(int64(t.K), 10)),

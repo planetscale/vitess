@@ -199,3 +199,144 @@ func TestTopk(t *testing.T) {
 		}
 	})
 }
+
+func TestTopkNoLimit(t *testing.T) {
+	setup := func(t *testing.T, desc bool) (*MockGraph, dataflow.IndexPair) {
+		cmprows := []flownodepb.OrderedColumn{{Col: 2, Desc: desc}}
+		g := NewMockGraph(t)
+		s := g.AddBase(
+			"source",
+			[]string{"x", "y", "z"},
+			sql.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.Int64),
+		)
+		g.SetOp(
+			"topk",
+			[]string{"x", "y", "z"},
+			NewTopK(s.AsGlobal(), cmprows, []int{1}, -1),
+			true,
+		)
+		return g, s
+	}
+
+	r12a := sql.TestRow(1, "z", 12)
+	r10a := sql.TestRow(2, "z", 10)
+	r11a := sql.TestRow(3, "z", 11)
+	r05a := sql.TestRow(4, "z", 5)
+	r15a := sql.TestRow(5, "z", 15)
+	r10b := sql.TestRow(6, "z", 10)
+	r10c := sql.TestRow(7, "z", 10)
+
+	t.Run("it keeps all elements", func(t *testing.T) {
+		g, _ := setup(t, false)
+		ni := g.Node().LocalAddr()
+
+		g.NarrowOneRow(r12a, true)
+		g.NarrowOneRow(r11a, true)
+		g.NarrowOneRow(r05a, true)
+		g.NarrowOneRow(r10b, true)
+		g.NarrowOneRow(r10c, true)
+		require.Equal(t, 5, g.states.Get(ni).Rows())
+
+		g.NarrowOneRow(r15a, true)
+		g.NarrowOneRow(r10a, true)
+		require.Equal(t, 7, g.states.Get(ni).Rows())
+	})
+
+	t.Run("it forwards", func(t *testing.T) {
+		g, _ := setup(t, false)
+
+		a := g.NarrowOneRow(r12a, true)
+		require.Equal(t, r12a.AsRecords(), a)
+
+		a = g.NarrowOneRow(r10a, true)
+		require.Equal(t, r10a.AsRecords(), a)
+
+		a = g.NarrowOneRow(r11a, true)
+		require.Equal(t, r11a.AsRecords(), a)
+
+		a = g.NarrowOneRow(r05a, true)
+		require.ElementsMatch(t, []sql.Record{r05a.ToRecord(true)}, a)
+
+		a = g.NarrowOneRow(r15a, true)
+		require.ElementsMatch(t, []sql.Record{r15a.ToRecord(true)}, a)
+	})
+
+	t.Run("it forwards reversed", func(t *testing.T) {
+		g, _ := setup(t, true)
+
+		r12 := sql.TestRow(1, "z", -12.123)
+		r10 := sql.TestRow(2, "z", 0.0431)
+		r11 := sql.TestRow(3, "z", -0.082)
+		r5 := sql.TestRow(4, "z", 5.601)
+		r15 := sql.TestRow(5, "z", -15.9)
+
+		a := g.NarrowOneRow(r12, true)
+		require.Equal(t, r12.AsRecords(), a)
+
+		a = g.NarrowOneRow(r10, true)
+		require.Equal(t, r10.AsRecords(), a)
+
+		a = g.NarrowOneRow(r11, true)
+		require.Equal(t, r11.AsRecords(), a)
+
+		a = g.NarrowOneRow(r5, true)
+		require.ElementsMatch(t, []sql.Record{r5.ToRecord(true)}, a)
+
+		a = g.NarrowOneRow(r15, true)
+		require.ElementsMatch(t, []sql.Record{r15.ToRecord(true)}, a)
+	})
+
+	t.Run("it reports parent columns", func(t *testing.T) {
+		g, _ := setup(t, false)
+
+		require.Equal(t,
+			[]NodeColumn{{Node: g.NarrowBaseID().AsGlobal(), Column: 0}},
+			g.Node().Resolve(0),
+		)
+		require.Equal(t,
+			[]NodeColumn{{Node: g.NarrowBaseID().AsGlobal(), Column: 1}},
+			g.Node().Resolve(1),
+		)
+		require.Equal(t,
+			[]NodeColumn{{Node: g.NarrowBaseID().AsGlobal(), Column: 2}},
+			g.Node().Resolve(2),
+		)
+	})
+
+	t.Run("it handles updates", func(t *testing.T) {
+		g, _ := setup(t, false)
+		ni := g.Node().LocalAddr()
+
+		r1 := sql.TestRow(1, "z", 10)
+		r2 := sql.TestRow(2, "z", 10)
+		r3 := sql.TestRow(3, "z", 10)
+		r4 := sql.TestRow(4, "z", 5)
+		r4a := sql.TestRow(4, "z", 10)
+
+		g.NarrowOneRow(r1, true)
+		g.NarrowOneRow(r2, true)
+		g.NarrowOneRow(r3, true)
+
+		emit := g.NarrowOneRow(r4, true)
+		require.Equal(t, 4, g.states.Get(ni).Rows())
+		require.ElementsMatch(t, []sql.Record{r4.ToRecord(true)}, emit)
+
+		emit = g.NarrowOne([]sql.Record{r4.ToRecord(false), r4a.ToRecord(true)}, true)
+
+		require.ElementsMatch(t, []sql.Record{r4.ToRecord(false), r4a.ToRecord(true)}, emit)
+
+		emit = g.NarrowOne([]sql.Record{r4a.ToRecord(false), r4.ToRecord(true)}, true)
+
+		require.Equal(t, 4, g.states.Get(ni).Rows())
+
+		if emit[0].Positive {
+			require.Equal(t, sqltypes.NewInt64(5), emit[0].Row.ValueAt(2).ToVitessUnsafe())
+			require.Equal(t, false, emit[1].Positive)
+			require.Equal(t, sqltypes.NewInt64(10), emit[1].Row.ValueAt(2).ToVitessUnsafe())
+		} else {
+			require.Equal(t, sqltypes.NewInt64(10), emit[0].Row.ValueAt(2).ToVitessUnsafe())
+			require.Equal(t, true, emit[1].Positive)
+			require.Equal(t, sqltypes.NewInt64(5), emit[1].Row.ValueAt(2).ToVitessUnsafe())
+		}
+	})
+}

@@ -165,7 +165,7 @@ type (
 	// TopK is used to implement a query with ORDER BY & LIMIT
 	TopK struct {
 		Order      sqlparser.OrderBy
-		K          uint
+		K          int
 		Parameters []*Column
 
 		OrderOffsets, ParamOffsets []int

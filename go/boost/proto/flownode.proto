@@ -162,7 +162,7 @@ message Node {
     dataflow.IndexPair src = 1 [(gogoproto.nullable) = false];
     repeated sql.Type src_schema = 2 [(gogoproto.nullable) = false];
     repeated OrderedColumn order = 3 [(gogoproto.nullable) = false];
-    uint64 K = 4 [(gogoproto.casttype) = "uint"];
+    int64 K = 4 [(gogoproto.casttype) = "int"];
     repeated int64 params = 5 [(gogoproto.casttype) = "int"];
   }
 

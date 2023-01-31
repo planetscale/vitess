@@ -41,14 +41,14 @@ type TopK struct {
 
 	keys  []int
 	order Order
-	k     uint
+	k     int
 }
 
 func (t *TopK) internal() {}
 
 func (t *TopK) dataflow() {}
 
-func NewTopK(src graph.NodeIdx, order []OrderedColumn, keys []int, k uint) *TopK {
+func NewTopK(src graph.NodeIdx, order []OrderedColumn, keys []int, k int) *TopK {
 	sort.Ints(keys)
 	return &TopK{
 		src:   dataflow.NewIndexPair(src),
@@ -140,7 +140,7 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, _ dataflow.LocalNodeId
 		out     []sql.Record
 		grp     sql.Row
 		grpHash vthash.Hash
-		grpk    uint
+		grpk    int
 		missed  bool
 		flush   bool
 		current []newrow
@@ -148,13 +148,22 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, _ dataflow.LocalNodeId
 		lookups []processing.Lookup
 	)
 
-	postGroup := func(out []sql.Record, current []newrow, grpk, k uint, order Order) ([]sql.Record, bool) {
+	postGroup := func(out []sql.Record, current []newrow, grpk, k int, order Order) ([]sql.Record, bool) {
 		slices.SortFunc(current, func(a, b newrow) bool {
 			return order.Cmp(a.row, b.row) < 0
 		})
 
+		if k < 0 {
+			for i := 0; i < len(current); i++ {
+				if current[i].new {
+					out = append(out, current[i].row.ToRecord(true))
+				}
+			}
+			return out, false
+		}
+
 		if grpk == k {
-			if len(current) < int(grpk) {
+			if len(current) < grpk {
 				return nil, true
 			}
 
@@ -178,7 +187,7 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, _ dataflow.LocalNodeId
 		}
 
 		// optimization: if we don't *have to* remove something, we don't
-		for i := int(k); i < len(current); i++ {
+		for i := k; i < len(current); i++ {
 			cur := &current[i]
 			if cur.new {
 				// we found an `is_new` in current
@@ -192,13 +201,13 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, _ dataflow.LocalNodeId
 			}
 		}
 
-		for i := 0; i < int(k) && i < len(current); i++ {
+		for i := 0; i < k && i < len(current); i++ {
 			if current[i].new {
 				out = append(out, current[i].row.ToRecord(true))
 			}
 		}
 
-		for i := int(k); i < len(current); i++ {
+		for i := k; i < len(current); i++ {
 			if !current[i].new {
 				out = append(out, current[i].row.ToRecord(false))
 			}
@@ -236,7 +245,7 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, _ dataflow.LocalNodeId
 				}
 
 				missed = false
-				grpk = uint(lookup.Len())
+				grpk = lookup.Len()
 				lookup.ForEach(func(r sql.Row) {
 					current = append(current, newrow{row: r, new: false})
 				})
