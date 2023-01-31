@@ -282,7 +282,11 @@ func (v *View) fixResult(rows []sql.Row) *sqltypes.Result {
 		slices.SortFunc(rows, func(a, b sql.Row) bool {
 			return order.Cmp(a, b) < 0
 		})
-		for _, r := range rows[:v.topkLimit] {
+		limit := v.topkLimit
+		if limit > len(rows) {
+			limit = len(rows)
+		}
+		for _, r := range rows[:limit] {
 			rr.Rows = append(rr.Rows, r.ToVitessTruncate(len(v.schema)))
 		}
 	} else {

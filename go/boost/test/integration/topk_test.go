@@ -66,3 +66,24 @@ func TestTopKEvictions(t *testing.T) {
 
 	g.View("q0").Lookup(0).ExpectSorted("[[INT32(0) INT32(12)] [INT32(0) INT32(16)] [INT32(0) INT32(20)]]")
 }
+
+func TestTopHighLimit(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a INT, b INT, PRIMARY KEY(pk));
+	SELECT a, b FROM num WHERE a = ? ORDER BY b LIMIT 100000;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 0; i <= 32; i++ {
+		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i%4, i)
+	}
+
+	g.View("q0").Lookup(0).ExpectSorted("[[INT32(0) INT32(0)] [INT32(0) INT32(4)] [INT32(0) INT32(8)] [INT32(0) INT32(12)] [INT32(0) INT32(16)] [INT32(0) INT32(20)] [INT32(0) INT32(24)] [INT32(0) INT32(28)] [INT32(0) INT32(32)]]")
+
+	for i := 0; i <= 16; i++ {
+		g.TestExecute("DELETE FROM num WHERE b IN (0, 4, 8)")
+	}
+
+	g.View("q0").Lookup(0).ExpectSorted("[[INT32(0) INT32(12)] [INT32(0) INT32(16)] [INT32(0) INT32(20)] [INT32(0) INT32(24)] [INT32(0) INT32(28)] [INT32(0) INT32(32)]]")
+}
