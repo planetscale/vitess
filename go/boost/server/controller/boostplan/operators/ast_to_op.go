@@ -118,24 +118,29 @@ func (conv *Converter) selectToOperator(ctx *PlanContext, sel *sqlparser.Select)
 		node = conv.NewNode("distinct", &Distinct{}, []*Node{node})
 	}
 
-	if sel.Limit != nil {
+	if sel.OrderBy != nil {
+		k := -1
 		env := evalengine.EmptyExpressionEnv()
-		expr, err := evalengine.Translate(sel.Limit.Rowcount, nil)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		value, err := env.Evaluate(expr)
-		if err != nil {
-			return nil, nil, nil, err
-		}
 
-		k, err := value.Value().ToUint64()
-		if err != nil {
-			return nil, nil, nil, err
+		if sel.Limit != nil {
+			expr, err := evalengine.Translate(sel.Limit.Rowcount, nil)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			value, err := env.Evaluate(expr)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			l, err := value.Value().ToUint64()
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			k = int(l)
 		}
 		node = conv.NewNode("topK", &TopK{
 			Order: sel.OrderBy,
-			K:     uint(k),
+			K:     k,
 		}, []*Node{node})
 	}
 
@@ -147,13 +152,7 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 	ordered := len(sel.OrderBy) != 0
 	limited := sel.Limit != nil
 
-	switch {
-	case ordered && !limited:
-		errors = append(errors, &UnsupportedError{
-			AST:  sel.OrderBy,
-			Type: OrderByNoLimit,
-		})
-	case limited && !ordered:
+	if limited && !ordered {
 		errors = append(errors, &UnsupportedError{
 			AST:  sel.Limit,
 			Type: LimitNoOrderBy,

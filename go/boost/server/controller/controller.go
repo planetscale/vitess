@@ -263,7 +263,7 @@ func (ctrl *Controller) viewDescriptor(node *flownode.Node) *vtboostpb.Materiali
 		Shards:        shards,
 		TopkOrderCols: orderCols,
 		TopkOrderDesc: orderColsDesc,
-		TopkLimit:     orderLimit,
+		TopkLimit:     int64(orderLimit),
 	}
 }
 

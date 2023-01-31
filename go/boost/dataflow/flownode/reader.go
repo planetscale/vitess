@@ -59,12 +59,12 @@ func (r *Reader) OnConnected(ingredients *graph.Graph[*Node], key []int, paramet
 	}
 }
 
-func (r *Reader) Order() (cols []int64, desc []bool, limit int64) {
+func (r *Reader) Order() (cols []int64, desc []bool, limit int) {
 	for _, ord := range r.topkOrder {
 		cols = append(cols, int64(ord.Col))
 		desc = append(desc, ord.Desc)
 	}
-	return cols, desc, int64(r.topkLimit)
+	return cols, desc, r.topkLimit
 }
 
 func (r *Reader) IsFor() graph.NodeIdx {
