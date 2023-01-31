@@ -3268,22 +3268,36 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	// - a migration is 'ready' but is not set to run _concurrently_, and there's a running migration that is also non-concurrent
 	// - a migration is 'ready' but there's another migration 'running' on the exact same table
 	getNonConflictingMigration := func() (*schema.OnlineDDL, error) {
+		pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+		if err != nil {
+			return nil, err
+		}
 		r, err := e.execQuery(ctx, sqlSelectReadyMigrations)
 		if err != nil {
 			return nil, err
 		}
 		for _, row := range r.Named().Rows {
 			uuid := row["migration_uuid"].ToString()
-			onlineDDL, _, err := e.readMigration(ctx, uuid)
+			onlineDDL, migrationRow, err := e.readMigration(ctx, uuid)
 			if err != nil {
 				return nil, err
 			}
-			if conflictFound, _ := e.isAnyConflictingMigrationRunning(onlineDDL); !conflictFound {
-				if e.countOwnedRunningMigrations() < maxConcurrentOnlineDDLs {
-					// This migration seems good to go
-					return onlineDDL, err
+			isImmediateOperation := migrationRow.AsBool("is_immediate_operation", false)
+
+			if conflictFound, _ := e.isAnyConflictingMigrationRunning(onlineDDL); conflictFound {
+				continue // this migration conflicts with a running one
+			}
+			if e.countOwnedRunningMigrations() >= maxConcurrentOnlineDDLs {
+				continue // too many running migrations
+			}
+			if isImmediateOperation && onlineDDL.StrategySetting().IsInOrderCompletion() {
+				// This migration is immediate: if we run it now, it will complete within a second or two at most.
+				if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
+					continue
 				}
 			}
+			// This migration seems good to go
+			return onlineDDL, err
 		}
 		// no non-conflicting migration found...
 		// Either all ready migrations are conflicting, or there are no ready migrations...
@@ -3519,6 +3533,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	if err != nil {
 		return countRunnning, cancellable, err
 	}
+	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return countRunnning, cancellable, err
+	}
 	uuidsFoundRunning := map[string]bool{}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
@@ -3607,6 +3625,12 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						// override. Even if migration is ready, we do not complete it.
 						isReady = false
 					}
+					if isReady && onlineDDL.StrategySetting().IsInOrderCompletion() {
+						if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
+							// wait for earlier pending migrations to complete
+							isReady = false
+						}
+					}
 					if isReady {
 						if err := e.cutOverVReplMigration(ctx, s); err != nil {
 							_ = e.updateMigrationMessage(ctx, uuid, err.Error())
@@ -3677,12 +3701,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	}
 	{
 		// now, let's look at UUIDs we own and _think_ should be running, and see which of tham _isn't_ actually running or pending...
-		pendingUUIDS, err := e.readPendingMigrationsUUIDs(ctx)
-		if err != nil {
-			return countRunnning, cancellable, err
-		}
 		uuidsFoundPending := map[string]bool{}
-		for _, uuid := range pendingUUIDS {
+		for _, uuid := range pendingMigrationsUUIDs {
 			uuidsFoundPending[uuid] = true
 		}
 
