@@ -423,6 +423,12 @@ const (
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp IS NULL
 	`
+	sqlFixRequestedTimestamp = `UPDATE _vt.schema_migrations
+		SET
+			requested_timestamp = added_timestamp
+		WHERE
+			requested_timestamp < added_timestamp;
+	`
 	sqlSelectMigration = `SELECT
 			id,
 			migration_uuid,
@@ -647,6 +653,15 @@ var (
 var ApplyDDL = []string{
 	sqlCreateSidecarDB,
 	sqlCreateSchemaMigrationsTable,
+	// Fixing a historical issue: past values of requested_timestamp could be '0000-00-00 00:00:00'.
+	// In turn, those cuase `ERROR 1292 (22007): Incorrect datetime value` when attempting to
+	// make any DDL on the table.
+	// We trust added_timestamp to be non-zero (it defaults CURRENT_TIMESTAMP and never modified),
+	// and so we set requested_timestamp to that value.
+	// The query makes a full table scan, because neither column is indexed.
+	// TODO (shlomi): this can be removed after being deployed just once. So once this is deployed
+	// everywhere, it can immediately be removed.
+	sqlFixRequestedTimestamp, // end  of fix
 	alterSchemaMigrationsTableRetries,
 	alterSchemaMigrationsTableTablet,
 	alterSchemaMigrationsTableArtifacts,
