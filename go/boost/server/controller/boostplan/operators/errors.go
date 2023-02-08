@@ -44,6 +44,7 @@ const (
 	Aggregation
 	NoFullGroupBy
 	Lock
+	SubQuery
 )
 
 type (
@@ -132,6 +133,8 @@ func (n *UnsupportedError) Error() string {
 	case Lock:
 		sel := n.AST.(*sqlparser.Select)
 		fmt.Fprintf(&sb, "row locking with '%s' is not supported", sel.Lock.ToString())
+	case SubQuery:
+		fmt.Fprintf(&sb, "subqueries are not supported: %s", sqlparser.CanonicalString(n.AST))
 	}
 
 	return sb.String()

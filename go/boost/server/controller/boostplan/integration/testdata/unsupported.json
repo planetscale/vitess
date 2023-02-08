@@ -123,6 +123,11 @@
       "Keyspace": "main",
       "SQL": "select SUM(name) from users where id = :v1",
       "Error": "unsupported type for SUM: VARCHAR"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select 1 from users where exists(select 1 from votes)",
+      "Error": "query not supported by boost: subqueries are not supported: EXISTS (SELECT 1 FROM `votes`)"
     }
   ]
 }
