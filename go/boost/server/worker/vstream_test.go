@@ -38,8 +38,7 @@ func TestVStreamSchemaMappings(t *testing.T) {
 	var C4 = simpletype{
 		Name: "col4",
 		Type: sql.Type{
-			T:       sqltypes.VarChar,
-			Default: "default4",
+			T: sqltypes.VarChar,
 		},
 	}
 

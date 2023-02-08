@@ -17,8 +17,6 @@ limitations under the License.
 
 package sql
 
-import hack "vitess.io/vitess/go/hack"
-
 func (cached *Type) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -27,7 +25,5 @@ func (cached *Type) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field Default vitess.io/vitess/go/boost/sql.Value
-	size += hack.RuntimeAllocSize(int64(len(cached.Default)))
 	return size
 }
