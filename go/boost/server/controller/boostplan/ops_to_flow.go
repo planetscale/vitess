@@ -11,7 +11,6 @@ import (
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
 	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -502,20 +501,6 @@ func makeBaseOpNode(mig Migration, node *operators.Node, op *operators.Table) (o
 			Collation: collationID,
 			Nullable:  nullable,
 		}
-
-		if cso := columnSpec.Column.Type.Options; cso != nil {
-			switch lit := cso.Default.(type) {
-			case *sqlparser.Literal:
-				def, err := evalengine.LiteralToValue(lit)
-				if err != nil {
-					panic(err)
-				}
-				ctype.Default = sql.ValueFromVitess(def)
-			case *sqlparser.NullVal:
-				ctype.Default = sql.ValueFromVitess(sqltypes.NULL)
-			}
-		}
-
 		columnTypes = append(columnTypes, ctype)
 	}
 

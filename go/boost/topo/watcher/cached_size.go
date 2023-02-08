@@ -29,7 +29,7 @@ func (cached *View) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(192)
+		size += int64(176)
 	}
 	// field publicID string
 	size += hack.RuntimeAllocSize(int64(len(cached.publicID)))
@@ -67,8 +67,6 @@ func (cached *View) CachedSize(alloc bool) int64 {
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.topkOrder)) * int64(9))
 	}
-	// field shardKeyType vitess.io/vitess/go/boost/sql.Type
-	size += cached.shardKeyType.CachedSize(false)
 	// field metrics *vitess.io/vitess/go/boost/topo/watcher.scopedMetrics
 	size += cached.metrics.CachedSize(true)
 	return size
