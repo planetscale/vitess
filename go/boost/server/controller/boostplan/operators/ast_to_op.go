@@ -187,23 +187,30 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 		})
 	}
 
+	if sel.Lock != sqlparser.NoLock {
+		errors = append(errors, &UnsupportedError{
+			AST:  sel,
+			Type: Lock,
+		})
+	}
+
 	var hasListArg bool
 
 	sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
 		switch cursor.Node().(type) {
 		case sqlparser.Argument:
-			switch op := cursor.Parent().(type) {
-			case *sqlparser.ComparisonExpr:
-				if op.Operator != sqlparser.EqualOp {
-					errors = append(errors, &UnsupportedError{
-						AST:  cursor.Parent(),
-						Type: ParameterNotEqual,
-					})
-				}
-			default:
+			parent, ok := cursor.Parent().(*sqlparser.ComparisonExpr)
+			if !ok {
 				errors = append(errors, &UnsupportedError{
 					AST:  cursor.Parent(),
 					Type: ParameterLocationCompare,
+				})
+				break
+			}
+			if parent.Operator != sqlparser.EqualOp {
+				errors = append(errors, &UnsupportedError{
+					AST:  cursor.Parent(),
+					Type: ParameterNotEqual,
 				})
 			}
 		case sqlparser.ListArg:
@@ -216,16 +223,14 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 				})
 			}
 			hasListArg = true
+		case *sqlparser.Subquery:
+			errors = append(errors, &UnsupportedError{
+				AST:  cursor.Parent(),
+				Type: SubQuery,
+			})
 		}
 		return true
 	}, nil)
-
-	if sel.Lock != sqlparser.NoLock {
-		errors = append(errors, &UnsupportedError{
-			AST:  sel,
-			Type: Lock,
-		})
-	}
 
 	return multierr.Combine(errors...)
 }
