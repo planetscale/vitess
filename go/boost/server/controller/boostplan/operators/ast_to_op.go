@@ -196,21 +196,30 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 
 	var hasListArg bool
 
+	seen := map[string]struct{}{}
 	sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
 		switch cursor.Node().(type) {
 		case sqlparser.Argument:
-			parent, ok := cursor.Parent().(*sqlparser.ComparisonExpr)
-			if !ok {
+			switch parent := cursor.Parent().(type) {
+			case *sqlparser.ComparisonExpr:
+				if parent.Operator != sqlparser.EqualOp {
+					errors = append(errors, &UnsupportedError{
+						AST:  parent,
+						Type: ParameterNotEqual,
+					})
+				}
+			case sqlparser.ValTuple:
+				if _, handled := seen[sqlparser.String(parent)]; !handled {
+					errors = append(errors, &UnsupportedError{
+						AST:  parent,
+						Type: ParameterLocationCompare,
+					})
+					seen[sqlparser.String(parent)] = struct{}{}
+				}
+			default:
 				errors = append(errors, &UnsupportedError{
 					AST:  cursor.Parent(),
 					Type: ParameterLocationCompare,
-				})
-				break
-			}
-			if parent.Operator != sqlparser.EqualOp {
-				errors = append(errors, &UnsupportedError{
-					AST:  cursor.Parent(),
-					Type: ParameterNotEqual,
 				})
 			}
 		case sqlparser.ListArg:

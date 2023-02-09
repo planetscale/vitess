@@ -61,6 +61,11 @@
     },
     {
       "Keyspace": "main",
+      "SQL": "SELECT id FROM users WHERE id not in (:id1, :id2)",
+      "Error": "query not supported by boost: parameter (:id1, :id2) needs to be used in a comparison expression"
+    },
+    {
+      "Keyspace": "main",
       "SQL": "SELECT users.id FROM users JOIN friends WHERE users.id = 1",
       "Error": "query not supported by boost: join without predicates is not supported"
     },
