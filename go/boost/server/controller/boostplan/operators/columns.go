@@ -140,6 +140,9 @@ func (p *Project) AddColumns(ctx *PlanContext, col Columns) (needs Columns, err 
 
 func (p *Project) rewriteDerivedExpression(semTable *semantics.SemTable, newCol *Column) (*Column, error) {
 	tblID := semTable.DirectDeps(newCol.AST[0])
+	if tblID.IsEmpty() {
+		return newCol, nil
+	}
 	infoFor, err := semTable.TableInfoFor(tblID)
 	if err != nil {
 		return nil, err
