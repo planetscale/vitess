@@ -29,3 +29,14 @@ SELECT /*vt+ VIEW=private_photos */ photo.p_id FROM photo JOIN (
 ) as album_friends ON (photo.album = album_friends.aid) WHERE album_friends.uid = :friend_id AND photo.album = :album_id;
 
 SELECT /*vt+ VIEW=public_photos */ photo.p_id FROM photo JOIN album ON (photo.album = album.a_id) WHERE album.public = 1 AND album.a_id = :album_id;
+
+-- checks that we can correctly plan queries with TopK inside derived tables
+SELECT *
+FROM (SELECT album.a_id AS aid, friend.userb AS uid
+      FROM album JOIN
+          friend ON (album.u_id = friend.usera)
+      WHERE album.public = 0
+      ORDER BY album.public
+      LIMIT 100) AS tbl1,
+     friend
+WHERE tbl1.uid = friend.usera;

@@ -437,7 +437,8 @@ func (conv *Converter) buildFromTableExpr(ctx *PlanContext, tableExpr sqlparser.
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			if proj, isProj := node.Op.(*Project); isProj {
+
+			if proj, node := findClosestProjection(node); proj != nil {
 				tblID := ctx.SemTable.TableSetFor(tableExpr)
 				proj.TableID = &tblID
 				proj.Alias = tableExpr.As.String()
@@ -458,6 +459,16 @@ func (conv *Converter) buildFromTableExpr(ctx *PlanContext, tableExpr sqlparser.
 		AST:  tableExpr,
 		Type: TableExpression,
 	}
+}
+
+func findClosestProjection(node *Node) (*Project, *Node) {
+	if proj, isProj := node.Op.(*Project); isProj {
+		return proj, node
+	}
+	if len(node.Ancestors) != 1 {
+		return nil, nil
+	}
+	return findClosestProjection(node.Ancestors[0])
 }
 
 func (conv *Converter) buildFromJoin(ctx *PlanContext, join *sqlparser.JoinTableExpr) (node *Node, params []Parameter, columns Columns, err error) {
