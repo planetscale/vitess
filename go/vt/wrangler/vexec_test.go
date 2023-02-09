@@ -249,7 +249,8 @@ func TestWorkflowListStreams(t *testing.T) {
 							"Table": "t1",
 							"LastPK": "pk1"
 						}
-					]
+					],
+					"RowsCopied": 1000
 				}
 			],
 			"TabletControls": null,
@@ -290,7 +291,8 @@ func TestWorkflowListStreams(t *testing.T) {
 							"Table": "t1",
 							"LastPK": "pk1"
 						}
-					]
+					],
+					"RowsCopied": 1000
 				}
 			],
 			"TabletControls": null,
