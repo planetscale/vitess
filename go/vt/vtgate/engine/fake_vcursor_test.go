@@ -340,6 +340,8 @@ type loggingVCursor struct {
 
 	// map different shards to keyspaces in the test.
 	ksShardMap map[string][]string
+
+	shardSession []*srvtopo.ResolvedShard
 }
 
 type tableRoutes struct {
@@ -401,7 +403,7 @@ func (f *loggingVCursor) InReservedConn() bool {
 }
 
 func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
-	return nil
+	return f.shardSession
 }
 
 func (f *loggingVCursor) ExecuteVSchema(context.Context, string, *sqlparser.AlterVschema) error {

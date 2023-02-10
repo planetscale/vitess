@@ -174,3 +174,28 @@ func TestTransactionIsolation(t *testing.T) {
 	utils.AssertMatches(t, conn1, "select id, msg from test where id = 1", `[[INT64(1) VARCHAR("foo")]]`)
 	utils.Exec(t, conn1, "rollback")
 }
+
+// TestTransactionIsolationInTx tests transaction isolation level inside transaction
+// and setting isolation level to different values.
+func TestTransactionIsolationInTx(t *testing.T) {
+	ctx := context.Background()
+
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "set transaction isolation level read committed")
+	utils.Exec(t, conn, "begin")
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+	utils.Exec(t, conn, "commit")
+
+	utils.Exec(t, conn, "set transaction isolation level serializable")
+	utils.Exec(t, conn, "begin")
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("SERIALIZABLE")]]`)
+	utils.Exec(t, conn, "commit")
+
+	utils.Exec(t, conn, "set transaction isolation level read committed")
+	utils.Exec(t, conn, "begin")
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+	utils.Exec(t, conn, "commit")
+}
