@@ -411,19 +411,37 @@ func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []P
 			predicates = sqlparser.AndExpressions(predicates, e)
 			continue
 		}
-		if col, cok := comp.Left.(*sqlparser.ColName); cok {
-			switch arg := comp.Right.(type) {
-			case sqlparser.Argument:
-				params = append(params, Parameter{Name: string(arg), key: ColumnFromAST(col), Op: comp.Operator})
-				continue
-			case sqlparser.ListArg:
-				params = append(params, Parameter{Name: string(arg), key: ColumnFromAST(col), Op: comp.Operator})
-				continue
-			}
+		param := extractParam(comp.Left, comp.Right, comp.Operator)
+		if param == nil {
+			param = extractParam(comp.Right, comp.Left, comp.Operator)
 		}
+		if param != nil {
+			params = append(params, *param)
+			continue
+		}
+
+		if _, ok := comp.Left.(sqlparser.Argument); ok && sqlparser.EqualsExpr(comp.Left, comp.Right, nil) {
+			// if we are comparing an argument with itself, we can be pretty sure that it's here because of
+			// normalization of literals, and that makes it safe to assume that this comparison will always be true,
+			// since normalization does not treat null-literals as something to normalize
+			continue
+		}
+
 		predicates = sqlparser.AndExpressions(predicates, e)
 	}
 	return
+}
+
+func extractParam(lft, rgt sqlparser.Expr, op sqlparser.ComparisonExprOperator) *Parameter {
+	if col, cok := lft.(*sqlparser.ColName); cok {
+		switch arg := rgt.(type) {
+		case sqlparser.Argument:
+			return &Parameter{Name: string(arg), key: ColumnFromAST(col), Op: op}
+		case sqlparser.ListArg:
+			return &Parameter{Name: string(arg), key: ColumnFromAST(col), Op: op}
+		}
+	}
+	return nil
 }
 
 func (conv *Converter) buildFilterOp(input *Node, predicate sqlparser.Expr) *Node {

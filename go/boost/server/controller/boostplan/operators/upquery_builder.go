@@ -77,29 +77,34 @@ func (qb *queryBuilder) addTableExpr(
 }
 
 func (qb *queryBuilder) rewriteColNames(expr sqlparser.Expr) (sqlparser.Expr, error) {
-	var err error
 	newExpr := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			id := qb.ctx.SemTable.DirectDeps(node)
-			tblAlias, ok := qb.aliasMap[id]
-			dbg.Assert(ok, "id %v should be in the alias map", id)
-
-			newCol := &sqlparser.ColName{
-				Name: node.Name,
-				Qualifier: sqlparser.TableName{
-					Name:      sqlparser.NewIdentifierCS(tblAlias),
-					Qualifier: sqlparser.NewIdentifierCS(""),
-				},
-			}
-
-			cursor.Replace(newCol)
-			qb.ctx.SemTable.Direct[newCol] = id
-			qb.ctx.SemTable.Recursive[newCol] = id
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return true
 		}
-		return err == nil
+
+		id := qb.ctx.SemTable.DirectDeps(col)
+		tblAlias, ok := qb.aliasMap[id]
+		if !ok {
+			return true
+		}
+		dbg.Assert(ok, "id %v should be in the alias map", id)
+
+		newCol := &sqlparser.ColName{
+			Name: col.Name,
+			Qualifier: sqlparser.TableName{
+				Name:      sqlparser.NewIdentifierCS(tblAlias),
+				Qualifier: sqlparser.NewIdentifierCS(""),
+			},
+		}
+
+		cursor.Replace(newCol)
+		qb.ctx.SemTable.Direct[newCol] = id
+		qb.ctx.SemTable.Recursive[newCol] = id
+
+		return true
 	}, nil).(sqlparser.Expr)
-	return newExpr, err
+	return newExpr, nil
 }
 
 func (qb *queryBuilder) addProjection(projection sqlparser.Expr) error {

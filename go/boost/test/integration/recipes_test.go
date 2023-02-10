@@ -139,6 +139,27 @@ func TestAlbumsRecipe(t *testing.T) {
 	require.Equal(t, 10, g.WorkerStats(worker.StatVStreamRows))
 }
 
+func TestPokemon(t *testing.T) {
+	recipe := testrecipe.Load(t, "pokemon")
+	seed := func(g *boosttest.Cluster) {
+		g.TestExecute(`insert into Pokemon (id, name, spriteUrl) values 
+                                (1, 'Bulbasaur', 'bulbasaur.gif'), 
+                                (2, 'Charizard', 'charizard.gif'), 
+                                (3, 'Pikachu', 'pikachu.gif')`)
+		g.TestExecute(`insert into Vote (id, createdAt, votedForId, votedAgainstId) values  
+                                (0,'2023-01-02', 1, 2), 
+                                (1,'2023-02-02', 3, 2), 
+                                (2,'2023-02-02', 2, 1)`)
+	}
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe), boosttest.WithSeed(seed))
+
+	g.View("pokemon_votes").Lookup().
+		Expect(
+			`[[INT32(3) VARCHAR("Pikachu") VARCHAR("pikachu.gif") INT64(1) NULL]
+					   [INT32(1) VARCHAR("Bulbasaur") VARCHAR("bulbasaur.gif") INT64(1) INT64(1)]
+ 					   [INT32(2) VARCHAR("Charizard") VARCHAR("charizard.gif") INT64(1) INT64(2)]]`)
+}
+
 func TestAlbumsRecipeWithInitialData(t *testing.T) {
 	recipe := testrecipe.Load(t, "albums")
 

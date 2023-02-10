@@ -59,7 +59,7 @@ from
     on tags.id = repository_tags.tag_id
 where
     stars.spammy = false
-    and tags.name = :name
+    and :name = tags.name
 group by
     stars.repository_id
 order by count_all desc limit 100;
