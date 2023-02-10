@@ -15,7 +15,6 @@ type (
 		Version int64
 
 		// These are the columns being exposed to the outside
-		// select id, name from users where apa = 23
 		Columns Columns
 		Op      Operator
 
