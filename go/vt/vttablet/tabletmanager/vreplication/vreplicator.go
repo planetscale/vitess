@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -267,7 +268,7 @@ type ColumnInfo struct {
 }
 
 func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}}
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}, ExcludeTables: []string{"/" + schema.GCTableNameExpression + "/"}}
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
 	if err != nil {
 		return nil, err
