@@ -321,14 +321,19 @@ func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr 
 	return offset, true, nil
 }
 
-func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) error {
-	ti, err := semTable.TableInfoForExpr(expr.Expr)
+func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) (err error) {
+	expr.Expr, err = rewriteProjectionOfDerivedTableForExpr(expr.Expr, semTable)
+	return
+}
+
+func rewriteProjectionOfDerivedTableForExpr(expr sqlparser.Expr, semTable *semantics.SemTable) (sqlparser.Expr, error) {
+	ti, err := semTable.TableInfoForExpr(expr)
 	if err != nil && err != semantics.ErrNotSingleTable {
-		return err
+		return expr, err
 	}
 	_, isDerivedTable := ti.(*semantics.DerivedTable)
 	if isDerivedTable {
-		expr.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, ti)
+		expr = semantics.RewriteDerivedTableExpression(expr, ti)
 	}
-	return nil
+	return expr, nil
 }

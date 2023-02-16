@@ -63,51 +63,64 @@ func (hp *horizonPlanning) pushAggregation(
 		// we just remove the simpleProjection. We are doing an OA on top anyway, so no need to clean up the output columns
 		return hp.pushAggregation(ctx, plan.input, grouping, aggregations, ignoreOutputOrder)
 
-	case *limit:
-		// if we are seeing a limit, it's because we are building on top of a derived table.
+	case *orderedAggregate:
 		output = plan
 		pushed = false
+		groupingOffsets, outputAggrsOffset, err = hp.getOffsets(ctx, plan.input, grouping, aggregations)
+		return
 
-		for _, grp := range grouping {
-			offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.WeightStrExpr, plan.input)
-			if err != nil {
-				return nil, nil, nil, false, err
-			}
-			groupingOffsets = append(groupingOffsets, offsets{
-				col:   offset,
-				wsCol: wOffset,
-			})
-		}
-
-		for _, aggr := range aggregations {
-			var offset int
-			aggrExpr, ok := aggr.Original.Expr.(sqlparser.AggrFunc)
-			if !ok {
-				return nil, nil, nil, false, vterrors.VT13001(fmt.Sprintf("unexpected expression: %v", aggr.Original))
-			}
-
-			switch aggrExpr.(type) {
-			case *sqlparser.CountStar:
-				offset = 0
-			default:
-				if len(aggrExpr.GetArgs()) != 1 {
-					return nil, nil, nil, false, vterrors.VT13001(fmt.Sprintf("unexpected expression: %v", aggrExpr))
-				}
-				offset, _, err = pushProjection(ctx, &sqlparser.AliasedExpr{Expr: aggrExpr.GetArg() /*As: expr.As*/}, plan.input, true, true, false)
-			}
-
-			if err != nil {
-				return nil, nil, nil, false, err
-			}
-
-			outputAggrsOffset = append(outputAggrsOffset, []offsets{newOffset(offset)})
-		}
+	case *limit:
+		output = plan
+		pushed = false
+		groupingOffsets, outputAggrsOffset, err = hp.getOffsets(ctx, plan.input, grouping, aggregations)
 
 		return
 	default:
 		err = vterrors.VT12001(fmt.Sprintf("using aggregation on top of a %T plan", plan))
 		return
 	}
+}
+
+func (hp *horizonPlanning) getOffsets(ctx *plancontext.PlanningContext, input logicalPlan, grouping []operators.GroupBy, aggregations []operators.Aggr) (groupingOffsets []offsets, outputAggrsOffset [][]offsets, err error) {
+	for _, grp := range grouping {
+		grp.WeightStrExpr, err = rewriteProjectionOfDerivedTableForExpr(grp.WeightStrExpr, ctx.SemTable)
+		if err != nil {
+			return nil, nil, err
+		}
+		offset, wOffset, err := wrapAndPushExpr(ctx, grp.Inner, grp.WeightStrExpr, input)
+		if err != nil {
+			return nil, nil, err
+		}
+		groupingOffsets = append(groupingOffsets, offsets{
+			col:   offset,
+			wsCol: wOffset,
+		})
+	}
+
+	for _, aggr := range aggregations {
+		var offset int
+		aggrExpr, ok := aggr.Original.Expr.(sqlparser.AggrFunc)
+		if !ok {
+			return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected expression: %v", aggr.Original))
+		}
+
+		switch aggrExpr.(type) {
+		case *sqlparser.CountStar:
+			offset = 0
+		default:
+			if len(aggrExpr.GetArgs()) != 1 {
+				return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected expression: %v", aggrExpr))
+			}
+			offset, _, err = pushProjection(ctx, &sqlparser.AliasedExpr{Expr: aggrExpr.GetArg() /*As: expr.As*/}, input, true, true, false)
+		}
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		outputAggrsOffset = append(outputAggrsOffset, []offsets{newOffset(offset)})
+	}
+	return groupingOffsets, outputAggrsOffset, nil
 }
 
 func pushAggrOnRoute(
