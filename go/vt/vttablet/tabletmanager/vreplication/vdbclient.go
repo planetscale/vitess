@@ -73,6 +73,7 @@ func (vc *vdbClient) Rollback() error {
 		return nil
 	}
 	if err := vc.DBClient.Rollback(); err != nil {
+		log.Infof("Got error in DBClient.Rollback()")
 		return err
 	}
 	vc.InTransaction = false

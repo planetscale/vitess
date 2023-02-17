@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -471,12 +472,12 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 // writeRecoveryPosition writes the current GTID as the recovery position
 // for the next transaction.
 // It also tries to get the timestamp for the transaction. Two cases:
-// - we have statements, and they start with a SET TIMESTAMP that we
-//   can parse: then we update transaction_timestamp in vreplication
-//   with it, and set ReplicationLagSeconds to now() - transaction_timestamp
-// - otherwise (the statements are probably filtered out), we leave
-//   transaction_timestamp alone (keeping the old value), and we don't
-//   change ReplicationLagSeconds
+//   - we have statements, and they start with a SET TIMESTAMP that we
+//     can parse: then we update transaction_timestamp in vreplication
+//     with it, and set ReplicationLagSeconds to now() - transaction_timestamp
+//   - otherwise (the statements are probably filtered out), we leave
+//     transaction_timestamp alone (keeping the old value), and we don't
+//     change ReplicationLagSeconds
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
 	position, err := DecodePosition(tx.EventToken.Position)
 	if err != nil {
@@ -570,9 +571,9 @@ var AlterVReplicationTable = []string{
 }
 
 // WithDDLInitialQueries contains the queries that:
-// - are to be expected by the mock db client during tests, or
-// - trigger some of the above _vt.vreplication schema changes to take effect
-//   when the binlogplayer starts up
+//   - are to be expected by the mock db client during tests, or
+//   - trigger some of the above _vt.vreplication schema changes to take effect
+//     when the binlogplayer starts up
 var WithDDLInitialQueries = []string{
 	"SELECT db_name FROM _vt.vreplication LIMIT 0",
 	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
@@ -594,6 +595,7 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
+		log.Infof("Error reading VRSettings dbClient(%+v), error %+v, call stack: %+s", dbClient, err, debug.Stack())
 		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
 	}
 
