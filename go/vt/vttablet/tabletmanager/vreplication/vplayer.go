@@ -70,13 +70,18 @@ type vplayer struct {
 
 // newVPlayer creates a new vplayer. Parameters:
 // vreplicator: the outer replicator. It's used for common functions like setState.
-//   Also used to access the engine for registering journal events.
+//
+//	Also used to access the engine for registering journal events.
+//
 // settings: current settings read from _vt.vreplication.
 // copyState: if set, contains the list of tables yet to be copied, or in the process
-//   of being copied. If copyState is non-nil, the plans generated make sure that
-//   replication is only applied to parts that have been copied so far.
+//
+//	of being copied. If copyState is non-nil, the plans generated make sure that
+//	replication is only applied to parts that have been copied so far.
+//
 // pausePos: if set, replication will stop at that position without updating the state to "Stopped".
-//   This is used by the fastForward function during copying.
+//
+//	This is used by the fastForward function during copying.
 func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position, phase string) *vplayer {
 	saveStop := true
 	if !pausePos.IsZero() {
@@ -145,13 +150,16 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
+		log.Infof("Starting VStream for id=%d from position %+v ", vp.vr.id, vp.startPos)
 		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+			log.Infof("VStream for id=%d received %d events, sending to vplayer's relay log", vp.vr.id, len(events))
 			return relay.Send(events)
 		})
 	}()
 
 	applyErr := make(chan error, 1)
 	go func() {
+		log.Infof("Starting gofunc applyEvents() for id=%d", vp.vr.id)
 		applyErr <- vp.applyEvents(ctx, relay)
 	}()
 
@@ -163,6 +171,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 			<-streamErr
 		}()
 
+		log.Infof("Got applyErr for id=%d: %+v", vp.vr.id, err)
 		// If the apply thread ends with io.EOF, it means either the Engine
 		// is shutting down and canceled the context, or stop position was reached,
 		// or a journal event was encountered.
@@ -172,6 +181,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 		}
 		return err
 	case err := <-streamErr:
+		log.Infof("Got streamErr for id=%d: %+v", vp.vr.id, err)
 		defer func() {
 			// cancel and wait for the other thread to finish.
 			cancel()
@@ -279,30 +289,30 @@ func (vp *vplayer) recordHeartbeat() error {
 
 // applyEvents is the main thread that applies the events. It has the following use
 // cases to take into account:
-// * Normal transaction that has row mutations. In this case, the transaction
-//   is committed along with an update of the position.
-// * DDL event: the action depends on the OnDDL setting.
-// * OTHER event: the current position of the event is saved.
-// * JOURNAL event: if the event is relevant to the current stream, invoke registerJournal
-//   of the engine, and terminate.
-// * HEARTBEAT: update ReplicationLagSeconds.
-// * Empty transaction: The event is remembered as an unsavedEvent. If no commits
-//   happen for idleTimeout since timeLastSaved, the current position of the unsavedEvent
-//   is committed (updatePos).
-// * An empty transaction: Empty transactions are necessary because the current
-//   position of that transaction may be the stop position. If so, we have to record it.
-//   If not significant, we should avoid saving these empty transactions individually
-//   because they can cause unnecessary churn and binlog bloat. We should
-//   also not go for too long without saving because we should not fall way behind
-//   on the current replication position. Additionally, WaitForPos or other external
-//   agents could be waiting on that specific position by watching the vreplication
-//   record.
-// * A group of transactions: Combine them into a single transaction.
-// * Partial transaction: Replay the events received so far and refetch from relay log
-//   for more.
-// * A combination of any of the above: The trickier case is the one where a group
-//   of transactions come in, with the last one being partial. In this case, all transactions
-//   up to the last one have to be committed, and the final one must be partially applied.
+//   - Normal transaction that has row mutations. In this case, the transaction
+//     is committed along with an update of the position.
+//   - DDL event: the action depends on the OnDDL setting.
+//   - OTHER event: the current position of the event is saved.
+//   - JOURNAL event: if the event is relevant to the current stream, invoke registerJournal
+//     of the engine, and terminate.
+//   - HEARTBEAT: update ReplicationLagSeconds.
+//   - Empty transaction: The event is remembered as an unsavedEvent. If no commits
+//     happen for idleTimeout since timeLastSaved, the current position of the unsavedEvent
+//     is committed (updatePos).
+//   - An empty transaction: Empty transactions are necessary because the current
+//     position of that transaction may be the stop position. If so, we have to record it.
+//     If not significant, we should avoid saving these empty transactions individually
+//     because they can cause unnecessary churn and binlog bloat. We should
+//     also not go for too long without saving because we should not fall way behind
+//     on the current replication position. Additionally, WaitForPos or other external
+//     agents could be waiting on that specific position by watching the vreplication
+//     record.
+//   - A group of transactions: Combine them into a single transaction.
+//   - Partial transaction: Replay the events received so far and refetch from relay log
+//     for more.
+//   - A combination of any of the above: The trickier case is the one where a group
+//     of transactions come in, with the last one being partial. In this case, all transactions
+//     up to the last one have to be committed, and the final one must be partially applied.
 //
 // Of the above events, the saveable ones are COMMIT, DDL, and OTHER. Eventhough
 // A GTID comes as a separate event, it's not saveable until a subsequent saveable
@@ -336,6 +346,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	var sbm int64 = -1
 	for {
 		if ctx.Err() != nil {
+			log.Infof("Got ctx error for id=%d: %+v", vp.vr.id, ctx.Err())
 			return ctx.Err()
 		}
 		// check throttler.
@@ -345,6 +356,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 
 		items, err := relay.Fetch()
 		if err != nil {
+			log.Infof("Got relay.Fetch() error for id=%d: %+v", vp.vr.id, err)
 			return err
 		}
 		// No events were received. This likely means that there's a network partition.
@@ -363,6 +375,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if time.Since(vp.timeLastSaved) >= idleTimeout && vp.unsavedEvent != nil {
 			posReached, err := vp.updatePos(vp.unsavedEvent.Timestamp)
 			if err != nil {
+				log.Infof("Got error in updatePos for id=%d: %+v", vp.vr.id, err)
 				return err
 			}
 			if posReached {
