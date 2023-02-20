@@ -6574,7 +6574,7 @@ separator_opt:
   }
 | SEPARATOR STRING
   {
-    $$ = " separator "+encodeSQLString($2)
+    $$ = encodeSQLString($2)
   }
 
 when_expression_list:
