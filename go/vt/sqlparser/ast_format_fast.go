@@ -1975,17 +1975,19 @@ func (node *GroupConcatExpr) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(DistinctStr)
 		node.Exprs.formatFast(buf)
 		node.OrderBy.formatFast(buf)
-		buf.WriteString(node.Separator)
-		node.Limit.formatFast(buf)
-		buf.WriteByte(')')
 	} else {
 		buf.WriteString("group_concat(")
 		node.Exprs.formatFast(buf)
 		node.OrderBy.formatFast(buf)
-		buf.WriteString(node.Separator)
-		node.Limit.formatFast(buf)
-		buf.WriteByte(')')
 	}
+	if node.Separator != "" {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[SEPARATOR])
+		buf.WriteByte(' ')
+		buf.WriteString(node.Separator)
+	}
+	node.Limit.formatFast(buf)
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node.
@@ -3194,7 +3196,6 @@ func (node *JSONSchemaValidationReportFuncExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
-	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_array(")
 	if len(node.Params) > 0 {
 		var prefix string
@@ -3209,7 +3210,6 @@ func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *JSONObjectExpr) formatFast(buf *TrackedBuffer) {
-	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_object(")
 	if len(node.Params) > 0 {
 		for i, p := range node.Params {

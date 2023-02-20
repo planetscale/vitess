@@ -41,8 +41,8 @@
     },
     {
       "Keyspace": "main",
-      "SQL": "SELECT users.id, NOW() FROM users",
-      "Error": "query not supported by boost: unsupported expression by the evaluation engine: NOW()"
+      "SQL": "SELECT users.id, now() FROM users",
+      "Error": "query not supported by boost: unsupported expression by the evaluation engine: now()"
     },
     {
       "Keyspace": "main",
