@@ -96,8 +96,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfColumnDefinition(n, parent)
 	case *ColumnType:
 		return c.copyOnRewriteRefOfColumnType(n, parent)
-	case Columns:
-		return c.copyOnRewriteColumns(n, parent)
+	case *Columns:
+		return c.copyOnRewriteRefOfColumns(n, parent)
 	case *CommentOnly:
 		return c.copyOnRewriteRefOfCommentOnly(n, parent)
 	case *Commit:
@@ -346,8 +346,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfPartitionSpec(n, parent)
 	case *PartitionValueRange:
 		return c.copyOnRewriteRefOfPartitionValueRange(n, parent)
-	case Partitions:
-		return c.copyOnRewritePartitions(n, parent)
+	case *Partitions:
+		return c.copyOnRewriteRefOfPartitions(n, parent)
 	case *PerformanceSchemaFuncExpr:
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
 	case *PointExpr:
@@ -626,17 +626,13 @@ func (c *cow) copyOnRewriteRefOfAliasedTableExpr(n *AliasedTableExpr, parent SQL
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Expr, changedExpr := c.copyOnRewriteSimpleTableExpr(n.Expr, n)
-		_Partitions, changedPartitions := c.copyOnRewritePartitions(n.Partitions, n)
 		_As, changedAs := c.copyOnRewriteIdentifierCS(n.As, n)
 		_Hints, changedHints := c.copyOnRewriteIndexHints(n.Hints, n)
-		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
-		if changedExpr || changedPartitions || changedAs || changedHints || changedColumns {
+		if changedExpr || changedAs || changedHints {
 			res := *n
 			res.Expr, _ = _Expr.(SimpleTableExpr)
-			res.Partitions, _ = _Partitions.(Partitions)
 			res.As, _ = _As.(IdentifierCS)
 			res.Hints, _ = _Hints.(IndexHints)
-			res.Columns, _ = _Columns.(Columns)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -819,14 +815,12 @@ func (c *cow) copyOnRewriteRefOfAlterView(n *AlterView, parent SQLNode) (out SQL
 	if c.pre == nil || c.pre(n, parent) {
 		_ViewName, changedViewName := c.copyOnRewriteTableName(n.ViewName, n)
 		_Definer, changedDefiner := c.copyOnRewriteRefOfDefiner(n.Definer, n)
-		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
 		_Select, changedSelect := c.copyOnRewriteSelectStatement(n.Select, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		if changedViewName || changedDefiner || changedColumns || changedSelect || changedComments {
+		if changedViewName || changedDefiner || changedSelect || changedComments {
 			res := *n
 			res.ViewName, _ = _ViewName.(TableName)
 			res.Definer, _ = _Definer.(*Definer)
-			res.Columns, _ = _Columns.(Columns)
 			res.Select, _ = _Select.(SelectStatement)
 			res.Comments, _ = _Comments.(*ParsedComments)
 			out = &res
@@ -1343,22 +1337,29 @@ func (c *cow) copyOnRewriteRefOfColumnType(n *ColumnType, parent SQLNode) (out S
 	}
 	return
 }
-func (c *cow) copyOnRewriteColumns(n Columns, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfColumns(n *Columns, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		res := make(Columns, len(n))
-		for x, el := range n {
-			this, change := c.copyOnRewriteIdentifierCI(el, n)
-			res[x] = this.(IdentifierCI)
-			if change {
-				changed = true
+		var changedX bool
+		_X := make([]IdentifierCI, len(n.X))
+		for x, el := range n.X {
+			this, changed := c.copyOnRewriteIdentifierCI(el, n)
+			_X[x] = this.(IdentifierCI)
+			if changed {
+				changedX = true
 			}
 		}
-		if changed {
-			out = res
+		if changedX {
+			res := *n
+			res.X = _X
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
 		}
 	}
 	if c.post != nil {
@@ -1397,12 +1398,10 @@ func (c *cow) copyOnRewriteRefOfCommonTableExpr(n *CommonTableExpr, parent SQLNo
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_ID, changedID := c.copyOnRewriteIdentifierCS(n.ID, n)
-		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
 		_Subquery, changedSubquery := c.copyOnRewriteRefOfSubquery(n.Subquery, n)
-		if changedID || changedColumns || changedSubquery {
+		if changedID || changedSubquery {
 			res := *n
 			res.ID, _ = _ID.(IdentifierCS)
-			res.Columns, _ = _Columns.(Columns)
 			res.Subquery, _ = _Subquery.(*Subquery)
 			out = &res
 			if c.cloned != nil {
@@ -1630,14 +1629,12 @@ func (c *cow) copyOnRewriteRefOfCreateView(n *CreateView, parent SQLNode) (out S
 	if c.pre == nil || c.pre(n, parent) {
 		_ViewName, changedViewName := c.copyOnRewriteTableName(n.ViewName, n)
 		_Definer, changedDefiner := c.copyOnRewriteRefOfDefiner(n.Definer, n)
-		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
 		_Select, changedSelect := c.copyOnRewriteSelectStatement(n.Select, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		if changedViewName || changedDefiner || changedColumns || changedSelect || changedComments {
+		if changedViewName || changedDefiner || changedSelect || changedComments {
 			res := *n
 			res.ViewName, _ = _ViewName.(TableName)
 			res.Definer, _ = _Definer.(*Definer)
-			res.Columns, _ = _Columns.(Columns)
 			res.Select, _ = _Select.(SelectStatement)
 			res.Comments, _ = _Comments.(*ParsedComments)
 			out = &res
@@ -1734,17 +1731,15 @@ func (c *cow) copyOnRewriteRefOfDelete(n *Delete, parent SQLNode) (out SQLNode, 
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
 		_Targets, changedTargets := c.copyOnRewriteTableNames(n.Targets, n)
 		_TableExprs, changedTableExprs := c.copyOnRewriteTableExprs(n.TableExprs, n)
-		_Partitions, changedPartitions := c.copyOnRewritePartitions(n.Partitions, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
-		if changedWith || changedComments || changedTargets || changedTableExprs || changedPartitions || changedWhere || changedOrderBy || changedLimit {
+		if changedWith || changedComments || changedTargets || changedTableExprs || changedWhere || changedOrderBy || changedLimit {
 			res := *n
 			res.With, _ = _With.(*With)
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Targets, _ = _Targets.(TableNames)
 			res.TableExprs, _ = _TableExprs.(TableExprs)
-			res.Partitions, _ = _Partitions.(Partitions)
 			res.Where, _ = _Where.(*Where)
 			res.OrderBy, _ = _OrderBy.(OrderBy)
 			res.Limit, _ = _Limit.(*Limit)
@@ -2163,12 +2158,10 @@ func (c *cow) copyOnRewriteRefOfForeignKeyDefinition(n *ForeignKeyDefinition, pa
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Source, changedSource := c.copyOnRewriteColumns(n.Source, n)
 		_IndexName, changedIndexName := c.copyOnRewriteIdentifierCI(n.IndexName, n)
 		_ReferenceDefinition, changedReferenceDefinition := c.copyOnRewriteRefOfReferenceDefinition(n.ReferenceDefinition, n)
-		if changedSource || changedIndexName || changedReferenceDefinition {
+		if changedIndexName || changedReferenceDefinition {
 			res := *n
-			res.Source, _ = _Source.(Columns)
 			res.IndexName, _ = _IndexName.(IdentifierCI)
 			res.ReferenceDefinition, _ = _ReferenceDefinition.(*ReferenceDefinition)
 			out = &res
@@ -2469,16 +2462,12 @@ func (c *cow) copyOnRewriteRefOfInsert(n *Insert, parent SQLNode) (out SQLNode, 
 	if c.pre == nil || c.pre(n, parent) {
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
 		_Table, changedTable := c.copyOnRewriteTableName(n.Table, n)
-		_Partitions, changedPartitions := c.copyOnRewritePartitions(n.Partitions, n)
-		_Columns, changedColumns := c.copyOnRewriteColumns(n.Columns, n)
 		_Rows, changedRows := c.copyOnRewriteInsertRows(n.Rows, n)
 		_OnDup, changedOnDup := c.copyOnRewriteOnDup(n.OnDup, n)
-		if changedComments || changedTable || changedPartitions || changedColumns || changedRows || changedOnDup {
+		if changedComments || changedTable || changedRows || changedOnDup {
 			res := *n
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Table, _ = _Table.(TableName)
-			res.Partitions, _ = _Partitions.(Partitions)
-			res.Columns, _ = _Columns.(Columns)
 			res.Rows, _ = _Rows.(InsertRows)
 			res.OnDup, _ = _OnDup.(OnDup)
 			out = &res
@@ -3208,11 +3197,9 @@ func (c *cow) copyOnRewriteRefOfJoinCondition(n *JoinCondition, parent SQLNode) 
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_On, changedOn := c.copyOnRewriteExpr(n.On, n)
-		_Using, changedUsing := c.copyOnRewriteColumns(n.Using, n)
-		if changedOn || changedUsing {
+		if changedOn {
 			res := *n
 			res.On, _ = _On.(Expr)
-			res.Using, _ = _Using.(Columns)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -3894,16 +3881,6 @@ func (c *cow) copyOnRewriteRefOfOrderByOption(n *OrderByOption, parent SQLNode) 
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Cols, changedCols := c.copyOnRewriteColumns(n.Cols, n)
-		if changedCols {
-			res := *n
-			res.Cols, _ = _Cols.(Columns)
-			out = &res
-			if c.cloned != nil {
-				c.cloned(n, out)
-			}
-			changed = true
-		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -4066,7 +4043,6 @@ func (c *cow) copyOnRewriteRefOfPartitionOption(n *PartitionOption, parent SQLNo
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_ColList, changedColList := c.copyOnRewriteColumns(n.ColList, n)
 		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
 		_SubPartition, changedSubPartition := c.copyOnRewriteRefOfSubPartition(n.SubPartition, n)
 		var changedDefinitions bool
@@ -4078,9 +4054,8 @@ func (c *cow) copyOnRewriteRefOfPartitionOption(n *PartitionOption, parent SQLNo
 				changedDefinitions = true
 			}
 		}
-		if changedColList || changedExpr || changedSubPartition || changedDefinitions {
+		if changedExpr || changedSubPartition || changedDefinitions {
 			res := *n
-			res.ColList, _ = _ColList.(Columns)
 			res.Expr, _ = _Expr.(Expr)
 			res.SubPartition, _ = _SubPartition.(*SubPartition)
 			res.Definitions = _Definitions
@@ -4102,7 +4077,6 @@ func (c *cow) copyOnRewriteRefOfPartitionSpec(n *PartitionSpec, parent SQLNode) 
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Names, changedNames := c.copyOnRewritePartitions(n.Names, n)
 		_Number, changedNumber := c.copyOnRewriteRefOfLiteral(n.Number, n)
 		_TableName, changedTableName := c.copyOnRewriteTableName(n.TableName, n)
 		var changedDefinitions bool
@@ -4114,9 +4088,8 @@ func (c *cow) copyOnRewriteRefOfPartitionSpec(n *PartitionSpec, parent SQLNode) 
 				changedDefinitions = true
 			}
 		}
-		if changedNames || changedNumber || changedTableName || changedDefinitions {
+		if changedNumber || changedTableName || changedDefinitions {
 			res := *n
-			res.Names, _ = _Names.(Partitions)
 			res.Number, _ = _Number.(*Literal)
 			res.TableName, _ = _TableName.(TableName)
 			res.Definitions = _Definitions
@@ -4154,22 +4127,29 @@ func (c *cow) copyOnRewriteRefOfPartitionValueRange(n *PartitionValueRange, pare
 	}
 	return
 }
-func (c *cow) copyOnRewritePartitions(n Partitions, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfPartitions(n *Partitions, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		res := make(Partitions, len(n))
-		for x, el := range n {
-			this, change := c.copyOnRewriteIdentifierCI(el, n)
-			res[x] = this.(IdentifierCI)
-			if change {
-				changed = true
+		var changedX bool
+		_X := make([]IdentifierCI, len(n.X))
+		for x, el := range n.X {
+			this, changed := c.copyOnRewriteIdentifierCI(el, n)
+			_X[x] = this.(IdentifierCI)
+			if changed {
+				changedX = true
 			}
 		}
-		if changed {
-			out = res
+		if changedX {
+			res := *n
+			res.X = _X
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
 		}
 	}
 	if c.post != nil {
@@ -4256,14 +4236,12 @@ func (c *cow) copyOnRewriteRefOfReferenceDefinition(n *ReferenceDefinition, pare
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_ReferencedTable, changedReferencedTable := c.copyOnRewriteTableName(n.ReferencedTable, n)
-		_ReferencedColumns, changedReferencedColumns := c.copyOnRewriteColumns(n.ReferencedColumns, n)
 		_Match, changedMatch := c.copyOnRewriteMatchAction(n.Match, n)
 		_OnDelete, changedOnDelete := c.copyOnRewriteReferenceAction(n.OnDelete, n)
 		_OnUpdate, changedOnUpdate := c.copyOnRewriteReferenceAction(n.OnUpdate, n)
-		if changedReferencedTable || changedReferencedColumns || changedMatch || changedOnDelete || changedOnUpdate {
+		if changedReferencedTable || changedMatch || changedOnDelete || changedOnUpdate {
 			res := *n
 			res.ReferencedTable, _ = _ReferencedTable.(TableName)
-			res.ReferencedColumns, _ = _ReferencedColumns.(Columns)
 			res.Match, _ = _Match.(MatchAction)
 			res.OnDelete, _ = _OnDelete.(ReferenceAction)
 			res.OnUpdate, _ = _OnUpdate.(ReferenceAction)
@@ -5048,11 +5026,9 @@ func (c *cow) copyOnRewriteRefOfSubPartition(n *SubPartition, parent SQLNode) (o
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_ColList, changedColList := c.copyOnRewriteColumns(n.ColList, n)
 		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
-		if changedColList || changedExpr {
+		if changedExpr {
 			res := *n
-			res.ColList, _ = _ColList.(Columns)
 			res.Expr, _ = _Expr.(Expr)
 			out = &res
 			if c.cloned != nil {

@@ -54,19 +54,18 @@ func bindVariable(yylex yyLexer, bvar string) {
 %}
 
 %struct {
-  empty         struct{}
+  empty struct{}
   LengthScaleOption LengthScaleOption
-  tableName     TableName
-  identifierCS    IdentifierCS
-  str           string
-  strs          []string
-  vindexParam   VindexParam
-  jsonObjectParam *JSONObjectParam
-  identifierCI      IdentifierCI
-  joinCondition *JoinCondition
+  tableName TableName
+  identifierCS IdentifierCS
+  str string
+  strs []string
+  vindexParam VindexParam
+  identifierCI IdentifierCI
   databaseOption DatabaseOption
-  columnType    *ColumnType
   columnCharset ColumnCharset
+  integer int
+  boolean bool
 }
 
 %union {
@@ -158,8 +157,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionEngine *PartitionEngine
   partSpecs     []*PartitionSpec
   selectExpr    SelectExpr
-  columns       Columns
-  partitions    Partitions
+  columns       []IdentifierCI
+  partitions    []IdentifierCI
   tableExprs    TableExprs
   tableNames    TableNames
   exprs         Exprs
@@ -194,14 +193,12 @@ func bindVariable(yylex yyLexer, bvar string) {
   columnStorage ColumnStorage
   columnFormat ColumnFormat
 
-  boolean bool
   boolVal BoolVal
   ignore Ignore
   partitionOption *PartitionOption
   subPartition  *SubPartition
   partitionByType PartitionByType
   definer 	*Definer
-  integer 	int
 
   JSONTableExpr	*JSONTableExpr
   jtColumnDefinition *JtColumnDefinition
@@ -209,6 +206,9 @@ func bindVariable(yylex yyLexer, bvar string) {
   jtOnResponse	*JtOnResponse
   variables      []*Variable
   variable       *Variable
+  joinCondition *JoinCondition
+  jsonObjectParam *JSONObjectParam
+  columnType    *ColumnType
 }
 
 // These precedence rules are there to handle shift-reduce conflicts.
@@ -733,7 +733,7 @@ with_list:
 common_table_expr:
   table_id column_list_opt AS subquery
   {
-	$$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4}
+	$$ = &CommonTableExpr{ID: $1, Columns: Columns{$2}, Subquery: $4}
   }
 
 query_expression_parens:
@@ -916,19 +916,19 @@ insert_statement:
     ins.Comments = Comments($2).Parsed()
     ins.Ignore = $3
     ins.Table = $4
-    ins.Partitions = $5
+    ins.Partitions = Partitions{$5}
     ins.OnDup = OnDup($7)
     $$ = ins
   }
 | insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET update_list on_dup_opt
   {
-    cols := make(Columns, 0, len($7))
+    cols := make([]IdentifierCI, 0, len($7))
     vals := make(ValTuple, 0, len($8))
     for _, updateList := range $7 {
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
+    $$ = &Insert{Action: $1, Comments: Comments($2).Parsed(), Ignore: $3, Table: $4, Partitions: Partitions{$5}, Columns: Columns{cols}, Rows: Values{vals}, OnDup: OnDup($8)}
   }
 
 insert_or_replace:
@@ -950,7 +950,7 @@ update_statement:
 delete_statement:
   with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
+    $$ = &Delete{With: $1, Comments: Comments($3).Parsed(), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: Partitions{$8}, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
@@ -1147,7 +1147,7 @@ create_statement:
   }
 | CREATE comment_opt replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &CreateView{ViewName: $8.ToViewName(), Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
+    $$ = &CreateView{ViewName: $8.ToViewName(), Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns: Columns{$9}, Select: $11, CheckOption: $12 }
   }
 | create_database_prefix create_options_opt
   {
@@ -2538,29 +2538,29 @@ check_constraint_definition:
 constraint_info:
   FOREIGN KEY name_opt '(' column_list ')' reference_definition
   {
-    $$ = &ForeignKeyDefinition{IndexName: NewIdentifierCI($3), Source: $5, ReferenceDefinition: $7}
+    $$ = &ForeignKeyDefinition{IndexName: NewIdentifierCI($3), Source: Columns{$5}, ReferenceDefinition: $7}
   }
 
 reference_definition:
   REFERENCES table_name '(' column_list ')' fk_match_opt
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: Columns{$4}, Match: $6}
   }
 | REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_delete
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnDelete: $7}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: Columns{$4}, Match: $6, OnDelete: $7}
   }
 | REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_update
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnUpdate: $7}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: Columns{$4}, Match: $6, OnUpdate: $7}
   }
 | REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_delete fk_on_update
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnDelete: $7, OnUpdate: $8}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: Columns{$4}, Match: $6, OnDelete: $7, OnUpdate: $8}
   }
 | REFERENCES table_name '(' column_list ')' fk_match_opt fk_on_update fk_on_delete
   {
-    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, Match: $6, OnUpdate: $7, OnDelete: $8}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: Columns{$4}, Match: $6, OnUpdate: $7, OnDelete: $8}
   }
 
 reference_definition_opt:
@@ -2928,7 +2928,7 @@ alter_commands_list:
   }
 | alter_options ',' ORDER BY column_list
   {
-    $$ = append($1,&OrderByOption{Cols:$5})
+    $$ = append($1, &OrderByOption{Cols: Columns{$5}})
   }
 | alter_commands_modifier_list
   {
@@ -2940,7 +2940,7 @@ alter_commands_list:
   }
 | alter_commands_modifier_list ',' alter_options ',' ORDER BY column_list
   {
-    $$ = append(append($1,$3...),&OrderByOption{Cols:$7})
+    $$ = append(append($1, $3...), &OrderByOption{Cols: Columns{$7}})
   }
 
 alter_options:
@@ -3167,7 +3167,7 @@ alter_statement:
   }
 | ALTER comment_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
+    $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns: Columns{$8}, Select: $10, CheckOption: $11 }
   }
 // The syntax here causes a shift / reduce issue, because ENCRYPTION is a non reserved keyword
 // and the database identifier is optional. When no identifier is given, the current database
@@ -3376,7 +3376,7 @@ partitions_options_beginning:
         IsLinear: $1,
         Type: KeyType,
         KeyAlgorithm: $3,
-        ColList: $5,
+        ColList: Columns{$5},
       }
     }
 | range_or_list '(' expression ')'
@@ -3388,10 +3388,7 @@ partitions_options_beginning:
     }
 | range_or_list COLUMNS '(' column_list ')'
   {
-    $$ = &PartitionOption {
-        Type: $1,
-        ColList: $4,
-    }
+    $$ = &PartitionOption { Type: $1, ColList: Columns{$4} }
   }
 
 subpartition_opt:
@@ -3413,7 +3410,7 @@ subpartition_opt:
       IsLinear: $3,
       Type: KeyType,
       KeyAlgorithm: $5,
-      ColList: $7,
+      ColList: Columns{$7},
       SubPartitions: $9,
     }
   }
@@ -3580,15 +3577,15 @@ partition_operation:
   }
 | DROP PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:DropAction, Names:$3}
+    $$ = &PartitionSpec{Action:DropAction, Names: Partitions{$3}}
   }
 | REORGANIZE PARTITION partition_list INTO openb partition_definitions closeb
   {
-    $$ = &PartitionSpec{Action: ReorganizeAction, Names: $3, Definitions: $6}
+    $$ = &PartitionSpec{Action: ReorganizeAction, Names: Partitions{$3}, Definitions: $6}
   }
 | DISCARD PARTITION partition_list TABLESPACE
   {
-    $$ = &PartitionSpec{Action:DiscardAction, Names:$3}
+    $$ = &PartitionSpec{Action:DiscardAction, Names: Partitions{$3}}
   }
 | DISCARD PARTITION ALL TABLESPACE
   {
@@ -3596,7 +3593,7 @@ partition_operation:
   }
 | IMPORT PARTITION partition_list TABLESPACE
   {
-    $$ = &PartitionSpec{Action:ImportAction, Names:$3}
+    $$ = &PartitionSpec{Action:ImportAction, Names: Partitions{$3}}
   }
 | IMPORT PARTITION ALL TABLESPACE
   {
@@ -3604,7 +3601,7 @@ partition_operation:
   }
 | TRUNCATE PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:TruncateAction, Names:$3}
+    $$ = &PartitionSpec{Action:TruncateAction, Names: Partitions{$3}}
   }
 | TRUNCATE PARTITION ALL
   {
@@ -3616,11 +3613,11 @@ partition_operation:
   }
 | EXCHANGE PARTITION sql_id WITH TABLE table_name without_valid_opt
   {
-    $$ = &PartitionSpec{Action:ExchangeAction, Names: Partitions{$3}, TableName: $6, WithoutValidation: $7}
+    $$ = &PartitionSpec{Action:ExchangeAction, Names: Partitions{[]IdentifierCI{$3}}, TableName: $6, WithoutValidation: $7}
   }
 | ANALYZE PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:AnalyzeAction, Names:$3}
+    $$ = &PartitionSpec{Action:AnalyzeAction, Names: Partitions{$3}}
   }
 | ANALYZE PARTITION ALL
   {
@@ -3628,7 +3625,7 @@ partition_operation:
   }
 | CHECK PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:CheckAction, Names:$3}
+    $$ = &PartitionSpec{Action:CheckAction, Names: Partitions{$3}}
   }
 | CHECK PARTITION ALL
   {
@@ -3636,7 +3633,7 @@ partition_operation:
   }
 | OPTIMIZE PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:OptimizeAction, Names:$3}
+    $$ = &PartitionSpec{Action:OptimizeAction, Names: Partitions{$3}}
   }
 | OPTIMIZE PARTITION ALL
   {
@@ -3644,7 +3641,7 @@ partition_operation:
   }
 | REBUILD PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:RebuildAction, Names:$3}
+    $$ = &PartitionSpec{Action:RebuildAction, Names: Partitions{$3}}
   }
 | REBUILD PARTITION ALL
   {
@@ -3652,7 +3649,7 @@ partition_operation:
   }
 | REPAIR PARTITION partition_list
   {
-    $$ = &PartitionSpec{Action:RepairAction, Names:$3}
+    $$ = &PartitionSpec{Action:RepairAction, Names: Partitions{$3}}
   }
 | REPAIR PARTITION ALL
   {
@@ -4892,7 +4889,7 @@ table_factor:
   }
 | derived_table as_opt table_id column_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $3, Columns: $4}
+    $$ = &AliasedTableExpr{Expr:$1, As: $3, Columns: Columns{$4}}
   }
 | openb table_references closeb
   {
@@ -4920,7 +4917,7 @@ table_name as_opt_id index_hint_list_opt
   }
 | table_name PARTITION openb partition_list closeb as_opt_id index_hint_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
+    $$ = &AliasedTableExpr{Expr:$1, Partitions: Partitions{$4}, As: $6, Hints: $7}
   }
 
 column_list_opt:
@@ -4944,7 +4941,7 @@ column_list_empty:
 column_list:
   sql_id
   {
-    $$ = Columns{$1}
+    $$ = []IdentifierCI{$1}
   }
 | column_list ',' sql_id
   {
@@ -4964,11 +4961,11 @@ at_id_list:
 index_list:
   sql_id
   {
-    $$ = Columns{$1}
+    $$ = []IdentifierCI{$1}
   }
 | PRIMARY
   {
-    $$ = Columns{NewIdentifierCI(string($1))}
+    $$ = []IdentifierCI{NewIdentifierCI(string($1))}
   }
 | index_list ',' sql_id
   {
@@ -4982,7 +4979,7 @@ index_list:
 partition_list:
   sql_id
   {
-    $$ = Partitions{$1}
+    $$ = []IdentifierCI{$1}
   }
 | partition_list ',' sql_id
   {
@@ -5018,7 +5015,7 @@ join_condition:
   ON expression
   { $$ = &JoinCondition{On: $2} }
 | USING '(' column_list ')'
-  { $$ = &JoinCondition{Using: $3} }
+  { $$ = &JoinCondition{Using: Columns{$3}} }
 
 join_condition_opt:
 %prec JOIN
@@ -7166,25 +7163,25 @@ insert_data:
   }
 | openb ins_column_list closeb VALUES tuple_list
   {
-    $$ = &Insert{Columns: $2, Rows: $5}
+    $$ = &Insert{Columns: Columns{$2}, Rows: $5}
   }
 | openb closeb VALUES tuple_list
   {
-    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4}
+    $$ = &Insert{Columns: Columns{[]IdentifierCI{}}, Rows: $4}
   }
 | openb ins_column_list closeb select_statement
   {
-    $$ = &Insert{Columns: $2, Rows: $4}
+    $$ = &Insert{Columns: Columns{$2}, Rows: $4}
   }
 
 ins_column_list:
   sql_id
   {
-    $$ = Columns{$1}
+    $$ = []IdentifierCI{$1}
   }
 | sql_id '.' sql_id
   {
-    $$ = Columns{$3}
+    $$ = []IdentifierCI{$3}
   }
 | ins_column_list ',' sql_id
   {

@@ -391,7 +391,7 @@ func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expres
 			if !ok {
 				return true
 			}
-			if join.Join != sqlparser.NormalJoinType || node.Using != nil {
+			if join.Join != sqlparser.NormalJoinType || node.Using.X != nil {
 				return false
 			}
 			exprs := sqlparser.SplitAndExpression(nil, node.On)

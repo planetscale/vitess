@@ -2161,10 +2161,10 @@ func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
 			for _, colName := range ts.columns {
 				col, ok := tableColumns[strings.ToLower(colName)]
 				require.True(t, ok)
-				columns = append(columns, col)
+				columns.X = append(columns.X, col)
 			}
 
-			indexes := c.indexesCoveringForeignKeyColumns(columns)
+			indexes := c.indexesCoveringForeignKeyColumns(&columns)
 			var indexesNames []string
 			for _, index := range indexes {
 				indexesNames = append(indexesNames, index.Info.Name.String())

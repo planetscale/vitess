@@ -708,7 +708,7 @@ func TestCompliantName(t *testing.T) {
 }
 
 func TestColumns_FindColumn(t *testing.T) {
-	cols := Columns{NewIdentifierCI("a"), NewIdentifierCI("c"), NewIdentifierCI("b"), NewIdentifierCI("0")}
+	cols := Columns{X: []IdentifierCI{NewIdentifierCI("a"), NewIdentifierCI("c"), NewIdentifierCI("b"), NewIdentifierCI("0")}}
 
 	testcases := []struct {
 		in  string

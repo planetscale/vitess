@@ -102,10 +102,10 @@ func analyzeDropRangePartition(alterTable *sqlparser.AlterTable, createTable *sq
 	if spec.Action != sqlparser.DropAction {
 		return nil, nil
 	}
-	if len(spec.Names) != 1 {
+	if len(spec.Names.X) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vitess only supports dropping a single partition per query: %v", sqlparser.CanonicalString(alterTable))
 	}
-	partitionName := spec.Names[0].String()
+	partitionName := spec.Names.X[0].String()
 	// OK then!
 
 	// Now, is this query dropping the first partition in a RANGE partitioned table?

@@ -162,7 +162,7 @@ func (planner *VReplicationQueryPlanner) planDelete(del *sqlparser.Delete) (*Fix
 		)
 	}
 
-	if del.Partitions != nil {
+	if del.Partitions.X != nil {
 		return nil, fmt.Errorf(
 			"%w: DELETE must not have explicit partitions (have: %v): %v",
 			ErrUnsupportedQueryConstruct,

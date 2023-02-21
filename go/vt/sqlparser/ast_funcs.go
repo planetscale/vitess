@@ -379,8 +379,8 @@ func (c *CheckConstraintDefinition) iConstraintInfo() {}
 
 // FindColumn finds a column in the column list, returning
 // the index if it exists or -1 otherwise
-func (node Columns) FindColumn(col IdentifierCI) int {
-	for i, colName := range node {
+func (node *Columns) FindColumn(col IdentifierCI) int {
+	for i, colName := range node.X {
 		if colName.Equal(col) {
 			return i
 		}

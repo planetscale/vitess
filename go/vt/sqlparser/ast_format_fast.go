@@ -461,7 +461,7 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 	case ReorganizeAction:
 		buf.WriteString(ReorganizeStr)
 		buf.WriteByte(' ')
-		for i, n := range node.Names {
+		for i, n := range node.Names.X {
 			if i != 0 {
 				buf.WriteString(", ")
 			}
@@ -483,7 +483,7 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 	case DropAction:
 		buf.WriteString(DropPartitionStr)
 		buf.WriteByte(' ')
-		for i, n := range node.Names {
+		for i, n := range node.Names.X {
 			if i != 0 {
 				buf.WriteString(", ")
 			}
@@ -496,7 +496,7 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 			buf.WriteString("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.WriteString(prefix)
 				n.formatFast(buf)
 				prefix = ", "
@@ -510,7 +510,7 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 			buf.WriteString("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.WriteString(prefix)
 				n.formatFast(buf)
 				prefix = ", "
@@ -524,7 +524,7 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 			buf.WriteString("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.WriteString(prefix)
 				n.formatFast(buf)
 				prefix = ", "
@@ -537,7 +537,7 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 	case ExchangeAction:
 		buf.WriteString(ExchangeStr)
 		buf.WriteByte(' ')
-		node.Names[0].formatFast(buf)
+		node.Names.X[0].formatFast(buf)
 		buf.WriteString(" with table ")
 		node.TableName.formatFast(buf)
 		if node.WithoutValidation {
@@ -550,7 +550,7 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 			buf.WriteString("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.WriteString(prefix)
 				n.formatFast(buf)
 				prefix = ", "
@@ -563,7 +563,7 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 			buf.WriteString("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.WriteString(prefix)
 				n.formatFast(buf)
 				prefix = ", "
@@ -576,7 +576,7 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 			buf.WriteString("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.WriteString(prefix)
 				n.formatFast(buf)
 				prefix = ", "
@@ -589,7 +589,7 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 			buf.WriteString("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.WriteString(prefix)
 				n.formatFast(buf)
 				prefix = ", "
@@ -602,7 +602,7 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 			buf.WriteString("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.WriteString(prefix)
 				n.formatFast(buf)
 				prefix = ", "
@@ -753,11 +753,11 @@ func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 			buf.WriteString(" algorithm = ")
 			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
 		}
-		if len(node.ColList) == 0 {
+		if len(node.ColList.X) == 0 {
 			buf.WriteString(" ()")
 		} else {
 			buf.WriteByte(' ')
-			node.ColList.formatFast(buf)
+			(&node.ColList).formatFast(buf)
 		}
 	case RangeType, ListType:
 		buf.WriteByte(' ')
@@ -810,7 +810,7 @@ func (node *SubPartition) formatFast(buf *TrackedBuffer) {
 			buf.WriteString(" algorithm = ")
 			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
 		}
-		if len(node.ColList) == 0 {
+		if len(node.ColList.X) == 0 {
 			buf.WriteString(" ()")
 		} else {
 			buf.WriteByte(' ')
@@ -1208,7 +1208,7 @@ func (a MatchAction) formatFast(buf *TrackedBuffer) {
 func (f *ForeignKeyDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("foreign key ")
 	f.IndexName.formatFast(buf)
-	f.Source.formatFast(buf)
+	(&f.Source).formatFast(buf)
 	buf.WriteByte(' ')
 	f.ReferenceDefinition.formatFast(buf)
 }
@@ -1456,13 +1456,13 @@ func (node *Nextval) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node Columns) formatFast(buf *TrackedBuffer) {
-	if node == nil {
+func (node *Columns) formatFast(buf *TrackedBuffer) {
+	if node.X == nil {
 		return
 	}
 	buf.WriteByte('(')
 	prefix := ""
-	for _, n := range node {
+	for _, n := range node.X {
 		buf.WriteString(prefix)
 		n.formatFast(buf)
 		prefix = ", "
@@ -1471,12 +1471,13 @@ func (node Columns) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node
-func (node Partitions) formatFast(buf *TrackedBuffer) {
-	if node == nil {
+func (node *Partitions) formatFast(buf *TrackedBuffer) {
+	if node.X == nil {
 		return
 	}
-	prefix := " partition ("
-	for _, n := range node {
+	buf.WriteString(" partition (")
+	prefix := ""
+	for _, n := range node.X {
 		buf.WriteString(prefix)
 		n.formatFast(buf)
 		prefix = ", "
@@ -1501,8 +1502,8 @@ func (node *AliasedTableExpr) formatFast(buf *TrackedBuffer) {
 	if !node.As.IsEmpty() {
 		buf.WriteString(" as ")
 		node.As.formatFast(buf)
-		if len(node.Columns) != 0 {
-			node.Columns.formatFast(buf)
+		if len(node.Columns.X) != 0 {
+			(&node.Columns).formatFast(buf)
 		}
 	}
 	if node.Hints != nil {
@@ -1549,9 +1550,9 @@ func (node *JoinCondition) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" on ")
 		node.On.formatFast(buf)
 	}
-	if node.Using != nil {
+	if len(node.Using.X) > 0 {
 		buf.WriteString(" using ")
-		node.Using.formatFast(buf)
+		(&node.Using).formatFast(buf)
 	}
 }
 
@@ -3034,7 +3035,7 @@ func (node *LockOption) formatFast(buf *TrackedBuffer) {
 func (node *OrderByOption) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("order by ")
 	prefix := ""
-	for _, n := range node.Cols {
+	for _, n := range node.Cols.X {
 		buf.WriteString(prefix)
 		n.formatFast(buf)
 		prefix = ", "

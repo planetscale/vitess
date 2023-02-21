@@ -96,8 +96,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfColumnDefinition(in, f)
 	case *ColumnType:
 		return VisitRefOfColumnType(in, f)
-	case Columns:
-		return VisitColumns(in, f)
+	case *Columns:
+		return VisitRefOfColumns(in, f)
 	case *CommentOnly:
 		return VisitRefOfCommentOnly(in, f)
 	case *Commit:
@@ -346,8 +346,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPartitionSpec(in, f)
 	case *PartitionValueRange:
 		return VisitRefOfPartitionValueRange(in, f)
-	case Partitions:
-		return VisitPartitions(in, f)
+	case *Partitions:
+		return VisitRefOfPartitions(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
 	case *PointExpr:
@@ -585,16 +585,10 @@ func VisitRefOfAliasedTableExpr(in *AliasedTableExpr, f Visit) error {
 	if err := VisitSimpleTableExpr(in.Expr, f); err != nil {
 		return err
 	}
-	if err := VisitPartitions(in.Partitions, f); err != nil {
-		return err
-	}
 	if err := VisitIdentifierCS(in.As, f); err != nil {
 		return err
 	}
 	if err := VisitIndexHints(in.Hints, f); err != nil {
-		return err
-	}
-	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
 	return nil
@@ -708,9 +702,6 @@ func VisitRefOfAlterView(in *AlterView, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
-		return err
-	}
-	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
 	if err := VisitSelectStatement(in.Select, f); err != nil {
@@ -1025,14 +1016,14 @@ func VisitRefOfColumnType(in *ColumnType, f Visit) error {
 	}
 	return nil
 }
-func VisitColumns(in Columns, f Visit) error {
+func VisitRefOfColumns(in *Columns, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in {
+	for _, el := range in.X {
 		if err := VisitIdentifierCI(el, f); err != nil {
 			return err
 		}
@@ -1065,9 +1056,6 @@ func VisitRefOfCommonTableExpr(in *CommonTableExpr, f Visit) error {
 		return err
 	}
 	if err := VisitIdentifierCS(in.ID, f); err != nil {
-		return err
-	}
-	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfSubquery(in.Subquery, f); err != nil {
@@ -1220,9 +1208,6 @@ func VisitRefOfCreateView(in *CreateView, f Visit) error {
 	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
 		return err
 	}
-	if err := VisitColumns(in.Columns, f); err != nil {
-		return err
-	}
 	if err := VisitSelectStatement(in.Select, f); err != nil {
 		return err
 	}
@@ -1296,9 +1281,6 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 		return err
 	}
 	if err := VisitTableExprs(in.TableExprs, f); err != nil {
-		return err
-	}
-	if err := VisitPartitions(in.Partitions, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
@@ -1560,9 +1542,6 @@ func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitColumns(in.Source, f); err != nil {
-		return err
-	}
 	if err := VisitIdentifierCI(in.IndexName, f); err != nil {
 		return err
 	}
@@ -1756,12 +1735,6 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 		return err
 	}
 	if err := VisitTableName(in.Table, f); err != nil {
-		return err
-	}
-	if err := VisitPartitions(in.Partitions, f); err != nil {
-		return err
-	}
-	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
 	if err := VisitInsertRows(in.Rows, f); err != nil {
@@ -2207,9 +2180,6 @@ func VisitRefOfJoinCondition(in *JoinCondition, f Visit) error {
 	if err := VisitExpr(in.On, f); err != nil {
 		return err
 	}
-	if err := VisitColumns(in.Using, f); err != nil {
-		return err
-	}
 	return nil
 }
 func VisitRefOfJoinTableExpr(in *JoinTableExpr, f Visit) error {
@@ -2641,9 +2611,6 @@ func VisitRefOfOrderByOption(in *OrderByOption, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitColumns(in.Cols, f); err != nil {
-		return err
-	}
 	return nil
 }
 func VisitRefOfOtherAdmin(in *OtherAdmin, f Visit) error {
@@ -2758,9 +2725,6 @@ func VisitRefOfPartitionOption(in *PartitionOption, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitColumns(in.ColList, f); err != nil {
-		return err
-	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
@@ -2779,9 +2743,6 @@ func VisitRefOfPartitionSpec(in *PartitionSpec, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitPartitions(in.Names, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLiteral(in.Number, f); err != nil {
@@ -2809,14 +2770,14 @@ func VisitRefOfPartitionValueRange(in *PartitionValueRange, f Visit) error {
 	}
 	return nil
 }
-func VisitPartitions(in Partitions, f Visit) error {
+func VisitRefOfPartitions(in *Partitions, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in {
+	for _, el := range in.X {
 		if err := VisitIdentifierCI(el, f); err != nil {
 			return err
 		}
@@ -2876,9 +2837,6 @@ func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 		return err
 	}
 	if err := VisitTableName(in.ReferencedTable, f); err != nil {
-		return err
-	}
-	if err := VisitColumns(in.ReferencedColumns, f); err != nil {
 		return err
 	}
 	if err := VisitMatchAction(in.Match, f); err != nil {
@@ -3392,9 +3350,6 @@ func VisitRefOfSubPartition(in *SubPartition, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitColumns(in.ColList, f); err != nil {
 		return err
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {

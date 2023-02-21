@@ -338,7 +338,7 @@ func (vx *vexec) buildDeletePlan(ctx context.Context, planner vexecPlanner, del 
 	if del.Targets != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
 	}
-	if del.Partitions != nil {
+	if del.Partitions.X != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
 	}
 	if del.OrderBy != nil || del.Limit != nil {

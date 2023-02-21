@@ -92,7 +92,7 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	if ins.Ignore {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
-	if ins.Partitions != nil {
+	if ins.Partitions.X != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
 	if ins.OnDup != nil {
@@ -103,9 +103,9 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
 	idPos := 0
-	if len(ins.Columns) != 0 {
+	if len(ins.Columns.X) != 0 {
 		idPos = -1
-		for i, col := range ins.Columns {
+		for i, col := range ins.Columns.X {
 			if col.EqualString("id") {
 				idPos = i
 				break
@@ -183,7 +183,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	if del.Targets != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
 	}
-	if del.Partitions != nil {
+	if del.Partitions.X != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
 	}
 	if del.OrderBy != nil || del.Limit != nil {

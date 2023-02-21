@@ -37,14 +37,14 @@ type DerivedTable struct {
 
 var _ TableInfo = (*DerivedTable)(nil)
 
-func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sqlparser.Columns, tables []TableInfo, org originable) *DerivedTable {
+func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols *sqlparser.Columns, tables []TableInfo, org originable) *DerivedTable {
 	vTbl := &DerivedTable{isAuthoritative: true}
 	for i, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
 			vTbl.cols = append(vTbl.cols, expr.Expr)
-			if len(cols) > 0 {
-				vTbl.columnNames = append(vTbl.columnNames, cols[i].String())
+			if len(cols.X) > 0 {
+				vTbl.columnNames = append(vTbl.columnNames, cols.X[i].String())
 			} else if expr.As.IsEmpty() {
 				switch expr := expr.Expr.(type) {
 				case *sqlparser.ColName:

@@ -281,12 +281,12 @@ func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {
 
 func rewriteJoinUsing(
 	current *scope,
-	using sqlparser.Columns,
+	using *sqlparser.Columns,
 	org originable,
 ) error {
 	joinUsing := current.prepareUsingMap()
-	predicates := make([]sqlparser.Expr, 0, len(using))
-	for _, column := range using {
+	predicates := make([]sqlparser.Expr, 0, len(using.X))
+	for _, column := range using.X {
 		var foundTables []sqlparser.TableName
 		for _, tbl := range current.tables {
 			if !tbl.authoritative() {
