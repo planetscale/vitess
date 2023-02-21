@@ -362,12 +362,12 @@ func (s *Schema) normalize() error {
 			}
 			// Thanks to table validation, we already know the foreign key covered columns count is equal to the
 			// referenced table column count. Now ensure their types are identical
-			for i, col := range check.Source {
+			for i, col := range check.Source.X {
 				coveredColumn, ok := tableColumns[col.Lowered()]
 				if !ok {
 					return &InvalidColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), Column: col.String()}
 				}
-				referencedColumnName := check.ReferenceDefinition.ReferencedColumns[i].Lowered()
+				referencedColumnName := check.ReferenceDefinition.ReferencedColumns.X[i].Lowered()
 				referencedColumn, ok := referencedColumns[referencedColumnName]
 				if !ok {
 					return &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
@@ -377,7 +377,7 @@ func (s *Schema) normalize() error {
 				}
 			}
 
-			if !referencedTable.columnsCoveredByInOrderIndex(check.ReferenceDefinition.ReferencedColumns) {
+			if !referencedTable.columnsCoveredByInOrderIndex(&check.ReferenceDefinition.ReferencedColumns) {
 				return &MissingForeignKeyReferencedIndexError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName}
 			}
 		}

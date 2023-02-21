@@ -97,7 +97,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reserve
 			if err := rpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr, reservedVars); err != nil {
 				return err
 			}
-		case ajoin.Condition.Using != nil:
+		case ajoin.Condition.Using.X != nil:
 			return vterrors.VT12001("JOIN with USING(column_list) clause for complex queries")
 		}
 	}

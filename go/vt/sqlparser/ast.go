@@ -1981,10 +1981,14 @@ func (*AliasedExpr) iSelectExpr() {}
 func (*Nextval) iSelectExpr()     {}
 
 // Columns represents an insert column list.
-type Columns []IdentifierCI
+type Columns struct {
+	X []IdentifierCI
+}
 
 // Partitions is a type alias for Columns so we can handle printing efficiently
-type Partitions Columns
+type Partitions struct {
+	X []IdentifierCI
+}
 
 // TableExprs represents a list of table expressions.
 type TableExprs []TableExpr

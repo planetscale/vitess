@@ -119,7 +119,7 @@ func (e *TabletVExec) analyzeInsertColumns(insert *sqlparser.Insert) ValColumns 
 	if len(rows) != 1 {
 		return cols
 	}
-	for i, col := range insert.Columns {
+	for i, col := range insert.Columns.X {
 		expr := rows[0][i]
 		if val, ok := expr.(*sqlparser.Literal); ok {
 			cols[col.Lowered()] = val
@@ -142,7 +142,7 @@ func (e *TabletVExec) ReplaceInsertColumnVal(colName string, val *sqlparser.Lite
 	if len(rows) != 1 {
 		return fmt.Errorf("Not a single row INSERT")
 	}
-	for i, col := range insert.Columns {
+	for i, col := range insert.Columns.X {
 		if col.Lowered() == colName {
 			rows[0][i] = val
 			e.InsertCols[colName] = val
@@ -165,7 +165,7 @@ func (e *TabletVExec) AddOrReplaceInsertColumnVal(colName string, val *sqlparser
 	insert, _ := e.Stmt.(*sqlparser.Insert)
 	rows, _ := insert.Rows.(sqlparser.Values)
 	rows[0] = append(rows[0], val)
-	insert.Columns = append(insert.Columns, sqlparser.NewIdentifierCI(colName))
+	insert.Columns.X = append(insert.Columns.X, sqlparser.NewIdentifierCI(colName))
 	e.InsertCols[colName] = val
 	e.Query = sqlparser.String(e.Stmt)
 

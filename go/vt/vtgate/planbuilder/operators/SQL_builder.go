@@ -52,7 +52,7 @@ func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.
 		Name:      sqlparser.NewIdentifierCS(tableName),
 		Qualifier: sqlparser.NewIdentifierCS(db),
 	}
-	qb.addTableExpr(tableName, alias, tableID, tableExpr, hints, nil)
+	qb.addTableExpr(tableName, alias, tableID, tableExpr, hints, sqlparser.Columns{})
 }
 
 func (qb *queryBuilder) addTableExpr(
@@ -68,7 +68,7 @@ func (qb *queryBuilder) addTableExpr(
 	sel := qb.sel.(*sqlparser.Select)
 	elems := &sqlparser.AliasedTableExpr{
 		Expr:       tblExpr,
-		Partitions: nil,
+		Partitions: sqlparser.Partitions{},
 		As:         sqlparser.NewIdentifierCS(alias),
 		Hints:      hints,
 		Columns:    columnAliases,

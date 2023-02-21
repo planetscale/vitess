@@ -5969,3 +5969,10 @@ func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName strin
 func locateFile(name string) string {
 	return "testdata/" + name
 }
+
+func Test1(t *testing.T) {
+	tree, err := Parse("update t set a = 1")
+	require.NoError(t, err)
+
+	t.Logf("%s", String(tree))
+}

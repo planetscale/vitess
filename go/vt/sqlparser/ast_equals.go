@@ -248,12 +248,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfColumnType(a, b)
-	case Columns:
-		b, ok := inB.(Columns)
+	case *Columns:
+		b, ok := inB.(*Columns)
 		if !ok {
 			return false
 		}
-		return cmp.Columns(a, b)
+		return cmp.RefOfColumns(a, b)
 	case *CommentOnly:
 		b, ok := inB.(*CommentOnly)
 		if !ok {
@@ -998,12 +998,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfPartitionValueRange(a, b)
-	case Partitions:
-		b, ok := inB.(Partitions)
+	case *Partitions:
+		b, ok := inB.(*Partitions)
 		if !ok {
 			return false
 		}
-		return cmp.Partitions(a, b)
+		return cmp.RefOfPartitions(a, b)
 	case *PerformanceSchemaFuncExpr:
 		b, ok := inB.(*PerformanceSchemaFuncExpr)
 		if !ok {
@@ -1950,17 +1950,15 @@ func (cmp *Comparator) RefOfColumnType(a, b *ColumnType) bool {
 		cmp.SliceOfString(a.EnumValues, b.EnumValues)
 }
 
-// Columns does deep equals between the two objects.
-func (cmp *Comparator) Columns(a, b Columns) bool {
-	if len(a) != len(b) {
+// RefOfColumns does deep equals between the two objects.
+func (cmp *Comparator) RefOfColumns(a, b *Columns) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
 		return false
 	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.IdentifierCI(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
+	return cmp.SliceOfIdentifierCI(a.X, b.X)
 }
 
 // RefOfCommentOnly does deep equals between the two objects.
@@ -3504,17 +3502,15 @@ func (cmp *Comparator) RefOfPartitionValueRange(a, b *PartitionValueRange) bool 
 		cmp.ValTuple(a.Range, b.Range)
 }
 
-// Partitions does deep equals between the two objects.
-func (cmp *Comparator) Partitions(a, b Partitions) bool {
-	if len(a) != len(b) {
+// RefOfPartitions does deep equals between the two objects.
+func (cmp *Comparator) RefOfPartitions(a, b *Partitions) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
 		return false
 	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.IdentifierCI(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
+	return cmp.SliceOfIdentifierCI(a.X, b.X)
 }
 
 // RefOfPerformanceSchemaFuncExpr does deep equals between the two objects.
@@ -6456,6 +6452,16 @@ func (cmp *Comparator) SliceOfRefOfColumnDefinition(a, b []*ColumnDefinition) bo
 		}
 	}
 	return true
+}
+
+// Partitions does deep equals between the two objects.
+func (cmp *Comparator) Partitions(a, b Partitions) bool {
+	return cmp.SliceOfIdentifierCI(a.X, b.X)
+}
+
+// Columns does deep equals between the two objects.
+func (cmp *Comparator) Columns(a, b Columns) bool {
+	return cmp.SliceOfIdentifierCI(a.X, b.X)
 }
 
 // RefOfBool does deep equals between the two objects.

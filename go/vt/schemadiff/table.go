@@ -684,7 +684,7 @@ func (c *CreateTableEntity) normalizeForeignKeyIndexes() {
 		if !ok {
 			continue
 		}
-		if !c.columnsCoveredByInOrderIndex(fk.Source) {
+		if !c.columnsCoveredByInOrderIndex(&fk.Source) {
 			// We add a foreign key, but the local FK columns are not indexed.
 			// MySQL's behavior is to implicitly add an index that covers the foreign key's local columns.
 			// The name of the index is either:
@@ -697,7 +697,7 @@ func (c *CreateTableEntity) normalizeForeignKeyIndexes() {
 					Name: constraint.Name, // if name is empty, then the name is later auto populated
 				},
 			}
-			for _, col := range fk.Source {
+			for _, col := range fk.Source.X {
 				indexColumn := &sqlparser.IndexColumn{Column: col}
 				indexDefinition.Columns = append(indexDefinition.Columns, indexColumn)
 			}
@@ -1122,7 +1122,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	for _, p := range droppedPartitions1 {
 		partitionSpec := &sqlparser.PartitionSpec{
 			Action: sqlparser.DropAction,
-			Names:  []sqlparser.IdentifierCI{p.Name},
+			Names:  sqlparser.Partitions{X: []sqlparser.IdentifierCI{p.Name}},
 		}
 		partitionSpecs = append(partitionSpecs, partitionSpec)
 	}
@@ -1685,8 +1685,8 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		case spec.Action == sqlparser.RemoveAction && spec.IsAll:
 			// Remove partitioning
 			c.TableSpec.PartitionOption = nil
-		case spec.Action == sqlparser.DropAction && len(spec.Names) > 0:
-			for _, dropPartitionName := range spec.Names {
+		case spec.Action == sqlparser.DropAction && len(spec.Names.X) > 0:
+			for _, dropPartitionName := range spec.Names.X {
 				// Drop partitions
 				if c.TableSpec.PartitionOption == nil {
 					return &ApplyPartitionNotFoundError{Table: c.Name(), Partition: dropPartitionName.String()}
@@ -1828,7 +1828,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					if !ok {
 						continue
 					}
-					if !c.columnsCoveredByInOrderIndex(fk.Source) {
+					if !c.columnsCoveredByInOrderIndex(&fk.Source) {
 						return &IndexNeededByForeignKeyError{Table: c.Name(), Key: opt.Name.String()}
 					}
 				}
@@ -2165,15 +2165,15 @@ func getKeyColumnNames(key *sqlparser.IndexDefinition) (colNames map[string]bool
 // indexCoversColumnsInOrder checks if the given index covers the given columns in order and in prefix.
 // the index must either covers the exact list of columns or continue to cover additional columns beyond.
 // Used for validating indexes covering foreign keys.
-func indexCoversColumnsInOrder(index *sqlparser.IndexDefinition, columns sqlparser.Columns) bool {
-	if len(columns) == 0 {
+func indexCoversColumnsInOrder(index *sqlparser.IndexDefinition, columns *sqlparser.Columns) bool {
+	if len(columns.X) == 0 {
 		return false
 	}
-	if len(index.Columns) < len(columns) {
+	if len(index.Columns) < len(columns.X) {
 		// obviously the index doesn't cover the required columns
 		return false
 	}
-	for i, col := range columns {
+	for i, col := range columns.X {
 		// the index must cover same columns, in order, wih possibly more columns covered than requested.
 		indexCol := index.Columns[i]
 		if !strings.EqualFold(col.String(), indexCol.Column.String()) {
@@ -2185,7 +2185,7 @@ func indexCoversColumnsInOrder(index *sqlparser.IndexDefinition, columns sqlpars
 
 // indexesCoveringForeignKeyColumns returns a list of indexes that cover a given list of coumns, in-oder and in prefix.
 // Used for validating indexes covering foreign keys.
-func (c *CreateTableEntity) indexesCoveringForeignKeyColumns(columns sqlparser.Columns) (indexes []*sqlparser.IndexDefinition) {
+func (c *CreateTableEntity) indexesCoveringForeignKeyColumns(columns *sqlparser.Columns) (indexes []*sqlparser.IndexDefinition) {
 	for _, index := range c.CreateTable.TableSpec.Indexes {
 		if indexCoversColumnsInOrder(index, columns) {
 			indexes = append(indexes, index)
@@ -2196,7 +2196,7 @@ func (c *CreateTableEntity) indexesCoveringForeignKeyColumns(columns sqlparser.C
 
 // columnsCoveredByInOrderIndex returns 'true' when there is at least one index that covers the given
 // list of columns in-order and in-prefix.
-func (c *CreateTableEntity) columnsCoveredByInOrderIndex(columns sqlparser.Columns) bool {
+func (c *CreateTableEntity) columnsCoveredByInOrderIndex(columns *sqlparser.Columns) bool {
 	return len(c.indexesCoveringForeignKeyColumns(columns)) > 0
 }
 
@@ -2230,10 +2230,10 @@ func (c *CreateTableEntity) validate() error {
 		if !ok {
 			continue
 		}
-		if len(fk.Source) != len(fk.ReferenceDefinition.ReferencedColumns) {
-			return &ForeignKeyColumnCountMismatchError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(fk.Source), ReferencedTable: fk.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(fk.ReferenceDefinition.ReferencedColumns)}
+		if len(fk.Source.X) != len(fk.ReferenceDefinition.ReferencedColumns.X) {
+			return &ForeignKeyColumnCountMismatchError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(fk.Source.X), ReferencedTable: fk.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(fk.ReferenceDefinition.ReferencedColumns.X)}
 		}
-		for _, col := range fk.Source {
+		for _, col := range fk.Source.X {
 			if !columnExists[col.Lowered()] {
 				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
 			}

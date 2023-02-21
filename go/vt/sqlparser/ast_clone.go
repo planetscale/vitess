@@ -97,8 +97,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfColumnDefinition(in)
 	case *ColumnType:
 		return CloneRefOfColumnType(in)
-	case Columns:
-		return CloneColumns(in)
+	case *Columns:
+		return CloneRefOfColumns(in)
 	case *CommentOnly:
 		return CloneRefOfCommentOnly(in)
 	case *Commit:
@@ -347,8 +347,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionSpec(in)
 	case *PartitionValueRange:
 		return CloneRefOfPartitionValueRange(in)
-	case Partitions:
-		return ClonePartitions(in)
+	case *Partitions:
+		return CloneRefOfPartitions(in)
 	case *PerformanceSchemaFuncExpr:
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
@@ -891,16 +891,14 @@ func CloneRefOfColumnType(n *ColumnType) *ColumnType {
 	return &out
 }
 
-// CloneColumns creates a deep clone of the input.
-func CloneColumns(n Columns) Columns {
+// CloneRefOfColumns creates a deep clone of the input.
+func CloneRefOfColumns(n *Columns) *Columns {
 	if n == nil {
 		return nil
 	}
-	res := make(Columns, len(n))
-	for i, x := range n {
-		res[i] = CloneIdentifierCI(x)
-	}
-	return res
+	out := *n
+	out.X = CloneSliceOfIdentifierCI(n.X)
+	return &out
 }
 
 // CloneRefOfCommentOnly creates a deep clone of the input.
@@ -2232,16 +2230,14 @@ func CloneRefOfPartitionValueRange(n *PartitionValueRange) *PartitionValueRange 
 	return &out
 }
 
-// ClonePartitions creates a deep clone of the input.
-func ClonePartitions(n Partitions) Partitions {
+// CloneRefOfPartitions creates a deep clone of the input.
+func CloneRefOfPartitions(n *Partitions) *Partitions {
 	if n == nil {
 		return nil
 	}
-	res := make(Partitions, len(n))
-	for i, x := range n {
-		res[i] = CloneIdentifierCI(x)
-	}
-	return res
+	out := *n
+	out.X = CloneSliceOfIdentifierCI(n.X)
+	return &out
 }
 
 // CloneRefOfPerformanceSchemaFuncExpr creates a deep clone of the input.
@@ -3902,6 +3898,16 @@ func CloneSliceOfRefOfColumnDefinition(n []*ColumnDefinition) []*ColumnDefinitio
 		res[i] = CloneRefOfColumnDefinition(x)
 	}
 	return res
+}
+
+// ClonePartitions creates a deep clone of the input.
+func ClonePartitions(n Partitions) Partitions {
+	return *CloneRefOfPartitions(&n)
+}
+
+// CloneColumns creates a deep clone of the input.
+func CloneColumns(n Columns) Columns {
+	return *CloneRefOfColumns(&n)
 }
 
 // CloneRefOfBool creates a deep clone of the input.

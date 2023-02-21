@@ -104,7 +104,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		// Table has auto-inc and has a VALUES clause.
 		// If the column list is nil then add all the columns
 		// If the column list is empty then add only the auto-inc column and this happens on calling modifyForAutoinc
-		if ins.Columns == nil {
+		if ins.Columns.X == nil {
 			if table.ColumnListAuthoritative {
 				populateInsertColumnlist(ins, table)
 			} else {
@@ -112,7 +112,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 			}
 		}
 		for _, row := range rows {
-			if len(ins.Columns) != len(row) {
+			if len(ins.Columns.X) != len(row) {
 				return nil, vterrors.VT13001("column list does not match values")
 			}
 		}
@@ -139,7 +139,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 		}
 		eins.Ignore = true
 	}
-	if ins.Columns == nil && table.ColumnListAuthoritative {
+	if ins.Columns.X == nil && table.ColumnListAuthoritative {
 		populateInsertColumnlist(ins, table)
 	}
 
@@ -155,7 +155,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 	eins.Opcode = engine.InsertSharded
 
 	for _, value := range rows {
-		if len(ins.Columns) != len(value) {
+		if len(ins.Columns.X) != len(value) {
 			return nil, vterrors.VT13001("column list does not match values")
 		}
 	}
@@ -203,7 +203,7 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	tc.addVindexTable(table)
 
 	// check if column list is provided if not, then vschema should be able to provide the column list.
-	if len(ins.Columns) == 0 {
+	if len(ins.Columns.X) == 0 {
 		if !table.ColumnListAuthoritative {
 			return nil, vterrors.VT09004()
 		}
@@ -283,10 +283,10 @@ func getStatementAndPlanner(
 }
 
 func checkColumnCounts(ins *sqlparser.Insert, selectStmt sqlparser.SelectStatement) error {
-	if len(ins.Columns) < selectStmt.GetColumnCount() {
+	if len(ins.Columns.X) < selectStmt.GetColumnCount() {
 		return vterrors.VT03006()
 	}
-	if len(ins.Columns) > selectStmt.GetColumnCount() {
+	if len(ins.Columns.X) > selectStmt.GetColumnCount() {
 		sel := sqlparser.GetFirstSelect(selectStmt)
 		var hasStarExpr bool
 		for _, sExpr := range sel.SelectExprs {
@@ -337,7 +337,7 @@ func extractColVindexOffsets(ins *sqlparser.Insert, colVindexes []*vindexes.Colu
 // findColumn returns the column index where it is placed on the insert column list.
 // Otherwise, return -1 when not found.
 func findColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
-	for i, column := range ins.Columns {
+	for i, column := range ins.Columns.X {
 		if col.Equal(column) {
 			return i
 		}
@@ -346,11 +346,11 @@ func findColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
 }
 
 func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) {
-	cols := make(sqlparser.Columns, 0, len(table.Columns))
+	cols := make([]sqlparser.IdentifierCI, 0, len(table.Columns))
 	for _, c := range table.Columns {
 		cols = append(cols, c.Name)
 	}
-	ins.Columns = cols
+	ins.Columns = sqlparser.Columns{X: cols}
 }
 
 func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, valueTuples sqlparser.Values) {
@@ -425,8 +425,8 @@ func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
 	if colNum >= 0 {
 		return colNum
 	}
-	colOffset := len(ins.Columns)
-	ins.Columns = append(ins.Columns, col)
+	colOffset := len(ins.Columns.X)
+	ins.Columns.X = append(ins.Columns.X, col)
 	if rows, ok := ins.Rows.(sqlparser.Values); ok {
 		for i := range rows {
 			rows[i] = append(rows[i], &sqlparser.NullVal{})

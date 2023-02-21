@@ -325,7 +325,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case ReorganizeAction:
 		buf.astPrintf(node, "%s ", ReorganizeStr)
-		for i, n := range node.Names {
+		for i, n := range node.Names.X {
 			if i != 0 {
 				buf.literal(", ")
 			}
@@ -343,7 +343,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%s (%v)", AddStr, node.Definitions[0])
 	case DropAction:
 		buf.astPrintf(node, "%s ", DropPartitionStr)
-		for i, n := range node.Names {
+		for i, n := range node.Names.X {
 			if i != 0 {
 				buf.literal(", ")
 			}
@@ -355,7 +355,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 			buf.literal("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.astPrintf(node, "%s%v", prefix, n)
 				prefix = ", "
 			}
@@ -367,7 +367,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 			buf.literal("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.astPrintf(node, "%s%v", prefix, n)
 				prefix = ", "
 			}
@@ -379,7 +379,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 			buf.literal("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.astPrintf(node, "%s%v", prefix, n)
 				prefix = ", "
 			}
@@ -387,7 +387,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	case CoalesceAction:
 		buf.astPrintf(node, "%s %v", CoalesceStr, node.Number)
 	case ExchangeAction:
-		buf.astPrintf(node, "%s %v with table %v", ExchangeStr, node.Names[0], node.TableName)
+		buf.astPrintf(node, "%s %v with table %v", ExchangeStr, node.Names.X[0], node.TableName)
 		if node.WithoutValidation {
 			buf.literal(" without validation")
 		}
@@ -397,7 +397,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 			buf.literal("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.astPrintf(node, "%s%v", prefix, n)
 				prefix = ", "
 			}
@@ -408,7 +408,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 			buf.literal("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.astPrintf(node, "%s%v", prefix, n)
 				prefix = ", "
 			}
@@ -419,7 +419,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 			buf.literal("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.astPrintf(node, "%s%v", prefix, n)
 				prefix = ", "
 			}
@@ -430,7 +430,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 			buf.literal("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.astPrintf(node, "%s%v", prefix, n)
 				prefix = ", "
 			}
@@ -441,7 +441,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 			buf.literal("all")
 		} else {
 			prefix := ""
-			for _, n := range node.Names {
+			for _, n := range node.Names.X {
 				buf.astPrintf(node, "%s%v", prefix, n)
 				prefix = ", "
 			}
@@ -566,10 +566,10 @@ func (node *PartitionOption) Format(buf *TrackedBuffer) {
 		if node.KeyAlgorithm != 0 {
 			buf.astPrintf(node, " algorithm = %d", node.KeyAlgorithm)
 		}
-		if len(node.ColList) == 0 {
+		if len(node.ColList.X) == 0 {
 			buf.literal(" ()")
 		} else {
-			buf.astPrintf(node, " %v", node.ColList)
+			buf.astPrintf(node, " %v", &node.ColList)
 		}
 	case RangeType, ListType:
 		buf.astPrintf(node, " %s", node.Type.ToString())
@@ -613,7 +613,7 @@ func (node *SubPartition) Format(buf *TrackedBuffer) {
 		if node.KeyAlgorithm != 0 {
 			buf.astPrintf(node, " algorithm = %d", node.KeyAlgorithm)
 		}
-		if len(node.ColList) == 0 {
+		if len(node.ColList.X) == 0 {
 			buf.literal(" ()")
 		} else {
 			buf.astPrintf(node, " %v", node.ColList)
@@ -904,12 +904,12 @@ func (a MatchAction) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
-	buf.astPrintf(f, "foreign key %v%v %v", f.IndexName, f.Source, f.ReferenceDefinition)
+	buf.astPrintf(f, "foreign key %v%v %v", f.IndexName, &f.Source, f.ReferenceDefinition)
 }
 
 // Format formats the node.
 func (ref *ReferenceDefinition) Format(buf *TrackedBuffer) {
-	buf.astPrintf(ref, "references %v %v", ref.ReferencedTable, ref.ReferencedColumns)
+	buf.astPrintf(ref, "references %v %v", ref.ReferencedTable, &ref.ReferencedColumns)
 	if ref.Match != DefaultMatch {
 		buf.astPrintf(ref, " match %v", ref.Match)
 	}
@@ -1106,13 +1106,13 @@ func (node *Nextval) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node Columns) Format(buf *TrackedBuffer) {
-	if node == nil {
+func (node *Columns) Format(buf *TrackedBuffer) {
+	if node.X == nil {
 		return
 	}
 	buf.WriteByte('(')
 	prefix := ""
-	for _, n := range node {
+	for _, n := range node.X {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
@@ -1120,12 +1120,13 @@ func (node Columns) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node
-func (node Partitions) Format(buf *TrackedBuffer) {
-	if node == nil {
+func (node *Partitions) Format(buf *TrackedBuffer) {
+	if node.X == nil {
 		return
 	}
-	prefix := " partition ("
-	for _, n := range node {
+	buf.WriteString(" partition (")
+	prefix := ""
+	for _, n := range node.X {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
@@ -1143,11 +1144,11 @@ func (node TableExprs) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v%v", node.Expr, node.Partitions)
+	buf.astPrintf(node, "%v%v", node.Expr, &node.Partitions)
 	if !node.As.IsEmpty() {
 		buf.astPrintf(node, " as %v", node.As)
-		if len(node.Columns) != 0 {
-			buf.astPrintf(node, "%v", node.Columns)
+		if len(node.Columns.X) != 0 {
+			buf.astPrintf(node, "%v", &node.Columns)
 		}
 	}
 	if node.Hints != nil {
@@ -1189,8 +1190,8 @@ func (node *JoinCondition) Format(buf *TrackedBuffer) {
 	if node.On != nil {
 		buf.astPrintf(node, " on %v", node.On)
 	}
-	if node.Using != nil {
-		buf.astPrintf(node, " using %v", node.Using)
+	if len(node.Using.X) > 0 {
+		buf.astPrintf(node, " using %v", &node.Using)
 	}
 }
 
@@ -2071,7 +2072,7 @@ func (node *CreateView) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "sql security %s ", node.Security)
 	}
 	buf.astPrintf(node, "view %v", node.ViewName)
-	buf.astPrintf(node, "%v as %v", node.Columns, node.Select)
+	buf.astPrintf(node, "%v as %v", &node.Columns, node.Select)
 	if node.CheckOption != "" {
 		buf.astPrintf(node, " with %s check option", node.CheckOption)
 	}
@@ -2315,7 +2316,7 @@ func (node *LockOption) Format(buf *TrackedBuffer) {
 func (node *OrderByOption) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "order by ")
 	prefix := ""
-	for _, n := range node.Cols {
+	for _, n := range node.Cols.X {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
