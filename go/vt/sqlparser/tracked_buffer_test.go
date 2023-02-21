@@ -237,6 +237,18 @@ func TestCanonicalOutput(t *testing.T) {
 			"SELECT CONVERT('abc' USING utf8mb4) FROM `dual`",
 		},
 		{
+			"select point(4, 5)",
+			"SELECT POINT(4, 5) FROM `dual`",
+		},
+		{
+			"create table x(location geometry default (point(7.0, 3.0)))",
+			"CREATE TABLE `x` (\n\t`location` geometry DEFAULT (POINT(7.0, 3.0))\n)",
+		},
+		{
+			"create table x(location geometry default (linestring(point(7.0, 3.0), point(7.0, 3.0))))",
+			"CREATE TABLE `x` (\n\t`location` geometry DEFAULT (LINESTRING(POINT(7.0, 3.0), POINT(7.0, 3.0)))\n)",
+		},
+		{
 			"alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 			"ALTER VSCHEMA CREATE VINDEX `lookup_vdx` USING `lookup` WITH owner=user, table=name_user_idx, from=name, to=user_id",
 		},

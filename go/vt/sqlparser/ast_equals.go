@@ -758,6 +758,12 @@ func EqualsSQLNode(inA, inB SQLNode, f ASTComparison) bool {
 			return false
 		}
 		return EqualsRefOfLimit(a, b, f)
+	case *LineStringExpr:
+		b, ok := inB.(*LineStringExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLineStringExpr(a, b, f)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -1004,6 +1010,12 @@ func EqualsSQLNode(inA, inB SQLNode, f ASTComparison) bool {
 			return false
 		}
 		return EqualsRefOfPerformanceSchemaFuncExpr(a, b, f)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPointExpr(a, b, f)
 	case *PrepareStmt:
 		b, ok := inB.(*PrepareStmt)
 		if !ok {
@@ -3010,6 +3022,17 @@ func EqualsRefOfLimit(a, b *Limit, f ASTComparison) bool {
 		EqualsExpr(a.Rowcount, b.Rowcount, f)
 }
 
+// EqualsRefOfLineStringExpr does deep equals between the two objects.
+func EqualsRefOfLineStringExpr(a, b *LineStringExpr, f ASTComparison) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExprs(a.PointParams, b.PointParams, f)
+}
+
 // EqualsRefOfLiteral does deep equals between the two objects.
 func EqualsRefOfLiteral(a, b *Literal, f ASTComparison) bool {
 	if a == b {
@@ -3492,6 +3515,18 @@ func EqualsRefOfPerformanceSchemaFuncExpr(a, b *PerformanceSchemaFuncExpr, f AST
 	}
 	return a.Type == b.Type &&
 		EqualsExpr(a.Argument, b.Argument, f)
+}
+
+// EqualsRefOfPointExpr does deep equals between the two objects.
+func EqualsRefOfPointExpr(a, b *PointExpr, f ASTComparison) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.XCordinate, b.XCordinate, f) &&
+		EqualsExpr(a.YCordinate, b.YCordinate, f)
 }
 
 // EqualsRefOfPrepareStmt does deep equals between the two objects.
@@ -4978,6 +5013,12 @@ func EqualsCallable(inA, inB Callable, f ASTComparison) bool {
 			return false
 		}
 		return EqualsRefOfLagLeadExpr(a, b, f)
+	case *LineStringExpr:
+		b, ok := inB.(*LineStringExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLineStringExpr(a, b, f)
 	case *LocateExpr:
 		b, ok := inB.(*LocateExpr)
 		if !ok {
@@ -5032,6 +5073,12 @@ func EqualsCallable(inA, inB Callable, f ASTComparison) bool {
 			return false
 		}
 		return EqualsRefOfPerformanceSchemaFuncExpr(a, b, f)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPointExpr(a, b, f)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -5632,6 +5679,12 @@ func EqualsExpr(inA, inB Expr, f ASTComparison) bool {
 			return false
 		}
 		return EqualsRefOfLagLeadExpr(a, b, f)
+	case *LineStringExpr:
+		b, ok := inB.(*LineStringExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLineStringExpr(a, b, f)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -5728,6 +5781,12 @@ func EqualsExpr(inA, inB Expr, f ASTComparison) bool {
 			return false
 		}
 		return EqualsRefOfPerformanceSchemaFuncExpr(a, b, f)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPointExpr(a, b, f)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
