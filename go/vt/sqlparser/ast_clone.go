@@ -267,6 +267,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLagLeadExpr(in)
 	case *Limit:
 		return CloneRefOfLimit(in)
+	case *LineStringExpr:
+		return CloneRefOfLineStringExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -349,6 +351,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return ClonePartitions(in)
 	case *PerformanceSchemaFuncExpr:
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
+	case *PointExpr:
+		return CloneRefOfPointExpr(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
 	case ReferenceAction:
@@ -1815,6 +1819,16 @@ func CloneRefOfLimit(n *Limit) *Limit {
 	return &out
 }
 
+// CloneRefOfLineStringExpr creates a deep clone of the input.
+func CloneRefOfLineStringExpr(n *LineStringExpr) *LineStringExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.PointParams = CloneExprs(n.PointParams)
+	return &out
+}
+
 // CloneRefOfLiteral creates a deep clone of the input.
 func CloneRefOfLiteral(n *Literal) *Literal {
 	if n == nil {
@@ -2228,6 +2242,17 @@ func CloneRefOfPerformanceSchemaFuncExpr(n *PerformanceSchemaFuncExpr) *Performa
 	}
 	out := *n
 	out.Argument = CloneExpr(n.Argument)
+	return &out
+}
+
+// CloneRefOfPointExpr creates a deep clone of the input.
+func CloneRefOfPointExpr(n *PointExpr) *PointExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.XCordinate = CloneExpr(n.XCordinate)
+	out.YCordinate = CloneExpr(n.YCordinate)
 	return &out
 }
 
@@ -3283,6 +3308,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfJSONValueModifierExpr(in)
 	case *LagLeadExpr:
 		return CloneRefOfLagLeadExpr(in)
+	case *LineStringExpr:
+		return CloneRefOfLineStringExpr(in)
 	case *LocateExpr:
 		return CloneRefOfLocateExpr(in)
 	case *MatchExpr:
@@ -3301,6 +3328,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfNtileExpr(in)
 	case *PerformanceSchemaFuncExpr:
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
+	case *PointExpr:
+		return CloneRefOfPointExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:
@@ -3543,6 +3572,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfJSONValueModifierExpr(in)
 	case *LagLeadExpr:
 		return CloneRefOfLagLeadExpr(in)
+	case *LineStringExpr:
+		return CloneRefOfLineStringExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -3575,6 +3606,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfOrExpr(in)
 	case *PerformanceSchemaFuncExpr:
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
+	case *PointExpr:
+		return CloneRefOfPointExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:

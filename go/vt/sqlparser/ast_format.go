@@ -2739,3 +2739,13 @@ func (node *Variable) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, "%v", node.Name)
 }
+
+// Format formats the node.
+func (node *PointExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "point(%v, %v)", node.XCordinate, node.YCordinate)
+}
+
+// Format formats the node.
+func (node *LineStringExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "linestring(%v)", node.PointParams)
+}
