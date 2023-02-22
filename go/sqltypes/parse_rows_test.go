@@ -1,8 +1,26 @@
-package boosttest
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package sqltypes
 
 import (
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var TestRows = []string{
@@ -143,14 +161,27 @@ var TestRows = []string{
 func TestRowParsing(t *testing.T) {
 	for _, r := range TestRows {
 		output, err := ParseRows(r)
-		if err != nil {
-			t.Errorf("failed to parse %s: %v", r, err)
-			continue
-		}
-
+		require.NoError(t, err)
 		outputstr := fmt.Sprintf("%v", output)
-		if r != outputstr {
-			t.Errorf("did not rountrip:\ninput:  %s\noutput: %s", r, outputstr)
-		}
+		require.Equal(t, r, outputstr, "did not roundtrip")
+	}
+}
+
+func TestRowsEquals(t *testing.T) {
+	var cases = []struct {
+		left, right string
+	}{
+		{"[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]", "[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]"},
+	}
+
+	for _, tc := range cases {
+		left, err := ParseRows(tc.left)
+		require.NoError(t, err)
+
+		right, err := ParseRows(tc.right)
+		require.NoError(t, err)
+
+		err = RowsEquals(left, right)
+		require.NoError(t, err)
 	}
 }

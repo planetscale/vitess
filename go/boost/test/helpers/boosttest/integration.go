@@ -505,7 +505,7 @@ func (l *Lookup) ExpectRow(expected []sqltypes.Row) *sqltypes.Result {
 
 	l.t.Helper()
 	return l.expect(func(result *sqltypes.Result) error {
-		return RowsEquals(expected, result.Rows)
+		return sqltypes.RowsEquals(expected, result.Rows)
 	})
 }
 
@@ -516,13 +516,13 @@ func (l *Lookup) Expect(expected string) *sqltypes.Result {
 
 	l.t.Helper()
 
-	expectedRows, err := ParseRows(expected)
+	expectedRows, err := sqltypes.ParseRows(expected)
 	if err != nil {
 		l.t.Fatalf("malformed row string: %s (%v)", expected, err)
 	}
 
 	return l.expect(func(result *sqltypes.Result) error {
-		return RowsEquals(expectedRows, result.Rows)
+		return sqltypes.RowsEquals(expectedRows, result.Rows)
 	})
 }
 
