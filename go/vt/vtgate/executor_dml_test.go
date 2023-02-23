@@ -163,7 +163,7 @@ func TestUpdateFromSubQuery(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "UPDATE", "update user set a=(select count(*) from user where id = 3) where id = 1", 2)
 }
 
-func TestUpdateEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
+func TestUpdateEqualWithNoVerifyAndWriteOnlyLookupUniqueVindexes(t *testing.T) {
 	res := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col|t2_lu_vdx",
@@ -884,7 +884,7 @@ func TestUpdateUseHigherCostVindexIfBackfilling(t *testing.T) {
 	assertQueries(t, sbc2, nil)
 }
 
-func TestDeleteEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
+func TestDeleteEqualWithNoVerifyAndWriteOnlyLookupUniqueVindex(t *testing.T) {
 	res := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|wo_lu_col|erl_lu_col|srl_lu_col|nrl_lu_col|nv_lu_col|lu_col",
