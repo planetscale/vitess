@@ -198,6 +198,15 @@ func (f *FilesBackupStorage) Close() error {
 	return nil
 }
 
+// WithParams satisfies backupstorage.BackupStorage.
+// This function is currently a no-op.
+// It may be used to return a new *FilesBackupStorage with the provided
+// backupstorage.Params.
+func (f *FilesBackupStorage) WithParams(backupstorage.Params) backupstorage.BackupStorage {
+	// TODO(maxeng): return a new *FilesBackupStorage that uses params.
+	return f
+}
+
 func loadTag(label string) (string, error) {
 	tags, err := loadTags()
 	if err != nil {

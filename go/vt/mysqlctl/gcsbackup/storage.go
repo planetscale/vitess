@@ -205,3 +205,12 @@ func (s *Storage) labels() (*labels, error) {
 func (s *Storage) Close() error {
 	return nil
 }
+
+// WithParams satisfies backupstorage.BackupStorage.
+// This function is currently a no-op.
+// It may be used to return a new *Storage with the provided
+// backupstorage.Params.
+func (s *Storage) WithParams(backupstorage.Params) backupstorage.BackupStorage {
+	// TODO(maxeng): return a new *Storage that uses params.
+	return s
+}
