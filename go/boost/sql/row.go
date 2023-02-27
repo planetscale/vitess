@@ -286,7 +286,7 @@ func (r Row) HashExact(h *vthash.Hasher, schema []Type) (vthash.Hash, bool) {
 
 		tt := sqltypes.Type(getUint16s(string(r)[last:]))
 		vv := []byte(r[last+2 : pos])
-		if !evalengine.NullsafeHashCode128(h, sqltypes.MakeTrusted(tt, vv), schema[col].Collation, schema[col].T) {
+		if evalengine.NullsafeHashcode128(h, sqltypes.MakeTrusted(tt, vv), schema[col].Collation, schema[col].T) != nil {
 			return vthash.Hash{}, false
 		}
 
@@ -299,7 +299,9 @@ func (r Row) HashExact(h *vthash.Hasher, schema []Type) (vthash.Hash, bool) {
 func (r Row) HashValue(h *vthash.Hasher, valpos int, valtype Type) vthash.Hash {
 	h.Reset()
 	vv := r.ValueAt(valpos).ToVitessUnsafe()
-	evalengine.NullsafeHashCode128(h, vv, valtype.Collation, valtype.T)
+	if err := evalengine.NullsafeHashcode128(h, vv, valtype.Collation, valtype.T); err != nil {
+		panic(err)
+	}
 	return h.Sum128()
 }
 
@@ -308,7 +310,9 @@ func (r Row) HashWithKey(h *vthash.Hasher, key []int, schema []Type) vthash.Hash
 	for _, col := range key {
 		vv := r.ValueAt(col).ToVitessUnsafe()
 		ss := &schema[col]
-		evalengine.NullsafeHashCode128(h, vv, ss.Collation, ss.T)
+		if err := evalengine.NullsafeHashcode128(h, vv, ss.Collation, ss.T); err != nil {
+			panic(err)
+		}
 	}
 	return h.Sum128()
 }
@@ -317,7 +321,9 @@ func (r Row) HashWithKeySchema(h *vthash.Hasher, key []int, schema []Type) vthas
 	h.Reset()
 	for i, col := range key {
 		vv := r.ValueAt(col).ToVitessUnsafe()
-		evalengine.NullsafeHashCode128(h, vv, schema[i].Collation, schema[i].T)
+		if err := evalengine.NullsafeHashcode128(h, vv, schema[i].Collation, schema[i].T); err != nil {
+			panic(err)
+		}
 	}
 	return h.Sum128()
 }
@@ -325,7 +331,9 @@ func (r Row) HashWithKeySchema(h *vthash.Hasher, key []int, schema []Type) vthas
 func (r Row) ShardValue(h *vthash.Hasher, valpos int, valtype Type, shards uint) uint {
 	h.Reset()
 	vv := r.ValueAt(valpos).ToVitessUnsafe()
-	evalengine.NullsafeHashCode128(h, vv, valtype.Collation, valtype.T)
+	if err := evalengine.NullsafeHashcode128(h, vv, valtype.Collation, valtype.T); err != nil {
+		panic(err)
+	}
 	return uint(h.Sum64()) % shards
 }
 

@@ -23,6 +23,15 @@ import (
 	"vitess.io/vitess/go/vt/vthash"
 )
 
+//go:generate go run ./tools/makecolldata/ -embed=true
+
+// CaseAwareCollation implements lowercase and uppercase conventions for collations.
+type CaseAwareCollation interface {
+	Collation
+	ToUpper(dst []byte, src []byte) []byte
+	ToLower(dst []byte, src []byte) []byte
+}
+
 // ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
 
@@ -186,4 +195,15 @@ func Validate(collation Collation, input []byte) bool {
 // appended to `dst` and returned.
 func Convert(dst []byte, dstCollation Collation, src []byte, srcCollation Collation) ([]byte, error) {
 	return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
+}
+
+// Length returns the number of codepoints in the input based on the given collation
+func Length(collation Collation, input []byte) int {
+	return charset.Length(collation.Charset(), input)
+}
+
+// ConvertForJSON behaves like Convert, but the output string is always utf8mb4 encoded,
+// as it is required for JSON strings in MySQL.
+func ConvertForJSON(dst []byte, src []byte, srcCollation Collation) ([]byte, error) {
+	return charset.Convert(dst, charset.Charset_utf8mb4{}, src, srcCollation.Charset())
 }

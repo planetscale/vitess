@@ -51,11 +51,6 @@
     },
     {
       "Keyspace": "main",
-      "SQL": "SELECT JSON_EXTRACT(metadata, '$.arbitrary') from users",
-      "Error": "query not supported by boost: unsupported expression by the evaluation engine: JSON_EXTRACT(`metadata`, '$.arbitrary')"
-    },
-    {
-      "Keyspace": "main",
       "SQL": "SELECT id FROM users WHERE id > :id",
       "Error": "query not supported by boost: parameter `id` > :id can only be compared for equality"
     },

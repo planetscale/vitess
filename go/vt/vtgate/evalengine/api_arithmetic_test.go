@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/vthash"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -271,7 +272,7 @@ func TestArithmetics(t *testing.T) {
 		operator: "/",
 		f:        Divide,
 		cases: []tcase{{
-			//All Nulls
+			// All Nulls
 			v1:  NULL,
 			v2:  NULL,
 			out: NULL,
@@ -355,7 +356,7 @@ func TestArithmetics(t *testing.T) {
 		operator: "*",
 		f:        Multiply,
 		cases: []tcase{{
-			//All Nulls
+			// All Nulls
 			v1:  NULL,
 			v2:  NULL,
 			out: NULL,
@@ -424,7 +425,7 @@ func TestArithmetics(t *testing.T) {
 			v2:  NewUint64(1),
 			out: NewUint64(math.MaxUint64),
 		}, {
-			//Checking whether maxInt value can be passed as uint value
+			// Checking whether maxInt value can be passed as uint value
 			v1:  NewUint64(math.MaxInt64),
 			v2:  NewInt64(3),
 			err: dataOutOfRangeError(math.MaxInt64, 3, "BIGINT UNSIGNED", "*").Error(),
@@ -824,7 +825,7 @@ func TestToNative(t *testing.T) {
 func TestNewIntegralNumeric(t *testing.T) {
 	tcases := []struct {
 		v   sqltypes.Value
-		out EvalResult
+		out eval
 		err error
 	}{{
 		v:   NewInt64(1),
@@ -856,7 +857,7 @@ func TestNewIntegralNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
 	}}
 	for _, tcase := range tcases {
-		got, err := newEvalResultNumeric(tcase.v)
+		got, err := valueToEvalNumeric(tcase.v)
 		if err != nil && !vterrors.Equals(err, tcase.err) {
 			t.Errorf("newIntegralNumeric(%s) error: %v, want %v", printValue(tcase.v), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
@@ -870,8 +871,8 @@ func TestNewIntegralNumeric(t *testing.T) {
 
 func TestAddNumeric(t *testing.T) {
 	tcases := []struct {
-		v1, v2 EvalResult
-		out    EvalResult
+		v1, v2 eval
+		out    eval
 		err    error
 	}{{
 		v1:  newEvalInt64(1),
@@ -918,8 +919,7 @@ func TestAddNumeric(t *testing.T) {
 		err: dataOutOfRangeError(uint64(18446744073709551615), 2, "BIGINT UNSIGNED", "+"),
 	}}
 	for _, tcase := range tcases {
-		var got EvalResult
-		err := addNumericWithError(&tcase.v1, &tcase.v2, &got)
+		got, err := addNumericWithError(tcase.v1, tcase.v2)
 		if err != nil {
 			if tcase.err == nil {
 				t.Fatal(err)
@@ -937,12 +937,12 @@ func TestPrioritize(t *testing.T) {
 	ival := newEvalInt64(-1)
 	uval := newEvalUint64(1)
 	fval := newEvalFloat(1.2)
-	textIntval := newEvalRaw(sqltypes.VarBinary, []byte("-1"))
-	textFloatval := newEvalRaw(sqltypes.VarBinary, []byte("1.2"))
+	textIntval := newEvalRaw(sqltypes.VarBinary, []byte("-1"), collationNumeric)
+	textFloatval := newEvalRaw(sqltypes.VarBinary, []byte("1.2"), collationNumeric)
 
 	tcases := []struct {
-		v1, v2     EvalResult
-		out1, out2 EvalResult
+		v1, v2     eval
+		out1, out2 eval
 	}{{
 		v1:   ival,
 		v2:   uval,
@@ -985,10 +985,10 @@ func TestPrioritize(t *testing.T) {
 		out2: ival,
 	}}
 	for _, tcase := range tcases {
-		t.Run(tcase.v1.Value().String()+" - "+tcase.v2.Value().String(), func(t *testing.T) {
-			got1, got2 := makeNumericAndPrioritize(&tcase.v1, &tcase.v2)
-			utils.MustMatch(t, tcase.out1.value(), got1.value(), "makeNumericAndPrioritize")
-			utils.MustMatch(t, tcase.out2.value(), got2.value(), "makeNumericAndPrioritize")
+		t.Run(fmt.Sprintf("%s - %s", evalToSQLValue(tcase.v1), evalToSQLValue(tcase.v2)), func(t *testing.T) {
+			got1, got2 := makeNumericAndPrioritize(tcase.v1, tcase.v2)
+			utils.MustMatch(t, evalToSQLValue(tcase.out1), evalToSQLValue(got1), "makeNumericAndPrioritize")
+			utils.MustMatch(t, evalToSQLValue(tcase.out2), evalToSQLValue(got2), "makeNumericAndPrioritize")
 		})
 	}
 }
@@ -996,7 +996,7 @@ func TestPrioritize(t *testing.T) {
 func TestToSqlValue(t *testing.T) {
 	tcases := []struct {
 		typ sqltypes.Type
-		v   EvalResult
+		v   eval
 		out sqltypes.Value
 		err error
 	}{{
@@ -1050,8 +1050,7 @@ func TestToSqlValue(t *testing.T) {
 		out: TestValue(sqltypes.Decimal, "0.00000000000000012"),
 	}}
 	for _, tcase := range tcases {
-		got := tcase.v.toSQLValue(tcase.typ)
-
+		got := evalToSQLValueWithType(tcase.v, tcase.typ)
 		if !reflect.DeepEqual(got, tcase.out) {
 			t.Errorf("toSQLValue(%v, %v): %v, want %v", tcase.v, tcase.typ, printValue(got), printValue(tcase.out))
 		}
@@ -1059,7 +1058,7 @@ func TestToSqlValue(t *testing.T) {
 }
 
 func TestCompareNumeric(t *testing.T) {
-	values := []EvalResult{
+	values := []eval{
 		newEvalInt64(1),
 		newEvalInt64(-1),
 		newEvalInt64(0),
@@ -1091,18 +1090,21 @@ func TestCompareNumeric(t *testing.T) {
 
 	for aIdx, aVal := range values {
 		for bIdx, bVal := range values {
-			t.Run(fmt.Sprintf("[%d/%d] %s %s", aIdx, bIdx, aVal.debugString(), bVal.debugString()), func(t *testing.T) {
-				result, err := compareNumeric(&aVal, &bVal)
+			t.Run(fmt.Sprintf("[%d/%d] %s %s", aIdx, bIdx, evalToSQLValue(aVal), evalToSQLValue(bVal)), func(t *testing.T) {
+				result, err := compareNumeric(aVal, bVal)
 				require.NoError(t, err)
 				assert.Equal(t, cmpResults[aIdx][bIdx], result)
 
 				// if two values are considered equal, they must also produce the same hashcode
 				if result == 0 {
-					if aVal.typeof() == bVal.typeof() {
+					if aVal.SQLType() == bVal.SQLType() {
+						hash1 := vthash.New()
+						hash2 := vthash.New()
+
 						// hash codes can only be compared if they are coerced to the same type first
-						aHash, _ := aVal.nullSafeHashcode()
-						bHash, _ := bVal.nullSafeHashcode()
-						assert.Equal(t, aHash, bHash, "hash code does not match")
+						aVal.(hashable).Hash(&hash1)
+						bVal.(hashable).Hash(&hash2)
+						assert.Equal(t, hash1.Sum128(), hash2.Sum128(), "hash code does not match")
 					}
 				}
 			})
@@ -1386,20 +1388,6 @@ func BenchmarkAddGoInterface(b *testing.B) {
 	v2 = int64(2)
 	for i := 0; i < b.N; i++ {
 		v1 = v1.(int64) + v2.(int64)
-	}
-}
-
-func BenchmarkAddGoNonInterface(b *testing.B) {
-	v1 := newEvalInt64(1)
-	v2 := newEvalInt64(12)
-	for i := 0; i < b.N; i++ {
-		if v1.typeof() != sqltypes.Int64 {
-			b.Error("type assertion failed")
-		}
-		if v2.typeof() != sqltypes.Int64 {
-			b.Error("type assertion failed")
-		}
-		v1 = newEvalInt64(v1.int64() + v2.int64())
 	}
 }
 
