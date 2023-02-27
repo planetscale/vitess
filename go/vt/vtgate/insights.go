@@ -575,7 +575,13 @@ func (ii *Insights) makeSchemaChangeMessage(ls *logstats.LogStats) ([]byte, erro
 	return ii.makeEnvelope(out, schemaChangeTopic)
 }
 
-func (ii *Insights) handleMessage(record interface{}) {
+func (ii *Insights) handleMessage(record any) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("PANIC while processing Insights message: %v", r)
+		}
+	}()
+
 	ls, ok := record.(*logstats.LogStats)
 	if !ok {
 		log.Infof("not a LogStats: %v (%T)", record, record)
