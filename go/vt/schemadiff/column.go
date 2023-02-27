@@ -33,7 +33,7 @@ func (c *columnDetails) identicalOtherThanName(other *sqlparser.ColumnDefinition
 	if other == nil {
 		return false
 	}
-	return sqlparser.EqualsColumnType(c.col.Type, other.Type, nil)
+	return sqlparser.EqualsRefOfColumnType(c.col.Type, other.Type, nil)
 }
 
 func (c *columnDetails) prevColName() string {
