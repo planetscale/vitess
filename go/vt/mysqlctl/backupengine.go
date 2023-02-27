@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -67,6 +68,24 @@ type BackupParams struct {
 	TabletAlias string
 	// BackupTime is the time at which the backup is being started
 	BackupTime time.Time
+	// Stats let's backup engines report detailed backup timings.
+	Stats backupstats.Stats
+}
+
+func (b BackupParams) Copy() BackupParams {
+	return BackupParams{
+		b.Cnf,
+		b.Mysqld,
+		b.Logger,
+		b.Concurrency,
+		b.HookExtraEnv,
+		b.TopoServer,
+		b.Keyspace,
+		b.Shard,
+		b.TabletAlias,
+		b.BackupTime,
+		b.Stats,
+	}
 }
 
 // RestoreParams is the struct that holds all params passed to ExecuteRestore
@@ -93,6 +112,25 @@ type RestoreParams struct {
 	// StartTime: if non-zero, look for a backup that was taken at or before this time
 	// Otherwise, find the most recent backup
 	StartTime time.Time
+	// Stats let's restore engines report detailed restore timings.
+	Stats backupstats.Stats
+}
+
+func (p RestoreParams) Copy() RestoreParams {
+	return RestoreParams{
+		p.Cnf,
+		p.Mysqld,
+		p.Logger,
+		p.Concurrency,
+		p.HookExtraEnv,
+		p.LocalMetadata,
+		p.DeleteBeforeRestore,
+		p.DbName,
+		p.Keyspace,
+		p.Shard,
+		p.StartTime,
+		p.Stats,
+	}
 }
 
 // RestoreEngine is the interface to restore a backup with a given engine.
