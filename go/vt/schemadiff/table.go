@@ -513,7 +513,7 @@ func (c *CreateTableEntity) normalizeIndexOptions() {
 	}
 }
 
-func isBool(colType sqlparser.ColumnType) bool {
+func isBool(colType *sqlparser.ColumnType) bool {
 	return colType.Type == sqlparser.KeywordString(sqlparser.TINYINT) && colType.Length != nil && sqlparser.CanonicalString(colType.Length) == "1"
 }
 

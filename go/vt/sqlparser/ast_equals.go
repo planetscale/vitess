@@ -1923,7 +1923,7 @@ func EqualsRefOfColumnDefinition(a, b *ColumnDefinition, f ASTComparison) bool {
 		return false
 	}
 	return EqualsIdentifierCI(a.Name, b.Name, f) &&
-		EqualsColumnType(a.Type, b.Type, f)
+		EqualsRefOfColumnType(a.Type, b.Type, f)
 }
 
 // EqualsRefOfColumnType does deep equals between the two objects.
@@ -6490,18 +6490,6 @@ func EqualsSliceOfRefOfWhen(a, b []*When, f ASTComparison) bool {
 	return true
 }
 
-// EqualsColumnType does deep equals between the two objects.
-func EqualsColumnType(a, b ColumnType, f ASTComparison) bool {
-	return a.Type == b.Type &&
-		a.Unsigned == b.Unsigned &&
-		a.Zerofill == b.Zerofill &&
-		EqualsRefOfColumnTypeOptions(a.Options, b.Options, f) &&
-		EqualsRefOfLiteral(a.Length, b.Length, f) &&
-		EqualsRefOfLiteral(a.Scale, b.Scale, f) &&
-		EqualsColumnCharset(a.Charset, b.Charset, f) &&
-		EqualsSliceOfString(a.EnumValues, b.EnumValues, f)
-}
-
 // EqualsRefOfColumnTypeOptions does deep equals between the two objects.
 func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions, f ASTComparison) bool {
 	if a == b {
@@ -6680,7 +6668,7 @@ func EqualsRefOfJtPathColDef(a, b *JtPathColDef, f ASTComparison) bool {
 	}
 	return a.JtColExists == b.JtColExists &&
 		EqualsIdentifierCI(a.Name, b.Name, f) &&
-		EqualsColumnType(a.Type, b.Type, f) &&
+		EqualsRefOfColumnType(a.Type, b.Type, f) &&
 		EqualsExpr(a.Path, b.Path, f) &&
 		EqualsRefOfJtOnResponse(a.EmptyOnResponse, b.EmptyOnResponse, f) &&
 		EqualsRefOfJtOnResponse(a.ErrorOnResponse, b.ErrorOnResponse, f)

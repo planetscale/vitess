@@ -23,7 +23,7 @@ func tableSpecRequiresNewTableNode(oldSpec, newSpec *sqlparser.TableSpec) bool {
 			return true
 		}
 		// if the type of the column has had a meaningful change, we need a new table node
-		if columnTypeHasChanged(&oldColumn.Type, &newColumn.Type) {
+		if columnTypeHasChanged(oldColumn.Type, newColumn.Type) {
 			return true
 		}
 	}

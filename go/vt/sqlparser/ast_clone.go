@@ -870,7 +870,7 @@ func CloneRefOfColumnDefinition(n *ColumnDefinition) *ColumnDefinition {
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Type = CloneColumnType(n.Type)
+	out.Type = CloneRefOfColumnType(n.Type)
 	return &out
 }
 
@@ -3939,11 +3939,6 @@ func CloneSliceOfRefOfWhen(n []*When) []*When {
 	return res
 }
 
-// CloneColumnType creates a deep clone of the input.
-func CloneColumnType(n ColumnType) ColumnType {
-	return *CloneRefOfColumnType(&n)
-}
-
 // CloneRefOfColumnTypeOptions creates a deep clone of the input.
 func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	if n == nil {
@@ -4096,7 +4091,7 @@ func CloneRefOfJtPathColDef(n *JtPathColDef) *JtPathColDef {
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Type = CloneColumnType(n.Type)
+	out.Type = CloneRefOfColumnType(n.Type)
 	out.Path = CloneExpr(n.Path)
 	out.EmptyOnResponse = CloneRefOfJtOnResponse(n.EmptyOnResponse)
 	out.ErrorOnResponse = CloneRefOfJtOnResponse(n.ErrorOnResponse)
