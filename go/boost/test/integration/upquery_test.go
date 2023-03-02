@@ -142,3 +142,26 @@ func TestMultiLevelUpqueriesPartialMaterialized(t *testing.T) {
 	upquery0.Lookup(1).Expect(`[[INT64(0)]]`)
 	upquery0.Lookup(420).Expect(`[[INT64(0)]]`)
 }
+
+func TestFullMaterializationsCanReplay(t *testing.T) {
+	const Recipe = `
+CREATE TABLE t (
+	id int NOT NULL,
+	PRIMARY KEY (id)
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_unicode_ci;
+
+select id from t;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+
+	seed := func(g *boosttest.Cluster) {
+		for i := 0; i < 3; i++ {
+			g.TestExecute("insert into t (id) values (%d)", i)
+		}
+	}
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe), boosttest.WithSeed(seed))
+	boosttest.Settle()
+	g.View("q0").Lookup().Expect(`[[INT32(0)] [INT32(1)] [INT32(2)]]`)
+}

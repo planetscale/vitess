@@ -1188,7 +1188,7 @@ func (d *Domain) handleReplayFromExternal(ctx context.Context, up *upquery.Upque
 			},
 			External: &packet.ReplayPiece_External{
 				Gtid:         gtid,
-				Intermediate: up != nil,
+				Intermediate: up.IsIntermediate(),
 			},
 		}
 		_, err = tx.SendReplayPiece(ctx, pkt)
@@ -1206,7 +1206,7 @@ func (d *Domain) handleReplayFromExternal(ctx context.Context, up *upquery.Upque
 			},
 			External: &packet.ReplayPiece_External{
 				Gtid:         mergedGtid.String(),
-				Intermediate: up != nil,
+				Intermediate: up.IsIntermediate(),
 			},
 		}
 		_, err = tx.SendReplayPiece(ctx, pkt)
