@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	throttleCheckDuration = 250 * time.Millisecond
+	throttleCheckInterval = 250 * time.Millisecond
 )
 
 var throttleTicks int64
@@ -34,7 +34,7 @@ var throttleInit sync.Once
 func initThrottleTicker() {
 	throttleInit.Do(func() {
 		go func() {
-			tick := time.NewTicker(throttleCheckDuration)
+			tick := time.NewTicker(throttleCheckInterval)
 			defer tick.Stop()
 			for range tick.C {
 				atomic.AddInt64(&throttleTicks, 1)
@@ -119,7 +119,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName string) (t
 func (c *Client) ThrottleCheckOKOrWaitAppName(ctx context.Context, appName string) bool {
 	ok := c.ThrottleCheckOK(ctx, appName)
 	if !ok {
-		time.Sleep(throttleCheckDuration)
+		time.Sleep(throttleCheckInterval)
 	}
 	return ok
 }
