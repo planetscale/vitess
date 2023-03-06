@@ -58,7 +58,7 @@ const (
 
 	shardStoreName = "shard"
 	selfStoreName  = "self"
-	txLagStoreName = "txlag"
+	lagStoreName   = "lag"
 )
 
 var (
@@ -100,8 +100,8 @@ const (
 	ThrottleCheckPrimaryWrite ThrottleCheckType = iota
 	// ThrottleCheckSelf indicates a check on a specific server health
 	ThrottleCheckSelf
-	// ThrottleCheckTxLag indicates a check based on shard's replication lag, speicically oriented towards TxThrottler (throttling BEGIN statements)
-	ThrottleCheckTxLag
+	// ThrottleCheckLag indicates a check based on shard's replication lag, speicically oriented towards TxThrottler (throttling BEGIN statements)
+	ThrottleCheckLag
 )
 
 func init() {
@@ -138,7 +138,7 @@ type Throttler struct {
 
 	metricsQuery     atomic.Value
 	MetricsThreshold atomic.Uint64
-	TxLagThreshold   atomic.Uint64
+	LagThreshold     atomic.Uint64
 
 	mysqlClusterThresholds *cache.Cache
 	aggregatedMetrics      *cache.Cache
@@ -213,7 +213,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	if throttleMetricThreshold != math.MaxFloat64 {
 		throttler.StoreMetricsThreshold(throttleMetricThreshold) // override
 	}
-	throttler.TxLagThreshold.Store(math.Float64bits(throttleThreshold.Seconds()))
+	throttler.LagThreshold.Store(math.Float64bits(throttleThreshold.Seconds()))
 
 	throttler.initConfig()
 
@@ -285,9 +285,9 @@ func (throttler *Throttler) initConfig() {
 		ThrottleThreshold: &throttler.MetricsThreshold,
 		IgnoreHostsCount:  0,
 	}
-	config.Instance.Stores.MySQL.Clusters[txLagStoreName] = &config.MySQLClusterConfigurationSettings{
+	config.Instance.Stores.MySQL.Clusters[lagStoreName] = &config.MySQLClusterConfigurationSettings{
 		MetricQuery:       replicationLagQuery,
-		ThrottleThreshold: &throttler.TxLagThreshold,
+		ThrottleThreshold: &throttler.LagThreshold,
 		IgnoreHostsCount:  0,
 	}
 }
@@ -1015,9 +1015,9 @@ func (throttler *Throttler) checkShard(ctx context.Context, appName string, remo
 	return throttler.checkStore(ctx, appName, shardStoreName, remoteAddr, flags)
 }
 
-// checkTxLag checks the health of the shard specifically using replication lag as metric
-func (throttler *Throttler) checkTxLag(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
-	return throttler.checkStore(ctx, appName, txLagStoreName, remoteAddr, flags)
+// checkLag checks the health of the shard specifically using replication lag as metric
+func (throttler *Throttler) checkLag(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+	return throttler.checkStore(ctx, appName, lagStoreName, remoteAddr, flags)
 }
 
 // CheckSelf is checks the mysql/self metric, and is available on each tablet
@@ -1038,8 +1038,8 @@ func (throttler *Throttler) CheckByType(ctx context.Context, appName string, rem
 			return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 		}
 		return throttler.checkShard(ctx, appName, remoteAddr, flags)
-	case ThrottleCheckTxLag:
-		return throttler.checkTxLag(ctx, appName, remoteAddr, flags)
+	case ThrottleCheckLag:
+		return throttler.checkLag(ctx, appName, remoteAddr, flags)
 	default:
 		return invalidCheckTypeCheckResult
 	}
