@@ -58,6 +58,7 @@ const (
 
 	shardStoreName = "shard"
 	selfStoreName  = "self"
+	txLagStoreName = "txlag"
 )
 
 var (
@@ -99,6 +100,8 @@ const (
 	ThrottleCheckPrimaryWrite ThrottleCheckType = iota
 	// ThrottleCheckSelf indicates a check on a specific server health
 	ThrottleCheckSelf
+	// ThrottleCheckTxLag indicates a check based on shard's replication lag, speicically oriented towards TxThrottler (throttling BEGIN statements)
+	ThrottleCheckTxLag
 )
 
 func init() {
@@ -135,6 +138,7 @@ type Throttler struct {
 
 	metricsQuery     atomic.Value
 	MetricsThreshold atomic.Uint64
+	TxLagThreshold   atomic.Uint64
 
 	mysqlClusterThresholds *cache.Cache
 	aggregatedMetrics      *cache.Cache
@@ -209,6 +213,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	if throttleMetricThreshold != math.MaxFloat64 {
 		throttler.StoreMetricsThreshold(throttleMetricThreshold) // override
 	}
+	throttler.TxLagThreshold.Store(math.Float64bits(throttleThreshold.Seconds()))
 
 	throttler.initConfig()
 
@@ -278,6 +283,11 @@ func (throttler *Throttler) initConfig() {
 	config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
 		MetricQuery:       throttler.GetMetricsQuery(),
 		ThrottleThreshold: &throttler.MetricsThreshold,
+		IgnoreHostsCount:  0,
+	}
+	config.Instance.Stores.MySQL.Clusters[txLagStoreName] = &config.MySQLClusterConfigurationSettings{
+		MetricQuery:       replicationLagQuery,
+		ThrottleThreshold: &throttler.TxLagThreshold,
 		IgnoreHostsCount:  0,
 	}
 }
@@ -708,9 +718,10 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 					defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
 					var throttleMetricFunc func() *mysql.MySQLThrottleMetric
-					if clusterName == selfStoreName {
+					switch clusterName {
+					case selfStoreName:
 						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
-					} else {
+					default: // shard-based
 						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, clusterName, probe)
 					}
 					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
@@ -1004,6 +1015,11 @@ func (throttler *Throttler) checkShard(ctx context.Context, appName string, remo
 	return throttler.checkStore(ctx, appName, shardStoreName, remoteAddr, flags)
 }
 
+// checkTxLag checks the health of the shard specifically using replication lag as metric
+func (throttler *Throttler) checkTxLag(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+	return throttler.checkStore(ctx, appName, txLagStoreName, remoteAddr, flags)
+}
+
 // CheckSelf is checks the mysql/self metric, and is available on each tablet
 func (throttler *Throttler) checkSelf(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	return throttler.checkStore(ctx, appName, selfStoreName, remoteAddr, flags)
@@ -1022,6 +1038,8 @@ func (throttler *Throttler) CheckByType(ctx context.Context, appName string, rem
 			return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 		}
 		return throttler.checkShard(ctx, appName, remoteAddr, flags)
+	case ThrottleCheckTxLag:
+		return throttler.checkTxLag(ctx, appName, remoteAddr, flags)
 	default:
 		return invalidCheckTypeCheckResult
 	}
