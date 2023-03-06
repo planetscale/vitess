@@ -1831,6 +1831,7 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 	}
 	handle("/throttler/check", throttle.ThrottleCheckPrimaryWrite)
 	handle("/throttler/check-self", throttle.ThrottleCheckSelf)
+	handle("/throttler/check-tx-lag", throttle.ThrottleCheckTxLag)
 }
 
 // registerThrottlerStatusHandler registers a throttler "status" request
