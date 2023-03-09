@@ -112,7 +112,7 @@ type DB struct {
 	// expectedExecuteFetch is the array of expected queries.
 	expectedExecuteFetch []ExpectedExecuteFetch
 	// expectedExecuteFetchIndex is the current index of the query.
-	expectedExecuteFetchIndex int
+	expectedExecuteFetchIndex atomic.Int64
 
 	// connections tracks all open connections.
 	// The key for the map is the value of mysql.Conn.ConnectionID.
@@ -422,20 +422,19 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 	var (
-		afterFn  func()
+		afterFn  func() = func() {}
 		entry    ExpectedExecuteFetch
 		err      error
 		expected string
+		index    int64
 		result   *sqltypes.Result
 	)
 
-	defer func() {
-		if afterFn != nil {
-			afterFn()
-		}
-	}()
 	db.mu.Lock()
-	defer db.mu.Unlock()
+	defer func() {
+		db.mu.Unlock()
+		afterFn()
+	}()
 
 	// when creating a connection to the database, we send an initial query to set the connection's
 	// collation, we want to skip the query check if we get such initial query.
@@ -444,9 +443,9 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 		return &sqltypes.Result{}, nil
 	}
 
-	index := db.expectedExecuteFetchIndex
+	index = db.expectedExecuteFetchIndex.Load()
 
-	if index >= len(db.expectedExecuteFetch) {
+	if index >= int64(len(db.expectedExecuteFetch)) {
 		if db.neverFail.Load() {
 			return &sqltypes.Result{}, nil
 		}
@@ -455,7 +454,6 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 	}
 
 	entry = db.expectedExecuteFetch[index]
-	afterFn = entry.AfterFunc
 	err = entry.Error
 	expected = entry.Query
 	result = entry.QueryResult
@@ -478,8 +476,15 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 		}
 	}
 
-	db.expectedExecuteFetchIndex++
-	db.t.Logf("ExecuteFetch: %v: %v", db.name, query)
+	db.expectedExecuteFetchIndex.Add(1)
+
+	afterFn = func() {
+		if entry.AfterFunc != nil {
+			entry.AfterFunc()
+		}
+	}
+
+	db.t.Logf("ExecuteFetch[%d]: %v: %v", index, db.name, query)
 
 	if err != nil {
 		return nil, err
@@ -717,7 +722,7 @@ func (db *DB) DeleteAllEntries() {
 	defer db.mu.Unlock()
 
 	db.expectedExecuteFetch = make([]ExpectedExecuteFetch, 0)
-	db.expectedExecuteFetchIndex = 0
+	db.expectedExecuteFetchIndex.Store(0)
 }
 
 // DeleteAllEntriesAfterIndex removes all queries after the index.
@@ -729,7 +734,7 @@ func (db *DB) DeleteAllEntriesAfterIndex(index int) {
 		panic(fmt.Sprintf("index out of range. current length: %v", len(db.expectedExecuteFetch)))
 	}
 
-	if index+1 < db.expectedExecuteFetchIndex {
+	if int64(index+1) < db.expectedExecuteFetchIndex.Load() {
 		// Don't delete entries which were already answered.
 		return
 	}
@@ -743,8 +748,9 @@ func (db *DB) VerifyAllExecutedOrFail() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if db.expectedExecuteFetchIndex != len(db.expectedExecuteFetch) {
-		db.t.Errorf("%v: not all expected queries were executed. leftovers: %v", db.name, db.expectedExecuteFetch[db.expectedExecuteFetchIndex:])
+	if db.expectedExecuteFetchIndex.Load() != int64(len(db.expectedExecuteFetch)) {
+		db.t.Errorf("%v: not all expected queries were executed. leftovers: %v",
+			db.name, db.expectedExecuteFetch[db.expectedExecuteFetchIndex.Load():])
 	}
 }
 

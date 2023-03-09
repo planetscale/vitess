@@ -46,15 +46,16 @@ func TestConsolidator(t *testing.T) {
 
 	result := 1
 	go func() {
-		orig.Result = &result
+		orig.SetResult(&result)
 		orig.Broadcast()
 	}()
-	dup.Wait()
+	w := dup.Waiter()
+	w()
 
-	if *orig.Result.(*int) != result {
+	if *orig.Result().(*int) != result {
 		t.Errorf("failed to pass result")
 	}
-	if *orig.Result.(*int) != *dup.Result.(*int) {
+	if *orig.Result().(*int) != *dup.Result().(*int) {
 		t.Fatalf("failed to share the result")
 	}
 
@@ -71,10 +72,11 @@ func TestConsolidator(t *testing.T) {
 	}
 
 	go func() {
-		second.Result = &result
+		second.SetResult(&result)
 		second.Broadcast()
 	}()
-	dup.Wait()
+	wait := dup.Waiter()
+	wait()
 
 	want = []ConsolidatorCacheItem{{Query: sql, Count: 2}}
 	if !reflect.DeepEqual(con.Items(), want) {
