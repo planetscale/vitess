@@ -176,7 +176,9 @@ var executorVSchema = `{
       "type": "region_experimental",
       "params": {
         "region_bytes": "1"
-      }
+      }},
+		"cfc": {
+			"type": "cfc"
     }
   },
   "tables": {
@@ -374,6 +376,20 @@ var executorVSchema = `{
         }
       ]
     },
+    "tbl_cfc": {
+			"column_vindexes": [
+                {
+                    "column": "c1",
+                    "name": "cfc"
+                }
+			],
+			"columns": [
+				{
+					"name": "c2",
+					"type": "VARCHAR"
+				}
+			]
+     },
     "zip_detail": {
       "type": "reference",
       "source": "TestUnsharded.zip_detail"

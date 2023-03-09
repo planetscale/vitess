@@ -1280,7 +1280,21 @@ func (node *Commit) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Begin) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("begin")
+	if node.TxAccessModes == nil {
+		buf.WriteString("begin")
+		return
+	}
+	buf.WriteString("start transaction")
+	for idx, accessMode := range node.TxAccessModes {
+		if idx == 0 {
+			buf.WriteByte(' ')
+			buf.WriteString(accessMode.ToString())
+			continue
+		}
+		buf.WriteString(", ")
+		buf.WriteString(accessMode.ToString())
+	}
+
 }
 
 // formatFast formats the node.
@@ -1319,6 +1333,15 @@ func (node *ExplainStmt) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("explain ")
 	node.Comments.formatFast(buf)
 	buf.WriteString(format)
+	node.Statement.formatFast(buf)
+}
+
+// formatFast formats the node.
+func (node *VExplainStmt) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("vexplain ")
+	node.Comments.formatFast(buf)
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte(' ')
 	node.Statement.formatFast(buf)
 }
 
@@ -3224,7 +3247,7 @@ func (node *JSONObjectExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node JSONObjectParam) formatFast(buf *TrackedBuffer) {
+func (node *JSONObjectParam) formatFast(buf *TrackedBuffer) {
 	node.Key.formatFast(buf)
 	buf.WriteString(", ")
 	node.Value.formatFast(buf)

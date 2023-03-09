@@ -26,6 +26,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
@@ -33,8 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/vtorc/config"
-
-	"github.com/openark/golib/sqlutils"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -290,7 +290,7 @@ func LockShard(ctx context.Context, instanceKey inst.InstanceKey) (context.Conte
 	}
 
 	atomic.AddInt32(&shardsLockCounter, 1)
-	ctx, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
+	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
 	if err != nil {
 		atomic.AddInt32(&shardsLockCounter, -1)
 		return nil, nil, err

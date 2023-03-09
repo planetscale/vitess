@@ -233,6 +233,17 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 
 // SetReadOnly set/unset the read_only flag
 func (mysqld *Mysqld) SetReadOnly(on bool) error {
+	// temp logging, to be removed in v17
+	var newState string
+	switch on {
+	case false:
+		newState = "ReadWrite"
+	case true:
+		newState = "ReadOnly"
+	}
+	log.Infof("SetReadOnly setting connection setting of %s:%d to : %s",
+		mysqld.dbcfgs.Host, mysqld.dbcfgs.Port, newState)
+
 	query := "SET GLOBAL read_only = "
 	if on {
 		query += "ON"
@@ -577,6 +588,44 @@ func (mysqld *Mysqld) GetGTIDMode(ctx context.Context) (string, error) {
 	defer conn.Recycle()
 
 	return conn.GetGTIDMode()
+}
+
+// FlushBinaryLogs is part of the MysqlDaemon interface.
+func (mysqld *Mysqld) FlushBinaryLogs(ctx context.Context) (err error) {
+	_, err = mysqld.FetchSuperQuery(ctx, "FLUSH BINARY LOGS")
+	return err
+}
+
+// GetBinaryLogs is part of the MysqlDaemon interface.
+func (mysqld *Mysqld) GetBinaryLogs(ctx context.Context) (binaryLogs []string, err error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW BINARY LOGS")
+	if err != nil {
+		return binaryLogs, err
+	}
+	for _, row := range qr.Rows {
+		binaryLogs = append(binaryLogs, row[0].ToString())
+	}
+	return binaryLogs, err
+}
+
+// GetPreviousGTIDs is part of the MysqlDaemon interface.
+func (mysqld *Mysqld) GetPreviousGTIDs(ctx context.Context, binlog string) (previousGtids string, err error) {
+	query := fmt.Sprintf("SHOW BINLOG EVENTS IN '%s' LIMIT 2", binlog)
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
+	if err != nil {
+		return previousGtids, err
+	}
+	previousGtidsFound := false
+	for _, row := range qr.Named().Rows {
+		if row.AsString("Event_type", "") == "Previous_gtids" {
+			previousGtids = row.AsString("Info", "")
+			previousGtidsFound = true
+		}
+	}
+	if !previousGtidsFound {
+		return previousGtids, fmt.Errorf("GetPreviousGTIDs: previous GTIDs not found")
+	}
+	return previousGtids, nil
 }
 
 // SetSemiSyncEnabled enables or disables semi-sync replication for

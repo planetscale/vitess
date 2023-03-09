@@ -420,7 +420,7 @@ func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []P
 			continue
 		}
 
-		if _, ok := comp.Left.(sqlparser.Argument); ok && sqlparser.EqualsExpr(comp.Left, comp.Right, nil) {
+		if _, ok := comp.Left.(sqlparser.Argument); ok && sqlparser.Equals.Expr(comp.Left, comp.Right) {
 			// if we are comparing an argument with itself, we can be pretty sure that it's here because of
 			// normalization of literals, and that makes it safe to assume that this comparison will always be true,
 			// since normalization does not treat null-literals as something to normalize

@@ -74,7 +74,6 @@ import (
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -113,6 +112,7 @@ var (
 	initKeyspace       string
 	initShard          string
 	concurrency        = 4
+	incrementalFromPos string
 	// mysqlctld-like flags
 	mysqlPort        = 3306
 	mysqlSocket      string
@@ -140,6 +140,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
 	fs.StringVar(&initShard, "init_shard", initShard, "(init parameter) shard to use for this tablet")
 	fs.IntVar(&concurrency, "concurrency", concurrency, "(init restore parameter) how many concurrent files to restore at once")
+	fs.StringVar(&incrementalFromPos, "incremental_from_pos", incrementalFromPos, "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
 	// mysqlctld-like flags
 	fs.IntVar(&mysqlPort, "mysql_port", mysqlPort, "mysql port")
 	fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "path to the mysql socket")
@@ -164,7 +165,6 @@ func main() {
 
 	servenv.ParseFlags("vtbackup")
 	servenv.Init()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	servenv.OnClose(func() {
 		cancel()
@@ -290,16 +290,17 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	backupParams := mysqlctl.BackupParams{
-		Cnf:          mycnf,
-		Mysqld:       mysqld,
-		Logger:       logutil.NewConsoleLogger(),
-		Concurrency:  concurrency,
-		HookExtraEnv: extraEnv,
-		TopoServer:   topoServer,
-		Keyspace:     initKeyspace,
-		Shard:        initShard,
-		TabletAlias:  topoproto.TabletAliasString(tabletAlias),
-		Stats:        backupstats.BackupStats(),
+		Cnf:                mycnf,
+		Mysqld:             mysqld,
+		Logger:             logutil.NewConsoleLogger(),
+		Concurrency:        concurrency,
+		IncrementalFromPos: incrementalFromPos,
+		HookExtraEnv:       extraEnv,
+		TopoServer:         topoServer,
+		Keyspace:           initKeyspace,
+		Shard:              initShard,
+		TabletAlias:        topoproto.TabletAliasString(tabletAlias),
+		Stats:              backupstats.BackupStats(),
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
@@ -311,15 +312,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ResetReplication(ctx); err != nil {
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
-		cmds := mysqlctl.CreateReparentJournal()
-		cmds = append(cmds, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(dbName)))
-		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
-			return fmt.Errorf("can't initialize database: %v", err)
+		cmd := mysqlctl.GenerateInitialBinlogEntry()
+		if err := mysqld.ExecuteSuperQueryList(ctx, []string{cmd}); err != nil {
+			return err
 		}
-
-		// Execute Alter commands on reparent_journal and ignore errors
-		cmds = mysqlctl.AlterReparentJournal()
-		_ = mysqld.ExecuteSuperQueryList(ctx, cmds)
 
 		backupParams.BackupTime = time.Now()
 		// Now we're ready to take the backup.
@@ -340,7 +336,6 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		Logger:              logutil.NewConsoleLogger(),
 		Concurrency:         concurrency,
 		HookExtraEnv:        extraEnv,
-		LocalMetadata:       map[string]string{},
 		DeleteBeforeRestore: true,
 		DbName:              dbName,
 		Keyspace:            initKeyspace,

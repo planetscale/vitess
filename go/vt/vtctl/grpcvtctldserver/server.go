@@ -102,6 +102,16 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	}
 }
 
+// NewTestVtctldServer returns a new VtctldServer for the given topo server
+// AND tmclient for use in tests. This should NOT be used in production.
+func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *VtctldServer {
+	return &VtctldServer{
+		ts:  ts,
+		tmc: tmc,
+		ws:  workflow.NewServer(ts, tmc),
+	}
+}
+
 func panicHandler(err *error) {
 	if x := recover(); x != nil {
 		*err = fmt.Errorf("uncaught panic: %v", x)
@@ -383,6 +393,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
 	span.Annotate("allow_primary", req.AllowPrimary)
 	span.Annotate("concurrency", req.Concurrency)
+	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
@@ -457,7 +468,11 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, req *vtctldatapb.BackupRequest, stream interface {
 	Send(resp *vtctldatapb.BackupResponse) error
 }) error {
-	r := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(req.Concurrency), AllowPrimary: req.AllowPrimary}
+	r := &tabletmanagerdatapb.BackupRequest{
+		Concurrency:        int64(req.Concurrency),
+		AllowPrimary:       req.AllowPrimary,
+		IncrementalFromPos: req.IncrementalFromPos,
+	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
 		return err
@@ -993,7 +1008,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
 			NewPrimaryAlias:           req.NewPrimary,
-			IgnoreReplicas:            sets.NewString(ignoreReplicaAliases...),
+			IgnoreReplicas:            sets.New[string](ignoreReplicaAliases...),
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 		},
@@ -1644,10 +1659,10 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 
 	// Omit any cell names in the request that don't map to existing cells
 	if len(req.Cells) > 0 {
-		s1 := sets.NewString(allCells...)
-		s2 := sets.NewString(req.Cells...)
+		s1 := sets.New[string](allCells...)
+		s2 := sets.New[string](req.Cells...)
 
-		cells = s1.Intersection(s2).List()
+		cells = sets.List(s1.Intersection(s2))
 	}
 
 	span.Annotate("cells", strings.Join(cells, ","))
@@ -1916,7 +1931,7 @@ func (s *VtctldServer) GetVersion(ctx context.Context, req *vtctldatapb.GetVersi
 		return nil, err
 	}
 
-	version, err := getVersionFromTablet(tablet.Addr())
+	version, err := GetVersionFunc()(tablet.Addr())
 	if err != nil {
 		return nil, err
 	}
@@ -2714,7 +2729,12 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 	span.Annotate("keyspace", ti.Keyspace)
 	span.Annotate("shard", ti.Shard)
 
-	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, protoutil.TimeFromProto(req.BackupTime))
+	r := &tabletmanagerdatapb.RestoreFromBackupRequest{
+		BackupTime:   req.BackupTime,
+		RestoreToPos: req.RestoreToPos,
+		DryRun:       req.DryRun,
+	}
+	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, r)
 	if err != nil {
 		return err
 	}
@@ -2739,6 +2759,10 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 		case io.EOF:
 			// Do not do anything when active reparenting is disabled.
 			if mysqlctl.DisableActiveReparents {
+				return nil
+			}
+			if req.RestoreToPos != "" && !req.DryRun {
+				// point in time recovery. Do not restore replication
 				return nil
 			}
 
@@ -3601,7 +3625,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 			span, ctx := trace.NewSpan(ctx, "VtctldServer.validateAllTablets")
 			defer span.Finish()
 
-			cellSet := sets.NewString()
+			cellSet := sets.New[string]()
 			for _, keyspace := range keyspaces {
 				getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				shards, err := s.ts.GetShardNames(getShardNamesCtx, keyspace)
@@ -3632,7 +3656,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 				}
 			}
 
-			for _, cell := range cellSet.List() {
+			for _, cell := range sets.List(cellSet) {
 				getTabletsByCellCtx, getTabletsByCellCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				aliases, err := s.ts.GetTabletAliasesByCell(getTabletsByCellCtx, cell)
 				getTabletsByCellCancel() // don't defer in a loop
@@ -4406,6 +4430,7 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 	return version, nil
 }
 
+var versionFuncMu sync.Mutex
 var getVersionFromTablet = getVersionFromTabletDebugVars
 
 // helper method to asynchronously get and diff a version
@@ -4490,4 +4515,16 @@ func boostDo[T any](t T, err error) (T, error) {
 	}
 
 	return *new(T), status.Error(berr.Code.GRPCCode(), err.Error())
+}
+
+func SetVersionFunc(versionFunc func(string) (string, error)) {
+	versionFuncMu.Lock()
+	defer versionFuncMu.Unlock()
+	getVersionFromTablet = versionFunc
+}
+
+func GetVersionFunc() func(string) (string, error) {
+	versionFuncMu.Lock()
+	defer versionFuncMu.Unlock()
+	return getVersionFromTablet
 }

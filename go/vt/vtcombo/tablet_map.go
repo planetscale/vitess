@@ -661,6 +661,12 @@ func (itc *internalTabletConn) Release(ctx context.Context, target *querypb.Targ
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
+// GetSchema is part of the QueryService interface.
+func (itc *internalTabletConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	err := itc.tablet.qsc.QueryService().GetSchema(ctx, target, tableType, tableNames, callback)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 // Close is part of queryservice.QueryService
 func (itc *internalTabletConn) Close(ctx context.Context) error {
 	return nil
@@ -903,7 +909,7 @@ func (itmc *internalTabletManagerClient) Backup(context.Context, *topodatapb.Tab
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) RestoreFromBackup(context.Context, *topodatapb.Tablet, time.Time) (logutil.EventStream, error) {
+func (itmc *internalTabletManagerClient) RestoreFromBackup(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.RestoreFromBackupRequest) (logutil.EventStream, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

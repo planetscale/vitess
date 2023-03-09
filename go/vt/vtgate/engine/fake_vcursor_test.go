@@ -232,6 +232,13 @@ func (t *noopVCursor) SetClientFoundRows(context.Context, bool) error {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetQueryTimeout(maxExecutionTime int64) {
+}
+
+func (t *noopVCursor) GetQueryTimeout(queryTimeoutFromComments int) int {
+	return queryTimeoutFromComments
+}
+
 func (t *noopVCursor) SetSkipQueryPlanCache(context.Context, bool) error {
 	panic("implement me")
 }
@@ -249,6 +256,10 @@ func (t *noopVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
 }
 
 func (t *noopVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) SetConsolidator(querypb.ExecuteOptions_Consolidator) {
 	panic("implement me")
 }
 
@@ -275,7 +286,7 @@ func (t *noopVCursor) Execute(ctx context.Context, method string, query string, 
 	panic("unimplemented")
 }
 
-func (t *noopVCursor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
+func (t *noopVCursor) ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
 	panic("unimplemented")
 }
 
@@ -283,11 +294,11 @@ func (t *noopVCursor) AutocommitApproval() bool {
 	panic("unimplemented")
 }
 
-func (t *noopVCursor) ExecuteStandalone(ctx context.Context, query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+func (t *noopVCursor) ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
 
-func (t *noopVCursor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
+func (t *noopVCursor) StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	panic("unimplemented")
 }
 
@@ -451,7 +462,7 @@ func (f *loggingVCursor) Execute(ctx context.Context, method string, query strin
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
+func (f *loggingVCursor) ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error) {
 	f.log = append(f.log, fmt.Sprintf("ExecuteMultiShard %v%v %v", printResolvedShardQueries(rss, queries), rollbackOnError, canAutocommit))
 	res, err := f.nextResult()
 	if err != nil {
@@ -465,12 +476,12 @@ func (f *loggingVCursor) AutocommitApproval() bool {
 	return true
 }
 
-func (f *loggingVCursor) ExecuteStandalone(ctx context.Context, query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+func (f *loggingVCursor) ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("ExecuteStandalone %s %v %s %s", query, printBindVars(bindvars), rs.Target.Keyspace, rs.Target.Shard))
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
+func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	f.mu.Lock()
 	f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s", query, printResolvedShardsBindVars(rss, bindVars)))
 	r, err := f.nextResult()
@@ -705,9 +716,9 @@ func (f *loggingVCursor) CanUseSetVar() bool {
 	return useSetVar
 }
 
-func (t *noopVCursor) VtExplainLogging() {}
-func (t *noopVCursor) DisableLogging()   {}
-func (t *noopVCursor) GetVTExplainLogs() []ExecuteEntry {
+func (t *noopVCursor) VExplainLogging() {}
+func (t *noopVCursor) DisableLogging()  {}
+func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
 	return nil
 }
 func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {

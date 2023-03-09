@@ -265,9 +265,8 @@ primary key(eid, id)
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("%#v.Query() = %v, want %v", input, got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "%#v.Query() = %v, want %v", input, got, want)
+
 }
 
 func TestBinlogEventQueryBadLength(t *testing.T) {

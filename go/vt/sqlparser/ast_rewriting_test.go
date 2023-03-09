@@ -37,13 +37,13 @@ type testCaseSysVar struct {
 }
 
 type myTestCase struct {
-	in, expected                                                       string
-	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
-	ddlStrategy, sessionUUID, sessionEnableSystemSettings              bool
-	udv                                                                int
-	autocommit, clientFoundRows, skipQueryPlanCache, socket, replLag   bool
-	sqlSelectLimit, transactionMode, workload, version, versionComment bool
-	txIsolation                                                        bool
+	in, expected                                                          string
+	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID     bool
+	ddlStrategy, sessionUUID, sessionEnableSystemSettings                 bool
+	udv                                                                   int
+	autocommit, clientFoundRows, skipQueryPlanCache, socket, queryTimeout bool
+	sqlSelectLimit, transactionMode, workload, version, versionComment    bool
+	txIsolation, replLag                                                  bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -55,6 +55,10 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT @@version",
 		expected: "SELECT :__vtversion as `@@version`",
 		version:  true,
+	}, {
+		in:           "SELECT @@query_timeout",
+		expected:     "SELECT :__vtquery_timeout as `@@query_timeout`",
+		queryTimeout: true,
 	}, {
 		in:             "SELECT @@version_comment",
 		expected:       "SELECT :__vtversion_comment as `@@version_comment`",
@@ -283,6 +287,9 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
 		expected: "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3 limit 1)",
 	}, {
+		in:       "SELECT id, name, salary FROM user_details",
+		expected: "SELECT id, name, salary FROM (select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id) as user_details",
+	}, {
 		in:                          "SHOW VARIABLES",
 		expected:                    "SHOW VARIABLES",
 		autocommit:                  true,
@@ -300,6 +307,7 @@ func TestRewrites(in *testing.T) {
 		rawTimeout:                  true,
 		sessTrackGTID:               true,
 		socket:                      true,
+		queryTimeout:                true,
 	}, {
 		in:                          "SHOW GLOBAL VARIABLES",
 		expected:                    "SHOW GLOBAL VARIABLES",
@@ -318,6 +326,7 @@ func TestRewrites(in *testing.T) {
 		rawTimeout:                  true,
 		sessTrackGTID:               true,
 		socket:                      true,
+		queryTimeout:                true,
 	}, {
 		in:       "select max_repl_lag()",
 		expected: "select :__vtmaxrepllag as `max_repl_lag()` from dual",
@@ -330,7 +339,14 @@ func TestRewrites(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", nil) // passing `ks` just to test that no rewriting happens as it is not system schema
+			result, err := RewriteAST(
+				stmt,
+				"ks", // passing `ks` just to test that no rewriting happens as it is not system schema
+				SQLSelectLimitUnset,
+				"",
+				nil,
+				&fakeViews{},
+			)
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -351,6 +367,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.sqlSelectLimit, result.NeedsSysVar(sysvars.SQLSelectLimit.Name), "should need :__vtsqlSelectLimit")
 			assert.Equal(tc.transactionMode, result.NeedsSysVar(sysvars.TransactionMode.Name), "should need :__vttransactionMode")
 			assert.Equal(tc.workload, result.NeedsSysVar(sysvars.Workload.Name), "should need :__vtworkload")
+			assert.Equal(tc.queryTimeout, result.NeedsSysVar(sysvars.QueryTimeout.Name), "should need :__vtquery_timeout")
 			assert.Equal(tc.ddlStrategy, result.NeedsSysVar(sysvars.DDLStrategy.Name), "should need ddlStrategy")
 			assert.Equal(tc.sessionUUID, result.NeedsSysVar(sysvars.SessionUUID.Name), "should need sessionUUID")
 			assert.Equal(tc.sessionEnableSystemSettings, result.NeedsSysVar(sysvars.SessionEnableSystemSettings.Name), "should need sessionEnableSystemSettings")
@@ -362,6 +379,19 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.socket, result.NeedsSysVar(sysvars.Socket.Name), "should need :__vtsocket")
 		})
 	}
+}
+
+type fakeViews struct{}
+
+func (*fakeViews) FindView(name TableName) SelectStatement {
+	if name.Name.String() != "user_details" {
+		return nil
+	}
+	statement, err := Parse("select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id")
+	if err != nil {
+		return nil
+	}
+	return statement.(SelectStatement)
 }
 
 func TestRewritesWithSetVarComment(in *testing.T) {
@@ -405,7 +435,7 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil)
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -453,7 +483,7 @@ func TestRewritesSysVar(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar)
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -503,7 +533,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil)
+			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)

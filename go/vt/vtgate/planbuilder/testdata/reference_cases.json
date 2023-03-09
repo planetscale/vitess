@@ -400,7 +400,26 @@
   {
     "comment": "update qualified ambiguous reference table v3 error no primary vindex v4 route to source",
     "query": "update user.ambiguous_ref_with_source set col = 1",
-    "plan": "table 'ambiguous_ref_with_source' does not have a primary vindex"
+    "v3-plan": "VT09001: table 'ambiguous_ref_with_source' does not have a primary vindex",
+    "gen4-plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user.ambiguous_ref_with_source set col = 1",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "update ambiguous_ref_with_source set col = 1",
+        "Table": "ambiguous_ref_with_source"
+      },
+      "TablesUsed": [
+        "main.ambiguous_ref_with_source"
+      ]
+    }
   },
   {
     "comment": "delete from unqualified ambiguous reference table routes to source",
@@ -428,7 +447,26 @@
   {
     "comment": "delete from qualified ambiguous reference table v3 error no primary vindex v4 route to source",
     "query": "delete from user.ambiguous_ref_with_source where col = 1",
-    "plan": "table 'ambiguous_ref_with_source' does not have a primary vindex"
+    "v3-plan": "VT09001: table 'ambiguous_ref_with_source' does not have a primary vindex",
+    "gen4-plan": {
+      "QueryType": "DELETE",
+      "Original": "delete from user.ambiguous_ref_with_source where col = 1",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "delete from ambiguous_ref_with_source where col = 1",
+        "Table": "ambiguous_ref_with_source"
+      },
+      "TablesUsed": [
+        "main.ambiguous_ref_with_source"
+      ]
+    }
   },
   {
     "comment": "join with unqualified unambiguous ref with source routes to requested table",
@@ -458,9 +496,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `user`.col from `user`, ref_in_source as ref_with_source where 1 != 1",
-        "Query": "select `user`.col from `user`, ref_in_source as ref_with_source",
-        "Table": "`user`, ref_in_source"
+        "FieldQuery": "select `user`.col from `user`, ref_with_source where 1 != 1",
+        "Query": "select `user`.col from `user`, ref_with_source",
+        "Table": "`user`, ref_with_source"
       },
       "TablesUsed": [
         "user.ref_with_source",

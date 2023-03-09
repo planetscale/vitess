@@ -303,17 +303,17 @@ func assertTransactionalityAndRollbackObeyed(ctx context.Context, t *testing.T, 
 	}
 	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
 	_, err := cur.Execute(ctx, query, bindVariables)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	bindVariables = map[string]*querypb.BindVariable{
 		"msg": {Type: querypb.Type_VARCHAR, Value: []byte(msg)},
 	}
 	res, err := cur.Execute(ctx, "select * from test_table where msg = :msg", bindVariables)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Rows))
 
 	_, err = cur.Execute(ctx, "begin", nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	msg2 := msg + "2"
 	bindVariables = map[string]*querypb.BindVariable{
@@ -322,15 +322,15 @@ func assertTransactionalityAndRollbackObeyed(ctx context.Context, t *testing.T, 
 	}
 	query = "update test_table set msg = :msg where id = :id"
 	_, err = cur.Execute(ctx, query, bindVariables)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	_, err = cur.Execute(ctx, "rollback", nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	bindVariables = map[string]*querypb.BindVariable{
 		"msg": {Type: querypb.Type_VARCHAR, Value: []byte(msg2)},
 	}
 	res, err = cur.Execute(ctx, "select * from test_table where msg = :msg", bindVariables)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, 0, len(res.Rows))
 }

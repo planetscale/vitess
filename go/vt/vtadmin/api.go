@@ -341,8 +341,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/cells", httpAPI.Adapt(vtadminhttp.GetCellInfos)).Name("API.GetCellInfos")
 	router.HandleFunc("/cells_aliases", httpAPI.Adapt(vtadminhttp.GetCellsAliases)).Name("API.GetCellsAliases")
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
-	router.HandleFunc("/cluster/{cluster_id}/validate", httpAPI.Adapt(vtadminhttp.Validate)).Name("API.Validate").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/cluster/{cluster_id}/topology", httpAPI.Adapt(vtadminhttp.GetTopologyPath)).Name("API.GetTopologyPath")
+	router.HandleFunc("/cluster/{cluster_id}/validate", httpAPI.Adapt(vtadminhttp.Validate)).Name("API.Validate").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
@@ -1402,7 +1402,7 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 
 			workflows, err := c.GetWorkflows(ctx, req.Keyspaces, cluster.GetWorkflowsOptions{
 				ActiveOnly:      req.ActiveOnly,
-				IgnoreKeyspaces: sets.NewString(req.IgnoreKeyspaces...),
+				IgnoreKeyspaces: sets.New[string](req.IgnoreKeyspaces...),
 			})
 			if err != nil {
 				rec.RecordError(err)
@@ -1913,6 +1913,9 @@ func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.Validat
 
 // VTExplain is part of the vtadminpb.VTAdminServer interface.
 func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) (*vtadminpb.VTExplainResponse, error) {
+	// TODO (andrew): https://github.com/vitessio/vitess/issues/12161.
+	log.Warningf("VTAdminServer.VTExplain is deprecated; please use a vexplain query instead. For more details, see https://vitess.io/docs/user-guides/sql/vexplain/.")
+
 	span, ctx := trace.NewSpan(ctx, "API.VTExplain")
 	defer span.Finish()
 

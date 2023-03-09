@@ -24,8 +24,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/withddl"
-
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -42,19 +40,8 @@ import (
 )
 
 const (
-	sqlCreateSidecarDB      = "create database if not exists %s"
-	sqlCreateHeartbeatTable = `CREATE TABLE IF NOT EXISTS %s.heartbeat (
-  keyspaceShard VARBINARY(256) NOT NULL PRIMARY KEY,
-  tabletUid INT UNSIGNED NOT NULL,
-  ts BIGINT UNSIGNED NOT NULL
-        ) engine=InnoDB`
 	sqlUpsertHeartbeat = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
 )
-
-var withDDL = withddl.New([]string{
-	fmt.Sprintf(sqlCreateSidecarDB, "_vt"),
-	fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"),
-})
 
 // heartbeatWriter runs on primary tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
@@ -101,8 +88,8 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		errorLog:         logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
 		// stats from incrementing continually, and causing concern
-		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, mysqlctl.DbaIdleTimeout, mysqlctl.PoolDynamicHostnameResolution),
-		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, mysqlctl.DbaIdleTimeout, mysqlctl.PoolDynamicHostnameResolution),
+		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 	}
 	if w.onDemandDuration > 0 {
 		// see RequestHeartbeats() for use of onDemandRequestTicks
@@ -221,7 +208,7 @@ func (w *heartbeatWriter) write() error {
 		return err
 	}
 	defer appConn.Recycle()
-	_, err = withDDL.Exec(ctx, upsert, appConn.ExecuteFetch, allPrivsConn.ExecuteFetch)
+	_, err = appConn.ExecuteFetch(upsert, 1, false)
 	if err != nil {
 		return err
 	}

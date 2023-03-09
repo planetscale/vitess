@@ -173,16 +173,22 @@ func (route *Route) SetTruncateColumnCount(count int) {
 
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	if route.QueryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(route.QueryTimeout)*time.Millisecond)
-		defer cancel()
-	}
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, route.QueryTimeout)
+	defer cancelFunc()
 	qr, err := route.executeInternal(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 	return qr.Truncate(route.TruncateColumnCount), nil
+}
+
+// addQueryTimeout adds a query timeout to the context it receives and returns the modified context along with the cancel function.
+func addQueryTimeout(ctx context.Context, vcursor VCursor, queryTimeout int) (context.Context, context.CancelFunc) {
+	timeout := vcursor.Session().GetQueryTimeout(queryTimeout)
+	if timeout != 0 {
+		return context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
+	}
+	return ctx, func() {}
 }
 
 type cxtKey int
@@ -242,7 +248,7 @@ func (route *Route) executeShards(
 	}
 
 	queries := getQueries(route.Query, bvs)
-	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	result, errs := vcursor.ExecuteMultiShard(ctx, route, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 
 	if errs != nil {
 		errs = filterOutNilErrors(errs)
@@ -333,7 +339,7 @@ func (route *Route) streamExecuteShards(
 	}
 
 	if len(route.OrderBy) == 0 {
-		errs := vcursor.StreamExecuteMulti(ctx, route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, func(qr *sqltypes.Result) error {
+		errs := vcursor.StreamExecuteMulti(ctx, route, route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 		if len(errs) > 0 {
@@ -365,9 +371,10 @@ func (route *Route) mergeSort(
 	prims := make([]StreamExecutor, 0, len(rss))
 	for i, rs := range rss {
 		prims = append(prims, &shardRoute{
-			query: route.Query,
-			rs:    rs,
-			bv:    bvs[i],
+			query:     route.Query,
+			rs:        rs,
+			bv:        bvs[i],
+			primitive: route,
 		})
 	}
 	ms := MergeSort{
@@ -390,7 +397,7 @@ func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 		// This code is unreachable. It's just a sanity check.
 		return nil, fmt.Errorf("no shards for keyspace: %s", route.Keyspace.Name)
 	}
-	qr, err := execShard(ctx, vcursor, route.FieldQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	qr, err := execShard(ctx, route, vcursor, route.FieldQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}
@@ -538,6 +545,7 @@ func (route *Route) streamExecuteAfterLookup(
 
 func execShard(
 	ctx context.Context,
+	primitive Primitive,
 	vcursor VCursor,
 	query string,
 	bindVars map[string]*querypb.BindVariable,
@@ -545,7 +553,7 @@ func execShard(
 	rollbackOnError, canAutocommit bool,
 ) (*sqltypes.Result, error) {
 	autocommit := canAutocommit && vcursor.AutocommitApproval()
-	result, errs := vcursor.ExecuteMultiShard(ctx, []*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
+	result, errs := vcursor.ExecuteMultiShard(ctx, primitive, []*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
 		{
 			Sql:           query,
 			BindVariables: bindVars,

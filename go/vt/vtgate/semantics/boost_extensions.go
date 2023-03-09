@@ -19,7 +19,7 @@ func (n *noTable) GetVindexTable() *vindexes.Table {
 	return nil
 }
 
-func (n *noTable) getExprFor(s string) (sqlparser.Expr, error) {
+func (n *noTable) GetExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should not be called")
 }
 

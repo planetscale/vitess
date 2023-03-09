@@ -20,7 +20,6 @@ import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } fr
 import { HttpOkResponse } from './responseTypes';
 import { TabletDebugVars } from '../util/tabletDebugVars';
 import { env, isReadOnlyMode } from '../util/env';
-import cookies from 'js-cookie';
 
 /**
  * vtfetch makes HTTP requests against the given vtadmin-api endpoint
@@ -42,13 +41,8 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
             throw new Error(`Cannot execute write request in read-only mode: ${options.method} ${endpoint}`);
         }
 
-        const env_url = `${env().REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
+        const url = `${env().REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
         const opts = { ...vtfetchOpts(), ...options };
-
-        // To support variable API endpoints, check if an api address is set as a cookie before
-        // falling back to REACT_APP_VTADMIN_API_ADDRESS
-        const vtadmin_api_addr = cookies.get('vtadmin_api_addr');
-        const url = vtadmin_api_addr ? `${vtadmin_api_addr}${endpoint}` : env_url;
 
         let response = null;
         try {
@@ -760,6 +754,21 @@ export const createShard = async (params: CreateShardParams) => {
 
     return vtctldata.CreateShardResponse.create(result);
 };
+
+export interface GetTopologyPathParams {
+    clusterID: string;
+    path: string;
+}
+
+export const getTopologyPath = async (params: GetTopologyPathParams) => {
+    const req = new URLSearchParams({ path: params.path });
+    const { result } = await vtfetch(`/api/cluster/${params.clusterID}/topology?${req}`);
+
+    const err = vtctldata.GetTopologyPathResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.GetTopologyPathResponse.create(result);
+};
 export interface ValidateParams {
     clusterID: string;
     pingTablets: boolean;
@@ -830,20 +839,4 @@ export const validateVersionShard = async (params: ValidateVersionShardParams) =
     if (err) throw Error(err);
 
     return vtctldata.ValidateVersionShardResponse.create(result);
-};
-export interface GetTopologyPathParams {
-    clusterID: string;
-    path: string;
-}
-
-export const getTopologyPath = async (params: GetTopologyPathParams) => {
-    const req = new URLSearchParams();
-    req.append('path', params.path);
-
-    const { result } = await vtfetch(`/api/cluster/${params.clusterID}/topology?${req}`);
-
-    const err = vtctldata.GetTopologyPathResponse.verify(result);
-    if (err) throw Error(err);
-
-    return vtctldata.GetTopologyPathResponse.create(result);
 };

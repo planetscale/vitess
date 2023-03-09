@@ -27,6 +27,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,7 +38,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -52,6 +52,8 @@ import (
 
 const (
 	builtinBackupEngineName = "builtin"
+	autoIncrementalFromPos  = "auto"
+	writerBufferSize        = 2 * 1024 * 1024
 	dataDictionaryFile      = "mysql.ibd"
 )
 
@@ -83,8 +85,7 @@ type BuiltinBackupEngine struct {
 }
 
 // builtinBackupManifest represents the backup. It lists all the files, the
-// Position that the backup was taken at, and the transform hook used,
-// if any.
+// Position that the backup was taken at, the compression engine used, etc.
 type builtinBackupManifest struct {
 	// BackupManifest is an anonymous embedding of the base manifest struct.
 	BackupManifest
@@ -98,9 +99,6 @@ type builtinBackupManifest struct {
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
 
-	// TransformHook that was used on the files, if any.
-	TransformHook string
-
 	// SkipCompress is true if the backup files were NOT run through gzip.
 	// The field is expressed as a negative because it will come through as
 	// false for backups that were created before the field existed, and those
@@ -113,6 +111,7 @@ type FileEntry struct {
 	// Base is one of:
 	// - backupInnodbDataHomeDir for files that go into Mycnf.InnodbDataHomeDir
 	// - backupInnodbLogGroupHomeDir for files that go into Mycnf.InnodbLogGroupHomeDir
+	// - binLogDir for files that go in the binlog dir (base path of Mycnf.BinLogPath)
 	// - backupData for files that go into Mycnf.DataDir
 	Base string
 
@@ -122,6 +121,10 @@ type FileEntry struct {
 	// Hash is the hash of the final data (transformed and
 	// compressed if specified) stored in the BackupStorage.
 	Hash string
+
+	// ParentPath is an optional prefix to the Base path. If empty, it is ignored. Useful
+	// for writing files in a temporary directory
+	ParentPath string
 }
 
 func init() {
@@ -137,7 +140,13 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.UintVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 }
 
-func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
+// isIncrementalBackup is a convenience function to check whether the params indicate an incremental backup request
+func isIncrementalBackup(params BackupParams) bool {
+	return params.IncrementalFromPos != ""
+}
+
+// fullPath returns the full path of the entry, based on its type
+func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 	// find the root to use
 	var root string
 	switch fe.Base {
@@ -147,14 +156,22 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 		root = cnf.InnodbLogGroupHomeDir
 	case backupData:
 		root = cnf.DataDir
+	case backupBinlogDir:
+		root = filepath.Dir(cnf.BinLogPath)
 	default:
-		return nil, vterrors.Errorf(vtrpc.Code_UNKNOWN, "unknown base: %v", fe.Base)
+		return "", vterrors.Errorf(vtrpc.Code_UNKNOWN, "unknown base: %v", fe.Base)
 	}
 
-	// and open the file
-	name := path.Join(root, fe.Name)
+	return path.Join(fe.ParentPath, root, fe.Name), nil
+}
+
+// open attempts t oopen the file
+func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
+	name, err := fe.fullPath(cnf)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "cannot evaluate full name for %v", fe.Name)
+	}
 	var fd *os.File
-	var err error
 	if readOnly {
 		if fd, err = os.Open(name); err != nil {
 			return nil, vterrors.Wrapf(err, "cannot open source file %v", name)
@@ -171,13 +188,134 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	return fd, nil
 }
 
-// ExecuteBackup returns a boolean that indicates if the backup is usable,
-// and an overall error.
+// ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
+// The function returns a boolean that indicates if the backup is usable, and an overall error.
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
-	params.Logger.Infof("Hook: %v, Compress: %v", backupStorageHook, backupStorageCompress)
-	if backupStorageHook != "" {
-		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
+	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
+		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
+
+	if isIncrementalBackup(params) {
+		return be.executeIncrementalBackup(ctx, params, bh)
 	}
+	return be.executeFullBackup(ctx, params, bh)
+}
+
+// executeIncrementalBackup runs an incremental backup, based on given 'incremental_from_pos', which can be:
+// - A valid position
+// - "auto", indicating the incremental backup should begin with last successful backup end position.
+func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+	if params.IncrementalFromPos == autoIncrementalFromPos {
+		params.Logger.Infof("auto evaluating incremental_from_pos")
+		bs, err := backupstorage.GetBackupStorage()
+		if err != nil {
+			return false, err
+		}
+		defer bs.Close()
+
+		// Backups are stored in a directory structure that starts with
+		// <keyspace>/<shard>
+		backupDir := GetBackupDir(params.Keyspace, params.Shard)
+		bhs, err := bs.ListBackups(ctx, backupDir)
+		if err != nil {
+			return false, vterrors.Wrap(err, "ListBackups failed")
+		}
+		_, manifest, err := FindLatestSuccessfulBackup(ctx, params.Logger, bhs)
+		if err != nil {
+			return false, vterrors.Wrap(err, "FindLatestSuccessfulBackup failed")
+		}
+		params.IncrementalFromPos = mysql.EncodePosition(manifest.Position)
+		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
+	}
+
+	rp, err := mysql.DecodePosition(params.IncrementalFromPos)
+	if err != nil {
+		return false, vterrors.Wrapf(err, "cannot decode position in incremental backup: %v", params.IncrementalFromPos)
+	}
+	if !rp.MatchesFlavor(mysql.Mysql56FlavorID) {
+		// incrementalFromGtidSet, ok := rp.GTIDSet.(mysql.Mysql56GTIDSet)
+		// if !ok {
+		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "incremental backup only supports MySQL GTID positions. Got: %v", params.IncrementalFromPos)
+	}
+	serverUUID, err := params.Mysqld.GetServerUUID(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get server uuid")
+	}
+	gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get gtid_purged")
+	}
+	rpGTID, ok := rp.GTIDSet.(mysql.Mysql56GTIDSet)
+	if !ok {
+		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID value: %v", rpGTID)
+	}
+	purgedGTID, ok := gtidPurged.GTIDSet.(mysql.Mysql56GTIDSet)
+	if !ok {
+		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", rpGTID)
+	}
+	// binlogs may not contain information about purged GTIDs. e.g. some binlog.000003 may have
+	// previous GTIDs like 00021324-1111-1111-1111-111111111111:30-60, ie 1-29 range is missing. This can happen
+	// when a server is restored from backup and set with gtid_purged != "".
+	// This is fine!
+	// Shortly we will compare a binlog's "Previous GTIDs" with the backup's position. For the purpose of comparison, we
+	// ignore the purged GTIDs:
+	binlogCompareGTID := rpGTID.Difference(purgedGTID)
+
+	if err := params.Mysqld.FlushBinaryLogs(ctx); err != nil {
+		return false, vterrors.Wrapf(err, "cannot flush binary logs in incremental backup")
+	}
+	binaryLogs, err := params.Mysqld.GetBinaryLogs(ctx)
+	if err != nil {
+		return false, vterrors.Wrapf(err, "cannot get binary logs in incremental backup")
+	}
+	previousGTIDs := map[string]string{}
+	getPreviousGTIDs := func(ctx context.Context, binlog string) (gtids string, err error) {
+		gtids, ok := previousGTIDs[binlog]
+		if ok {
+			// Found a cached entry! No need to query again
+			return gtids, nil
+		}
+		gtids, err = params.Mysqld.GetPreviousGTIDs(ctx, binlog)
+		if err != nil {
+			return gtids, err
+		}
+		previousGTIDs[binlog] = gtids
+		return gtids, nil
+	}
+	binaryLogsToBackup, incrementalBackupFromGTID, incrementalBackupToGTID, err := ChooseBinlogsForIncrementalBackup(ctx, binlogCompareGTID, binaryLogs, getPreviousGTIDs, true)
+	if err != nil {
+		return false, vterrors.Wrapf(err, "cannot get binary logs to backup in incremental backup")
+	}
+	incrementalBackupFromPosition, err := mysql.ParsePosition(mysql.Mysql56FlavorID, incrementalBackupFromGTID)
+	if err != nil {
+		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupFromGTID)
+	}
+	incrementalBackupToPosition, err := mysql.ParsePosition(mysql.Mysql56FlavorID, incrementalBackupToGTID)
+	if err != nil {
+		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupToGTID)
+	}
+	// It's worthwhile we explain the difference between params.IncrementalFromPos and incrementalBackupFromPosition.
+	// params.IncrementalFromPos is supplied by the user. They want an incremental backup that covers that position.
+	// However, we implement incremental backups by copying complete binlog files. That position could potentially
+	// be somewhere in the middle of some binlog. So we look at the earliest binlog file that covers the user's position.
+	// The backup we take either starts exactly at the user's position or at some prior position, depending where in the
+	// binlog file the user's requested position is found.
+	// incrementalBackupFromGTID is the "previous GTIDs" of the first binlog file we back up.
+	// It is a fact that incrementalBackupFromGTID is earlier or equal to params.IncrementalFromPos.
+	// In the backup manifest file, we document incrementalBackupFromGTID, not the user's requested position.
+	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, mysql.Position{}, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// executeFullBackup returns a boolean that indicates if the backup is usable,
+// and an overall error.
+func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+
+	if params.IncrementalFromPos != "" {
+		return be.executeIncrementalBackup(ctx, params, bh)
+	}
+
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
@@ -217,17 +355,31 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 			return false, vterrors.Wrap(err, "can't get position on primary")
 		}
 	} else {
-		if err = params.Mysqld.StopReplication(params.HookExtraEnv); err != nil {
+		// This is a replica
+		if err := params.Mysqld.StopReplication(params.HookExtraEnv); err != nil {
 			return false, vterrors.Wrapf(err, "can't stop replica")
 		}
-		var replicaStatus mysql.ReplicationStatus
-		replicaStatus, err = params.Mysqld.ReplicationStatus()
+		replicaStatus, err := params.Mysqld.ReplicationStatus()
 		if err != nil {
 			return false, vterrors.Wrap(err, "can't get replica status")
 		}
 		replicationPosition = replicaStatus.Position
 	}
 	params.Logger.Infof("using replication position: %v", replicationPosition)
+
+	gtidPurgedPosition, err := params.Mysqld.GetGTIDPurged(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get gtid_purged")
+	}
+
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get purged position")
+	}
+
+	serverUUID, err := params.Mysqld.GetServerUUID(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get server uuid")
+	}
 
 	// shutdown mysqld
 	shutdownCtx, cancel := context.WithTimeout(ctx, BuiltinBackupMysqldTimeout)
@@ -238,7 +390,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, params, bh, replicationPosition)
+	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, gtidPurgedPosition, mysql.Position{}, nil, serverUUID)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -314,10 +466,26 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position) (finalErr error) {
+func (be *BuiltinBackupEngine) backupFiles(
+	ctx context.Context,
+	params BackupParams,
+	bh backupstorage.BackupHandle,
+	replicationPosition mysql.Position,
+	purgedPosition mysql.Position,
+	fromPosition mysql.Position,
+	binlogFiles []string,
+	serverUUID string,
+) (finalErr error) {
+
 	// Get the files to backup.
 	// We don't care about totalSize because we add each file separately.
-	fes, _, err := findFilesToBackup(params.Cnf)
+	var fes []FileEntry
+	var err error
+	if isIncrementalBackup(params) {
+		fes, _, err = binlogFilesToBackup(params.Cnf, binlogFiles)
+	} else {
+		fes, _, err = findFilesToBackup(params.Cnf)
+	}
 	if err != nil {
 		return vterrors.Wrap(err, "can't find files to backup")
 	}
@@ -374,15 +542,21 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 	bm := &builtinBackupManifest{
 		// Common base fields
 		BackupManifest: BackupManifest{
-			BackupMethod: builtinBackupEngineName,
-			Position:     replicationPosition,
-			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
-			FinishedTime: time.Now().UTC().Format(time.RFC3339),
+			BackupMethod:   builtinBackupEngineName,
+			Position:       replicationPosition,
+			PurgedPosition: purgedPosition,
+			FromPosition:   fromPosition,
+			Incremental:    !fromPosition.IsZero(),
+			ServerUUID:     serverUUID,
+			TabletAlias:    params.TabletAlias,
+			Keyspace:       params.Keyspace,
+			Shard:          params.Shard,
+			BackupTime:     params.BackupTime.UTC().Format(time.RFC3339),
+			FinishedTime:   time.Now().UTC().Format(time.RFC3339),
 		},
 
 		// Builtin-specific fields
 		FileEntries:       fes,
-		TransformHook:     backupStorageHook,
 		SkipCompress:      !backupStorageCompress,
 		CompressionEngine: CompressionEngineName,
 	}
@@ -537,19 +711,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	var reader io.Reader = br
 	var writer io.Writer = bw
 
-	// Create the external write pipe, if any.
-	var pipe io.WriteCloser
-	var wait hook.WaitFunc
-	if backupStorageHook != "" {
-		h := hook.NewHook(backupStorageHook, []string{"-operation", "write"})
-		h.ExtraEnv = params.HookExtraEnv
-		pipe, wait, _, err = h.ExecuteAsWritePipe(writer)
-		if err != nil {
-			return vterrors.Wrapf(err, "'%v' hook returned error", backupStorageHook)
-		}
-		writer = pipe
-	}
-
 	// Create the gzip compression pipe, if necessary.
 	var compressor io.WriteCloser
 	if backupStorageCompress {
@@ -590,20 +751,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		params.Stats.Scope(stats.Operation("Compressor:Close")).TimedIncrement(time.Since(closeCompressorAt))
 	}
 
-	// Close the hook pipe if necessary.
-	if pipe != nil {
-		if err := pipe.Close(); err != nil {
-			return vterrors.Wrap(err, "cannot close hook pipe")
-		}
-		stderr, err := wait()
-		if stderr != "" {
-			params.Logger.Infof("'%v' hook returned stderr: %v", backupStorageHook, stderr)
-		}
-		if err != nil {
-			return vterrors.Wrapf(err, "'%v' returned error", backupStorageHook)
-		}
-	}
-
 	// Close the backupPipe to finish writing on destination.
 	closeWriterAt := time.Now()
 	if err = bw.Close(); err != nil {
@@ -619,6 +766,55 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	// Save the hash.
 	fe.Hash = bw.HashString()
+	return nil
+}
+
+// executeRestoreFullBackup restores the files from a full backup. The underlying mysql database service is expected to be stopped.
+func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
+	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
+		return err
+	}
+
+	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
+
+	if _, err := be.restoreFiles(context.Background(), params, bh, bm); err != nil {
+		// don't delete the file here because that is how we detect an interrupted restore
+		return vterrors.Wrap(err, "failed to restore files")
+	}
+	return nil
+}
+
+// executeRestoreIncrementalBackup executes a restore of an incremental backup, and expect to run on top of a full backup's restore.
+// It restores any (zero or more) binary log files and applies them onto the underlying database one at a time, but only applies those transactions
+// that fall within params.RestoreToPos.GTIDSet. The rest (typically a suffix of the last binary log) are discarded.
+// The underlying mysql database is expected to be up and running.
+func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
+	params.Logger.Infof("Restoring incremental backup to position: %v", bm.Position)
+
+	createdDir, err := be.restoreFiles(context.Background(), params, bh, bm)
+	defer os.RemoveAll(createdDir)
+	mysqld, ok := params.Mysqld.(*Mysqld)
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "expected: Mysqld")
+	}
+	for _, fe := range bm.FileEntries {
+		fe.ParentPath = createdDir
+		binlogFile, err := fe.fullPath(params.Cnf)
+		if err != nil {
+			return vterrors.Wrap(err, "failed to restore file")
+		}
+		if err := mysqld.applyBinlogFile(binlogFile, params.RestoreToPos.GTIDSet); err != nil {
+			return vterrors.Wrap(err, "failed to extract binlog file")
+		}
+		defer os.Remove(binlogFile)
+		params.Logger.Infof("Applied binlog file: %v", binlogFile)
+	}
+	if err != nil {
+		// don't delete the file here because that is how we detect an interrupted restore
+		return vterrors.Wrap(err, "failed to restore files")
+	}
+	params.Logger.Infof("Restored incremental backup files to: %v", createdDir)
+
 	return nil
 }
 
@@ -638,27 +834,22 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 		return nil, err
 	}
 
-	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
+	var err error
+	if bm.Incremental {
+		err = be.executeRestoreIncrementalBackup(ctx, params, bh, bm)
+	} else {
+		err = be.executeRestoreFullBackup(ctx, params, bh, bm)
+	}
+	if err != nil {
 		return nil, err
 	}
-	if bm.TransformHook != "" {
-		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
-	}
-
-	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
-
-	if err := be.restoreFiles(context.Background(), params, bh, bm); err != nil {
-		// don't delete the file here because that is how we detect an interrupted restore
-		return nil, vterrors.Wrap(err, "failed to restore files")
-	}
-
 	params.Logger.Infof("Restore: returning replication position %v", bm.Position)
 	return &bm.BackupManifest, nil
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
-func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
+func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) (createdDir string, err error) {
 	// For optimization, we are replacing pargzip with pgzip, so newBuiltinDecompressor doesn't have to compare and print warning for every file
 	// since newBuiltinDecompressor is helper method and does not hold any state, it was hard to do it in that method itself.
 	if bm.CompressionEngine == PargzipCompressor {
@@ -669,6 +860,12 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}()
 	}
 
+	if bm.Incremental {
+		createdDir, err = os.MkdirTemp("", "restore-incremental-*")
+		if err != nil {
+			return "", err
+		}
+	}
 	fes := bm.FileEntries
 	sema := sync2.NewSemaphore(params.Concurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
@@ -686,17 +883,19 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 				return
 			}
 
+			fe := &fes[i]
+			fe.ParentPath = createdDir
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
-			params.Logger.Infof("Copying file %v: %v", name, fes[i].Name)
-			err := be.restoreFile(ctx, params, bh, &fes[i], bm, name)
+			params.Logger.Infof("Copying file %v: %v", name, fe.Name)
+			err := be.restoreFile(ctx, params, bh, fe, bm, name)
 			if err != nil {
-				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fes[i].Name))
+				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fe.Name))
 			}
 		}(i)
 	}
 	wg.Wait()
-	return rec.Error()
+	return createdDir, rec.Error()
 }
 
 // restoreFile restores an individual file.
@@ -748,17 +947,6 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	bufferedDest := bufio.NewWriterSize(timedDest, int(builtinBackupFileWriteBufferSize))
 
-	// Create the external read pipe, if any.
-	var wait hook.WaitFunc
-	if bm.TransformHook != "" {
-		h := hook.NewHook(bm.TransformHook, []string{"-operation", "read"})
-		h.ExtraEnv = params.HookExtraEnv
-		reader, wait, _, err = h.ExecuteAsReadPipe(reader)
-		if err != nil {
-			return vterrors.Wrapf(err, "'%v' hook returned error", bm.TransformHook)
-		}
-	}
-
 	// Create the uncompresser if needed.
 	if !bm.SkipCompress {
 		var decompressor io.ReadCloser
@@ -805,17 +993,6 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Copy the data. Will also write to the hasher.
 	if _, err = io.Copy(bufferedDest, reader); err != nil {
 		return vterrors.Wrap(err, "failed to copy file contents")
-	}
-
-	// Close the Pipe.
-	if wait != nil {
-		stderr, err := wait()
-		if stderr != "" {
-			log.Infof("'%v' hook returned stderr: %v", bm.TransformHook, stderr)
-		}
-		if err != nil {
-			return vterrors.Wrapf(err, "'%v' returned error", bm.TransformHook)
-		}
 	}
 
 	// Check the hash.

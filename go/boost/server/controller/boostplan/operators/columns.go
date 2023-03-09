@@ -147,11 +147,25 @@ func (p *Project) rewriteDerivedExpression(semTable *semantics.SemTable, newCol 
 	if err != nil {
 		return nil, err
 	}
-	newExpr, err := semantics.RewriteDerivedTableExpressionWithDepsCopy(semTable, newCol.AST[0], infoFor)
-	if err != nil {
-		return nil, err
-	}
-	newCol = ColumnFromAST(newExpr)
+
+	newExpr := sqlparser.CopyOnRewrite(newCol.AST[0], nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			exp, err := infoFor.GetExprFor(node.Name.String())
+			if err == nil {
+				cursor.Replace(exp)
+			} else {
+				// cloning the expression and removing the qualifier
+				col := *node
+				col.Qualifier = sqlparser.TableName{}
+				cursor.Replace(&col)
+				if semTable != nil {
+					semTable.CopyDependencies(node, &col)
+				}
+			}
+		}
+	}, nil)
+	newCol = ColumnFromAST(newExpr.(sqlparser.Expr))
 	return newCol, nil
 }
 

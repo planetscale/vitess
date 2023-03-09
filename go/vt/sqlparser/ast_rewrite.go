@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -222,8 +222,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJSONKeysExpr(parent, node, replacer)
 	case *JSONObjectExpr:
 		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
-	case JSONObjectParam:
-		return a.rewriteJSONObjectParam(parent, node, replacer)
+	case *JSONObjectParam:
+		return a.rewriteRefOfJSONObjectParam(parent, node, replacer)
 	case *JSONOverlapsExpr:
 		return a.rewriteRefOfJSONOverlapsExpr(parent, node, replacer)
 	case *JSONPrettyExpr:
@@ -474,6 +474,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case *Use:
 		return a.rewriteRefOfUse(parent, node, replacer)
+	case *VExplainStmt:
+		return a.rewriteRefOfVExplainStmt(parent, node, replacer)
 	case *VStream:
 		return a.rewriteRefOfVStream(parent, node, replacer)
 	case ValTuple:
@@ -3652,7 +3654,10 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 	}
 	return true
 }
-func (a *application) rewriteJSONObjectParam(parent SQLNode, node JSONObjectParam, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObjectParam, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3662,12 +3667,12 @@ func (a *application) rewriteJSONObjectParam(parent SQLNode, node JSONObjectPara
 		}
 	}
 	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
-		panic("[BUG] tried to replace 'Key' on 'JSONObjectParam'")
+		parent.(*JSONObjectParam).Key = newNode.(Expr)
 	}) {
 		return false
 	}
 	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
-		panic("[BUG] tried to replace 'Value' on 'JSONObjectParam'")
+		parent.(*JSONObjectParam).Value = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -7644,6 +7649,38 @@ func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replac
 	}
 	return true
 }
+func (a *application) rewriteRefOfVExplainStmt(parent SQLNode, node *VExplainStmt, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
+		parent.(*VExplainStmt).Statement = newNode.(Statement)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*VExplainStmt).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8941,6 +8978,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfUpdate(parent, node, replacer)
 	case *Use:
 		return a.rewriteRefOfUse(parent, node, replacer)
+	case *VExplainStmt:
+		return a.rewriteRefOfVExplainStmt(parent, node, replacer)
 	case *VStream:
 		return a.rewriteRefOfVStream(parent, node, replacer)
 	default:
@@ -9134,38 +9173,6 @@ func (a *application) rewriteRefOfIdentifierCS(parent SQLNode, node *IdentifierC
 			a.cur.parent = parent
 			a.cur.node = node
 		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObjectParam, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
-		parent.(*JSONObjectParam).Key = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
-		parent.(*JSONObjectParam).Value = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}

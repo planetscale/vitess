@@ -63,6 +63,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 		"", workflowActionCreate, "", sourceShards, targetShards)
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
+	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, "")
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
 	vdiff1(t, ksWorkflow, "")
@@ -77,6 +78,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 		tables, workflowActionCreate, "", "", "")
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
+	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, tables)
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
 	vdiff1(t, ksWorkflow, "")
@@ -109,6 +111,11 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 			}
 		} else {
 			args = append(args, "--source_shards", sourceShards, "--target_shards", targetShards)
+		}
+		// Test new experimental --defer-secondary-keys flag
+		switch currentWorkflowType {
+		case wrangler.MoveTablesWorkflow, wrangler.MigrateWorkflow, wrangler.ReshardWorkflow:
+			args = append(args, "--defer-secondary-keys")
 		}
 	}
 	if cells != "" {
@@ -149,13 +156,13 @@ func tstWorkflowReverseWrites(t *testing.T) {
 	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "primary", ""))
 }
 
-// tstWorkflowSwitchReadsAndWrites tests that SwitchWrites w/o any user provided --tablet_types
+// tstWorkflowSwitchReadsAndWrites tests that switching traffic w/o any user provided --tablet_types
 // value switches all traffic
 func tstWorkflowSwitchReadsAndWrites(t *testing.T) {
 	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "", ""))
 }
 
-// tstWorkflowReversesReadsAndWrites tests that SwitchWrites w/o any user provided --tablet_types
+// tstWorkflowReversesReadsAndWrites tests that ReverseTraffic w/o any user provided --tablet_types
 // value switches all traffic in reverse
 func tstWorkflowReverseReadsAndWrites(t *testing.T) {
 	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "", ""))
@@ -205,25 +212,15 @@ func validateWritesRouteToTarget(t *testing.T) {
 	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
 }
 
-func revert(t *testing.T) {
-	switchWrites(t, reverseKsWorkflow, false)
+func revert(t *testing.T, workflowType string) {
+	switchWrites(t, workflowType, ksWorkflow, true)
 	validateWritesRouteToSource(t)
-	switchReadsNew(t, allCellNames, ksWorkflow, true)
+	switchReadsNew(t, workflowType, allCellNames, ksWorkflow, true)
 	validateReadsRouteToSource(t, "replica")
-	queries := []string{
-		"delete from _vt.vreplication",
-		"delete from _vt.resharding_journal",
-	}
 
-	for _, query := range queries {
-		targetTab1.QueryTablet(query, "customer", true)
-		targetTab2.QueryTablet(query, "customer", true)
-		sourceTab.QueryTablet(query, "product", true)
-	}
-	targetTab1.QueryTablet("drop table vt_customer.customer", "customer", true)
-	targetTab2.QueryTablet("drop table vt_customer.customer", "customer", true)
-
-	clearRoutingRules(t, vc)
+	// cancel the workflow to cleanup
+	_, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "Cancel", ksWorkflow)
+	require.NoError(t, err, fmt.Sprintf("%s Cancel error: %v", workflowType, err))
 }
 
 func checkStates(t *testing.T, startState, endState string) {
@@ -243,7 +240,14 @@ func getCurrentState(t *testing.T) string {
 
 func TestBasicV2Workflows(t *testing.T) {
 	defaultRdonly = 1
-	defer func() { defaultRdonly = 0 }()
+	extraVTTabletArgs = []string{
+		parallelInsertWorkers,
+	}
+	defer func() {
+		defaultRdonly = 0
+		extraVTTabletArgs = []string{}
+	}()
+
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
 	defer vc.TearDown(t)
@@ -641,9 +645,13 @@ func TestSwitchReadsWritesInAnyOrder(t *testing.T) {
 	moveCustomerTableSwitchFlows(t, []*Cell{vc.Cells["zone1"]}, "zone1")
 }
 
-func switchReadsNew(t *testing.T, cells, ksWorkflow string, reverse bool) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells,
-		"--tablet_types=rdonly,replica", fmt.Sprintf("--reverse=%t", reverse), ksWorkflow)
+func switchReadsNew(t *testing.T, workflowType, cells, ksWorkflow string, reverse bool) {
+	command := "SwitchTraffic"
+	if reverse {
+		command = "ReverseTraffic"
+	}
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells,
+		"--tablet_types=rdonly,replica", command, ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
 	if output != "" {
 		fmt.Printf("SwitchReads output: %s\n", output)
@@ -657,11 +665,12 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	tables := "customer"
 	setupCustomerKeyspace(t)
+	workflowType := "MoveTables"
 
 	var moveTablesAndWait = func() {
-		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
-		catchup(t, targetTab1, workflow, "MoveTables")
-		catchup(t, targetTab2, workflow, "MoveTables")
+		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
+		catchup(t, targetTab1, workflow, workflowType)
+		catchup(t, targetTab2, workflow, workflowType)
 		vdiff1(t, ksWorkflow, "")
 	}
 
@@ -669,71 +678,71 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		moveTablesAndWait()
 
 		validateReadsRouteToSource(t, "replica")
-		switchReadsNew(t, allCellNames, ksWorkflow, false)
+		switchReadsNew(t, workflowType, allCellNames, ksWorkflow, false)
 		validateReadsRouteToTarget(t, "replica")
 
 		validateWritesRouteToSource(t)
-		switchWrites(t, ksWorkflow, false)
+		switchWrites(t, workflowType, ksWorkflow, false)
 		validateWritesRouteToTarget(t)
 
-		revert(t)
+		revert(t, workflowType)
 	}
 	var switchWritesFollowedBySwitchReads = func() {
 		moveTablesAndWait()
 
 		validateWritesRouteToSource(t)
-		switchWrites(t, ksWorkflow, false)
+		switchWrites(t, workflowType, ksWorkflow, false)
 		validateWritesRouteToTarget(t)
 
 		validateReadsRouteToSource(t, "replica")
-		switchReadsNew(t, allCellNames, ksWorkflow, false)
+		switchReadsNew(t, workflowType, allCellNames, ksWorkflow, false)
 		validateReadsRouteToTarget(t, "replica")
 
-		revert(t)
+		revert(t, workflowType)
 	}
 
 	var switchReadsReverseSwitchWritesSwitchReads = func() {
 		moveTablesAndWait()
 
 		validateReadsRouteToSource(t, "replica")
-		switchReadsNew(t, allCellNames, ksWorkflow, false)
+		switchReadsNew(t, workflowType, allCellNames, ksWorkflow, false)
 		validateReadsRouteToTarget(t, "replica")
 
-		switchReadsNew(t, allCellNames, ksWorkflow, true)
+		switchReadsNew(t, workflowType, allCellNames, ksWorkflow, true)
 		validateReadsRouteToSource(t, "replica")
-		printRoutingRules(t, vc, "After reversing SwitchReads")
+		printRoutingRules(t, vc, "After reversing read traffic")
 
 		validateWritesRouteToSource(t)
-		switchWrites(t, ksWorkflow, false)
+		switchWrites(t, workflowType, ksWorkflow, false)
 		validateWritesRouteToTarget(t)
 
-		printRoutingRules(t, vc, "After SwitchWrites and reversing SwitchReads")
+		printRoutingRules(t, vc, "After switching writes and reversing reads")
 		validateReadsRouteToSource(t, "replica")
-		switchReadsNew(t, allCellNames, ksWorkflow, false)
+		switchReadsNew(t, workflowType, allCellNames, ksWorkflow, false)
 		validateReadsRouteToTarget(t, "replica")
 
-		revert(t)
+		revert(t, workflowType)
 	}
 
 	var switchWritesReverseSwitchReadsSwitchWrites = func() {
 		moveTablesAndWait()
 
 		validateWritesRouteToSource(t)
-		switchWrites(t, ksWorkflow, false)
+		switchWrites(t, workflowType, ksWorkflow, false)
 		validateWritesRouteToTarget(t)
 
-		switchWrites(t, reverseKsWorkflow, true)
+		switchWrites(t, workflowType, reverseKsWorkflow, true)
 		validateWritesRouteToSource(t)
 
 		validateReadsRouteToSource(t, "replica")
-		switchReadsNew(t, allCellNames, ksWorkflow, false)
+		switchReadsNew(t, workflowType, allCellNames, ksWorkflow, false)
 		validateReadsRouteToTarget(t, "replica")
 
 		validateWritesRouteToSource(t)
-		switchWrites(t, ksWorkflow, false)
+		switchWrites(t, workflowType, ksWorkflow, false)
 		validateWritesRouteToTarget(t)
 
-		revert(t)
+		revert(t, workflowType)
 
 	}
 	switchReadsFollowedBySwitchWrites()

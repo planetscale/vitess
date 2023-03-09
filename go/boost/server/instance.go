@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate"
 	vtschema "vitess.io/vitess/go/vt/vtgate/schema"
 
+	// nolint
 	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
 )
 
@@ -135,7 +136,7 @@ func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, t
 	const DefaultPlannerVersion = querypb.ExecuteOptions_Gen4
 	const DefaultTxMode = vtgatepb.TransactionMode_MULTI
 
-	tracker := vtschema.NewTracker(gateway.HealthCheck().Subscribe(), schemaTrackingUser)
+	tracker := vtschema.NewTracker(gateway.HealthCheck().Subscribe(), schemaTrackingUser, false)
 	addKeyspaceToTracker(ctx, log, srvResolver, tracker, gateway)
 
 	tc := vtgate.NewTxConn(gateway, DefaultTxMode)

@@ -29,6 +29,8 @@ limitations under the License.
 package servenv
 
 import (
+	// register the HTTP handlers for profiling
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"
@@ -49,8 +51,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	// register the HTTP handlers for profiling
-	_ "net/http/pprof"
 	// register the proper init and shutdown hooks for logging
 	_ "vitess.io/vitess/go/vt/logutil"
 
@@ -82,6 +82,7 @@ var (
 	onCloseTimeout = 10 * time.Second
 	catchSigpipe   bool
 	maxStackSize   = 64 * 1024 * 1024
+	initStartTime  time.Time // time when tablet init started: for debug purposes to time how long a tablet init takes
 )
 
 // RegisterFlags installs the flags used by Init, Run, and RunDefault.
@@ -94,16 +95,24 @@ func RegisterFlags() {
 		fs.DurationVar(&onTermTimeout, "onterm_timeout", onTermTimeout, "wait no more than this for OnTermSync handlers before stopping")
 		fs.DurationVar(&onCloseTimeout, "onclose_timeout", onCloseTimeout, "wait no more than this for OnClose handlers before stopping")
 		fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
+		fs.IntVar(&maxStackSize, "max-stack-size", maxStackSize, "configure the maximum stack size in bytes")
 
 		// pid_file.go
 		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
 	})
 }
 
+func GetInitStartTime() time.Time {
+	mu.Lock()
+	defer mu.Unlock()
+	return initStartTime
+}
+
 // Init is the first phase of the server startup.
 func Init() {
 	mu.Lock()
 	defer mu.Unlock()
+	initStartTime = time.Now()
 
 	// Ignore SIGPIPE if specified
 	// The Go runtime catches SIGPIPE for us on all fds except stdout/stderr

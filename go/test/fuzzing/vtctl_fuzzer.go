@@ -95,13 +95,11 @@ func getCommandType(index int) string {
 		51: "ValidateKeyspace",
 		52: "Reshard",
 		53: "MoveTables",
-		54: "DropSources",
 		55: "CreateLookupVindex",
 		56: "ExternalizeVindex",
 		57: "Materialize",
 		60: "VDiff",
-		63: "SwitchReads",
-		64: "SwitchWrites",
+		63: "SwitchTraffic",
 		67: "FindAllShardsInKeyspace",
 	}
 	return m[index]
@@ -170,8 +168,8 @@ func Fuzz(data []byte) int {
 	chunkSize := len(restOfArray) / numberOfCalls
 	command := 0
 	for i := 0; i < len(restOfArray); i = i + chunkSize {
-		from := i           //lower
-		to := i + chunkSize //upper
+		from := i           // lower
+		to := i + chunkSize // upper
 
 		// Index of command in getCommandType():
 		commandIndex := int(commandPart[command]) % 68
@@ -180,9 +178,7 @@ func Fuzz(data []byte) int {
 		args := strings.Split(string(restOfArray[from:to]), " ")
 
 		// Add params to the command
-		for i := range args {
-			commandSlice = append(commandSlice, args[i])
-		}
+		commandSlice = append(commandSlice, args...)
 
 		_ = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), commandSlice)
 		command++

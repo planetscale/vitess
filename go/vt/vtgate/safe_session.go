@@ -24,7 +24,9 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"google.golang.org/protobuf/proto"
@@ -33,7 +35,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -147,11 +148,7 @@ func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
 func (session *SafeSession) ResetTx() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.mustRollback = false
-	session.autocommitState = notAutocommittable
-	session.Session.InTransaction = false
-	session.commitOrder = vtgatepb.CommitOrder_NORMAL
-	session.Savepoints = nil
+	session.resetCommonLocked()
 	if !session.Session.InReservedConn {
 		session.ShardSessions = nil
 		session.PreSessions = nil
@@ -163,14 +160,47 @@ func (session *SafeSession) ResetTx() {
 func (session *SafeSession) Reset() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	session.resetCommonLocked()
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
+}
+
+// ResetAll resets the shard sessions and lock session.
+func (session *SafeSession) ResetAll() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.resetCommonLocked()
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
+	session.LockSession = nil
+	session.AdvisoryLock = nil
+}
+
+func (session *SafeSession) resetCommonLocked() {
 	session.mustRollback = false
 	session.autocommitState = notAutocommittable
 	session.Session.InTransaction = false
 	session.commitOrder = vtgatepb.CommitOrder_NORMAL
 	session.Savepoints = nil
-	session.ShardSessions = nil
-	session.PreSessions = nil
-	session.PostSessions = nil
+	if session.Options != nil {
+		session.Options.TransactionAccessMode = nil
+	}
+}
+
+// SetQueryTimeout sets the query timeout
+func (session *SafeSession) SetQueryTimeout(queryTimeout int64) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.QueryTimeout = queryTimeout
+}
+
+// GetQueryTimeout gets the query timeout
+func (session *SafeSession) GetQueryTimeout() int64 {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.QueryTimeout
 }
 
 // SavePoints returns the save points of the session. It's safe to use concurrently
@@ -369,11 +399,11 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	// that needs to be stored as shard session.
 	if session.autocommitState == autocommitted && shardSession.TransactionId != 0 {
 		// Should be unreachable
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] unexpected 'autocommitted' state in transaction")
+		return vterrors.VT13001("unexpected 'autocommitted' state in transaction")
 	}
 	if !(session.Session.InTransaction || session.Session.InReservedConn) {
 		// Should be unreachable
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] current session neither in transaction nor in reserved connection")
+		return vterrors.VT13001("current session is neither in transaction nor in reserved connection")
 	}
 	session.autocommitState = notAutocommittable
 
@@ -615,22 +645,6 @@ func (session *SafeSession) ResetLock() {
 	session.AdvisoryLock = nil
 }
 
-// ResetAll resets the shard sessions and lock session.
-func (session *SafeSession) ResetAll() {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	session.mustRollback = false
-	session.autocommitState = notAutocommittable
-	session.Session.InTransaction = false
-	session.commitOrder = vtgatepb.CommitOrder_NORMAL
-	session.Savepoints = nil
-	session.ShardSessions = nil
-	session.PreSessions = nil
-	session.PostSessions = nil
-	session.LockSession = nil
-	session.AdvisoryLock = nil
-}
-
 // ResetShard reset the shard session for the provided tablet alias.
 func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) error {
 	session.mu.Lock()
@@ -733,13 +747,13 @@ func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Sessi
 	for i, session := range sessions {
 		if proto.Equal(session.TabletAlias, tabletAlias) {
 			if session.TransactionId != 0 {
-				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] removing shard session when in transaction")
+				return nil, vterrors.VT13001("removing shard session when in transaction")
 			}
 			idx = i
 		}
 	}
 	if idx == -1 {
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] tried to remove missing shard")
+		return nil, vterrors.VT13001("tried to remove missing shard")
 	}
 	return append(sessions[:idx], sessions[idx+1:]...), nil
 }
@@ -875,7 +889,7 @@ func (session *SafeSession) EnableLogging() {
 	session.logging = &executeLogger{}
 }
 
-func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv map[string]*querypb.BindVariable) {
+func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
 	if l == nil {
 		return
 	}
@@ -885,12 +899,11 @@ func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv
 	l.lastID++
 	if begin {
 		l.entries = append(l.entries, engine.ExecuteEntry{
-			ID:         id,
-			Keyspace:   target.Keyspace,
-			Shard:      target.Shard,
-			TabletType: target.TabletType,
-			Cell:       target.Cell,
-			Query:      "begin",
+			ID:        id,
+			Target:    target,
+			Gateway:   gateway,
+			Query:     "begin",
+			FiredFrom: primitive,
 		})
 	}
 	ast, err := sqlparser.Parse(query)
@@ -907,12 +920,11 @@ func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv
 	}
 
 	l.entries = append(l.entries, engine.ExecuteEntry{
-		ID:         id,
-		Keyspace:   target.Keyspace,
-		Shard:      target.Shard,
-		TabletType: target.TabletType,
-		Cell:       target.Cell,
-		Query:      q,
+		ID:        id,
+		Target:    target,
+		Gateway:   gateway,
+		Query:     q,
+		FiredFrom: primitive,
 	})
 }
 

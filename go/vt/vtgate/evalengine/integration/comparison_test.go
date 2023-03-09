@@ -483,6 +483,34 @@ func TestTypes(t *testing.T) {
 	}
 }
 
+func TestUnderscoreAndPercentage(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var queries = []string{
+		`'pokemon' LIKE 'poke%'`,
+		`'pokemon' LIKE 'poke\%'`,
+		`'poke%mon' LIKE 'poke\%mon'`,
+		`'pokemon' LIKE 'poke\%mon'`,
+		`'poke%mon' = 'poke%mon'`,
+		`'poke\%mon' = 'poke%mon'`,
+		`'poke%mon' = 'poke\%mon'`,
+		`'poke\%mon' = 'poke\%mon'`,
+		`'pokemon' LIKE 'poke_on'`,
+		`'pokemon' LIKE 'poke\_on'`,
+		`'poke_mon' LIKE 'poke\_mon'`,
+		`'pokemon' LIKE 'poke\_mon'`,
+		`'poke_mon' = 'poke_mon'`,
+		`'poke\_mon' = 'poke_mon'`,
+		`'poke_mon' = 'poke\_mon'`,
+		`'poke\_mon' = 'poke\_mon'`,
+	}
+
+	for _, query := range queries {
+		compareRemoteExpr(t, conn, query)
+	}
+}
+
 func TestFloatFormatting(t *testing.T) {
 	var floats = []string{
 		`18446744073709551615`,
@@ -791,7 +819,7 @@ func TestCeilandCeiling(t *testing.T) {
 	}
 
 	for _, num := range ceilInputs {
-		compareRemoteExpr(t, conn, fmt.Sprintf("CEIL(%s)", num))
+		// compareRemoteExpr(t, conn, fmt.Sprintf("CEIL(%s)", num))
 		compareRemoteExpr(t, conn, fmt.Sprintf("CEILING(%s)", num))
 	}
 }

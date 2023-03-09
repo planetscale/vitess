@@ -1247,6 +1247,12 @@ var (
 	}, {
 		input: "alter table `By` add column foo int, algorithm = default",
 	}, {
+		input: "alter table `By` add column foo int, algorithm = copy",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = inplace",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = INPLACE",
+	}, {
 		input: "alter table `By` add column foo int, algorithm = instant",
 	}, {
 		input: "alter table a rename b",
@@ -2150,6 +2156,15 @@ var (
 	}, {
 		input: "explain format = traditional select * from t",
 	}, {
+		input: "vexplain queries select * from t",
+	}, {
+		input: "vexplain all select * from t",
+	}, {
+		input: "vexplain plan select * from t",
+	}, {
+		input:  "vexplain select * from t",
+		output: "vexplain plan select * from t",
+	}, {
 		input: "explain analyze select * from t",
 	}, {
 		input: "explain format = tree select * from t",
@@ -2344,6 +2359,14 @@ var (
 	}, {
 		input:  "start transaction",
 		output: "begin",
+	}, {
+		input: "start transaction with consistent snapshot",
+	}, {
+		input: "start transaction read write",
+	}, {
+		input: "start transaction read only",
+	}, {
+		input: "start transaction read only, with consistent snapshot",
 	}, {
 		input: "commit",
 	}, {
@@ -3304,6 +3327,12 @@ var (
 	}, {
 		input:  "select * from (((select 1))) as tbl",
 		output: "select * from (select 1 from dual) as tbl",
+	}, {
+		input:  `select * from t1 where col1 like 'ks\%' and col2 = 'ks\%' and col1 like 'ks%' and col2 = 'ks%'`,
+		output: `select * from t1 where col1 like 'ks\%' and col2 = 'ks\%' and col1 like 'ks%' and col2 = 'ks%'`,
+	}, {
+		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
+		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 	}}
 )
 
@@ -5669,9 +5698,9 @@ partition by range (id)
 
 	for _, testcase := range testcases {
 		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
-			oldMySQLVersion := MySQLVersion
-			defer func() { MySQLVersion = oldMySQLVersion }()
-			MySQLVersion = testcase.mysqlVersion
+			oldMySQLVersion := mySQLParserVersion
+			defer func() { mySQLParserVersion = oldMySQLVersion }()
+			mySQLParserVersion = testcase.mysqlVersion
 			tree, err := Parse(testcase.input)
 			require.NoError(t, err, testcase.input)
 			out := String(tree)

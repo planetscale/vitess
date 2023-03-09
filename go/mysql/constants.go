@@ -277,7 +277,7 @@ const (
 
 // Error codes for client-side errors.
 // Originally found in include/mysql/errmsg.h and
-// https://dev.mysql.com/doc/refman/5.7/en/error-messages-client.html
+// https://dev.mysql.com/doc/mysql-errors/en/client-error-reference.html
 const (
 	// CRUnknownError is CR_UNKNOWN_ERROR
 	CRUnknownError = 2000
@@ -289,6 +289,10 @@ const (
 	// CRConnHostError is CR_CONN_HOST_ERROR
 	// This is returned if a connection via a TCP socket fails.
 	CRConnHostError = 2003
+
+	// CRUnknownHost is CR_UNKNOWN_HOST
+	// This is returned if the host name cannot be resolved.
+	CRUnknownHost = 2005
 
 	// CRServerGone is CR_SERVER_GONE_ERROR.
 	// This is returned if the client tries to send a command but it fails.
@@ -329,7 +333,7 @@ const (
 
 // Error codes for server-side errors.
 // Originally found in include/mysql/mysqld_error.h and
-// https://dev.mysql.com/doc/refman/5.7/en/error-messages-server.html
+// https://dev.mysql.com/doc/mysql-errors/en/server-error-reference.html
 // The below are in sorted order by value, grouped by vterror code they should be bucketed into.
 // See above reference for more information on each code.
 const (
@@ -368,6 +372,7 @@ const (
 	ERServerShutdown = 1053
 
 	// not found
+	ERDbDropExists          = 1008
 	ERCantFindFile          = 1017
 	ERFormNotFound          = 1029
 	ERKeyNotFound           = 1032
@@ -379,7 +384,6 @@ const (
 	ERNoSuchTable           = 1146
 	ERNonExistingTableGrant = 1147
 	ERKeyDoesNotExist       = 1176
-	ERDbDropExists          = 1008
 
 	// permissions
 	ERDBAccessDenied            = 1044
@@ -407,6 +411,7 @@ const (
 	ERRowIsReferenced               = 1217
 	ERCantUpdateWithReadLock        = 1223
 	ERNoDefault                     = 1230
+	ERMasterFatalReadingBinlog      = 1236
 	EROperandColumns                = 1241
 	ERSubqueryNo1Row                = 1242
 	ERWarnDataOutOfRange            = 1264
@@ -415,19 +420,19 @@ const (
 	EROptionPreventsStatement       = 1290
 	ERDuplicatedValueInType         = 1291
 	ERSPDoesNotExist                = 1305
+	ERNoDefaultForField             = 1364
+	ErSPNotVarArg                   = 1414
 	ERRowIsReferenced2              = 1451
 	ErNoReferencedRow2              = 1452
-	ErSPNotVarArg                   = 1414
+	ERDupIndex                      = 1831
 	ERInnodbReadOnly                = 1874
-	ERMasterFatalReadingBinlog      = 1236
-	ERNoDefaultForField             = 1364
 
 	// already exists
+	ERDbCreateExists = 1007
 	ERTableExists    = 1050
 	ERDupEntry       = 1062
 	ERFileExists     = 1086
 	ERUDFExists      = 1125
-	ERDbCreateExists = 1007
 
 	// aborted
 	ERGotSignal          = 1078
@@ -513,7 +518,11 @@ const (
 	ERWrongFKDef                   = 1239
 	ERKeyRefDoNotMatchTableRef     = 1240
 	ERCyclicReference              = 1245
+	ERIllegalReference             = 1247
+	ERDerivedMustHaveAlias         = 1248
+	ERTableNameNotAllowedHere      = 1250
 	ERCollationCharsetMismatch     = 1253
+	ERWarnDataTruncated            = 1265
 	ERCantAggregate2Collations     = 1267
 	ERCantAggregate3Collations     = 1270
 	ERCantAggregateNCollations     = 1271
@@ -527,16 +536,13 @@ const (
 	ERInvalidOnUpdate              = 1294
 	ERUnknownTimeZone              = 1298
 	ERInvalidCharacterString       = 1300
-	ERIllegalReference             = 1247
-	ERDerivedMustHaveAlias         = 1248
-	ERTableNameNotAllowedHere      = 1250
 	ERQueryInterrupted             = 1317
 	ERTruncatedWrongValueForField  = 1366
 	ERIllegalValueForType          = 1367
 	ERDataTooLong                  = 1406
 	ErrWrongValueForType           = 1411
-	ERWarnDataTruncated            = 1265
 	ERForbidSchemaChange           = 1450
+	ERWrongValue                   = 1525
 	ERDataOutOfRange               = 1690
 	ERInvalidJSONText              = 3140
 	ERInvalidJSONTextInParams      = 3141
@@ -545,7 +551,9 @@ const (
 	ERInvalidCastToJSON            = 3147
 	ERJSONValueTooBig              = 3150
 	ERJSONDocumentTooDeep          = 3157
-	ERWrongValue                   = 1525
+
+	// max execution time exceeded
+	ERQueryTimeout = 3024
 
 	ErrCantCreateGeometryObject      = 1416
 	ErrGISDataWrongEndianess         = 3055
@@ -681,8 +689,12 @@ func IsEphemeralError(err error) bool {
 			CRConnHostError,
 			CRMalformedPacket,
 			CRNamedPipeStateError,
+			CRServerHandshakeErr,
+			CRServerGone,
 			CRServerLost,
 			CRSSLConnectionError,
+			CRUnknownError,
+			CRUnknownHost,
 			ERCantCreateThread,
 			ERDiskFull,
 			ERForcingClose,
@@ -693,6 +705,7 @@ func IsEphemeralError(err error) bool {
 			ERInternalError,
 			ERLockDeadlock,
 			ERLockWaitTimeout,
+			ERQueryTimeout,
 			EROutOfMemory,
 			EROutOfResources,
 			EROutOfSortMemory,

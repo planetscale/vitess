@@ -89,8 +89,7 @@ var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerialize
 // the db config is not initially available. For this reason,
 // the initialization is done in two phases.
 // Some subcomponents have Init functions. Such functions usually
-// perform one-time initializations like creating metadata tables
-// in the sidecar database. These functions must be idempotent.
+// perform one-time initializations and must be idempotent.
 // Open and Close can be called repeatedly during the lifetime of
 // a subcomponent. These should also be idempotent.
 type TabletServer struct {
@@ -1401,6 +1400,26 @@ func txToReserveState(state queryservice.TransactionState) queryservice.Reserved
 		TransactionID:       state.TransactionID,
 		SessionStateChanges: state.SessionStateChanges,
 	}
+}
+
+// GetSchema returns table definitions for the specified tables.
+func (tsv *TabletServer) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) (err error) {
+	err = tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"GetSchema", "", nil,
+		target, nil, false, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			defer tsv.stats.QueryTimings.Record("GetSchema", time.Now())
+
+			qre := &QueryExecutor{
+				ctx:      ctx,
+				logStats: logStats,
+				tsv:      tsv,
+			}
+			return qre.GetSchemaDefinitions(tableType, tableNames, callback)
+		},
+	)
+	return
 }
 
 // execRequest performs verifications, sets up the necessary environments

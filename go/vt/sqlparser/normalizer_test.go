@@ -304,13 +304,6 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
 		},
 	}, {
-		// Int leading with zero should also be normalized
-		in:      `select * from t where zipcode = 01001900`,
-		outstmt: `select * from t where zipcode = :zipcode`,
-		outbv: map[string]*querypb.BindVariable{
-			"zipcode": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Int64, []byte("01001900"))),
-		},
-	}, {
 		// TimestampVal should also be normalized
 		in:      `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = 'rjve634shXzaavKHbAH16ql6OrxJ' limit 1,1`,
 		outstmt: `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = :comms_by_companies_id limit :bv1, :bv2`,
@@ -321,6 +314,13 @@ func TestNormalize(t *testing.T) {
 		},
 	}, {
 		// Int leading with zero should also be normalized
+		in:      `select * from t where zipcode = 01001900`,
+		outstmt: `select * from t where zipcode = :zipcode`,
+		outbv: map[string]*querypb.BindVariable{
+			"zipcode": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Int64, []byte("01001900"))),
+		},
+	}, {
+		// literals in limit and offset should not reuse bindvars
 		in:      `select * from t where id = 10 limit 10 offset 10`,
 		outstmt: `select * from t where id = :id limit :bv1, :bv2`,
 		outbv: map[string]*querypb.BindVariable{
@@ -493,7 +493,17 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 
 			// Normalize if possible and retry.
 			if CanNormalize(stmt) || MustRewriteAST(stmt, false) {
-				result, err := PrepareAST(stmt, NewReservedVars("vtg", reservedVars), bindVars, true, keyspace, SQLSelectLimitUnset, "", nil)
+				result, err := PrepareAST(
+					stmt,
+					NewReservedVars("vtg", reservedVars),
+					bindVars,
+					true,
+					keyspace,
+					SQLSelectLimitUnset,
+					"",
+					nil, /*sysvars*/
+					nil, /*views*/
+				)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -773,7 +783,17 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 			}
 
 			reservedVars := NewReservedVars("vtg", reserved)
-			_, err = PrepareAST(stmt, reservedVars, make(map[string]*querypb.BindVariable), true, "keyspace0", SQLSelectLimitUnset, "", nil)
+			_, err = PrepareAST(
+				stmt,
+				reservedVars,
+				make(map[string]*querypb.BindVariable),
+				true,
+				"keyspace0",
+				SQLSelectLimitUnset,
+				"",
+				nil,
+				nil,
+			)
 			if err != nil {
 				b.Fatal(err)
 			}

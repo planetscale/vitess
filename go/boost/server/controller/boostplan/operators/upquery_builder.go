@@ -7,7 +7,6 @@ import (
 	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/sqlparserx"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -68,10 +67,7 @@ func (qb *queryBuilder) addTableExpr(
 		Hints:      hints,
 		Columns:    nil,
 	}
-	err := qb.ctx.SemTable.ReplaceTableSetFor(tableID, elems)
-	if err != nil {
-		log.Warningf("error in replacing table expression in semtable: %v", err)
-	}
+	qb.ctx.SemTable.ReplaceTableSetFor(tableID, elems)
 	sel.From = append(sel.From, elems)
 	qb.sel = sel
 }
