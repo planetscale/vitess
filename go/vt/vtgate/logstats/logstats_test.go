@@ -61,11 +61,14 @@ func TestLogStatsFormat(t *testing.T) {
 	logStats := NewLogStats(context.Background(), "test", "sql1", "suuid", nil)
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
-	logStats.Keyspace = "ks"
-	logStats.Table = "table"
 	logStats.TablesUsed = []string{"ks1.tbl1", "ks2.tbl2"}
 	logStats.TabletType = "PRIMARY"
 	logStats.ActiveKeyspace = "db"
+
+	// insights-only, deprecated, to be removed
+	logStats.Keyspace = "ks"
+	logStats.Table = "table"
+
 	logStats.BoostQueryID = "awesomequery"
 	params := map[string][]string{"full": {}}
 	intBindVar := map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}

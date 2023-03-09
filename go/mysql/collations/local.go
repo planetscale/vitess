@@ -35,11 +35,7 @@ func Local() *Environment {
 		if !flag.Parsed() {
 			panic("collations.Local() called too early")
 		}
-		if mySQLVersion := servenv.MySQLServerVersion(); mySQLVersion == "" {
-			defaultEnv = fetchCacheEnvironment(collverMySQL80)
-		} else {
-			defaultEnv = NewEnvironment(mySQLVersion)
-		}
+		defaultEnv = NewEnvironment(servenv.MySQLServerVersion())
 	})
 	return defaultEnv
 }

@@ -89,8 +89,6 @@ func TestMain(m *testing.M) {
 			"--watch_replication_stream",
 			"--enable_replication_reporter",
 		}
-		// We do not need semiSync for this test case.
-		clusterInstance.EnableSemiSync = false
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
@@ -172,7 +170,7 @@ func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 
 	// Capture the current TER.
 	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), &replicaTablet, 1)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	streamHealthRes1 := shrs[0]
 	actualType := streamHealthRes1.GetTarget().GetTabletType()
@@ -196,7 +194,7 @@ func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 
 	// Make sure that the TER did not change
 	shrs, err = clusterInstance.StreamTabletHealth(context.Background(), &replicaTablet, 1)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	streamHealthRes2 := shrs[0]
 	actualType = streamHealthRes2.GetTarget().GetTabletType()

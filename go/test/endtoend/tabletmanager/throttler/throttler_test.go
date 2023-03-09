@@ -19,14 +19,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -70,15 +68,16 @@ var (
     }
 	}`
 
-	httpClient       = base.SetupHTTPClient(time.Second)
-	checkAPIPath     = "throttler/check"
-	checkSelfAPIPath = "throttler/check-self"
-	vtParams         mysql.ConnParams
+	httpClient           = base.SetupHTTPClient(time.Second)
+	throttledAppsAPIPath = "throttler/throttled-apps"
+	checkAPIPath         = "throttler/check"
+	checkSelfAPIPath     = "throttler/check-self"
 )
 
 const (
-	testThreshold   = 5
-	applyConfigWait = 15 * time.Second // time after which we're sure the throttler has refreshed config and tablets
+	throttlerThreshold        = 1 * time.Second // standard, tight threshold
+	onDemandHeartbeatDuration = 5 * time.Second
+	applyConfigWait           = 15 * time.Second // time after which we're sure the throttler has refreshed config and tablets
 )
 
 func TestMain(m *testing.M) {
@@ -101,14 +100,12 @@ func TestMain(m *testing.M) {
 			"--watch_replication_stream",
 			"--enable_replication_reporter",
 			"--enable-lag-throttler",
-			"--throttle_metrics_query", "show global status like 'threads_running'",
-			"--throttle_metrics_threshold", fmt.Sprintf("%d", testThreshold),
-			"--throttle_check_as_check_self",
+			"--throttle_threshold", throttlerThreshold.String(),
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", onDemandHeartbeatDuration.String(),
+			"--disable_active_reparents",
 		}
-		// We do not need semiSync for this test case.
-		clusterInstance.EnableSemiSync = false
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
@@ -117,7 +114,7 @@ func TestMain(m *testing.M) {
 			VSchema:   vSchema,
 		}
 
-		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false); err != nil {
+		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
 			return 1
 		}
 
@@ -131,113 +128,192 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// Start vtgate
-		if err := vtgateInstance.Setup(); err != nil {
-			return 1
-		}
-		// ensure it is torn down during cluster TearDown
-		clusterInstance.VtgateProcess = *vtgateInstance
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
-func throttleCheck(tablet *cluster.Vttablet) (*http.Response, error) {
-	resp, err := httpClient.Get(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkAPIPath))
-	return resp, err
+func throttledApps(tablet *cluster.Vttablet) (resp *http.Response, respBody string, err error) {
+	resp, err = httpClient.Get(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, throttledAppsAPIPath))
+	if err != nil {
+		return resp, respBody, err
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp, respBody, err
+	}
+	respBody = string(b)
+	return resp, respBody, err
+}
+
+func throttleCheck(tablet *cluster.Vttablet, skipRequestHeartbeats bool) (*http.Response, error) {
+	return httpClient.Get(fmt.Sprintf("http://localhost:%d/%s?s=%t", tablet.HTTPPort, checkAPIPath, skipRequestHeartbeats))
 }
 
 func throttleCheckSelf(tablet *cluster.Vttablet) (*http.Response, error) {
 	return httpClient.Head(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkSelfAPIPath))
 }
 
-func TestThrottlerThresholdOK(t *testing.T) {
+func warmUpHeartbeat(t *testing.T) (respStatus int) {
+	//  because we run with -heartbeat_on_demand_duration=5s, the heartbeat is "cold" right now.
+	// Let's warm it up.
+	resp, err := throttleCheck(primaryTablet, false)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	time.Sleep(time.Second)
+	return resp.StatusCode
+}
+
+// waitForThrottleCheckStatus waits for the tablet to return the provided HTTP code in a throttle check
+func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode int) {
+	_ = warmUpHeartbeat(t)
+	ctx, cancel := context.WithTimeout(context.Background(), onDemandHeartbeatDuration+applyConfigWait)
+	defer cancel()
+
+	for {
+		resp, err := throttleCheck(tablet, true)
+		require.NoError(t, err)
+
+		if wantCode == resp.StatusCode {
+			// Wait for any cached check values to be cleared and the new
+			// status value to be in effect everywhere before returning.
+			resp.Body.Close()
+			return
+		}
+		select {
+		case <-ctx.Done():
+			b, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			resp.Body.Close()
+
+			assert.Equal(t, wantCode, resp.StatusCode, "body: %v", string(b))
+			return
+		default:
+			resp.Body.Close()
+			time.Sleep(time.Second)
+		}
+	}
+}
+
+func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	t.Run("immediately", func(t *testing.T) {
-		resp, err := throttleCheck(primaryTablet)
+	// We run with on-demand heartbeats. Immediately as the tablet manager opens, it sends a one-time
+	// request for heartbeats, which means the throttler is able to collect initial "good" data.
+	// After a few seconds, the heartbeat lease terminates. We wait for that.
+	// {"StatusCode":429,"Value":4.864921,"Threshold":1,"Message":"Threshold exceeded"}
+	t.Run("expect push back once initial heartbeat lease terminates", func(t *testing.T) {
+		time.Sleep(onDemandHeartbeatDuration)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
+	})
+	t.Run("requesting heartbeats", func(t *testing.T) {
+		respStatus := warmUpHeartbeat(t)
+		assert.NotEqual(t, http.StatusOK, respStatus)
+	})
+	t.Run("expect OK once heartbeats lease renewed", func(t *testing.T) {
+		time.Sleep(1 * time.Second)
+		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
-	t.Run("after long wait", func(t *testing.T) {
-		time.Sleep(applyConfigWait)
-		resp, err := throttleCheck(primaryTablet)
+	t.Run("expect OK once heartbeats lease renewed, still", func(t *testing.T) {
+		time.Sleep(1 * time.Second)
+		resp, err := throttleCheck(primaryTablet, false)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	t.Run("validate throttled-apps", func(t *testing.T) {
+		resp, body, err := throttledApps(primaryTablet)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Contains(t, body, "always-throttled-app")
+	})
+	t.Run("validate check-self", func(t *testing.T) {
+		resp, err := throttleCheckSelf(primaryTablet)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	t.Run("validate check-self, again", func(t *testing.T) {
+		resp, err := throttleCheckSelf(replicaTablet)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 }
 
-func TestThreadsRunning(t *testing.T) {
+func TestLag(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	// Stop VTOrc because we want to stop replication to increase lag.
+	// We don't want VTOrc to fix this.
+	clusterInstance.DisableVTOrcRecoveries(t)
+	defer clusterInstance.EnableVTOrcRecoveries(t)
 
-	sleepDuration := 10 * time.Second
-	var wg sync.WaitGroup
-	for i := 0; i < testThreshold; i++ {
-		// generate different Sleep() calls, all at minimum sleepDuration
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			vtgateExec(t, fmt.Sprintf("select sleep(%d)", int(sleepDuration.Seconds())+i), "")
-		}(i)
-	}
-	t.Run("exceeds threshold", func(t *testing.T) {
-		time.Sleep(sleepDuration / 2)
-		// by this time we will have testThreshold+1 threads_running, and we should hit the threshold
-		// {"StatusCode":429,"Value":2,"Threshold":2,"Message":"Threshold exceeded"}
-		{
-			resp, err := throttleCheck(primaryTablet)
-			require.NoError(t, err)
-			defer resp.Body.Close()
-			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
-		}
-		{
-			resp, err := throttleCheckSelf(primaryTablet)
-			require.NoError(t, err)
-			defer resp.Body.Close()
-			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
-		}
+	t.Run("stopping replication", func(t *testing.T) {
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
+		assert.NoError(t, err)
 	})
-	t.Run("wait for queries to terminate", func(t *testing.T) {
-		wg.Wait()
+	t.Run("accumulating lag, expecting throttler push back", func(t *testing.T) {
+		time.Sleep(2 * throttlerThreshold)
+
+		resp, err := throttleCheck(primaryTablet, false)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 	})
-	t.Run("restored below threshold", func(t *testing.T) {
-		{
-			resp, err := throttleCheck(primaryTablet)
-			require.NoError(t, err)
-			defer resp.Body.Close()
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-		}
-		{
-			resp, err := throttleCheckSelf(primaryTablet)
-			require.NoError(t, err)
-			defer resp.Body.Close()
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-		}
+	t.Run("primary self-check should still be fine", func(t *testing.T) {
+		resp, err := throttleCheckSelf(primaryTablet)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		// self (on primary) is unaffected by replication lag
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	t.Run("replica self-check should show error", func(t *testing.T) {
+		resp, err := throttleCheckSelf(replicaTablet)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	})
+	t.Run("starting replication", func(t *testing.T) {
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", replicaTablet.Alias)
+		assert.NoError(t, err)
+	})
+	t.Run("expecting replication to catch up and throttler check to return OK", func(t *testing.T) {
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
+	})
+	t.Run("primary self-check should be fine", func(t *testing.T) {
+		resp, err := throttleCheckSelf(primaryTablet)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		// self (on primary) is unaffected by replication lag
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+	t.Run("replica self-check should be fine", func(t *testing.T) {
+		resp, err := throttleCheckSelf(replicaTablet)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 }
 
-func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result {
-	t.Helper()
+func TestNoReplicas(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	t.Run("changing replica to RDONLY", func(t *testing.T) {
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
+		assert.NoError(t, err)
 
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
+		// This makes no REPLICA servers available. We expect something like:
+		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
+	})
+	t.Run("restoring to REPLICA", func(t *testing.T) {
 
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if expectError == "" {
-		require.NoError(t, err)
-	} else {
-		require.Error(t, err, "error should not be nil")
-		assert.Contains(t, err.Error(), expectError, "Unexpected error")
-	}
-	return qr
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
+		assert.NoError(t, err)
+
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
+	})
 }

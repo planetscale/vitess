@@ -42,7 +42,7 @@ func (v *VindexTable) getTableSet(org originable) TableSet {
 }
 
 // GetExprFor implements the TableInfo interface
-func (v *VindexTable) getExprFor(_ string) (sqlparser.Expr, error) {
+func (v *VindexTable) GetExprFor(_ string) (sqlparser.Expr, error) {
 	panic("implement me")
 }
 

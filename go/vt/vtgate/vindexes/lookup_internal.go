@@ -33,20 +33,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// lookupInternal implements the functions for the Lookup vindexes.
-type lookupInternal struct {
-	Table                   string   `json:"table"`
-	FromColumns             []string `json:"from_columns"`
-	To                      string   `json:"to"`
-	Autocommit              bool     `json:"autocommit,omitempty"`
-	MultiShardAutocommit    bool     `json:"multi_shard_autocommit,omitempty"`
-	Upsert                  bool     `json:"upsert,omitempty"`
-	IgnoreNulls             bool     `json:"ignore_nulls,omitempty"`
-	BatchLookup             bool     `json:"batch_lookup,omitempty"`
-	ReadLock                string   `json:"read_lock,omitempty"`
-	sel, selTxDml, ver, del string
-}
-
 var (
 	readLockExclusive = "exclusive"
 	readLockShared    = "shared"
@@ -59,6 +45,20 @@ var (
 		readLockNone:      "",
 	}
 )
+
+// lookupInternal implements the functions for the Lookup vindexes.
+type lookupInternal struct {
+	Table                   string   `json:"table"`
+	FromColumns             []string `json:"from_columns"`
+	To                      string   `json:"to"`
+	Autocommit              bool     `json:"autocommit,omitempty"`
+	MultiShardAutocommit    bool     `json:"multi_shard_autocommit,omitempty"`
+	Upsert                  bool     `json:"upsert,omitempty"`
+	IgnoreNulls             bool     `json:"ignore_nulls,omitempty"`
+	BatchLookup             bool     `json:"batch_lookup,omitempty"`
+	ReadLock                string   `json:"read_lock,omitempty"`
+	sel, selTxDml, ver, del string   // sel: map query, ver: verify query, del: delete query
+}
 
 func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit, upsert, multiShardAutocommit bool) error {
 	lkp.Table = lookupQueryParams["table"]

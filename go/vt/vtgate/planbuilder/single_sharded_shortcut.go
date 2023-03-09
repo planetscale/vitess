@@ -20,7 +20,7 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -31,7 +31,7 @@ import (
 
 func unshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement, ks *vindexes.Keyspace) (logicalPlan, []string, error) {
 	// this method is used when the query we are handling has all tables in the same unsharded keyspace
-	sqlparser.Rewrite(stmt, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.SafeRewrite(stmt, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case sqlparser.SelectExpr:
 			removeKeyspaceFromSelectExpr(node)
@@ -41,7 +41,7 @@ func unshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectSt
 			})
 		}
 		return true
-	}, nil)
+	})
 
 	tableNames, err := getTableNames(ctx.SemTable)
 	if err != nil {
@@ -61,7 +61,7 @@ func unshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectSt
 	if err := plan.WireupGen4(ctx); err != nil {
 		return nil, nil, err
 	}
-	return plan, abstract.QualifiedTableNames(ks, tableNames), nil
+	return plan, operators.QualifiedTableNames(ks, tableNames), nil
 }
 
 func escapedTableNames(tableNames []sqlparser.TableName) []string {

@@ -93,12 +93,6 @@ endif
 		    -ldflags "$(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
 
-	# build vtorc with CGO, because it depends on sqlite
-	CGO_ENABLED=1 go build \
-		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		    -ldflags "$(shell tools/build_version_flags.sh)" \
-		    -o ${VTROOTBIN} ./go/cmd/vtorc/...
-
 # cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
 # Usage: GOOS=darwin GOARCH=amd64 make cross-build
@@ -120,8 +114,6 @@ endif
 	@if [ ! -x "${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet" ]; then \
 		echo "Missing vttablet at: ${VTROOTBIN}/${GOOS}_${GOARCH}." && exit; \
 	fi
-
-	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it
 
 debug:
 ifndef NOBANNER
@@ -147,8 +139,7 @@ install: build
 cross-install: cross-build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	# Still no vtorc for cross-compile
-	cp "${VTROOTBIN}/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
+	cp "${VTROOTBIN}/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
@@ -176,27 +167,22 @@ parser:
 demo:
 	go install ./examples/demo/demo.go
 
-codegen: asthelpergen sizegen parser astfmtgen
+codegen: asthelpergen sizegen parser
 
 visitor: asthelpergen
 	echo "make visitor has been replaced by make asthelpergen"
 
 asthelpergen:
-	go run ./go/tools/asthelpergen/main \
-		--in ./go/vt/sqlparser \
-		--iface vitess.io/vitess/go/vt/sqlparser.SQLNode \
-		--except "*ColName"
+	go generate ./go/vt/sqlparser/...
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
 		--in ./go/... \
 		--gen vitess.io/vitess/go/pools.Setting \
+		--gen vitess.io/vitess/go/vt/schema.DDLStrategySetting \
 		--gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
 		--gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
 		--gen vitess.io/vitess/go/sqltypes.Result
-
-astfmtgen:
-	go run ./go/tools/astfmtgen/main.go vitess.io/vitess/go/vt/sqlparser/...
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
@@ -295,9 +281,10 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # Please read docker/README.md to understand the different available images.
 
 # This rule builds the bootstrap images for all flavors.
-DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql57 mysql80 percona57 percona80
+DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=14
+BOOTSTRAP_VERSION=14.1
+
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -333,7 +320,7 @@ endef
 docker_base:
 	${call build_docker_image,docker/base/Dockerfile,vitess/base}
 
-DOCKER_BASE_SUFFIX = mysql80 mariadb mariadb103 percona57 percona80
+DOCKER_BASE_SUFFIX = mysql80 percona57 percona80
 DOCKER_BASE_TARGETS = $(addprefix docker_base_, $(DOCKER_BASE_SUFFIX))
 $(DOCKER_BASE_TARGETS): docker_base_%:
 	${call build_docker_image,docker/base/Dockerfile.$*,vitess/base:$*}
@@ -343,7 +330,7 @@ docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 
-DOCKER_LITE_SUFFIX = mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 mariadb mariadb103 percona57 ubi7.percona57 percona80 ubi7.percona80 alpine testing ubi8.mysql80 ubi8.arm64.mysql80
+DOCKER_LITE_SUFFIX = mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 percona57 ubi7.percona57 percona80 ubi7.percona80 testing ubi8.mysql80 ubi8.arm64.mysql80
 DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
 $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
@@ -367,7 +354,7 @@ $(DOCKER_VTTESTSERVER_TARGETS): docker_vttestserver_%:
 docker_vttestserver: $(DOCKER_VTTESTSERVER_TARGETS)
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
-# Example: $ make docker_test flavor=mariadb
+# Example: $ make docker_test flavor=mysql80
 docker_test:
 	go run test.go -flavor $(flavor)
 
@@ -388,8 +375,11 @@ release: docker_base
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
 
-do_release:
-	./tools/do_release.sh
+create_release:
+	./tools/create_release.sh
+
+back_to_dev_mode:
+	./tools/back_to_dev_mode.sh
 
 tools:
 	echo $$(date): Installing dependencies

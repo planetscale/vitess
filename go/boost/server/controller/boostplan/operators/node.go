@@ -87,10 +87,7 @@ func (node *Node) ExprLookup(st *semantics.SemTable, expr sqlparser.Expr) (int, 
 	tableInfo, err := st.TableInfoForExpr(expr)
 	if err == nil {
 		if _, isDerived := tableInfo.(*semantics.DerivedTable); isDerived {
-			expr, err = semantics.RewriteDerivedTableExpression(expr, tableInfo)
-			if err != nil {
-				return 0, err
-			}
+			expr = semantics.RewriteDerivedTableExpression(expr, tableInfo)
 		}
 	}
 
@@ -221,7 +218,7 @@ func equalAccordingToSchemaTable(semTable *semantics.SemTable, a, b *sqlparser.C
 		if err != nil {
 			return false
 		}
-		if sqlparser.EqualsTableName(name1, name2, nil) {
+		if sqlparser.Equals.TableName(name1, name2) {
 			return true
 		}
 	case *semantics.RealTable:

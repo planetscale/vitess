@@ -613,3 +613,4 @@
  * [vtadmin] fix flaky GetSchemas test cases [#10555](https://github.com/vitessio/vitess/pull/10555) 
 #### web UI
  * Fixing flaky vtctld2 web test [#10541](https://github.com/vitessio/vitess/pull/10541)
+

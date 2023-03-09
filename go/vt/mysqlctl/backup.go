@@ -52,6 +52,7 @@ const (
 	// the three bases for files to restore
 	backupInnodbDataHomeDir     = "InnoDBData"
 	backupInnodbLogGroupHomeDir = "InnoDBLog"
+	backupBinlogDir             = "BinLog"
 	backupData                  = "Data"
 
 	// backupManifestFileName is the MANIFEST file name within a backup.
@@ -76,16 +77,8 @@ var (
 	// but none of them are complete.
 	ErrNoCompleteBackup = errors.New("backup(s) found but none are complete")
 
-	// backupStorageHook contains the hook name to use to process
-	// backup files. If not set, we will not process the files. It is
-	// only used at backup time. Then it is put in the manifest,
-	// and when decoding a backup, it is read from the manifest,
-	// and used as the transform hook name again.
-	backupStorageHook string
-
 	// backupStorageCompress can be set to false to not use gzip
-	// on the backups. Usually would be set if a hook is used, and
-	// the hook compresses the data.
+	// on the backups.
 	backupStorageCompress = true
 
 	// backupCompressBlockSize is the splitting size for each
@@ -106,9 +99,7 @@ func init() {
 }
 
 func registerBackupFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&backupStorageHook, "backup_storage_hook", backupStorageHook, "if set, we send the contents of the backup files through this hook.")
-	_ = fs.MarkDeprecated("backup_storage_hook", "consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
-	fs.BoolVar(&backupStorageCompress, "backup_storage_compress", backupStorageCompress, "if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data.")
+	fs.BoolVar(&backupStorageCompress, "backup_storage_compress", backupStorageCompress, "if set, the backup files will be compressed.")
 	fs.IntVar(&backupCompressBlockSize, "backup_storage_block_size", backupCompressBlockSize, "if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000).")
 	fs.IntVar(&backupCompressBlocks, "backup_storage_number_blocks", backupCompressBlocks, "if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression.")
 }
@@ -342,8 +333,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, vterrors.Wrap(err, "ListBackups failed")
 	}
 
-	metadataManager := &MetadataManager{}
-
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
 		params.Logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", backupDir)
@@ -357,19 +346,19 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 			params.Logger.Errorf("error resetting replication: %v. Continuing", err)
 		}
 
-		if err := metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err != nil {
-			params.Logger.Errorf("error populating metadata tables: %v. Continuing", err)
-
-		}
 		// Always return ErrNoBackup
 		return nil, ErrNoBackup
 	}
 
-	bh, err := FindBackupToRestore(ctx, params, bhs)
+	restorePath, err := FindBackupToRestore(ctx, params, bhs)
 	if err != nil {
 		return nil, err
 	}
-
+	if restorePath.IsEmpty() {
+		// This condition should not happen; but we validate for sanity
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "empty restore path")
+	}
+	bh := restorePath.FullBackupHandle()
 	re, err := GetRestoreEngine(ctx, bh)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "Failed to find restore engine")
@@ -419,18 +408,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, vterrors.Wrap(err, "mysql_upgrade failed")
 	}
 
-	// Add backupTime and restorePosition to LocalMetadata
-	params.LocalMetadata["RestoredBackupTime"] = manifest.BackupTime
-	params.LocalMetadata["RestorePosition"] = mysql.EncodePosition(manifest.Position)
-
-	// Populate local_metadata before starting without --skip-networking,
-	// so it's there before we start announcing ourselves.
-	params.Logger.Infof("Restore: populating local_metadata")
-	err = metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
-	if err != nil {
-		return nil, err
-	}
-
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
 	params.Logger.Infof("Restore: restarting mysqld after mysql_upgrade")
@@ -443,6 +420,19 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
+	if handles := restorePath.IncrementalBackupHandles(); len(handles) > 0 {
+		params.Logger.Infof("Restore: applying %v incremental backups", len(handles))
+		for _, bh := range handles {
+			manifest, err := re.ExecuteRestore(ctx, params, bh)
+			if err != nil {
+				return nil, err
+			}
+			params.Logger.Infof("Restore: applied incremental backup: %v", manifest.Position)
+		}
+		params.Logger.Infof("Restore: done applying incremental backups")
+	}
+
+	params.Logger.Infof("Restore: removing state file")
 	if err = removeStateFile(params.Cnf); err != nil {
 		return nil, err
 	}

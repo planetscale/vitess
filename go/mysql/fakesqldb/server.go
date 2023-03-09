@@ -23,11 +23,12 @@ import (
 	"os"
 	"path"
 	"regexp"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -111,9 +112,6 @@ type DB struct {
 	expectedExecuteFetch []ExpectedExecuteFetch
 	// expectedExecuteFetchIndex is the current index of the query.
 	expectedExecuteFetchIndex int
-	// Infinite is true when executed queries beyond our expectation list
-	// should respond with the last entry from the list.
-	infinite bool
 
 	// connections tracks all open connections.
 	// The key for the map is the value of mysql.Conn.ConnectionID.
@@ -140,9 +138,10 @@ type ExpectedResult struct {
 }
 
 type exprResult struct {
-	expr   *regexp.Regexp
-	result *sqltypes.Result
-	err    string
+	queryPattern string
+	expr         *regexp.Regexp
+	result       *sqltypes.Result
+	err          string
 }
 
 // ExpectedExecuteFetch defines for an expected query the to be faked output.
@@ -417,13 +416,27 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return callback(&sqltypes.Result{})
 	}
 	// Nothing matched.
-	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v", query, db.name)
-	log.Errorf("Query not found: %s:%s", query, debug.Stack())
+	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
+		sqlparser.TruncateForUI(query), db.name)
+	log.Errorf("Query not found: %s", sqlparser.TruncateForUI(query))
 
 	return err
 }
 
 func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
+	var (
+		afterFn  func()
+		entry    ExpectedExecuteFetch
+		err      error
+		expected string
+		result   *sqltypes.Result
+	)
+
+	defer func() {
+		if afterFn != nil {
+			afterFn()
+		}
+	}()
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -435,44 +448,46 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 	}
 
 	index := db.expectedExecuteFetchIndex
-	if db.infinite && index == len(db.expectedExecuteFetch) {
-		// Although we already executed all queries, we'll continue to answer the
-		// last one in the infinite mode.
-		index--
-	}
+
 	if index >= len(db.expectedExecuteFetch) {
+		if db.neverFail {
+			return &sqltypes.Result{}, nil
+		}
 		db.t.Errorf("%v: got unexpected out of bound fetch: %v >= %v", db.name, index, len(db.expectedExecuteFetch))
 		return nil, errors.New("unexpected out of bound fetch")
 	}
-	entry := db.expectedExecuteFetch[index]
 
-	db.expectedExecuteFetchIndex++
-	// If the infinite mode is on, reverse the increment and keep the index at
-	// len(db.expectedExecuteFetch).
-	if db.infinite && db.expectedExecuteFetchIndex > len(db.expectedExecuteFetch) {
-		db.expectedExecuteFetchIndex--
-	}
+	entry = db.expectedExecuteFetch[index]
+	afterFn = entry.AfterFunc
+	err = entry.Error
+	expected = entry.Query
+	result = entry.QueryResult
 
-	if entry.AfterFunc != nil {
-		defer entry.AfterFunc()
-	}
-
-	expected := entry.Query
 	if strings.HasSuffix(expected, "*") {
 		if !strings.HasPrefix(query, expected[0:len(expected)-1]) {
+			if db.neverFail {
+				return &sqltypes.Result{}, nil
+			}
 			db.t.Errorf("%v: got unexpected query start (index=%v): %v != %v", db.name, index, query, expected)
+			return nil, errors.New("unexpected query")
 		}
 	} else {
 		if query != expected {
+			if db.neverFail {
+				return &sqltypes.Result{}, nil
+			}
 			db.t.Errorf("%v: got unexpected query (index=%v): %v != %v", db.name, index, query, expected)
 			return nil, errors.New("unexpected query")
 		}
 	}
+
+	db.expectedExecuteFetchIndex++
 	db.t.Logf("ExecuteFetch: %v: %v", db.name, query)
-	if entry.Error != nil {
-		return nil, entry.Error
+
+	if err != nil {
+		return nil, err
 	}
-	return entry.QueryResult, nil
+	return result, nil
 }
 
 // ComPrepare is part of the mysql.Handler interface.
@@ -545,7 +560,7 @@ func (db *DB) AddQueryPattern(queryPattern string, expectedResult *sqltypes.Resu
 	result := *expectedResult
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.patternData[queryPattern] = exprResult{expr: expr, result: &result}
+	db.patternData[queryPattern] = exprResult{queryPattern: queryPattern, expr: expr, result: &result}
 }
 
 // RejectQueryPattern allows a query pattern to be rejected with an error
@@ -553,7 +568,7 @@ func (db *DB) RejectQueryPattern(queryPattern, error string) {
 	expr := regexp.MustCompile("(?is)^" + queryPattern + "$")
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.patternData[queryPattern] = exprResult{expr: expr, err: error}
+	db.patternData[queryPattern] = exprResult{queryPattern: queryPattern, expr: expr, err: error}
 }
 
 // ClearQueryPattern removes all query patterns set up
@@ -647,14 +662,6 @@ func (db *DB) EnableShouldClose() {
 // AddExpectedExecuteFetch adds an ExpectedExecuteFetch directly.
 func (db *DB) AddExpectedExecuteFetch(entry ExpectedExecuteFetch) {
 	db.AddExpectedExecuteFetchAtIndex(appendEntry, entry)
-}
-
-// EnableInfinite turns on the infinite flag (the last ordered query is used).
-func (db *DB) EnableInfinite() {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	db.infinite = true
 }
 
 // AddExpectedExecuteFetchAtIndex inserts a new entry at index.

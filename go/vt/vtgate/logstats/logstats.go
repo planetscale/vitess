@@ -63,9 +63,10 @@ type LogStats struct {
 	// Set if the query was executed through Boost
 	BoostQueryID string
 
-	// These two fields are deprecated and will be removed in the Vitess V16 release
+	// deprecated
 	Keyspace string
-	Table    string
+	// deprecated
+	Table string
 }
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx
@@ -165,7 +166,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	case streamlog.QueryLogFormatText:
 		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%q\t%q\t%v\t%v\t%q\t%q\n"
 	case streamlog.QueryLogFormatJSON:
-		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q,  \"Keyspace\": %q, \"Table\": %q, \"TabletType\": %q, \"SessionUUID\": %q, \"Cached Plan\": %v, \"TablesUsed\": %v, \"ActiveKeyspace\": %q, \"BoostQueryID\": %q}\n"
+		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q, \"Keyspace\": %q, \"Table\": %q, \"TabletType\": %q, \"SessionUUID\": %q, \"Cached Plan\": %v, \"TablesUsed\": %v, \"ActiveKeyspace\": %q, \"BoostQueryID\": %q}\n"
 	}
 
 	tables := stats.TablesUsed

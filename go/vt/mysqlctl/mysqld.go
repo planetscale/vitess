@@ -137,11 +137,11 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	}
 
 	// Create and open the connection pool for dba access.
-	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", dbaPoolSize, DbaIdleTimeout, PoolDynamicHostnameResolution)
+	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", dbaPoolSize, DbaIdleTimeout, 0, PoolDynamicHostnameResolution)
 	result.dbaPool.Open(dbcfgs.DbaWithDB())
 
 	// Create and open the connection pool for app access.
-	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", appPoolSize, appIdleTimeout, PoolDynamicHostnameResolution)
+	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", appPoolSize, appIdleTimeout, 0, PoolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB())
 
 	/*
@@ -217,9 +217,7 @@ func GetVersionFromEnv() (flavor MySQLFlavor, ver ServerVersion, err error) {
 	env := os.Getenv("MYSQL_FLAVOR")
 	switch env {
 	case "MariaDB":
-		return FlavorMariaDB, ServerVersion{10, 0, 10}, nil
-	case "MariaDB103":
-		return FlavorMariaDB, ServerVersion{10, 3, 7}, nil
+		return FlavorMariaDB, ServerVersion{10, 6, 11}, nil
 	case "MySQL80":
 		return FlavorMySQL, ServerVersion{8, 0, 11}, nil
 	case "MySQL56":
@@ -854,17 +852,9 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 		}
 	case FlavorMariaDB:
-		switch mysqld.capabilities.version.Minor {
-		case 0:
-			versionConfig = config.MycnfMariaDB100
-		case 1:
-			versionConfig = config.MycnfMariaDB101
-		case 2:
-			versionConfig = config.MycnfMariaDB102
-		case 3:
-			versionConfig = config.MycnfMariaDB103
-		case 4:
-			versionConfig = config.MycnfMariaDB104
+		switch mysqld.capabilities.version.Major {
+		case 10:
+			versionConfig = config.MycnfMariaDB10
 		default:
 			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 		}
@@ -1205,4 +1195,81 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) string {
 	res := qr.Named().Row()
 	versionComment, _ := res.ToString("@@global.version_comment")
 	return versionComment
+}
+
+// applyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
+// $ mysqlbinlog --include-gtids binlog.file | mysql
+func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTIDSet) error {
+	var pipe io.ReadCloser
+	var mysqlbinlogCmd *exec.Cmd
+	var mysqlCmd *exec.Cmd
+
+	dir, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return err
+	}
+	env, err := buildLdPaths()
+	if err != nil {
+		return err
+	}
+	{
+		name, err := binaryPath(dir, "mysqlbinlog")
+		if err != nil {
+			return err
+		}
+		args := []string{}
+		if gtids := includeGTIDs.String(); gtids != "" {
+			args = append(args,
+				"--include-gtids",
+				gtids,
+			)
+		}
+		args = append(args, binlogFile)
+
+		mysqlbinlogCmd = exec.Command(name, args...)
+		mysqlbinlogCmd.Dir = dir
+		mysqlbinlogCmd.Env = env
+		log.Infof("applyBinlogFile: running %#v", mysqlbinlogCmd)
+		pipe, err = mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
+		if err != nil {
+			return err
+		}
+	}
+	{
+		name, err := binaryPath(dir, "mysql")
+		if err != nil {
+			return err
+		}
+		params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+		if err != nil {
+			return err
+		}
+		cnf, err := mysqld.defaultsExtraFile(params)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(cnf)
+		args := []string{
+			"--defaults-extra-file=" + cnf,
+		}
+		mysqlCmd = exec.Command(name, args...)
+		mysqlCmd.Dir = dir
+		mysqlCmd.Env = env
+		mysqlCmd.Stdin = pipe // piped from mysqlbinlog
+	}
+	// Run both processes, piped:
+	if err := mysqlbinlogCmd.Start(); err != nil {
+		return err
+	}
+	if err := mysqlCmd.Start(); err != nil {
+		return err
+	}
+	// Wait for both to complete:
+	if err := mysqlbinlogCmd.Wait(); err != nil {
+		return err
+	}
+	if err := mysqlCmd.Wait(); err != nil {
+		return err
+	}
+	return nil
 }

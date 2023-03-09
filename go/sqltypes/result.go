@@ -91,8 +91,7 @@ func (result *Result) ReplaceKeyspace(keyspace string) {
 // Copy creates a deep copy of Result.
 func (result *Result) Copy() *Result {
 	out := &Result{
-		InsertID:            result.InsertID,
-		RowsAffected:        result.RowsAffected,
+		RowsAffected: result.RowsAffected, InsertID: result.InsertID,
 		RowsRead:            result.RowsRead,
 		Info:                result.Info,
 		SessionStateChanges: result.SessionStateChanges,

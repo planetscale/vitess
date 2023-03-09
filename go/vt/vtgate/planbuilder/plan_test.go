@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -29,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -42,9 +42,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	"github.com/google/go-cmp/cmp"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -254,8 +251,9 @@ func TestPlan(t *testing.T) {
 	testFile(t, "flush_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "show_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "stream_cases.json", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "systemtables_cases80.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "info_schema80_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSystemTables57(t *testing.T) {
@@ -264,7 +262,7 @@ func TestSystemTables57(t *testing.T) {
 	defer servenv.SetMySQLServerVersionForTest("")
 	vschemaWrapper := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
 	testOutputTempDir := makeTestOutput(t)
-	testFile(t, "systemtables_cases57.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "info_schema57_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -274,6 +272,15 @@ func TestSysVarSetDisabled(t *testing.T) {
 	}
 
 	testFile(t, "set_sysvar_disabled_cases.json", makeTestOutput(t), vschemaWrapper, false)
+}
+
+func TestViews(t *testing.T) {
+	vschemaWrapper := &vschemaWrapper{
+		v:           loadSchema(t, "vschemas/schema.json", true),
+		enableViews: true,
+	}
+
+	testFile(t, "view_cases.json", makeTestOutput(t), vschemaWrapper, false)
 }
 
 func TestOne(t *testing.T) {
@@ -511,6 +518,15 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 			t.Fatal(ks.Error)
 		}
 
+		// adding view in user keyspace
+		if ks.Keyspace.Name == "user" {
+			if err = vschema.AddView(ks.Keyspace.Name,
+				"user_details_view",
+				"select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id"); err != nil {
+				t.Fatal(err)
+			}
+		}
+
 		// setting a default value to all the text columns in the tables of this keyspace
 		// so that we can "simulate" a real case scenario where the vschema is aware of
 		// columns' collations.
@@ -536,6 +552,7 @@ type vschemaWrapper struct {
 	dest          key.Destination
 	sysVarEnabled bool
 	version       plancontext.PlannerVersion
+	enableViews   bool
 }
 
 func (vw *vschemaWrapper) IsShardRoutingEnabled() bool {
@@ -573,7 +590,7 @@ func (vw *vschemaWrapper) ForeignKeyMode() string {
 
 func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	if vw.keyspace == nil {
-		return nil, errors.New("keyspace not available")
+		return nil, vterrors.VT13001("keyspace not available")
 	}
 	return []*vindexes.Keyspace{vw.keyspace}, nil
 }
@@ -581,7 +598,7 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 // FindKeyspace implements the VSchema interface
 func (vw *vschemaWrapper) FindKeyspace(keyspace string) (*vindexes.Keyspace, error) {
 	if vw.keyspace == nil {
-		return nil, errors.New("keyspace not available")
+		return nil, vterrors.VT13001("keyspace not available")
 	}
 	if vw.keyspace.Name == keyspace {
 		return vw.keyspace, nil
@@ -622,11 +639,11 @@ func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, 
 		keyspaceName = qualifier
 	}
 	if keyspaceName == "" {
-		return nil, nil, 0, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace not specified")
+		return nil, nil, 0, vterrors.VT03007()
 	}
 	keyspace := vw.v.Keyspaces[keyspaceName]
 	if keyspace == nil {
-		return nil, nil, 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspaceName)
+		return nil, nil, 0, vterrors.VT05003(keyspaceName)
 	}
 	return vw.dest, keyspace.Keyspace, vw.tabletType, nil
 
@@ -650,6 +667,14 @@ func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, s
 		return nil, destKeyspace, destTabletType, destTarget, err
 	}
 	return table, destKeyspace, destTabletType, destTarget, nil
+}
+
+func (vw *vschemaWrapper) FindView(tab sqlparser.TableName) sqlparser.SelectStatement {
+	destKeyspace, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	if err != nil {
+		return nil
+	}
+	return vw.v.FindView(destKeyspace, tab.Name.String())
 }
 
 func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
@@ -720,6 +745,10 @@ func (vw *vschemaWrapper) FindRoutedShard(keyspace, shard string) (string, error
 	return "", nil
 }
 
+func (vw *vschemaWrapper) IsViewsEnabled() bool {
+	return vw.enableViews
+}
+
 type (
 	planTest struct {
 		Comment  string          `json:"comment,omitempty"`
@@ -730,19 +759,9 @@ type (
 	}
 )
 
-func compacted(in string) string {
-	if in != "" && in[0] != '{' {
-		return in
-	}
-	dst := bytes.NewBuffer(nil)
-	err := json.Compact(dst, []byte(in))
-	if err != nil {
-		panic(err)
-	}
-	return dst.String()
-}
-
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, render bool) {
+	opts := jsondiff.DefaultConsoleOptions()
+
 	t.Run(filename, func(t *testing.T) {
 		var expected []planTest
 		var outFirstPlanner string
@@ -770,10 +789,9 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, r
 				}
 				out := getPlanOrErrorOutput(err, plan)
 
-				lft := compacted(out)
-				rgt := compacted(string(tcase.V3Plan))
-				if lft != rgt {
-					t.Errorf("V3 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, cmp.Diff(tcase.V3Plan, out), tcase.V3Plan, out)
+				compare, s := jsondiff.Compare(tcase.V3Plan, []byte(out), &opts)
+				if compare != jsondiff.FullMatch {
+					t.Errorf("V3 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.V3Plan, out)
 				}
 
 				outFirstPlanner = out
@@ -795,8 +813,9 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, r
 			//       with this last expectation, it is an error if the Gen4 planner
 			//       produces the same plan as the V3 planner does
 			t.Run(fmt.Sprintf("Gen4: %s", testName), func(t *testing.T) {
-				if compacted(out) != compacted(string(tcase.Gen4Plan)) {
-					t.Errorf("Gen4 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, cmp.Diff(tcase.Gen4Plan, out), tcase.Gen4Plan, out)
+				compare, s := jsondiff.Compare(tcase.Gen4Plan, []byte(out), &opts)
+				if compare != jsondiff.FullMatch {
+					t.Errorf("Gen4 - %s\nDiff:\n%s\n[%s] \n[%s]", filename, s, tcase.Gen4Plan, out)
 				}
 
 				if outFirstPlanner == out {

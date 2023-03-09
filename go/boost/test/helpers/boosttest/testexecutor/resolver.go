@@ -47,6 +47,11 @@ type fakeGateway struct {
 	executor *Executor
 }
 
+func (f *fakeGateway) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (f *fakeGateway) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
 	panic("implement me")
 }

@@ -32,6 +32,21 @@ func GetClusters(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(clusters, err)
 }
 
+// GetTopologyPath implements the http wrapper for /cluster/{cluster_id}/topology
+//
+// Query params:
+// - path: string
+func GetTopologyPath(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	query := r.URL.Query()
+
+	result, err := api.server.GetTopologyPath(ctx, &vtadminpb.GetTopologyPathRequest{
+		ClusterId: vars["cluster_id"],
+		Path:      query["path"][0],
+	})
+	return NewJSONResponse(result, err)
+}
+
 // Validate implements the http wrapper for /cluster/{cluster_id}/validate
 func Validate(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := mux.Vars(r.Request)
@@ -53,19 +68,4 @@ func Validate(ctx context.Context, r Request, api *API) *JSONResponse {
 		PingTablets: result.PingTablets,
 	})
 	return NewJSONResponse(resp, err)
-}
-
-// GetTopologyPath implements the http wrapper for /cluster/{cluster_id}/topology
-//
-// Query params:
-// - path: string
-func GetTopologyPath(ctx context.Context, r Request, api *API) *JSONResponse {
-	vars := r.Vars()
-	query := r.URL.Query()
-
-	result, err := api.server.GetTopologyPath(ctx, &vtadminpb.GetTopologyPathRequest{
-		ClusterId: vars["cluster_id"],
-		Path:      query["path"][0],
-	})
-	return NewJSONResponse(result, err)
 }

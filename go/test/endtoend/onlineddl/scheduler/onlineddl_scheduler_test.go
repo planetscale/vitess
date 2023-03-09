@@ -811,7 +811,7 @@ func testScheduler(t *testing.T) {
 		defer func() { overrideVtctlParams = nil }()
 		// create a migration and cancel it. We don't let it complete. We want it in "failed" state
 		t.Run("start and fail migration", func(t *testing.T) {
-			executedUUID := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtctl", "", "", true)) // skip wait
+			executedUUID := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" -postpone-completion", "vtctl", "", "", true)) // skip wait
 			require.Equal(t, uuid, executedUUID)
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			// let's cancel it

@@ -66,7 +66,6 @@ var (
 
 const (
 	streamModeTar        = "tar"
-	writerBufferSize     = 2 * 1024 * 1024 /*2 MiB*/
 	xtrabackupBinaryName = "xtrabackup"
 	xtrabackupEngineName = "xtrabackup"
 	xbstream             = "xbstream"
@@ -157,6 +156,9 @@ func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalE
 // and an overall error.
 func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (complete bool, finalErr error) {
 
+	if params.IncrementalFromPos != "" {
+		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "incremental backups not supported in xtrabackup engine.")
+	}
 	if xtrabackupUser == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
 	}
@@ -180,6 +182,11 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	if err != nil {
 		return false, vterrors.Wrap(err, "unable to obtain primary position")
 	}
+	serverUUID, err := conn.GetServerUUID()
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get server uuid")
+	}
+
 	flavor := pos.GTIDSet.Flavor()
 	params.Logger.Infof("Detected MySQL flavor: %v", flavor)
 
@@ -212,6 +219,10 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 		BackupManifest: BackupManifest{
 			BackupMethod: xtrabackupEngineName,
 			Position:     replicationPosition,
+			ServerUUID:   serverUUID,
+			TabletAlias:  params.TabletAlias,
+			Keyspace:     params.Keyspace,
+			Shard:        params.Shard,
 			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime: time.Now().UTC().Format(time.RFC3339),
 		},

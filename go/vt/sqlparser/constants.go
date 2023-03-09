@@ -65,6 +65,12 @@ const (
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
 
+	// ALTER TABLE ALGORITHM string.
+	DefaultStr = "default"
+	CopyStr    = "copy"
+	InplaceStr = "inplace"
+	InstantStr = "instant"
+
 	// Partition and subpartition type strings
 	HashTypeStr  = "hash"
 	KeyTypeStr   = "key"
@@ -238,6 +244,11 @@ const (
 	RepeatableReadStr  = "repeatable-read"
 	SerializableStr    = "serializable"
 
+	// Transaction access mode
+	WithConsistentSnapshotStr = "with consistent snapshot"
+	ReadWriteStr              = "read write"
+	ReadOnlyStr               = "read only"
+
 	// Explain formats
 	EmptyStr       = ""
 	TreeStr        = "tree"
@@ -246,6 +257,9 @@ const (
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
 	VTExplainStr   = "vtexplain"
+	QueriesStr     = "queries"
+	AllVExplainStr = "all"
+	PlanStr        = "plan"
 
 	// Lock Types
 	ReadStr             = "read"
@@ -277,7 +291,7 @@ const (
 	ProcedureStr               = " procedure status"
 	StatusGlobalStr            = " global status"
 	StatusSessionStr           = " status"
-	TableStr                   = " tables"
+	TablesStr                  = " tables"
 	TableStatusStr             = " table status"
 	TriggerStr                 = " triggers"
 	VariableGlobalStr          = " global variables"
@@ -710,6 +724,13 @@ const (
 	AnalyzeType
 )
 
+// Constant for Enum Type - VExplainType
+const (
+	QueriesVExplainType VExplainType = iota
+	PlanVExplainType
+	AllVExplainType
+)
+
 // Constant for Enum Type - SelectIntoType
 const (
 	IntoOutfile SelectIntoType = iota
@@ -858,4 +879,11 @@ const (
 	IntervalHourMicrosecond
 	IntervalMinuteMicrosecond
 	IntervalSecondMicrosecond
+)
+
+// Transaction access mode
+const (
+	WithConsistentSnapshot TxAccessMode = iota
+	ReadWrite
+	ReadOnly
 )

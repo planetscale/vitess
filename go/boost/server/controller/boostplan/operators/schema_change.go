@@ -19,7 +19,7 @@ func tableSpecRequiresNewTableNode(oldSpec, newSpec *sqlparser.TableSpec) bool {
 		oldColumn := oldSpec.Columns[col]
 		newColumn := newSpec.Columns[col]
 		// any column reordering requires a new base node
-		if !sqlparser.EqualsIdentifierCI(oldColumn.Name, newColumn.Name, nil) {
+		if !sqlparser.Equals.IdentifierCI(oldColumn.Name, newColumn.Name) {
 			return true
 		}
 		// if the type of the column has had a meaningful change, we need a new table node
@@ -49,7 +49,7 @@ func columnTypeHasChanged(colType, destColType *sqlparser.ColumnType) bool {
 		destColType.Options.Comment = nil
 	}
 
-	if sqlparser.EqualsRefOfColumnType(colType, destColType, nil) {
+	if sqlparser.Equals.RefOfColumnType(colType, destColType) {
 		return false
 	}
 

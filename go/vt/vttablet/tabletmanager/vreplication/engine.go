@@ -42,45 +42,23 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
-	"vitess.io/vitess/go/vt/withddl"
 )
 
 const (
 	reshardingJournalTableName = "_vt.resharding_journal"
 	vreplicationTableName      = "_vt.vreplication"
 	copyStateTableName         = "_vt.copy_state"
+	postCopyActionTableName    = "_vt.post_copy_action"
 
-	createReshardingJournalTable = `create table if not exists _vt.resharding_journal(
-  id bigint,
-  db_name varbinary(255),
-  val blob,
-  primary key (id)
-)`
-
-	createCopyState = `create table if not exists _vt.copy_state (
-  vrepl_id int,
-  table_name varbinary(128),
-  lastpk varbinary(2000),
-  primary key (vrepl_id, table_name))`
-)
-
-var withDDL *withddl.WithDDL
-var withDDLInitialQueries []string
-
-const (
+	maxRows                      = 10000
 	throttlerVReplicationAppName = "vreplication"
 	throttlerOnlineDDLAppName    = "online-ddl"
 )
 
-func init() {
-	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
-	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
-	allddls = append(allddls, createReshardingJournalTable, createCopyState)
-	allddls = append(allddls, createVReplicationLogTable)
-	withDDL = withddl.New(allddls)
-
-	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
-}
+const (
+	PostCopyActionNone PostCopyActionType = iota
+	PostCopyActionSQL
+)
 
 // waitRetryTime can be changed to a smaller value for tests.
 // A VReplication stream can be created by sending an insert statement
@@ -93,6 +71,10 @@ var waitRetryTime = 1 * time.Second
 
 // How frequently vcopier will update _vt.vreplication rows_copied
 var rowsCopiedUpdateInterval = 30 * time.Second
+
+// How frequntly vcopier will garbage collect old copy_state rows.
+// By default, do it in between every 2nd and 3rd rows copied update.
+var copyStateGCInterval = (rowsCopiedUpdateInterval * 3) - (rowsCopiedUpdateInterval / 2)
 
 // Engine is the engine for handling vreplication.
 type Engine struct {
@@ -123,12 +105,24 @@ type Engine struct {
 	ec        *externalConnector
 
 	throttlerClient *throttle.Client
+
+	// This should only be set in Test Engines in order to short
+	// curcuit functions as needed in unit tests. It's automatically
+	// enabled in NewSimpleTestEngine. This should NOT be used in
+	// production.
+	shortcircuit bool
 }
 
 type journalEvent struct {
 	journal      *binlogdatapb.Journal
 	participants map[string]int
 	shardGTIDs   map[string]*binlogdatapb.ShardGtid
+}
+
+type PostCopyActionType int
+type PostCopyAction struct {
+	Type PostCopyActionType `json:"type"`
+	Task string             `json:"task"`
 }
 
 // NewEngine creates a new Engine.
@@ -174,6 +168,24 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(externalConfig),
+	}
+	return vre
+}
+
+// NewSimpleTestEngine creates a new Engine for testing that can
+// also short curcuit functions as needed.
+func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
+	vre := &Engine{
+		controllers:             make(map[int]*controller),
+		ts:                      ts,
+		cell:                    cell,
+		mysqld:                  mysqld,
+		dbClientFactoryFiltered: dbClientFactoryFiltered,
+		dbClientFactoryDba:      dbClientFactoryDba,
+		dbName:                  dbname,
+		journaler:               make(map[string]*journalEvent),
+		ec:                      newExternalConnector(externalConfig),
+		shortcircuit:            true,
 	}
 	return vre
 }
@@ -362,13 +374,13 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := withDDL.Exec(vre.ctx, "use _vt", dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	if _, err := dbClient.ExecuteFetch("use _vt", 1); err != nil {
 		return nil, err
 	}
 
 	switch plan.opcode {
 	case insertQuery:
-		qr, err := withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+		qr, err := dbClient.ExecuteFetch(plan.query, 1)
 		if err != nil {
 			return nil, err
 		}
@@ -412,11 +424,11 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				blpStats[id] = ct.blpStats
 			}
 		}
-		query, err := plan.applier.GenerateQuery(bv, nil)
+		query, err = plan.applier.GenerateQuery(bv, nil)
 		if err != nil {
 			return nil, err
 		}
-		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+		qr, err := dbClient.ExecuteFetch(query, maxRows)
 		if err != nil {
 			return nil, err
 		}
@@ -464,7 +476,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+		qr, err := dbClient.ExecuteFetch(query, maxRows)
 		if err != nil {
 			return nil, err
 		}
@@ -472,8 +484,16 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		// Legacy vreplication won't create this table. So, ignore schema errors.
-		if _, err := withDDL.ExecIgnore(vre.ctx, delQuery, dbClient.ExecuteFetch); err != nil {
+		_, err = dbClient.ExecuteFetch(delQuery, maxRows)
+		if err != nil {
+			return nil, err
+		}
+		delQuery, err = plan.delPostCopyAction.GenerateQuery(bv, nil)
+		if err != nil {
+			return nil, err
+		}
+		_, err = dbClient.ExecuteFetch(delQuery, maxRows)
+		if err != nil {
 			return nil, err
 		}
 		if err := dbClient.Commit(); err != nil {
@@ -482,7 +502,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		return qr, nil
 	case selectQuery, reshardingJournalQuery:
 		// select and resharding journal queries are passed through.
-		return withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+		return dbClient.ExecuteFetch(plan.query, maxRows)
 	}
 	panic("unreachable")
 }
@@ -642,9 +662,10 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 
 		workflowType, _ := strconv.ParseInt(params["workflow_type"], 10, 64)
 		workflowSubType, _ := strconv.ParseInt(params["workflow_sub_type"], 10, 64)
+		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
-		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"], workflowType, workflowSubType)
-		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"], workflowType, workflowSubType, deferSecondaryKeys)
+		qr, err := dbClient.ExecuteFetch(ig.String(), maxRows)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
@@ -654,7 +675,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	}
 	for _, ks := range participants {
 		id := je.participants[ks]
-		_, err := withDDL.Exec(vre.ctx, binlogplayer.DeleteVReplication(uint32(id)), dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+		_, err := dbClient.ExecuteFetch(binlogplayer.DeleteVReplication(uint32(id)), maxRows)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
@@ -710,6 +731,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		return err
 	}
 	defer vre.wg.Done()
+
+	if vre.shortcircuit {
+		return nil
+	}
 
 	dbClient := vre.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
@@ -794,7 +819,7 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 		return nil, err
 	}
 	defer dbClient.Close()
-	qr, err := withDDL.ExecIgnore(ctx, fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(vre.dbName)), dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(vre.dbName)), maxRows)
 	if err != nil {
 		return nil, err
 	}

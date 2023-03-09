@@ -72,7 +72,7 @@ func main() {
 		http.ServeFile(w, r, statsFileName)
 	})
 
-	http.ListenAndServe(":15123", nil)
+	_ = http.ListenAndServe(":15123", nil)
 }
 
 type Stats struct {

@@ -95,7 +95,7 @@ func (t *TopK) Equals(st *semantics.SemTable, op Operator) bool {
 		return false
 	}
 
-	return t.K == other.K && sqlparser.EqualsOrderBy(t.Order, other.Order, nil)
+	return t.K == other.K && sqlparser.Equals.OrderBy(t.Order, other.Order)
 }
 
 func (d *Distinct) Equals(st *semantics.SemTable, op Operator) bool {

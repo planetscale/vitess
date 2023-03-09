@@ -23,6 +23,7 @@ Usage of vtgate:
       --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-boost                                                     Enable boost integration; requires a valid topo connection. This Vitess process will find the local Boost cluster via topo
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
+      --enable-views                                                     Enable views support in vtgate.
       --enable_buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
       --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)
@@ -90,12 +91,15 @@ Usage of vtgate:
       --legacy_replication_lag_algorithm                                 Use the legacy algorithm when selecting vttablets for serving. (default true)
       --lock-timeout duration                                            Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
       --lock_heartbeat_time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
-      --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
+      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
       --log_dir string                                                   If non-empty, write log files in this directory
       --log_err_stacks                                                   log stack traces for errors
+      --log_link string                                                  If non-empty, add symbolic links in this directory to the log files
       --log_queries_to_file string                                       Enable query logging to the specified file
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logbuflevel int                                                  Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
       --logtostderr                                                      log to standard error instead of files
+      --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --max_memory_rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
       --max_payload_size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --message_stream_grace_period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
@@ -123,8 +127,8 @@ Usage of vtgate:
       --mysql_server_bind_address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql_server_port int                                            If set, also listen for MySQL binary protocol connections on this port. (default -1)
-      --mysql_server_query_timeout duration                              mysql query timeout (default 0s)
-      --mysql_server_read_timeout duration                               connection read timeout (default 0s)
+      --mysql_server_query_timeout duration                              mysql query timeout
+      --mysql_server_read_timeout duration                               connection read timeout
       --mysql_server_require_secure_transport                            Reject insecure connections but only if mysql_server_ssl_cert and mysql_server_ssl_key are provided
       --mysql_server_socket_path string                                  This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket
       --mysql_server_ssl_ca string                                       Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.
@@ -133,9 +137,9 @@ Usage of vtgate:
       --mysql_server_ssl_key string                                      Path to ssl key for mysql server plugin SSL
       --mysql_server_ssl_server_ca string                                path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
       --mysql_server_tls_min_version string                              Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --mysql_server_version string                                      MySQL server version to advertise.
-      --mysql_server_write_timeout duration                              connection write timeout (default 0s)
-      --mysql_slow_connect_warn_threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish (default 0s)
+      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.30-Vitess")
+      --mysql_server_write_timeout duration                              connection write timeout
+      --mysql_slow_connect_warn_threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
       --mysql_tcp_version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
       --no_scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --normalize_queries                                                Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
@@ -148,6 +152,7 @@ Usage of vtgate:
       --pprof strings                                                    enable profiling
       --proxy_protocol                                                   Enable HAProxy PROXY protocol on MySQL listener socket
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
+      --query-timeout int                                                Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)
       --querylog-buffer-size int                                         Maximum number of buffered query logs before throttling log output (default 10)
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
@@ -171,7 +176,7 @@ Usage of vtgate:
       --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd_address string                                            Address for statsd client
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
-      --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
+      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --stream_buffer_size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
       --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
       --tablet_grpc_ca string                                            the server ca to use to validate servers when connecting
@@ -212,7 +217,7 @@ Usage of vtgate:
       --transaction_mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
-      --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
+      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
       --vtctld_addr string                                               address of a vtctld instance
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors

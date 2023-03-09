@@ -30,7 +30,7 @@ type RewriteState bool
 func RewritePredicate(ast SQLNode) SQLNode {
 	for {
 		finishedRewrite := true
-		ast = Rewrite(ast, nil, func(cursor *Cursor) bool {
+		ast = SafeRewrite(ast, nil, func(cursor *Cursor) bool {
 			if e, isExpr := cursor.node.(Expr); isExpr {
 				rewritten, state := simplifyExpression(e)
 				if state == Changed {
@@ -81,6 +81,38 @@ func simplifyNot(expr *NotExpr) (Expr, RewriteState) {
 	return expr, NoChange
 }
 
+// ExtractINFromOR will add additional predicated to an OR.
+// this rewriter should not be used in a fixed point way, since it returns the original expression with additions,
+// and it will therefor OOM before it stops rewriting
+func ExtractINFromOR(expr *OrExpr) []Expr {
+	// we check if we have two comparisons on either side of the OR
+	// that we can add as an ANDed comparison.
+	// WHERE (a = 5 and B) or (a = 6 AND C) =>
+	// WHERE (a = 5 AND B) OR (a = 6 AND C) AND a IN (5,6)
+	// This rewrite makes it possible to find a better route than Scatter if the `a` column has a helpful vindex
+	lftPredicates := SplitAndExpression(nil, expr.Left)
+	rgtPredicates := SplitAndExpression(nil, expr.Right)
+	var ins []Expr
+	for _, lft := range lftPredicates {
+		l, ok := lft.(*ComparisonExpr)
+		if !ok {
+			continue
+		}
+		for _, rgt := range rgtPredicates {
+			r, ok := rgt.(*ComparisonExpr)
+			if !ok {
+				continue
+			}
+			in, state := tryTurningOrIntoIn(l, r)
+			if state == Changed {
+				ins = append(ins, in)
+			}
+		}
+	}
+
+	return ins
+}
+
 func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 	or := expr
 
@@ -92,16 +124,16 @@ func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 		var a, b, c Expr
 		switch {
 		// (A and B) or (A and C) => A AND (B OR C)
-		case EqualsExpr(land.Left, rand.Left, nil):
+		case Equals.Expr(land.Left, rand.Left):
 			a, b, c = land.Left, land.Right, rand.Right
 		// (A and B) or (C and A) => A AND (B OR C)
-		case EqualsExpr(land.Left, rand.Right, nil):
+		case Equals.Expr(land.Left, rand.Right):
 			a, b, c = land.Left, land.Right, rand.Left
 		// (B and A) or (A and C) => A AND (B OR C)
-		case EqualsExpr(land.Right, rand.Left, nil):
+		case Equals.Expr(land.Right, rand.Left):
 			a, b, c = land.Right, land.Left, rand.Right
 		// (B and A) or (C and A) => A AND (B OR C)
-		case EqualsExpr(land.Right, rand.Right, nil):
+		case Equals.Expr(land.Right, rand.Right):
 			a, b, c = land.Right, land.Left, rand.Left
 		default:
 			return expr, NoChange
@@ -110,7 +142,7 @@ func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 	case lok:
 		// Simplification
 		// (A AND B) OR A => A
-		if EqualsExpr(or.Right, land.Left, nil) || EqualsExpr(or.Right, land.Right, nil) {
+		if Equals.Expr(or.Right, land.Left) || Equals.Expr(or.Right, land.Right) {
 			return or.Right, Changed
 		}
 		// Distribution Law
@@ -119,7 +151,7 @@ func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 	case rok:
 		// Simplification
 		// A OR (A AND B) => A
-		if EqualsExpr(or.Left, rand.Left, nil) || EqualsExpr(or.Left, rand.Right, nil) {
+		if Equals.Expr(or.Left, rand.Left) || Equals.Expr(or.Left, rand.Right) {
 			return or.Left, Changed
 		}
 		// Distribution Law
@@ -144,7 +176,7 @@ func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 func tryTurningOrIntoIn(l, r *ComparisonExpr) (Expr, RewriteState) {
 	// looks for A = X OR A = Y and turns them into A IN (X, Y)
 	col, ok := l.Left.(*ColName)
-	if !ok || !EqualsExpr(col, r.Left, nil) {
+	if !ok || !Equals.Expr(col, r.Left) {
 		return nil, NoChange
 	}
 
@@ -187,7 +219,7 @@ func uniquefy(tuple ValTuple) (output ValTuple) {
 outer:
 	for _, expr := range tuple {
 		for _, seen := range output {
-			if EqualsExpr(expr, seen, nil) {
+			if Equals.Expr(expr, seen) {
 				continue outer
 			}
 		}
@@ -211,14 +243,14 @@ func simplifyAnd(expr *AndExpr) (Expr, RewriteState) {
 	if or, ok := and.Left.(*OrExpr); ok {
 		// Simplification
 		// (A OR B) AND A => A
-		if EqualsExpr(or.Left, and.Right, nil) || EqualsExpr(or.Right, and.Right, nil) {
+		if Equals.Expr(or.Left, and.Right) || Equals.Expr(or.Right, and.Right) {
 			return and.Right, Changed
 		}
 	}
 	if or, ok := and.Right.(*OrExpr); ok {
 		// Simplification
 		// A OR (A AND B) => A
-		if EqualsExpr(or.Left, and.Left, nil) || EqualsExpr(or.Right, and.Left, nil) {
+		if Equals.Expr(or.Left, and.Left) || Equals.Expr(or.Right, and.Left) {
 			return or.Left, Changed
 		}
 	}
@@ -251,7 +283,7 @@ outer1:
 		curr := leaves[0]
 		leaves = leaves[1:]
 		for _, alreadyIn := range predicates {
-			if EqualsExpr(alreadyIn, curr, nil) {
+			if Equals.Expr(alreadyIn, curr) {
 				continue outer1
 			}
 		}
@@ -296,7 +328,7 @@ outer1:
 		curr := leaves[0]
 		leaves = leaves[1:]
 		for _, alreadyIn := range predicates {
-			if EqualsExpr(alreadyIn, curr, nil) {
+			if Equals.Expr(alreadyIn, curr) {
 				continue outer1
 			}
 		}

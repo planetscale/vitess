@@ -22,6 +22,7 @@ import {
     UseQueryOptions,
     UseQueryResult,
 } from 'react-query';
+
 import {
     fetchBackups,
     fetchClusters,
@@ -68,6 +69,8 @@ import {
     rebuildKeyspaceGraph,
     removeKeyspaceCell,
     createShard,
+    GetTopologyPathParams,
+    getTopologyPath,
     validate,
     ValidateParams,
     validateShard,
@@ -76,8 +79,6 @@ import {
     GetFullStatusParams,
     validateVersionShard,
     ValidateVersionShardParams,
-    GetTopologyPathParams,
-    getTopologyPath,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -605,6 +606,15 @@ export const useCreateShard = (
 };
 
 /**
+ * useTopologyPath is a query hook that fetches a cell at the specified path in the topology server.
+ */
+export const useTopologyPath = (
+    params: GetTopologyPathParams,
+    options?: UseQueryOptions<vtctldata.GetTopologyPathResponse, Error> | undefined
+) => {
+    return useQuery(['topology-path', params], () => getTopologyPath(params));
+};
+/**
  * useValidate is a mutate hook that validates that all nodes reachable from the global replication graph,
  * as well as all tablets in discoverable cells, are consistent.
  */
@@ -635,14 +645,7 @@ export const useValidateShard = (
  */
 export const useGetFullStatus = (
     params: GetFullStatusParams,
-    options?:
-        | UseQueryOptions<
-              vtctldata.GetFullStatusResponse,
-              Error,
-              vtctldata.GetFullStatusResponse,
-              (string | GetFullStatusParams)[]
-          >
-        | undefined
+    options?: UseQueryOptions<vtctldata.GetFullStatusResponse, Error> | undefined
 ) => useQuery(['full-status', params], () => getFullStatus(params), options);
 
 /**
@@ -655,13 +658,4 @@ export const useValidateVersionShard = (
     return useMutation<Awaited<ReturnType<typeof validateVersionShard>>, Error, ValidateVersionShardParams>(() => {
         return validateVersionShard(params);
     }, options);
-};
-/*
- * useTopologyPath is a query hook that fetches a cell at the specified path in the topology server.
- */
-export const useTopologyPath = (
-    params: GetTopologyPathParams,
-    options?: UseQueryOptions<vtctldata.GetTopologyPathResponse, Error> | undefined
-) => {
-    return useQuery(['topology-path', params], () => getTopologyPath(params));
 };
