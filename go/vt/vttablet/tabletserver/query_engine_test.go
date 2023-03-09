@@ -326,7 +326,8 @@ func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
 	}
 
 	r1.Broadcast()
-	r2.Wait()
+	w := r2.Waiter()
+	w()
 
 	return qe
 }

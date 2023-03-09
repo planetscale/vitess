@@ -794,21 +794,24 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 			conn, err := qre.getConn()
 
 			if err != nil {
-				q.Err = err
+				q.SetErr(err)
 			} else {
 				defer conn.Recycle()
-				q.Result, q.Err = qre.execDBConn(conn, sql, true)
+				r, err := qre.execDBConn(conn, sql, true)
+				q.SetResult(r)
+				q.SetErr(err)
 			}
 		} else {
 			qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
 			startTime := time.Now()
-			q.Wait()
+			wait := q.Waiter()
+			wait()
 			qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
 		}
-		if q.Err != nil {
-			return nil, q.Err
+		if q.Err() != nil {
+			return nil, q.Err()
 		}
-		return q.Result.(*sqltypes.Result), nil
+		return q.Result().(*sqltypes.Result), nil
 	}
 	conn, err := qre.getConn()
 	if err != nil {
