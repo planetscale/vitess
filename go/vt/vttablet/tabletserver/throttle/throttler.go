@@ -774,8 +774,11 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	for clusterName, clusterSettings := range config.Settings().Stores.MySQL.Clusters {
 		clusterName := clusterName
 		clusterSettings := clusterSettings
-		clusterSettings.MetricQuery = metricsQuery
-		clusterSettings.ThrottleThreshold.Store(metricsThreshold)
+		switch clusterName {
+		case shardStoreName, selfStoreName:
+			clusterSettings.MetricQuery = metricsQuery
+			clusterSettings.ThrottleThreshold.Store(metricsThreshold)
+		}
 		// config may dynamically change, but internal structure (config.Settings().Stores.MySQL.Clusters in our case)
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 		go func() {
