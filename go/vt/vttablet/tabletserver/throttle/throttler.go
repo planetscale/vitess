@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -56,9 +57,10 @@ const (
 	defaultThrottleTTLMinutes = 60
 	defaultThrottleRatio      = 1.0
 
-	shardStoreName = "shard"
-	selfStoreName  = "self"
-	lagStoreName   = "lag"
+	shardStoreName   = "shard"
+	selfStoreName    = "self"
+	lagStoreName     = "lag"
+	selfLagStoreName = "self-lag"
 )
 
 var (
@@ -100,8 +102,10 @@ const (
 	ThrottleCheckPrimaryWrite ThrottleCheckType = iota
 	// ThrottleCheckSelf indicates a check on a specific server health
 	ThrottleCheckSelf
-	// ThrottleCheckLag indicates a check based on shard's replication lag, speicically oriented towards TxThrottler (throttling BEGIN statements)
+	// ThrottleCheckLag indicates a check based on shard's replication lag, specifically oriented towards TxThrottler (throttling BEGIN statements)
 	ThrottleCheckLag
+	// ThrottleCheckLag indicates a check based on a specific tablet's replication lag
+	ThrottleCheckSelfLag
 )
 
 func init() {
@@ -284,6 +288,11 @@ func (throttler *Throttler) initConfig() {
 	config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
 		MetricQuery:       throttler.GetMetricsQuery(),
 		ThrottleThreshold: &throttler.MetricsThreshold,
+		IgnoreHostsCount:  0,
+	}
+	config.Instance.Stores.MySQL.Clusters[selfLagStoreName] = &config.MySQLClusterConfigurationSettings{
+		MetricQuery:       replicationLagQuery,
+		ThrottleThreshold: &throttler.LagThreshold,
 		IgnoreHostsCount:  0,
 	}
 	config.Instance.Stores.MySQL.Clusters[lagStoreName] = &config.MySQLClusterConfigurationSettings{
@@ -510,7 +519,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, pro
 		return metric
 	}
 
-	metricsQueryType := mysql.GetMetricsQueryType(throttler.GetMetricsQuery())
+	metricsQueryType := mysql.GetMetricsQueryType(probe.MetricQuery)
 	switch metricsQueryType {
 	case mysql.MetricsQueryTypeSelect:
 		// We expect a single row, single column result.
@@ -521,9 +530,10 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, pro
 	case mysql.MetricsQueryTypeShowGlobal:
 		metric.Value, metric.Err = strconv.ParseFloat(row["Value"].ToString(), 64)
 	default:
-		metric.Err = fmt.Errorf("Unsupported metrics query type for query: %s", throttler.GetMetricsQuery())
+		metric.Err = errors.New("Unsupported metrics query type")
 	}
 
+	metric.Err = vterrors.Wrapf(metric.Err, "probe query: %v", probe.MetricQuery)
 	return metric
 }
 
@@ -669,7 +679,11 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 		mySQLThrottleMetric.ClusterName = clusterName
 		mySQLThrottleMetric.Key = probe.Key
 
-		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=vitess", probe.TabletHost, probe.TabletPort)
+		path := "check-self"
+		if clusterName == lagStoreName {
+			path = "check-self-lag"
+		}
+		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/%s?app=vitess", probe.TabletHost, probe.TabletPort, path)
 		resp, err := throttler.httpClient.Get(tabletCheckSelfURL)
 		if err != nil {
 			mySQLThrottleMetric.Err = err
@@ -715,7 +729,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 
 					var throttleMetricFunc func() *mysql.MySQLThrottleMetric
 					switch clusterName {
-					case selfStoreName:
+					case selfStoreName, selfLagStoreName:
 						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
 					default: // shard-based
 						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, clusterName, probe)
@@ -1011,14 +1025,19 @@ func (throttler *Throttler) checkShard(ctx context.Context, appName string, remo
 	return throttler.checkStore(ctx, appName, shardStoreName, remoteAddr, flags)
 }
 
+// CheckSelf is checks the mysql/self metric, and is available on each tablet
+func (throttler *Throttler) checkSelf(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+	return throttler.checkStore(ctx, appName, selfStoreName, remoteAddr, flags)
+}
+
 // checkLag checks the health of the shard specifically using replication lag as metric
 func (throttler *Throttler) checkLag(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	return throttler.checkStore(ctx, appName, lagStoreName, remoteAddr, flags)
 }
 
-// CheckSelf is checks the mysql/self metric, and is available on each tablet
-func (throttler *Throttler) checkSelf(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
-	return throttler.checkStore(ctx, appName, selfStoreName, remoteAddr, flags)
+// checkSelfLag checks the lag of this tablet's MySQL server
+func (throttler *Throttler) checkSelfLag(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+	return throttler.checkStore(ctx, appName, selfLagStoreName, remoteAddr, flags)
 }
 
 // CheckByType runs a check by requested check type
@@ -1036,6 +1055,8 @@ func (throttler *Throttler) CheckByType(ctx context.Context, appName string, rem
 		return throttler.checkShard(ctx, appName, remoteAddr, flags)
 	case ThrottleCheckLag:
 		return throttler.checkLag(ctx, appName, remoteAddr, flags)
+	case ThrottleCheckSelfLag:
+		return throttler.checkSelfLag(ctx, appName, remoteAddr, flags)
 	default:
 		return invalidCheckTypeCheckResult
 	}
