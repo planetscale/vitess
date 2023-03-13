@@ -16,6 +16,7 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
@@ -75,14 +76,15 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 
 	var statusCode int
 
+	unwrappedErr := vterrors.UnwrapAll(err)
 	switch {
-	case err == base.ErrAppDenied:
+	case unwrappedErr == base.ErrAppDenied:
 		// app specifically not allowed to get metrics
 		statusCode = http.StatusExpectationFailed // 417
-	case err == base.ErrNoSuchMetric:
+	case unwrappedErr == base.ErrNoSuchMetric:
 		// not collected yet, or metric does not exist
 		statusCode = http.StatusNotFound // 404
-	case err != nil:
+	case unwrappedErr != nil:
 		// any error
 		statusCode = http.StatusInternalServerError // 500
 	case value > threshold:
@@ -98,6 +100,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 		// all good!
 		statusCode = http.StatusOK // 200
 	}
+	err = vterrors.Wrapf(err, "metric: %v", metricName)
 	return NewCheckResult(statusCode, value, threshold, err)
 }
 
