@@ -28,6 +28,16 @@ func TestGoldenIncorporatorCasesFromNoria(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("it handles the default keyspace routing", func(t *testing.T) {
+		mig := controller.NewDummyMigration()
+		ti := boostplan.NewTestIncorporator(golden.SchemaInformation, mig)
+
+		err := ti.AddQuery("", "SELECT users.id from users;")
+		require.NoError(t, err)
+		err = mig.Commit()
+		require.NoError(t, err)
+	})
+
 	t.Run("GoldenQueries", func(t *testing.T) {
 		for _, query := range golden.Queries {
 			mig := controller.NewDummyMigration()

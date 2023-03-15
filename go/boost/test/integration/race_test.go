@@ -73,8 +73,6 @@ SELECT /*vt+ VIEW=v_sum_b */ SUM(num.b) FROM num WHERE num.a = :a;
 	g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", 3, 2)
 	g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", 3, 3)
 
-	time.Sleep(200 * time.Millisecond)
-
 	time.Sleep(500 * time.Millisecond)
 	g.View("v_sum_b").Lookup(2).Expect(`[[DECIMAL(8)]]`)
 	g.View("v_sum_b").Lookup(420).Expect(`[[NULL]]`)

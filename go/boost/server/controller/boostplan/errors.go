@@ -11,7 +11,18 @@ type UnknownTableError struct {
 }
 
 func (e *UnknownTableError) Error() string {
+	if e.Keyspace == "" {
+		return fmt.Sprintf("unknown table: %s", e.Table)
+	}
 	return fmt.Sprintf("unknown table: %s.%s", e.Keyspace, e.Table)
+}
+
+type AmbiguousTableError struct {
+	Table string
+}
+
+func (e *AmbiguousTableError) Error() string {
+	return fmt.Sprintf("ambiguous table: %s", e.Table)
 }
 
 type SyntaxError struct {

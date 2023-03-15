@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -60,8 +59,6 @@ select /*vt+ VIEW=simplejoin */ article.id, article.title, vote.id, vote.article
 				g.TestExecute("INSERT INTO `vote` (`article_title`, `user`) values ('article %d', %d)", (i%articleCount)+1, rand.Intn(userCount)+1)
 				g.TestExecute("INSERT INTO `vote` (`article_title`, `user`) values ('Article %d', %d)", (i%articleCount)+1, rand.Intn(userCount)+1)
 			}
-
-			time.Sleep(10 * time.Millisecond)
 
 			expectedCount := votesCount / articleCount
 			if !coll.CaseSensitive {

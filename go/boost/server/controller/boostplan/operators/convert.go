@@ -54,11 +54,6 @@ func (conv *Converter) NewNode(name string, op Operator, inputs []*Node) *Node {
 		Flow:      FlowNode{Address: graph.InvalidNode},
 	}
 
-	ch, ok := op.(ColumnHolder)
-	if ok {
-		n.Columns = ch.GetColumns()
-	}
-
 	nodeID := noderef{name, conv.version}
 	if _, ok := conv.nodes[nodeID]; !ok {
 		conv.current[name] = conv.version
@@ -70,17 +65,17 @@ func (conv *Converter) NewNode(name string, op Operator, inputs []*Node) *Node {
 }
 
 func (conv *Converter) loadNamedTable(ddl DDLSchema, keyspace, name string) (*Node, error) {
-	tableSpec, err := ddl.LoadTableSpec(keyspace, name)
+	tableKeyspace, tableSpec, err := ddl.LoadTableSpec(keyspace, name)
 	if err != nil {
 		return nil, err
 	}
 
-	n, err := conv.makeTableNode(keyspace, name, tableSpec)
+	n, err := conv.makeTableNode(tableKeyspace, name, tableSpec)
 	if err != nil {
 		return nil, err
 	}
 
-	tableName := externalTableName(keyspace, name)
+	tableName := externalTableName(tableKeyspace, name)
 	nodeID := noderef{tableName, conv.version}
 	if _, ok := conv.nodes[nodeID]; !ok {
 		conv.current[tableName] = conv.version

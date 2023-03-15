@@ -161,8 +161,10 @@ install-testing: build
 vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 	make -C go/vt/vtctl/vtctldclient
 
-parser:
-	make -C go/vt/sqlparser
+sqlparser:
+	go generate ./go/vt/sqlparser/...
+
+codegen: sqlparser sizegen
 
 demo:
 	go install ./examples/demo/demo.go

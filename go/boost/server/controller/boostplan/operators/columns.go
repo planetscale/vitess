@@ -2,6 +2,7 @@ package operators
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -111,9 +112,18 @@ func (p *Project) AddColumns(ctx *PlanContext, col Columns) (needs Columns, err 
 	// They will have pushed down their needs
 	for _, newCol := range col {
 		if p.isDerivedTable() {
-			newCol, err = p.rewriteDerivedExpression(ctx.SemTable, newCol)
-			if err != nil {
-				return Columns{}, err
+			expr := newCol.AST[0]
+			deps := ctx.SemTable.DirectDeps(expr)
+
+			// sometimes we need to push in expressions from outside the derived table,
+			// thanks to parameters inside the derived table.
+			// here we check if the expression comes projection of the derived table and should get rewritten,
+			// or if we have an expression that really lives on the inside of the derived table and can be used as is
+			if deps == (*p.TableID) {
+				newCol, err = p.rewriteDerivedColumn(ctx.SemTable, newCol)
+				if err != nil {
+					return Columns{}, err
+				}
 			}
 		}
 		p.Columns = p.Columns.Add(ctx, newCol)
@@ -138,35 +148,63 @@ func (p *Project) AddColumns(ctx *PlanContext, col Columns) (needs Columns, err 
 	return
 }
 
-func (p *Project) rewriteDerivedExpression(semTable *semantics.SemTable, newCol *Column) (*Column, error) {
-	tblID := semTable.DirectDeps(newCol.AST[0])
+func (p *Project) rewriteDerivedColumn(semTable *semantics.SemTable, in *Column) (*Column, error) {
+	expr := in.AST[0]
+	infoFor, err := semTable.TableInfoFor(*p.TableID)
+	if err != nil {
+		dbg.Bug("got an unknown table info")
+	}
+	dt, ok := infoFor.(*semantics.DerivedTable)
+	if !ok {
+		dbg.Bug("this should be a derived table")
+	}
+
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		dbg.Bug("this should be a sqlparser.ColName")
+	}
+	for i, colName := range dt.ColumnNames {
+		if col.Name.EqualString(colName) {
+			return p.DerivedColumns[i], nil
+		}
+	}
+
+	s1, s2 := in.Explain()
+	dbg.Bug("did not find the derived column: %s - %s", s1, s2)
+	return nil, nil
+}
+
+func (p *Project) rewriteDerivedExpr(semTable *semantics.SemTable, expr sqlparser.Expr) (sqlparser.Expr, error) {
+	tblID := semTable.DirectDeps(expr)
 	if tblID.IsEmpty() {
-		return newCol, nil
+		return expr, nil
 	}
 	infoFor, err := semTable.TableInfoFor(tblID)
 	if err != nil {
 		return nil, err
 	}
 
-	newExpr := sqlparser.CopyOnRewrite(newCol.AST[0], nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			exp, err := infoFor.GetExprFor(node.Name.String())
-			if err == nil {
-				cursor.Replace(exp)
-			} else {
-				// cloning the expression and removing the qualifier
-				col := *node
-				col.Qualifier = sqlparser.TableName{}
-				cursor.Replace(&col)
-				if semTable != nil {
-					semTable.CopyDependencies(node, &col)
-				}
+	dt, ok := infoFor.(*semantics.DerivedTable)
+	if !ok {
+		dbg.Bug("this should be a derived table")
+	}
+
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		dbg.Bug("this should be a sqlparser.ColName")
+	}
+	for i, colName := range dt.ColumnNames {
+		if col.Name.EqualString(colName) {
+			expr, err := p.DerivedColumns[i].SingleAST()
+			if err != nil {
+				return nil, err
 			}
+			return expr, nil
 		}
-	}, nil)
-	newCol = ColumnFromAST(newExpr.(sqlparser.Expr))
-	return newCol, nil
+	}
+
+	dbg.Bug("did not find the derived column")
+	return nil, nil
 }
 
 func (p *Project) isDerivedTable() bool {
@@ -343,25 +381,20 @@ outer:
 }
 
 func (u *Union) AddColumns(ctx *PlanContext, col Columns) (Columns, error) {
-outer:
 	for _, c1 := range col {
 		ast, err := c1.SingleAST()
 		if err != nil {
 			return nil, err
 		}
 
-		if offset, ok := ast.(*sqlparser.Offset); ok {
-			dbg.Assert(len(u.Columns) > offset.V, "we don't have that many union columns")
+		if col, ok := ast.(*sqlparser.ColName); ok {
+			if !strings.HasPrefix(col.Name.String(), "union") {
+				dbg.Bug("got columns we did not expect for UNION `%s`", col.Name.String())
+			}
 			continue
 		}
 
-		for _, c2 := range u.Columns {
-			if c1.Equals(ctx.SemTable, c2, true) {
-				continue outer
-			}
-		}
-
-		dbg.Bug("got columns we did not expect for UNION")
+		dbg.Bug("got columns we did not expect for UNION [%s]", sqlparser.String(ast))
 	}
 	return col, nil
 }

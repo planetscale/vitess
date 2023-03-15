@@ -291,14 +291,15 @@ func (qb *queryBuilder) replaceProjections(projections []Projection) error {
 		}
 		return nil
 	}
-	addExpression := func(in sqlparser.Expr) error {
-		expr, err := qb.rewriteColNames(in)
+	addExpression := func(in *sqlparser.AliasedExpr) error {
+		var err error
+		in.Expr, err = qb.rewriteColNames(in.Expr)
 		if err != nil {
 			return err
 		}
 
 		for _, sel := range selects {
-			sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: expr})
+			sel.SelectExprs = append(sel.SelectExprs, in)
 		}
 		return nil
 	}
@@ -309,8 +310,17 @@ func (qb *queryBuilder) replaceProjections(projections []Projection) error {
 			if err := addColumn(proj.Column); err != nil {
 				return err
 			}
-		case ProjectionLiteral, ProjectionEval:
-			if err := addExpression(proj.Original); err != nil {
+		case ProjectionEval:
+			if err := addExpression(&sqlparser.AliasedExpr{Expr: proj.Original}); err != nil {
+				return err
+			}
+		case ProjectionLiteral:
+			ae := &sqlparser.AliasedExpr{Expr: proj.Original}
+			if lit, ok := proj.Original.(*sqlparser.Literal); ok && lit.Type == sqlparser.IntVal {
+				ae.As = sqlparser.NewIdentifierCI(getColNameForLiteral(lit))
+			}
+
+			if err := addExpression(ae); err != nil {
 				return err
 			}
 		default:

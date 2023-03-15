@@ -14,6 +14,66 @@ import (
 )
 
 func TestProjection(t *testing.T) {
+	t.Run("ProjectOrder", func(t *testing.T) {
+		var defaultOrder = Order{
+			{Col: 0, Desc: false},
+			{Col: 1, Desc: false},
+		}
+
+		var cases = []struct {
+			name     string
+			project  []string
+			order    Order
+			expected Order
+		}{
+			{
+				name:     "identity",
+				order:    defaultOrder,
+				expected: defaultOrder,
+			},
+			{
+				name:    "shuffle",
+				project: []string{":1", ":0"},
+				order:   defaultOrder,
+				expected: Order{
+					{Col: 1, Desc: false},
+					{Col: 0, Desc: false},
+				},
+			},
+			{
+				name:    "removed",
+				project: []string{":1"},
+				order:   defaultOrder,
+				expected: Order{
+					{Col: 0, Desc: false},
+				},
+			},
+			{
+				name:    "added",
+				project: []string{":0", "42", ":1"},
+				order:   defaultOrder,
+				expected: Order{
+					{Col: 0, Desc: false},
+					{Col: 2, Desc: false},
+				},
+			},
+		}
+
+		for _, tcase := range cases {
+			t.Run(tcase.name, func(t *testing.T) {
+				index := dataflow.IndexPair{Global: 0, Local: 0}
+				project, err := NewProjectFromProto(&flownodepb.Node_InternalProject{
+					Src:         &index,
+					Projections: tcase.project,
+				})
+				require.NoError(t, err)
+
+				order := project.projectOrder(tcase.order)
+				require.Equal(t, tcase.expected, order)
+			})
+		}
+	})
+
 	t.Run("QueryThrough", func(t *testing.T) {
 		var cases = []struct {
 			name     string

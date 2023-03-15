@@ -40,17 +40,31 @@ func (r *Reader) Key() []int {
 	return r.state
 }
 
+func traceParentOrdering(g *graph.Graph[*Node], node graph.NodeIdx) (Order, int) {
+	n := g.Value(node)
+	switch parent := n.impl.(type) {
+	case *TopK:
+		return slices.Clone(parent.order), parent.k
+	case *Project:
+		order, topk := traceParentOrdering(g, n.Ancestors()[0])
+		return parent.projectOrder(order), topk
+	case *Filter:
+		return traceParentOrdering(g, n.Ancestors()[0])
+	case *Ingress, *Sharder, *Egress:
+		return traceParentOrdering(g, g.NeighborsDirected(node, graph.DirectionIncoming).First())
+	default:
+		return nil, 0
+	}
+}
+
 func (r *Reader) OnConnected(ingredients *graph.Graph[*Node], key []int, parameters []ViewParameter, colLen int) {
 	r.state = slices.Clone(key)
 	r.parameters = slices.Clone(parameters)
 	r.columnsForUser = colLen
 	r.columnsForView = colLen
+	r.topkOrder, r.topkLimit = traceParentOrdering(ingredients, r.forNode)
 
-	switch parent := ingredients.Value(r.forNode).impl.(type) {
-	case *TopK:
-		r.topkOrder = slices.Clone(parent.order)
-		r.topkLimit = int(parent.k)
-
+	if r.topkOrder != nil {
 		for _, ord := range r.topkOrder {
 			if ord.Col >= r.columnsForUser {
 				r.columnsForView = 0

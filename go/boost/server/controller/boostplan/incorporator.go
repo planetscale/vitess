@@ -42,10 +42,6 @@ func (inc *Incorporator) AddParsedQuery(keyspace string, stmt sqlparser.Statemen
 		return nil, fmt.Errorf("missing ID for parsed query")
 	}
 
-	if keyspace == "" {
-		return nil, fmt.Errorf("missing keyspace for parsed query")
-	}
-
 	switch stmt.(type) {
 	case sqlparser.SelectStatement:
 		return inc.addSelectQuery(keyspace, id, stmt, mig, si)

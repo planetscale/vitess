@@ -341,28 +341,7 @@ func (u *Union) OnInputRaw(ex processing.Executor, from dataflow.LocalNodeIdx, r
 				u.replayKey[rk] = append(u.replayKey[rk], keyCols...)
 
 			case *unionEmitProject:
-				emission, ok := emit.emitLeft.Get(from)
-				if !ok {
-					panic("missing entry in emitLeft")
-				}
-
-				var extend []int
-				for _, c := range keyCols {
-					extend = append(extend, emission[c])
-				}
-
-				u.replayKey[rk] = append(u.replayKey[rk], extend...)
-
-				emit.emitLeft.Scan(func(src dataflow.LocalNodeIdx, emission []int) bool {
-					if src != from {
-						var extend []int
-						for _, c := range keyCols {
-							extend = append(extend, emission[c])
-						}
-						u.replayKey[unionreplayKey{tag, src}] = extend
-					}
-					return true
-				})
+				emit.replay(u, from, keyCols, rk)
 			}
 			// otherwise we already know the meta info for this tag
 		}
@@ -576,19 +555,16 @@ type unionEmit interface {
 	OnInput(from dataflow.LocalNodeIdx, rs []sql.Record) (processing.Result, error)
 }
 
-func NewUnion(emit map[graph.NodeIdx][]int) *Union {
-	var emitLocal = make(map[dataflow.IndexPair][]int, len(emit))
-	for k, cols := range emit {
-		if !sort.IntsAreSorted(cols) {
+func NewUnion(emit []EmitTuple) *Union {
+	for _, e := range emit {
+		if !sort.IntsAreSorted(e.Columns) {
 			panic("union does not support column reordering")
 		}
-		emitLocal[dataflow.NewIndexPair(k)] = cols
 	}
 
 	return &Union{
 		emit: &unionEmitProject{
-			emit: emitLocal,
-			cols: make(map[dataflow.IndexPair]int),
+			emit: emit,
 		},
 		required:     len(emit),
 		me:           graph.InvalidNode,

@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/domain/replay"
 	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
@@ -170,11 +172,6 @@ func (p *Project) Description() string {
 
 func (p *Project) OnConnected(graph *graph.Graph[*Node]) error {
 	p.cols = len(graph.Value(p.src.AsGlobal()).Fields())
-	return nil
-}
-
-func (p *Project) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]dataflow.IndexPair) {
-	p.src.Remap(remap)
 
 	// Eliminate emit specifications which require no permutation of
 	// the inputs, so we don't needlessly perform extra work on each
@@ -183,14 +180,19 @@ func (p *Project) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]dataflow.Ind
 		switch col := col.(type) {
 		case ProjectedCol:
 			if i != int(col) {
-				return
+				return nil
 			}
 		default:
-			return
+			return nil
 		}
 	}
 
 	p.projections = []Projection{}
+	return nil
+}
+
+func (p *Project) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]dataflow.IndexPair) {
+	p.src.Remap(remap)
 }
 
 func (p *Project) OnInput(you *Node, ex processing.Executor, from dataflow.LocalNodeIdx, rs []sql.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
@@ -267,6 +269,30 @@ func (p *Project) ToProto() *flownodepb.Node_InternalProject {
 		Cols:        p.cols,
 		Projections: expressions,
 	}
+}
+
+func (p *Project) projectOrder(order Order) Order {
+	if order == nil {
+		return nil
+	}
+	if len(p.projections) == 0 {
+		return order
+	}
+	var newOrder Order
+	for _, ord := range order {
+		col := slices.IndexFunc(p.projections, func(proj Projection) bool {
+			switch proj := proj.(type) {
+			case ProjectedCol:
+				return int(proj) == ord.Col
+			default:
+				return false
+			}
+		})
+		if col >= 0 {
+			newOrder = append(newOrder, OrderedColumn{Col: col, Desc: ord.Desc})
+		}
+	}
+	return newOrder
 }
 
 func (col ProjectedCol) Type(g *graph.Graph[*Node], src dataflow.IndexPair) (sql.Type, error) {

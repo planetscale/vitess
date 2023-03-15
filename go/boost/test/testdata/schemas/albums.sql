@@ -31,7 +31,7 @@ SELECT /*vt+ VIEW=private_photos */ photo.p_id FROM photo JOIN (
 SELECT /*vt+ VIEW=public_photos */ photo.p_id FROM photo JOIN album ON (photo.album = album.a_id) WHERE album.public = 1 AND album.a_id = :album_id;
 
 -- checks that we can correctly plan queries with TopK inside derived tables
-SELECT *
+SELECT /*vt+ VIEW=derived_topk */ *
 FROM (SELECT album.a_id AS aid, friend.userb AS uid
       FROM album JOIN
           friend ON (album.u_id = friend.usera)

@@ -17,9 +17,9 @@ func TestUnion(t *testing.T) {
 		g := NewMockGraph(t)
 		l := g.AddBase("left", []string{"l0", "l1"}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar))
 		r := g.AddBase("right", []string{"r0", "r1", "r2"}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar, sqltypes.VarChar))
-		emits := map[graph.NodeIdx][]int{
-			l.AsGlobal(): {0, 1},
-			r.AsGlobal(): {0, 2},
+		emits := []EmitTuple{
+			{Ip: l, Columns: []int{0, 1}},
+			{Ip: r, Columns: []int{0, 2}},
 		}
 		g.SetOp("union", []string{"u0", "u1"}, NewUnion(emits), false)
 		return g, l, r

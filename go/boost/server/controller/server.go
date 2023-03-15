@@ -210,8 +210,12 @@ func (srv *Server) PutRecipe(ctx context.Context, recipe *vtboostpb.Recipe) erro
 	return srv.PutRecipeWithOptions(ctx, recipe, nil)
 }
 
-func (srv *Server) defaultSchemaInfo() *boostplan.SchemaInformation {
-	return &boostplan.SchemaInformation{Schema: boostplan.NewDDLSchema(srv.topo)}
+func (srv *Server) defaultSchemaInfo() (*boostplan.SchemaInformation, error) {
+	ddl, err := boostplan.NewDDLSchema(srv.topo)
+	if err != nil {
+		return nil, err
+	}
+	return &boostplan.SchemaInformation{Schema: ddl}, nil
 }
 
 func (srv *Server) PutRecipeWithOptions(ctx context.Context, recipepb *vtboostpb.Recipe, si *boostplan.SchemaInformation) error {
@@ -223,7 +227,11 @@ func (srv *Server) PutRecipeWithOptions(ctx context.Context, recipepb *vtboostpb
 	}
 
 	if si == nil {
-		si = srv.defaultSchemaInfo()
+		var err error
+		si, err = srv.defaultSchemaInfo()
+		if err != nil {
+			return err
+		}
 	}
 	_, err := srv.inner.ModifyRecipe(ctx, recipepb, si)
 	return err

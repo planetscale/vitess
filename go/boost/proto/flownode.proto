@@ -56,26 +56,10 @@ message Node {
   message InternalUnion {
     message EmitProject {
       message EmitTuple {
-        dataflow.IndexPair ip = 1;
+        dataflow.IndexPair ip = 1 [(gogoproto.nullable) = false];
         repeated int64 columns = 2 [(gogoproto.casttype) = "int"];
       };
-      message EmitLeftTuple {
-        uint32 index = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
-        repeated int64 columns = 2 [(gogoproto.casttype) = "int"];
-      };
-      message ColumnsTuple {
-        dataflow.IndexPair ip = 1;
-        int64 column = 2 [(gogoproto.casttype) = "int"];
-      };
-      message ColumnsLeftTuple {
-        uint32 index = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.LocalNodeIdx"];
-        int64 column = 2 [(gogoproto.casttype) = "int"];
-      };
-
-      repeated EmitTuple emit = 1;
-      repeated EmitLeftTuple emit_left = 2;
-      repeated ColumnsTuple cols = 3;
-      repeated ColumnsLeftTuple cols_left = 4;
+      repeated EmitTuple emit = 1 [(gogoproto.nullable) = false];
     };
 
     message EmitAll {
@@ -166,12 +150,6 @@ message Node {
     repeated int64 params = 5 [(gogoproto.casttype) = "int"];
   }
 
-  message InternalDistinct {
-    dataflow.IndexPair src = 1 [(gogoproto.nullable) = false];
-    repeated sql.Type src_schema = 2 [(gogoproto.nullable) = false];
-    repeated int64 params = 3 [(gogoproto.casttype) = "int"];
-  }
-
   message Sharder {
     int64 shard_by = 1 [(gogoproto.casttype) = "int"];
   };
@@ -189,6 +167,5 @@ message Node {
     InternalProject project = 43;
     InternalFilter filter = 44;
     InternalTopK top_k = 45;
-    InternalDistinct distinct = 46;
   };
 };

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
 	"vitess.io/vitess/go/vt/proto/vtboost"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -37,12 +39,11 @@ func (recipe *Recipe) Update(t testing.TB) {
 }
 
 func (recipe *Recipe) updateExternalSchema(t testing.TB) {
-	recipe.External = &boostplan.DDLSchema{
-		Specs: map[string]map[string]*sqlparser.TableSpec{},
-	}
+	ddl, err := boostplan.NewDDLSchema(nil)
+	require.NoError(t, err)
+	recipe.External = ddl
 
 	for keyspace, ddls := range recipe.DDL {
-		specs := make(map[string]*sqlparser.TableSpec)
 		for _, ddl := range ddls {
 			t.Logf("[schema] %s", ddl)
 
@@ -51,24 +52,24 @@ func (recipe *Recipe) updateExternalSchema(t testing.TB) {
 				t.Fatalf("failed to parse DDL statement: %v", err)
 			}
 			if create, ok := stmt.(*sqlparser.CreateTable); ok {
-				specs[create.Table.Name.String()] = create.TableSpec
+				err := recipe.External.AddSpec(keyspace, create.Table.Name.String(), create.TableSpec)
+				require.NoError(t, err)
 			}
 		}
-		recipe.External.Specs[keyspace] = specs
 	}
 }
 
 const DefaultKeyspace = "source"
 
 func Load(t testing.TB, name string) *Recipe {
-	return NewRecipeFromSQL(t, DefaultKeyspace, Schema(t, name))
+	return NewRecipeFromSQL(t, DefaultKeyspace, DefaultKeyspace, Schema(t, name))
 }
 
 func LoadSQL(t testing.TB, recipesql string) *Recipe {
-	return NewRecipeFromSQL(t, DefaultKeyspace, recipesql)
+	return NewRecipeFromSQL(t, DefaultKeyspace, DefaultKeyspace, recipesql)
 }
 
-func NewRecipeFromSQL(t testing.TB, keyspace, recipesql string) *Recipe {
+func NewRecipeFromSQL(t testing.TB, ddlKeyspace, queryKeyspace, recipesql string) *Recipe {
 	pieces, err := sqlparser.SplitStatementToPieces(recipesql)
 	if err != nil {
 		t.Fatalf("failed to parse recipe: %v", err)
@@ -87,7 +88,7 @@ func NewRecipeFromSQL(t testing.TB, keyspace, recipesql string) *Recipe {
 			query := &vtboost.CachedQuery{
 				PublicId: fmt.Sprintf("q%d", len(queries)),
 				Sql:      piece,
-				Keyspace: keyspace,
+				Keyspace: queryKeyspace,
 			}
 
 			dir := expr.GetParsedComments().Directives()
@@ -109,7 +110,7 @@ func NewRecipeFromSQL(t testing.TB, keyspace, recipesql string) *Recipe {
 
 	return &Recipe{
 		DDL: map[string][]string{
-			keyspace: ddls,
+			ddlKeyspace: ddls,
 		},
 		Queries: queries,
 	}

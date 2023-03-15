@@ -84,11 +84,20 @@ func (node *Node) ExprLookup(st *semantics.SemTable, expr sqlparser.Expr) (int, 
 		}
 	}
 
-	tableInfo, err := st.TableInfoForExpr(expr)
-	if err == nil {
-		if _, isDerived := tableInfo.(*semantics.DerivedTable); isDerived {
-			expr = semantics.RewriteDerivedTableExpression(expr, tableInfo)
-		}
+	fail := func() (int, error) {
+		dbg.Bug("column not found: %s", sqlparser.String(expr))
+		return -1, nil
+	}
+
+	p, ok := node.Op.(*Project)
+	if !ok || !p.isDerivedTable() {
+		return fail()
+	}
+
+	var err error
+	expr, err = p.rewriteDerivedExpr(st, expr)
+	if err != nil {
+		return 0, err
 	}
 
 	for i, column := range node.Columns {

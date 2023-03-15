@@ -5,7 +5,6 @@ import (
 
 	"vitess.io/vitess/go/boost/common/graphviz"
 	"vitess.io/vitess/go/boost/dataflow"
-	"vitess.io/vitess/go/mysql/collations"
 )
 
 type GraphvizOptions struct {
@@ -112,7 +111,7 @@ func (n *Node) RenderGraphviz(gvz *graphviz.Node, options GraphvizOptions) {
 				fieldname graphviz.Escaped
 				fieldn    graphviz.Cell
 			)
-			if coll := collations.Local().LookupByID(schema[i].Collation); coll != nil {
+			if coll := schema[i].Collation.Get(); coll != nil {
 				collname = coll.Name()
 			} else {
 				collname = "???"
