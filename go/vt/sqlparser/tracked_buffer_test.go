@@ -236,6 +236,38 @@ func TestCanonicalOutput(t *testing.T) {
 			"select convert('abc' using utf8mb4)",
 			"SELECT CONVERT('abc' USING utf8mb4) FROM `dual`",
 		},
+		{
+			"select point(4, 5)",
+			"SELECT POINT(4, 5) FROM `dual`",
+		},
+		{
+			"create table x(location geometry default (point(7.0, 3.0)))",
+			"CREATE TABLE `x` (\n\t`location` geometry DEFAULT (POINT(7.0, 3.0))\n)",
+		},
+		{
+			"create table x(location geometry default (linestring(point(7.0, 3.0), point(7.0, 3.0))))",
+			"CREATE TABLE `x` (\n\t`location` geometry DEFAULT (LINESTRING(POINT(7.0, 3.0), POINT(7.0, 3.0)))\n)",
+		},
+		{
+			"alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
+			"ALTER VSCHEMA CREATE VINDEX `lookup_vdx` USING `lookup` WITH owner=user, table=name_user_idx, from=name, to=user_id",
+		},
+		{
+			"create table tb (id varbinary(100) default X'4d7953514c')",
+			"CREATE TABLE `tb` (\n\t`id` varbinary(100) DEFAULT X'4d7953514c'\n)",
+		},
+		{
+			"select grp, group_concat(c order by c asc separator 'foo') from t1 group by grp",
+			"SELECT `grp`, GROUP_CONCAT(`c` ORDER BY `c` ASC SEPARATOR 'foo') FROM `t1` GROUP BY `grp`",
+		},
+		{
+			"create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned array))))",
+			"CREATE TABLE `t` (\n\t`id` int,\n\t`info` JSON,\n\tINDEX `zips` ((CAST(`info` -> '$.field' AS unsigned array)))\n)",
+		},
+		{
+			"select 1 from t1 into outfile 'test/t1.txt'",
+			"SELECT 1 FROM `t1` INTO OUTFILE 'test/t1.txt'",
+		},
 	}
 
 	for _, tc := range testcases {
