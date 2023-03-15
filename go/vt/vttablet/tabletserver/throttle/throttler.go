@@ -486,17 +486,17 @@ func (throttler *Throttler) Close() {
 	log.Infof("Throttler: finished execution of Close")
 }
 
-func (throttler *Throttler) generateSelfMySQLThrottleMetricFunc(ctx context.Context, probe *mysql.Probe) func() *mysql.MySQLThrottleMetric {
+func (throttler *Throttler) generateSelfMySQLThrottleMetricFunc(ctx context.Context, clusterName string, probe *mysql.Probe) func() *mysql.MySQLThrottleMetric {
 	f := func() *mysql.MySQLThrottleMetric {
-		return throttler.readSelfMySQLThrottleMetric(ctx, probe)
+		return throttler.readSelfMySQLThrottleMetric(ctx, clusterName, probe)
 	}
 	return f
 }
 
 // readSelfMySQLThrottleMetric reads the mysql metric from thi very tablet's backend mysql.
-func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, probe *mysql.Probe) *mysql.MySQLThrottleMetric {
+func (throttler *Throttler) readSelfMySQLThrottleMetric(ctx context.Context, clusterName string, probe *mysql.Probe) *mysql.MySQLThrottleMetric {
 	metric := &mysql.MySQLThrottleMetric{
-		ClusterName: selfStoreName,
+		ClusterName: clusterName,
 		Key:         *mysql.SelfInstanceKey,
 		Value:       0,
 		Err:         nil,
@@ -730,7 +730,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 					var throttleMetricFunc func() *mysql.MySQLThrottleMetric
 					switch clusterName {
 					case selfStoreName, selfLagStoreName:
-						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, probe)
+						throttleMetricFunc = throttler.generateSelfMySQLThrottleMetricFunc(ctx, clusterName, probe)
 					default: // shard-based
 						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, clusterName, probe)
 					}
@@ -789,7 +789,8 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 				InstanceProbes:   mysql.NewProbes(),
 			}
 
-			if clusterName == selfStoreName {
+			switch clusterName {
+			case selfStoreName, selfLagStoreName:
 				// special case: just looking at this tablet's MySQL server
 				// We will probe this "cluster" (of one server) is a special way.
 				addInstanceKey("", 0, mysql.SelfInstanceKey, clusterName, clusterSettings, clusterProbes.InstanceProbes)
