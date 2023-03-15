@@ -9,7 +9,7 @@ import (
 
 type (
 	DDLSchema interface {
-		LoadTableSpec(keyspace, table string) (*sqlparser.TableSpec, error)
+		LoadTableSpec(keyspace, table string) (string, *sqlparser.TableSpec, error)
 	}
 
 	TableReport struct {

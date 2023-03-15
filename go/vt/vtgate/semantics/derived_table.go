@@ -29,7 +29,7 @@ import (
 type DerivedTable struct {
 	tableName       string
 	ASTNode         *sqlparser.AliasedTableExpr
-	columnNames     []string
+	ColumnNames     []string
 	cols            []sqlparser.Expr
 	tables          TableSet
 	isAuthoritative bool
@@ -44,17 +44,17 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sq
 		case *sqlparser.AliasedExpr:
 			vTbl.cols = append(vTbl.cols, expr.Expr)
 			if len(cols) > 0 {
-				vTbl.columnNames = append(vTbl.columnNames, cols[i].String())
+				vTbl.ColumnNames = append(vTbl.ColumnNames, cols[i].String())
 			} else if expr.As.IsEmpty() {
 				switch expr := expr.Expr.(type) {
 				case *sqlparser.ColName:
 					// for projections, we strip out the qualifier and keep only the column name
-					vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
+					vTbl.ColumnNames = append(vTbl.ColumnNames, expr.Name.String())
 				default:
-					vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
+					vTbl.ColumnNames = append(vTbl.ColumnNames, sqlparser.String(expr))
 				}
 			} else {
-				vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
+				vTbl.ColumnNames = append(vTbl.ColumnNames, expr.As.String())
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
@@ -71,7 +71,7 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sq
 // dependencies implements the TableInfo interface
 func (dt *DerivedTable) dependencies(colName string, org originable) (dependencies, error) {
 	directDeps := org.tableSetFor(dt.ASTNode)
-	for i, name := range dt.columnNames {
+	for i, name := range dt.ColumnNames {
 		if !strings.EqualFold(name, colName) {
 			continue
 		}
@@ -115,8 +115,8 @@ func (dt *DerivedTable) GetVindexTable() *vindexes.Table {
 }
 
 func (dt *DerivedTable) getColumns() []ColumnInfo {
-	cols := make([]ColumnInfo, 0, len(dt.columnNames))
-	for _, col := range dt.columnNames {
+	cols := make([]ColumnInfo, 0, len(dt.ColumnNames))
+	for _, col := range dt.ColumnNames {
 		cols = append(cols, ColumnInfo{
 			Name: col,
 		})
@@ -135,7 +135,7 @@ func (dt *DerivedTable) getTableSet(_ originable) TableSet {
 
 // GetExprFor implements the TableInfo interface
 func (dt *DerivedTable) GetExprFor(s string) (sqlparser.Expr, error) {
-	for i, colName := range dt.columnNames {
+	for i, colName := range dt.ColumnNames {
 		if colName == s {
 			return dt.cols[i], nil
 		}
@@ -144,8 +144,8 @@ func (dt *DerivedTable) GetExprFor(s string) (sqlparser.Expr, error) {
 }
 
 func (dt *DerivedTable) checkForDuplicates() error {
-	for i, name := range dt.columnNames {
-		for j, name2 := range dt.columnNames {
+	for i, name := range dt.ColumnNames {
+		for j, name2 := range dt.ColumnNames {
 			if i == j {
 				continue
 			}

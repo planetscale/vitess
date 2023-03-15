@@ -2,7 +2,6 @@ package integration
 
 import (
 	"testing"
-	"time"
 
 	"vitess.io/vitess/go/boost/test/helpers/boosttest"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testexecutor"
@@ -91,7 +90,6 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 	g.View("distinct2").Lookup(int32(4)).Expect(`[[INT32(2) INT32(4)]]`)
 
 	g.TestExecute("INSERT INTO num (a, b) VALUES (5, 4)")
-	time.Sleep(1 * time.Second)
 
 	g.View("distinct").Lookup().Expect(`[[INT32(5) INT32(4)] [INT32(3) INT32(9)] [INT32(2) INT32(4)] [INT32(1) INT32(1)]]`)
 	g.View("union_distinct").Lookup().Expect(`[[INT32(5) INT32(4)] [INT32(3) INT32(9)] [INT32(2) INT32(4)] [INT32(1) INT32(1)]]`)
@@ -149,6 +147,29 @@ func TestDeletedReader(t *testing.T) {
 	SELECT tbl.pk FROM tbl WHERE tbl.a = :a and tbl.b = :b and tbl.c = :c;
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 1; i <= 16; i++ {
+		g.TestExecute("INSERT INTO tbl (a, b, c) VALUES (%d, %d, %d)", i, i%4, i*10)
+	}
+
+	upquery0 := g.View("q0")
+	upquery0.Lookup(1, 1, 10).Expect(`[[INT64(1)]]`)
+
+	g.ApplyRecipe(&testrecipe.Recipe{})
+
+	upquery0.Lookup(1, 1, 10).ExpectErrorEventually()
+}
+
+func TestNoKeyspaceRouting(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE tbl (pk BIGINT NOT NULL AUTO_INCREMENT,
+	a BIGINT, b BIGINT, c BIGINT,
+	PRIMARY KEY(pk));
+
+	SELECT tbl.pk FROM tbl WHERE tbl.a = :a and tbl.b = :b and tbl.c = :c;
+`
+	recipe := testrecipe.NewRecipeFromSQL(t, testrecipe.DefaultKeyspace, "", Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
 
 	for i := 1; i <= 16; i++ {

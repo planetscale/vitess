@@ -64,8 +64,6 @@ func (n *Node) ToProto() *flownodepb.Node {
 		pnode.Impl = &flownodepb.Node_Union{Union: impl.ToProto()}
 	case *TopK:
 		pnode.Impl = &flownodepb.Node_TopK{TopK: impl.ToProto()}
-	case *Distinct:
-		pnode.Impl = &flownodepb.Node_Distinct{Distinct: impl.ToProto()}
 	case *Dropped:
 		pnode.Impl = nil
 	default:
@@ -113,8 +111,6 @@ func NodeFromProto(v *flownodepb.Node) *Node {
 		node.impl = NewUnionFromProto(impl.Union)
 	case *flownodepb.Node_TopK:
 		node.impl = NewTopKFromProto(impl.TopK)
-	case *flownodepb.Node_Distinct:
-		node.impl = NewDistinctFromProto(impl.Distinct)
 	default:
 		panic(fmt.Sprintf("FromProto: unimplemented %T", impl))
 	}

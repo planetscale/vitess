@@ -128,9 +128,10 @@ type (
 	}
 
 	Project struct {
-		// TableID and Alias are only set when we project a derived table
-		TableID *semantics.TableSet
-		Alias   string
+		// These fields are only set if this is on top of a derived table
+		TableID        *semantics.TableSet
+		Alias          string
+		DerivedColumns Columns
 
 		Columns Columns
 

@@ -2,7 +2,6 @@ package integration
 
 import (
 	"testing"
-	"time"
 
 	"vitess.io/vitess/go/boost/test/helpers/boosttest"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
@@ -111,8 +110,6 @@ func TestMultiLevelUpqueriesFullyMaterialized(t *testing.T) {
 
 	g.TestExecute("DELETE FROM tbl WHERE b = 1")
 
-	time.Sleep(100 * time.Millisecond)
-
 	upquery0.Lookup().Expect(`[[INT64(3)]]`)
 }
 
@@ -136,8 +133,6 @@ func TestMultiLevelUpqueriesPartialMaterialized(t *testing.T) {
 	upquery0.Lookup(420).Expect(`[[INT64(0)]]`)
 
 	g.TestExecute("DELETE FROM tbl WHERE b = 1")
-
-	time.Sleep(100 * time.Millisecond)
 
 	upquery0.Lookup(1).Expect(`[[INT64(0)]]`)
 	upquery0.Lookup(420).Expect(`[[INT64(0)]]`)

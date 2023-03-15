@@ -2,11 +2,9 @@ package flownode
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
-	"github.com/tidwall/btree"
-	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
@@ -15,76 +13,98 @@ import (
 	"vitess.io/vitess/go/boost/sql"
 )
 
-type unionEmitProject struct {
-	emit map[dataflow.IndexPair][]int
+type EmitTuple = flownodepb.Node_InternalUnion_EmitProject_EmitTuple
 
-	emitLeft btree.Map[dataflow.LocalNodeIdx, []int]
-	cols     map[dataflow.IndexPair]int
-	colsLeft btree.Map[dataflow.LocalNodeIdx, int]
+type unionEmitProject struct {
+	emit []EmitTuple
+}
+
+func (u *unionEmitProject) replay(union *Union, from dataflow.LocalNodeIdx, keyCols []int, rk unionreplayKey) {
+	for _, emit := range u.emit {
+		var extend []int
+		for _, c := range keyCols {
+			extend = append(extend, emit.Columns[c])
+		}
+
+		if emit.Ip.Local == from {
+			union.replayKey[rk] = append(union.replayKey[rk], extend...)
+		} else {
+			union.replayKey[unionreplayKey{rk.tag, emit.Ip.Local}] = extend
+		}
+	}
 }
 
 func (u *unionEmitProject) OnInput(from dataflow.LocalNodeIdx, rs []sql.Record) (processing.Result, error) {
-	var records = make([]sql.Record, 0, len(rs))
-	mapping, ok := u.emitLeft.Get(from)
-	if !ok {
-		panic("missing mapping for EMIT")
+	records := make([]sql.Record, 0, len(rs))
+
+	for _, emit := range u.emit {
+		if emit.Ip.Local != from {
+			continue
+		}
+
+		for _, rec := range rs {
+			mappedRow := make([]sql.Value, 0, len(emit.Columns))
+			values := rec.Row.ToValues()
+			for _, col := range emit.Columns {
+				mappedRow = append(mappedRow, values[col])
+			}
+			records = append(records, sql.NewRecord(mappedRow, rec.Positive))
+		}
+
+		return processing.Result{
+			Records: records,
+		}, nil
 	}
 
-	for _, rec := range rs {
-		mappedRow := make([]sql.Value, 0, len(mapping))
-		values := rec.Row.ToValues()
-		for _, col := range mapping {
-			mappedRow = append(mappedRow, values[col])
-		}
-		records = append(records, sql.NewRecord(mappedRow, rec.Positive))
-	}
-	return processing.Result{
-		Records: records,
-	}, nil
+	panic("did not find EMIT for source column")
 }
 
 func (u *unionEmitProject) Ancestors() []graph.NodeIdx {
-	var keys = make([]graph.NodeIdx, 0, len(u.emit))
-	for k := range u.emit {
-		keys = append(keys, k.AsGlobal())
+	keys := make([]graph.NodeIdx, 0, len(u.emit))
+	for _, emit := range u.emit {
+		idx := emit.Ip.AsGlobal()
+		if !slices.Contains(keys, idx) {
+			keys = append(keys, idx)
+		}
 	}
 	return keys
 }
 
 func (u *unionEmitProject) Resolve(col int) (resolve []NodeColumn) {
-	for src, emit := range u.emit {
-		resolve = append(resolve, NodeColumn{Node: src.AsGlobal(), Column: emit[col]})
+	for _, e := range u.emit {
+		idx := e.Ip.AsGlobal()
+		if !slices.ContainsFunc(resolve, func(nc NodeColumn) bool { return nc.Node == idx }) {
+			resolve = append(resolve, NodeColumn{Node: idx, Column: e.Columns[col]})
+		}
 	}
 	return
 }
 
 func (u *unionEmitProject) Description() string {
-	var ips = maps.Keys(u.emit)
-	sort.Slice(ips, func(i, j int) bool {
-		return ips[i].AsGlobal() < ips[j].AsGlobal()
-	})
-
 	var buf strings.Builder
-	for i, ip := range ips {
+	for i, emit := range u.emit {
 		if i > 0 {
 			buf.WriteString(" ⋃ ")
 		}
-		fmt.Fprintf(&buf, "%v:%v", ip, u.emit[ip])
+		fmt.Fprintf(&buf, "%v:%v", emit.Ip, emit.Columns)
 	}
 	return buf.String()
 }
 
 func (u *unionEmitProject) ParentColumns(col int) (pc []NodeColumn) {
-	for src, emit := range u.emit {
-		pc = append(pc, NodeColumn{Node: src.AsGlobal(), Column: emit[col]})
+	for _, emit := range u.emit {
+		idx := emit.Ip.AsGlobal()
+		if !slices.ContainsFunc(pc, func(nc NodeColumn) bool { return nc.Node == idx }) {
+			pc = append(pc, NodeColumn{Node: idx, Column: emit.Columns[col]})
+		}
 	}
 	return
 }
 
 func (u *unionEmitProject) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
 	var tt = sql.Type{T: -1}
-	for src, emit := range u.emit {
-		t, err := g.Value(src.AsGlobal()).ColumnType(g, emit[col])
+	for _, emit := range u.emit {
+		t, err := g.Value(emit.Ip.AsGlobal()).ColumnType(g, emit.Columns[col])
 		if err != nil {
 			return sql.Type{}, err
 		}
@@ -97,81 +117,24 @@ func (u *unionEmitProject) ColumnType(g *graph.Graph[*Node], col int) (sql.Type,
 }
 
 func (u *unionEmitProject) OnCommit(remap map[graph.NodeIdx]dataflow.IndexPair) {
-	var mappedEmit = make(map[dataflow.IndexPair][]int, len(u.emit))
-	var mappedCols = make(map[dataflow.IndexPair]int, len(u.cols))
-
-	for k, v := range u.emit {
-		k.Remap(remap)
-		u.emitLeft.Set(k.AsLocal(), v)
-		mappedEmit[k] = v
+	for i, emit := range u.emit {
+		emit.Ip.Remap(remap)
+		u.emit[i] = emit
 	}
-
-	for k, v := range u.cols {
-		k.Remap(remap)
-		u.colsLeft.Set(k.AsLocal(), v)
-		mappedCols[k] = v
-	}
-
-	u.emit = mappedEmit
-	u.cols = mappedCols
 }
 
 func (u *unionEmitProject) OnConnected(graph *graph.Graph[*Node]) error {
-	for n := range u.emit {
-		u.cols[n] = len(graph.Value(n.AsGlobal()).Fields())
-	}
 	return nil
 }
 
 func (u *unionEmitProject) ToProto() *flownodepb.Node_InternalUnion_EmitProject {
-	pemit := &flownodepb.Node_InternalUnion_EmitProject{}
-	for k, v := range u.emit {
-		k := k
-		pemit.Emit = append(pemit.Emit, &flownodepb.Node_InternalUnion_EmitProject_EmitTuple{
-			Ip:      &k,
-			Columns: v,
-		})
+	return &flownodepb.Node_InternalUnion_EmitProject{
+		Emit: u.emit,
 	}
-	u.emitLeft.Scan(func(k dataflow.LocalNodeIdx, v []int) bool {
-		pemit.EmitLeft = append(pemit.EmitLeft, &flownodepb.Node_InternalUnion_EmitProject_EmitLeftTuple{
-			Index:   k,
-			Columns: v,
-		})
-		return true
-	})
-	for k, v := range u.cols {
-		k := k
-		pemit.Cols = append(pemit.Cols, &flownodepb.Node_InternalUnion_EmitProject_ColumnsTuple{
-			Ip:     &k,
-			Column: v,
-		})
-	}
-	u.colsLeft.Scan(func(k dataflow.LocalNodeIdx, v int) bool {
-		pemit.ColsLeft = append(pemit.ColsLeft, &flownodepb.Node_InternalUnion_EmitProject_ColumnsLeftTuple{
-			Index:  k,
-			Column: v,
-		})
-		return true
-	})
-	return pemit
 }
 
 func newUnionEmitProjectFromProto(pemit *flownodepb.Node_InternalUnion_EmitProject) *unionEmitProject {
-	emit := &unionEmitProject{
-		emit: make(map[dataflow.IndexPair][]int),
-		cols: make(map[dataflow.IndexPair]int),
+	return &unionEmitProject{
+		emit: pemit.Emit,
 	}
-	for _, e := range pemit.Emit {
-		emit.emit[*e.Ip] = e.Columns
-	}
-	for _, e := range pemit.EmitLeft {
-		emit.emitLeft.Set(e.Index, e.Columns)
-	}
-	for _, e := range pemit.Cols {
-		emit.cols[*e.Ip] = e.Column
-	}
-	for _, e := range pemit.ColsLeft {
-		emit.colsLeft.Set(e.Index, e.Column)
-	}
-	return emit
 }

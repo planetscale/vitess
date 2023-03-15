@@ -44,8 +44,6 @@ func testVoteRecipe(t *testing.T, recipe *testrecipe.Recipe) {
 		g.TestExecute("INSERT INTO `vote` (`article_id`, `user`) values (%d, %d)", (i%articleCount)+1, rand.Intn(userCount)+1)
 	}
 
-	time.Sleep(10 * time.Millisecond)
-
 	awvc.Lookup(1).Expect(`[[INT64(1) VARCHAR("Article 1") INT64(10)]]`)
 	awvc.Lookup(2).Expect(`[[INT64(2) VARCHAR("Article 2") INT64(10)]]`)
 
@@ -85,8 +83,6 @@ func TestAlbumsRecipe(t *testing.T) {
 		"photoB", "albumY",
 		"photoC", "albumZ",
 		"photoD", "albumQ")
-
-	time.Sleep(100 * time.Millisecond)
 
 	view := g.View("album_friends")
 	view.Lookup().Expect(`[[VARCHAR("albumQ") INT32(4)] [VARCHAR("albumY") INT32(1)] [VARCHAR("albumY") INT32(2)] [VARCHAR("albumX") INT32(2)] [VARCHAR("albumX") INT32(3)] [VARCHAR("albumX") INT32(1)]]`)
@@ -234,7 +230,6 @@ func TestDoubleShuffle(t *testing.T) {
 	require.Equal(t, 2, g.WorkerStats(worker.StatVStreamRows))
 
 	g.TestExecute("UPDATE `Price` SET `price` = %d WHERE `pid` = %d", 200, 1)
-	time.Sleep(100 * time.Millisecond)
 
 	carPrice.Lookup(1).Expect(`[[INT32(1) INT32(200)]]`)
 }
@@ -276,8 +271,6 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY
 
 	recipe.Queries = xslice.Filter(recipe.Queries, func(q *vtboost.CachedQuery) bool { return q.PublicId != "q1" })
 	g.ApplyRecipe(recipe)
-
-	time.Sleep(100 * time.Millisecond)
 
 	require.Nil(t, g.FindView("q1"))
 	clientQ2.Lookup(1).Expect(`[[INT64(2)]]`)
@@ -374,4 +367,22 @@ select id from mike where season = ?;
 	boosttest.Settle()
 
 	g.View("q0").Lookup("fall-69").Expect(`[[UINT32(70)]]`)
+}
+
+func TestDerivedTopK(t *testing.T) {
+	recipe := testrecipe.Load(t, "albums")
+
+	seed := func(g *boosttest.Cluster) {
+		g.TestExecute("INSERT INTO `friend` (`usera`, `userb`) VALUES (%d, %d), (%d, %d)", 1, 1, 3, 3)
+		g.TestExecute("INSERT INTO `album` (`a_id`, `u_id`, `public`) VALUES ('%s', %d, %d), ('%s', %d, %d), ('%s', %d, %d), ('%s', %d, %d)",
+			"albumX", 1, 0,
+			"albumY", 2, 0,
+			"albumZ", 3, 0,
+			"albumQ", 4, 0)
+	}
+
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe), boosttest.WithSeed(seed))
+
+	view := g.View("derived_topk")
+	view.Lookup().Expect(`[[VARCHAR("albumZ") INT32(3) INT32(3) INT32(3)] [VARCHAR("albumX") INT32(1) INT32(1) INT32(1)]]`)
 }

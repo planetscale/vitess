@@ -164,25 +164,31 @@ func (ts *Server) WatchLeadership(ctx context.Context, watcher LeadershipWatcher
 		ts.log.Debug("waiting for leader election")
 
 		for ctx.Err() == nil {
-			l, newl, err := conn.Watch(ctx, boosttopo.PathControllerState(ts.clusterID))
-			if err != nil {
-				if topo.IsErrType(err, topo.NoNode) {
-					time.Sleep(100 * time.Millisecond)
-				} else {
-					ts.log.Warn("failed to Watch active controller state; retrying", zap.Error(err))
-					time.Sleep(1 * time.Second)
+			func() {
+				watchCtx, watchCancel := context.WithCancel(ctx)
+				defer watchCancel()
+				l, newl, err := conn.Watch(watchCtx, boosttopo.PathControllerState(ts.clusterID))
+				if err != nil {
+					if topo.IsErrType(err, topo.NoNode) {
+						time.Sleep(100 * time.Millisecond)
+					} else {
+						ts.log.Warn("failed to Watch active controller state; retrying", zap.Error(err))
+						time.Sleep(1 * time.Second)
+					}
+					return
 				}
-				continue
-			}
 
-			if err := ts.onControllerChange(l, watcher, &currentLeader); err != nil {
-				ts.log.Error("failed to process controller state change", zap.Error(err))
-			}
-			for l := range newl {
 				if err := ts.onControllerChange(l, watcher, &currentLeader); err != nil {
 					ts.log.Error("failed to process controller state change", zap.Error(err))
+					return
 				}
-			}
+				for l := range newl {
+					if err := ts.onControllerChange(l, watcher, &currentLeader); err != nil {
+						ts.log.Error("failed to process controller state change", zap.Error(err))
+						return
+					}
+				}
+			}()
 		}
 		return nil
 	})
@@ -280,6 +286,10 @@ func (ts *Server) CreateWorker(ctx context.Context, epoch int64, worker *vtboost
 
 func (ts *Server) UpdateControllerState(ctx context.Context, update func(state *vtboostpb.ControllerState) error) (*vtboostpb.ControllerState, error) {
 	return boosttopo.Update(ctx, ts.srv, boosttopo.PathControllerState(ts.clusterID), update)
+}
+
+func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
+	return ts.srv.GetKeyspaces(ctx)
 }
 
 func (ts *Server) GetSchema(ctx context.Context, keyspace string) (*tabletmanagerdata.SchemaDefinition, error) {

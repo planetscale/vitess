@@ -560,7 +560,7 @@ func (l *Lookup) expect(check func(result *sqltypes.Result) error) *sqltypes.Res
 
 	var rs *sqltypes.Result
 	var err error
-	for tries := 0; tries < 10; tries++ {
+	for tries := 0; tries < 100; tries++ {
 		rs, err = l.try()
 		if err != nil {
 			continue
@@ -568,7 +568,7 @@ func (l *Lookup) expect(check func(result *sqltypes.Result) error) *sqltypes.Res
 		if err = check(rs); err == nil {
 			return rs
 		}
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 	l.t.Fatal(err)
 	return nil

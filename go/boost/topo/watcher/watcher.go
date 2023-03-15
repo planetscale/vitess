@@ -385,11 +385,9 @@ type MaterializedQuery struct {
 	hash       vthash.Hash
 }
 
-func hashMaterializedQuery(keyspace, query string) vthash.Hash {
+func hashMaterializedQuery(query string) vthash.Hash {
 	var h vthash.Hasher
 	_, _ = h.Write([]byte("mat1:"))
-	_, _ = h.Write(hack.StringBytes(keyspace))
-	_, _ = h.Write([]byte{':'})
 	_, _ = h.Write(hack.StringBytes(query))
 	return h.Sum128()
 }
@@ -406,7 +404,7 @@ func (nw *Watcher) GetCachedQuery(keyspace string, query sqlparser.Statement, bv
 		Normalized: ParametrizeQuery(query),
 	}
 
-	res.hash = hashMaterializedQuery(keyspace, res.Normalized)
+	res.hash = hashMaterializedQuery(res.Normalized)
 
 	activeCluster := nw.primary.Load()
 	if activeCluster == nil {
@@ -414,6 +412,10 @@ func (nw *Watcher) GetCachedQuery(keyspace string, query sqlparser.Statement, bv
 	}
 
 	for cached, _ := activeCluster.mats.Get(res.hash); cached != nil; cached = cached.next {
+		if cached.keyspace != keyspace && cached.keyspace != "" {
+			continue
+		}
+
 		var args []*querypb.BindVariable
 		if cached.fullyMaterialized {
 			args = defaultBogokey
@@ -447,6 +449,7 @@ func (nw *Watcher) Warmup(query *MaterializedQuery, warmup func(*View)) {
 
 type cachedMaterialization struct {
 	view              *View
+	keyspace          string
 	bounds            []*vtboostpb.Materialization_Bound
 	fullyMaterialized bool
 	original          string
@@ -573,9 +576,10 @@ func (ac *clusterClient) updateMaterializations(leader vtboostpb.DRPCControllerS
 			continue
 		}
 		view.CollectMetrics(ac.hitrate)
-		hashedQuery := hashMaterializedQuery(m.Query.Keyspace, m.NormalizedSql)
+		hashedQuery := hashMaterializedQuery(m.NormalizedSql)
 		res[hashedQuery] = &cachedMaterialization{
 			view:              view,
+			keyspace:          m.Query.Keyspace,
 			bounds:            m.Bounds,
 			original:          m.NormalizedSql,
 			fullyMaterialized: m.FullyMaterialized,

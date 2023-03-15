@@ -10,19 +10,19 @@ import (
 )
 
 func collationForColumn(table *sqlparser.TableSpec, column *sqlparser.ColumnDefinition) (collations.ID, error) {
-
 	var tableCharsetCollation collations.Collation
 	var tableCollation collations.Collation
+	var env = collations.Local()
 
 	for _, option := range table.Options {
 		switch strings.ToLower(option.Name) {
 		case "charset":
-			tableCharsetCollation = collations.Local().DefaultCollationForCharset(option.String)
+			tableCharsetCollation = env.DefaultCollationForCharset(option.String)
 			if tableCharsetCollation == nil {
 				return collations.Unknown, fmt.Errorf("unsupported table charset: %s", option.String)
 			}
 		case "collate":
-			tableCollation = collations.Local().LookupByName(option.String)
+			tableCollation = env.LookupByName(option.String)
 			if tableCollation == nil {
 				return collations.Unknown, fmt.Errorf("unsupported table collation: %s", option.String)
 			}
@@ -36,7 +36,7 @@ func collationForColumn(table *sqlparser.TableSpec, column *sqlparser.ColumnDefi
 
 	// If nothing was defined, fallback to our default
 	if tableCollation == nil {
-		tableCollation = collations.Local().LookupByID(collations.Default())
+		tableCollation = collations.ID(env.DefaultConnectionCharset()).Get()
 	}
 
 	var collationID collations.ID
@@ -47,7 +47,7 @@ func collationForColumn(table *sqlparser.TableSpec, column *sqlparser.ColumnDefi
 		collationName := column.Type.Options.Collate
 		charset := column.Type.Charset
 		if collationName != "" {
-			collation := collations.Local().LookupByName(collationName)
+			collation := env.LookupByName(collationName)
 			if collation == nil {
 				return collations.Unknown, fmt.Errorf("unsupported column collation: %s", collationName)
 			}
@@ -55,9 +55,9 @@ func collationForColumn(table *sqlparser.TableSpec, column *sqlparser.ColumnDefi
 		} else if charset.Name != "" {
 			var collation collations.Collation
 			if charset.Binary {
-				collation = collations.Local().BinaryCollationForCharset(charset.Name)
+				collation = env.BinaryCollationForCharset(charset.Name)
 			} else {
-				collation = collations.Local().DefaultCollationForCharset(charset.Name)
+				collation = env.DefaultCollationForCharset(charset.Name)
 			}
 
 			if collation == nil {

@@ -7,7 +7,6 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -251,7 +250,7 @@ func createExtremumState(tt sql.Type, max bool, over int) (agstate, error) {
 			over: over,
 		}, nil
 	case sqltypes.IsQuoted(tt.T):
-		col := collations.Local().LookupByID(tt.Collation)
+		col := tt.Collation.Get()
 		return &agstateExtremum[[]byte]{
 			cmp: func(a, b []byte) int {
 				return col.Collate(a, b, false)

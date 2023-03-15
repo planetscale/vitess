@@ -142,6 +142,16 @@ func (conv *Converter) selectToOperator(ctx *PlanContext, sel *sqlparser.Select)
 			Order: sel.OrderBy,
 			K:     k,
 		}, []*Node{node})
+
+		// We need a projection that will do the derived table rewriting,
+		// and this projection needs to have the column list ready
+		// But we only want one projection doing this -
+		// if we add one here, we'll remove the columns from the inner one
+		projAfterTopK := &Project{
+			Columns: columns,
+		}
+		projection.Columns = nil
+		node = conv.NewNode("projection", projAfterTopK, []*Node{node})
 	}
 
 	return
@@ -469,6 +479,7 @@ func (conv *Converter) buildFromTableExpr(ctx *PlanContext, tableExpr sqlparser.
 				tblID := ctx.SemTable.TableSetFor(tableExpr)
 				proj.TableID = &tblID
 				proj.Alias = tableExpr.As.String()
+				proj.DerivedColumns = columns
 				node.Name = "derived_" + node.Name
 			}
 			return
@@ -589,9 +600,6 @@ func (conv *Converter) buildFromJoin(ctx *PlanContext, join *sqlparser.JoinTable
 }
 
 func externalTableName(keyspace string, name string) string {
-	if keyspace == "" {
-		panic("missing keyspace")
-	}
 	return fmt.Sprintf("table[%s.%s]", keyspace, name)
 }
 
@@ -624,7 +632,11 @@ func (conv *Converter) buildFromTableName(ctx *PlanContext, tableExpr *sqlparser
 			panic("current[name] but no match in nodes")
 		}
 		tableOp := tableNode.Op.(*Table)
-		tblSpec, err := ctx.DDL.LoadTableSpec(keyspace, name)
+		// We can ignore the keyspace here as it's already
+		// resolved even in the case of global routing because we
+		// check against the semtable above which was built
+		// global routing aware.
+		_, tblSpec, err := ctx.DDL.LoadTableSpec(keyspace, name)
 		if err != nil {
 			return nil, err
 		}
@@ -692,59 +704,32 @@ func (conv *Converter) unionToOperator(
 		return nil, nil, Columns{}, err
 	}
 
-	rgt, rgtParams, _, err := conv.selectStmtToOperator(ctx, stmt.Right)
+	rgt, rgtParams, rgtCols, err := conv.selectStmtToOperator(ctx, stmt.Right)
 	if err != nil {
 		return nil, nil, Columns{}, err
-	}
-
-	inputColumns, err := mapExpressionsToInputCols(ctx, stmt)
-	if err != nil {
-		return nil, nil, Columns{}, err
-	}
-
-	unionCols := Columns{}
-	for x := range lftCols {
-		unionCols = unionCols.Add(ctx, ColumnFromAST(sqlparser.NewOffset(x, nil)))
 	}
 
 	unionOp := &Union{
-		InputColumns: inputColumns,
-		Columns:      lftCols,
+		InputColumns: [2]Columns{lftCols, rgtCols},
 	}
 	unionNode := conv.NewNode("union", unionOp, []*Node{lft, rgt})
 	projNode := conv.NewNode("project", &Project{}, []*Node{unionNode})
 	parameters := append(lftParams, rgtParams...)
+
+	unionCols := Columns{}
+	for x, lftCol := range lftCols {
+		name := fmt.Sprintf("%s_?_%d", unionNode.Name, x)
+		col := ColumnFromAST(sqlparser.NewColName(name))
+		col.Name = lftCol.Name
+		unionCols = unionCols.Add(ctx, col)
+	}
+	unionOp.Columns = unionCols
+
 	if !stmt.Distinct {
-		return projNode, parameters, lftCols, nil
+		return projNode, parameters, unionCols, nil
 	}
 
 	return conv.NewNode("distinct", &Distinct{}, []*Node{projNode}), parameters, unionCols, nil
-}
-
-func mapExpressionsToInputCols(ctx *PlanContext, stmt *sqlparser.Union) ([2]Columns, error) {
-	inputColumns := [2]Columns{}
-	var err error
-	inputColumns[0], err = mapExprsToColumns(ctx, sqlparser.GetFirstSelect(stmt.Left).SelectExprs)
-	if err != nil {
-		return [2]Columns{}, err
-	}
-	inputColumns[1], err = mapExprsToColumns(ctx, sqlparser.GetFirstSelect(stmt.Right).SelectExprs)
-	if err != nil {
-		return [2]Columns{}, err
-	}
-	return inputColumns, nil
-}
-
-func mapExprsToColumns(ctx *PlanContext, exprs sqlparser.SelectExprs) (Columns, error) {
-	output := Columns{}
-	for _, e := range exprs {
-		ae, ok := e.(*sqlparser.AliasedExpr)
-		if !ok {
-			return Columns{}, &UnsupportedError{AST: e, Type: NotAliasedExpression}
-		}
-		output = output.Add(ctx, ColumnFromAST(ae.Expr))
-	}
-	return output, nil
 }
 
 func ColumnFromAST(expr sqlparser.Expr) *Column {

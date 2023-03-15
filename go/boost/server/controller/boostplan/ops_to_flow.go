@@ -6,6 +6,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/common/dbg"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
@@ -136,9 +137,12 @@ func opNodeToFlowParts(mig Migration, node *operators.Node) (operators.FlowNode,
 
 func makeUnionNode(mig Migration, node *operators.Node, op *operators.Union) (operators.FlowNode, error) {
 	colNames := columnOpNames(op.Columns)
-	emitColumnID := make(map[graph.NodeIdx][]int)
+	var emitColumnID []flownode.EmitTuple
 	for i, ancestor := range node.Ancestors {
-		emitColumnID[ancestor.Flow.Address] = op.ColumnsIdx[i]
+		emitColumnID = append(emitColumnID, flownode.EmitTuple{
+			Ip:      dataflow.NewIndexPair(ancestor.Flow.Address),
+			Columns: op.ColumnsIdx[i],
+		})
 	}
 	ingr, err := mig.AddIngredient(node.Name, colNames, flownode.NewUnion(emitColumnID))
 	if err != nil {
@@ -520,13 +524,19 @@ func makeBaseOpNode(mig Migration, node *operators.Node, op *operators.Table) (o
 func makeDistinctNode(mig Migration, node *operators.Node) (operators.FlowNode, error) {
 	src := node.Ancestors[0].Flow.Address
 
+	// Distinct is now able to clearly realize that the data has changed,
+	// for this reason we decide to use a group by with a count(*) instead
+	// of distinct. The count(*) will tell us how many rows are being grouped
+	// which will allow us to easily detect that the number of rows has changed.
+
 	var groupBy []int
 	for i := range node.Columns {
 		groupBy = append(groupBy, i)
 	}
 
-	distinct := flownode.NewDistinct(src, groupBy)
-	ingr, err := mig.AddIngredient(node.Name, columnOpNames(node.Columns), distinct)
+	countStarAggr := flownode.Aggregation{Kind: flownode.AggregationCount, Over: -1}
+	grouped := flownode.NewGrouped(src, false, groupBy, []flownode.Aggregation{countStarAggr})
+	ingr, err := mig.AddIngredient(node.Name, columnOpNames(node.Columns), grouped)
 	if err != nil {
 		return operators.FlowNode{}, err
 	}

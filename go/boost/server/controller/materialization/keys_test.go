@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -128,9 +129,9 @@ func TestGraphKeys(t *testing.T) {
 	t.Run("union straight", func(t *testing.T) {
 		g, a, b := bases()
 
-		union := flownode.NewUnion(map[graph.NodeIdx][]int{
-			a: {0, 1},
-			b: {0, 1},
+		union := flownode.NewUnion([]flownode.EmitTuple{
+			{Ip: dataflow.NewIndexPair(a), Columns: []int{0, 1}},
+			{Ip: dataflow.NewIndexPair(b), Columns: []int{0, 1}},
 		})
 		x := g.AddNode(flownode.New("x", []string{"x1", "x2"}, union))
 		g.AddEdge(a, x)

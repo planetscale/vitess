@@ -43,16 +43,6 @@ func (n *Node) IsJoin() bool {
 	return ok
 }
 
-func (n *Node) RequiresFullMaterialization() bool {
-	switch n.impl.(type) {
-	case *Distinct:
-		return true
-	// TODO: Trigger would also require full materialization if we choose to support it
-	default:
-		return false
-	}
-}
-
 func (n *Node) CanQueryThrough() bool {
 	_, ok := n.impl.(ingredientQueryThrough)
 	return ok

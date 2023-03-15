@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 	"text/template"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -29,7 +28,6 @@ func TestMidflowAggregation(t *testing.T) {
 		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, 100 * %d)", i, i)
 	}
 	g.TestExecute("INSERT INTO num (a, b) VALUES (null, 100)")
-	time.Sleep(100 * time.Millisecond)
 
 	g.View("q0").Lookup().Expect(`[[INT64(3) INT64(4)]]`)
 }
@@ -54,7 +52,6 @@ func TestAggregations(t *testing.T) {
 		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, 100 * %d)", i, i)
 	}
 	g.TestExecute("INSERT INTO num (a, b) VALUES (null, 100)")
-	time.Sleep(100 * time.Millisecond)
 
 	g.View("q0").Lookup().Expect(`[[INT64(3) INT64(4)]]`)
 	g.View("q1").Lookup().Expect(`[[INT32(100) INT64(1) INT64(2)] [INT32(200) INT64(1) INT64(1)] [INT32(300) INT64(1) INT64(1)]]`)
@@ -295,7 +292,6 @@ func TestExtremumsCrash(t *testing.T) {
 	op0.Lookup(100).Expect(`[[INT32(3)]]`)
 
 	g.TestExecute("DELETE FROM num WHERE a = 3")
-	time.Sleep(100 * time.Millisecond)
 	op0.Lookup(100).Expect(`[[INT32(2)]]`)
 }
 
@@ -320,7 +316,6 @@ func TestExtremumsCrashFullMaterialization(t *testing.T) {
 	op0.Lookup().Expect(`[[INT32(3)]]`)
 
 	g.TestExecute("DELETE FROM num WHERE a = 3")
-	time.Sleep(100 * time.Millisecond)
 	op0.Lookup().Expect(`[[INT32(2)]]`)
 }
 
@@ -410,7 +405,6 @@ func TestAggregationCountsToZero(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i, i*10)
 	}
-	time.Sleep(100 * time.Millisecond)
 
 	q0 := g.View("q0")
 	q0.Lookup().Expect("[[INT64(1) INT32(40)] [INT64(1) INT32(30)] [INT64(1) INT32(20)] [INT64(1) INT32(10)]]")
@@ -419,7 +413,6 @@ func TestAggregationCountsToZero(t *testing.T) {
 	q1.Lookup().Expect("[[INT64(4)]]")
 
 	g.TestExecute("DELETE FROM num WHERE b = 20")
-	time.Sleep(100 * time.Millisecond)
 
 	q0.Lookup().Expect("[[INT64(1) INT32(40)] [INT64(1) INT32(30)] [INT64(1) INT32(10)]]")
 	q1.Lookup().Expect("[[INT64(3)]]")
@@ -443,7 +436,6 @@ func TestAggregationSumsToZero(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i, i*10)
 	}
-	time.Sleep(100 * time.Millisecond)
 
 	q0 := g.View("q0")
 	q0.Lookup().Expect("[[DECIMAL(4) INT32(40)] [DECIMAL(3) INT32(30)] [DECIMAL(2) INT32(20)] [DECIMAL(1) INT32(10)]]")
@@ -452,14 +444,12 @@ func TestAggregationSumsToZero(t *testing.T) {
 	q1.Lookup().Expect("[[DECIMAL(10)]]")
 
 	g.TestExecute("DELETE FROM num WHERE b = 20")
-	time.Sleep(100 * time.Millisecond)
 
 	q0.Lookup().Expect("[[DECIMAL(4) INT32(40)] [DECIMAL(3) INT32(30)] [DECIMAL(1) INT32(10)]]")
 	q1.Lookup().Expect("[[DECIMAL(8)]]")
 
 	g.TestExecute("DELETE FROM num")
 
-	time.Sleep(100 * time.Millisecond)
 	q0.Lookup().Expect("[]")
 	q1.Lookup().Expect("[[DECIMAL(0)]]")
 }
@@ -477,7 +467,6 @@ func TestAggregationNegativeSumsToZero(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i, i*10)
 	}
-	time.Sleep(100 * time.Millisecond)
 
 	q0 := g.View("q0")
 	q0.Lookup().Expect("[[DECIMAL(4) INT32(40)] [DECIMAL(3) INT32(30)] [DECIMAL(2) INT32(20)] [DECIMAL(1) INT32(10)]]")
@@ -486,13 +475,11 @@ func TestAggregationNegativeSumsToZero(t *testing.T) {
 	q1.Lookup().Expect("[[DECIMAL(10)]]")
 
 	g.TestExecute("INSERT INTO num (a, b) VALUES(-3, 30)")
-	time.Sleep(100 * time.Millisecond)
 
 	q0.Lookup().Expect("[[DECIMAL(4) INT32(40)] [DECIMAL(0) INT32(30)] [DECIMAL(2) INT32(20)] [DECIMAL(1) INT32(10)]]")
 	q1.Lookup().Expect("[[DECIMAL(7)]]")
 
 	g.TestExecute("DELETE FROM num WHERE b = 20")
-	time.Sleep(100 * time.Millisecond)
 
 	q0.Lookup().Expect("[[DECIMAL(4) INT32(40)] [DECIMAL(0) INT32(30)] [DECIMAL(1) INT32(10)]]")
 	q1.Lookup().Expect("[[DECIMAL(5)]]")
@@ -510,7 +497,6 @@ func TestAggregationWithUpdate(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		g.TestExecute("INSERT INTO num (a, b) VALUES (%d, %d)", i, i*10)
 	}
-	time.Sleep(100 * time.Millisecond)
 
 	q0 := g.View("q0")
 	q0.Lookup(20).Expect("[[INT64(1) INT32(20)]]")
@@ -540,7 +526,6 @@ select count(*), aid from votes where uid = :v1 group by aid;
 	q0.Lookup(3).Expect("[[INT64(1) INT32(1)] [INT64(1) INT32(2)] [INT64(1) INT32(3)] [INT64(1) INT32(4)]]")
 
 	g.TestExecute("UPDATE votes SET aid = 5 WHERE aid = 1")
-	time.Sleep(100 * time.Millisecond)
 
 	q0.Lookup(3).Expect("[[INT64(1) INT32(2)] [INT64(1) INT32(3)] [INT64(1) INT32(4)] [INT64(1) INT32(5)]]")
 }
@@ -577,7 +562,6 @@ select count(*), aid from votes where uid = :v1 group by aid, uid;
 	q0.Lookup(3).Expect("[[INT64(1) INT32(1)] [INT64(1) INT32(2)] [INT64(1) INT32(3)] [INT64(1) INT32(4)]]")
 
 	g.TestExecute("INSERT INTO votes (aid, uid, comment_id, sign) VALUES (%d, %d, %d, 1)", 5, 3, rand.Intn(100))
-	time.Sleep(100 * time.Millisecond)
 
 	q0.Lookup(3).Expect("[[INT64(1) INT32(1)] [INT64(1) INT32(2)] [INT64(1) INT32(3)] [INT64(1) INT32(4)] [INT64(1) INT32(5)]]")
 }

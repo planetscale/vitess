@@ -35,7 +35,7 @@ func TestOpsToAST(t *testing.T) {
 	}{{
 		query: "select id, id+a, 420 from user",
 		keys:  []int{2},
-		res:   "select ks_user_0.id, ks_user_0.id + ks_user_0.a, 420, 0 from ks.`user` as ks_user_0 where 420 = :vtg0",
+		res:   "select ks_user_0.id, ks_user_0.id + ks_user_0.a, 420 as `literal-420`, 0 as `literal-0` from ks.`user` as ks_user_0 where 420 = :vtg0",
 		get:   parent,
 	}, {
 		query: "select u1.id, u2.a from user u1 join user u2 on u1.a = u2.id",
@@ -54,7 +54,7 @@ func TestOpsToAST(t *testing.T) {
 	}, {
 		query: "select u1.id, u1.a, u2.a from user u1 left join user u2 on u1.id = u2.id",
 		keys:  []int{1, 2},
-		res: "select ks_user_0.id, ks_user_0.a, ks_user_1.a, 0 " +
+		res: "select ks_user_0.id, ks_user_0.a, ks_user_1.a, 0 as `literal-0` " +
 			"from ks.`user` as ks_user_0 left join ks.`user` as ks_user_1 on ks_user_0.id = ks_user_1.id " +
 			"where ks_user_0.a = :vtg0 and ks_user_1.a = :vtg1",
 		get: parent,
@@ -78,24 +78,24 @@ func TestOpsToAST(t *testing.T) {
 	}, {
 		query: "select user.a, product.price from user left join product on user.id = product.id and a > 12",
 		keys:  []int{},
-		res: "select ks_user_0.a, ks_product_0.price, 0 " +
+		res: "select ks_user_0.a, ks_product_0.price, 0 as `literal-0` " +
 			"from ks.`user` as ks_user_0 left join ks.product as ks_product_0 " +
 			"on ks_user_0.id = ks_product_0.id and ks_user_0.a > 12",
 		get: parent,
 	}, {
 		query: "select id from user order by a limit 10",
 		keys:  []int{},
-		res:   "select ks_user_0.id, 0, ks_user_0.a from ks.`user` as ks_user_0 order by a asc limit 10",
-		get:   parent,
+		res:   "select ks_user_0.id, ks_user_0.a, 0 as `literal-0` from ks.`user` as ks_user_0 order by a asc limit 10",
+		get:   grandParent,
 	}, {
 		query: "select id from user UNION ALL select id from product",
 		keys:  []int{},
-		res:   "select ks_user_0.id, 0 from ks.`user` as ks_user_0 union all select ks_product_0.id, 0 from ks.product as ks_product_0",
+		res:   "select ks_user_0.id, 0 as `literal-0` from ks.`user` as ks_user_0 union all select ks_product_0.id, 0 as `literal-0` from ks.product as ks_product_0",
 		get:   parent,
 	}, {
 		query: "select id, 12 from user UNION select id, 13 from product",
 		keys:  []int{},
-		res:   "select ks_user_0.id, 12, 0 from ks.`user` as ks_user_0 union select ks_product_0.id, 13, 0 from ks.product as ks_product_0",
+		res:   "select ks_user_0.id, 12, 0 as `literal-0` from ks.`user` as ks_user_0 union select ks_product_0.id, 13, 0 as `literal-0` from ks.product as ks_product_0",
 		get:   parent,
 	}, {
 		query: "select max(a) from user",
@@ -111,6 +111,11 @@ func TestOpsToAST(t *testing.T) {
 		query: "select * from (select 'toto', max(a) from user group by 'toto') x",
 		keys:  []int{},
 		res:   "select x_0.toto, x_0.`max(ks_user_0.a)` from (select 'toto', max(ks_user_0.a) from ks.`user` as ks_user_0 group by 'toto') as x_0",
+		get:   grandParent,
+	}, {
+		query: "select sum(a) from user union select sum(price) from product",
+		keys:  []int{},
+		res:   "select sum(ks_user_0.a), 0 as `literal-0` from ks.`user` as ks_user_0 group by `literal-0` union all select sum(ks_product_0.price), 0 as `literal-0` from ks.product as ks_product_0 group by `literal-0`",
 		get:   grandParent,
 	}}
 

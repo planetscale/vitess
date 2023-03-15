@@ -295,9 +295,6 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 		if nn.IsTable() {
 			able = false
 		}
-		if nn.IsInternal() && nn.RequiresFullMaterialization() {
-			able = false
-		}
 
 		// we are already fully materialized, so can't be made partial
 		if !newnodes[ni] && !mat.partial[ni] && len(mat.added[ni]) != len(mat.have[ni]) {
