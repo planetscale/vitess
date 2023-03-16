@@ -238,6 +238,10 @@ func (throttler *Throttler) StoreMetricsThreshold(threshold float64) {
 	throttler.MetricsThreshold.Store(math.Float64bits(threshold))
 }
 
+func (throttler *Throttler) StoreLagThreshold(threshold float64) {
+	throttler.LagThreshold.Store(math.Float64bits(threshold))
+}
+
 // initThrottleTabletTypes reads the user supplied throttle_tablet_types and sets these
 // for the duration of this tablet's lifetime
 func (throttler *Throttler) initThrottleTabletTypes() {
@@ -322,6 +326,9 @@ func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.
 			thottlerConfig.Threshold = throttleThreshold.Seconds()
 		}
 	}
+	if thottlerConfig.LagThreshold == 0 {
+		thottlerConfig.LagThreshold = throttleThreshold.Seconds()
+	}
 	return thottlerConfig
 }
 
@@ -357,6 +364,8 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
 	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
+	throttler.StoreLagThreshold(throttlerConfig.LagThreshold)
+
 	throttlerCheckAsCheckSelf = throttlerConfig.CheckAsCheckSelf
 	if throttlerConfig.Enabled {
 		go throttler.Enable(ctx)
