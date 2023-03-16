@@ -686,7 +686,7 @@ var commands = []commandGroup{
 			{
 				name:   "UpdateThrottlerConfig",
 				method: commandUpdateThrottlerConfig,
-				params: "[--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] <keyspace>",
+				params: "[--enable|--disable] [--threshold=<float64>] [--lag-threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] <keyspace>",
 				help:   "Update the table throttler configuration for all cells and tablets of a given keyspace",
 			},
 			{
@@ -3480,6 +3480,7 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 	enable := subFlags.Bool("enable", false, "Enable the throttler")
 	disable := subFlags.Bool("disable", false, "Disable the throttler")
 	threshold := subFlags.Float64("threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
+	lagThreshold := subFlags.Float64("lag-threshold", 0, "threshold specific to lag checks")
 	customQuery := subFlags.String("custom-query", "", "custom throttler check query")
 	checkAsCheckSelf := subFlags.Bool("check-as-check-self", false, "/throttler/check requests behave as is /throttler/check-self was called")
 	checkAsCheckShard := subFlags.Bool("check-as-check-shard", false, "use standard behavior for /throttler/check requests")
@@ -3513,6 +3514,9 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 			if *threshold > 0 {
 				throttlerConfig.Threshold = *threshold
 			}
+		}
+		if *lagThreshold > 0 {
+			throttlerConfig.LagThreshold = *lagThreshold
 		}
 		if *enable {
 			throttlerConfig.Enabled = true

@@ -1591,6 +1591,9 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 				throttlerConfig.Threshold = req.Threshold
 			}
 		}
+		if req.LagThreshold > 0 {
+			throttlerConfig.LagThreshold = req.LagThreshold
+		}
 		if req.Enable {
 			throttlerConfig.Enabled = true
 		}
