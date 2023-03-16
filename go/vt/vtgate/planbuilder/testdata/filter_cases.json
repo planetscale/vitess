@@ -1150,7 +1150,7 @@
       "Original": "select Id from user where 1 in ('aa', 'bb')",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Scatter",
+        "Variant": "None",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -6698,78 +6698,65 @@
     }
   },
   {
-    "comment": "Like clause evaluated on the vtgate",
-    "query": "select a.textcol1 from user a join user b where a.textcol1 = b.textcol2 group by a.textcol1 having repeat(a.textcol1,sum(a.id)) like \"And%res\"",
-    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
+    "comment": "must merge subquery with the right side of the join",
+    "query": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select a.textcol1 from user a join user b where a.textcol1 = b.textcol2 group by a.textcol1 having repeat(a.textcol1,sum(a.id)) like \"And%res\"",
+      "Original": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
-        ],
+        "OperatorType": "SemiJoin",
+        "JoinVars": {
+          "u1_bar": 0
+        },
+        "ProjectedIndexes": "-2",
+        "TableName": "unsharded_`user`_unsharded",
         "Inputs": [
           {
-            "OperatorType": "Filter",
-            "Predicate": "repeat(a.textcol1, :1) like 'And%res'",
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0,L:0",
+            "TableName": "unsharded_`user`",
             "Inputs": [
               {
-                "OperatorType": "Aggregate",
-                "Variant": "Ordered",
-                "Aggregates": "sum(1) AS sum(a.id)",
-                "GroupBy": "0 COLLATE latin1_swedish_ci",
-                "Inputs": [
-                  {
-                    "OperatorType": "Projection",
-                    "Expressions": [
-                      "[COLUMN 0] as textcol1",
-                      "[COLUMN 1] * COALESCE([COLUMN 2], INT64(1)) as sum(a.id)"
-                    ],
-                    "Inputs": [
-                      {
-                        "OperatorType": "Join",
-                        "Variant": "Join",
-                        "JoinColumnIndexes": "L:0,L:1,R:1",
-                        "JoinVars": {
-                          "a_textcol1": 0
-                        },
-                        "TableName": "`user`_`user`",
-                        "Inputs": [
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select a.textcol1, sum(a.id) from `user` as a where 1 != 1 group by a.textcol1",
-                            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-                            "Query": "select a.textcol1, sum(a.id) from `user` as a group by a.textcol1 order by a.textcol1 asc",
-                            "Table": "`user`"
-                          },
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "Scatter",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select 1, count(*) from `user` as b where 1 != 1 group by 1",
-                            "Query": "select 1, count(*) from `user` as b where b.textcol2 = :a_textcol1 group by 1",
-                            "Table": "`user`"
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded where 1 != 1",
+                "Query": "select 1 from unsharded",
+                "Table": "unsharded"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u1.bar from `user` as u1 where 1 != 1",
+                "Query": "select u1.bar from `user` as u1",
+                "Table": "`user`"
               }
             ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
+            "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar",
+            "Table": "unsharded"
           }
         ]
       },
       "TablesUsed": [
+        "main.unsharded",
         "user.user"
       ]
     }

@@ -95,7 +95,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
+	vtgateVersion, err := 17, nil // cluster.GetMajorVersion("vtgate") -- backported to private, can be cleaned up to match upstream once rebased on 17
 	require.NoError(t, err)
 	expected := `[[VARCHAR("dual")] [VARCHAR("main")]]`
 	if vtgateVersion >= 17 {
