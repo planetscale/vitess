@@ -380,6 +380,9 @@ message ThrottlerConfig {
   // CheckAsCheckSelf indicates whether a throttler /check request
   // should behave like a /check-self.
   bool check_as_check_self = 4;
+
+  // LagThreshold is the threshold for lag-specific checks
+  double lag_threshold = 5;
 }
 
 // SrvKeyspace is a rollup node for the keyspace itself.

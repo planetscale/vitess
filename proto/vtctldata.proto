@@ -694,6 +694,8 @@ message UpdateThrottlerConfigRequest {
   bool check_as_check_self=7;
   // CheckAsCheckShard instructs the throttler to respond to /check requests by checking the shard's health (this is the default behavior)
   bool check_as_check_shard=8;
+  // LagThreshold is the specific threshold for lag checks
+  double lag_threshold = 9;
 }
 
 message UpdateThrottlerConfigResponse {
