@@ -111,7 +111,7 @@ func TestVSchema(t *testing.T) {
 
 	utils.AssertMatches(t, conn, "delete from vt_user", `[]`)
 
-	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
+	vtgateVersion, err := 17, nil // cluster.GetMajorVersion("vtgate") -- backported to private, can be cleaned up to match upstream once rebased on 17
 	require.NoError(t, err)
 
 	// Test empty vschema
