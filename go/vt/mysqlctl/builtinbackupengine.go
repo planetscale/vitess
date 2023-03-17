@@ -53,7 +53,6 @@ import (
 const (
 	builtinBackupEngineName = "builtin"
 	autoIncrementalFromPos  = "auto"
-	writerBufferSize        = 2 * 1024 * 1024
 	dataDictionaryFile      = "mysql.ibd"
 )
 
