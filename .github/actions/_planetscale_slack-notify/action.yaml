@@ -1,5 +1,5 @@
 name: 'Slack Notify'
 description: 'Send slack message when workflow is done.'
 runs:
-  using: 'node12'
+  using: 'node16'
   main: 'dist/index.js'
