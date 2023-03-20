@@ -19,5 +19,6 @@ package vtgr
 // Imports and register the zk2 TopologyServer
 
 import (
+	//revive:disable because this this plugin should be deprecated.
 	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 )

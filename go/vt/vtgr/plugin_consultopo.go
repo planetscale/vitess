@@ -19,5 +19,6 @@ package vtgr
 // This plugin imports consultopo to register the consul implementation of TopoServer.
 
 import (
+	//revive:disable because this this plugin should be deprecated.
 	_ "vitess.io/vitess/go/vt/topo/consultopo"
 )
