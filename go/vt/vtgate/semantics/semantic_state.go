@@ -391,13 +391,6 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 			}
 			return nil, nil
 		}
-		if vindexTable.Type != "" {
-			// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
-			if vindexTable.Type == vindexes.TypeReference {
-				continue
-			}
-			return nil, nil
-		}
 		name, ok := table.getExpr().Expr.(sqlparser.TableName)
 		if !ok {
 			return nil, nil
