@@ -19,5 +19,6 @@ package vtgr
 // Imports and register the gRPC tabletmanager client
 
 import (
+	//revive:disable because this this plugin should be deprecated.
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )

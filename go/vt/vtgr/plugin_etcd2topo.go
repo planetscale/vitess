@@ -19,5 +19,6 @@ package vtgr
 // This plugin imports etcd2topo to register the etcd2 implementation of TopoServer.
 
 import (
+	//revive:disable because this this plugin should be deprecated.
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 )
