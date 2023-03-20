@@ -730,10 +730,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		reader = bufio.NewReaderSize(br, int(builtinBackupFileReadBufferSize))
 	}
 
-	if builtinBackupFileReadBufferSize > 0 {
-		reader = bufio.NewReaderSize(br, int(builtinBackupFileReadBufferSize))
-	}
-
 	// Copy from the source file to writer (optional gzip,
 	// optional pipe, tee, output file and hasher).
 	_, err = io.Copy(writer, reader)
