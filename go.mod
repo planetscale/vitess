@@ -111,6 +111,7 @@ require (
 	github.com/kr/pretty v0.3.1
 	github.com/kr/text v0.2.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
+	github.com/shopspring/decimal v1.3.1
 	github.com/spyzhov/ajson v0.8.0
 	golang.org/x/exp v0.0.0-20230131160201-f062dba9d201
 	modernc.org/sqlite v1.20.3
@@ -217,4 +218,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )
 
-replace github.com/spyzhov/ajson v0.8.0 => github.com/rohit-nayak-ps/ajson v0.7.2-0.20230316112806-97deb03d883c
+replace github.com/spyzhov/ajson v0.8.0 => /home/rohit/ajson-upstream
