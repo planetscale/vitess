@@ -74,13 +74,20 @@ export const Select = <T,>({
         [onChange]
     );
 
-    const { getItemProps, getLabelProps, getMenuProps, getToggleButtonProps, highlightedIndex, isOpen, selectItem } =
-        useSelect({
-            itemToString: _itemToString,
-            items,
-            onSelectedItemChange,
-            selectedItem,
-        });
+    const {
+        getItemProps,
+        getLabelProps,
+        getMenuProps,
+        getToggleButtonProps,
+        highlightedIndex,
+        isOpen,
+        selectItem,
+    } = useSelect({
+        itemToString: _itemToString,
+        items,
+        onSelectedItemChange,
+        selectedItem,
+    });
 
     const containerClass = cx(style.container, className, {
         [style.large]: size === 'large',

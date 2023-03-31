@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -79,8 +80,8 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalUint64(^uint64(eu.i)), nil
 }
 
-func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	tt, f := b.Inner.typeof(env)
+func (b *BitwiseNotExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := b.Inner.typeof(env, fields)
 	if tt == sqltypes.VarBinary && f&(flagHex|flagBit) == 0 {
 		return sqltypes.VarBinary, f
 	}
@@ -173,8 +174,13 @@ func (o opBitAnd) BitwiseOp() string { return "&" }
 var errBitwiseOperandsLength = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Binary operands of bitwise operators must be of equal length")
 
 func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
-	l, r, err := bit.arguments(env)
-	if l == nil || r == nil || err != nil {
+	l, err := bit.Left.eval(env)
+	if l == nil || err != nil {
+		return nil, err
+	}
+
+	r, err := bit.Right.eval(env)
+	if r == nil || err != nil {
 		return nil, err
 	}
 
@@ -225,9 +231,9 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	t1, f1 := bit.Left.typeof(env)
-	t2, f2 := bit.Right.typeof(env)
+func (bit *BitwiseExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t1, f1 := bit.Left.typeof(env, fields)
+	t2, f2 := bit.Right.typeof(env, fields)
 
 	switch bit.Op.(type) {
 	case opBitBinary:

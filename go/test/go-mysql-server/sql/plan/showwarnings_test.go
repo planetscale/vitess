@@ -17,6 +17,7 @@ package plan
 import (
 	"io"
 	"testing"
+	"vitess.io/vitess/go/mysql"
 
 	"github.com/stretchr/testify/require"
 
@@ -27,9 +28,9 @@ func TestShowWarnings(t *testing.T) {
 	require := require.New(t)
 
 	ctx := sql.NewEmptyContext()
-	ctx.Session.Warn(&sql.Warning{Level: "l1", Message: "w1", Code: 1})
-	ctx.Session.Warn(&sql.Warning{Level: "l2", Message: "w2", Code: 2})
-	ctx.Session.Warn(&sql.Warning{Level: "l4", Message: "w3", Code: 3})
+	ctx.Session.Warn(&sql.Warning{Level: "l1", Message: "w1", Code: mysql.ErrorCode(1)})
+	ctx.Session.Warn(&sql.Warning{Level: "l2", Message: "w2", Code: mysql.ErrorCode(2)})
+	ctx.Session.Warn(&sql.Warning{Level: "l4", Message: "w3", Code: mysql.ErrorCode(3)})
 
 	sw := ShowWarnings(ctx.Session.Warnings())
 	require.True(sw.Resolved())
@@ -37,10 +38,10 @@ func TestShowWarnings(t *testing.T) {
 	it, err := sw.RowIter(ctx, nil)
 	require.NoError(err)
 
-	n := 3
+	n := mysql.ErrorCode(3)
 	for row, err := it.Next(ctx); err == nil; row, err = it.Next(ctx) {
 		level := row[0].(string)
-		code := row[1].(int)
+		code := row[1].(mysql.ErrorCode)
 		message := row[2].(string)
 
 		t.Logf("level: %s\tcode: %v\tmessage: %s\n", level, code, message)

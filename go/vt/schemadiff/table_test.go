@@ -1144,6 +1144,7 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:  "alter table t1 comment ''",
 			cdiff: "ALTER TABLE `t1` COMMENT ''",
 		},
+		// expressions
 		{
 			// validates that CanonicalString prints 'signed' and not 'SIGNED', as MySQL's `SHOW CREATE TABLE` outputs lower case 'signed'
 			name: "cast as",
@@ -1245,10 +1246,10 @@ func TestCreateTableDiff(t *testing.T) {
 				assert.NoError(t, err)
 				assert.True(t, alter.IsEmpty(), "expected empty diff, found changes")
 				if !alter.IsEmpty() {
-					t.Logf("statements[0]: %v", alter.StatementString())
+					t.Logf(" statements[0]: %v", alter.StatementString())
+					t.Logf("cstatements[0]: %v", alter.CanonicalStatementString())
 					t.Logf("c: %v", sqlparser.CanonicalString(c.CreateTable))
 					t.Logf("other: %v", sqlparser.CanonicalString(other.CreateTable))
-					t.Logf("cstatements[0]: %v", alter.CanonicalStatementString())
 				}
 			default:
 				assert.NoError(t, err)
@@ -2091,6 +2092,21 @@ func TestNormalize(t *testing.T) {
 			name: "drops non-default column visibility",
 			from: "create table t (id int primary key, i1 int invisible)",
 			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int INVISIBLE,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "normalize boolean, default true",
+			from: "create table t (id int primary key, b boolean default true)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`b` tinyint(1) DEFAULT '1',\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "normalize boolean, default false",
+			from: "create table t (id int primary key, b boolean default false)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`b` tinyint(1) DEFAULT '0',\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "normalize primary key and column with no default, with type boolean",
+			from: "create table t (id boolean primary key, b boolean)",
+			to:   "CREATE TABLE `t` (\n\t`id` tinyint(1),\n\t`b` tinyint(1),\n\tPRIMARY KEY (`id`)\n)",
 		},
 	}
 	for _, ts := range tt {

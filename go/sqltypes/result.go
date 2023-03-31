@@ -91,11 +91,12 @@ func (result *Result) ReplaceKeyspace(keyspace string) {
 // Copy creates a deep copy of Result.
 func (result *Result) Copy() *Result {
 	out := &Result{
-		RowsAffected: result.RowsAffected, InsertID: result.InsertID,
+		RowsAffected:        result.RowsAffected,
 		RowsRead:            result.RowsRead,
-		Info:                result.Info,
+		InsertID:            result.InsertID,
 		SessionStateChanges: result.SessionStateChanges,
 		StatusFlags:         result.StatusFlags,
+		Info:                result.Info,
 	}
 	if result.Fields != nil {
 		out.Fields = make([]*querypb.Field, len(result.Fields))

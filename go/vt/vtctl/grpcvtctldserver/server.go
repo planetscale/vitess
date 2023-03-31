@@ -33,12 +33,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	boostclient "vitess.io/vitess/go/boost/topo/client"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -4358,6 +4358,23 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 	return resp, err
 }
 
+// WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUpdateRequest) (resp *vtctldatapb.WorkflowUpdateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowUpdate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.TabletRequest.Workflow)
+	span.Annotate("cells", req.TabletRequest.Cells)
+	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
+	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
+
+	resp, err = s.ws.WorkflowUpdate(ctx, req)
+	return resp, err
+}
+
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
 func StartServer(s *grpc.Server, ts *topo.Server, boost *boostclient.Client) {
 	srv := NewVtctldServer(ts)
@@ -4444,6 +4461,18 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 var versionFuncMu sync.Mutex
 var getVersionFromTablet = getVersionFromTabletDebugVars
 
+func SetVersionFunc(versionFunc func(string) (string, error)) {
+	versionFuncMu.Lock()
+	defer versionFuncMu.Unlock()
+	getVersionFromTablet = versionFunc
+}
+
+func GetVersionFunc() func(string) (string, error) {
+	versionFuncMu.Lock()
+	defer versionFuncMu.Unlock()
+	return getVersionFromTablet
+}
+
 // helper method to asynchronously get and diff a version
 func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
@@ -4526,16 +4555,4 @@ func boostDo[T any](t T, err error) (T, error) {
 	}
 
 	return *new(T), status.Error(berr.Code.GRPCCode(), err.Error())
-}
-
-func SetVersionFunc(versionFunc func(string) (string, error)) {
-	versionFuncMu.Lock()
-	defer versionFuncMu.Unlock()
-	getVersionFromTablet = versionFunc
-}
-
-func GetVersionFunc() func(string) (string, error) {
-	versionFuncMu.Lock()
-	defer versionFuncMu.Unlock()
-	return getVersionFromTablet
 }

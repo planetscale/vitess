@@ -81,7 +81,6 @@ func (p *Project) QueryThrough(columns []int, key sql.Row, nodes *Map, states *s
 	result := make(RowSlice, 0, rows.Len())
 
 	var env evalengine.ExpressionEnv
-	env.DefaultCollation = collations.Default()
 
 	rows.ForEach(func(row sql.Row) {
 		builder := sql.NewRowBuilder(len(proj))
@@ -198,7 +197,6 @@ func (p *Project) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]dataflow.Ind
 func (p *Project) OnInput(you *Node, ex processing.Executor, from dataflow.LocalNodeIdx, rs []sql.Record, repl replay.Context, domain *Map, states *state.Map) (processing.Result, error) {
 	if emit := p.projections; len(emit) > 0 {
 		var env evalengine.ExpressionEnv
-		env.DefaultCollation = collations.Default()
 
 		for i, record := range rs {
 			builder := sql.NewRowBuilder(len(emit))
@@ -333,7 +331,7 @@ func (expr *ProjectedExpr) Type(g *graph.Graph[*Node], src dataflow.IndexPair) (
 		env.Row = append(env.Row, sqltypes.MakeTrusted(tt.T, nil))
 	}
 
-	tt, err := env.TypeOf(expr.EvalExpr)
+	tt, err := env.TypeOf(expr.EvalExpr, nil)
 	if err != nil {
 		return sql.Type{}, err
 	}

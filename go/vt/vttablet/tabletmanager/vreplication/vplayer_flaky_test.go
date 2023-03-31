@@ -1767,7 +1767,7 @@ func TestPlayerStopPos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := uint32(qr.InsertID)
+	id := int32(qr.InsertID)
 	for q := range globalDBQueries {
 		if strings.HasPrefix(q, "insert into _vt.vreplication") {
 			break
@@ -1871,7 +1871,7 @@ func TestPlayerStopAtOther(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := uint32(qr.InsertID)
+	id := int32(qr.InsertID)
 	for q := range globalDBQueries {
 		if strings.HasPrefix(q, "insert into _vt.vreplication") {
 			break

@@ -68,11 +68,11 @@ type BackupParams struct {
 	TabletAlias string
 	// BackupTime is the time at which the backup is being started
 	BackupTime time.Time
-	// Stats let's backup engines report detailed backup timings.
-	Stats backupstats.Stats
 	// Position of last known backup. If non empty, then this value indicates the backup should be incremental
 	// and as of this position
 	IncrementalFromPos string
+	// Stats let's backup engines report detailed backup timings.
+	Stats backupstats.Stats
 }
 
 func (b BackupParams) Copy() BackupParams {
@@ -87,8 +87,8 @@ func (b BackupParams) Copy() BackupParams {
 		b.Shard,
 		b.TabletAlias,
 		b.BackupTime,
-		b.Stats,
 		b.IncrementalFromPos,
+		b.Stats,
 	}
 }
 
@@ -114,13 +114,13 @@ type RestoreParams struct {
 	// StartTime: if non-zero, look for a backup that was taken at or before this time
 	// Otherwise, find the most recent backup
 	StartTime time.Time
-	// Stats let's restore engines report detailed restore timings.
-	Stats backupstats.Stats
 	// RestoreToPos hints that a point in time recovery is requested, to recover up to the specific given pos.
 	// When empty, the restore is a normal from full backup
 	RestoreToPos mysql.Position
 	// When DryRun is set, no restore actually takes place; but some of its steps are validated.
 	DryRun bool
+	// Stats let's restore engines report detailed restore timings.
+	Stats backupstats.Stats
 }
 
 func (p RestoreParams) Copy() RestoreParams {
@@ -135,9 +135,9 @@ func (p RestoreParams) Copy() RestoreParams {
 		p.Keyspace,
 		p.Shard,
 		p.StartTime,
-		p.Stats,
 		p.RestoreToPos,
 		p.DryRun,
+		p.Stats,
 	}
 }
 

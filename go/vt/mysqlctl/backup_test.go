@@ -456,16 +456,17 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 	stats := backupstats.NewFakeStats()
 
 	backupParams := BackupParams{
-		Cnf:          cnf,
-		Logger:       logger,
-		Mysqld:       mysqld,
-		Concurrency:  1,
-		HookExtraEnv: map[string]string{},
-		TopoServer:   nil,
-		Keyspace:     "test",
-		Shard:        "-",
-		BackupTime:   time.Now(),
-		Stats:        stats,
+		Cnf:                cnf,
+		Logger:             logger,
+		Mysqld:             mysqld,
+		Concurrency:        1,
+		HookExtraEnv:       map[string]string{},
+		TopoServer:         nil,
+		Keyspace:           "test",
+		Shard:              "-",
+		BackupTime:         time.Now(),
+		IncrementalFromPos: "",
+		Stats:              stats,
 	}
 
 	restoreParams := RestoreParams{
@@ -479,12 +480,16 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 		Keyspace:            "test",
 		Shard:               "-",
 		StartTime:           time.Now(),
+		RestoreToPos:        mysql.Position{},
+		DryRun:              false,
 		Stats:               stats,
 	}
 
 	manifest := BackupManifest{
 		BackupTime:   time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
 		BackupMethod: "fake",
+		Keyspace:     "test",
+		Shard:        "-",
 	}
 
 	manifestBytes, err := json.Marshal(manifest)

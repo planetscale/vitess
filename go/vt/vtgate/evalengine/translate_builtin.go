@@ -96,22 +96,91 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinHex{CallExpr: call}, nil
+		return &builtinHex{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "ceil", "ceiling":
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
 		return &builtinCeil{CallExpr: call}, nil
+	case "floor":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinFloor{CallExpr: call}, nil
+	case "abs":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinAbs{CallExpr: call}, nil
+	case "pi":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinPi{CallExpr: call}, nil
+	case "acos":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinAcos{CallExpr: call}, nil
+	case "asin":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinAsin{CallExpr: call}, nil
+	case "atan":
+		switch len(args) {
+		case 1:
+			return &builtinAtan{CallExpr: call}, nil
+		case 2:
+			return &builtinAtan2{CallExpr: call}, nil
+		default:
+			return nil, argError(method)
+		}
+	case "atan2":
+		if len(args) != 2 {
+			return nil, argError(method)
+		}
+		return &builtinAtan2{CallExpr: call}, nil
+	case "cos":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinCos{CallExpr: call}, nil
+	case "cot":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinCot{CallExpr: call}, nil
+	case "sin":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinSin{CallExpr: call}, nil
+	case "tan":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinTan{CallExpr: call}, nil
+	case "degrees":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinDegrees{CallExpr: call}, nil
+	case "radians":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinRadians{CallExpr: call}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinChangeCase{CallExpr: call, upcase: false}, nil
+		return &builtinChangeCase{CallExpr: call, upcase: false, collate: ast.cfg.Collation}, nil
 	case "upper", "ucase":
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinChangeCase{CallExpr: call, upcase: true}, nil
+		return &builtinChangeCase{CallExpr: call, upcase: true, collate: ast.cfg.Collation}, nil
 	case "char_length", "character_length":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -136,7 +205,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		if len(args) != 2 {
 			return nil, argError(method)
 		}
-		return &builtinRepeat{CallExpr: call}, nil
+		return &builtinRepeat{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "from_base64":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -146,7 +215,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinToBase64{CallExpr: call}, nil
+		return &builtinToBase64{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "json_depth":
 		if len(args) != 1 {
 			return nil, argError(method)

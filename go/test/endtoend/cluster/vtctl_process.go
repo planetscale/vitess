@@ -63,7 +63,7 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 func (vtctl *VtctlProcess) CreateKeyspace(keyspace, sidecarDBName string) (err error) {
 	var output string
 	// For upgrade/downgrade tests where an older version is also used.
-	if vtctl.VtctlMajorVersion < 16 {
+	if vtctl.VtctlMajorVersion < 17 {
 		log.Errorf("CreateKeyspace does not support the --sidecar-db-name flag in vtctl version %d; ignoring...", vtctl.VtctlMajorVersion)
 		output, err = vtctl.ExecuteCommandWithOutput("CreateKeyspace", keyspace)
 	} else {

@@ -72,10 +72,11 @@ type MysqlDaemon interface {
 	ResetReplication(ctx context.Context) error
 	PrimaryPosition() (mysql.Position, error)
 	IsReadOnly() (bool, error)
+	IsSuperReadOnly() (bool, error)
 	SetReadOnly(on bool) error
-	SetSuperReadOnly(on bool) error
+	SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error)
 	SetReplicationPosition(ctx context.Context, pos mysql.Position) error
-	SetReplicationSource(ctx context.Context, host string, port int, stopReplicationBefore bool, startReplicationAfter bool) error
+	SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	WaitSourcePos(context.Context, mysql.Position) error

@@ -171,7 +171,7 @@ func (s *Signal) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 		return nil, fmt.Errorf("warnings not yet implemented")
 	} else {
 		return nil, mysql.NewSQLError(
-			int(s.Info[SignalConditionItemName_MysqlErrno].IntValue),
+			mysql.ErrorCode(s.Info[SignalConditionItemName_MysqlErrno].IntValue),
 			s.SqlStateValue,
 			s.Info[SignalConditionItemName_MessageText].StrValue,
 		)

@@ -134,7 +134,7 @@ func (dt *DerivedTable) getTableSet(_ originable) TableSet {
 }
 
 // GetExprFor implements the TableInfo interface
-func (dt *DerivedTable) GetExprFor(s string) (sqlparser.Expr, error) {
+func (dt *DerivedTable) getExprFor(s string) (sqlparser.Expr, error) {
 	for i, colName := range dt.ColumnNames {
 		if colName == s {
 			return dt.cols[i], nil

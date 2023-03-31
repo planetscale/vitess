@@ -17,14 +17,13 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -93,16 +92,16 @@ type FakeMysqlDaemon struct {
 	CurrentSourceHost string
 
 	// CurrentSourcePort is returned by ReplicationStatus
-	CurrentSourcePort int
+	CurrentSourcePort int32
 
 	// ReplicationLagSeconds is returned by ReplicationStatus
-	ReplicationLagSeconds uint
+	ReplicationLagSeconds uint32
 
 	// ReadOnly is the current value of the flag
 	ReadOnly bool
 
 	// SuperReadOnly is the current value of the flag
-	SuperReadOnly bool
+	SuperReadOnly atomic.Bool
 
 	// SetReplicationPositionPos is matched against the input of SetReplicationPosition.
 	// If it doesn't match, SetReplicationPosition will return an error.
@@ -368,6 +367,11 @@ func (fmd *FakeMysqlDaemon) IsReadOnly() (bool, error) {
 	return fmd.ReadOnly, nil
 }
 
+// IsSuperReadOnly is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) IsSuperReadOnly() (bool, error) {
+	return fmd.SuperReadOnly.Load(), nil
+}
+
 // SetReadOnly is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 	fmd.ReadOnly = on
@@ -375,10 +379,10 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 }
 
 // SetSuperReadOnly is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) error {
-	fmd.SuperReadOnly = on
+func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) {
+	fmd.SuperReadOnly.Store(on)
 	fmd.ReadOnly = on
-	return nil
+	return nil, nil
 }
 
 // StartReplication is part of the MysqlDaemon interface.
@@ -439,7 +443,7 @@ func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos mysq
 }
 
 // SetReplicationSource is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int, stopReplicationBefore bool, startReplicationAfter bool) error {
+func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error {
 	input := fmt.Sprintf("%v:%v", host, port)
 	found := false
 	for _, sourceInput := range fmd.SetReplicationSourceInputs {

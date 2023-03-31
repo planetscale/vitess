@@ -17,7 +17,7 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-ARG bootstrap_version=14.1
+ARG bootstrap_version=15
 ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
 
 FROM "${image}" AS builder
@@ -27,10 +27,6 @@ ARG BUILD_NUMBER
 
 # Re-copy sources from working tree.
 COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
-
-# PS: Setup git to use github_token
-RUN --mount=type=secret,id=github_token,mode=044 \
-    git config --global --add url."https://x-access-token:$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
 
 # Build and install Vitess in a temporary output directory.
 USER vitess

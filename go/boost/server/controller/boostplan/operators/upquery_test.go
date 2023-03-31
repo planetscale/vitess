@@ -35,35 +35,35 @@ func TestOpsToAST(t *testing.T) {
 	}{{
 		query: "select id, id+a, 420 from user",
 		keys:  []int{2},
-		res:   "select ks_user_0.id, ks_user_0.id + ks_user_0.a, 420 as `literal-420`, 0 as `literal-0` from ks.`user` as ks_user_0 where 420 = :vtg0",
+		res:   "select ks_user_0.id, ks_user_0.id + ks_user_0.a, 420 as `literal-420`, 0 as `literal-0` from ks.`user` as ks_user_0 where 420 = :vtg0 /* NULL_TYPE */",
 		get:   parent,
 	}, {
 		query: "select u1.id, u2.a from user u1 join user u2 on u1.a = u2.id",
 		keys:  []int{2},
 		res: "select ks_user_0.a, ks_user_0.id, ks_user_1.a " +
 			"from ks.`user` as ks_user_0, ks.`user` as ks_user_1 " +
-			"where ks_user_0.a = ks_user_1.id and ks_user_1.a = :vtg0",
+			"where ks_user_0.a = ks_user_1.id and ks_user_1.a = :vtg0 /* NULL_TYPE */",
 		get: grandParent,
 	}, {
 		query: "select u1.id, u1.a, u2.a from user u1 left join user u2 on u1.id = u2.id",
 		keys:  []int{1, 3},
 		res: "select ks_user_0.id, ks_user_1.id, ks_user_0.a, ks_user_1.a " +
 			"from ks.`user` as ks_user_0 left join ks.`user` as ks_user_1 on ks_user_0.id = ks_user_1.id " +
-			"where ks_user_1.id = :vtg0 and ks_user_1.a = :vtg1",
+			"where ks_user_1.id = :vtg0 /* NULL_TYPE */ and ks_user_1.a = :vtg1 /* NULL_TYPE */",
 		get: grandParent,
 	}, {
 		query: "select u1.id, u1.a, u2.a from user u1 left join user u2 on u1.id = u2.id",
 		keys:  []int{1, 2},
 		res: "select ks_user_0.id, ks_user_0.a, ks_user_1.a, 0 as `literal-0` " +
 			"from ks.`user` as ks_user_0 left join ks.`user` as ks_user_1 on ks_user_0.id = ks_user_1.id " +
-			"where ks_user_0.a = :vtg0 and ks_user_1.a = :vtg1",
+			"where ks_user_0.a = :vtg0 /* NULL_TYPE */ and ks_user_1.a = :vtg1 /* NULL_TYPE */",
 		get: parent,
 	}, {
 		query: "select count(*), a from user join product on user.id = product.id where price = ? group by a",
 		keys:  []int{2},
 		res: "select count(*), ks_user_0.a, ks_product_0.price " +
 			"from ks.`user` as ks_user_0, ks.product as ks_product_0 " +
-			"where ks_user_0.id = ks_product_0.id and ks_product_0.price = :vtg0 " +
+			"where ks_user_0.id = ks_product_0.id and ks_product_0.price = :vtg0 /* NULL_TYPE */ " +
 			"group by ks_user_0.a, ks_product_0.price",
 		get: parent,
 	}, {
@@ -73,7 +73,7 @@ func TestOpsToAST(t *testing.T) {
 		// since we know from the join that `user.id = product.id`, we can return user.id in place of product.id
 		res: "select ks_user_0.id, ks_user_0.a, ks_user_0.id, ks_product_0.price " +
 			"from ks.`user` as ks_user_0, ks.product as ks_product_0 " +
-			"where ks_product_0.price = 12 and ks_user_0.id = ks_product_0.id and ks_user_0.id = :vtg0",
+			"where ks_product_0.price = 12 and ks_user_0.id = ks_product_0.id and ks_user_0.id = :vtg0 /* NULL_TYPE */",
 		get: parent,
 	}, {
 		query: "select user.a, product.price from user left join product on user.id = product.id and a > 12",

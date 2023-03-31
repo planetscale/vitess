@@ -23,6 +23,7 @@ import (
 	"math"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -162,18 +163,18 @@ func (ms *MemorySort) fetchCount(vcursor VCursor, bindVars map[string]*querypb.B
 	if ms.UpperLimit == nil {
 		return math.MaxInt64, nil
 	}
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.EnvWithBindVars(bindVars)
 	resolved, err := env.Evaluate(ms.UpperLimit)
 	if err != nil {
 		return 0, err
 	}
-	num, err := resolved.Value().ToUint64()
-	if err != nil {
-		return 0, err
+	if !resolved.Value().IsIntegral() {
+		return 0, sqltypes.ErrIncompatibleTypeCast
 	}
-	count := int(num)
-	if count < 0 {
-		return 0, fmt.Errorf("requested limit is out of range: %v", num)
+
+	count, err := strconv.Atoi(resolved.Value().RawStr())
+	if err != nil || count < 0 {
+		return 0, fmt.Errorf("requested limit is out of range: %v", resolved.Value().RawStr())
 	}
 	return count, nil
 }

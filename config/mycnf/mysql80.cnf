@@ -34,3 +34,8 @@ information_schema_stats_expiry = 3600
 
 # Only retry connecting to the primary 300 times before giving up
 master_retry_count = 300
+
+# In order to protect against any errand GTIDs we will start the mysql instance
+# in super-read-only mode.
+super-read-only
+

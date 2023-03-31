@@ -361,7 +361,11 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 			}
 			// Start Mysqlctl process
 			log.Infof("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort)
-			tablet.MysqlctlProcess = *MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
+			mysqlctlProcess, err := MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
+			if err != nil {
+				return err
+			}
+			tablet.MysqlctlProcess = *mysqlctlProcess
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				log.Errorf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err)
@@ -510,7 +514,11 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 			}
 			// Start Mysqlctl process
 			log.Infof("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort)
-			tablet.MysqlctlProcess = *MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
+			mysqlctlProcess, err := MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
+			if err != nil {
+				return err
+			}
+			tablet.MysqlctlProcess = *mysqlctlProcess
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				log.Errorf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err)
@@ -634,7 +642,11 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 	for _, shard := range shards {
 		for _, tablet := range shard.Vttablets {
 			// Setup MysqlctlProcess
-			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
+			mysqlctlProcess, err := MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
+			if err != nil {
+				return err
+			}
+			tablet.MysqlctlProcess = *mysqlctlProcess
 			// Setup VttabletProcess
 			tablet.VttabletProcess = VttabletProcessInstance(
 				tablet.HTTPPort,
@@ -718,7 +730,10 @@ func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 		// path/to/whatever exists
 		cluster.ReusingVTDATAROOT = true
 	} else {
-		_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+		err = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
 	log.Infof("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT)
@@ -1118,11 +1133,10 @@ func getPort() int {
 	if len(portBytes) == 0 || time.Now().After(fileInfo.ModTime().Add(portFileTimeout)) {
 		port = getVtStartPort()
 	} else {
-		parsedPort, err := strconv.ParseInt(string(portBytes), 10, 64)
+		port, err = strconv.Atoi(string(portBytes))
 		if err != nil {
 			panic(err)
 		}
-		port = int(parsedPort)
 	}
 
 	portFile.Truncate(0)

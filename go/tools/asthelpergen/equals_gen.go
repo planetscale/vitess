@@ -78,7 +78,7 @@ func (e *equalsGen) genFile() (string, *jen.File) {
 
 func (e *equalsGen) interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error {
 	/*
-		func (cmp *Comparator) AST(inA, inB AST, f ASTComparison) bool {
+		func (cmp *Comparator) AST(inA, inB AST) bool {
 			if inA == inB {
 				return true
 			}
@@ -91,7 +91,7 @@ func (e *equalsGen) interfaceMethod(t types.Type, iface *types.Interface, spi ge
 				if !ok {
 					return false
 				}
-				return cmp.SubImpl(a, b, f)
+				return cmp.SubImpl(a, b)
 			}
 			return false
 		}

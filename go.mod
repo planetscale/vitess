@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.19
+go 1.20
 
 require (
 	cloud.google.com/go/storage v1.29.0
@@ -35,7 +35,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/hashicorp/consul/api v1.20.0
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
-	github.com/hashicorp/go-msgpack v0.5.5 // indirect
 	github.com/hashicorp/serf v0.10.1 // indirect
 	github.com/howeyc/gopass v0.0.0-20210920133722-c8aef6fb66ef
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
@@ -66,6 +65,7 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
+	github.com/spyzhov/ajson v0.8.0
 	github.com/stretchr/testify v1.8.2
 	github.com/tchap/go-patricia v2.3.0+incompatible
 	github.com/tidwall/gjson v1.12.1
@@ -114,6 +114,7 @@ require github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/gogo/protobuf v1.3.2
+	github.com/hashicorp/go-version v1.6.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/kr/pretty v0.3.1
 	github.com/kr/text v0.2.0
@@ -126,7 +127,6 @@ require (
 	github.com/segmentio/fasthash v1.0.3
 	github.com/segmentio/kafka-go v0.4.39
 	github.com/shopspring/decimal v1.3.1
-	github.com/spyzhov/ajson v0.8.0
 	github.com/tidwall/btree v1.6.0
 	github.com/twmb/murmur3 v1.1.6
 	go.opentelemetry.io/otel v1.14.0

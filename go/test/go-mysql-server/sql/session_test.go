@@ -18,6 +18,7 @@ import (
 	"context"
 	"io"
 	"testing"
+	"vitess.io/vitess/go/mysql"
 
 	"github.com/stretchr/testify/require"
 )
@@ -42,15 +43,15 @@ func TestSessionConfig(t *testing.T) {
 
 	require.Equal(uint16(0), sess.WarningCount())
 
-	sess.Warn(&Warning{Code: 1})
-	sess.Warn(&Warning{Code: 2})
-	sess.Warn(&Warning{Code: 3})
+	sess.Warn(&Warning{Code: mysql.ErrorCode(1)})
+	sess.Warn(&Warning{Code: mysql.ErrorCode(2)})
+	sess.Warn(&Warning{Code: mysql.ErrorCode(3)})
 
 	require.Equal(uint16(3), sess.WarningCount())
 
-	require.Equal(3, sess.Warnings()[0].Code)
-	require.Equal(2, sess.Warnings()[1].Code)
-	require.Equal(1, sess.Warnings()[2].Code)
+	require.Equal(mysql.ErrorCode(3), sess.Warnings()[0].Code)
+	require.Equal(mysql.ErrorCode(2), sess.Warnings()[1].Code)
+	require.Equal(mysql.ErrorCode(1), sess.Warnings()[2].Code)
 }
 
 func TestHasDefaultValue(t *testing.T) {

@@ -26,10 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
@@ -53,6 +52,11 @@ type fakeRPCTM struct {
 	slow bool
 	// mu guards accesses of "slow".
 	mu sync.Mutex
+}
+
+func (fra *fakeRPCTM) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (fra *fakeRPCTM) VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
@@ -902,14 +906,6 @@ func tmRPCTestGetReplicasPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "GetReplicas", false /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) VExec(ctx context.Context, query, workflow, keyspace string) (*querypb.QueryResult, error) {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	compare(fra.t, "VExec query", query, "query")
-	return testExecuteFetchResult, nil
-}
-
 var testVRQuery = "query"
 
 func (fra *fakeRPCTM) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
@@ -931,11 +927,11 @@ func tmRPCTestVReplicationExecPanic(ctx context.Context, t *testing.T, client tm
 }
 
 var (
-	wfpid  = 3
+	wfpid  = int32(3)
 	wfppos = ""
 )
 
-func (fra *fakeRPCTM) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
+func (fra *fakeRPCTM) VReplicationWaitForPos(ctx context.Context, id int32, pos string) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

@@ -97,7 +97,7 @@ func VtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory str
 func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sidecarDBName string) (err error) {
 	var output string
 	// For upgrade/downgrade tests where an older version is also used.
-	if vtctldclient.VtctldClientMajorVersion < 16 {
+	if vtctldclient.VtctldClientMajorVersion < 17 {
 		log.Errorf("CreateKeyspace does not support the --sidecar-db-name flag in vtctl version %d; ignoring...", vtctldclient.VtctldClientMajorVersion)
 		output, err = vtctldclient.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName)
 	} else {

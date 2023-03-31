@@ -115,7 +115,7 @@ func (up *Upquery) cacheSingle(mode config.UpqueryMode) error {
 		sqlparserx.AddSelectPredicate(sel, &sqlparser.ComparisonExpr{
 			Operator: sqlparser.EqualOp,
 			Left:     up.output[key],
-			Right:    sqlparser.Argument(sqlparser.DefaultBindVar(i)),
+			Right:    &sqlparser.Argument{Name: sqlparser.DefaultBindVar(i)},
 		})
 	}
 
@@ -137,7 +137,7 @@ func (up *Upquery) buildForMany(keys map[sql.Row]bool) (string, map[string]*quer
 			exprs = append(exprs, &sqlparser.ComparisonExpr{
 				Operator: sqlparser.EqualOp,
 				Left:     up.output[col],
-				Right:    sqlparser.Argument(bv),
+				Right:    &sqlparser.Argument{Name: bv},
 			})
 		}
 

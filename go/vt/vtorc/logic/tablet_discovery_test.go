@@ -270,11 +270,11 @@ func TestShardPrimary(t *testing.T) {
 // verifyRefreshTabletsInKeyspaceShard calls refreshTabletsInKeyspaceShard with the forceRefresh parameter provided and verifies that
 // the number of instances refreshed matches the parameter and all the tablets match the ones provided
 func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instanceRefreshRequired int, tablets []*topodatapb.Tablet) {
-	var instancesRefreshed int32
-	atomic.StoreInt32(&instancesRefreshed, 0)
+	var instancesRefreshed atomic.Int32
+	instancesRefreshed.Store(0)
 	// call refreshTabletsInKeyspaceShard while counting all the instances that are refreshed
 	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(instanceKey *inst.InstanceKey) {
-		atomic.AddInt32(&instancesRefreshed, 1)
+		instancesRefreshed.Add(1)
 	}, forceRefresh)
 	// Verify that all the tablets are present in the database
 	for _, tablet := range tablets {
@@ -282,7 +282,7 @@ func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instan
 	}
 	verifyTabletCount(t, len(tablets))
 	// Verify that refresh as many tablets as expected
-	assert.EqualValues(t, instanceRefreshRequired, atomic.LoadInt32(&instancesRefreshed))
+	assert.EqualValues(t, instanceRefreshRequired, instancesRefreshed.Load())
 }
 
 // verifyTabletInfo verifies that the tablet information read from the vtorc database

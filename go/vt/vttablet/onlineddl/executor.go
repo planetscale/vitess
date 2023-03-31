@@ -64,7 +64,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-	"vitess.io/vitess/go/vt/vttablet/vexec"
 )
 
 var (
@@ -76,33 +75,8 @@ var (
 	ErrMigrationNotFound = errors.New("migration not found")
 )
 
-var vexecUpdateTemplates = []string{
-	`update _vt.schema_migrations set migration_status='val1' where mysql_schema='val2'`,
-	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`,
-	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3' and shard='val4'`,
-}
-
-var vexecInsertTemplates = []string{
-	`INSERT IGNORE INTO _vt.schema_migrations (
-		migration_uuid,
-		keyspace,
-		shard,
-		mysql_schema,
-		mysql_table,
-		migration_statement,
-		strategy,
-		options,
-		ddl_action,
-		requested_timestamp,
-		migration_context,
-		migration_status
-	) VALUES (
-		'val1', 'val2', 'val3', 'val4', 'val5', 'val6', 'val7', 'val8', 'val9', FROM_UNIXTIME(0), 'vala', 'valb'
-	)`,
-}
-
 var emptyResult = &sqltypes.Result{}
-var acceptableDropTableIfExistsErrorCodes = []int{mysql.ERCantFindFile, mysql.ERNoSuchTable}
+var acceptableDropTableIfExistsErrorCodes = []mysql.ErrorCode{mysql.ERCantFindFile, mysql.ERNoSuchTable}
 var copyAlgorithm = sqlparser.AlgorithmValue(sqlparser.CopyStr)
 
 var (
@@ -353,10 +327,6 @@ func (e *Executor) Open() error {
 	e.ticks.Start(e.onMigrationCheckTick)
 	e.triggerNextCheckInterval()
 
-	if _, err := sqlparser.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates); err != nil {
-		// this validates vexecUpdateTemplates
-		return err
-	}
 	atomic.StoreInt64(&e.isOpen, 1)
 
 	return nil
@@ -543,10 +513,10 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVari
 
 	if e.env.Config().DB.Port != 0 {
 		variables.port = e.env.Config().DB.Port
-	} else if port, err := row.ToInt64("port"); err != nil {
+	} else if port, err := row.ToInt("port"); err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.port %v: %v", tm, err)
 	} else {
-		variables.port = int(port)
+		variables.port = port
 	}
 	if variables.readOnly, err = row.ToBool("read_only"); err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.read_only %v: %v", tm, err)
@@ -640,7 +610,7 @@ func (e *Executor) parseAlterOptions(ctx context.Context, onlineDDL *schema.Onli
 }
 
 // executeDirectly runs a DDL query directly on the backend MySQL server
-func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL, acceptableMySQLErrorCodes ...int) (acceptableErrorCodeFound bool, err error) {
+func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL, acceptableMySQLErrorCodes ...mysql.ErrorCode) (acceptableErrorCodeFound bool, err error) {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 	if err != nil {
 		return false, err
@@ -809,7 +779,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		ctx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
 		defer cancel()
 		// Wait for target to reach the up-to-date pos
-		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(pos)); err != nil {
+		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, s.id, mysql.EncodePosition(pos)); err != nil {
 			return err
 		}
 		// Target is now in sync with source!
@@ -817,7 +787,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 
 	if !isVreplicationTestSuite {
-		// A bit early on, we generate names for stowaway and temporary tables
+		// A bit early on, we generate a name for the sentry table
 		// We do this here because right now we're in a safe place where nothing happened yet. If there's an error now, bail out
 		// and no harm done.
 		// Later on, when traffic is blocked and tables renamed, that's a more dangerous place to be in; we want as little logic
@@ -1013,7 +983,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	go log.Infof("cutOverVReplMigration %v: done waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
 	// Stop vreplication
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "stopping vreplication")
-	if _, err := e.vreplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
+	if _, err := e.vreplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(s.id, "stopped for online DDL cutover")); err != nil {
 		return err
 	}
 	go log.Infof("cutOverVReplMigration %v: stopped vreplication", s.workflow)
@@ -2469,33 +2439,8 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 	if err := e.validateMigrationRevertible(ctx, revertMigration, onlineDDL.UUID); err != nil {
 		return err
 	}
+
 	revertedActionStr := row["ddl_action"].ToString()
-	if onlineDDL.Table == "" {
-		// table name should be populated by reviewQueuedMigrations
-		// but this was a newly added functionality. To be backwards compatible,
-		// we double check here, and populate table name and ddl_action.
-
-		// TODO: remove in v14
-		mimickedActionStr := ""
-
-		switch revertedActionStr {
-		case sqlparser.CreateStr:
-			mimickedActionStr = sqlparser.DropStr
-		case sqlparser.DropStr:
-			mimickedActionStr = sqlparser.CreateStr
-		case sqlparser.AlterStr:
-			mimickedActionStr = sqlparser.AlterStr
-		default:
-			return fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertMigration.UUID, revertedActionStr)
-		}
-		if err := e.updateDDLAction(ctx, onlineDDL.UUID, mimickedActionStr); err != nil {
-			return err
-		}
-		if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertMigration.Table); err != nil {
-			return err
-		}
-	}
-
 	switch revertedActionStr {
 	case sqlparser.CreateStr:
 		{
@@ -2734,7 +2679,7 @@ func (e *Executor) executeDropDDLActionMigration(ctx context.Context, onlineDDL 
 		return err
 	}
 
-	acceptableErrorCodes := []int{}
+	acceptableErrorCodes := []mysql.ErrorCode{}
 	if ddlStmt.GetIfExists() {
 		acceptableErrorCodes = acceptableDropTableIfExistsErrorCodes
 	}
@@ -3392,7 +3337,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot find unique workflow for UUID: %+v", uuid)
 	}
 	s := &VReplStream{
-		id:                   row.AsInt64("id", 0),
+		id:                   row.AsInt32("id", 0),
 		workflow:             row.AsString("workflow", ""),
 		source:               row.AsString("source", ""),
 		pos:                  row.AsString("pos", ""),
@@ -3445,7 +3390,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		// copy_state must have no entries for this vreplication id: if entries are
 		// present that means copy is still in progress
 		query, err := sqlparser.ParseAndBind(sqlReadCountCopyState,
-			sqltypes.Int64BindVariable(s.id),
+			sqltypes.Int32BindVariable(s.id),
 		)
 		if err != nil {
 			return false, err
@@ -3528,30 +3473,6 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		}
 		postponeCompletion := row.AsBool("postpone_completion", false)
 		elapsedSeconds := row.AsInt64("elapsed_seconds", 0)
-
-		if stowawayTable := row.AsString("stowaway_table", ""); stowawayTable != "" {
-			// whoa
-			// stowawayTable is an original table stowed away while cutting over a vrepl migration, see call to cutOverVReplMigration() down below in this function.
-			// In a normal operation, the table should not exist outside the scope of cutOverVReplMigration
-			// If it exists, that means a tablet crashed while running a cut-over, and left the database in a bad state, where the migrated table does not exist.
-			// thankfully, we have tracked this situation and just realized what happened. Now, first thing to do is to restore the original table.
-			log.Infof("found stowaway table %s journal in migration %s for table %s", stowawayTable, uuid, onlineDDL.Table)
-			attemptMade, err := e.renameTableIfApplicable(ctx, stowawayTable, onlineDDL.Table)
-			if err != nil {
-				// unable to restore table; we bail out, and we will try again next round.
-				return countRunnning, cancellable, err
-			}
-			// success
-			if attemptMade {
-				log.Infof("stowaway table %s restored back into %s", stowawayTable, onlineDDL.Table)
-			} else {
-				log.Infof("stowaway table %s did not exist and there was no need to restore it", stowawayTable)
-			}
-			// OK good, table restored. We can remove the record.
-			if err := e.updateMigrationStowawayTable(ctx, uuid, ""); err != nil {
-				return countRunnning, cancellable, err
-			}
-		}
 
 		uuidsFoundRunning[uuid] = true
 
@@ -3862,13 +3783,6 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
-		// This query fixes a bug where stale migrations were marked as 'failed' without updating 'completed_timestamp'
-		// see https://github.com/vitessio/vitess/issues/8499
-		// Running this query retroactively sets completed_timestamp
-		// This 'if' clause can be removed in version v13
-		return err
-	}
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
 		sqltypes.Int64BindVariable(int64((retainOnlineDDLTables).Seconds())),
 	)
@@ -4390,18 +4304,6 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 	return nil
 }
 
-func (e *Executor) updateMigrationStowawayTable(ctx context.Context, uuid string, tableName string) error {
-	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStowawayTable,
-		sqltypes.StringBindVariable(tableName),
-		sqltypes.StringBindVariable(uuid),
-	)
-	if err != nil {
-		return err
-	}
-	_, err = e.execQuery(ctx, query)
-	return err
-}
-
 func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid string, ratio float64) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationUserThrottleRatio,
 		sqltypes.Float64BindVariable(ratio),
@@ -4782,6 +4684,7 @@ func (e *Executor) SubmitMigration(
 	)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "submitting migration %v", onlineDDL.UUID)
+
 	}
 	log.Infof("SubmitMigration: migration %s submitted", onlineDDL.UUID)
 
@@ -4901,89 +4804,4 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context,
 	}
 
 	return e.onSchemaMigrationStatus(ctx, uuidParam, status, dryRun, progressPct, etaSeconds, rowsCopied, hint)
-}
-
-// VExec is called by a VExec invocation
-// Implements vitess.io/vitess/go/vt/vttablet/vexec.Executor interface
-func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *querypb.QueryResult, err error) {
-	response := func(result *sqltypes.Result, err error) (*querypb.QueryResult, error) {
-		if err != nil {
-			return nil, err
-		}
-		return sqltypes.ResultToProto3(result), nil
-	}
-
-	switch stmt := vx.Stmt.(type) {
-	case *sqlparser.Delete:
-		return nil, fmt.Errorf("DELETE statements not supported for this table. query=%s", vx.Query)
-	case *sqlparser.Select:
-		return response(e.execQuery(ctx, vx.Query))
-	case *sqlparser.Insert:
-		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecInsertTemplates)
-		if err != nil {
-			return nil, err
-		}
-		if !match {
-			return nil, fmt.Errorf("Query must match one of these templates: %s", strings.Join(vexecInsertTemplates, "; "))
-		}
-		// Vexec naturally runs outside shard/schema context. It does not supply values for those columns.
-		// We can fill them in.
-		vx.ReplaceInsertColumnVal("shard", vx.ToStringVal(e.shard))
-		vx.ReplaceInsertColumnVal("mysql_schema", vx.ToStringVal(e.dbName))
-		vx.AddOrReplaceInsertColumnVal("tablet", vx.ToStringVal(e.TabletAliasString()))
-		e.triggerNextCheckInterval()
-		return response(e.execQuery(ctx, vx.Query))
-	case *sqlparser.Update:
-		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)
-		if err != nil {
-			return nil, err
-		}
-		if !match {
-			return nil, fmt.Errorf("Query must match one of these templates: %s; query=%s", strings.Join(vexecUpdateTemplates, "; "), vx.Query)
-		}
-		if shard, _ := vx.ColumnStringVal(vx.WhereCols, "shard"); shard != "" {
-			// shard is specified.
-			if shard != e.shard {
-				// specified shard is not _this_ shard. So we're skipping this UPDATE
-				return sqltypes.ResultToProto3(emptyResult), nil
-			}
-		}
-		statusVal, err := vx.ColumnStringVal(vx.UpdateCols, "migration_status")
-		if err != nil {
-			return nil, err
-		}
-		switch statusVal {
-		case retryMigrationHint:
-			return response(e.retryMigrationWhere(ctx, sqlparser.String(stmt.Where.Expr)))
-		case completeMigrationHint:
-			uuid, err := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
-			if err != nil {
-				return nil, err
-			}
-			if !schema.IsOnlineDDLUUID(uuid) {
-				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
-			}
-			return response(e.CompleteMigration(ctx, uuid))
-		case cancelMigrationHint:
-			uuid, err := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
-			if err != nil {
-				return nil, err
-			}
-			if !schema.IsOnlineDDLUUID(uuid) {
-				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
-			}
-			return response(e.CancelMigration(ctx, uuid, "cancel by user", true))
-		case cancelAllMigrationHint:
-			uuid, _ := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
-			if uuid != "" {
-				return nil, fmt.Errorf("Unexpetced UUID: %s", uuid)
-			}
-			return response(e.CancelPendingMigrations(ctx, "cancel-all by user", true))
-		default:
-			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
-				statusVal, retryMigrationHint, cancelMigrationHint)
-		}
-	default:
-		return nil, fmt.Errorf("No handler for this query: %s", vx.Query)
-	}
 }

@@ -1,5 +1,10 @@
+<<<<<<<< HEAD:go/test/go-mysql-server/internal/sqlparser/Makefile
 # Copyright 2019 The Vitess Authors.
 # 
+========
+# Copyright 2023 The Vitess Authors.
+#
+>>>>>>>> vitess/main:docker/base/Dockerfile.mysql57
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,11 +17,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-MAKEFLAGS = -s
+ARG bootstrap_version=15
+ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
 
+<<<<<<<< HEAD:go/test/go-mysql-server/internal/sqlparser/Makefile
 sql.go: sql.y
 	go run golang.org/x/tools/cmd/goyacc -o sql.go sql.y
 	gofmt -w sql.go
+========
+FROM "${image}"
+>>>>>>>> vitess/main:docker/base/Dockerfile.mysql57
 
-clean:
-	rm -f y.output sql.go
+# Allows some docker builds to disable CGO
+ARG CGO_ENABLED=0
+
+# Allows docker builds to set the BUILD_NUMBER
+ARG BUILD_NUMBER
+
+# Allows docker builds to set the BUILD_GIT_BRANCH
+ARG BUILD_GIT_BRANCH
+
+# Allows docker builds to set the BUILD_GIT_REV
+ARG BUILD_GIT_REV
+
+# Re-copy sources from working tree
+COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
+
+USER vitess
+
+# Build Vitess
+RUN make build

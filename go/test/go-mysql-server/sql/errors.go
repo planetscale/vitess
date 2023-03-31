@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"gopkg.in/src-d/go-errors.v1"
+
 	"vitess.io/vitess/go/mysql"
 )
 
@@ -665,7 +666,7 @@ func CastSQLError(err error) *mysql.SQLError {
 		return mysqlErr
 	}
 
-	var code int
+	var code mysql.ErrorCode
 	var sqlState string = ""
 
 	if w, ok := err.(WrappedInsertError); ok {

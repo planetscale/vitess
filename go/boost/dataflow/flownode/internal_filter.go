@@ -48,7 +48,6 @@ func (f *Filter) apply(env *evalengine.ExpressionEnv, r sql.Row) bool {
 func (f *Filter) OnInput(_ *Node, _ processing.Executor, _ dataflow.LocalNodeIdx, rs []sql.Record, _ replay.Context, _ *Map, _ *state.Map) (processing.Result, error) {
 	var newRecords = make([]sql.Record, 0, len(rs))
 	var env evalengine.ExpressionEnv
-	env.DefaultCollation = collations.Default()
 
 	for _, r := range rs {
 		if f.apply(&env, r.Row) {
@@ -71,7 +70,6 @@ func (f *Filter) QueryThrough(columns []int, key sql.Row, nodes *Map, states *st
 
 	var newRecords = make(RowSlice, 0, rows.Len())
 	var env evalengine.ExpressionEnv
-	env.DefaultCollation = collations.Default()
 	rows.ForEach(func(r sql.Row) {
 		if f.apply(&env, r) {
 			newRecords = append(newRecords, r)
@@ -131,16 +129,10 @@ func NewFilter(src graph.NodeIdx, filter []FilterConditionTuple) *Filter {
 	}
 }
 
-type fakecolumn int
-
-func (fc *fakecolumn) ColumnLookup(_ *sqlparser.ColName) (int, error) {
-	return int(*fc), nil
-}
-func (fc *fakecolumn) CollationForExpr(_ sqlparser.Expr) collations.ID {
-	return collations.CollationUtf8mb4ID
-}
-func (fc *fakecolumn) DefaultCollation() collations.ID {
-	return collations.CollationUtf8mb4ID
+func columnLookup(fakeColumn int) evalengine.ColumnResolver {
+	return func(name *sqlparser.ColName) (int, error) {
+		return fakeColumn, nil
+	}
 }
 
 func NewFilterFromProto(pbfilt *flownodepb.Node_InternalFilter) *Filter {
@@ -151,8 +143,10 @@ func NewFilterFromProto(pbfilt *flownodepb.Node_InternalFilter) *Filter {
 			panic(fmt.Errorf("should not fail to deserialize SQL expression %s (%v)", f.Expr, err))
 		}
 
-		transcol := fakecolumn(f.Col)
-		evalf, err := evalengine.Translate(expr, &transcol)
+		evalf, err := evalengine.Translate(expr, &evalengine.Config{
+			ResolveColumn: columnLookup(f.Col),
+			Collation:     collations.CollationUtf8mb4ID,
+		})
 		if err != nil {
 			panic(err)
 		}

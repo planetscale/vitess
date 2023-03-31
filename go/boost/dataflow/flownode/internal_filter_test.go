@@ -17,31 +17,26 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-type forceColumn map[string]int
-
-func (f forceColumn) ColumnLookup(col *sqlparser.ColName) (int, error) {
-	offset, ok := f[col.Name.Lowered()]
-	if !ok {
-		return 0, fmt.Errorf("unexpected column name: %q", col.Name.Lowered())
+func columnLookupFromColMap(colmap map[string]int) evalengine.ColumnResolver {
+	return func(col *sqlparser.ColName) (int, error) {
+		offset, ok := colmap[col.Name.Lowered()]
+		if !ok {
+			return 0, fmt.Errorf("unexpected column name: %q", col.Name.Lowered())
+		}
+		return offset, nil
 	}
-	return offset, nil
-}
-
-func (f forceColumn) CollationForExpr(_ sqlparser.Expr) collations.ID {
-	return collations.CollationUtf8mb4ID
-}
-
-func (f forceColumn) DefaultCollation() collations.ID {
-	return collations.CollationUtf8mb4ID
 }
 
 func fakeFilter(t *testing.T, expr sqlparser.Expr, columns ...int) FilterConditionTuple {
-	var colmap = make(forceColumn)
+	var colmap = make(map[string]int)
 	for n, c := range columns {
 		colmap[fmt.Sprintf("_col%d", n)] = c
 	}
 
-	evalexpr, err := evalengine.Translate(expr, colmap)
+	evalexpr, err := evalengine.Translate(expr, &evalengine.Config{
+		ResolveColumn: columnLookupFromColMap(colmap),
+		Collation:     collations.CollationUtf8mb4ID,
+	})
 	if err != nil {
 		t.Fatalf("evalengine failed to translate: %v", err)
 	}
