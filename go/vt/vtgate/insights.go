@@ -173,7 +173,7 @@ type Insights struct {
 	PeriodStart          time.Time
 	InFlightCounter      uint64
 	Timer                *time.Ticker
-	LogChan              chan interface{}
+	LogChan              chan *logstats.LogStats
 	Workers              sync.WaitGroup
 	QueriesThisInterval  uint
 	ReorderInsertColumns bool
@@ -249,7 +249,7 @@ var (
 	insightsTotalDurationSketchUnits = flag.Int("insights_total_duration_sketch_units", -6, "Base 10 exponent for the units of the total query duration sketches, relative to seconds (0 = seconds, -3 = milliseconds, -6 = microseconds)")
 )
 
-func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
+func initInsights(logger *streamlog.StreamLogger[*logstats.LogStats]) (*Insights, error) {
 	return initInsightsInner(logger,
 		argOrEnv(*insightsKafkaBrokers, BrokersVar),
 		*databaseBranchPublicID,
@@ -273,7 +273,7 @@ func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
 	)
 }
 
-func initInsightsInner(logger *streamlog.StreamLogger,
+func initInsightsInner(logger *streamlog.StreamLogger[*logstats.LogStats],
 	brokers, publicID, username, password string,
 	bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold uint,
 	maxQueriesPerInterval uint,
@@ -384,7 +384,7 @@ func (ii *Insights) shouldSendToInsights(ls *logstats.LogStats) bool {
 	return ls.TotalTime().Milliseconds() > int64(ii.ResponseTimeThreshold) || ls.RowsRead >= uint64(ii.RowsReadThreshold) || ls.Error != nil
 }
 
-func (ii *Insights) logToKafka(logger *streamlog.StreamLogger) error {
+func (ii *Insights) logToKafka(logger *streamlog.StreamLogger[*logstats.LogStats]) error {
 	var transport kafka.RoundTripper
 
 	if ii.Username != "" && ii.Password != "" {
@@ -1027,6 +1027,9 @@ func (ii *Insights) makeEnvelope(contents []byte, topic string) ([]byte, error) 
 	return envelope.MarshalVT()
 }
 
+var genericBindPrefix = "vtg"
+var genericBindPattern = regexp.MustCompile(`\Avtg(\d+)\z`)
+
 func (ii *Insights) normalizeSQL(sql string, maybeReorderColumns bool) (string, *uint32, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
@@ -1047,6 +1050,9 @@ func (ii *Insights) normalizeSQL(sql string, maybeReorderColumns bool) (string, 
 		left, right int
 	}
 	var skipSpans []span
+
+	nextBindIndex := 1
+	bindRenames := make(map[int]int) // Needed to ensure we always rename the same underlying bind identically
 
 	buf := sqlparser.NewTrackedBuffer(func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		switch node := node.(type) {
@@ -1072,6 +1078,13 @@ func (ii *Insights) normalizeSQL(sql string, maybeReorderColumns bool) (string, 
 				default:
 					buf.Myprintf("%l in (<elements>)", node.Left)
 				}
+			} else if node.Operator == sqlparser.NotInOp {
+				switch node.Right.(type) {
+				case *sqlparser.Subquery: // "IN <subquery>" is unmodified
+					node.Format(buf)
+				default:
+					buf.Myprintf("%l not in (<elements>)", node.Left)
+				}
 			} else {
 				node.Format(buf)
 			}
@@ -1081,6 +1094,35 @@ func (ii *Insights) normalizeSQL(sql string, maybeReorderColumns bool) (string, 
 			buf.WriteString("savepoint <id>")
 		case *sqlparser.Release:
 			buf.WriteString("release savepoint <id>")
+		case *sqlparser.Argument:
+			// Renumber generic bind variables starting with 1. This is necessary if
+			// 1. There are bind variables in the values part of an insert and
+			// 2. There are bind variables after the values (such as in `on duplicate key update set col = :vtg5`
+			// When this happens, the index of the post-values binds will be different based on the number of binds
+			// consumed in values fragment. This is bad because we end up with different query patterns when there
+			// should only be one.
+			// Only generic (i.e. vtg-prefixed) binds are renamed because we don't want to mess with semantically named
+			// binds (i.e. my_column = :my_column).
+			matches := genericBindPattern.FindStringSubmatch(node.Name)
+			if len(matches) >= 2 {
+				oldBindNum, err := strconv.Atoi(matches[1])
+				if err != nil {
+					panic("Couldn't parse bind index, this should never happen due to regex")
+				}
+
+				// If we've already seen this bind, use the same replacement
+				repBindNum, ok := bindRenames[oldBindNum]
+				if !ok {
+					repBindNum = nextBindIndex
+					bindRenames[oldBindNum] = repBindNum
+					nextBindIndex++
+				}
+
+				buf.Myprintf(":%s%d", genericBindPrefix, repBindNum)
+
+			} else {
+				node.Format(buf)
+			}
 		default:
 			node.Format(buf)
 		}

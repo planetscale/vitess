@@ -480,9 +480,6 @@ func TestRestoreDefaultQuery(t *testing.T) {
 		_, err := onlineddl.UpdateThrottlerTopoConfig(clusterInstance, true, false, throttlerThreshold.Seconds(), "", false)
 		assert.NoError(t, err)
 	})
-	t.Run("requesting heartbeats", func(t *testing.T) {
-		_ = warmUpHeartbeat(t)
-	})
 	t.Run("validating OK response from throttler with low threshold, heartbeats running", func(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})

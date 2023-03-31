@@ -209,7 +209,7 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 	seen := map[string]struct{}{}
 	sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
 		switch cursor.Node().(type) {
-		case sqlparser.Argument:
+		case *sqlparser.Argument:
 			switch parent := cursor.Parent().(type) {
 			case *sqlparser.ComparisonExpr:
 				if parent.Operator != sqlparser.EqualOp {
@@ -430,7 +430,7 @@ func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []P
 			continue
 		}
 
-		if _, ok := comp.Left.(sqlparser.Argument); ok && sqlparser.Equals.Expr(comp.Left, comp.Right) {
+		if _, ok := comp.Left.(*sqlparser.Argument); ok && sqlparser.Equals.Expr(comp.Left, comp.Right) {
 			// if we are comparing an argument with itself, we can be pretty sure that it's here because of
 			// normalization of literals, and that makes it safe to assume that this comparison will always be true,
 			// since normalization does not treat null-literals as something to normalize
@@ -445,8 +445,8 @@ func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []P
 func extractParam(lft, rgt sqlparser.Expr, op sqlparser.ComparisonExprOperator) *Parameter {
 	if col, cok := lft.(*sqlparser.ColName); cok {
 		switch arg := rgt.(type) {
-		case sqlparser.Argument:
-			return &Parameter{Name: string(arg), key: ColumnFromAST(col), Op: op}
+		case *sqlparser.Argument:
+			return &Parameter{Name: arg.Name, key: ColumnFromAST(col), Op: op}
 		case sqlparser.ListArg:
 			return &Parameter{Name: string(arg), key: ColumnFromAST(col), Op: op}
 		}
@@ -687,7 +687,7 @@ func (conv *Converter) unionToOperator(
 	// UNION can be used inside a query that has parameters, but the parameters cannot exist inside the UNION
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node.(type) {
-		case sqlparser.Argument, sqlparser.ListArg:
+		case *sqlparser.Argument, sqlparser.ListArg:
 			return false, &UnsupportedError{
 				AST:  node,
 				Type: ParametersInsideUnion,

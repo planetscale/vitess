@@ -23,14 +23,14 @@ func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field
 			// Common node types that never contain expressions but create a lot of object
 			// allocations.
 			return false, nil
-		case sqlparser.Argument:
+		case *sqlparser.Argument:
 			pos := slices.IndexFunc(keySchema, func(f *querypb.Field) bool {
-				return f.Name == string(node) && (f.Flags&uint32(querypb.MySqlFlag_MULTIPLE_KEY_FLAG)) == 0
+				return f.Name == node.Name && (f.Flags&uint32(querypb.MySqlFlag_MULTIPLE_KEY_FLAG)) == 0
 			})
 			if pos < 0 {
 				return false, fmt.Errorf("did not find placeholder in key schema for argument %v", sqlparser.CanonicalString(node))
 			}
-			bounds = append(bounds, &vtboostpb.Materialization_Bound{Name: string(node), Pos: int64(pos)})
+			bounds = append(bounds, &vtboostpb.Materialization_Bound{Name: node.Name, Pos: int64(pos)})
 			arguments++
 		case sqlparser.ListArg:
 			pos := slices.IndexFunc(keySchema, func(f *querypb.Field) bool {
@@ -74,14 +74,14 @@ func matchParametrizedQuery(keyOut []*querypb.BindVariable, stmt sqlparser.State
 			// Common node types that never contain expressions but create a lot of object
 			// allocations.
 			return false, nil
-		case sqlparser.Argument:
+		case *sqlparser.Argument:
 			if pos == len(bounds) {
 				return false, errMismatch
 			}
 			bound := bounds[pos]
 			pos++
 
-			bv2, ok := bvars[string(node)]
+			bv2, ok := bvars[node.Name]
 			if !ok {
 				return false, errMismatch
 			}
@@ -120,7 +120,7 @@ func matchParametrizedQuery(keyOut []*querypb.BindVariable, stmt sqlparser.State
 func ParametrizeQuery(q sqlparser.Statement) string {
 	var buf = sqlparser.NewTrackedBuffer(func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		switch node.(type) {
-		case sqlparser.Argument, sqlparser.ListArg, *sqlparser.Literal:
+		case *sqlparser.Argument, sqlparser.ListArg, *sqlparser.Literal:
 			buf.WriteByte('?')
 		case *sqlparser.ParsedComments:
 		default:

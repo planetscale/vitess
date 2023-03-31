@@ -62,6 +62,10 @@ type FakeTabletManagerClient struct {
 	tmc tmclient.TabletManagerClient
 }
 
+func (client *FakeTabletManagerClient) UpdateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
+	return nil, nil
+}
+
 func (client *FakeTabletManagerClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	return nil, nil
 }
@@ -244,16 +248,6 @@ func (client *FakeTabletManagerClient) WaitForPosition(ctx context.Context, tabl
 	return nil
 }
 
-// VExec is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) VExec(ctx context.Context, tablet *topodatapb.Tablet, query, workflow, keyspace string) (*querypb.QueryResult, error) {
-	// This result satisfies a generic VExec command
-	result := sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id", "int"),
-		"complete",
-	)
-	return sqltypes.ResultToProto3(result), nil
-}
-
 // VReplicationExec is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	// This result satisfies 'select pos from _vt.vreplication...' called from split clone unit tests in go/vt/worker.
@@ -265,7 +259,7 @@ func (client *FakeTabletManagerClient) VReplicationExec(ctx context.Context, tab
 }
 
 // VReplicationWaitForPos is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
+func (client *FakeTabletManagerClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
 	return nil
 }
 

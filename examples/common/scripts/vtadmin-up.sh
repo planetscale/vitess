@@ -22,7 +22,6 @@ vtadmin \
   --rbac \
   --rbac-config="${script_dir}/../vtadmin/rbac.yaml" \
   --cluster "id=${cluster_name},name=${cluster_name},discovery=staticfile,discovery-staticfile-path=${script_dir}/../vtadmin/discovery.json,tablet-fqdn-tmpl={{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }}" \
-  --cluster "id=prod,name=prod,discovery=staticfile,discovery-staticfile-path=./vtadmin/discovery.json,tablet-fqdn-tmpl={{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }}" \
   > "${log_dir}/vtadmin-api.out" 2>&1 &
 
 vtadmin_api_pid=$!
@@ -47,6 +46,30 @@ done
 
 # Check one last time
 [[ $(curl -s "http://localhost:${vtadmin_api_port}/api/clusters") == "${expected_cluster_result}" ]] || fail "vtadmin failed to discover the running example Vitess cluster."
+
+# Download nvm and node
+if [[ -z ${NVM_DIR} ]]; then
+    export NVM_DIR="$HOME/.nvm"
+fi
+
+if [[ -z ${NODE_VERSION} ]]; then
+    export NODE_VERSION="16"
+fi
+
+output "\nInstalling nvm...\n"
+
+if [ -d "$NVM_DIR" ]; then
+  output "\033[1;32mnvm is already installed!\033[0m"
+else
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash && output "\033[1;32mnvm is installed!\033[0m" || fail "\033[1;32mnvm failed to install!\033[0m"
+fi
+
+source "$NVM_DIR/nvm.sh"
+
+output "\nConfiguring Node.js $NODE_VERSION\n"
+nvm install "$NODE_VERSION" || fail "Could not install nvm $NODE_VERSION."
+nvm use "$NODE_VERSION" || fail "Could not use nvm $NODE_VERSION."
+nvm use "$NODE_VERSION" || fail "Could not use nvm $NODE_VERSION."
 
 # As a TODO, it'd be nice to make the assumption that vtadmin-web is already
 # installed and built (since we assume that `make` has already been run for

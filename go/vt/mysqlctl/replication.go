@@ -21,6 +21,7 @@ Handle creating replicas and setting up the replication streams.
 package mysqlctl
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -30,13 +31,13 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 )
+
+type ResetSuperReadOnlyFunc func() error
 
 // WaitForReplicationStart waits until the deadline for replication to start.
 // This validates the current primary is correct and can be connected to.
@@ -231,6 +232,22 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 	return false, nil
 }
 
+// IsSuperReadOnly return true if the instance is super read only
+func (mysqld *Mysqld) IsSuperReadOnly() (bool, error) {
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SELECT @@global.super_read_only")
+	if err != nil {
+		return false, err
+	}
+	if err == nil && len(qr.Rows) == 1 {
+		sro := qr.Rows[0][0].ToString()
+		if sro == "1" || sro == "ON" {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // SetReadOnly set/unset the read_only flag
 func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	// temp logging, to be removed in v17
@@ -253,15 +270,52 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	return mysqld.ExecuteSuperQuery(context.TODO(), query)
 }
 
-// SetSuperReadOnly set/unset the super_read_only flag
-func (mysqld *Mysqld) SetSuperReadOnly(on bool) error {
+// SetSuperReadOnly set/unset the super_read_only flag.
+// Returns a function which is called to set super_read_only back to its original value.
+func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) {
+	//  return function for switching `OFF` super_read_only
+	var resetFunc ResetSuperReadOnlyFunc
+	var disableFunc = func() error {
+		query := "SET GLOBAL super_read_only = 'OFF'"
+		err := mysqld.ExecuteSuperQuery(context.Background(), query)
+		return err
+	}
+
+	//  return function for switching `ON` super_read_only.
+	var enableFunc = func() error {
+		query := "SET GLOBAL super_read_only = 'ON'"
+		err := mysqld.ExecuteSuperQuery(context.Background(), query)
+		return err
+	}
+
+	superReadOnlyEnabled, err := mysqld.IsSuperReadOnly()
+	if err != nil {
+		return nil, err
+	}
+
+	// If non-idempotent then set the right call-back.
+	// We are asked to turn on super_read_only but original value is false,
+	// therefore return disableFunc, that can be used as defer by caller.
+	if on && !superReadOnlyEnabled {
+		resetFunc = disableFunc
+	}
+	// We are asked to turn off super_read_only but original value is true,
+	// therefore return enableFunc, that can be used as defer by caller.
+	if !on && superReadOnlyEnabled {
+		resetFunc = enableFunc
+	}
+
 	query := "SET GLOBAL super_read_only = "
 	if on {
-		query += "ON"
+		query += "'ON'"
 	} else {
-		query += "OFF"
+		query += "'OFF'"
 	}
-	return mysqld.ExecuteSuperQuery(context.TODO(), query)
+	if err := mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
+		return nil, err
+	}
+
+	return resetFunc, nil
 }
 
 // WaitSourcePos lets replicas wait to given replication position
@@ -392,7 +446,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos mysql.Posi
 
 // SetReplicationSource makes the provided host / port the primary. It optionally
 // stops replication before, and starts it after.
-func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int, replicationStopBefore bool, replicationStartAfter bool) error {
+func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error {
 	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
 	if err != nil {
 		return err
@@ -404,7 +458,7 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	defer conn.Recycle()
 
 	cmds := []string{}
-	if replicationStopBefore {
+	if stopReplicationBefore {
 		cmds = append(cmds, conn.StopReplicationCommand())
 	}
 	// Reset replication parameters commands makes the instance forget the source host port
@@ -417,7 +471,7 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	cmds = append(cmds, conn.ResetReplicationParametersCommands()...)
 	smc := conn.SetReplicationSourceCommand(params, host, port, int(replicationConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
-	if replicationStartAfter {
+	if startReplicationAfter {
 		cmds = append(cmds, conn.StartReplicationCommand())
 	}
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
@@ -684,7 +738,7 @@ func (mysqld *Mysqld) SemiSyncClients() uint32 {
 		return 0
 	}
 	countStr := qr.Rows[0][1].ToString()
-	count, _ := strconv.ParseUint(countStr, 10, 0)
+	count, _ := strconv.ParseUint(countStr, 10, 32)
 	return uint32(count)
 }
 
@@ -694,8 +748,8 @@ func (mysqld *Mysqld) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
 	if err != nil {
 		return 0, 0
 	}
-	timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_master_timeout"], 10, 0)
-	numReplicasUint, _ := strconv.ParseUint(vars["rpl_semi_sync_master_wait_for_slave_count"], 10, 0)
+	timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_master_timeout"], 10, 64)
+	numReplicasUint, _ := strconv.ParseUint(vars["rpl_semi_sync_master_wait_for_slave_count"], 10, 32)
 	return timeout, uint32(numReplicasUint)
 }
 

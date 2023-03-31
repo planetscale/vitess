@@ -289,6 +289,24 @@ func (v Value) ToInt64() (int64, error) {
 	return strconv.ParseInt(v.RawStr(), 10, 64)
 }
 
+func (v Value) ToInt32() (int32, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	i, err := strconv.ParseInt(v.RawStr(), 10, 32)
+	return int32(i), err
+}
+
+// ToInt returns the value as MySQL would return it as a int.
+func (v Value) ToInt() (int, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	return strconv.Atoi(v.RawStr())
+}
+
 // ToFloat64 returns the value as MySQL would return it as a float64.
 func (v Value) ToFloat64() (float64, error) {
 	if !IsNumber(v.typ) {
@@ -298,6 +316,16 @@ func (v Value) ToFloat64() (float64, error) {
 	return strconv.ParseFloat(v.RawStr(), 64)
 }
 
+// ToUint16 returns the value as MySQL would return it as a uint16.
+func (v Value) ToUint16() (uint16, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	i, err := strconv.ParseUint(v.RawStr(), 10, 16)
+	return uint16(i), err
+}
+
 // ToUint64 returns the value as MySQL would return it as a uint64.
 func (v Value) ToUint64() (uint64, error) {
 	if !v.IsIntegral() {
@@ -305,6 +333,15 @@ func (v Value) ToUint64() (uint64, error) {
 	}
 
 	return strconv.ParseUint(v.RawStr(), 10, 64)
+}
+
+func (v Value) ToUint32() (uint32, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	u, err := strconv.ParseUint(v.RawStr(), 10, 32)
+	return uint32(u), err
 }
 
 // ToBool returns the value as a bool value

@@ -31,26 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func TestVexecUpdateTemplates(t *testing.T) {
-	{
-		match, err := sqlparser.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates)
-		assert.NoError(t, err)
-		assert.False(t, match)
-	}
-	queries := []string{
-		`update _vt.schema_migrations set migration_status='cancel-all' where mysql_schema='vt_commerce'`,
-		`update _vt.schema_migrations set migration_status = 'cancel-all' where migration_uuid='a5a563da_dc1a_11ec_a416_0a43f95f28a3' and mysql_schema = 'vt_commerce'`,
-		`update _vt.schema_migrations set migration_status = 'cancel-all' where migration_uuid='a5a563da_dc1a_11ec_a416_0a43f95f28a3' and mysql_schema = 'vt_commerce' and shard='0'`,
-	}
-	for _, query := range queries {
-		t.Run(query, func(t *testing.T) {
-			match, err := sqlparser.QueryMatchesTemplates(query, vexecUpdateTemplates)
-			assert.NoError(t, err)
-			assert.True(t, match)
-		})
-	}
-}
-
 func TestGetConstraintType(t *testing.T) {
 	{
 		typ := GetConstraintType(&sqlparser.CheckConstraintDefinition{})
@@ -82,8 +62,22 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 						constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
 					)
 				`,
+			strategyOptions:  "--unsafe-allow-foreign-keys",
 			countConstraints: 1,
-			expectError:      schema.ErrForeignKeyFound.Error(),
+		},
+		{
+			name: "table with anonymous FK, allowed",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						parent_id int not null,
+						primary key(id),
+						foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+					)
+				`,
+			strategyOptions:  "--unsafe-allow-foreign-keys",
+			countConstraints: 1,
 		},
 		{
 			name: "table with FK, allowed",

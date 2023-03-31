@@ -387,6 +387,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name, true)
 
+	checkIfDenyListExists(t, vc, "product:0", "customer")
 	// we tag along this test so as not to create the overhead of creating another cluster
 	testVStreamCellFlag(t)
 }
@@ -752,9 +753,9 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
 		insertQuery1 := "insert into customer(cid, name, meta) values(1001, 'tempCustomer1', '{\"a\": 1629849600, \"b\": 930701976723823}')"
 
-		matchInsertQuery0 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
-		matchInsertQuery1 := "insert into customer(cid, `name`, meta) values (:vtg1, :vtg2, :vtg3)"
-		validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1)
+		matchInsertQuery0 := "insert into customer(cid, `name`) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */)"
+		matchInsertQuery1 := "insert into customer(cid, `name`, meta) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */, :vtg3 /* VARCHAR */)"
+		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 
 		// confirm that the backticking of table names in the routing rules works
 		tbls := []string{"Lead", "Lead-1"}
@@ -794,7 +795,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
 		insertQuery2 := "insert into customer(name, cid) values('tempCustomer2', 100)"
-		matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1, :_cid0)"
+		matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1 /* VARCHAR */, :_cid0)"
 		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
 
 		insertQuery2 = "insert into customer(name, cid) values('tempCustomer3', 101)" // ID 101, hence due to reverse_bits in shard 80-
@@ -889,7 +890,8 @@ func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias str
 	t.Run("reshardCustomer2to4Split", func(t *testing.T) {
 		ksName := "customer"
 		counts := map[string]int{"zone1-600": 4, "zone1-700": 5, "zone1-800": 6, "zone1-900": 5}
-		reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-", 600, counts, nil, cells, sourceCellOrAlias)
+		reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-",
+			600, counts, nil, cells, sourceCellOrAlias, 1)
 		waitForRowCount(t, vtgateConn, ksName, "customer", 20)
 		query := "insert into customer (name) values('yoko')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
@@ -901,7 +903,8 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 	t.Run("reshardMerchant2to3SplitMerge", func(t *testing.T) {
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
-		reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-", 1600, counts, dryRunResultsSwitchWritesM2m3, nil, "")
+		reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-",
+			1600, counts, dryRunResultsSwitchWritesM2m3, nil, "", 1)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 2)
 		query := "insert into merchant (mname, category) values('amazon', 'electronics')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
@@ -947,7 +950,8 @@ func reshardMerchant3to1Merge(t *testing.T) {
 	t.Run("reshardMerchant3to1Merge", func(t *testing.T) {
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-2000": 3}
-		reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0", 2000, counts, nil, nil, "")
+		reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0",
+			2000, counts, nil, nil, "", 1)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 3)
 		query := "insert into merchant (mname, category) values('flipkart', 'electronics')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
@@ -959,7 +963,8 @@ func reshardCustomer3to2SplitMerge(t *testing.T) { // -40,40-80,80-c0 => merge/s
 	t.Run("reshardCustomer3to2SplitMerge", func(t *testing.T) {
 		ksName := "customer"
 		counts := map[string]int{"zone1-1000": 8, "zone1-1100": 8, "zone1-1200": 5}
-		reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0", 1000, counts, nil, nil, "")
+		reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0",
+			1000, counts, nil, nil, "", 1)
 	})
 }
 
@@ -967,11 +972,14 @@ func reshardCustomer3to1Merge(t *testing.T) { // to unsharded
 	t.Run("reshardCustomer3to1Merge", func(t *testing.T) {
 		ksName := "customer"
 		counts := map[string]int{"zone1-1500": 21}
-		reshard(t, ksName, "customer", "c3c1", "-60,60-c0,c0-", "0", 1500, counts, nil, nil, "")
+		reshard(t, ksName, "customer", "c3c1", "-60,60-c0,c0-", "0",
+			1500, counts, nil, nil, "", 3)
 	})
 }
 
-func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string, tabletIDBase int, counts map[string]int, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string) {
+func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string,
+	tabletIDBase int, counts map[string]int, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string,
+	autoIncrementStep int) {
 	t.Run("reshard", func(t *testing.T) {
 		if cells == nil {
 			cells = []*Cell{defaultCell}
@@ -988,12 +996,19 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			err := cluster.WaitForHealthyShard(vc.VtctldClient, ksName, shardName)
 			require.NoError(t, err)
 		}
+		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
+
+		// Test multi-primary setups, like a Galera cluster, which have auto increment steps > 1.
+		for _, tablet := range tablets {
+			autoIncrementSetQuery := fmt.Sprintf("set @@session.auto_increment_increment = %d; set @@global.auto_increment_increment = %d",
+				autoIncrementStep, autoIncrementStep)
+			tablet.QueryTablet(autoIncrementSetQuery, "", false)
+		}
 		workflowType := "Reshard"
 		if err := vc.VtctlClient.ExecuteCommand(workflowType, "--", "--source_shards="+sourceShards, "--target_shards="+targetShards,
 			"--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", "Create", ksWorkflow); err != nil {
 			t.Fatalf("Reshard Create command failed with %+v\n", err)
 		}
-		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
 		targetShards = "," + targetShards + ","
 		for _, tab := range tablets {
 			if strings.Contains(targetShards, ","+tab.Shard+",") {

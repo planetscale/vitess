@@ -18,7 +18,9 @@ package integration
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"regexp"
@@ -30,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
@@ -120,7 +123,7 @@ func errorsMatch(remote, local error) bool {
 	return false
 }
 
-func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evalengine.EvalResult, sqltypes.Type, error) {
+func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields []*querypb.Field) (evalengine.EvalResult, sqltypes.Type, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return evalengine.EvalResult{}, 0, err
@@ -133,8 +136,15 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evale
 				err = fmt.Errorf("PANIC during translate: %v", r)
 			}
 		}()
-		lookup := &evalengine.LookupIntegrationTest{Collation: collations.CollationUtf8mb4ID}
-		expr, err = evalengine.TranslateEx(astExpr, lookup, debugSimplify)
+		cfg := &evalengine.Config{
+			ResolveColumn: evalengine.FieldResolver(fields).Column,
+			Collation:     collations.CollationUtf8mb4ID,
+			Optimization:  evalengine.OptimizationLevelNone,
+		}
+		if debugSimplify {
+			cfg.Optimization = evalengine.OptimizationLevelSimplify
+		}
+		expr, err = evalengine.Translate(astExpr, cfg)
 		return
 	}()
 
@@ -150,7 +160,11 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evale
 		}()
 		eval, err = env.Evaluate(local)
 		if err == nil && debugCheckTypes {
-			tt, err = env.TypeOf(local)
+			tt, err = env.TypeOf(local, fields)
+			if errors.Is(err, evalengine.ErrAmbiguousType) {
+				tt = -1
+				err = nil
+			}
 		}
 		return
 	}()
@@ -182,8 +196,8 @@ func TestGenerateFuzzCases(t *testing.T) {
 	compareWithMySQL := func(expr sqlparser.Expr) *mismatch {
 		query := "SELECT " + sqlparser.String(expr)
 
-		env := evalengine.EnvWithBindVars(nil, 255)
-		eval, _, localErr := evaluateLocalEvalengine(env, query)
+		env := evalengine.EnvWithBindVars(nil)
+		eval, _, localErr := evaluateLocalEvalengine(env, query, nil)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 		if localErr != nil && strings.Contains(localErr.Error(), "syntax error at position") {
@@ -200,10 +214,10 @@ func TestGenerateFuzzCases(t *testing.T) {
 			remoteErr: remoteErr,
 		}
 		if localErr == nil {
-			res.localVal = eval.Value().String()
+			res.localVal = eval.Value()
 		}
 		if remoteErr == nil {
-			res.remoteVal = remote.Rows[0][0].String()
+			res.remoteVal = remote.Rows[0][0]
 		}
 		if res.Error() != "" {
 			return &res
@@ -265,7 +279,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 		} else {
 			golden = append(golden, evaltest{
 				Query: query,
-				Value: fail.remoteVal,
+				Value: fail.remoteVal.String(),
 			})
 		}
 	}
@@ -285,10 +299,28 @@ func TestGenerateFuzzCases(t *testing.T) {
 type mismatch struct {
 	expr                sqlparser.Expr
 	localErr, remoteErr error
-	localVal, remoteVal string
+	localVal, remoteVal sqltypes.Value
 }
 
-func compareResult(localErr, remoteErr error, localVal, remoteVal string, localCollation, remoteCollation collations.ID) string {
+const tolerance = 1e-14
+
+func close(a, b float64, decimals uint32) bool {
+	if decimals > 0 {
+		ratio := math.Pow(10, float64(decimals))
+		a = math.Round(a*ratio) / ratio
+		b = math.Round(b*ratio) / ratio
+	}
+
+	if a == b {
+		return true
+	}
+	if b == 0 {
+		return math.Abs(a) < tolerance
+	}
+	return math.Abs((a-b)/b) < tolerance
+}
+
+func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value, localCollation, remoteCollation collations.ID, decimals uint32) string {
 	if localErr != nil {
 		if remoteErr == nil {
 			return fmt.Sprintf("%v; mysql response: %s", localErr, remoteVal)
@@ -317,13 +349,26 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal string, localC
 		remoteCollationName = coll.Name()
 	}
 
-	if localVal != remoteVal {
+	if localVal.IsFloat() && remoteVal.IsFloat() {
+		localFloat, err := localVal.ToFloat64()
+		if err != nil {
+			return fmt.Sprintf("error converting local value to float: %v", err)
+		}
+		remoteFloat, err := remoteVal.ToFloat64()
+		if err != nil {
+			return fmt.Sprintf("error converting remote value to float: %v", err)
+		}
+		if !close(localFloat, remoteFloat, decimals) {
+			return fmt.Sprintf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
+				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
+		}
+	} else if localVal.String() != remoteVal.String() {
 		return fmt.Sprintf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
-			localVal, remoteVal, localCollationName, remoteCollationName)
+			localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 	}
 	if localCollation != remoteCollation {
 		return fmt.Sprintf("different collations: %s; mysql response: %s (local result: %s; mysql result: %s)",
-			localCollationName, remoteCollationName, localVal, remoteVal,
+			localCollationName, remoteCollationName, localVal.String(), remoteVal.String(),
 		)
 	}
 
@@ -331,5 +376,5 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal string, localC
 }
 
 func (cr *mismatch) Error() string {
-	return compareResult(cr.localErr, cr.remoteErr, cr.localVal, cr.remoteVal, collations.Unknown, collations.Unknown)
+	return compareResult(cr.localErr, cr.remoteErr, cr.localVal, cr.remoteVal, collations.Unknown, collations.Unknown, 0)
 }

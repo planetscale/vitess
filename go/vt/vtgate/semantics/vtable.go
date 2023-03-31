@@ -99,7 +99,7 @@ func (v *vTableInfo) getTableSet(_ originable) TableSet {
 }
 
 // GetExprFor implements the TableInfo interface
-func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
+func (v *vTableInfo) getExprFor(s string) (sqlparser.Expr, error) {
 	for i, colName := range v.columnNames {
 		if colName == s {
 			return v.cols[i], nil

@@ -86,20 +86,19 @@ import { formatAlias } from '../util/tablets';
 /**
  * useBackups is a query hook that fetches all backups across every cluster.
  */
-export const useBackups = (
-    options?: UseQueryOptions<pb.ClusterBackup[], Error, pb.ClusterBackup[], string[]> | undefined
-) => useQuery(['backups'], fetchBackups, options);
+export const useBackups = (options?: UseQueryOptions<pb.ClusterBackup[], Error> | undefined) =>
+    useQuery(['backups'], fetchBackups, options);
 
 /**
  * useClusters is a query hook that fetches all clusters VTAdmin is configured to discover.
  */
-export const useClusters = (options?: UseQueryOptions<pb.Cluster[], Error, pb.Cluster[], string[]> | undefined) =>
+export const useClusters = (options?: UseQueryOptions<pb.Cluster[], Error> | undefined) =>
     useQuery(['clusters'], fetchClusters, options);
 
 /**
  * useGates is a query hook that fetches all VTGates across every cluster.
  */
-export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error, pb.VTGate[], string[]> | undefined) =>
+export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error> | undefined) =>
     useQuery(['gates'], fetchGates, options);
 
 /**
@@ -107,7 +106,7 @@ export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error, pb.VTGate
  */
 export const useKeyspace = (
     params: Parameters<typeof fetchKeyspace>[0],
-    options?: UseQueryOptions<pb.Keyspace, Error, pb.Keyspace, (string | Parameters<typeof fetchKeyspace>[0])[]>
+    options?: UseQueryOptions<pb.Keyspace, Error>
 ) => {
     const queryClient = useQueryClient();
     return useQuery(['keyspace', params], () => fetchKeyspace(params), {
@@ -136,34 +135,31 @@ export const useCreateKeyspace = (
 /**
  * useKeyspaces is a query hook that fetches all keyspaces across every cluster.
  */
-export const useKeyspaces = (options?: UseQueryOptions<pb.Keyspace[], Error, pb.Keyspace[], string[]> | undefined) =>
+export const useKeyspaces = (options?: UseQueryOptions<pb.Keyspace[], Error> | undefined) =>
     useQuery(['keyspaces'], fetchKeyspaces, options);
 
 /**
  * useSchemas is a query hook that fetches all schemas across every cluster.
  */
-export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error, pb.Schema[], string[]> | undefined) =>
+export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error> | undefined) =>
     useQuery(['schemas'], fetchSchemas, options);
 
 /**
  * useTablets is a query hook that fetches all tablets across every cluster.
  */
-export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error, pb.Tablet[], string[]> | undefined) =>
+export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undefined) =>
     useQuery(['tablets'], fetchTablets, options);
 
 /**
  * useVtctlds is a query hook that fetches all vtctlds across every cluster.
  */
-export const useVtctlds = (options?: UseQueryOptions<pb.Vtctld[], Error, pb.Vtctld[], string[]> | undefined) =>
+export const useVtctlds = (options?: UseQueryOptions<pb.Vtctld[], Error> | undefined) =>
     useQuery(['vtctlds'], fetchVtctlds, options);
 
 /**
  * useTablet is a query hook that fetches a single tablet by alias.
  */
-export const useTablet = (
-    params: Parameters<typeof fetchTablet>[0],
-    options?: UseQueryOptions<pb.Tablet, Error, pb.Tablet, (string | Parameters<typeof fetchTablet>[0])[]>
-) => {
+export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: UseQueryOptions<pb.Tablet, Error>) => {
     const queryClient = useQueryClient();
     return useQuery(['tablet', params], () => fetchTablet(params), {
         initialData: () => {
@@ -232,14 +228,7 @@ export const useSetReadWrite = (
  */
 export const useShardReplicationPositions = (
     params: Parameters<typeof fetchShardReplicationPositions>[0],
-    options?:
-        | UseQueryOptions<
-              pb.GetShardReplicationPositionsResponse,
-              Error,
-              pb.GetShardReplicationPositionsResponse,
-              (string | Parameters<typeof fetchShardReplicationPositions>[0])[]
-          >
-        | undefined
+    options?: UseQueryOptions<pb.GetShardReplicationPositionsResponse, Error> | undefined
 ) => useQuery(['shard_replication_positions', params], () => fetchShardReplicationPositions(params), options);
 
 /**
@@ -271,12 +260,7 @@ export const useStopReplication = (
  */
 export const usePingTablet = (
     params: Parameters<typeof pingTablet>[0],
-    options?: UseQueryOptions<
-        pb.PingTabletResponse,
-        Error,
-        pb.PingTabletResponse,
-        (string | Parameters<typeof pingTablet>[0])[]
-    >
+    options?: UseQueryOptions<pb.PingTabletResponse, Error>
 ) => {
     return useQuery(['ping-tablet', params], () => pingTablet(params), options);
 };
@@ -286,12 +270,7 @@ export const usePingTablet = (
  */
 export const useRefreshState = (
     params: Parameters<typeof refreshState>[0],
-    options?: UseQueryOptions<
-        pb.RefreshStateResponse,
-        Error,
-        pb.RefreshStateResponse,
-        (string | Parameters<typeof refreshState>[0])[]
-    >
+    options?: UseQueryOptions<pb.RefreshStateResponse, Error>
 ) => {
     return useQuery(['refresh-state', params], () => refreshState(params), options);
 };
@@ -301,19 +280,14 @@ export const useRefreshState = (
  */
 export const useHealthCheck = (
     params: Parameters<typeof runHealthCheck>[0],
-    options?: UseQueryOptions<
-        pb.RunHealthCheckResponse,
-        Error,
-        pb.RunHealthCheckResponse,
-        (string | Parameters<typeof runHealthCheck>[0])[]
-    >
+    options?: UseQueryOptions<pb.RunHealthCheckResponse, Error>
 ) => {
     return useQuery(['run-health-check', params], () => runHealthCheck(params), options);
 };
 
 export const useExperimentalTabletDebugVars = (
     params: FetchTabletParams,
-    options?: UseQueryOptions<TabletDebugVarsResponse, Error, TabletDebugVarsResponse, (string | FetchTabletParams)[]>
+    options?: UseQueryOptions<TabletDebugVarsResponse, Error>
 ) => {
     return useQuery(
         ['experimental/tablet/debug/vars', params],
@@ -341,9 +315,8 @@ export const useManyExperimentalTabletDebugVars = (
 /**
  * useWorkflowsResponse is a query hook that fetches all workflows (by cluster) across every cluster.
  */
-export const useWorkflowsResponse = (
-    options?: UseQueryOptions<pb.GetWorkflowsResponse, Error, pb.GetWorkflowsResponse, string[]> | undefined
-) => useQuery(['workflows'], fetchWorkflows, options);
+export const useWorkflowsResponse = (options?: UseQueryOptions<pb.GetWorkflowsResponse, Error> | undefined) =>
+    useQuery(['workflows'], fetchWorkflows, options);
 
 /**
  * useWorkflows is a helper hook for when a flattened list of workflows
@@ -371,10 +344,7 @@ export const useWorkflows = (...args: Parameters<typeof useWorkflowsResponse>) =
 /**
  * useSchema is a query hook that fetches a single schema for the given parameters.
  */
-export const useSchema = (
-    params: FetchSchemaParams,
-    options?: UseQueryOptions<pb.Schema, Error, pb.Schema, (string | FetchSchemaParams)[]> | undefined
-) => {
+export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<pb.Schema, Error> | undefined) => {
     const queryClient = useQueryClient();
     return useQuery(['schema', params], () => fetchSchema(params), {
         initialData: () => {
@@ -435,16 +405,9 @@ export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions
 
 export const useVTExplain = (
     params: Parameters<typeof fetchVTExplain>[0],
-    options?:
-        | UseQueryOptions<
-              pb.VTExplainResponse,
-              Error,
-              pb.VTExplainResponse,
-              (string | Parameters<typeof fetchVTExplain>[0])[]
-          >
-        | undefined
+    options?: UseQueryOptions<pb.VTExplainResponse, Error> | undefined
 ) => {
-    return useQuery(['vtexplain', params], () => fetchVTExplain(params), options);
+    return useQuery(['vtexplain', params], () => fetchVTExplain(params), { ...options });
 };
 
 /**
@@ -452,9 +415,7 @@ export const useVTExplain = (
  */
 export const useWorkflow = (
     params: Parameters<typeof fetchWorkflow>[0],
-    options?:
-        | UseQueryOptions<pb.Workflow, Error, pb.Workflow, (string | Parameters<typeof fetchWorkflow>[0])[]>
-        | undefined
+    options?: UseQueryOptions<pb.Workflow, Error> | undefined
 ) => {
     const queryClient = useQueryClient();
     return useQuery(['workflow', params], () => fetchWorkflow(params), {

@@ -4,7 +4,6 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/common/dbg"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -219,10 +218,6 @@ func getComparisons(expr sqlparser.Expr) (predicates []*sqlparser.ComparisonExpr
 
 func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 	input := node.Ancestors[0]
-	lu := &lookup{
-		node:     input,
-		semTable: semTable,
-	}
 
 	for _, col := range p.Columns {
 		ast, err := col.SingleAST()
@@ -246,7 +241,11 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 			if err != nil {
 				return err
 			}
-			eexpr, err := evalengine.Translate(newExpr, lu)
+			eexpr, err := evalengine.Translate(newExpr, &evalengine.Config{
+				ResolveColumn: columnLookup(input, semTable),
+				ResolveType:   semTable.TypeForExpr,
+				Collation:     semTable.Collation,
+			})
 			if err != nil {
 				return &UnsupportedError{AST: expr, Type: EvalEngineNotSupported}
 			}
@@ -356,7 +355,7 @@ func findOffsets(semTable *semantics.SemTable, input *Node) func(cursor *sqlpars
 			}
 			cursor.Replace(&sqlparser.Offset{
 				V:        offset,
-				Original: sqlparser.String(col),
+				Original: expr,
 			})
 			return false
 		default:
@@ -452,25 +451,14 @@ func bindUnionSideOffset(columns Columns, node *Node, st *semantics.SemTable) ([
 	return offsets, nil
 }
 
-type lookup struct {
-	node     *Node
-	semTable *semantics.SemTable
-}
-
-func (lu *lookup) ColumnLookup(col *sqlparser.ColName) (int, error) {
-	for i, column := range lu.node.Columns {
-		if column.EqualsAST(lu.semTable, col, true) {
-			return i, nil
+func columnLookup(node *Node, semTable *semantics.SemTable) evalengine.ColumnResolver {
+	return func(expr *sqlparser.ColName) (int, error) {
+		for i, column := range node.Columns {
+			if column.EqualsAST(semTable, expr, true) {
+				return i, nil
+			}
 		}
+		dbg.Bug("column not found during lookup")
+		return -1, nil
 	}
-	dbg.Bug("column not found during lookup")
-	return -1, nil
-}
-
-func (lu *lookup) CollationForExpr(expr sqlparser.Expr) collations.ID {
-	return lu.semTable.CollationForExpr(expr)
-}
-
-func (lu *lookup) DefaultCollation() collations.ID {
-	return collations.Default()
 }

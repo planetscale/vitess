@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -398,7 +399,7 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 			continue
 		}
 		query := rule.Filter
-		if rule.Filter == "" || key.IsKeyRange(rule.Filter) {
+		if rule.Filter == "" || key.IsValidKeyRange(rule.Filter) {
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table.Name))
 			query = buf.String()
@@ -576,7 +577,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 					// but will need to be revisited when we add such support to vreplication
 					aggregateFuncType := "sum"
 					aggregates = append(aggregates, &engine.AggregateParams{
-						Opcode: engine.SupportedAggregates[aggregateFuncType],
+						Opcode: opcode.SupportedAggregates[aggregateFuncType],
 						Col:    len(sourceSelect.SelectExprs) - 1,
 					})
 				}
@@ -872,14 +873,14 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
-	err := df.ts.ForAllUIDs(func(target *workflow.MigrationTarget, uid uint32) error {
+	err := df.ts.ForAllUIDs(func(target *workflow.MigrationTarget, uid int32) error {
 		bls := target.Sources[uid]
 		pos := df.sources[bls.Shard].snapshotPosition
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for vdiff' where id=%d", pos, uid)
 		if _, err := df.ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, query); err != nil {
 			return err
 		}
-		if err := df.ts.TabletManagerClient().VReplicationWaitForPos(waitCtx, target.GetPrimary().Tablet, int(uid), pos); err != nil {
+		if err := df.ts.TabletManagerClient().VReplicationWaitForPos(waitCtx, target.GetPrimary().Tablet, uid, pos); err != nil {
 			return vterrors.Wrapf(err, "VReplicationWaitForPos for tablet %v", topoproto.TabletAliasString(target.GetPrimary().Tablet.Alias))
 		}
 		return nil

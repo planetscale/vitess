@@ -42,7 +42,7 @@ import (
 )
 
 var (
-	logger *streamlog.StreamLogger
+	logger *streamlog.StreamLogger[*logstats.LogStats]
 )
 
 type setupOptions struct {
@@ -55,7 +55,7 @@ type setupOptions struct {
 }
 
 func setup(t *testing.T, brokers, publicID, username, password string, options setupOptions) (*Insights, error) {
-	logger = streamlog.New("tests", 32)
+	logger = streamlog.New[*logstats.LogStats]("tests", 32)
 	defaultUint := func(val *uint, dfault uint) uint {
 		if val != nil {
 			return *val
@@ -770,35 +770,44 @@ func TestNormalization(t *testing.T) {
 
 		//-- VALUES compaction
 		// one tuple
-		{"insert into xyz values (:v1, :v2)", "insert into xyz values <values>"},
+		{"insert into xyz values (:vtg1, :vtg2)", "insert into xyz values <values>"},
 
 		// case insensitive
-		{"INSERT INTO xyz VALUES (:v1, :v2)", "insert into xyz values <values>"},
+		{"INSERT INTO xyz VALUES (:vtg1, :vtg2)", "insert into xyz values <values>"},
 
 		// multiple tuples
-		{"insert into xyz values (:v1, :v2), (:v3, null), (null, :v4)", "insert into xyz values <values>"},
+		{"insert into xyz values (:vtg1, :vtg2), (:vtg3, null), (null, :vtg4)", "insert into xyz values <values>"},
 
 		// multiple singles
-		{"insert into xyz values (:v1), (null), (:v2)", "insert into xyz values <values>"},
+		{"insert into xyz values (:vtg1), (null), (:vtg2)", "insert into xyz values <values>"},
+
+		// bind variables are renumbered starting from 1
+		{"select * from xyz where col1 = :vtg2 and col2 = :vtg4", "select * from xyz where col1 = :vtg1 and col2 = :vtg2"},
+
+		// bind variables are renumbered starting from 1 after removing the values
+		{"insert into xyz(col1, col2) values (:vtg1, :vtg2), (:vtg3, :vtg4) on duplicate key update col1 = :vtg5, col2 = coalesce(col2, :vtg6)", "insert into xyz(col1, col2) values <values> on duplicate key update col1 = :vtg1, col2 = coalesce(col2, :vtg2)"},
+
+		// bind variables renumbering keeps re-used binds (does not assign different bind nums to binds that were previously the same)
+		{"insert into xyz(col1, col2) values (:vtg1, :vtg2), (:vtg3, :vtg4) on duplicate key update col1 = :vtg5, col2 = coalesce(col2, :vtg5), col1 = :vtg6, col2 = coalesce(col2, :vtg7) ", "insert into xyz(col1, col2) values <values> on duplicate key update col1 = :vtg1, col2 = coalesce(col2, :vtg1), col1 = :vtg2, col2 = coalesce(col2, :vtg3)"},
 
 		// question marks instead
 		{"insert into xyz values (?, ?)", "insert into xyz values <values>"},
 
-		//-- SET compaction
+		//-- SET compaction: IN
 		// case insensitive
-		{"SELECT 1 FROM x WHERE xyz IN (:vtg1, :vtg2) AND abc in (:v3, :v4)", "select 1 from x where xyz in (<elements>) and abc in (<elements>)"},
+		{"SELECT 1 FROM x WHERE xyz IN (:vtg1, :vtg2) AND abc in (:vtg3, :vtg4)", "select 1 from x where xyz in (<elements>) and abc in (<elements>)"},
 
 		// question marks instead
 		{"SELECT 1 FROM x WHERE xyz IN (?, ?) AND abc in (?, ?)", "select 1 from x where xyz in (<elements>) and abc in (<elements>)"},
 
 		// single element in list
-		{"select 1 FROM x where xyz in (:bv1)", "select 1 from x where xyz in (<elements>)"},
+		{"select 1 FROM x where xyz in (:vtg1)", "select 1 from x where xyz in (<elements>)"},
 
 		// very large :v sequence numbers
-		{"select 1 from x where xyz in (:v8675309, :v8765000)", "select 1 from x where xyz in (<elements>)"},
+		{"select 1 from x where xyz in (:vtg8675309, :vtg8765000)", "select 1 from x where xyz in (<elements>)"},
 
 		// nested, single
-		{"select 1 from x where (abc, xyz) in ((:v1, :v2))", "select 1 from x where (abc, xyz) in (<elements>)"},
+		{"select 1 from x where (abc, xyz) in ((:vtg1, :vtg2))", "select 1 from x where (abc, xyz) in (<elements>)"},
 
 		// nested, multiple
 		{"select 1 from x where (abc, xyz) in ((:vtg1, :vtg2), (:vtg3, :vtg4), (:vtg5, :vtg6))", "select 1 from x where (abc, xyz) in (<elements>)"},
@@ -807,13 +816,44 @@ func TestNormalization(t *testing.T) {
 		{"select 1 from x where (abc, xyz) in ((?, ?), (?, ?), (?, ?))", "select 1 from x where (abc, xyz) in (<elements>)"},
 
 		// mixed nested and simple
-		{"select 1 from x where xyz in ((:v1, :v2), :v3)", "select 1 from x where xyz in (<elements>)"},
+		{"select 1 from x where xyz in ((:vtg1, :vtg2), :vtg3)", "select 1 from x where xyz in (<elements>)"},
 
 		// subqueries should not be normalized
 		{"select 1 from x where xyz in (select distinct foo from bar)", "select 1 from x where xyz in (select distinct foo from bar)"},
 
 		// stuff within a subquery should be normalized
 		{"select 1 from x where xyz in (select distinct foo from bar where baz in (1,2,3))", "select 1 from x where xyz in (select distinct foo from bar where baz in (<elements>))"},
+
+		//-- SET compaction: NOT IN
+		// case insensitive
+		{"SELECT 1 FROM x WHERE xyz NOT IN (:vtg1, :vtg2) AND abc not in (:v3, :v4)", "select 1 from x where xyz not in (<elements>) and abc not in (<elements>)"},
+
+		// question marks instead
+		{"SELECT 1 FROM x WHERE xyz NOT IN (?, ?) AND abc not in (?, ?)", "select 1 from x where xyz not in (<elements>) and abc not in (<elements>)"},
+
+		// single element in list
+		{"select 1 FROM x where xyz not in (:bv1)", "select 1 from x where xyz not in (<elements>)"},
+
+		// very large :v sequence numbers
+		{"select 1 from x where xyz not in (:v8675309, :v8765000)", "select 1 from x where xyz not in (<elements>)"},
+
+		// nested, single
+		{"select 1 from x where (abc, xyz) not in ((:v1, :v2))", "select 1 from x where (abc, xyz) not in (<elements>)"},
+
+		// nested, multiple
+		{"select 1 from x where (abc, xyz) not in ((:vtg1, :vtg2), (:vtg3, :vtg4), (:vtg5, :vtg6))", "select 1 from x where (abc, xyz) not in (<elements>)"},
+
+		// nested, multiple, question marks
+		{"select 1 from x where (abc, xyz) not in ((?, ?), (?, ?), (?, ?))", "select 1 from x where (abc, xyz) not in (<elements>)"},
+
+		// mixed nested and simple
+		{"select 1 from x where xyz not in ((:v1, :v2), :v3)", "select 1 from x where xyz not in (<elements>)"},
+
+		// subqueries should not be normalized
+		{"select 1 from x where xyz not in (select distinct foo from bar)", "select 1 from x where xyz not in (select distinct foo from bar)"},
+
+		// stuff within a subquery should be normalized
+		{"select 1 from x where xyz not in (select distinct foo from bar where baz not in (1,2,3))", "select 1 from x where xyz not in (select distinct foo from bar where baz not in (<elements>))"},
 	}
 	ii := Insights{}
 	for _, tc := range testCases {

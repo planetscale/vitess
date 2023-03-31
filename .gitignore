@@ -70,8 +70,7 @@ _test/
 /vendor/*/
 
 # release folder
-releases
-
+/releases/
 # Local examples
 /examples/local/vtdataroot
 

@@ -207,6 +207,7 @@ func TestBinlogEventFormat(t *testing.T) {
 	assert.NoError(t, err, "unexpected error: %v", err)
 	assert.True(t, reflect.DeepEqual(got, want), "%#v.Format() = %v, want %v", input, got, want)
 	assert.False(t, input.IsHeartbeat())
+
 }
 
 func TestBinlogEventFormatWrongVersion(t *testing.T) {

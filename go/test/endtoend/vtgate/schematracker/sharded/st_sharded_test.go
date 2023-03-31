@@ -186,7 +186,7 @@ func TestInitAndUpdate(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	vtgateVersion, err := 17, nil // cluster.GetMajorVersion("vtgate") -- backported to private, can be cleaned up to match upstream once rebased on 17
+	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
 	require.NoError(t, err)
 
 	expected := `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
@@ -249,7 +249,7 @@ func TestDMLOnNewTable(t *testing.T) {
 	// create a new table which is not part of the VSchema
 	utils.Exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
 
-	vtgateVersion, err := 17, nil // cluster.GetMajorVersion("vtgate") -- backported to private, can be cleaned up to match upstream once rebased on 17
+	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
 	require.NoError(t, err)
 	expected := `[[VARCHAR("dual")] [VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
 	if vtgateVersion >= 17 {

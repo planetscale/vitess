@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -86,11 +87,16 @@ func TestMain(m *testing.M) {
 
 		// Create a new init_db.sql file that sets up passwords for all users.
 		// Then we use a db-credentials-file with the passwords.
+		// TODO: We could have operated with empty password here. Create a separate test for --db-credentials-file functionality (@rsajwani)
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
+		// The original init_db.sql does not have any passwords. Here we update the init file with passwords
+		sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), "")
+		if err != nil {
+			return 1, err
+		}
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 		if err != nil {
 			return 1, err
@@ -112,7 +118,11 @@ func TestMain(m *testing.M) {
 			tablet.VttabletProcess.ExtraArgs = commonTabletArg
 			tablet.VttabletProcess.SupportsBackup = true
 
-			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			if err != nil {
+				return 1, err
+			}
+			tablet.MysqlctlProcess = *mysqlctlProcess
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctlProcess.ExtraArgs = extraArgs
 			proc, err := tablet.MysqlctlProcess.StartProcess()
@@ -127,9 +137,12 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		// Create database
-		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
-			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
+		if localCluster.VtTabletMajorVersion >= 16 {
+			// If vttablets are any lower than version 16, then they are running the replication manager.
+			// Running VTOrc and replication manager sometimes creates the situation where VTOrc has set up semi-sync on the primary,
+			// but the replication manager starts replication on the replica without setting semi-sync. This hangs the primary.
+			// Even if VTOrc fixes it, since there is no ongoing traffic, the state remains blocked.
+			if err := localCluster.StartVTOrc(keyspaceName); err != nil {
 				return 1, err
 			}
 		}

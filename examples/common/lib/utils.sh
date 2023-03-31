@@ -117,3 +117,7 @@ function fail() {
 	echo "ERROR: ${1}"
 	exit 1
 }
+
+function output() {
+  echo -e "$@"
+}

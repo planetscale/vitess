@@ -27,6 +27,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
+
+	"vitess.io/vitess/go/mysql"
 )
 
 type key uint
@@ -496,7 +498,7 @@ type (
 	Warning struct {
 		Level   string
 		Message string
-		Code    int
+		Code    mysql.ErrorCode
 	}
 )
 
@@ -792,7 +794,7 @@ func (c *Context) RootSpan() trace.Span {
 }
 
 // Error adds an error as warning to the session.
-func (c *Context) Error(code int, msg string, args ...interface{}) {
+func (c *Context) Error(code mysql.ErrorCode, msg string, args ...interface{}) {
 	c.Session.Warn(&Warning{
 		Level:   "Error",
 		Code:    code,
@@ -801,7 +803,7 @@ func (c *Context) Error(code int, msg string, args ...interface{}) {
 }
 
 // Warn adds a warning to the session.
-func (c *Context) Warn(code int, msg string, args ...interface{}) {
+func (c *Context) Warn(code mysql.ErrorCode, msg string, args ...interface{}) {
 	c.Session.Warn(&Warning{
 		Level:   "Warning",
 		Code:    code,

@@ -19,9 +19,9 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vthash"
 )
 
 type (
@@ -45,7 +45,6 @@ type (
 	InExpr struct {
 		BinaryExpr
 		Negate bool
-		Hashed map[vthash.Hash]int
 	}
 
 	ComparisonOp interface {
@@ -158,6 +157,10 @@ func compareAsTuples(left, right eval) (*evalTuple, *evalTuple, bool) {
 	return nil, nil, false
 }
 
+func compareAsJSON(l, r sqltypes.Type) bool {
+	return l == sqltypes.TypeJSON || r == sqltypes.TypeJSON
+}
+
 func evalCompareNullSafe(lVal, rVal eval) (bool, error) {
 	if lVal == nil || rVal == nil {
 		return lVal == rVal, nil
@@ -224,6 +227,8 @@ func evalCompare(left, right eval) (comp int, err error) {
 		// 			- select 1 where 2021210101 = cast("2021-01-01" as date)
 		// 			- select 1 where 104200 = cast("10:42:00" as time)
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a numeric value")
+	case compareAsJSON(lt, rt):
+		return compareJSON(left, right)
 	case lt == sqltypes.Tuple || rt == sqltypes.Tuple:
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: evalCompare: tuple comparison should be handled early")
 	default:
@@ -258,9 +263,20 @@ func evalCompareTuplesNullSafe(left, right []eval) (bool, error) {
 
 // eval implements the Expr interface
 func (c *ComparisonExpr) eval(env *ExpressionEnv) (eval, error) {
-	left, right, err := c.arguments(env)
+	left, err := c.Left.eval(env)
 	if err != nil {
 		return nil, err
+	}
+	if _, ok := c.Op.(compareNullSafeEQ); !ok && left == nil {
+		return nil, nil
+	}
+	right, err := c.Right.eval(env)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := c.Op.(compareNullSafeEQ); !ok && right == nil {
+		return nil, nil
 	}
 	cmp, err := c.Op.compare(left, right)
 	if err != nil {
@@ -270,10 +286,41 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 // typeof implements the Expr interface
-func (c *ComparisonExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := c.Left.typeof(env)
-	_, f2 := c.Right.typeof(env)
+func (c *ComparisonExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := c.Left.typeof(env, fields)
+	_, f2 := c.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2
+}
+
+func evalInExpr(lhs eval, rhs *evalTuple) (boolean, error) {
+	if lhs == nil {
+		return boolNULL, nil
+	}
+
+	var foundNull, found bool
+	for _, rtuple := range rhs.t {
+		numeric, isNull, err := evalCompareAll(lhs, rtuple, true)
+		if err != nil {
+			return boolNULL, err
+		}
+		if isNull {
+			foundNull = true
+			continue
+		}
+		if numeric == 0 {
+			found = true
+			break
+		}
+	}
+
+	switch {
+	case found:
+		return boolTrue, nil
+	case foundNull:
+		return boolNULL, nil
+	default:
+		return boolFalse, nil
+	}
 }
 
 // eval implements the ComparisonOp interface
@@ -286,58 +333,19 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
 	}
-	if left == nil {
-		return nil, nil
+	in, err := evalInExpr(left, rtuple)
+	if err != nil {
+		return nil, err
 	}
-
-	var foundNull, found bool
-	var hasher = vthash.New()
-	if i.Hashed != nil {
-		if left, ok := left.(hashable); ok {
-			left.Hash(&hasher)
-
-			hash := hasher.Sum128()
-			hasher.Reset()
-
-			if idx, ok := i.Hashed[hash]; ok {
-				var numeric int
-				numeric, foundNull, err = evalCompareAll(left, rtuple.t[idx], true)
-				if err != nil {
-					return nil, err
-				}
-				found = numeric == 0
-			}
-		}
-	} else {
-		for _, rtuple := range rtuple.t {
-			numeric, isNull, err := evalCompareAll(left, rtuple, true)
-			if err != nil {
-				return nil, err
-			}
-			if isNull {
-				foundNull = true
-				continue
-			}
-			if numeric == 0 {
-				found = true
-				break
-			}
-		}
+	if i.Negate {
+		in = in.not()
 	}
-
-	switch {
-	case found:
-		return newEvalBool(!i.Negate), nil
-	case foundNull:
-		return nil, nil
-	default:
-		return newEvalBool(i.Negate), nil
-	}
+	return in.eval(), nil
 }
 
-func (i *InExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := i.Left.typeof(env)
-	_, f2 := i.Right.typeof(env)
+func (i *InExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := i.Left.typeof(env, fields)
+	_, f2 := i.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2
 }
 
@@ -377,8 +385,8 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 // typeof implements the ComparisonOp interface
-func (l *LikeExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := l.Left.typeof(env)
-	_, f2 := l.Right.typeof(env)
+func (l *LikeExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := l.Left.typeof(env, fields)
+	_, f2 := l.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2
 }

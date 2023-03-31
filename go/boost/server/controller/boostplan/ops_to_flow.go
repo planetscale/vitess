@@ -351,7 +351,7 @@ func makeGroupByOpNode(mig Migration, node *operators.Node, op *operators.GroupB
 func checkParametersInExpression(ast sqlparser.SQLNode) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node.(type) {
-		case sqlparser.Argument, sqlparser.ListArg:
+		case *sqlparser.Argument, sqlparser.ListArg:
 			return false, &operators.UnsupportedError{
 				AST:  ast,
 				Type: operators.ParameterLocation,

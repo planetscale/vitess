@@ -820,7 +820,7 @@ func (c *Conn) WriteErrorAndLog(format string, args ...interface{}) bool {
 	return c.writeErrorAndLog(ERUnknownComError, SSNetError, format, args...)
 }
 
-func (c *Conn) writeErrorAndLog(errorCode uint16, sqlState string, format string, args ...any) bool {
+func (c *Conn) writeErrorAndLog(errorCode ErrorCode, sqlState string, format string, args ...any) bool {
 	if err := c.writeErrorPacket(errorCode, sqlState, format, args...); err != nil {
 		log.Errorf("Error writing error to %s: %v", c, err)
 		return false
@@ -840,12 +840,12 @@ func (c *Conn) writeErrorPacketFromErrorAndLog(err error) bool {
 // writeErrorPacket writes an error packet.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
-func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...any) error {
+func (c *Conn) writeErrorPacket(errorCode ErrorCode, sqlState string, format string, args ...any) error {
 	errorMessage := fmt.Sprintf(format, args...)
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
 	data, pos := c.startEphemeralPacketWithHeader(length)
 	pos = writeByte(data, pos, ErrPacket)
-	pos = writeUint16(data, pos, errorCode)
+	pos = writeUint16(data, pos, uint16(errorCode))
 	pos = writeByte(data, pos, '#')
 	if sqlState == "" {
 		sqlState = SSUnknownSQLState
@@ -863,7 +863,7 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 // See writeErrorPacket for other info.
 func (c *Conn) writeErrorPacketFromError(err error) error {
 	if se, ok := err.(*SQLError); ok {
-		return c.writeErrorPacket(uint16(se.Num), se.State, "%v", se.Message)
+		return c.writeErrorPacket(se.Num, se.State, "%v", se.Message)
 	}
 
 	return c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", err)
@@ -1226,8 +1226,8 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	paramsCount := uint16(0)
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
-		case sqlparser.Argument:
-			if strings.HasPrefix(string(node), "v") {
+		case *sqlparser.Argument:
+			if strings.HasPrefix(node.Name, "v") {
 				paramsCount++
 			}
 		}
@@ -1606,7 +1606,7 @@ func ParseErrorPacket(data []byte) error {
 	// Human readable error message is the rest.
 	msg := string(data[pos:])
 
-	return NewSQLError(int(code), string(sqlState), "%v", msg)
+	return NewSQLError(ErrorCode(code), string(sqlState), "%v", msg)
 }
 
 // GetTLSClientCerts gets TLS certificates.

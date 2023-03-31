@@ -58,7 +58,7 @@ func (r *RealTable) getTableSet(org originable) TableSet {
 }
 
 // GetExprFor implements the TableInfo interface
-func (r *RealTable) GetExprFor(s string) (sqlparser.Expr, error) {
+func (r *RealTable) getExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
 }
 

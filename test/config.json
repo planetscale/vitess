@@ -460,6 +460,17 @@
 				"site_test"
 			]
 		},
+		"tabletmanager_throttler_topo": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "tabletmanager_throttler_topo",
+			"RetryMax": 1,
+			"Tags": [
+				"site_test"
+			]
+		},
 		"tabletmanager_throttler_custom_config": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_custom_config"],
@@ -511,15 +522,6 @@
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
 			"RetryMax": 2,
-			"Tags": []
-		},
-		"vtgate_queries_derived": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/derived"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtgate_queries",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_queries_derived": {
@@ -639,6 +641,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_queries_reference": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/reference"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_concurrentdml": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/concurrentdml"],
@@ -720,15 +731,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vtgate_queries_derived": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/derived"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "mysql80",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"vtgate_sequence": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/sequence"],
@@ -795,6 +797,15 @@
 		"vtgate_transaction": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_transaction",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_transaction_restart": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/restart"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
@@ -906,6 +917,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_topo",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_grpc_server_auth_static": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/grpc_server_auth_static"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_general_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},
