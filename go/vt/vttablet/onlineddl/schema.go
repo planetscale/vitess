@@ -359,11 +359,9 @@ const (
 			AND cleanup_timestamp IS NULL
 			AND completed_timestamp IS NULL
 	`
-	sqlFixRequestedTimestamp = `UPDATE _vt.schema_migrations
-		SET
-			requested_timestamp = added_timestamp
-		WHERE
-			requested_timestamp < added_timestamp;
+	sqlShowMigrationsWhere = `SELECT *
+		FROM _vt.schema_migrations
+		%s
 	`
 	sqlSelectMigration = `SELECT
 			id,
