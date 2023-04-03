@@ -45,6 +45,7 @@ const (
 	NoFullGroupBy
 	Lock
 	SubQuery
+	NonConstantExpression
 )
 
 type (
@@ -135,6 +136,8 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "row locking with '%s' is not supported", sel.Lock.ToString())
 	case SubQuery:
 		fmt.Fprintf(&sb, "subqueries are not supported: %s", sqlparser.CanonicalString(n.AST))
+	case NonConstantExpression:
+		fmt.Fprintf(&sb, "non constant expression in query: %s", sqlparser.CanonicalString(n.AST))
 	}
 
 	return sb.String()
