@@ -5,8 +5,9 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/boost/sql"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 type agstateCount struct {
@@ -58,7 +59,7 @@ func (g *agstateCount) aggregate(current *sql.Value) (sql.Value, agstatus) {
 }
 
 type agstateSumDecimal struct {
-	diffs  []evalengine.Decimal
+	diffs  []decimal.Decimal
 	over   int
 	offset int
 	scalar bool
@@ -71,7 +72,7 @@ func (g *agstateSumDecimal) len() int {
 func (g *agstateSumDecimal) reset() {
 	// explicitly clear the Decimals to prevent GC leaks
 	for i := range g.diffs {
-		g.diffs[i] = evalengine.Decimal{}
+		g.diffs[i] = decimal.Decimal{}
 	}
 	g.diffs = g.diffs[:0]
 	g.offset = 0
@@ -82,10 +83,10 @@ func (g *agstateSumDecimal) update(r sql.Record) {
 
 	switch val.Type() {
 	case sqltypes.Null:
-		g.diffs = append(g.diffs, evalengine.DecimalZero)
+		g.diffs = append(g.diffs, decimal.Zero)
 
 	case sqltypes.Decimal:
-		d, err := evalengine.NewDecimalFromMySQL(val.RawBytes())
+		d, err := decimal.NewFromMySQL(val.RawBytes())
 		if err != nil {
 			panic(err)
 		}
@@ -113,7 +114,7 @@ func (g *agstateSumDecimal) aggregate(current *sql.Value) (sql.Value, agstatus) 
 	case sqltypes.Null:
 		return aggregateSumDecimal(canBeEmpty, g.diffs[0], g.diffs[1:], nil)
 	case sqltypes.Decimal:
-		d, err := evalengine.NewDecimalFromMySQL(current.RawBytes())
+		d, err := decimal.NewFromMySQL(current.RawBytes())
 		if err != nil {
 			panic(err)
 		}
@@ -175,7 +176,7 @@ func aggregateSumInt(zeroCanBeEmpty bool, sum int64, diffs []int64) (sql.Value, 
 	var ok bool
 	for n, d := range diffs {
 		if sum, ok = safeAdd64(sum, d); !ok {
-			return aggregateSumDecimal(zeroCanBeEmpty, evalengine.NewDecimalFromInt(sum), nil, diffs[n:])
+			return aggregateSumDecimal(zeroCanBeEmpty, decimal.NewFromInt(sum), nil, diffs[n:])
 		}
 	}
 	if zeroCanBeEmpty && sum == 0 {
@@ -186,12 +187,12 @@ func aggregateSumInt(zeroCanBeEmpty bool, sum int64, diffs []int64) (sql.Value, 
 	}), aggregationOK
 }
 
-func aggregateSumDecimal(zeroCanBeEmpty bool, sum evalengine.Decimal, diffD []evalengine.Decimal, diffI []int64) (sql.Value, agstatus) {
+func aggregateSumDecimal(zeroCanBeEmpty bool, sum decimal.Decimal, diffD []decimal.Decimal, diffI []int64) (sql.Value, agstatus) {
 	for _, d := range diffD {
 		sum = sum.Add(d)
 	}
 	for _, d := range diffI {
-		sum = sum.Add(evalengine.NewDecimalFromInt(d))
+		sum = sum.Add(decimal.NewFromInt(d))
 	}
 	if zeroCanBeEmpty && sum.IsZero() {
 		return sql.NULL, aggregationMiss
@@ -219,7 +220,7 @@ func (g *agstateSumInt) aggregate(current *sql.Value) (sql.Value, agstatus) {
 		}
 		return aggregateSumInt(zeroCanBeEmpty, n, g.diffs)
 	case sqltypes.Decimal:
-		d, err := evalengine.NewDecimalFromMySQL(current.RawBytes())
+		d, err := decimal.NewFromMySQL(current.RawBytes())
 		if err != nil {
 			panic(err)
 		}
@@ -268,6 +269,6 @@ func (g *agstateSumFloat) aggregate(current *sql.Value) (sql.Value, agstatus) {
 		n += d
 	}
 	return sql.MakeValue(sqltypes.Float64, func(buf []byte) []byte {
-		return evalengine.AppendFloat(buf, sqltypes.Float64, n)
+		return mysql.AppendFloat(buf, sqltypes.Float64, n)
 	}), aggregationOK
 }

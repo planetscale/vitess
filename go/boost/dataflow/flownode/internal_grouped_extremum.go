@@ -7,15 +7,16 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/decimal"
 
 	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 type deltaValue interface {
-	int64 | uint64 | float64 | evalengine.Decimal | time.Time | []byte
+	int64 | uint64 | float64 | decimal.Decimal | time.Time | []byte
 }
 
 type delta[N deltaValue] struct {
@@ -180,21 +181,21 @@ func createExtremumState(tt sql.Type, max bool, over int) (agstate, error) {
 			},
 			to: func(f float64) sql.Value {
 				return sql.MakeValue(tt.T, func(buf []byte) []byte {
-					return evalengine.AppendFloat(buf, tt.T, f)
+					return mysql.AppendFloat(buf, tt.T, f)
 				})
 			},
 			max:  max,
 			over: over,
 		}, nil
 	case tt.T == sqltypes.Decimal:
-		return &agstateExtremum[evalengine.Decimal]{
-			cmp: func(a, b evalengine.Decimal) int {
+		return &agstateExtremum[decimal.Decimal]{
+			cmp: func(a, b decimal.Decimal) int {
 				return a.Cmp(b)
 			},
-			from: func(value sql.Value) (evalengine.Decimal, error) {
-				return evalengine.NewDecimalFromMySQL(value.RawBytes())
+			from: func(value sql.Value) (decimal.Decimal, error) {
+				return decimal.NewFromMySQL(value.RawBytes())
 			},
-			to: func(f evalengine.Decimal) sql.Value {
+			to: func(f decimal.Decimal) sql.Value {
 				return sql.MakeValue(tt.T, func(buf []byte) []byte {
 					return append(buf, f.FormatMySQL(0)...)
 				})
@@ -220,12 +221,12 @@ func createExtremumState(tt sql.Type, max bool, over int) (agstate, error) {
 					if str == "0000-00-00" {
 						return time.Time{}, nil
 					}
-					return sqlparser.ParseDate(str)
+					return datetime.ParseDate(str)
 				case sqltypes.Datetime, sqltypes.Timestamp:
 					if str == "0000-00-00 00:00:00" {
 						return time.Time{}, nil
 					}
-					return sqlparser.ParseDateTime(str)
+					return datetime.ParseDateTime(str)
 				}
 				return time.Time{}, fmt.Errorf("invalid type %v", tt)
 			},

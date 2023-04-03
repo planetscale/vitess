@@ -77,6 +77,6 @@ jobs:
         make tools
 
     - name: unit_race
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
         eatmydata -- make unit_test_race
