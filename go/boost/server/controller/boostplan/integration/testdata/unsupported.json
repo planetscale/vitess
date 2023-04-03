@@ -42,7 +42,17 @@
     {
       "Keyspace": "main",
       "SQL": "SELECT users.id, now() FROM users",
-      "Error": "query not supported by boost: unsupported expression by the evaluation engine: now()"
+      "Error": "query not supported by boost: non constant expression in query: now()"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, unix_timestamp() FROM users",
+      "Error": "query not supported by boost: non constant expression in query: unix_timestamp()"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "SELECT users.id, unix_timestamp('2020-01-01') FROM users /* TODO: This will work once we support unix_timestamp in the evalengine */",
+      "Error": "query not supported by boost: unsupported expression by the evaluation engine: unix_timestamp('2020-01-01')"
     },
     {
       "Keyspace": "main",

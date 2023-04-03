@@ -3,6 +3,7 @@ package operators
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"go.uber.org/multierr"
 
@@ -157,6 +158,52 @@ func (conv *Converter) selectToOperator(ctx *PlanContext, sel *sqlparser.Select)
 	return
 }
 
+// nonConstantFuncs is a map of functions that are not constant even for
+// the same user input. The value is the number of arguments for which it
+// is non-constant. -1 indicates it's non-constant for any number of arguments.
+// See also https://dev.mysql.com/doc/refman/8.0/en/replication-rbr-safe-unsafe.html
+// since being unsafe for replication is a good indicator of being non-constant.
+var nonConstantFuncs = map[string]int{
+	"now":                  -1,
+	"curdate":              -1,
+	"current_date":         -1,
+	"current_time":         -1,
+	"current_timestamp":    -1,
+	"curtime":              -1,
+	"localtime":            -1,
+	"localtimestamp":       -1,
+	"sysdate":              -1,
+	"utc_date":             -1,
+	"utc_time":             -1,
+	"utc_timestamp":        -1,
+	"unix_timestamp":       0,
+	"current_user":         -1,
+	"session_user":         -1,
+	"system_user":          -1,
+	"user":                 -1,
+	"version":              -1,
+	"database":             -1,
+	"schema":               -1,
+	"connection_id":        -1,
+	"last_insert_id:":      -1,
+	"rand":                 -1,
+	"random_bytes":         -1,
+	"found_rows":           -1,
+	"get_lock":             -1,
+	"is_free_lock":         -1,
+	"is_used_lock":         -1,
+	"load_file":            -1,
+	"master_pos_wait":      -1,
+	"release_lock":         -1,
+	"row_count":            -1,
+	"sleep":                -1,
+	"source_pos_wait":      -1,
+	"uuid":                 -1,
+	"uuid_short":           -1,
+	"ps_current_thread_id": -1,
+	"ps_thread_id":         -1,
+}
+
 func checkForUnsupported(sel *sqlparser.Select) error {
 	var errors []error
 	ordered := len(sel.OrderBy) != 0
@@ -208,7 +255,7 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 
 	seen := map[string]struct{}{}
 	sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
-		switch cursor.Node().(type) {
+		switch n := cursor.Node().(type) {
 		case *sqlparser.Argument:
 			switch parent := cursor.Parent().(type) {
 			case *sqlparser.ComparisonExpr:
@@ -247,6 +294,38 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 				AST:  cursor.Parent(),
 				Type: SubQuery,
 			})
+		case *sqlparser.FuncExpr:
+			args, ok := nonConstantFuncs[n.Name.Lowered()]
+			if !ok {
+				return true
+			}
+			if args == -1 || len(n.Exprs) == args {
+				errors = append(errors, &UnsupportedError{
+					AST:  cursor.Parent(),
+					Type: NonConstantExpression,
+				})
+			}
+		case *sqlparser.CurTimeFuncExpr:
+			if _, ok := nonConstantFuncs[n.Name.Lowered()]; ok {
+				errors = append(errors, &UnsupportedError{
+					AST:  cursor.Parent(),
+					Type: NonConstantExpression,
+				})
+			}
+		case *sqlparser.LockingFunc:
+			if _, ok := nonConstantFuncs[strings.ToLower(n.Type.ToString())]; ok {
+				errors = append(errors, &UnsupportedError{
+					AST:  cursor.Parent(),
+					Type: NonConstantExpression,
+				})
+			}
+		case *sqlparser.PerformanceSchemaFuncExpr:
+			if _, ok := nonConstantFuncs[strings.ToLower(n.Type.ToString())]; ok {
+				errors = append(errors, &UnsupportedError{
+					AST:  cursor.Parent(),
+					Type: NonConstantExpression,
+				})
+			}
 		}
 		return true
 	}, nil)
