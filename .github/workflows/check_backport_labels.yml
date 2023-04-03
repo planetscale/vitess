@@ -1,0 +1,26 @@
+name: Check Backport Labels
+on:
+  pull_request:
+    types: [opened, labeled, unlabeled, synchronize, reopened]
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Check Backport Labels')
+  cancel-in-progress: true
+
+jobs:
+  check_pull_request_labels:
+    name: Check Backport Labels
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Backport labels
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Backport to: latest')}}" == "true" ]]; then
+            echo 'The "Backport to: latest" label is set.'
+            gh pr edit ${{ github.event.pull_request.number }} --add-label 'Backport to: latest-16.0'
+          fi
