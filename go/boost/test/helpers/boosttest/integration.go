@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -204,7 +205,11 @@ func New(t testing.TB, options ...Option) *Cluster {
 	var logger *zap.Logger
 	if testing.Verbose() {
 		var err error
-		logger, err = zap.NewDevelopment()
+		cfg := zap.NewDevelopmentConfig()
+		if os.Getenv("CI") == "true" {
+			cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+		}
+		logger, err = cfg.Build()
 		if err != nil {
 			t.Fatal(err)
 		}

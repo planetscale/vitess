@@ -193,8 +193,6 @@ func (ctrl *Controller) domainPlace(ctx context.Context, idx dataflow.DomainIdx,
 		return err
 	}
 
-	ctrl.log.Info("placed new domain", idx.Zap(), zap.Int("shard_count", len(domainshards)), zap.Any("shards", domainshards))
-
 	for _, endpoint := range ctrl.workers {
 		for _, dd := range announce {
 			if _, err := endpoint.Client.DomainBooted(ctx, &service.DomainBootedRequest{
@@ -371,7 +369,7 @@ func (ctrl *Controller) cleanupRecipe(ctx context.Context, activation *boostplan
 }
 
 func (ctrl *Controller) applyRecipe(ctx context.Context, newrecipe *boostplan.VersionedRecipe, si *boostplan.SchemaInformation) (*boostplan.ActivationResult, error) {
-	ctrl.log.Info("applying new recipe", zap.Int64("version", newrecipe.Version()))
+	ctrl.log.Debug("applying new recipe", zap.Int64("version", newrecipe.Version()))
 
 	var activation *boostplan.ActivationResult
 
@@ -427,8 +425,6 @@ func (ctrl *Controller) removeLeaf(ctx context.Context, leaf graph.NodeIdx) erro
 	if ctrl.g.Value(leaf).IsRoot() {
 		panic("trying to remove source")
 	}
-
-	ctrl.log.Info("computing removals", leaf.ZapField("remove_node"))
 
 	nchildren := ctrl.g.NeighborsDirected(leaf, graph.DirectionOutgoing).Count()
 	if nchildren > 0 {
@@ -517,7 +513,7 @@ func (ctrl *Controller) PrepareEvictionPlan(ctx context.Context) (*materializati
 }
 
 func (ctrl *Controller) PerformDistributedEviction(ctx context.Context, forceLimits map[string]int64) (*materialization.EvictionPlan, error) {
-	ctrl.log.Info("preparing eviction plan for distributed eviction")
+	ctrl.log.Debug("preparing eviction plan for distributed eviction")
 
 	plan, err := ctrl.PrepareEvictionPlan(ctx)
 	if err != nil {
@@ -527,7 +523,7 @@ func (ctrl *Controller) PerformDistributedEviction(ctx context.Context, forceLim
 	plan.SetCustomLimits(forceLimits)
 	evictions := plan.Evictions()
 
-	ctrl.log.Info("distributed eviction plan ready", zap.Int("evictions", len(evictions)))
+	ctrl.log.Debug("distributed eviction plan ready", zap.Int("evictions", len(evictions)))
 
 	var errs []error
 	for _, ev := range plan.Evictions() {

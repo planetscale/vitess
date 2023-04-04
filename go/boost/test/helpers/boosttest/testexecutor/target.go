@@ -115,8 +115,6 @@ func (target *memTarget) execute(querySQL string, variables map[string]*querypb.
 	}
 
 	vtrows := rowsToVitess(ctx, schema, rows)
-	target.t.Logf("executed query %q with %d results", querySQL, len(vtrows))
-	target.t.Logf("\t%v", vtrows)
 
 	return &sqltypes.Result{
 		Fields: schemaToVitess(schema),

@@ -1346,7 +1346,7 @@ func (d *Domain) handleFinishReplay(ctx context.Context, finishReplay *packet.Fi
 	}
 
 	if finished {
-		d.log.Info("node is fully up to date", finishReplay.Node.Zap(), zap.Int("passes", d.replaying.Passes), finishReplay.Tag.Zap())
+		d.log.Debug("node is fully up to date", finishReplay.Node.Zap(), zap.Int("passes", d.replaying.Passes), finishReplay.Tag.Zap())
 		d.replaying = nil
 
 		if finishReplay.NotifyDone {

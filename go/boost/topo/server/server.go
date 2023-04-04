@@ -56,7 +56,7 @@ func (ts *Server) Close() {
 }
 
 func (ts *Server) watchWorkersPoll(ctx context.Context, watcher WorkerWatcher, epoch int64) error {
-	ts.log.Info("watching for workers (poll)", zap.Int64("epoch", epoch))
+	ts.log.Debug("watching for workers (poll)", zap.Int64("epoch", epoch))
 
 	var activeWorkers = make(map[string]*vtboostpb.TopoWorkerEntry)
 	var ticker = time.NewTicker(500 * time.Millisecond)
@@ -101,7 +101,7 @@ func (ts *Server) WatchWorkers(ctx context.Context, watcher WorkerWatcher, epoch
 		return err
 	}
 
-	ts.log.Info("watching for workers (recursive)", zap.Int64("epoch", epoch))
+	ts.log.Debug("watching for workers (recursive)", zap.Int64("epoch", epoch))
 
 	for _, d := range initial {
 		var entry vtboostpb.TopoWorkerEntry
@@ -222,7 +222,7 @@ func (ts *Server) WatchLeadership(ctx context.Context, watcher LeadershipWatcher
 				if err != nil {
 					return err
 				}
-				ts.log.Info("leadership campaign finished")
+				ts.log.Debug("leadership campaign finished")
 			case topo.IsErrType(err, topo.Interrupted):
 				return nil
 			default:

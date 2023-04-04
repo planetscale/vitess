@@ -101,7 +101,7 @@ func (w *Worker) ViewRead(ctx context.Context, req *service.ViewReadRequest) (*s
 		}
 	}
 
-	w.log.Warn("ViewRead request timed out", zap.Error(ctx.Err()))
+	w.log.Warn("ViewRead request timed out", zap.Error(ctx.Err()), req.Key.Zap("key"))
 	return nil, ctx.Err()
 }
 
@@ -231,7 +231,7 @@ func (w *Worker) start(ctx context.Context, globalCfg *config.Config, globalAddr
 		}
 	}()
 
-	w.log.Info("started inner worker",
+	w.log.Debug("started inner worker",
 		zap.String("reader_addr", readerListener.Addr().String()),
 		zap.String("ctrl_addr", globalAddress),
 	)
