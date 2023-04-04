@@ -1,0 +1,44 @@
+name: Prevent Direct PRs
+on:
+  pull_request:
+    types: [opened, labeled, unlabeled, synchronize, reopened]
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Prevent Direct PRs')
+  cancel-in-progress: true
+
+jobs:
+  prevent_direct_prs:
+    name: Prevent Direct PRs
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        if: ${{ github.base_ref != 'upstream' }}
+        uses: actions/checkout@v3
+
+      - name: Add initial labels
+        if: ${{ github.base_ref != 'upstream' && contains(fromJSON('["opened", "reopened"]'), github.event.action) }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Backport')}}" == "true" ]]; then
+            echo 'The "Backport" label is set.'
+          else
+            echo 'The "Backport" label is not set.'
+            gh pr edit ${{ github.event.pull_request.number }} --add-label 'Direct PRs Not Supported'
+            echo 'The "Direct PRs Not Supported" label has been set.'
+            exit 1
+          fi
+
+      - name: Fail if Direct PR
+        if: ${{ github.base_ref != 'upstream' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Direct PRs Not Supported')}}" == "true" ]]; then
+            echo 'The "Direct PRs Not Supported" label is set.'
+            exit 1
+          fi
+
+
