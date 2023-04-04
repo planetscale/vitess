@@ -45,8 +45,6 @@ func (recipe *Recipe) updateExternalSchema(t testing.TB) {
 
 	for keyspace, ddls := range recipe.DDL {
 		for _, ddl := range ddls {
-			t.Logf("[schema] %s", ddl)
-
 			stmt, err := sqlparser.ParseStrictDDL(ddl)
 			if err != nil {
 				t.Fatalf("failed to parse DDL statement: %v", err)

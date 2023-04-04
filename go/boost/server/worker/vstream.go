@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -265,7 +266,7 @@ func NewExternalTableClientFromProto(pb *service.ExternalTableDescriptor, sender
 }
 
 func (ep *EventProcessor) AssignTables(ctx context.Context, tables []*service.ExternalTableDescriptor) error {
-	ep.log.Info("assigning new vstream tables", zap.Int("num_tables", len(tables)))
+	ep.log.Debug("assigning new vstream tables", zap.Int("num_tables", len(tables)))
 
 	if ep.cancel != nil {
 		ep.log.Debug("cancelling existing vstream...")
@@ -365,7 +366,7 @@ func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gat
 		zap.String("target.cell", target.pb.Cell),
 	)
 
-	log.Info("started VStream")
+	log.Debug("started VStream")
 
 	rules := make([]*binlogdatapb.Rule, 0, len(interestingTables))
 	for _, table := range interestingTables {
@@ -433,7 +434,9 @@ func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gat
 		})
 
 		if ctx.Err() != nil {
-			log.Info("vstream finished")
+			if !errors.Is(ctx.Err(), context.Canceled) {
+				log.Warn("vstream finished with unexpected error", zap.Error(ctx.Err()))
+			}
 			return
 		}
 

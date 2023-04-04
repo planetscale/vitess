@@ -105,7 +105,7 @@ func (srv *Server) DomainBooted(ctx context.Context, req *service.DomainBootedRe
 
 	if st := srv.active; st != nil {
 		if req.From.Epoch == st.epoch {
-			srv.log.Info("found about new domain", req.Domain.Zap())
+			srv.log.Debug("found about new domain", req.Domain.Zap())
 			srv.coord.InsertRemote(req.Domain.Id, req.Domain.Shard, req.Domain.Addr)
 		}
 	}
@@ -125,7 +125,7 @@ func (srv *Server) LeaderChange(st *vtboostpb.ControllerState) {
 		return
 	}
 
-	srv.log.Info("LeaderChange", zap.Int64("new_epoch", st.Epoch))
+	srv.log.Debug("LeaderChange", zap.Int64("new_epoch", st.Epoch))
 
 	stats := newWorkerStats(srv.uuid)
 

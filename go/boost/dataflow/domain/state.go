@@ -19,7 +19,6 @@ func (d *Domain) memstate(node dataflow.LocalNodeIdx) *state.Memory {
 	var memstate *state.Memory
 	if !d.state.ContainsKey(node) {
 		memstate = state.NewMemoryState()
-		d.log.Debug("allocate NewMemoryState", node.Zap())
 		d.state.Insert(node, memstate)
 		d.memstats.Register(d.index, d.shard, d.nodes.Get(node).GlobalAddr(), memstate.StateSizeAtomic())
 	} else {

@@ -70,7 +70,7 @@ func (srv *Server) waitForClusterState(ctx context.Context) error {
 		return err
 	}
 
-	srv.log.Info("found self in ClusterStates",
+	srv.log.Debug("found self in ClusterStates",
 		zap.String("self_uuid", state.Uuid),
 		zap.Uint32("expected_worker_count", state.ExpectedWorkerCount))
 
@@ -128,7 +128,7 @@ func (srv *Server) ReadyCheck(context.Context, *vtboostpb.ReadyRequest) (*vtboos
 }
 
 func (srv *Server) StartLeaderCampaign(ctx context.Context, state *vtboostpb.ControllerState) error {
-	srv.log.Info("Starting leader campaign", zap.Int64("epoch", state.Epoch))
+	srv.log.Debug("Starting leader campaign", zap.Int64("epoch", state.Epoch))
 
 	srv.mu.Lock()
 	var err error

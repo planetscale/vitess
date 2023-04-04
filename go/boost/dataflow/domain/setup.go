@@ -44,7 +44,6 @@ func (d *Domain) handleReady(rdy *packet.ReadyRequest, done chan struct{}) error
 		}
 	}
 
-	d.log.Info("readying local node", node.Zap())
 	close(done)
 	return nil
 }
