@@ -216,7 +216,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
-		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, warnMemoryRows)
+		log.Warningf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, len(result.Rows))
 	}
 
 	logStats.SaveEndTime()
@@ -354,7 +354,7 @@ func (e *Executor) StreamExecute(
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
-		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, warnMemoryRows)
+		log.Warningf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, srr.rowsReturned)
 	}
 
 	logStats.RowsReturned = uint64(srr.rowsReturned)
