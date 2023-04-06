@@ -23,13 +23,15 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/mysql/datetime"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-
-	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -553,9 +555,9 @@ func (session *SafeSession) TimeZone() *time.Location {
 	session.mu.Unlock()
 
 	if !ok {
-		return time.Local
+		return nil
 	}
-	loc, _ := time.LoadLocation(tz)
+	loc, _ := datetime.ParseTimeZone(tz)
 	return loc
 }
 
