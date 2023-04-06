@@ -186,7 +186,7 @@ func updateWorkflowFilesOnly(goTo string) error {
 
 	for _, fileToChange := range filesToChange {
 		err = replaceInFile(
-			[]*regexp.Regexp{regexp.MustCompile(`(?i).*go-version:[[:space:]]*([0-9.]+).*`)},
+			[]*regexp.Regexp{regexp.MustCompile(`go-version:[[:space:]]*([0-9.]+).*`)},
 			[]string{"go-version: " + newV.String()},
 			fileToChange,
 		)
@@ -414,8 +414,8 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 	for _, file := range files {
 		err = replaceInFile(
 			[]*regexp.Regexp{
-				regexp.MustCompile(`(?i)ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*[0-9.]+`), // Dockerfile
-				regexp.MustCompile(`(?i)BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+`),                // Makefile
+				regexp.MustCompile(`ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*[0-9.]+`), // Dockerfile
+				regexp.MustCompile(`BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+`),                // Makefile
 			},
 			[]string{
 				fmt.Sprintf("ARG bootstrap_version=%s", new), // Dockerfile

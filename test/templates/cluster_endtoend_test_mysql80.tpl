@@ -20,7 +20,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.4
+        go-version: 1.20.2
 
     - name: Set up python
       uses: actions/setup-python@v4
