@@ -41,6 +41,8 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+var printProcessListOnce = &sync.Once{}
+
 // DBConn is a db connection for tabletserver.
 // It performs automatic reconnects as needed.
 // Its Execute function has a timeout that can kill
@@ -438,6 +440,11 @@ func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	if err != nil {
 		log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(),
 			dbc.CurrentForLogging(), err)
+		// We want to log the redacted process lists only once when killing a query fails
+		printProcessListOnce.Do(func() {
+			dbconnpool.LogRedactedProcessList(killConn, dbc.conn.User)
+		})
+		dbc.stats.ErrorInKillingCounter.Add(1)
 		return err
 	}
 	return nil

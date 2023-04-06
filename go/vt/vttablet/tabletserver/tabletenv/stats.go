@@ -31,6 +31,7 @@ type Stats struct {
 	QPSRates               *stats.Rates                   // Human readable QPS rates
 	WaitTimings            *servenv.TimingsWrapper        // waits like Consolidations etc
 	KillCounters           *stats.CountersWithSingleLabel // Connection and transaction kills
+	ErrorInKillingCounter  *stats.Counter
 	ErrorCounters          *stats.CountersWithSingleLabel
 	InternalErrors         *stats.CountersWithSingleLabel
 	Warnings               *stats.CountersWithSingleLabel
@@ -52,10 +53,11 @@ type Stats struct {
 // NewStats instantiates a new set of stats scoped by exporter.
 func NewStats(exporter *servenv.Exporter) *Stats {
 	stats := &Stats{
-		MySQLTimings: exporter.NewTimings("Mysql", "MySQl query time", "operation"),
-		QueryTimings: exporter.NewTimings("Queries", "MySQL query timings", "plan_type"),
-		WaitTimings:  exporter.NewTimings("Waits", "Wait operations", "type"),
-		KillCounters: exporter.NewCountersWithSingleLabel("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries", "ReservedConnection"),
+		MySQLTimings:          exporter.NewTimings("Mysql", "MySQl query time", "operation"),
+		QueryTimings:          exporter.NewTimings("Queries", "MySQL query timings", "plan_type"),
+		WaitTimings:           exporter.NewTimings("Waits", "Wait operations", "type"),
+		KillCounters:          exporter.NewCountersWithSingleLabel("Kills", "Number of connections being killed", "query_type", "Transactions", "Queries", "ReservedConnection"),
+		ErrorInKillingCounter: exporter.NewCounter("ErrorsInKills", "Number of errors in connections being killed"),
 		ErrorCounters: exporter.NewCountersWithSingleLabel(
 			"Errors",
 			"Critical errors",

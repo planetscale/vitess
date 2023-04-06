@@ -256,38 +256,35 @@ func TestDBConnKill(t *testing.T) {
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
-	if err != nil {
-		t.Fatalf("should not get an error, err: %v", err)
-	}
+	require.NoError(t, err)
+	// Verify initial value of ErrorsInKilling counter
+	require.EqualValues(t, 0, dbConn.stats.ErrorInKillingCounter.Get())
+
 	query := fmt.Sprintf("kill %d", dbConn.ID())
 	db.AddQuery(query, &sqltypes.Result{})
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
 	err = dbConn.Kill("test kill", 0)
 	want := "errno 2013"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Exec: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, want)
+	// Verify we don't increment ErrorInKillingCounter when getting a kill connection fails
+	require.EqualValues(t, 0, dbConn.stats.ErrorInKillingCounter.Get())
 	db.DisableConnFail()
 
 	// Kill succeed
 	err = dbConn.Kill("test kill", 0)
-	if err != nil {
-		t.Fatalf("kill should succeed, but got error: %v", err)
-	}
+	require.NoError(t, err)
 
 	err = dbConn.reconnect(context.Background())
-	if err != nil {
-		t.Fatalf("reconnect should succeed, but got error: %v", err)
-	}
+	require.NoError(t, err)
 	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
 	db.AddRejectedQuery(newKillQuery, errors.New("rejected"))
 	err = dbConn.Kill("test kill", 0)
 	want = "rejected"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Exec: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, want)
+	// Verify ErrorInKillingCounter got incremented
+	require.EqualValues(t, 1, dbConn.stats.ErrorInKillingCounter.Get())
 }
 
 // TestDBConnClose tests that an Exec returns immediately if a connection
@@ -343,9 +340,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 
 	// Kill succeed
 	err = dbConn.Kill("test kill", 0)
-	if err != nil {
-		t.Fatalf("kill should succeed, but got error: %v", err)
-	}
+	require.NoError(t, err)
 
 	err = dbConn.reconnect(context.Background())
 	if err != nil {
