@@ -5,9 +5,10 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/mysql/format"
+
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 
@@ -181,7 +182,7 @@ func createExtremumState(tt sql.Type, max bool, over int) (agstate, error) {
 			},
 			to: func(f float64) sql.Value {
 				return sql.MakeValue(tt.T, func(buf []byte) []byte {
-					return mysql.AppendFloat(buf, tt.T, f)
+					return format.AppendFloat(buf, tt.T, f)
 				})
 			},
 			max:  max,
