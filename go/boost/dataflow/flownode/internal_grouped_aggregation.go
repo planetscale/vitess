@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/format"
+
 	"vitess.io/vitess/go/boost/sql"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -269,6 +270,6 @@ func (g *agstateSumFloat) aggregate(current *sql.Value) (sql.Value, agstatus) {
 		n += d
 	}
 	return sql.MakeValue(sqltypes.Float64, func(buf []byte) []byte {
-		return mysql.AppendFloat(buf, sqltypes.Float64, n)
+		return format.AppendFloat(buf, sqltypes.Float64, n)
 	}), aggregationOK
 }
