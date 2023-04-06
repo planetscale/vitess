@@ -154,7 +154,7 @@ jobs:
         run: $(go env GOPATH)/bin/golangci-lint --version
 
       - name: Run golangci-lint
-        run: $(go env GOPATH)/bin/golangci-lint run go/... || exit 1
+        run: $(go env GOPATH)/bin/golangci-lint run go/... --timeout 10m || exit 1
 
       - name: Run go mod tidy
         run: |
