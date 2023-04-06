@@ -1,14 +1,14 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (onlineddl_singleton)
+name: Cluster (backup_pitr)
 on: [push]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_singleton)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (backup_pitr)')
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (onlineddl_singleton)
+    name: Run endtoend tests on Cluster (backup_pitr)
     runs-on: ubuntu-20.04
     timeout-minutes: 60
 
@@ -22,7 +22,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.20.1
+        go-version: 1.20.2
 
     - name: Set up python
       uses: actions/setup-python@v4
@@ -88,4 +88,4 @@ jobs:
 
         set -x
 
-        eatmydata -- go run test.go -docker=false -follow -shard onlineddl_singleton
+        eatmydata -- go run test.go -docker=false -follow -shard backup_pitr
