@@ -34,9 +34,10 @@ const (
 )
 
 var (
-	backupRegion = flag.String("psdb.backup_region", "", "The region for the backups")
-	backupBucket = flag.String("psdb.backup_bucket", "", "S3 bucket for backups")
-	backupARN    = flag.String("psdb.backup_arn", "", "ARN for the S3 bucket")
+	backupRegion      = flag.String("psdb.backup_region", "", "The region for the backups")
+	backupBucket      = flag.String("psdb.backup_bucket", "", "S3 bucket for backups")
+	backupARN         = flag.String("psdb.backup_arn", "", "ARN for the S3 bucket")
+	backupSSEKMSKeyID = flag.String("psdb.backup_sse_kms_key_id", "", "KMS Key ID to use for S3-SSE")
 )
 
 func init() {
@@ -53,6 +54,9 @@ type FilesBackupStorage struct {
 
 	// arn represents the ARN for the encrypted S3 bucket.
 	arn string
+
+	// kmsKeyID is the KMS Key ID for S3-SSE
+	kmsKeyID string
 
 	// files represents the a file system abstraction. It can be
 	// replaced for testing purposes.
@@ -127,8 +131,8 @@ func (f *FilesBackupStorage) StartBackup(ctx context.Context, dir string, name s
 		return nil, err
 	}
 
-	log.Infof("Starting backup with id = %s, bucket = %s, root = %s, name = %s.",
-		backupID, f.bucket, dir, name)
+	log.Infof("Starting backup with id = %s, bucket = %s, kmsKeyID = %s, root = %s, name = %s.",
+		backupID, f.bucket, f.kmsKeyID, dir, name)
 
 	return handle, nil
 }
@@ -148,6 +152,9 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 	if *backupARN != "" {
 		f.arn = *backupARN
 	}
+	if *backupSSEKMSKeyID != "" {
+		f.kmsKeyID = *backupSSEKMSKeyID
+	}
 
 	if f.region == "" {
 		return nil, errors.New("backup_region is not specified")
@@ -161,6 +168,10 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 		return nil, errors.New("backup_arn is not specified")
 	}
 
+	if f.kmsKeyID == "" {
+		return nil, errors.New("backup_sse_kms_key_id is not specified")
+	}
+
 	rootPath := path.Join("/", backupID, dir)
 
 	cfg := request.WithRetryer(aws.NewConfig(), newKMSReadConnResetRetryer())
@@ -172,7 +183,7 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 
 	impl := f.files
 	if impl == nil {
-		impl, err = files.NewEncryptedS3Files(sess, f.region, f.bucket, "", f.arn)
+		impl, err = files.NewEncryptedS3Files(sess, f.region, f.bucket, f.kmsKeyID, "", f.arn)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "could not create encrypted s3 files")
 		}
@@ -180,7 +191,7 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 
 	unencryptedFs := f.unencryptedFiles
 	if unencryptedFs == nil {
-		unencryptedFs = files.NewS3Files(sess, f.region, f.bucket, "")
+		unencryptedFs = files.NewS3Files(sess, f.region, f.bucket, f.kmsKeyID, "")
 	}
 
 	return newFilesBackupHandle(impl, unencryptedFs, rootPath, dir, name), nil
