@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"time"
 )
 
@@ -38,18 +39,18 @@ func main() {
 }
 
 func realMain() error {
-	v := VitessImageVersion{}
-	flag.StringVar(&v.CommitSha, "commit-sha", "", "the commit sha of the build")
-	flag.StringVar(&v.CommitDate, "commit-date", "", "the commit date of the build")
-	flag.StringVar(&v.Major, "major", "", "the major version of the build")
-	flag.StringVar(&v.Minor, "minor", "", "the minor version of the build")
-	flag.StringVar(&v.Patch, "patch", "", "the patch version of the build")
+	version := flag.String("version", "", "the output of vttablet --version")
 	hmacKey := flag.String("hmac-key", "", "the hmac secret key")
 	apibbURL := flag.String("url", "http://admin.pscaledev.com:3000/api/external-admin/vitess-image-versions", "url to push the vitess image version")
 
 	flag.Parse()
 
-	return pushVersion(*apibbURL, *hmacKey, v)
+	v, err := parseVersion(*version)
+	if err != nil {
+		return err
+	}
+
+	return pushVersion(*apibbURL, *hmacKey, *v)
 }
 
 func pushVersion(apiURL, hmacKey string, version VitessImageVersion) error {
@@ -112,4 +113,103 @@ func (r *requestHMAC) generate(key string) string {
 	)
 
 	return fmt.Sprintf("%d.%s", r.timestamp.Unix(), hex.EncodeToString(mac.Sum(nil)))
+}
+
+// Parses the following output of "vttablet --version".
+// TODO(fatih): replace this by when we introduce --version-json flag to vt
+// components.
+func parseVersion(output string) (*VitessImageVersion, error) {
+	if output == "" {
+		return nil, errors.New("vttablet --version output is empty")
+	}
+	// see go/vt/servenv/buildinfo.go for the pattern
+	// we only care about couple of things, hence we use the most minimal regexp match
+	re := regexp.MustCompile(`^Version: (?P<version>.*) \(Git revision (?P<git_sha>.*) branch \'(?P<branch>.*)\'\) built on (?P<build_date>.*) by.*$`)
+
+	result := re.FindAllStringSubmatch(output, -1)
+	if len(result) == 0 {
+		// no matches
+		return nil, fmt.Errorf("couldn't parse vttablet version output: %q", output)
+	}
+
+	names := re.SubexpNames()
+	matches := map[string]string{}
+	for i, n := range result[0] {
+		matches[names[i]] = n
+	}
+
+	ver, ok := matches["version"]
+	if !ok {
+		return nil, fmt.Errorf("couldn't parse vttablet version: %q", matches)
+	}
+
+	sver, err := parseSemver(ver)
+	if err != nil {
+		return nil, err
+	}
+
+	commitDate, ok := matches["build_date"]
+	if !ok {
+		return nil, fmt.Errorf("couldn't parse vttablet build date: %q", matches)
+	}
+
+	commitSHA, ok := matches["git_sha"]
+	if !ok {
+		return nil, fmt.Errorf("couldn't parse vttablet git sha: %q", matches)
+	}
+
+	return &VitessImageVersion{
+		CommitDate: commitDate,
+		CommitSha:  commitSHA,
+		Major:      sver.major,
+		Minor:      sver.minor,
+		Patch:      sver.patch,
+	}, nil
+}
+
+type semver struct {
+	major string
+	minor string
+	patch string
+}
+
+func parseSemver(s string) (*semver, error) {
+	// official regex for parsing a semver. We don't use a basic split function
+	// because it's more work (i.e: 15.0.0-snapshot). The regex is future-proof
+	// and also doesn't require any extra dependency.
+	// https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
+	re := regexp.MustCompile(`^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(?:-(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$`)
+
+	result := re.FindAllStringSubmatch(s, -1)
+	if len(result) == 0 {
+		// no matches
+		return nil, fmt.Errorf("couldn't parse vttablet semver: %q", s)
+	}
+
+	names := re.SubexpNames()
+	matches := map[string]string{}
+	for i, n := range result[0] {
+		matches[names[i]] = n
+	}
+
+	major, ok := matches["major"]
+	if !ok {
+		return nil, fmt.Errorf("couldn't parse semver major: %q", matches)
+	}
+
+	minor, ok := matches["minor"]
+	if !ok {
+		return nil, fmt.Errorf("couldn't parse semver minor: %q", matches)
+	}
+
+	patch, ok := matches["patch"]
+	if !ok {
+		return nil, fmt.Errorf("couldn't parse semver patch: %q", matches)
+	}
+
+	return &semver{
+		major: major,
+		minor: minor,
+		patch: patch,
+	}, nil
 }
