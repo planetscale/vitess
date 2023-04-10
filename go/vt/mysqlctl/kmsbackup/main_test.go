@@ -16,11 +16,12 @@ import (
 )
 
 var (
-	awsCredFile    = flag.String("aws-credentials-file", "", "AWS Credentials file")
-	awsCredProfile = flag.String("aws-credentials-profile", "", "Profile for AWS Credentials")
-	awsKMSKeyARN   = flag.String("aws-kms-key-arn", "", "AWS KMS Key ARN")
-	awsRegion      = flag.String("aws-region", "us-east-1", "AWS Region")
-	awsS3Bucket    = flag.String("aws-s3-bucket", "planetscale-vitess-private-ci", "Bucket to use for S3 for AWS Credentials")
+	awsCredFile      = flag.String("aws-credentials-file", "", "AWS Credentials file")
+	awsCredProfile   = flag.String("aws-credentials-profile", "", "Profile for AWS Credentials")
+	awsKMSKeyARN     = flag.String("aws-kms-key-arn", "", "AWS KMS Key ARN")
+	awsRegion        = flag.String("aws-region", "us-east-1", "AWS Region")
+	awsS3Bucket      = flag.String("aws-s3-bucket", "planetscale-vitess-private-ci", "Bucket to use for S3 for AWS Credentials")
+	awsS3SSEKMSKeyID = flag.String("aws-s3-sse-kms-key-id", "arn:aws:kms:us-east-1:997601596833:key/c25827d2-1c7f-48ad-9c62-b4cb94c60277", "KMS Key ID to use for S3-SSE")
 )
 
 func TestMain(m *testing.M) {
@@ -53,9 +54,9 @@ func newAWSConfigWithRetryer(retryer request.Retryer) *aws.Config {
 }
 
 func newEncryptedS3FilesBackupStorage(sess *session.Session) (*FilesBackupStorage, error) {
-	ufs := files.NewS3Files(sess, *awsRegion, *awsS3Bucket, "")
+	ufs := files.NewS3Files(sess, *awsRegion, *awsS3Bucket, *awsS3SSEKMSKeyID, "")
 
-	fs, err := files.NewEncryptedS3Files(sess, *awsRegion, *awsS3Bucket, "", *awsKMSKeyARN)
+	fs, err := files.NewEncryptedS3Files(sess, *awsRegion, *awsS3Bucket, *awsS3SSEKMSKeyID, "", *awsKMSKeyARN)
 	if err != nil {
 		return nil, err
 	}
@@ -64,18 +65,20 @@ func newEncryptedS3FilesBackupStorage(sess *session.Session) (*FilesBackupStorag
 		arn:              "not-used",
 		region:           *awsRegion,
 		bucket:           *awsS3Bucket,
+		kmsKeyID:         *awsS3SSEKMSKeyID,
 		files:            fs,
 		unencryptedFiles: ufs,
 	}, nil
 }
 
 func newS3FilesBackupStorage(sess *session.Session) (*FilesBackupStorage, error) {
-	fs := files.NewS3Files(sess, *awsRegion, *awsS3Bucket, "")
+	fs := files.NewS3Files(sess, *awsRegion, *awsS3Bucket, *awsS3SSEKMSKeyID, "")
 
 	return &FilesBackupStorage{
 		arn:              "not-used",
 		region:           *awsRegion,
 		bucket:           *awsS3Bucket,
+		kmsKeyID:         *awsS3SSEKMSKeyID,
 		files:            fs,
 		unencryptedFiles: fs,
 	}, nil
@@ -92,6 +95,7 @@ func newLocalFilesBackupStorage(testDir string) (*FilesBackupStorage, error) {
 		arn:              "not-used",
 		region:           *awsRegion,
 		bucket:           *awsS3Bucket,
+		kmsKeyID:         *awsS3SSEKMSKeyID,
 		files:            fs,
 		unencryptedFiles: fs,
 	}, nil
