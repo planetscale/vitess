@@ -25,10 +25,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-
-	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"

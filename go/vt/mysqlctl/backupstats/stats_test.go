@@ -179,5 +179,4 @@ func resetStats() {
 	restoreBytes = nil
 	restoreCount = nil
 	restoreDurationNs = nil
-	backupBytes = nil
 }
