@@ -92,6 +92,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           push: true
           secrets: github_token=${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+          build-args: | 
+            BUILD_TIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
 
       - name: Install Go
         uses: actions/setup-go@v3
@@ -119,3 +121,12 @@ jobs:
           echo '${{ secrets.VITESS_PRIVATE_GCP_CREDENTIALS }}' >> "$RUNNER_TEMP/gcp.credentials"
           go test vitess.io/vitess/go/vt/mysqlctl/kmsbackup -v -race --aws-credentials-file "$RUNNER_TEMP/aws.credentials" --aws-credentials-profile vitess-private-ci
           go test vitess.io/vitess/go/vt/mysqlctl/gcsbackup -v -race --gcp-credentials-file "$RUNNER_TEMP/gcp.credentials"
+
+      - name: Notify api-bb of new Vitess image version
+        run: >-
+          go run vitess.io/vitess/go/cmd/planetscale/push-image-version
+          --hmac-key ${{ secrets.PS_API_BB_EXTERNAL_ADMIN_HMAC }}
+          --url "https://admin.planetscale.com/external/vitess-image-versions"
+          --pr-number ${{ github.event.pull_request.number }} 
+          --commit-sha ${{ github.event.pull_request.head.sha }} 
+          --commit-date ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}

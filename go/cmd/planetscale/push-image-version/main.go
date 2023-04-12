@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -9,11 +10,17 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
+
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 const (
@@ -27,9 +34,27 @@ type PushRequest struct {
 type VitessImageVersion struct {
 	CommitSha  string `json:"commit_sha"`
 	CommitDate string `json:"commit_date"`
-	Major      string `json:"major_version"`
-	Minor      string `json:"minor_version"`
-	Patch      string `json:"patch_version"`
+	Major      int64  `json:"major_version"`
+	Minor      int64  `json:"minor_version"`
+	Patch      int64  `json:"patch_version"`
+	PRNumber   *int64 `json:"pr_number,omitempty"`
+}
+
+func (v *VitessImageVersion) ImageVersion() string {
+	return fmt.Sprintf("%s.%s", v.CommitDate, v.CommitSha)
+}
+
+func (v *VitessImageVersion) String() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "\t - Commit SHA: %s\n", v.CommitSha)
+	fmt.Fprintf(&b, "\t - Commit Date: %s\n", v.CommitDate)
+	fmt.Fprintf(&b, "\t - Vitess Version: %d.%d.%d\n", v.Major, v.Minor, v.Patch)
+	if v.PRNumber != nil {
+		fmt.Fprintf(&b, "\t - PR Number: %d", *v.PRNumber)
+	} else {
+		fmt.Fprintf(&b, "\t - PR Number: nil")
+	}
+	return b.String()
 }
 
 func main() {
@@ -39,39 +64,134 @@ func main() {
 }
 
 func realMain() error {
-	version := flag.String("version", "", "the output of vttablet --version")
+	log.SetPrefix("push-image-version: ")
+	log.SetOutput(os.Stdout)
+
+	prNumber := flag.Int64("pr-number", 0, "the pull request number (if present)")
+	commitSHA := flag.String("commit-sha", "", "the commit/build sha of the image")
+	commitDate := flag.String("commit-date", "", "the commit/build date of the image")
 	hmacKey := flag.String("hmac-key", "", "the hmac secret key")
 	apibbURL := flag.String("url", "http://admin.pscaledev.com:3000/api/external-admin/vitess-image-versions", "url to push the vitess image version")
 
 	flag.Parse()
 
-	v, err := parseVersion(*version)
+	if *hmacKey == "" {
+		return errors.New("hmacKey is required")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	// the vitess version is automatically created by the release scripts and
+	// replaced into a file go/vt/servenv/version.go. The servenv package
+	// allows us to expose this information.
+	vitessVersion, ok := servenv.AppVersion.ToStringMap()["version"]
+	if !ok {
+		return fmt.Errorf("version is not available in servenv: %q", servenv.AppVersion)
+	}
+
+	sver, err := parseSemver(vitessVersion)
 	if err != nil {
 		return err
 	}
 
-	return pushVersion(*apibbURL, *hmacKey, *v)
-}
-
-func pushVersion(apiURL, hmacKey string, version VitessImageVersion) error {
-	if hmacKey == "" {
-		return errors.New("hmacKey is required")
+	sha := *commitSHA
+	if len(sha) > 7 {
+		sha = sha[:7]
 	}
 
+	v := &VitessImageVersion{
+		CommitDate: *commitDate,
+		CommitSha:  sha,
+		Major:      sver.major,
+		Minor:      sver.minor,
+		Patch:      sver.patch,
+		PRNumber:   prNumber,
+	}
+
+	log.Printf("verifying if version already exists: %q", v.ImageVersion())
+	_, exists, err := getVersion(ctx, *apibbURL, *hmacKey, v.ImageVersion())
+	if err != nil {
+		return fmt.Errorf("verifying if version already exists: %w", err)
+	}
+	if exists {
+		log.Printf("Version already exists:\n\n%s", v)
+		return nil
+	}
+
+	log.Printf("version not found, creating it")
+	err = createVersion(ctx, *apibbURL, *hmacKey, *v)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Published version:\n\n%s", v)
+	return nil
+}
+
+func getVersion(ctx context.Context, baseURL, hmacKey string, vitessVersion string) (*VitessImageVersion, bool, error) {
+	method := "GET"
+
+	getURL := fmt.Sprintf("%s/%s", baseURL, vitessVersion)
+	req, err := http.NewRequestWithContext(ctx, method, getURL, nil)
+	if err != nil {
+		return nil, false, err
+	}
+
+	u, err := url.Parse(getURL)
+	if err != nil {
+		return nil, false, fmt.Errorf("couldn't parse URL %q: %s", getURL, err)
+	}
+
+	rh := requestHMAC{
+		method:    method,
+		path:      u.Path,
+		timestamp: time.Now(),
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add(hmacHeader, rh.generate(hmacKey))
+
+	c := &http.Client{Timeout: 15 * time.Second}
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, nil
+	}
+
+	out, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, false, err
+	}
+
+	v := &VitessImageVersion{}
+	err = json.Unmarshal(out, &v)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return v, true, nil
+}
+
+func createVersion(ctx context.Context, baseURL, hmacKey string, version VitessImageVersion) error {
 	out, err := json.Marshal(&PushRequest{VitessImageVersion: version})
 	if err != nil {
 		return err
 	}
 
 	method := "POST"
-	req, err := http.NewRequest(method, apiURL, bytes.NewReader(out))
+	req, err := http.NewRequestWithContext(ctx, method, baseURL, bytes.NewReader(out))
 	if err != nil {
 		return err
 	}
 
-	u, err := url.Parse(apiURL)
+	u, err := url.Parse(baseURL)
 	if err != nil {
-		return fmt.Errorf("couldn't parse URL %q: %s", apiURL, err)
+		return fmt.Errorf("couldn't parse URL %q: %s", baseURL, err)
 	}
 
 	rh := requestHMAC{
@@ -91,6 +211,21 @@ func pushVersion(apiURL, hmacKey string, version VitessImageVersion) error {
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("unexpected status (%s): %s", resp.Status, string(body))
+	}
+
+	v := &VitessImageVersion{}
+	err = json.Unmarshal(body, &v)
+	if err != nil {
+		return fmt.Errorf("unmarshaling body: %w", err)
+	}
+
 	return nil
 }
 
@@ -107,70 +242,19 @@ func (r *requestHMAC) generate(key string) string {
 
 	// signature: "GET /external/authenticated 1234567 {\"foo\":\"bar\"}")
 	// https://github.com/planetscale/api-bb/blob/main/lib/hmac_helpers.rb#L78
-	fmt.Fprintf(mac,
-		"%s %s %d %s",
-		r.method, r.path, r.timestamp.Unix(), r.payload,
-	)
+	if r.payload == "" {
+		fmt.Fprintf(mac, "%s %s %d", r.method, r.path, r.timestamp.Unix())
+	} else {
+		fmt.Fprintf(mac, "%s %s %d %s", r.method, r.path, r.timestamp.Unix(), r.payload)
+	}
 
 	return fmt.Sprintf("%d.%s", r.timestamp.Unix(), hex.EncodeToString(mac.Sum(nil)))
 }
 
-// Parses the following output of "vttablet --version".
-// TODO(fatih): replace this by when we introduce --version-json flag to vt
-// components.
-func parseVersion(output string) (*VitessImageVersion, error) {
-	if output == "" {
-		return nil, errors.New("vttablet --version output is empty")
-	}
-	// see go/vt/servenv/buildinfo.go for the pattern
-	// we only care about couple of things, hence we use the most minimal regexp match
-	re := regexp.MustCompile(`^Version: (?P<version>.*) \(Git revision (?P<git_sha>.*) branch \'(?P<branch>.*)\'\) built on (?P<build_date>.*) by.*$`)
-
-	result := re.FindAllStringSubmatch(output, -1)
-	if len(result) == 0 {
-		// no matches
-		return nil, fmt.Errorf("couldn't parse vttablet version output: %q", output)
-	}
-
-	names := re.SubexpNames()
-	matches := map[string]string{}
-	for i, n := range result[0] {
-		matches[names[i]] = n
-	}
-
-	ver, ok := matches["version"]
-	if !ok {
-		return nil, fmt.Errorf("couldn't parse vttablet version: %q", matches)
-	}
-
-	sver, err := parseSemver(ver)
-	if err != nil {
-		return nil, err
-	}
-
-	commitDate, ok := matches["build_date"]
-	if !ok {
-		return nil, fmt.Errorf("couldn't parse vttablet build date: %q", matches)
-	}
-
-	commitSHA, ok := matches["git_sha"]
-	if !ok {
-		return nil, fmt.Errorf("couldn't parse vttablet git sha: %q", matches)
-	}
-
-	return &VitessImageVersion{
-		CommitDate: commitDate,
-		CommitSha:  commitSHA,
-		Major:      sver.major,
-		Minor:      sver.minor,
-		Patch:      sver.patch,
-	}, nil
-}
-
 type semver struct {
-	major string
-	minor string
-	patch string
+	major int64
+	minor int64
+	patch int64
 }
 
 func parseSemver(s string) (*semver, error) {
@@ -192,19 +276,17 @@ func parseSemver(s string) (*semver, error) {
 		matches[names[i]] = n
 	}
 
-	major, ok := matches["major"]
-	if !ok {
-		return nil, fmt.Errorf("couldn't parse semver major: %q", matches)
+	major, err := parseMatchAsInt(matches, "major")
+	if err != nil {
+		return nil, fmt.Errorf("parsing major: %w", err)
 	}
-
-	minor, ok := matches["minor"]
-	if !ok {
-		return nil, fmt.Errorf("couldn't parse semver minor: %q", matches)
+	minor, err := parseMatchAsInt(matches, "minor")
+	if err != nil {
+		return nil, fmt.Errorf("parsing minor: %w", err)
 	}
-
-	patch, ok := matches["patch"]
-	if !ok {
-		return nil, fmt.Errorf("couldn't parse semver patch: %q", matches)
+	patch, err := parseMatchAsInt(matches, "patch")
+	if err != nil {
+		return nil, fmt.Errorf("parsing patch: %w", err)
 	}
 
 	return &semver{
@@ -212,4 +294,16 @@ func parseSemver(s string) (*semver, error) {
 		minor: minor,
 		patch: patch,
 	}, nil
+}
+
+func parseMatchAsInt(matches map[string]string, key string) (int64, error) {
+	str, ok := matches[key]
+	if !ok {
+		return -1, fmt.Errorf("no %s found in matches: %q", key, matches)
+	}
+	v, err := strconv.ParseInt(str, 10, 64)
+	if err != nil {
+		return -1, fmt.Errorf("parsing as an integer: %w", err)
+	}
+	return v, nil
 }

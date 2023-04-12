@@ -135,6 +135,36 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           push: true
           secrets: github_token=${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+          build-args: | 
+            BUILD_TIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.20.2
+
+      - name: Set credentials for private go deps
+        env:
+          PLANETSCALE_ACTIONS_BOT_TOKEN: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+        run: |
+          git config --global credential.helper store
+          echo "https://planetscalebot:${PLANETSCALE_ACTIONS_BOT_TOKEN}@github.com" >> ~/.git-credentials
+
+      - name: Cache the go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Notify api-bb of new Vitess image version
+        run: >
+          go run vitess.io/vitess/go/planetscale/push-image-version 
+          --hmac-key {{ secrets.PS_API_BB_EXTERNAL_ADMIN_HMAC }} 
+          --url "https://admin.planetscale.com/external/vitess-image-versions" 
+          --commit-sha ${{ github.sha }} 
+          --commit-date ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
 
   slack-notify:
     name: "Send Slack Notification to #builds"
