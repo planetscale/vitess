@@ -281,7 +281,7 @@ func (vttablet *VttabletProcess) WaitForTabletStatuses(expectedStatuses []string
 	return vttablet.WaitForTabletStatusesForTimeout(expectedStatuses, vttabletStateTimeout)
 }
 
-// WaitForTabletTypes waits for 10 second till one of expected statuses is reached
+// WaitForTabletTypes waits for one of expected statuses is reached
 func (vttablet *VttabletProcess) WaitForTabletTypes(expectedTypes []string) error {
 	return vttablet.WaitForTabletTypesForTimeout(expectedTypes, vttabletStateTimeout)
 }
@@ -354,7 +354,7 @@ func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) err
 
 // WaitForBinlogServerState wait for the tablet's binlog server to be in the provided state.
 func (vttablet *VttabletProcess) WaitForBinlogServerState(expectedStatus string) error {
-	timeout := time.Now().Add(10 * time.Second)
+	timeout := time.Now().Add(vttabletStateTimeout)
 	for time.Now().Before(timeout) {
 		if vttablet.getVarValue("UpdateStreamState") == expectedStatus {
 			return nil

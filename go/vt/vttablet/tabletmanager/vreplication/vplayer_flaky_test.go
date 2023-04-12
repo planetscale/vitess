@@ -27,15 +27,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
-
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
