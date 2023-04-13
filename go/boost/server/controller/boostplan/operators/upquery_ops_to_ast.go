@@ -252,17 +252,22 @@ func (n *NodeTableRef) addToQueryBuilder(qb *queryBuilder, _ *Node) error {
 	return nil
 }
 
-func (t *TopK) addToQueryBuilder(qb *queryBuilder, _ *Node) error {
+func (t *TopK) addToQueryBuilder(qb *queryBuilder, _ *Node) (err error) {
+	for _, order := range t.Order {
+		order.Expr, err = qb.rewriteColNames(order.Expr)
+		if err != nil {
+			return err
+		}
+	}
 	qb.sel.SetOrderBy(t.Order)
 	if t.K < 0 {
 		return nil
 	}
 	limit := &sqlparser.Limit{
-		Offset:   nil,
 		Rowcount: sqlparser.NewIntLiteral(strconv.FormatInt(int64(t.K), 10)),
 	}
 	qb.sel.SetLimit(limit)
-	return nil
+	return
 }
 
 func (d *Distinct) addToQueryBuilder(qb *queryBuilder, _ *Node) error {
