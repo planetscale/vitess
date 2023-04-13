@@ -182,7 +182,7 @@ func createExtremumState(tt sql.Type, max bool, over int) (agstate, error) {
 			},
 			to: func(f float64) sql.Value {
 				return sql.MakeValue(tt.T, func(buf []byte) []byte {
-					return format.AppendFloat(buf, tt.T, f)
+					return format.AppendFloat(buf, f)
 				})
 			},
 			max:  max,
@@ -222,12 +222,22 @@ func createExtremumState(tt sql.Type, max bool, over int) (agstate, error) {
 					if str == "0000-00-00" {
 						return time.Time{}, nil
 					}
-					return datetime.ParseDate(str)
+					d, ok := datetime.ParseDate(str)
+					err := error(nil)
+					if !ok {
+						err = fmt.Errorf("invalid date: %v", str)
+					}
+					return d.ToStdTime(time.Local), err
 				case sqltypes.Datetime, sqltypes.Timestamp:
 					if str == "0000-00-00 00:00:00" {
 						return time.Time{}, nil
 					}
-					return datetime.ParseDateTime(str)
+					dt, ok := datetime.ParseDateTime(str)
+					err := error(nil)
+					if !ok {
+						err = fmt.Errorf("invalid datetime: %v", str)
+					}
+					return dt.ToStdTime(time.Local), err
 				}
 				return time.Time{}, fmt.Errorf("invalid type %v", tt)
 			},
