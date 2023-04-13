@@ -25,6 +25,8 @@ import (
 	"net/url"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/tb"
@@ -43,6 +45,7 @@ type LogStats struct {
 	StmtType       string
 	SQL            string
 	RawSQL         string
+	AST            sqlparser.Statement
 	IsNormalized   bool
 	BindVariables  map[string]*querypb.BindVariable
 	StartTime      time.Time
