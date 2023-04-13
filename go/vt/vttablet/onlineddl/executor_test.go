@@ -62,22 +62,8 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 						constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
 					)
 				`,
-			strategyOptions:  "--unsafe-allow-foreign-keys",
 			countConstraints: 1,
-		},
-		{
-			name: "table with anonymous FK, allowed",
-			query: `
-				create table onlineddl_test (
-						id int auto_increment,
-						i int not null,
-						parent_id int not null,
-						primary key(id),
-						foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
-					)
-				`,
-			strategyOptions:  "--unsafe-allow-foreign-keys",
-			countConstraints: 1,
+			expectError:      schema.ErrForeignKeyFound.Error(),
 		},
 		{
 			name: "table with FK, allowed",
