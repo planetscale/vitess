@@ -123,6 +123,7 @@ jobs:
           go test vitess.io/vitess/go/vt/mysqlctl/gcsbackup -v -race --gcp-credentials-file "$RUNNER_TEMP/gcp.credentials"
 
       - name: Notify api-bb of new Vitess image version
+        if: steps.check-pr-state.outputs.result == 'approved'
         run: >-
           go run vitess.io/vitess/go/cmd/planetscale/push-image-version
           --hmac-key ${{ secrets.PS_API_BB_EXTERNAL_ADMIN_HMAC }}
