@@ -85,7 +85,7 @@ func TestOpsToAST(t *testing.T) {
 	}, {
 		query: "select id from user order by a limit 10",
 		keys:  []int{},
-		res:   "select ks_user_0.id, ks_user_0.a, 0 as `literal-0` from ks.`user` as ks_user_0 order by a asc limit 10",
+		res:   "select ks_user_0.id, ks_user_0.a, 0 as `literal-0` from ks.`user` as ks_user_0 order by ks_user_0.a asc limit 10",
 		get:   grandParent,
 	}, {
 		query: "select id from user UNION ALL select id from product",

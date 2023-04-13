@@ -183,3 +183,21 @@ func TestNoKeyspaceRouting(t *testing.T) {
 
 	upquery0.Lookup(1, 1, 10).ExpectErrorEventually()
 }
+
+func TestRewriteOrderByColumnQualifier(t *testing.T) {
+	const Recipe = `
+create table t1 (
+       id int not null auto_increment,
+       PRIMARY KEY (id)
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_0900_ai_ci;
+
+select alias.id from t1 as alias where alias.id = 42 order by alias.id desc
+`
+	recipe := testrecipe.NewRecipeFromSQL(t, testrecipe.DefaultKeyspace, "", Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	upquery0 := g.View("q0")
+	upquery0.Lookup().Expect(`[]`)
+}
