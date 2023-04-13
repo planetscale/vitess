@@ -345,28 +345,6 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	defer rl.Stop()
 
 	syncOperationExecuted := false
-	for index, sql := range sqls {
-		// Attempt to renew lease:
-		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
-			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
-			return &execResult
-		}
-		execResult.CurSQLIndex = index
-		if exec.hasProvidedUUIDs() {
-			providedUUID = exec.uuids[index]
-		}
-		executedAsynchronously, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
-		if err != nil {
-			execResult.ExecutorErr = err.Error()
-			return &execResult
-		}
-		if !executedAsynchronously {
-			syncOperationExecuted = true
-		}
-		if len(execResult.FailedShards) > 0 {
-			break
-		}
-	}
 
 	// ReloadSchema once. Do it even if we do an early return on error
 	defer func() {
@@ -411,6 +389,29 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		}
 		wg.Wait()
 	}()
+
+	for index, sql := range sqls {
+		// Attempt to renew lease:
+		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
+			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
+			return &execResult
+		}
+		execResult.CurSQLIndex = index
+		if exec.hasProvidedUUIDs() {
+			providedUUID = exec.uuids[index]
+		}
+		executedAsynchronously, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+			return &execResult
+		}
+		if !executedAsynchronously {
+			syncOperationExecuted = true
+		}
+		if len(execResult.FailedShards) > 0 {
+			break
+		}
+	}
 
 	return &execResult
 }
