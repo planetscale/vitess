@@ -270,6 +270,6 @@ func (g *agstateSumFloat) aggregate(current *sql.Value) (sql.Value, agstatus) {
 		n += d
 	}
 	return sql.MakeValue(sqltypes.Float64, func(buf []byte) []byte {
-		return format.AppendFloat(buf, sqltypes.Float64, n)
+		return format.AppendFloat(buf, n)
 	}), aggregationOK
 }
