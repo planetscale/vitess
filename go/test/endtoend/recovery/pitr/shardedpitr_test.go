@@ -474,15 +474,6 @@ func initializeCluster(t *testing.T) {
 	err = clusterInstance.StartVTOrc(keyspaceName)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard0.Name, cell, shard0Primary.TabletUID)
-	require.NoError(t, err)
-
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard1.Name, cell, shard1Primary.TabletUID)
-	require.NoError(t, err)
-
-	err = clusterInstance.StartVTOrc(keyspaceName)
-	require.NoError(t, err)
-
 	// Start vtgate
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
