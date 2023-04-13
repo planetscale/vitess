@@ -17,16 +17,14 @@ limitations under the License.
 package testlib
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/discovery"
-
-	"context"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -41,7 +39,7 @@ import (
 // --allow_long_unavailability flag of vtctl ApplySchema.
 // Only if the flag is specified, potentially long running schema changes are
 // allowed.
-func TestApplySchemaAllowLongUnavailability(t *testing.T) {
+func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
