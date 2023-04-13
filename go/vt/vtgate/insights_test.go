@@ -253,7 +253,7 @@ func TestInsightsConnectionRefused(t *testing.T) {
 	// send to a real Kafka endpoint, will fail
 	insights, err := setup(t, "localhost:1", "mumblefoo", "", "", setupOptions{})
 	require.NoError(t, err)
-	logger.Send(lsSlowQuery)
+	logger.Send(realize(t, lsSlowQuery))
 	require.True(t, insights.Drain(), "did not drain")
 }
 
@@ -269,7 +269,7 @@ func TestInsightsSlowQuery(t *testing.T) {
 		assert.Equal(t, queryTopic, topic)
 		return nil
 	}
-	logger.Send(lsSlowQuery)
+	logger.Send(realize(t, lsSlowQuery))
 	require.True(t, insights.Drain(), "did not drain")
 	assert.Equal(t, 1, messages)
 }
@@ -858,11 +858,31 @@ func TestNormalization(t *testing.T) {
 	ii := Insights{}
 	for _, tc := range testCases {
 		t.Run(tc.input, func(t *testing.T) {
-			out, _, err := ii.normalizeSQL(tc.input, true)
+			stmt, err := sqlparser.Parse(tc.input)
 			assert.NoError(t, err)
+
+			out, _ := ii.normalizeSQL(stmt, true)
 			assert.Equal(t, tc.output, out)
 		})
 	}
+}
+
+func TestNilAST(t *testing.T) {
+	// vtgate should give us an AST whenever ls.IsNormalized is true or ls.Error is nil.
+	// This unit test covers the unexpected case where it doesn't, where we would want an "<error>"
+	// as our query pattern, rather than a nil-dereference panic.
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			{sql: "select * from aaa where id = :vtg1", responseTime: 5 * time.Second, nilAST: false},
+			{sql: "select * from bbb where id = :vtg1", responseTime: 5 * time.Second, nilAST: true},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryTopic,
+				`normalized_sql:{value:\"select * from aaa where id = :vtg1\"}`),
+			expect(queryTopic,
+				`<error>`),
+			expect(queryStatsBundleTopic).count(2),
+		})
 }
 
 func TestStringTruncation(t *testing.T) {
@@ -1158,6 +1178,8 @@ type insightsQuery struct {
 	// statement that did not need to be normalized.
 	normalized int
 
+	nilAST bool
+
 	boostQueryID string
 	method       string
 }
@@ -1257,6 +1279,11 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 		} else {
 			ls.StmtType = sqlparser.Preview(q.sql).String()
 		}
+
+		if (ls.IsNormalized || ls.Error == nil) && !q.nilAST {
+			ls.AST, err = sqlparser.Parse(q.sql)
+			assert.NoError(t, err)
+		}
 		logger.Send(ls)
 	}
 	if mockTimer {
@@ -1282,3 +1309,17 @@ var (
 		}, nil),
 	}
 )
+
+func realize(t *testing.T, ls *logstats.LogStats) *logstats.LogStats {
+	if ls.RawSQL == "" {
+		ls.RawSQL = ls.SQL
+	}
+	if ls.AST == nil {
+		var err error
+		ls.AST, err = sqlparser.Parse(ls.SQL)
+		if err != nil {
+			t.Log(err)
+		}
+	}
+	return ls
+}

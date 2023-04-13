@@ -1068,6 +1068,7 @@ func (e *Executor) getPlan(
 	}
 
 	logStats.SQL = comments.Leading + query + comments.Trailing
+	logStats.AST = stmt
 	logStats.IsNormalized = shouldNormalize
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 

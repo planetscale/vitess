@@ -607,13 +607,9 @@ func (ii *Insights) handleMessage(record any) {
 	var sql string
 	var comments []string
 	var ciHash *uint32
-	if ls.IsNormalized || ls.Error == nil {
-		var renormalizeError error
-		sql, comments = splitComments(ls.SQL)
-		sql, ciHash, renormalizeError = ii.normalizeSQL(sql, ls.StmtType == "INSERT")
-		if ls.Error == nil && renormalizeError != nil {
-			ls.Error = renormalizeError
-		}
+	if (ls.IsNormalized || ls.Error == nil) && ls.AST != nil {
+		_, comments = splitComments(ls.SQL)
+		sql, ciHash = ii.normalizeSQL(ls.AST, ls.StmtType == "INSERT")
 	} else {
 		sql = "<error>"
 		ls.Table = ""
@@ -1030,13 +1026,7 @@ func (ii *Insights) makeEnvelope(contents []byte, topic string) ([]byte, error) 
 var genericBindPrefix = "vtg"
 var genericBindPattern = regexp.MustCompile(`\Avtg(\d+)\z`)
 
-func (ii *Insights) normalizeSQL(sql string, maybeReorderColumns bool) (string, *uint32, error) {
-	stmt, err := sqlparser.Parse(sql)
-	if err != nil {
-		// should never happen since the SQL was already processed
-		return "<error>", nil, err
-	}
-
+func (ii *Insights) normalizeSQL(stmt sqlparser.Statement, maybeReorderColumns bool) (string, *uint32) {
 	// We normalize queries that differ only by the orders of the columns in INSERT statements, but only for
 	// customers where we detect that's a problem.  We detect it's a problem by counting the number of
 	// query patterns that differ only in column order.  To do that, we calculate what the hash would be if
@@ -1137,9 +1127,9 @@ func (ii *Insights) normalizeSQL(sql string, maybeReorderColumns bool) (string, 
 			prev = sp.right
 		}
 		hash = murmur3.SeedStringSum32(hash, ret[prev:])
-		return ret, &hash, nil
+		return ret, &hash
 	}
-	return ret, nil, nil
+	return ret, nil
 }
 
 // First capture group in pattern is replaced with `replacment`
