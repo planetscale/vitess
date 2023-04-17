@@ -22,10 +22,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Backport')}}" == "true" ]]; then
-            echo 'The "Backport" label is set.'
+          if [[ ${{ github.event.pull_request.user.login == 'planetscale-actions-bot' }} ]]; then
+            echo 'The bot created this PR'
           else
-            echo 'The "Backport" label is not set.'
+            echo 'The bot didn't create this PR'
             gh pr edit ${{ github.event.pull_request.number }} --add-label 'Direct PRs Not Supported'
             echo 'The "Direct PRs Not Supported" label has been set.'
             exit 1
