@@ -232,7 +232,7 @@ func createExtremumState(tt sql.Type, max bool, over int) (agstate, error) {
 					if str == "0000-00-00 00:00:00" {
 						return time.Time{}, nil
 					}
-					dt, ok := datetime.ParseDateTime(str)
+					dt, _, ok := datetime.ParseDateTime(str, -1)
 					err := error(nil)
 					if !ok {
 						err = fmt.Errorf("invalid datetime: %v", str)
