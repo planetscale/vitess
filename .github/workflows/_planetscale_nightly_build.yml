@@ -163,7 +163,7 @@ jobs:
           go run vitess.io/vitess/go/cmd/planetscale/push-image-version
           --hmac-key ${{ secrets.PS_API_BB_EXTERNAL_ADMIN_HMAC }}
           --url "https://admin.planetscale.com/external/vitess-image-versions"
-          --commit-sha ${{ github.event.pull_request.head.sha }} 
+          --commit-sha ${{ github.sha }} 
           --commit-date ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
 
   slack-notify:
