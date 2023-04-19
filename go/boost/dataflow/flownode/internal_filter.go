@@ -38,7 +38,7 @@ func (f *Filter) apply(env *evalengine.ExpressionEnv, r sql.Row) bool {
 		if err != nil {
 			panic(err)
 		}
-		if !res.MustBoolean() {
+		if !res.ToBoolean() {
 			return false
 		}
 	}

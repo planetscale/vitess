@@ -201,3 +201,20 @@ select alias.id from t1 as alias where alias.id = 42 order by alias.id desc
 	upquery0 := g.View("q0")
 	upquery0.Lookup().Expect(`[]`)
 }
+
+func TestNullFilterCrash(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE tbl (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, PRIMARY KEY(pk));
+	SELECT tbl.pk FROM tbl WHERE tbl.a = 3;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 1; i <= 4; i++ {
+		g.TestExecute("INSERT INTO tbl (a) VALUES (%d)", i)
+	}
+	g.TestExecute("INSERT INTO tbl (a) VALUES (NULL)")
+
+	upquery0 := g.View("q0")
+	upquery0.Lookup().Expect(`[[INT64(3)]]`)
+}
