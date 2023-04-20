@@ -259,13 +259,13 @@ func topDown(
 	shouldVisit ShouldVisit,
 	isRoot bool,
 ) (ops.Operator, ApplyResult, error) {
-	if !shouldVisit(root) {
-		return root, SameTree, nil
-	}
-
 	newOp, treeIdentity, err := rewriter(root, rootID, isRoot)
 	if err != nil {
 		return nil, false, err
+	}
+
+	if !shouldVisit(root) {
+		return newOp, treeIdentity, nil
 	}
 
 	if treeIdentity == NewTree {
@@ -298,4 +298,40 @@ func topDown(
 	}
 
 	return root, SameTree, nil
+}
+
+func visitChildren(
+	root ops.Operator,
+	treeId ApplyResult,
+	rootID semantics.TableSet,
+	resolveID func(ops.Operator) semantics.TableSet,
+	rewriter VisitF,
+	shouldVisit ShouldVisit,
+) (ops.Operator, ApplyResult, error) {
+	oldInputs := root.Inputs()
+	anythingChanged := treeId == NewTree
+	newInputs := make([]ops.Operator, len(oldInputs))
+	childID := rootID
+
+	type noLHSTableSet interface{ NoLHSTableSet() }
+
+	for i, operator := range oldInputs {
+		if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
+			childID = childID.Merge(resolveID(oldInputs[0]))
+		}
+		in, changed, err := topDown(operator, childID, resolveID, rewriter, shouldVisit, false)
+		if err != nil {
+			return nil, false, err
+		}
+		if changed == NewTree {
+			anythingChanged = true
+		}
+		newInputs[i] = in
+	}
+
+	if anythingChanged {
+		return root.Clone(newInputs), NewTree, nil
+	}
+	return root, SameTree, nil
+
 }

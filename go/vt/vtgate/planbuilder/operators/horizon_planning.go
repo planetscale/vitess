@@ -26,7 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
-var errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator planned")
+func errHorizonNotPlanned() error {
+	return _errHorizonNotPlanned
+}
+
+var _errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator planned")
 
 // planHorizons is the process of figuring out how to perform the operations in the Horizon
 // If we can push it under a route - done.
@@ -51,6 +55,8 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 			return tryPushingDownProjection(ctx, in)
 		case *Limit:
 			return tryPushingDownLimit(in)
+		case *Ordering:
+			return tryPushingDownOrdering(in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -60,12 +66,21 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Oper
 	if err != nil {
 		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
 			// we encountered a bug. let's try to back out
-			return nil, errHorizonNotPlanned
+			return nil, errHorizonNotPlanned()
 		}
 		return nil, err
 	}
 
 	return newOp, nil
+}
+
+func tryPushingDownOrdering(in *Ordering) (ops.Operator, rewrite.ApplyResult, error) {
+	switch src := in.Source.(type) {
+	case *Route:
+		return swap(in, src)
+	default:
+		return in, rewrite.SameTree, nil
+	}
 }
 
 func tryPushingDownProjection(
@@ -74,7 +89,7 @@ func tryPushingDownProjection(
 ) (ops.Operator, rewrite.ApplyResult, error) {
 	switch src := p.Source.(type) {
 	case *Route:
-		return pushDownProjectionIntoRoute(p, src)
+		return swap(p, src)
 	case *ApplyJoin:
 		return pushDownProjectionInApplyJoin(ctx, p, src)
 	case *Vindex:
@@ -84,8 +99,8 @@ func tryPushingDownProjection(
 	}
 }
 
-func pushDownProjectionIntoRoute(p *Projection, src ops.Operator) (ops.Operator, rewrite.ApplyResult, error) {
-	op, err := rewrite.Swap(p, src)
+func swap(a, b ops.Operator) (ops.Operator, rewrite.ApplyResult, error) {
+	op, err := rewrite.Swap(a, b)
 	if err != nil {
 		return nil, false, err
 	}
@@ -201,11 +216,7 @@ func tryPushingDownLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
 	case *Route:
 		return tryPushingDownLimitInRoute(in, src)
 	case *Projection:
-		newOp, err := rewrite.Swap(in, src)
-		if err != nil {
-			return nil, false, err
-		}
-		return newOp, rewrite.NewTree, nil
+		return swap(in, src)
 	default:
 		if in.Pushed {
 			return in, rewrite.SameTree, nil
@@ -245,11 +256,7 @@ func setUpperLimit(in *Limit) (ops.Operator, rewrite.ApplyResult, error) {
 
 func tryPushingDownLimitInRoute(in *Limit, src *Route) (ops.Operator, rewrite.ApplyResult, error) {
 	if src.IsSingleShard() {
-		newOp, err := rewrite.Swap(in, src)
-		if err != nil {
-			return nil, false, err
-		}
-		return newOp, rewrite.NewTree, nil
+		return swap(in, src)
 	}
 
 	return setUpperLimit(in)
@@ -263,7 +270,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in horizonLike) (ops.
 
 	sel, isSel := in.selectStatement().(*sqlparser.Select)
 	if !isSel {
-		return nil, errHorizonNotPlanned
+		return nil, errHorizonNotPlanned()
 	}
 
 	qp, err := CreateQPFromSelect(ctx, sel)
@@ -291,20 +298,26 @@ type horizonLike interface {
 func expandHorizon(qp *QueryProjection, horizon horizonLike) (ops.Operator, error) {
 	sel, isSel := horizon.selectStatement().(*sqlparser.Select)
 	if !isSel {
-		return nil, errHorizonNotPlanned
+		return nil, errHorizonNotPlanned()
 	}
 
-	needsOrdering := len(qp.OrderExprs) > 0
 	src := horizon.src()
 	_, isDerived := src.(*Derived)
 
-	if qp.NeedsAggregation() || sel.Having != nil || isDerived || needsOrdering || qp.NeedsDistinct() || sel.Distinct {
-		return nil, errHorizonNotPlanned
+	if qp.NeedsAggregation() || sel.Having != nil || isDerived || qp.NeedsDistinct() || sel.Distinct {
+		return nil, errHorizonNotPlanned()
 	}
 
 	op, err := createProjectionFromSelect(src, qp.SelectExprs)
 	if err != nil {
 		return nil, err
+	}
+
+	if qp.OrderExprs != nil {
+		op = &Ordering{
+			Source: op,
+			Order:  qp.OrderExprs,
+		}
 	}
 
 	if sel.Limit != nil {
@@ -324,7 +337,7 @@ func createProjectionFromSelect(src ops.Operator, selectExprs []SelectExpr) (ops
 
 	for _, e := range selectExprs {
 		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
-			return nil, errHorizonNotPlanned
+			return nil, errHorizonNotPlanned()
 		}
 		expr, err := e.GetAliasedExpr()
 		if err != nil {

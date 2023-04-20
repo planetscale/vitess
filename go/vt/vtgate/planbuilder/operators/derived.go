@@ -211,6 +211,10 @@ func (d *Derived) GetColumns() ([]sqlparser.Expr, error) {
 	return slices2.Map(d.Columns, colNameToExpr), nil
 }
 
+func (d *Derived) GetOrdering() ([]ops.OrderBy, error) {
+	return d.Query.GetOrderBy(), nil
+}
+
 func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
 	for idx, val := range columnOffset {
 		if val == valToAdd {
