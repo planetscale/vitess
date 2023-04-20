@@ -48,11 +48,19 @@ type (
 		AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (Operator, int, error)
 
 		GetColumns() ([]sqlparser.Expr, error)
+
+		GetOrdering() ([]OrderBy, error)
 	}
 
 	// PhysicalOperator means that this operator is ready to be turned into a logical plan
 	PhysicalOperator interface {
 		Operator
 		IPhysical()
+	}
+
+	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
+	OrderBy struct {
+		Inner         *sqlparser.Order
+		WeightStrExpr sqlparser.Expr
 	}
 )

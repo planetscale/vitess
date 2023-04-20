@@ -184,6 +184,10 @@ func (a *ApplyJoin) GetColumns() ([]sqlparser.Expr, error) {
 	return slices2.Map(a.ColumnsAST, jcToExpr), nil
 }
 
+func (a *ApplyJoin) GetOrdering() ([]ops.OrderBy, error) {
+	return a.LHS.GetOrdering()
+}
+
 func jcToExpr(c JoinColumn) sqlparser.Expr { return c.Original }
 
 func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e sqlparser.Expr) (col JoinColumn, err error) {

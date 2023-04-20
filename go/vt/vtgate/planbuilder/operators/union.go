@@ -46,6 +46,10 @@ func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	return &newOp
 }
 
+func (u *Union) GetOrdering() ([]ops.OrderBy, error) {
+	return u.Ordering, nil
+}
+
 // Inputs implements the Operator interface
 func (u *Union) Inputs() []ops.Operator {
 	return u.Sources

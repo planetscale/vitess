@@ -43,11 +43,15 @@ func (h *Horizon) GetColumns() (exprs []sqlparser.Expr, err error) {
 	for _, expr := range sqlparser.GetFirstSelect(h.Select).SelectExprs {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, errHorizonNotPlanned
+			return nil, errHorizonNotPlanned()
 		}
 		exprs = append(exprs, ae.Expr)
 	}
 	return
+}
+
+func (h *Horizon) GetOrdering() ([]ops.OrderBy, error) {
+	return h.Select.GetOrderBy(), nil
 }
 
 var _ ops.Operator = (*Horizon)(nil)
