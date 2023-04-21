@@ -2,9 +2,6 @@
 
 name: Cluster (mysql_server_vault)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (mysql_server_vault)')
-  cancel-in-progress: true
 
 jobs:
   build:

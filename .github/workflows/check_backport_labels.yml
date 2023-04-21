@@ -3,9 +3,6 @@ on:
   pull_request:
     types: [opened, labeled, unlabeled, synchronize, reopened]
 
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Check Backport Labels')
-  cancel-in-progress: true
 
 jobs:
   check_pull_request_labels:

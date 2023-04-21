@@ -2,9 +2,6 @@
 
 name: Cluster (vtgate_gen4)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_gen4)')
-  cancel-in-progress: true
 
 jobs:
   build:

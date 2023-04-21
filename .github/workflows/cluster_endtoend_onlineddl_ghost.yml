@@ -2,9 +2,6 @@
 
 name: Cluster (onlineddl_ghost)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_ghost)')
-  cancel-in-progress: true
 
 jobs:
   build:

@@ -2,9 +2,6 @@
 
 name: Cluster (vstream_with_keyspaces_to_watch)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vstream_with_keyspaces_to_watch)')
-  cancel-in-progress: true
 
 jobs:
   build:

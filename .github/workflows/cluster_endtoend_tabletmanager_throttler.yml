@@ -2,9 +2,6 @@
 
 name: Cluster (tabletmanager_throttler)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (tabletmanager_throttler)')
-  cancel-in-progress: true
 
 jobs:
   build:

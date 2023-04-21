@@ -2,9 +2,6 @@
 
 name: Cluster (15)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (15)')
-  cancel-in-progress: true
 
 jobs:
   build:

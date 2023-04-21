@@ -2,9 +2,6 @@
 
 name: Cluster (ers_prs_newfeatures_heavy)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (ers_prs_newfeatures_heavy)')
-  cancel-in-progress: true
 
 jobs:
   build:

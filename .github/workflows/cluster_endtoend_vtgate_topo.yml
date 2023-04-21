@@ -2,9 +2,6 @@
 
 name: Cluster (vtgate_topo)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_topo)')
-  cancel-in-progress: true
 
 jobs:
   build:

@@ -1,8 +1,5 @@
 name: unit_race
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'unit_race')
-  cancel-in-progress: true
 
 permissions: read-all
 

@@ -2,9 +2,6 @@
 
 name: Cluster (backup_pitr)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (backup_pitr)')
-  cancel-in-progress: true
 
 jobs:
   build:

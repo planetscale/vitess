@@ -3,9 +3,6 @@ on:
   pull_request:
     types: [opened, labeled, unlabeled, synchronize, reopened]
 
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Prevent Direct PRs')
-  cancel-in-progress: true
 
 jobs:
   prevent_direct_prs:

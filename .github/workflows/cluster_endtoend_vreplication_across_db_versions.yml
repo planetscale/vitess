@@ -2,9 +2,6 @@
 
 name: Cluster (vreplication_across_db_versions)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_across_db_versions)')
-  cancel-in-progress: true
 
 jobs:
   build:

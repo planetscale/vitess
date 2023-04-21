@@ -2,9 +2,6 @@
 
 name: Cluster (onlineddl_vrepl_stress)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_vrepl_stress)')
-  cancel-in-progress: true
 
 jobs:
   build:
