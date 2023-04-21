@@ -2,9 +2,6 @@
 
 name: Cluster (topo_connection_cache)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (topo_connection_cache)')
-  cancel-in-progress: true
 
 jobs:
   build:

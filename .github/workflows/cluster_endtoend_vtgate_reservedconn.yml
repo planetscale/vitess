@@ -2,9 +2,6 @@
 
 name: Cluster (vtgate_reservedconn)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_reservedconn)')
-  cancel-in-progress: true
 
 jobs:
   build:

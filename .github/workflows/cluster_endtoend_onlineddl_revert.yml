@@ -2,9 +2,6 @@
 
 name: Cluster (onlineddl_revert)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_revert)')
-  cancel-in-progress: true
 
 jobs:
   build:

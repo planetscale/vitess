@@ -2,9 +2,6 @@
 
 name: Cluster (vtgate_tablet_healthcheck_cache)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_tablet_healthcheck_cache)')
-  cancel-in-progress: true
 
 jobs:
   build:

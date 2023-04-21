@@ -2,9 +2,6 @@
 
 name: Cluster (vtgate_schema_tracker)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_schema_tracker)')
-  cancel-in-progress: true
 
 jobs:
   build:

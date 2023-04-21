@@ -2,9 +2,6 @@
 
 name: Cluster (vtgate_concurrentdml)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_concurrentdml)')
-  cancel-in-progress: true
 
 jobs:
   build:

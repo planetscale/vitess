@@ -2,9 +2,6 @@
 
 name: Cluster (vtctlbackup_sharded_clustertest_heavy)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtctlbackup_sharded_clustertest_heavy)')
-  cancel-in-progress: true
 
 jobs:
   build:

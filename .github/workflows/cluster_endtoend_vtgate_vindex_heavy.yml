@@ -2,9 +2,6 @@
 
 name: Cluster (vtgate_vindex_heavy)
 on: [push]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_vindex_heavy)')
-  cancel-in-progress: true
 
 jobs:
   build:
