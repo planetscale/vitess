@@ -1,124 +1,80 @@
 name: {{.Name}}
-on: [push, pull_request]
+on: [push]
 concurrency:
   group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
   cancel-in-progress: true
-
-permissions: read-all
-
-env:
-  LAUNCHABLE_ORGANIZATION: "vitess"
-  LAUNCHABLE_WORKSPACE: "vitess-app"
-  GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
 
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
 
     steps:
-    - name: Skip CI
+    - name: Configure git private repo access
+      env:
+        GITHUB_TOKEN: ${{"{{"}} secrets.PLANETSCALE_ACTIONS_BOT_TOKEN {{"}}"}}
       run: |
-        if [[ "{{"${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}"}}" == "true" ]]; then
-          echo "skipping CI due to the 'Skip CI' label"
-          exit 1
-        fi
-
-    - name: Check if workflow needs to be skipped
-      id: skip-workflow
-      run: |
-        skip='false'
-        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
-          skip='true'
-        fi
-        echo Skip ${skip}
-        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
-
-    - name: Check out code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v3
-
-    - name: Check for changes in relevant files
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: frouioui/paths-filter@main
-      id: changes
-      with:
-        token: ''
-        filters: |
-          end_to_end:
-            - 'go/**/*.go'
-            - 'test.go'
-            - 'Makefile'
-            - 'build.env'
-            - 'go.sum'
-            - 'go.mod'
-            - 'proto/*.proto'
-            - 'tools/**'
-            - 'config/**'
-            - 'bootstrap.sh'
-            - '.github/workflows/{{.FileName}}'
-            {{- if or (contains .Name "onlineddl") (contains .Name "schemadiff") }}
-            - 'go/test/endtoend/onlineddl/vrepl_suite/testdata'
-            {{- end}}
+        git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
     - name: Set up Go
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v3
       with:
         go-version: 1.20.2
 
     - name: Set up python
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@v4
 
     - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        # Limit local port range to not use ports that overlap with server side
-        # ports that we listen on.
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
 
+    - name: Check out code
+      uses: actions/checkout@v3
+
     - name: Get dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      env: # Or as an environment variable
+        AWS_ACCESS_KEY_ID: ${{"{{"}} secrets.BUILDKITE_S3_ACCESS_KEY_ID {{"}}"}}
+        AWS_SECRET_ACCESS_KEY: ${{"{{"}} secrets.BUILDKITE_S3_SECRET_ACCESS_KEY {{"}}"}}
+        AWS_DEFAULT_REGION: us-east-1
       run: |
-        {{if .InstallXtraBackup}}
+        sudo apt-get update
+        # stop any existing running instance of mysql
+        sudo service mysql stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
-        # Setup Percona Server for MySQL 8.0
-        sudo apt-get update
-        sudo apt-get install -y lsb-release gnupg2 curl
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release setup ps80
-        sudo apt-get update
+        # Uninstall any previously installed MySQL first
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo deluser mysql
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
+        # install necessary tools
+        sudo apt-get install -y make unzip g++ etcd curl git wget awscli
+        sudo service etcd stop
+
+        # Get latest version of mysql from s3 bucket
+        LATEST_BUILD=$(aws s3api list-objects-v2 --bucket "planetscale-mysql-server-private-ci-artifacts" --prefix mysql/main/dist --query 'reverse(sort_by(Contents[?contains(Key, `jammy`)], &LastModified))[:1].Key' --output=text)
+        echo "latest build is $LATEST_BUILD"
+        # Pin this to 8.0.30
+        LAST_BUILD="mysql/main/dist/mysql-8.0.30.20221013-ps-87805bf371e-jammy-linux-x86_64.tar.gz"
+        echo "installing psdb mysql $LAST_BUILD"
+        aws s3 cp "s3://planetscale-mysql-server-private-ci-artifacts/${LAST_BUILD}" .
+        sudo tar xf $(basename $LAST_BUILD) -v -C /usr --strip-components=1
 
         # Install everything else we need, and configure
-        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils libncurses5
-
-        {{else}}
-
-        # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-        # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.24-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get update
-        # Install everything else we need, and configure
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils libncurses5
-
-        {{end}}
-
+        sudo apt-get install -y mysql-server mysql-client eatmydata xz-utils libncurses5
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
-
-        # install JUnit report formatter
-        go install github.com/vitessio/go-junit-report@HEAD
 
         {{if .InstallXtraBackup}}
 
@@ -126,29 +82,7 @@ jobs:
 
         {{end}}
 
-    {{if .MakeTools}}
-
-    - name: Installing zookeeper and consul
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-          make tools
-
-    {{end}}
-
-    - name: Setup launchable dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
-      run: |
-        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
-        pip3 install --user launchable~=1.0 > /dev/null
-
-        # verify that launchable setup is all correct.
-        launchable verify || true
-
-        # Tell Launchable about the build you are producing and testing
-        launchable record build --name "$GITHUB_RUN_ID" --source .
-
     - name: Run cluster endtoend test
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 45
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
@@ -159,6 +93,8 @@ jobs:
         set -x
 
         {{if .LimitResourceUsage}}
+        # Increase our local ephemeral port range as we could exhaust this
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 61999"
         # Increase our open file descriptor limit as we could hit this
         ulimit -n 65536
         cat <<-EOF>>./config/mycnf/mysql80.cnf
@@ -168,24 +104,20 @@ jobs:
         innodb_buffer_pool_size=64M
         innodb_doublewrite=OFF
         innodb_flush_log_at_trx_commit=0
+        innodb_flush_neighbors=0
         innodb_flush_method=O_DIRECT
         innodb_numa_interleave=ON
         innodb_adaptive_hash_index=OFF
         sync_binlog=0
         sync_relay_log=0
+        slave_parallel_type=LOGICAL_CLOCK
+        slave_parallel_workers=4
+        slave_preserve_commit_order=ON
+        transaction_write_set_extraction=XXHASH64
+        binlog_transaction_dependency_tracking=WRITESET
         performance_schema=OFF
         slow-query-log=OFF
         EOF
         {{end}}
 
-        # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
-
-    - name: Print test output and Record test result in launchable
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
-      run: |
-        # send recorded tests to launchable
-        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
-
-        # print test output
-        cat output.txt
+        eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}}
