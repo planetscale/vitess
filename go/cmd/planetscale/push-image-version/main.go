@@ -106,7 +106,9 @@ func realMain() error {
 		Major:      sver.major,
 		Minor:      sver.minor,
 		Patch:      sver.patch,
-		PRNumber:   prNumber,
+	}
+	if isFlagPassed("pr-number") {
+		v.PRNumber = prNumber
 	}
 
 	log.Printf("verifying if version already exists: %q", v.ImageVersion())
@@ -127,6 +129,16 @@ func realMain() error {
 
 	log.Printf("Published version:\n\n%s", v)
 	return nil
+}
+
+func isFlagPassed(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
 }
 
 func getVersion(ctx context.Context, baseURL, hmacKey string, vitessVersion string) (*VitessImageVersion, bool, error) {
