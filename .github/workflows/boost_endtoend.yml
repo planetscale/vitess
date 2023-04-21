@@ -4,7 +4,7 @@ jobs:
 
   build:
     name: End-to-End Test
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Configure git private repo access
       env:
@@ -46,7 +46,7 @@ jobs:
         sudo apt-get install -y make unzip g++ etcd curl git wget awscli
         sudo service etcd stop
 
-        LAST_BUILD=$(aws s3api list-objects-v2 --bucket "planetscale-mysql-server-private-ci-artifacts" --prefix mysql/main/dist --query 'reverse(sort_by(Contents[?contains(Key, `focal`)], &LastModified))[:1].Key' --output=text)
+        LAST_BUILD=$(aws s3api list-objects-v2 --bucket "planetscale-mysql-server-private-ci-artifacts" --prefix mysql/main/dist --query 'reverse(sort_by(Contents[?contains(Key, `jammy`)], &LastModified))[:1].Key' --output=text)
         aws s3 cp "s3://planetscale-mysql-server-private-ci-artifacts/${LAST_BUILD}" .
         sudo tar xf $(basename $LAST_BUILD) -C /usr --strip-components=1
 

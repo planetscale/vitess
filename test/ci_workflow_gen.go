@@ -74,12 +74,11 @@ var (
 		"vtgate_general_heavy",
 		"vtbackup",
 		"18",
-		"mysql_server_vault",
-		"vtbackup",
 		"xb_backup",
 		"backup_pitr",
 		"21",
 		"22",
+		"mysql_server_vault",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
@@ -343,8 +342,6 @@ func generateClusterWorkflows(list []string, tpl string) {
 			}
 			if mysqlVersion == mysql57 {
 				test.Platform = string(mysql57)
-			} else if mysqlVersion == mysql80 {
-				test.Platform = string(mysql80)
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
 				test.LimitResourceUsage = true

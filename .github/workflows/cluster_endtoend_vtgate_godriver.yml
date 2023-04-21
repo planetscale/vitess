@@ -9,7 +9,7 @@ concurrency:
 jobs:
   build:
     name: Run endtoend tests on Cluster (vtgate_godriver)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
 
     steps:
@@ -62,16 +62,16 @@ jobs:
         sudo service etcd stop
 
         # Get latest version of mysql from s3 bucket
-        LATEST_BUILD=$(aws s3api list-objects-v2 --bucket "planetscale-mysql-server-private-ci-artifacts" --prefix mysql/main/dist --query 'reverse(sort_by(Contents[?contains(Key, `focal`)], &LastModified))[:1].Key' --output=text)
+        LATEST_BUILD=$(aws s3api list-objects-v2 --bucket "planetscale-mysql-server-private-ci-artifacts" --prefix mysql/main/dist --query 'reverse(sort_by(Contents[?contains(Key, `jammy`)], &LastModified))[:1].Key' --output=text)
         echo "latest build is $LATEST_BUILD"
         # Pin this to 8.0.30
-        LAST_BUILD="mysql/main/dist/mysql-8.0.30.20221013-ps-87805bf371e-focal-linux-x86_64.tar.gz"
+        LAST_BUILD="mysql/main/dist/mysql-8.0.30.20221013-ps-87805bf371e-jammy-linux-x86_64.tar.gz"
         echo "installing psdb mysql $LAST_BUILD"
         aws s3 cp "s3://planetscale-mysql-server-private-ci-artifacts/${LAST_BUILD}" .
         sudo tar xf $(basename $LAST_BUILD) -v -C /usr --strip-components=1
 
         # Install everything else we need, and configure
-        sudo apt-get install -y mysql-server mysql-client eatmydata xz-utils
+        sudo apt-get install -y mysql-server mysql-client eatmydata xz-utils libncurses5
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
