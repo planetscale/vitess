@@ -106,7 +106,7 @@ func realMain() error {
 	}
 
 	v := &VitessImageVersion{
-		CommitDate: t.Format(time.DateOnly),
+		CommitDate: t.Format("2006-01-02"),
 		CommitSha:  sha,
 		Major:      sver.major,
 		Minor:      sver.minor,
