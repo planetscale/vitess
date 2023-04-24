@@ -100,8 +100,13 @@ func realMain() error {
 		sha = sha[:7]
 	}
 
+	t, err := time.Parse(time.RFC3339, *commitDate)
+	if err != nil {
+		return fmt.Errorf("can't parse commit date %q %w", *commitDate, err)
+	}
+
 	v := &VitessImageVersion{
-		CommitDate: *commitDate,
+		CommitDate: t.Format(time.DateOnly),
 		CommitSha:  sha,
 		Major:      sver.major,
 		Minor:      sver.minor,
