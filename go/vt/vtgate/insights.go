@@ -1023,9 +1023,6 @@ func (ii *Insights) makeEnvelope(contents []byte, topic string) ([]byte, error) 
 	return envelope.MarshalVT()
 }
 
-var genericBindPrefix = "vtg"
-var genericBindPattern = regexp.MustCompile(`\Avtg(\d+)\z`)
-
 func (ii *Insights) normalizeSQL(stmt sqlparser.Statement, maybeReorderColumns bool) (string, *uint32) {
 	// We normalize queries that differ only by the orders of the columns in INSERT statements, but only for
 	// customers where we detect that's a problem.  We detect it's a problem by counting the number of
@@ -1040,9 +1037,6 @@ func (ii *Insights) normalizeSQL(stmt sqlparser.Statement, maybeReorderColumns b
 		left, right int
 	}
 	var skipSpans []span
-
-	nextBindIndex := 1
-	bindRenames := make(map[int]int) // Needed to ensure we always rename the same underlying bind identically
 
 	buf := sqlparser.NewTrackedBuffer(func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		switch node := node.(type) {
@@ -1084,35 +1078,8 @@ func (ii *Insights) normalizeSQL(stmt sqlparser.Statement, maybeReorderColumns b
 			buf.WriteString("savepoint <id>")
 		case *sqlparser.Release:
 			buf.WriteString("release savepoint <id>")
-		case *sqlparser.Argument:
-			// Renumber generic bind variables starting with 1. This is necessary if
-			// 1. There are bind variables in the values part of an insert and
-			// 2. There are bind variables after the values (such as in `on duplicate key update set col = :vtg5`
-			// When this happens, the index of the post-values binds will be different based on the number of binds
-			// consumed in values fragment. This is bad because we end up with different query patterns when there
-			// should only be one.
-			// Only generic (i.e. vtg-prefixed) binds are renamed because we don't want to mess with semantically named
-			// binds (i.e. my_column = :my_column).
-			matches := genericBindPattern.FindStringSubmatch(node.Name)
-			if len(matches) >= 2 {
-				oldBindNum, err := strconv.Atoi(matches[1])
-				if err != nil {
-					panic("Couldn't parse bind index, this should never happen due to regex")
-				}
-
-				// If we've already seen this bind, use the same replacement
-				repBindNum, ok := bindRenames[oldBindNum]
-				if !ok {
-					repBindNum = nextBindIndex
-					bindRenames[oldBindNum] = repBindNum
-					nextBindIndex++
-				}
-
-				buf.Myprintf(":%s%d", genericBindPrefix, repBindNum)
-
-			} else {
-				node.Format(buf)
-			}
+		case *sqlparser.Argument, sqlparser.BoolVal, *sqlparser.NullVal, *sqlparser.Literal:
+			buf.WriteString("?")
 		default:
 			node.Format(buf)
 		}

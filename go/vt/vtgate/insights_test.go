@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -263,7 +264,7 @@ func TestInsightsSlowQuery(t *testing.T) {
 	messages := 0
 	insights.Sender = func(buf []byte, topic, key string) error {
 		messages++
-		assert.Contains(t, string(buf), "select sleep(:vtg1)")
+		assert.Contains(t, string(buf), "select sleep(?)")
 		assert.Contains(t, string(buf), "planetscale-reader")
 		assert.Contains(t, key, "mumblefoo/")
 		assert.Equal(t, queryTopic, topic)
@@ -284,8 +285,8 @@ func TestInsightsSummaries(t *testing.T) {
 			{sql: "select * from foo", responseTime: 10 * time.Millisecond, rowsRead: 7},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryTopic, "select sleep(5)", "total_duration:{seconds:5}", `statement_type:{value:\"SELECT\"}`),
-			expect(queryStatsBundleTopic, "select sleep(5)", "query_count:1", "sum_total_duration:{seconds:5}", "max_total_duration:{seconds:5}"),
+			expect(queryTopic, "select sleep(?)", "total_duration:{seconds:5}", `statement_type:{value:\"SELECT\"}`),
+			expect(queryStatsBundleTopic, "select sleep(?)", "query_count:1", "sum_total_duration:{seconds:5}", "max_total_duration:{seconds:5}"),
 			expect(queryStatsBundleTopic, "select * from foo", "query_count:4", "sum_total_duration:{nanos:40000000}",
 				"max_total_duration:{nanos:10000000}", "sum_rows_read:17", "max_rows_read:7"),
 		})
@@ -410,11 +411,11 @@ func TestInsightsTooManyInteresting(t *testing.T) {
 			{sql: "select 1", error: "no but seriously"},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryTopic, "select 1", "total_duration:{seconds:5}"),
-			expect(queryTopic, "select 1", "rows_read:20000"),
+			expect(queryTopic, "select ?", "total_duration:{seconds:5}"),
+			expect(queryTopic, "select ?", "rows_read:20000"),
 			expect(queryTopic, "<error>", "thou shalt not"),
-			expect(queryTopic, "select 1", "total_duration:{seconds:6}"),
-			expect(queryStatsBundleTopic, "select 1", "query_count:4", "sum_total_duration:{seconds:11}", "max_total_duration:{seconds:6}", "sum_rows_read:41000"),
+			expect(queryTopic, "select ?", "total_duration:{seconds:6}"),
+			expect(queryStatsBundleTopic, "select ?", "query_count:4", "sum_total_duration:{seconds:11}", "max_total_duration:{seconds:6}", "sum_rows_read:41000"),
 			expect(queryStatsBundleTopic, "<error>", "query_count:2", "error_count:2"),
 		})
 }
@@ -486,17 +487,17 @@ func TestInsightsSafeErrors(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
 			{sql: "select :vtg1", normalized: YES, error: "target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: 29.998788288s, killing query ID 58 (CallerID: userData1)"},
-			{sql: "select :vtg1", normalized: YES, error: `target: commerce.0.primary: vttablet: rpc error: code = Aborted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) (CallerID: userData1): Sql: "select * from bar as f1 join bar as f2 join bar as f3 join bar as f4 join bar as f5 join bar as f6 where f1.id > :vtg1", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"0\"`},
+			{sql: "select :vtg1", normalized: YES, error: `target: commerce.0.primary: vttablet: rpc error: code = Aborted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) (CallerID: userData1): Sql: "select * from bar as f1 join bar as f2 join bar as f3 join bar as f4 join bar as f5 join bar as f6 where f1.id > ?", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"0\"`},
 			{sql: "select :vtg1", normalized: YES, error: "target: commerce.0.primary: vttablet: rpc error: code = ResourceExhausted desc = grpc: trying to send message larger than max (18345369 vs. 16777216)"},
-			{sql: "select :vtg1", normalized: YES, error: `target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = EOF (errno 2013) (sqlstate HY000) (CallerID: userData1): Sql: "select :vtg1 from bar", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"1\"`},
+			{sql: "select :vtg1", normalized: YES, error: `target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = EOF (errno 2013) (sqlstate HY000) (CallerID: userData1): Sql: "select ? from bar", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"1\"`},
 			{sql: "select :vtg1", normalized: YES, error: `target: sharded.-40.primary: vttablet: rpc error: code = Unavailable desc = error reading from server: EOF`},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Canceled`).butNot("bar", "BindVars", "Sql").count(2),
-			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Aborted`).butNot("bar", "BindVars", "Sql"),
-			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = ResourceExhausted`),
-			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Unavailable`),
-			expect(queryStatsBundleTopic, `normalized_sql:{value:\"select :vtg1 from dual\"}`, `statement_type:\"ERROR\"`, "query_count:5", "error_count:5").butNot("bar", "BindVars"),
+			expect(queryTopic, `normalized_sql:{value:\"select ?`, `code = Canceled`).butNot("bar", "BindVars", "Sql").count(2),
+			expect(queryTopic, `normalized_sql:{value:\"select ?`, `code = Aborted`).butNot("bar", "BindVars", "Sql"),
+			expect(queryTopic, `normalized_sql:{value:\"select ?`, `code = ResourceExhausted`),
+			expect(queryTopic, `normalized_sql:{value:\"select ?`, `code = Unavailable`),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"select ? from dual\"}`, `statement_type:\"ERROR\"`, "query_count:5", "error_count:5").butNot("bar", "BindVars"),
 		})
 }
 
@@ -522,10 +523,10 @@ func TestInsightsExtraNormalization(t *testing.T) {
 			{sql: "insert into foo values (:v1, :vtg2), (?, null), (:v3, :v4)", responseTime: 5 * time.Second},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryTopic, "select beam.`User`.id, beam.`User`.`name` from beam.`User` where beam.`User`.id in (<elements>)").butNot(":v73"),
-			expect(queryStatsBundleTopic, "select beam.`User`.id, beam.`User`.`name` from beam.`User` where beam.`User`.id in (<elements>)").butNot(":v73"),
-			expect(queryTopic, "select * from users where foo in (<elements>) and bar in (<elements>) and baz in (<elements>) and blarg in (<elements>)").butNot(":v2", ":v4", ":v5"),
-			expect(queryStatsBundleTopic, "select * from users where foo in (<elements>) and bar in (<elements>) and baz in (<elements>) and blarg in (<elements>)").butNot(":v2", ":v4", ":v5"),
+			expect(queryTopic, "select beam.`User`.id, beam.`User`.`name` from beam.`User` where beam.`User`.id in (<elements>)").butNot(":v73", "?"),
+			expect(queryStatsBundleTopic, "select beam.`User`.id, beam.`User`.`name` from beam.`User` where beam.`User`.id in (<elements>)").butNot(":v73", "?"),
+			expect(queryTopic, "select * from users where foo in (<elements>) and bar in (<elements>) and baz in (<elements>) and blarg in (<elements>)").butNot(":v2", ":v4", ":v5", "?"),
+			expect(queryStatsBundleTopic, "select * from users where foo in (<elements>) and bar in (<elements>) and baz in (<elements>) and blarg in (<elements>)").butNot(":v2", ":v4", ":v5", "?"),
 			expect(queryTopic, "insert into foo values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
 			expect(queryStatsBundleTopic, "insert into foo values <values>", `statement_type:\"INSERT\"`).butNot(":v1", ":vtg1", "null", "?"),
 		})
@@ -562,8 +563,8 @@ func TestInsightsInsertColumnOrderNormalization(t *testing.T) {
 			{sql: "insert into foo values (222, 333, 444, 555)", responseTime: 5 * time.Second},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryStatsBundleTopic, "select 1 from foo", `statement_type:\"SELECT\"`),
-			expect(queryStatsBundleTopic, "select 1 from bar", `statement_type:\"SELECT\"`),
+			expect(queryStatsBundleTopic, "select ? from foo", `statement_type:\"SELECT\"`),
+			expect(queryStatsBundleTopic, "select ? from bar", `statement_type:\"SELECT\"`),
 
 			expect(queryTopic, "insert into foo(d, c, b, a) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
 			expect(queryStatsBundleTopic, "insert into foo(d, c, b, a) values <values>", `statement_type:\"INSERT\"`).butNot(":v1", ":vtg1", "null", "?"),
@@ -732,8 +733,8 @@ func TestTables(t *testing.T) {
 			op := splitTables(tc.input)
 			assert.Equal(t, tc.split, op)
 
-			e1 := expect(queryTopic, "select 1", " total_duration:{seconds:5}")
-			e2 := expect(queryStatsBundleTopic, "select 1", "query_count:1 sum_total_duration:{seconds:5} max_total_duration:{seconds:5}")
+			e1 := expect(queryTopic, "select ?", " total_duration:{seconds:5}")
+			e2 := expect(queryStatsBundleTopic, "select ?", "query_count:1 sum_total_duration:{seconds:5} max_total_duration:{seconds:5}")
 			if tc.message != "" {
 				e1.patterns = append(e1.patterns, tc.message)
 				e2.patterns = append(e2.patterns, tc.message)
@@ -759,14 +760,26 @@ func TestNormalization(t *testing.T) {
 		input, output string
 	}{
 		// nothing to change
-		{"select * from users where id=:vtg1", "select * from users where id = :vtg1"},
+		{"select * from users where id=:vtg1", "select * from users where id = ?"},
 
 		// normalizer strips off comments
-		{"/* with some leading comments */ select * from users where id=:vtg1 /* with some trailing comments */", "select * from users where id = :vtg1"},
+		{"/* with some leading comments */ select * from users where id=:vtg1 /* with some trailing comments */", "select * from users where id = ?"},
 
 		// savepoints
 		{"savepoint foo", "savepoint <id>"},
 		{"release savepoint bar", "release savepoint <id>"},
+
+		// booleans
+		{"select * from users where staff=true", "select * from users where staff = ?"},
+		{"select * from users where staff=false", "select * from users where staff = ?"},
+		{"update users set staff=true where id=:vtg1", "update users set staff = ? where id = ?"},
+		{"update users set staff=false where id=:vtg1", "update users set staff = ? where id = ?"},
+
+		// nulls
+		{"update users set email=null where id=:vtg1", "update users set email = ? where id = ?"},
+		{"select * from users where email is null", "select * from users where email is null"},
+		{"select * from users where email is not null", "select * from users where email is not null"},
+		{"update users set email=null where email is not null", "update users set email = ? where email is not null"},
 
 		//-- VALUES compaction
 		// one tuple
@@ -782,80 +795,86 @@ func TestNormalization(t *testing.T) {
 		{"insert into xyz values (:vtg1), (null), (:vtg2)", "insert into xyz values <values>"},
 
 		// bind variables are renumbered starting from 1
-		{"select * from xyz where col1 = :vtg2 and col2 = :vtg4", "select * from xyz where col1 = :vtg1 and col2 = :vtg2"},
+		{"select * from xyz where col1 = :vtg2 and col2 = :vtg4", "select * from xyz where col1 = ? and col2 = ?"},
 
 		// bind variables are renumbered starting from 1 after removing the values
-		{"insert into xyz(col1, col2) values (:vtg1, :vtg2), (:vtg3, :vtg4) on duplicate key update col1 = :vtg5, col2 = coalesce(col2, :vtg6)", "insert into xyz(col1, col2) values <values> on duplicate key update col1 = :vtg1, col2 = coalesce(col2, :vtg2)"},
+		{"insert into xyz(col1, col2) values (:vtg1, :vtg2), (:vtg3, :vtg4) on duplicate key update col1 = :vtg5, col2 = coalesce(col2, :vtg6)", "insert into xyz(col1, col2) values <values> on duplicate key update col1 = ?, col2 = coalesce(col2, ?)"},
 
 		// bind variables renumbering keeps re-used binds (does not assign different bind nums to binds that were previously the same)
-		{"insert into xyz(col1, col2) values (:vtg1, :vtg2), (:vtg3, :vtg4) on duplicate key update col1 = :vtg5, col2 = coalesce(col2, :vtg5), col1 = :vtg6, col2 = coalesce(col2, :vtg7) ", "insert into xyz(col1, col2) values <values> on duplicate key update col1 = :vtg1, col2 = coalesce(col2, :vtg1), col1 = :vtg2, col2 = coalesce(col2, :vtg3)"},
+		{"insert into xyz(col1, col2) values (:vtg1, :vtg2), (:vtg3, :vtg4) on duplicate key update col1 = :vtg5, col2 = coalesce(col2, :vtg5), col1 = :vtg6, col2 = coalesce(col2, :vtg7) ", "insert into xyz(col1, col2) values <values> on duplicate key update col1 = ?, col2 = coalesce(col2, ?), col1 = ?, col2 = coalesce(col2, ?)"},
 
 		// question marks instead
 		{"insert into xyz values (?, ?)", "insert into xyz values <values>"},
 
 		//-- SET compaction: IN
 		// case insensitive
-		{"SELECT 1 FROM x WHERE xyz IN (:vtg1, :vtg2) AND abc in (:vtg3, :vtg4)", "select 1 from x where xyz in (<elements>) and abc in (<elements>)"},
+		{"SELECT 1 FROM x WHERE xyz IN (:vtg1, :vtg2) AND abc in (:vtg3, :vtg4)", "select ? from x where xyz in (<elements>) and abc in (<elements>)"},
 
 		// question marks instead
-		{"SELECT 1 FROM x WHERE xyz IN (?, ?) AND abc in (?, ?)", "select 1 from x where xyz in (<elements>) and abc in (<elements>)"},
+		{"SELECT 1 FROM x WHERE xyz IN (?, ?) AND abc in (?, ?)", "select ? from x where xyz in (<elements>) and abc in (<elements>)"},
 
 		// single element in list
-		{"select 1 FROM x where xyz in (:vtg1)", "select 1 from x where xyz in (<elements>)"},
+		{"select 1 FROM x where xyz in (:vtg1)", "select ? from x where xyz in (<elements>)"},
 
 		// very large :v sequence numbers
-		{"select 1 from x where xyz in (:vtg8675309, :vtg8765000)", "select 1 from x where xyz in (<elements>)"},
+		{"select 1 from x where xyz in (:vtg8675309, :vtg8765000)", "select ? from x where xyz in (<elements>)"},
 
 		// nested, single
-		{"select 1 from x where (abc, xyz) in ((:vtg1, :vtg2))", "select 1 from x where (abc, xyz) in (<elements>)"},
+		{"select 1 from x where (abc, xyz) in ((:vtg1, :vtg2))", "select ? from x where (abc, xyz) in (<elements>)"},
 
 		// nested, multiple
-		{"select 1 from x where (abc, xyz) in ((:vtg1, :vtg2), (:vtg3, :vtg4), (:vtg5, :vtg6))", "select 1 from x where (abc, xyz) in (<elements>)"},
+		{"select 1 from x where (abc, xyz) in ((:vtg1, :vtg2), (:vtg3, :vtg4), (:vtg5, :vtg6))", "select ? from x where (abc, xyz) in (<elements>)"},
 
 		// nested, multiple, question marks
-		{"select 1 from x where (abc, xyz) in ((?, ?), (?, ?), (?, ?))", "select 1 from x where (abc, xyz) in (<elements>)"},
+		{"select 1 from x where (abc, xyz) in ((?, ?), (?, ?), (?, ?))", "select ? from x where (abc, xyz) in (<elements>)"},
 
 		// mixed nested and simple
-		{"select 1 from x where xyz in ((:vtg1, :vtg2), :vtg3)", "select 1 from x where xyz in (<elements>)"},
+		{"select 1 from x where xyz in ((:vtg1, :vtg2), :vtg3)", "select ? from x where xyz in (<elements>)"},
 
 		// subqueries should not be normalized
-		{"select 1 from x where xyz in (select distinct foo from bar)", "select 1 from x where xyz in (select distinct foo from bar)"},
+		{"select 1 from x where xyz in (select distinct foo from bar)", "select ? from x where xyz in (select distinct foo from bar)"},
 
 		// stuff within a subquery should be normalized
-		{"select 1 from x where xyz in (select distinct foo from bar where baz in (1,2,3))", "select 1 from x where xyz in (select distinct foo from bar where baz in (<elements>))"},
+		{"select 1 from x where xyz in (select distinct foo from bar where baz in (1,2,3))", "select ? from x where xyz in (select distinct foo from bar where baz in (<elements>))"},
 
 		//-- SET compaction: NOT IN
 		// case insensitive
-		{"SELECT 1 FROM x WHERE xyz NOT IN (:vtg1, :vtg2) AND abc not in (:v3, :v4)", "select 1 from x where xyz not in (<elements>) and abc not in (<elements>)"},
+		{"SELECT 1 FROM x WHERE xyz NOT IN (:vtg1, :vtg2) AND abc not in (:v3, :v4)", "select ? from x where xyz not in (<elements>) and abc not in (<elements>)"},
 
 		// question marks instead
-		{"SELECT 1 FROM x WHERE xyz NOT IN (?, ?) AND abc not in (?, ?)", "select 1 from x where xyz not in (<elements>) and abc not in (<elements>)"},
+		{"SELECT 1 FROM x WHERE xyz NOT IN (?, ?) AND abc not in (?, ?)", "select ? from x where xyz not in (<elements>) and abc not in (<elements>)"},
 
 		// single element in list
-		{"select 1 FROM x where xyz not in (:bv1)", "select 1 from x where xyz not in (<elements>)"},
+		{"select 1 FROM x where xyz not in (:bv1)", "select ? from x where xyz not in (<elements>)"},
 
 		// very large :v sequence numbers
-		{"select 1 from x where xyz not in (:v8675309, :v8765000)", "select 1 from x where xyz not in (<elements>)"},
+		{"select 1 from x where xyz not in (:v8675309, :v8765000)", "select ? from x where xyz not in (<elements>)"},
 
 		// nested, single
-		{"select 1 from x where (abc, xyz) not in ((:v1, :v2))", "select 1 from x where (abc, xyz) not in (<elements>)"},
+		{"select 1 from x where (abc, xyz) not in ((:v1, :v2))", "select ? from x where (abc, xyz) not in (<elements>)"},
 
 		// nested, multiple
-		{"select 1 from x where (abc, xyz) not in ((:vtg1, :vtg2), (:vtg3, :vtg4), (:vtg5, :vtg6))", "select 1 from x where (abc, xyz) not in (<elements>)"},
+		{"select 1 from x where (abc, xyz) not in ((:vtg1, :vtg2), (:vtg3, :vtg4), (:vtg5, :vtg6))", "select ? from x where (abc, xyz) not in (<elements>)"},
 
 		// nested, multiple, question marks
-		{"select 1 from x where (abc, xyz) not in ((?, ?), (?, ?), (?, ?))", "select 1 from x where (abc, xyz) not in (<elements>)"},
+		{"select 1 from x where (abc, xyz) not in ((?, ?), (?, ?), (?, ?))", "select ? from x where (abc, xyz) not in (<elements>)"},
 
 		// mixed nested and simple
-		{"select 1 from x where xyz not in ((:v1, :v2), :v3)", "select 1 from x where xyz not in (<elements>)"},
+		{"select 1 from x where xyz not in ((:v1, :v2), :v3)", "select ? from x where xyz not in (<elements>)"},
 
 		// subqueries should not be normalized
-		{"select 1 from x where xyz not in (select distinct foo from bar)", "select 1 from x where xyz not in (select distinct foo from bar)"},
+		{"select 1 from x where xyz not in (select distinct foo from bar)", "select ? from x where xyz not in (select distinct foo from bar)"},
 
 		// stuff within a subquery should be normalized
-		{"select 1 from x where xyz not in (select distinct foo from bar where baz not in (1,2,3))", "select 1 from x where xyz not in (select distinct foo from bar where baz not in (<elements>))"},
+		{"select 1 from x where xyz not in (select distinct foo from bar where baz not in (1,2,3))", "select ? from x where xyz not in (select distinct foo from bar where baz not in (<elements>))"},
+
+		// Literals are removed
+		{"insert into users(email, first_name) select * from (select 'e@mail.com' as email, 'fn' as first_name) as tmp", "insert into users(email, first_name) select * from (select ? as email, ? as first_name from dual) as tmp"},
+
+		{"set @my_secret_variable = 'secret'", "set @my_secret_variable = ?"},
 	}
 	ii := Insights{}
+	re := regexp.MustCompile(`<id>|<values>|<elements>`)
 	for _, tc := range testCases {
 		t.Run(tc.input, func(t *testing.T) {
 			stmt, err := sqlparser.Parse(tc.input)
@@ -863,6 +882,17 @@ func TestNormalization(t *testing.T) {
 
 			out, _ := ii.normalizeSQL(stmt, true)
 			assert.Equal(t, tc.output, out)
+
+			// Most normalized queries should be legal to parse again.
+			// Both Boost and the Insights EXPLAIN feature need this.
+			// But skip normalized queries with <id>, <values>, or <elements>,
+			// which we know can't be re-parsed.
+			if !re.MatchString(tc.output) {
+				stmt, err = sqlparser.Parse(tc.input)
+				assert.NoError(t, err)
+				out, _ = ii.normalizeSQL(stmt, true)
+				assert.Equal(t, tc.output, out)
+			}
 		})
 	}
 }
@@ -878,7 +908,7 @@ func TestNilAST(t *testing.T) {
 		},
 		[]insightsKafkaExpectation{
 			expect(queryTopic,
-				`normalized_sql:{value:\"select * from aaa where id = :vtg1\"}`),
+				`normalized_sql:{value:\"select * from aaa where id = ?\"}`),
 			expect(queryTopic,
 				`<error>`),
 			expect(queryStatsBundleTopic).count(2),
@@ -943,10 +973,10 @@ func TestRawQueries(t *testing.T) {
 		},
 		[]insightsKafkaExpectation{
 			expect(queryTopic,
-				`normalized_sql:{value:\"select * from users where id = :vtg1\"}`,
+				`normalized_sql:{value:\"select * from users where id = ?\"}`,
 				`raw_sql:{value:\"select * from users where id=7\"}`).butNot("raw_sql_abbreviation"),
 			expect(queryTopic,
-				`normalized_sql:{value:\"select * from users where id = :vtg1 and email = :vtg2\"}`,
+				`normalized_sql:{value:\"select * from users where id = ? and email = ?\"}`,
 				`raw_sql:{value:\"select * from users where id=8 a\"}`,
 				"raw_sql_abbreviation:TRUNCATED").butNot("alice"),
 			expect(queryTopic,
@@ -958,10 +988,10 @@ func TestRawQueries(t *testing.T) {
 				`raw_sql:{value:\"insert into foo values ('😂', \"}`,
 				"raw_sql_abbreviation:TRUNCATED").butNot("bob"),
 			expect(queryTopic,
-				`normalized_sql:{value:\"update foo set a = :vtg1 where id = :vtg2\"}`,
+				`normalized_sql:{value:\"update foo set a = ? where id = ?\"}`,
 				`raw_sql:{value:\"update foo set a=1 where id=7\"}`).butNot("raw_sql_abbreviation"),
 			expect(queryTopic,
-				`normalized_sql:{value:\"update foo set a = :vtg1 where id = :vtg2\"}`,
+				`normalized_sql:{value:\"update foo set a = ? where id = ?\"}`,
 				`raw_sql:{value:\"update foo set a=1 where id='6\"}`,
 				"raw_sql_abbreviation:TRUNCATED").butNot("67890"),
 			expect(queryStatsBundleTopic).count(4),
@@ -992,9 +1022,9 @@ func TestNotNormalizedNotError(t *testing.T) {
 				rawSQL: "hello world"},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryTopic, `normalized_sql:{value:\"select * from users where id = :vtg1\"}`,
+			expect(queryTopic, `normalized_sql:{value:\"select * from users where id = ?\"}`,
 				`raw_sql:{value:\"select * from users where id=7\"}`),
-			expect(queryStatsBundleTopic, `normalized_sql:{value:\"select * from users where id = :vtg1\"}`),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"select * from users where id = ?\"}`),
 			expect(queryTopic, `normalized_sql:{value:\"begin\"}`,
 				`raw_sql:{value:\"begin\"}`),
 			expect(queryStatsBundleTopic, `normalized_sql:{value:\"begin\"}`),
