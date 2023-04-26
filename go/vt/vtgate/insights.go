@@ -608,7 +608,7 @@ func (ii *Insights) handleMessage(record any) {
 	var comments []string
 	var ciHash *uint32
 	if (ls.IsNormalized || ls.Error == nil) && ls.AST != nil {
-		_, comments = splitComments(ls.SQL)
+		comments = extractComments(ls.SQL)
 		sql, ciHash = ii.normalizeSQL(ls.AST, ls.StmtType == "INSERT")
 	} else {
 		sql = "<error>"
@@ -1080,6 +1080,8 @@ func (ii *Insights) normalizeSQL(stmt sqlparser.Statement, maybeReorderColumns b
 			buf.WriteString("release savepoint <id>")
 		case *sqlparser.Argument, sqlparser.BoolVal, *sqlparser.NullVal, *sqlparser.Literal:
 			buf.WriteString("?")
+		case *sqlparser.ParsedComments:
+			// elide comments entirely
 		default:
 			node.Format(buf)
 		}
