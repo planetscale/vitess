@@ -1352,10 +1352,10 @@ func (cached *externalPlanPrimitive) CachedSize(alloc bool) int64 {
 	}
 	// field view *vitess.io/vitess/go/boost/topo/watcher.View
 	size += cached.view.CachedSize(true)
-	// field args []*vitess.io/vitess/go/vt/proto/query.BindVariable
+	// field key []*vitess.io/vitess/go/vt/proto/query.BindVariable
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.args)) * int64(8))
-		for _, elem := range cached.args {
+		size += hack.RuntimeAllocSize(int64(cap(cached.key)) * int64(8))
+		for _, elem := range cached.key {
 			size += elem.CachedSize(true)
 		}
 	}

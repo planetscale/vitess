@@ -186,13 +186,33 @@ func randomValue() sqltypes.Value {
 	return randomGenerators[r]()
 }
 
-func randomNull() sqltypes.Value    { return sqltypes.NULL }
-func randomInt8() sqltypes.Value    { return sqltypes.NewInt8(int8(rand.Intn(255))) }
-func randomInt32() sqltypes.Value   { return sqltypes.NewInt32(rand.Int31()) }
-func randomInt64() sqltypes.Value   { return sqltypes.NewInt64(rand.Int63()) }
-func randomUint32() sqltypes.Value  { return sqltypes.NewUint32(rand.Uint32()) }
-func randomUint64() sqltypes.Value  { return sqltypes.NewUint64(rand.Uint64()) }
-func randomVarChar() sqltypes.Value { return sqltypes.NewVarChar(fmt.Sprintf("%d", rand.Int63())) }
+func randomNull() sqltypes.Value  { return sqltypes.NULL }
+func randomInt8() sqltypes.Value  { return sqltypes.NewInt8(int8(rand.Intn(255))) }
+func randomInt32() sqltypes.Value { return sqltypes.NewInt32(rand.Int31()) }
+func randomInt64() sqltypes.Value {
+	i := rand.Int63()
+	if rand.Int()&0x1 == 1 {
+		i = -i
+	}
+	return sqltypes.NewInt64(i)
+}
+func randomUint32() sqltypes.Value    { return sqltypes.NewUint32(rand.Uint32()) }
+func randomUint64() sqltypes.Value    { return sqltypes.NewUint64(rand.Uint64()) }
+func randomVarChar() sqltypes.Value   { return sqltypes.NewVarChar(string(randomBytes())) }
+func randomVarBinary() sqltypes.Value { return sqltypes.NewVarBinary(string(randomBytes())) }
 func randomComplexVarChar() sqltypes.Value {
 	return sqltypes.NewVarChar(fmt.Sprintf(" \t %f apa", float64(rand.Intn(1000))*1.10))
+}
+func randomFloat64() sqltypes.Value {
+	return sqltypes.NewFloat64(rand.NormFloat64())
+}
+
+func randomBytes() []byte {
+	const Dictionary = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+	b := make([]byte, 4+rand.Intn(256))
+	for i := range b {
+		b[i] = Dictionary[rand.Intn(len(Dictionary))]
+	}
+	return b
 }

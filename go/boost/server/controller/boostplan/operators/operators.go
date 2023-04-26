@@ -144,10 +144,8 @@ type (
 
 	View struct {
 		PublicID   string
-		Parameters []Parameter
+		Parameters []*Parameter
 		Columns    Columns
-
-		ParametersIdx []int
 
 		doesNotIntroduceColumn
 		dontKeepsAncestorColumns
@@ -181,10 +179,10 @@ type (
 	}
 
 	Parameter struct {
-		Name string
-		Op   sqlparser.ComparisonExprOperator
-
-		key *Column
+		Name         string
+		Op           sqlparser.ComparisonExprOperator
+		ColumnOffset int
+		Column       *Column
 	}
 
 	NodeTableRef struct {

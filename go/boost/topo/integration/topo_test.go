@@ -139,7 +139,6 @@ func (ins *FakeBoostInstance) GetMaterializations() (*vtboost.MaterializationsRe
 			resp.Materializations = append(resp.Materializations, &vtboost.Materialization{
 				Query:         q,
 				NormalizedSql: q.Sql,
-				Bounds:        nil,
 				View:          &vtboost.Materialization_ViewDescriptor{},
 			})
 		}

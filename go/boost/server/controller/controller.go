@@ -223,20 +223,15 @@ func (ctrl *Controller) viewDescriptor(node *flownode.Node) *vtboostpb.Materiali
 		shards = append(shards, ctrl.readAddrs[domain.Assignment(s)])
 	}
 
-	var params = reader.Parameters()
+	var desc = reader.Descriptor()
+	var nodeSchema = node.Schema()
 	var keySchema []*querypb.Field
-	for i, col := range reader.Key() {
-		flags := uint32(0)
-		if params[i].Multi {
-			flags |= uint32(querypb.MySqlFlag_MULTIPLE_KEY_FLAG)
-		}
-
-		tt := node.Schema()[col]
+	for _, param := range desc.Parameters {
+		tt := nodeSchema[param.Col]
 		keySchema = append(keySchema, &querypb.Field{
-			Name:    params[i].Name,
+			Name:    param.Name,
 			Type:    tt.T,
 			Charset: uint32(tt.Collation),
-			Flags:   flags,
 		})
 	}
 
@@ -292,10 +287,9 @@ func (ctrl *Controller) GetMaterializations() ([]*vtboostpb.Materialization, err
 			}
 
 			normalizedSQL := topowatcher.ParametrizeQuery(view.Statement)
-			viewDescriptor := ctrl.viewDescriptor(n)
-			var bounds []*vtboostpb.Materialization_Bound
+			var binds []*vtboostpb.Materialization_Bind
 			var fullyMaterialized bool
-			bounds, fullyMaterialized, err = topowatcher.GenerateBoundsForQuery(view.Statement, viewDescriptor.KeySchema)
+			binds, fullyMaterialized, err = topowatcher.GenerateBoundsForQuery(view.Statement, r.Descriptor())
 			if err != nil {
 				return false
 			}
@@ -303,9 +297,9 @@ func (ctrl *Controller) GetMaterializations() ([]*vtboostpb.Materialization, err
 			res = append(res, &vtboostpb.Materialization{
 				Query:             view.CachedQuery,
 				NormalizedSql:     normalizedSQL,
-				Bounds:            bounds,
+				Binds:             binds,
 				FullyMaterialized: fullyMaterialized,
-				View:              viewDescriptor,
+				View:              ctrl.viewDescriptor(n),
 			})
 		}
 		return true

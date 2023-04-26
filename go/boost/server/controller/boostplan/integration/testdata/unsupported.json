@@ -56,11 +56,6 @@
     },
     {
       "Keyspace": "main",
-      "SQL": "SELECT id FROM users WHERE id > :id",
-      "Error": "query not supported by boost: parameter `id` > :id can only be compared for equality"
-    },
-    {
-      "Keyspace": "main",
       "SQL": "SELECT id FROM users WHERE id not in (:id1, :id2)",
       "Error": "query not supported by boost: parameter (:id1, :id2) needs to be used in a comparison expression"
     },
@@ -133,6 +128,26 @@
       "Keyspace": "main",
       "SQL": "select 1 from users where exists(select 1 from votes)",
       "Error": "query not supported by boost: subqueries are not supported: EXISTS (SELECT 1 FROM `votes`)"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from users where id > :v1 and users.age > :v2",
+      "Error": "query not supported by boost: multiple columns using range operators: `age`, `id`"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from users where id in ::v1 and users.age > :v2",
+      "Error": "query not supported by boost: range combined with IN() is not supported: `users`.`age` > :v2"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from users where id > :v1 and id > :v2",
+      "Error": "query not supported by boost: multiple range operators with the same direction on column `id`"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from users where id = :v1 and id > :v2",
+      "Error": "query not supported by boost: equality operator used with range operator on column `id`"
     }
   ]
 }

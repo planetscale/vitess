@@ -17,7 +17,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
-	"storj.io/drpc"
 
 	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/boost/boostrpc/service"
@@ -59,7 +58,7 @@ type Cluster struct {
 	wg     errgroup.Group
 	cancel context.CancelFunc
 
-	cachedConns   *common.SyncMap[string, drpc.Conn]
+	cachedConns   topowatcher.Dialer
 	cachedDomains *common.SyncMap[string, boostrpc.DomainClient]
 
 	Config        *config.Config
@@ -183,7 +182,7 @@ func WithSeed(fn func(g *Cluster)) Option {
 func New(t testing.TB, options ...Option) *Cluster {
 	var cluster = &Cluster{
 		t:             t,
-		cachedConns:   common.NewSyncMap[string, drpc.Conn](),
+		cachedConns:   topowatcher.NewCachedDialer(),
 		cachedDomains: common.NewSyncMap[string, boostrpc.DomainClient](),
 		localCell:     DefaultLocalCell,
 
@@ -387,10 +386,7 @@ func (c *Cluster) FindGraphNodes(check func(n *flownode.Node) bool) []*flownode.
 }
 
 func (c *Cluster) shutdown() {
-	c.cachedConns.ForEach(func(_ string, conn drpc.Conn) {
-		conn.Close()
-	})
-
+	c.cachedConns.Close()
 	c.cancel()
 
 	err := c.wg.Wait()
@@ -430,11 +426,7 @@ type Lookup struct {
 	try func() (*sqltypes.Result, error)
 }
 
-func (tv *TestView) LookupBvar(govals ...any) *Lookup {
-	if tv == nil {
-		return nil
-	}
-
+func (tv *TestView) bvars(govals []any) []*querypb.BindVariable {
 	tv.t.Helper()
 
 	var bvar []*querypb.BindVariable
@@ -445,11 +437,20 @@ func (tv *TestView) LookupBvar(govals ...any) *Lookup {
 		}
 		bvar = append(bvar, v)
 	}
+	return bvar
+}
 
+func (tv *TestView) LookupBvar(govals ...any) *Lookup {
+	if tv == nil {
+		return nil
+	}
+
+	tv.t.Helper()
+	bvar := tv.bvars(govals)
 	return &Lookup{
 		t: tv.t,
 		try: func() (*sqltypes.Result, error) {
-			return tv.View.LookupByBindVar(context.Background(), bvar, true)
+			return tv.View.LookupByBVar(context.Background(), bvar, true)
 		},
 	}
 }
@@ -560,12 +561,14 @@ func (l *Lookup) ExpectLen(expected int) *sqltypes.Result {
 	})
 }
 
+const MaxTries = 100
+
 func (l *Lookup) expect(check func(result *sqltypes.Result) error) *sqltypes.Result {
 	l.t.Helper()
 
 	var rs *sqltypes.Result
 	var err error
-	for tries := 0; tries < 100; tries++ {
+	for tries := 0; tries < MaxTries; tries++ {
 		rs, err = l.try()
 		if err != nil {
 			continue
@@ -573,7 +576,7 @@ func (l *Lookup) expect(check func(result *sqltypes.Result) error) *sqltypes.Res
 		if err = check(rs); err == nil {
 			return rs
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	l.t.Fatal(err)
 	return nil

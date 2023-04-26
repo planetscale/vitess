@@ -33,7 +33,7 @@ func partialGlobalState(
 	node dataflow.LocalNodeIdx,
 	schema []sql.Type,
 	st *packet.PrepareStateRequest_PartialGlobal) (
-	*view.Reader, *view.Writer, error,
+	view.Reader, *view.Writer, error,
 ) {
 	triggerDomain := st.TriggerDomain.Domain
 	shards := st.TriggerDomain.Shards
@@ -118,7 +118,7 @@ func partialGlobalState(
 		}
 	}
 
-	r, w := view.New(k, schema, onMiss)
+	r, w := view.NewMapView(k, schema, onMiss)
 	return r, w, nil
 }
 
@@ -150,10 +150,20 @@ func (d *Domain) handlePrepareState(ctx context.Context, pkt *packet.PrepareStat
 
 	case *packet.PrepareStateRequest_Global_:
 		n := d.nodes.Get(node)
-		r, w := view.New(st.Global.Key, n.Schema(), nil)
+		reader := n.AsReader()
+		desc := reader.Descriptor()
+
+		var r view.Reader
+		var w *view.Writer
+		if desc.Range != nil {
+			r, w = view.NewTreeView(st.Global.Key, n.Schema(), desc.Range)
+		} else {
+			r, w = view.NewMapView(st.Global.Key, n.Schema(), nil)
+		}
+
 		d.readers.Set(ReaderID{st.Global.Gid, d.shardn()}, r)
 		d.memstats.Register(d.index, d.shard, n.GlobalAddr(), w.StateSizeAtomic())
-		n.AsReader().SetWriteHandle(w)
+		reader.SetWriteHandle(w)
 	}
 
 	return nil

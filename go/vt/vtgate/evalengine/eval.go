@@ -151,7 +151,7 @@ func evalIsTruthy(e eval) boolean {
 			}
 			return makeboolean(hex.u != 0)
 		}
-		return makeboolean(parseStringToFloat(e.string()) != 0.0)
+		return makeboolean(ParseStringToFloat(e.string()) != 0.0)
 	case *evalJSON:
 		return makeboolean(e.ToBoolean())
 	case *evalTemporal:
@@ -216,7 +216,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			fval, err := v.ToFloat64()
 			return newEvalFloat(fval), err
 		case v.IsText() || v.IsBinary():
-			return newEvalFloat(parseStringToFloat(v.RawStr())), nil
+			return newEvalFloat(ParseStringToFloat(v.RawStr())), nil
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
 		}
@@ -237,7 +237,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			}
 			dec = decimal.NewFromFloat(fval)
 		case v.IsText() || v.IsBinary():
-			fval := parseStringToFloat(v.RawStr())
+			fval := ParseStringToFloat(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)

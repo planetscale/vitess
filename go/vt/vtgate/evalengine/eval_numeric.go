@@ -111,7 +111,7 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 			}
 			return hex
 		}
-		return &evalFloat{f: parseStringToFloat(e.string())}
+		return &evalFloat{f: ParseStringToFloat(e.string())}
 	case *evalJSON:
 		switch e.Type() {
 		case json.TypeBoolean:
@@ -123,7 +123,7 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 			f, _ := e.Float64()
 			return &evalFloat{f: f}
 		case json.TypeString:
-			return &evalFloat{f: parseStringToFloat(e.Raw())}
+			return &evalFloat{f: ParseStringToFloat(e.Raw())}
 		default:
 			return &evalFloat{f: 0}
 		}

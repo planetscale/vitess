@@ -676,11 +676,12 @@ func (p *Plan) finalize(mig Migration) ([]pendingReplay, error) {
 			},
 			}
 		} else {
-			p.state.State = &packet.PrepareStateRequest_Global_{Global: &packet.PrepareStateRequest_Global{
+			st := &packet.PrepareStateRequest_Global{
 				Gid:  p.node,
 				Cols: len(node.Fields()),
 				Key:  r.Key(),
-			}}
+			}
+			p.state.State = &packet.PrepareStateRequest_Global_{Global: st}
 		}
 	} else {
 		if p.partial {

@@ -14,5 +14,7 @@ message Record {
 message Type {
   int32 t = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/sqltypes.Type"];
   uint32 collation = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/mysql/collations.ID"];
-  bool nullable = 3;
+  int32 length = 3;
+  int32 precision = 4;
+  bool nullable = 5;
 };

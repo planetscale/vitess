@@ -296,6 +296,11 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 			able = false
 		}
 
+		// TODO: for now Readers with range parameters must always be fully materialized
+		if r := nn.AsReader(); r != nil && r.Descriptor().Range != nil {
+			able = false
+		}
+
 		// we are already fully materialized, so can't be made partial
 		if !newnodes[ni] && !mat.partial[ni] && len(mat.added[ni]) != len(mat.have[ni]) {
 			able = false

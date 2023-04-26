@@ -32,15 +32,14 @@ func bindOffsets(node *Node, semTable *semantics.SemTable) error {
 func (v *View) PlanOffsets(node *Node, st *semantics.SemTable) error {
 	ancestor := node.Ancestors[0]
 	for _, param := range v.Parameters {
-		paramExpr, err := param.key.SingleAST()
+		paramExpr, err := param.Column.SingleAST()
 		if err != nil {
 			return err
 		}
-		offset, err := ancestor.ExprLookup(st, paramExpr)
+		param.ColumnOffset, err = ancestor.ExprLookup(st, paramExpr)
 		if err != nil {
 			return err
 		}
-		v.ParametersIdx = append(v.ParametersIdx, offset)
 	}
 	return nil
 }

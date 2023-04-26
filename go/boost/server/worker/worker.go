@@ -57,26 +57,57 @@ func (w *Worker) Stop() {
 	w.cancel()
 }
 
+func (w *Worker) reader(node dataflow.NodeIdx, shard uint) (view.Reader, error) {
+	w.stats.onRead()
+	reader, ok := w.readers.Get(domain.ReaderID{Node: node, Shard: shard})
+	if !ok {
+		return nil, fmt.Errorf("missing reader for node=%d shard=%d", node, shard)
+	}
+	return reader, nil
+}
+
 func (w *Worker) ViewRead(ctx context.Context, req *service.ViewReadRequest) (*service.ViewReadResponse, error) {
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(ctx, w.readTimeout)
 	defer cancel()
 
-	w.stats.onRead()
-	reader, ok := w.readers.Get(domain.ReaderID{Node: req.TargetNode, Shard: req.TargetShard})
-	if !ok {
-		return nil, fmt.Errorf("missing reader for node=%d shard=%d", req.TargetNode, req.TargetShard)
+	reader, err := w.reader(req.TargetNode, req.TargetShard)
+	if err != nil {
+		return nil, err
 	}
 
 	if log := w.log.Check(zapcore.DebugLevel, "ViewRead"); log != nil {
 		log.Write(req.Key.Zap("key"), req.TargetNode.Zap())
 	}
 
+	switch reader := reader.(type) {
+	case *view.MapReader:
+		return w.viewReadMap(ctx, reader, req.Key, req.Block)
+	case *view.TreeReader:
+		return w.viewReadRange(ctx, reader, req.Key)
+	default:
+		panic("unexpected reader type")
+	}
+}
+
+func (w *Worker) viewReadRange(_ context.Context, reader *view.TreeReader, key sql.Row) (*service.ViewReadResponse, error) {
+	lower, upper, err := reader.Bounds(key)
+	if err != nil {
+		return nil, err
+	}
+	var rs []sql.Row
+	reader.LookupRange(lower, upper, func(rows view.Rows) {
+		rs = rows.Collect(rs)
+	})
+	return &service.ViewReadResponse{Rows: rs, Hits: 1}, nil
+}
+
+func (w *Worker) viewReadMap(ctx context.Context, reader *view.MapReader, key sql.Row, block bool) (*service.ViewReadResponse, error) {
 	var (
 		hasher vthash.Hasher
 		rs     []sql.Row
 	)
-	ok = view.Lookup(reader, &hasher, req.Key, func(rows view.Rows) {
+	ok := reader.Lookup(&hasher, key, func(rows view.Rows) {
 		rs = rows.Collect(rs)
 	})
 	if ok {
@@ -84,16 +115,16 @@ func (w *Worker) ViewRead(ctx context.Context, req *service.ViewReadRequest) (*s
 	}
 
 	if log := w.log.Check(zapcore.DebugLevel, "ViewRead trigger replay"); log != nil {
-		log.Write(req.Key.Zap("key"))
+		log.Write(key.Zap("key"))
 	}
 
-	reader.Trigger([]sql.Row{req.Key})
-	if !req.Block {
+	reader.Trigger([]sql.Row{key})
+	if !block {
 		return &service.ViewReadResponse{Hits: 0}, nil
 	}
 
 	for ctx.Err() == nil {
-		ok = view.BlockingLookup(ctx, reader, &hasher, req.Key, func(rows view.Rows) {
+		ok = reader.BlockingLookup(ctx, &hasher, key, func(rows view.Rows) {
 			rs = rows.Collect(rs)
 		})
 		if ok {
@@ -101,7 +132,7 @@ func (w *Worker) ViewRead(ctx context.Context, req *service.ViewReadRequest) (*s
 		}
 	}
 
-	w.log.Warn("ViewRead request timed out", zap.Error(ctx.Err()), req.Key.Zap("key"))
+	w.log.Warn("ViewRead request timed out", zap.Error(ctx.Err()), key.Zap("key"))
 	return nil, ctx.Err()
 }
 
@@ -110,23 +141,24 @@ func (w *Worker) ViewReadMany(ctx context.Context, req *service.ViewReadManyRequ
 	ctx, cancel = context.WithTimeout(ctx, w.readTimeout)
 	defer cancel()
 
-	w.stats.onRead()
-	reader, ok := w.readers.Get(domain.ReaderID{Node: req.TargetNode, Shard: req.TargetShard})
-	if !ok {
-		return nil, fmt.Errorf("missing reader for node=%d shard=%d", req.TargetNode, req.TargetShard)
-	}
-
 	var (
 		hasher  vthash.Hasher
 		pending []sql.Row
 		results service.ViewReadResponse
 	)
 
+	anyreader, err := w.reader(req.TargetNode, req.TargetShard)
+	if err != nil {
+		return nil, err
+	}
+
+	reader := anyreader.(*view.MapReader)
+
 	if log := w.log.Check(zapcore.DebugLevel, "ViewReadMany"); log != nil {
 		log.Write(sql.ZapRows("keys", req.Keys))
 	}
 
-	pending = view.LookupMany(reader, &hasher, req.Keys, func(rows view.Rows) {
+	pending = reader.LookupMany(&hasher, req.Keys, func(rows view.Rows) {
 		results.Rows = rows.Collect(results.Rows)
 		results.Hits++
 	})
@@ -145,7 +177,7 @@ func (w *Worker) ViewReadMany(ctx context.Context, req *service.ViewReadManyRequ
 
 	for ctx.Err() == nil && len(pending) > 0 {
 		key := pending[len(pending)-1]
-		ok = view.BlockingLookup(ctx, reader, &hasher, key, func(rows view.Rows) {
+		ok := reader.BlockingLookup(ctx, &hasher, key, func(rows view.Rows) {
 			results.Rows = rows.Collect(results.Rows)
 		})
 		if ok {
