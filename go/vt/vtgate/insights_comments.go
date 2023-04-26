@@ -7,20 +7,12 @@ import (
 	pbvtgate "github.com/planetscale/psevents/go/vtgate/v1"
 )
 
-// splitComments splits a SQL string, optionally containing /**/-style comments, into
-// a block of non-comments SQL and an array of 0 or more comment sections.  The
-// returned comment strings do not include the /**/ markers.
-func splitComments(sql string) (string, []string) {
-	sb := strings.Builder{}
+// extractComments scans a SQL string for zero or more /**/-style comments, which
+// it returns.  The returned comment strings do not include the /**/ markers.
+func extractComments(sql string) []string {
 	var comments []string
 	var tok []string
 	for tok = strings.SplitN(sql, "/*", 2); len(tok) == 2; tok = strings.SplitN(sql, "/*", 2) {
-		tok[0] = strings.TrimSpace(tok[0])
-		if sb.Len() > 0 && len(tok[0]) > 0 {
-			sb.WriteByte(' ')
-		}
-		sb.WriteString(tok[0])
-
 		tok = strings.SplitN(tok[1], "*/", 2)
 		comments = append(comments, strings.TrimSpace(tok[0]))
 		if len(tok) == 2 {
@@ -30,17 +22,11 @@ func splitComments(sql string) (string, []string) {
 		}
 	}
 
-	tok[0] = strings.TrimSpace(tok[0])
-	if sb.Len() > 0 && len(tok[0]) > 0 {
-		sb.WriteByte(' ')
-	}
-	sb.WriteString(tok[0])
-
-	return sb.String(), comments
+	return comments
 }
 
 // parseCommentTags parses sqlcommenter-style key-value pairs out of an array of comments,
-// e.g. as returned by splitComments.
+// e.g. as returned by extractComments.
 // The sqlcommenter format is loosely this:
 //
 //	/*key='value',key2='url%2dencoded value',key3='I\'m using back\\slashes'*/

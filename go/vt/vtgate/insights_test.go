@@ -460,11 +460,11 @@ func TestInsightsComments(t *testing.T) {
 	insightsTestHelper(t, true,
 		setupOptions{},
 		[]insightsQuery{
-			{sql: "select * from foo /*abc='xxx%2fyyy%3azzz'*/", responseTime: 5 * time.Second},
+			{sql: "select  /*abc='xxx%2fyyy%3azzz'*/ * from foo", responseTime: 5 * time.Second},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryTopic, "xxx/yyy:zzz"),
-			expect(queryStatsBundleTopic, "select * from foo").butNot("xxx"),
+			expect(queryTopic, `value:\"select * from foo\"`, `key:\"abc\" value:\"xxx/yyy:zzz\"`),
+			expect(queryStatsBundleTopic, `value:\"select * from foo\"`).butNot("xxx"),
 		})
 }
 
@@ -870,8 +870,13 @@ func TestNormalization(t *testing.T) {
 
 		// Literals are removed
 		{"insert into users(email, first_name) select * from (select 'e@mail.com' as email, 'fn' as first_name) as tmp", "insert into users(email, first_name) select * from (select ? as email, ? as first_name from dual) as tmp"},
-
 		{"set @my_secret_variable = 'secret'", "set @my_secret_variable = ?"},
+		{"select 1 from x where xyz not in (select distinct foo from bar where baz not in (1,2,3))", "select ? from x where xyz not in (select distinct foo from bar where baz not in (<elements>))"},
+
+		// comments should get stripped out
+		{"select /*+ SET_VAR(sql_mode = 'NO_ZERO_IN_DATE') */ sleep(:vtg1) from customer", "select sleep(?) from customer"},
+		{"select /* freeform comment */ sleep(:vtg1) from customer", "select sleep(?) from customer"},
+		{"select /*abc='xyz'*/ sleep(:vtg1) from customer", "select sleep(?) from customer"},
 	}
 	ii := Insights{}
 	re := regexp.MustCompile(`<id>|<values>|<elements>`)
@@ -1029,7 +1034,8 @@ func TestNotNormalizedNotError(t *testing.T) {
 				`raw_sql:{value:\"begin\"}`),
 			expect(queryStatsBundleTopic, `normalized_sql:{value:\"begin\"}`),
 			expect(queryTopic, `normalized_sql:{value:\"rollback\"}`, "xyz",
-				`raw_sql:{value:\"roLlBacK /*abc='xyz'*/\"}`),
+				`raw_sql:{value:\"roLlBacK /*abc='xyz'*/\"}`,
+				`key:\"abc\" value:\"xyz\"`),
 			expect(queryStatsBundleTopic, `normalized_sql:{value:\"rollback\"}`).butNot("xyz"),
 			expect(queryTopic, `normalized_sql:{value:\"select * from orders\"}`, "no such table",
 				`raw_sql:{value:\"select * from orders\"}`).butNot("<error>"),

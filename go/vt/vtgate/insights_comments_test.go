@@ -11,41 +11,33 @@ import (
 func TestCommentSplitting(t *testing.T) {
 	testCases := []struct {
 		input    string
-		output   string
 		comments []string
 	}{
 		{
 			"hello world /* comment */",
-			"hello world",
 			[]string{"comment"},
 		},
 		{
 			"hello world /* unterminated comment",
-			"hello world",
 			[]string{"unterminated comment"},
 		},
 		{
 			"before/* comment */after",
-			"before after",
 			[]string{"comment"},
 		},
 		{
 			"/* now */ hello /* three */ world /* comments */",
-			"hello world",
 			[]string{"now", "three", "comments"},
 		},
 		{
 			"/*/*/*/*///***/*/***///**/",
-			"* * /",
 			[]string{"/", "///**", "*", ""},
 		},
 		{
 			" no\tcomments\t",
-			"no\tcomments",
 			nil,
 		},
 		{
-			"",
 			"",
 			nil,
 		},
@@ -53,20 +45,17 @@ func TestCommentSplitting(t *testing.T) {
 			// We don't split on `--` because that style of comments gets split off before the
 			// string is copied into LogStats.SQL.  Only `/* ... */` comments show up in LogStats.SQL.
 			"we don't -- split these",
-			"we don't -- split these",
 			nil,
 		},
 		{
 			"select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO') */ schema_snapshot.* from schema_snapshot where schema_snapshot.ready = true and schema_snapshot.migration_snapshot_applied_at is null and created_at > :vtg1 and schema_snapshot.migration_snapshot_public_id is not null and schema_snapshot.deleted_at is null order by schema_snapshot.id asc limit :vtg2",
-			"select schema_snapshot.* from schema_snapshot where schema_snapshot.ready = true and schema_snapshot.migration_snapshot_applied_at is null and created_at > :vtg1 and schema_snapshot.migration_snapshot_public_id is not null and schema_snapshot.deleted_at is null order by schema_snapshot.id asc limit :vtg2",
 			[]string{"+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO')"},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.input, func(t *testing.T) {
-			o, c := splitComments(tc.input)
-			assert.Equal(t, tc.output, o)
+			c := extractComments(tc.input)
 			assert.Equal(t, tc.comments, c)
 		})
 	}
@@ -74,13 +63,12 @@ func TestCommentSplitting(t *testing.T) {
 
 func TestCommentTags(t *testing.T) {
 	testCases := []struct {
-		name, input, output string
-		tags                []*pbvtgate.Query_Tag
+		name, input string
+		tags        []*pbvtgate.Query_Tag
 	}{
 		{
 			"sqlcommenter",
 			`INSERT INTO "polls_question" ("question_text", "pub_date") VALUES ('What is this?', '2019-05-28T18:54:50.767481+00:00'::timestamptz) RETURNING "polls_question"."id" /*controller='index',db_driver='django.db.backends.postgresql',framework='django%3A2.2.1',route='%5Epolls/%24',traceparent='00-5bd66ef5095369c7b0d1f8f4bd33716a-c532cb4098ac3dd2-01',tracestate='congo%3Dt61rcWkgMzE%2Crojo%3D00f067aa0ba902b7'*/`,
-			`INSERT INTO "polls_question" ("question_text", "pub_date") VALUES ('What is this?', '2019-05-28T18:54:50.767481+00:00'::timestamptz) RETURNING "polls_question"."id"`,
 			[]*pbvtgate.Query_Tag{
 				{Key: "controller", Value: "index"},
 				{Key: "db_driver", Value: "django.db.backends.postgresql"},
@@ -93,13 +81,11 @@ func TestCommentTags(t *testing.T) {
 		{
 			"interior comments, not sqlcommenter",
 			"select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO') */ schema_snapshot.* from schema_snapshot where schema_snapshot.ready = true and schema_snapshot.migration_snapshot_applied_at is null and created_at > :vtg1 and schema_snapshot.migration_snapshot_public_id is not null and schema_snapshot.deleted_at is null order by schema_snapshot.id asc limit :vtg2",
-			"select schema_snapshot.* from schema_snapshot where schema_snapshot.ready = true and schema_snapshot.migration_snapshot_applied_at is null and created_at > :vtg1 and schema_snapshot.migration_snapshot_public_id is not null and schema_snapshot.deleted_at is null order by schema_snapshot.id asc limit :vtg2",
 			nil,
 		},
 		{
 			"ugly",
 			` /*one='1' , two='2' */ SELECT /* th%2dree= ' 3 '*/* FROM hello/*	four='4\'s a great n\umber'*//* five ='5\\cinco' ,, six='%foo'  */`,
-			"SELECT * FROM hello",
 			[]*pbvtgate.Query_Tag{
 				{Key: "one", Value: "1"},
 				{Key: "two", Value: "2"},
@@ -113,8 +99,7 @@ func TestCommentTags(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			query, comments := splitComments(tc.input)
-			assert.Equal(t, tc.output, query)
+			comments := extractComments(tc.input)
 			tags := parseCommentTags(comments)
 			assert.Equal(t, tc.tags, tags)
 		})
