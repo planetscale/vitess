@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/boost/server/controller/config"
-
 	"vitess.io/vitess/go/boost/test/helpers/boosttest"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testexecutor"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"

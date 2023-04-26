@@ -771,7 +771,7 @@ func (asm *assembler) Collate(col collations.ID) {
 func (asm *assembler) Convert_bB(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset]
-		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && parseStringToFloat(arg.(*evalBytes).string()) != 0.0)
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(arg != nil && ParseStringToFloat(arg.(*evalBytes).string()) != 0.0)
 		return 1
 	}, "CONV VARBINARY(SP-%d), BOOL", offset)
 }

@@ -17,28 +17,28 @@ import (
 func TestStoreWorks(t *testing.T) {
 	var hasher vthash.Hasher
 	a := sql.TestRow(1, "a")
-	r, w := New([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
+	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
 
 	defer func() {
 		w.Free()
 		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
-	hit := Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) {
+	hit := r.Lookup(&hasher, a.Slice(0, 1), func(r Rows) {
 		assert.Equal(t, 0, r.Len())
 	})
 	assert.True(t, hit)
 
 	w.Add(a.AsRecords(), 0)
 
-	hit = Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) {
+	hit = r.Lookup(&hasher, a.Slice(0, 1), func(r Rows) {
 		assert.Equal(t, 0, r.Len())
 	})
 	assert.True(t, hit)
 
 	w.Swap()
 
-	hit = Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) {
+	hit = r.Lookup(&hasher, a.Slice(0, 1), func(r Rows) {
 		assert.Equal(t, 1, r.Len())
 	})
 	assert.True(t, hit)
@@ -47,7 +47,7 @@ func TestStoreWorks(t *testing.T) {
 func TestMinimalQuery(t *testing.T) {
 	a := sql.TestRow(1, "a")
 	b := sql.TestRow(1, "b")
-	r, w := New([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
+	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
 
 	defer func() {
 		w.Free()
@@ -60,12 +60,12 @@ func TestMinimalQuery(t *testing.T) {
 
 	var hasher vthash.Hasher
 
-	hit := Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) {
+	hit := r.Lookup(&hasher, a.Slice(0, 1), func(r Rows) {
 		assert.Equal(t, 2, r.Len())
 	})
 	assert.True(t, hit)
 
-	hit = Lookup(r, &hasher, a.Slice(0, 1), func(r Rows) {
+	hit = r.Lookup(&hasher, a.Slice(0, 1), func(r Rows) {
 		allrows := r.Collect(nil)
 		assert.Contains(t, allrows, a)
 		assert.Contains(t, allrows, b)
@@ -77,7 +77,7 @@ func TestBusy(t *testing.T) {
 	const N = 1000
 	var wg sync.WaitGroup
 
-	r, w := New([]int{0}, sql.TestSchema(sqltypes.Int64), nil)
+	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64), nil)
 
 	defer func() {
 		w.Free()
@@ -99,7 +99,7 @@ func TestBusy(t *testing.T) {
 	stress:
 		for {
 			var foundlen int
-			hit := Lookup(r, &hasher, key, func(r Rows) { foundlen = r.Len() })
+			hit := r.Lookup(&hasher, key, func(r Rows) { foundlen = r.Len() })
 			switch {
 			case !hit:
 				continue
@@ -112,18 +112,18 @@ func TestBusy(t *testing.T) {
 	wg.Wait()
 }
 
-func assertLookup(t *testing.T, r *Reader, key sql.Row, wantRowsLen int, wantHit bool) {
+func assertLookup(t *testing.T, r *MapReader, key sql.Row, wantRowsLen int, wantHit bool) {
 	t.Helper()
 
 	var hasher vthash.Hasher
-	hit := Lookup(r, &hasher, key, func(rows Rows) {
+	hit := r.Lookup(&hasher, key, func(rows Rows) {
 		require.Equal(t, wantRowsLen, rows.Len())
 	})
 	require.Equal(t, wantHit, hit)
 }
 
 func TestConcurrentRows(t *testing.T) {
-	r, w := New([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.Int64), func(iterator []sql.Row) bool {
+	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.Int64), func(iterator []sql.Row) bool {
 		return true
 	})
 
@@ -158,7 +158,7 @@ func TestConcurrentRows(t *testing.T) {
 func TestConcurrentRowsInternal(t *testing.T) {
 	key := []int{0}
 	schema := sql.TestSchema(sqltypes.Int64, sqltypes.Int64)
-	r, w := New(key, schema, func(iterator []sql.Row) bool {
+	r, w := NewMapView(key, schema, func(iterator []sql.Row) bool {
 		return true
 	})
 
@@ -182,7 +182,8 @@ func TestConcurrentRowsInternal(t *testing.T) {
 
 	var hasher vthash.Hasher
 	h := row.HashWithKey(&hasher, key, schema)
-	memrow, ok := w.store.table.Writer().Get(h)
+	st := w.store.(*ConcurrentMap)
+	memrow, ok := st.lr.Writer().Get(h)
 	require.True(t, ok)
 
 	internal := memrow.CollectInternal_(nil)
@@ -196,8 +197,8 @@ func TestConcurrentRowsInternal(t *testing.T) {
 		}
 	}
 
-	require.Len(t, memrow.Collect(w.store.table.writerVersion.Load(), nil), 4)
-	require.Len(t, memrow.Collect(w.store.table.writerVersion.Load()+1, nil), 3)
+	require.Len(t, memrow.Collect(st.lr.writerVersion.Load(), nil), 4)
+	require.Len(t, memrow.Collect(st.lr.writerVersion.Load()+1, nil), 3)
 
 	removedNode := unsafe.Pointer(internal[2])
 
@@ -223,7 +224,7 @@ func TestUpdateRows(t *testing.T) {
 	key := []int{0}
 	schema := sql.TestSchema(sqltypes.Int64, sqltypes.Int64)
 
-	r, w := New(key, schema, func(iterator []sql.Row) bool {
+	r, w := NewMapView(key, schema, func(iterator []sql.Row) bool {
 		return true
 	})
 
@@ -248,7 +249,8 @@ func TestUpdateRows(t *testing.T) {
 
 	var hasher vthash.Hasher
 	h := row.HashWithKey(&hasher, key, schema)
-	memrow, ok := w.store.table.Writer().Get(h)
+	st := w.store.(*ConcurrentMap)
+	memrow, ok := st.lr.Writer().Get(h)
 	require.True(t, ok)
 
 	internal := memrow.CollectInternal_(nil)
@@ -256,7 +258,7 @@ func TestUpdateRows(t *testing.T) {
 
 	w.Swap()
 
-	w.store.table.Read(func(tbl offheap.CRowsTable, version uint64) {
+	st.lr.Read(func(tbl offheap.CRowsTable, version uint64) {
 		memrow, ok = tbl.Get(h)
 		require.True(t, ok)
 

@@ -293,6 +293,16 @@ func (nw *Watcher) updateTopoVtgates(ctx context.Context, uuid string) error {
 	return err
 }
 
+func (nw *Watcher) newClusterClient(uuid string) *clusterClient {
+	return &clusterClient{
+		dial:    nw.Dial,
+		uuid:    uuid,
+		dialer:  NewCachedDialer(),
+		mats:    common.NewSyncMap[vthash.Hash, *cachedMaterialization](),
+		hitrate: metrics.NewRateCounter(1 * time.Minute),
+	}
+}
+
 func (nw *Watcher) updateAvailableClusters(ctx context.Context, w *topo.WatchData, conn topo.Conn) error {
 	if w.Err != nil {
 		if topo.IsErrType(w.Err, topo.Interrupted) {
@@ -317,13 +327,7 @@ func (nw *Watcher) updateAvailableClusters(ctx context.Context, w *topo.WatchDat
 	for _, cluster := range cstate.Clusters {
 		client, ok := nw.clusterClients.Get(cluster.Uuid)
 		if !ok {
-			client = &clusterClient{
-				dial:    nw.Dial,
-				uuid:    cluster.Uuid,
-				rpcs:    common.NewSyncMap[string, drpc.Conn](),
-				mats:    common.NewSyncMap[vthash.Hash, *cachedMaterialization](),
-				hitrate: metrics.NewRateCounter(1 * time.Minute),
-			}
+			client = nw.newClusterClient(cluster.Uuid)
 
 			var clusterCtx context.Context
 			clusterCtx, client.cancel = context.WithCancel(ctx)
@@ -381,7 +385,7 @@ func (nw *Watcher) Stop() {
 type MaterializedQuery struct {
 	View       *View
 	Normalized string
-	Args       []*querypb.BindVariable
+	Key        []*querypb.BindVariable
 	hash       vthash.Hash
 }
 
@@ -416,15 +420,15 @@ func (nw *Watcher) GetCachedQuery(keyspace string, query sqlparser.Statement, bv
 			continue
 		}
 
-		var args []*querypb.BindVariable
+		var key []*querypb.BindVariable
 		if cached.fullyMaterialized {
-			args = defaultBogokey
+			key = defaultBogokey
 		} else {
-			args = make([]*querypb.BindVariable, len(cached.view.keySchema))
+			key = make([]*querypb.BindVariable, len(cached.view.keySchema))
 		}
 
-		if matchParametrizedQuery(args, query, bvars, cached.bounds) {
-			res.Args = args
+		if matchParametrizedQuery(key, query, bvars, cached.bounds) {
+			res.Key = key
 			res.View = cached.view
 			return res, true
 		}
@@ -450,10 +454,37 @@ func (nw *Watcher) Warmup(query *MaterializedQuery, warmup func(*View)) {
 type cachedMaterialization struct {
 	view              *View
 	keyspace          string
-	bounds            []*vtboostpb.Materialization_Bound
+	bounds            []*vtboostpb.Materialization_Bind
 	fullyMaterialized bool
 	original          string
 	next              *cachedMaterialization
+}
+
+type cachedDialer struct {
+	cache *common.SyncMap[string, drpc.Conn]
+}
+
+func (d *cachedDialer) Dial(addr string) (drpc.Conn, error) {
+	return d.cache.GetOrSet(addr, func() (drpc.Conn, error) {
+		return boostrpc.NewClientConn(addr)
+	})
+}
+
+func (d *cachedDialer) Close() {
+	d.cache.ForEach(func(_ string, conn drpc.Conn) {
+		conn.Close()
+	})
+}
+
+func NewCachedDialer() Dialer {
+	return &cachedDialer{
+		cache: common.NewSyncMap[string, drpc.Conn](),
+	}
+}
+
+type Dialer interface {
+	Dial(addr string) (drpc.Conn, error)
+	Close()
 }
 
 type clusterClient struct {
@@ -466,7 +497,7 @@ type clusterClient struct {
 	leaderConn   vtboostpb.DRPCControllerServiceClient
 	pendingState bool
 
-	rpcs          *common.SyncMap[string, drpc.Conn]
+	dialer        Dialer
 	mats          *common.SyncMap[vthash.Hash, *cachedMaterialization]
 	hitrate       *metrics.RateCounter
 	recipeVersion int64
@@ -562,16 +593,11 @@ func (ac *clusterClient) updateLeader(currentLeader string) error {
 	return nil
 }
 
-func (ac *clusterClient) updateMaterializations(leader vtboostpb.DRPCControllerServiceClient) error {
-	resp, err := leader.GetMaterializations(context.Background(), &vtboostpb.MaterializationsRequest{})
-	if err != nil {
-		return err
-	}
-
+func (ac *clusterClient) loadMaterializations(dialer Dialer, resp *vtboostpb.MaterializationsResponse) {
 	log.Infof("boost.Watcher: new materializations loaded (%d in total)", len(resp.Materializations))
 	res := make(map[vthash.Hash]*cachedMaterialization)
 	for _, m := range resp.Materializations {
-		view, err := NewViewClientFromProto(m.View, ac.rpcs)
+		view, err := NewViewClientFromProto(m.View, dialer)
 		if err != nil {
 			continue
 		}
@@ -580,13 +606,22 @@ func (ac *clusterClient) updateMaterializations(leader vtboostpb.DRPCControllerS
 		res[hashedQuery] = &cachedMaterialization{
 			view:              view,
 			keyspace:          m.Query.Keyspace,
-			bounds:            m.Bounds,
+			bounds:            m.Binds,
 			original:          m.NormalizedSql,
 			fullyMaterialized: m.FullyMaterialized,
 			next:              res[hashedQuery],
 		}
 	}
 	ac.mats.Replace(res)
+}
+
+func (ac *clusterClient) updateMaterializations(leader vtboostpb.DRPCControllerServiceClient) error {
+	resp, err := leader.GetMaterializations(context.Background(), &vtboostpb.MaterializationsRequest{})
+	if err != nil {
+		return err
+	}
+
+	ac.loadMaterializations(ac.dialer, resp)
 	return nil
 }
 
@@ -620,9 +655,7 @@ func (ac *clusterClient) processControllerState(data *topo.WatchData) error {
 
 func (ac *clusterClient) Close() {
 	ac.cancel()
-	ac.rpcs.ForEach(func(_ string, conn drpc.Conn) {
-		conn.Close()
-	})
+	ac.dialer.Close()
 }
 
 func (ac *clusterClient) updateScience(science *vtboostpb.Science) {

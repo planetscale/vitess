@@ -1,7 +1,9 @@
 package sql
 
 import (
+	"bytes"
 	"fmt"
+	"strconv"
 	"unsafe"
 
 	"go.uber.org/zap"
@@ -326,6 +328,94 @@ func (r Row) HashWithKeySchema(h *vthash.Hasher, key []int, schema []Type) vthas
 		}
 	}
 	return h.Sum128()
+}
+
+type Weights string
+
+func (w Weights) GoString() string {
+	var dst []byte
+	dst = append(dst, '[')
+	for i := range w {
+		if i > 0 {
+			dst = append(dst, ',', ' ')
+		}
+		dst = append(dst, '0', 'x')
+		dst = strconv.AppendUint(dst, uint64(w[i]), 16)
+	}
+	dst = append(dst, ']')
+	return string(dst)
+}
+
+func (r Row) Weights(schema []Type) (Weights, error) {
+	var w []byte
+	var col int
+	var err error
+
+	bytelen := uint16(len(r))
+	if bytelen == 0 {
+		return "", nil
+	}
+
+	s := string(r)
+	last := getUint16s(s)
+	s = s[2:]
+
+	for last < bytelen {
+		pos := getUint16s(s)
+		s = s[2:]
+
+		tt := sqltypes.Type(getUint16s(string(r)[last:]))
+		vv := []byte(r[last+2 : pos])
+		w, err = addWeights(w, sqltypes.MakeTrusted(tt, vv), schema[col])
+		if err != nil {
+			return "", err
+		}
+
+		last = pos
+		col++
+	}
+
+	return Weights(unsafe.String(unsafe.SliceData(w), len(w))), nil
+}
+
+func escapeWeights(s []byte, start int) []byte {
+	for {
+		idx := bytes.IndexByte(s[start:], 0xf8)
+		if idx < 0 {
+			return s
+		}
+		s = append(s[:start+idx+1], s[start+idx:]...)
+		s[start+idx+1] = 0xff
+		start = start + idx + 1
+	}
+}
+
+func addWeights(dst []byte, v sqltypes.Value, t Type) ([]byte, error) {
+	out, fixed, err := WeightString(dst, v, t)
+	if err != nil {
+		return nil, err
+	}
+	if !fixed {
+		out = escapeWeights(out, len(dst))
+		out = append(out, 0xf8, 0x01)
+	}
+	return out, nil
+}
+
+func (r Row) WeightsWithKeySchema(key []int, schema []Type, pad int) (Weights, error) {
+	var w []byte
+	var err error
+	for i, col := range key {
+		vv := r.ValueAt(col).ToVitessUnsafe()
+		w, err = addWeights(w, vv, schema[i])
+		if err != nil {
+			return "", err
+		}
+	}
+	for len(w) < pad {
+		w = append(w, 0xff)
+	}
+	return Weights(unsafe.String(unsafe.SliceData(w), len(w))), nil
 }
 
 func (r Row) ShardValue(h *vthash.Hasher, valpos int, valtype Type, shards uint) uint {

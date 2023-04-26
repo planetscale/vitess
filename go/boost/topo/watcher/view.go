@@ -8,11 +8,8 @@ import (
 
 	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
-	"storj.io/drpc"
 
-	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/boost/boostrpc/service"
-	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/common/metrics"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
@@ -46,11 +43,9 @@ type View struct {
 	metrics      *scopedMetrics
 }
 
-func (v *View) addShards(shards []string, rpcs *common.SyncMap[string, drpc.Conn]) error {
+func (v *View) addShards(shards []string, dialer Dialer) error {
 	for _, addr := range shards {
-		conn, err := rpcs.GetOrSet(addr, func() (drpc.Conn, error) {
-			return boostrpc.NewClientConn(addr)
-		})
+		conn, err := dialer.Dial(addr)
 		if err != nil {
 			return err
 		}
@@ -61,7 +56,7 @@ func (v *View) addShards(shards []string, rpcs *common.SyncMap[string, drpc.Conn
 	return nil
 }
 
-func NewViewClientFromProto(pb *vtboostpb.Materialization_ViewDescriptor, rpcs *common.SyncMap[string, drpc.Conn]) (*View, error) {
+func NewViewClientFromProto(pb *vtboostpb.Materialization_ViewDescriptor, dialer Dialer) (*View, error) {
 	v := &View{
 		publicID:  pb.PublicId,
 		node:      graph.NodeIdx(pb.Node),
@@ -81,7 +76,7 @@ func NewViewClientFromProto(pb *vtboostpb.Materialization_ViewDescriptor, rpcs *
 			Desc: pb.TopkOrderDesc[i],
 		})
 	}
-	if err := v.addShards(pb.Shards, rpcs); err != nil {
+	if err := v.addShards(pb.Shards, dialer); err != nil {
 		return nil, err
 	}
 	return v, nil
@@ -98,25 +93,37 @@ func (v *View) CollectMetrics(hitrate *metrics.RateCounter) {
 	}
 }
 
-func (v *View) LookupByBindVar(ctx context.Context, key []*querypb.BindVariable, block bool) (*sqltypes.Result, error) {
+func (v *View) makerow(bvars []*querypb.BindVariable) (sql.Row, error) {
+	if len(bvars) == 0 {
+		return "", nil
+	}
+
+	for i, k := range bvars {
+		if err := v.canCoerce(k.Type, i); err != nil {
+			return "", err
+		}
+	}
+
+	keypb := sql.NewRowBuilder(len(bvars))
+	for _, bvar := range bvars {
+		keypb.AddVitess(sqltypes.MakeTrusted(bvar.Type, bvar.Value))
+	}
+	return keypb.Finish(), nil
+}
+
+func (v *View) LookupByBVar(ctx context.Context, key []*querypb.BindVariable, block bool) (*sqltypes.Result, error) {
 	for i, k := range key {
 		if k.Type == sqltypes.Tuple {
 			return v.multiLookupForTuple(ctx, i, key, block)
 		}
 	}
 
-	for i, k := range key {
-		if err := v.canCoerce(k.Type, i); err != nil {
-			return nil, err
-		}
+	k, err := v.makerow(key)
+	if err != nil {
+		return nil, err
 	}
 
-	keypb := sql.NewRowBuilder(len(key))
-	for _, bvar := range key {
-		v, _ := sqltypes.BindVariableToValue(bvar)
-		keypb.AddVitess(v)
-	}
-	return v.lookup(ctx, keypb.Finish(), block)
+	return v.lookup(ctx, k, block)
 }
 
 func (v *View) multiLookupForTuple(ctx context.Context, tuplePosition int, key []*querypb.BindVariable, block bool) (*sqltypes.Result, error) {

@@ -19,9 +19,9 @@ func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStateme
 	}
 
 	if len(params) == 0 {
-		params = []Parameter{{
-			Name: "bogokey",
-			key:  newBogoKeyColumn(),
+		params = []*Parameter{{
+			Name:   "bogokey",
+			Column: newBogoKeyColumn(),
 		}}
 	}
 
@@ -40,7 +40,7 @@ func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStateme
 
 func (conv *Converter) selectStmtToOperator(ctx *PlanContext, stmt sqlparser.SelectStatement) (
 	node *Node,
-	params []Parameter,
+	params []*Parameter,
 	columns Columns,
 	err error,
 ) {
@@ -55,7 +55,7 @@ func (conv *Converter) selectStmtToOperator(ctx *PlanContext, stmt sqlparser.Sel
 	}
 }
 
-func (conv *Converter) addFilterIfNeeded(node *Node, where *sqlparser.Where, params []Parameter) (*Node, []Parameter, error) {
+func (conv *Converter) addFilterIfNeeded(node *Node, where *sqlparser.Where, params []*Parameter) (*Node, []*Parameter, error) {
 	if where == nil {
 		return node, params, nil
 	}
@@ -78,7 +78,7 @@ func (conv *Converter) addFilterIfNeeded(node *Node, where *sqlparser.Where, par
 
 func (conv *Converter) selectToOperator(ctx *PlanContext, sel *sqlparser.Select) (
 	node *Node,
-	params []Parameter,
+	params []*Parameter,
 	columns Columns,
 	err error,
 ) {
@@ -252,6 +252,7 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 	}
 
 	var hasListArg bool
+	var hasRangeArg bool
 
 	seen := map[string]struct{}{}
 	sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
@@ -259,11 +260,19 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 		case *sqlparser.Argument:
 			switch parent := cursor.Parent().(type) {
 			case *sqlparser.ComparisonExpr:
-				if parent.Operator != sqlparser.EqualOp {
+				if !isComparisonSupported(parent.Operator) {
 					errors = append(errors, &UnsupportedError{
 						AST:  parent,
-						Type: ParameterNotEqual,
+						Type: ParameterNotSupported,
 					})
+				} else if parent.Operator != sqlparser.EqualOp && parent.Operator != sqlparser.InOp {
+					hasRangeArg = true
+					if hasListArg {
+						errors = append(errors, &UnsupportedError{
+							AST:  parent,
+							Type: RangeAndIn,
+						})
+					}
 				}
 			case sqlparser.ValTuple:
 				if _, handled := seen[sqlparser.String(parent)]; !handled {
@@ -289,6 +298,13 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 				})
 			}
 			hasListArg = true
+
+			if hasRangeArg {
+				errors = append(errors, &UnsupportedError{
+					AST:  cursor.Parent(),
+					Type: RangeAndIn,
+				})
+			}
 		case *sqlparser.Subquery:
 			errors = append(errors, &UnsupportedError{
 				AST:  cursor.Parent(),
@@ -345,6 +361,20 @@ func markOther(st *semantics.SemTable, col sqlparser.Expr, tableID semantics.Tab
 			}
 		}
 		return true
+	}
+}
+
+func extractRangeColumn(cmpr *sqlparser.ComparisonExpr) sqlparser.SQLNode {
+	switch cmpr.Operator {
+	case sqlparser.EqualOp, sqlparser.InOp:
+		return nil
+	case sqlparser.LessThanOp,
+		sqlparser.GreaterThanOp,
+		sqlparser.LessEqualOp,
+		sqlparser.GreaterEqualOp:
+		return cmpr
+	default:
+		return nil
 	}
 }
 
@@ -492,28 +522,37 @@ func (conv *Converter) planProjectionWithoutAggr(ctx *PlanContext, sel *sqlparse
 	return
 }
 
-func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []Parameter) {
-	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
-		comp, ok := e.(*sqlparser.ComparisonExpr)
-		if !ok || (comp.Operator != sqlparser.EqualOp && comp.Operator != sqlparser.InOp) {
-			// if it's something other than `=` or `IN`, we are not interested
-			predicates = sqlparser.AndExpressions(predicates, e)
-			continue
-		}
-		param := extractParam(comp.Left, comp.Right, comp.Operator)
-		if param == nil {
-			param = extractParam(comp.Right, comp.Left, comp.Operator)
-		}
-		if param != nil {
-			params = append(params, *param)
-			continue
-		}
+func isComparisonSupported(op sqlparser.ComparisonExprOperator) bool {
+	switch op {
+	case sqlparser.EqualOp,
+		sqlparser.InOp,
+		sqlparser.LessThanOp,
+		sqlparser.GreaterThanOp,
+		sqlparser.LessEqualOp,
+		sqlparser.GreaterEqualOp:
+		return true
+	default:
+		return false
+	}
+}
 
-		if _, ok := comp.Left.(*sqlparser.Argument); ok && sqlparser.Equals.Expr(comp.Left, comp.Right) {
-			// if we are comparing an argument with itself, we can be pretty sure that it's here because of
-			// normalization of literals, and that makes it safe to assume that this comparison will always be true,
-			// since normalization does not treat null-literals as something to normalize
-			continue
+func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []*Parameter) {
+	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
+		if comp, ok := e.(*sqlparser.ComparisonExpr); ok {
+			if isComparisonSupported(comp.Operator) {
+				param := extractParam(comp.Left, comp.Right, comp.Operator)
+				if param != nil {
+					params = append(params, param)
+					continue
+				}
+			}
+
+			if _, ok := comp.Left.(*sqlparser.Argument); ok && sqlparser.Equals.Expr(comp.Left, comp.Right) {
+				// if we are comparing an argument with itself, we can be pretty sure that it's here because of
+				// normalization of literals, and that makes it safe to assume that this comparison will always be true,
+				// since normalization does not treat null-literals as something to normalize
+				continue
+			}
 		}
 
 		predicates = sqlparser.AndExpressions(predicates, e)
@@ -522,22 +561,44 @@ func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []P
 }
 
 func extractParam(lft, rgt sqlparser.Expr, op sqlparser.ComparisonExprOperator) *Parameter {
-	if col, cok := lft.(*sqlparser.ColName); cok {
-		switch arg := rgt.(type) {
-		case *sqlparser.Argument:
-			return &Parameter{Name: arg.Name, key: ColumnFromAST(col), Op: op}
-		case sqlparser.ListArg:
-			return &Parameter{Name: string(arg), key: ColumnFromAST(col), Op: op}
+	extract := func(lft, rgt sqlparser.Expr, op sqlparser.ComparisonExprOperator) *Parameter {
+		if col, cok := lft.(*sqlparser.ColName); cok {
+			switch arg := rgt.(type) {
+			case *sqlparser.Argument:
+				return &Parameter{Name: arg.Name, Column: ColumnFromAST(col), Op: op, ColumnOffset: -1}
+			case sqlparser.ListArg:
+				return &Parameter{Name: string(arg), Column: ColumnFromAST(col), Op: op, ColumnOffset: -1}
+			}
+		}
+		return nil
+	}
+
+	invert := func(op sqlparser.ComparisonExprOperator) sqlparser.ComparisonExprOperator {
+		switch op {
+		case sqlparser.LessThanOp:
+			return sqlparser.GreaterThanOp
+		case sqlparser.LessEqualOp:
+			return sqlparser.GreaterEqualOp
+		case sqlparser.GreaterEqualOp:
+			return sqlparser.LessEqualOp
+		case sqlparser.GreaterThanOp:
+			return sqlparser.LessThanOp
+		default:
+			return op
 		}
 	}
-	return nil
+
+	if p := extract(lft, rgt, op); p != nil {
+		return p
+	}
+	return extract(rgt, lft, invert(op))
 }
 
 func (conv *Converter) buildFilterOp(input *Node, predicate sqlparser.Expr) *Node {
 	return conv.NewNode("filter", &Filter{Predicates: predicate}, []*Node{input})
 }
 
-func (conv *Converter) buildFromTableExpr(ctx *PlanContext, tableExpr sqlparser.TableExpr) (node *Node, params []Parameter, columns Columns, err error) {
+func (conv *Converter) buildFromTableExpr(ctx *PlanContext, tableExpr sqlparser.TableExpr) (node *Node, params []*Parameter, columns Columns, err error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		switch tbl := tableExpr.Expr.(type) {
@@ -588,7 +649,7 @@ func findClosestProjection(node *Node) (*Project, *Node) {
 	return findClosestProjection(node.Ancestors[0])
 }
 
-func (conv *Converter) buildFromJoin(ctx *PlanContext, join *sqlparser.JoinTableExpr) (node *Node, params []Parameter, columns Columns, err error) {
+func (conv *Converter) buildFromJoin(ctx *PlanContext, join *sqlparser.JoinTableExpr) (node *Node, params []*Parameter, columns Columns, err error) {
 	if join.Join == sqlparser.RightJoinType {
 		join.Join = sqlparser.LeftJoinType
 		join.LeftExpr, join.RightExpr = join.RightExpr, join.LeftExpr
@@ -736,7 +797,7 @@ func (conv *Converter) buildFromTableName(ctx *PlanContext, tableExpr *sqlparser
 	return newTableRef(ctx.SemTable, tableNode, conv.version, tableID, tableExpr.Hints)
 }
 
-func (conv *Converter) buildFromOp(ctx *PlanContext, from []sqlparser.TableExpr) (last *Node, params []Parameter, columns Columns, err error) {
+func (conv *Converter) buildFromOp(ctx *PlanContext, from []sqlparser.TableExpr) (last *Node, params []*Parameter, columns Columns, err error) {
 	for _, tableExpr := range from {
 		node, tParams, tCols, err := conv.buildFromTableExpr(ctx, tableExpr)
 		if err != nil {
@@ -762,7 +823,7 @@ func (conv *Converter) buildFromOp(ctx *PlanContext, from []sqlparser.TableExpr)
 func (conv *Converter) unionToOperator(
 	ctx *PlanContext,
 	stmt *sqlparser.Union,
-) (*Node, []Parameter, Columns, error) {
+) (*Node, []*Parameter, Columns, error) {
 	// UNION can be used inside a query that has parameters, but the parameters cannot exist inside the UNION
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node.(type) {

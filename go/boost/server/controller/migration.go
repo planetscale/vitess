@@ -117,13 +117,14 @@ func (mig *migration) AddTable(name string, fields []string, t *flownode.Table) 
 	return ni
 }
 
-func (mig *migration) AddView(name string, na graph.NodeIdx, connect func(g *graph.Graph[*flownode.Node], r *flownode.Reader)) {
+func (mig *migration) AddView(name string, r *flownode.Reader) {
+	na := r.IsFor()
 	if _, found := mig.readers[na]; found {
 		return
 	}
+
 	g := mig.target.graph()
-	r := flownode.NewReader(na)
-	connect(g, r)
+	r.OnConnected(g)
 
 	var rn *flownode.Node
 	if name != "" {

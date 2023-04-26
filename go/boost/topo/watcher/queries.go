@@ -5,8 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"golang.org/x/exp/slices"
-
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
@@ -15,7 +14,7 @@ import (
 
 var errMismatch = errors.New("not matched")
 
-func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field) (bounds []*vtboostpb.Materialization_Bound, fullyMaterialized bool, err error) {
+func GenerateBoundsForQuery(stmt sqlparser.Statement, view *flownodepb.ViewDescriptor) (bounds []*vtboostpb.Materialization_Bind, fullyMaterialized bool, err error) {
 	var arguments int
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -23,27 +22,34 @@ func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field
 			// Common node types that never contain expressions but create a lot of object
 			// allocations.
 			return false, nil
+
 		case *sqlparser.Argument:
-			pos := slices.IndexFunc(keySchema, func(f *querypb.Field) bool {
-				return f.Name == node.Name && (f.Flags&uint32(querypb.MySqlFlag_MULTIPLE_KEY_FLAG)) == 0
-			})
-			if pos < 0 {
-				return false, fmt.Errorf("did not find placeholder in key schema for argument %v", sqlparser.CanonicalString(node))
+			b := &vtboostpb.Materialization_Bind{
+				Name: node.Name,
+				Pos:  int64(arguments),
 			}
-			bounds = append(bounds, &vtboostpb.Materialization_Bound{Name: node.Name, Pos: int64(pos)})
+			bounds = append(bounds, b)
 			arguments++
+
 		case sqlparser.ListArg:
-			pos := slices.IndexFunc(keySchema, func(f *querypb.Field) bool {
-				return f.Name == string(node) && (f.Flags&uint32(querypb.MySqlFlag_MULTIPLE_KEY_FLAG)) != 0
-			})
-			if pos < 0 {
-				return false, fmt.Errorf("did not find placeholder in key schema for list argument %v", sqlparser.CanonicalString(node))
+			b := &vtboostpb.Materialization_Bind{
+				Name: string(node),
+				Pos:  int64(arguments),
 			}
-			bounds = append(bounds, &vtboostpb.Materialization_Bound{Name: string(node), Pos: int64(pos), Multi: true})
+			p := view.Parameters[arguments]
+			if p.Match != flownodepb.ViewDescriptor_Param_IN {
+				return false, fmt.Errorf("unexpected placeholder for non-IN clause: %v", sqlparser.CanonicalString(node))
+			}
+			bounds = append(bounds, b)
 			arguments++
+
 		case *sqlparser.Literal:
 			bindVar := sqlparser.SQLToBindvar(node)
-			bounds = append(bounds, &vtboostpb.Materialization_Bound{Name: "@literal", Type: int64(bindVar.Type), BoundValue: bindVar.Value})
+			b := &vtboostpb.Materialization_Bind{
+				Name:    "@literal",
+				Literal: bindVar,
+			}
+			bounds = append(bounds, b)
 		}
 		return true, nil
 	}, stmt)
@@ -53,8 +59,8 @@ func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field
 	}
 
 	if arguments == 0 {
-		if len(keySchema) != 1 || keySchema[0].Name != "bogokey" {
-			return nil, false, fmt.Errorf("unexpected schema for fully materialized view %v", keySchema)
+		if len(view.Parameters) != 1 || view.Parameters[0].Name != "bogokey" {
+			return nil, false, fmt.Errorf("unexpected schema for fully materialized view %v", view.Parameters)
 		}
 		fullyMaterialized = true
 	}
@@ -65,7 +71,7 @@ func GenerateBoundsForQuery(stmt sqlparser.Statement, keySchema []*querypb.Field
 // => col1 = :foo AND col2 = a
 // => col1 = :foo AND col2 = b
 
-func matchParametrizedQuery(keyOut []*querypb.BindVariable, stmt sqlparser.Statement, bvars map[string]*querypb.BindVariable, bounds []*vtboostpb.Materialization_Bound) bool {
+func matchParametrizedQuery(key []*querypb.BindVariable, stmt sqlparser.Statement, bvars map[string]*querypb.BindVariable, bounds []*vtboostpb.Materialization_Bind) bool {
 	var pos int
 
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -86,13 +92,13 @@ func matchParametrizedQuery(keyOut []*querypb.BindVariable, stmt sqlparser.State
 				return false, errMismatch
 			}
 
-			if bound.BoundValue != nil {
-				if sqltypes.Type(bound.Type) != bv2.Type || !bytes.Equal(bound.BoundValue, bv2.Value) {
+			if bound.Literal != nil {
+				if bound.Literal.Type != bv2.Type || !bytes.Equal(bound.Literal.Value, bv2.Value) {
 					return false, errMismatch
 				}
-			} else {
-				keyOut[bound.Pos] = bv2
+				return true, nil
 			}
+			key[bound.Pos] = bv2
 		case sqlparser.ListArg:
 			if pos == len(bounds) {
 				return false, errMismatch
@@ -107,10 +113,10 @@ func matchParametrizedQuery(keyOut []*querypb.BindVariable, stmt sqlparser.State
 			if bv2.Type != sqltypes.Tuple {
 				return false, errMismatch
 			}
-			if bound.BoundValue != nil {
+			if bound.Literal != nil {
 				return false, fmt.Errorf("bound value for node %v in tuple: %v", sqlparser.String(node), bound)
 			}
-			keyOut[bound.Pos] = bv2
+			key[bound.Pos] = bv2
 		}
 		return true, nil
 	}, stmt)

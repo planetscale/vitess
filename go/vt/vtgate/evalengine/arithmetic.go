@@ -719,7 +719,7 @@ func mathMod_dd0(v1, v2 *evalDecimal) (decimal.Decimal, int32) {
 	return rem, length
 }
 
-func parseStringToFloat(str string) float64 {
+func ParseStringToFloat(str string) float64 {
 	str = strings.TrimSpace(str)
 
 	// We only care to parse as many of the initial float characters of the

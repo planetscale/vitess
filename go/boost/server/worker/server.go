@@ -138,7 +138,7 @@ func (srv *Server) LeaderChange(st *vtboostpb.ControllerState) {
 		log:              srv.log.With(zap.Int64("epoch", st.Epoch)),
 		uuid:             srv.uuid,
 		epoch:            service.Epoch(st.Epoch),
-		readers:          common.NewSyncMap[domain.ReaderID, *view.Reader](),
+		readers:          common.NewSyncMap[domain.ReaderID, view.Reader](),
 		domains:          common.NewSyncMap[dataflow.DomainAddr, *domain.Domain](),
 		memstats:         common.NewMemStats(),
 		coord:            srv.coord,

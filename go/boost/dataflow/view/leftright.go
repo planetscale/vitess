@@ -4,8 +4,6 @@ import (
 	"runtime"
 	"sync/atomic"
 	_ "unsafe"
-
-	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 )
 
 //go:linkname sync_runtime_procPin sync.runtime_procPin
@@ -26,17 +24,16 @@ type atomicInt64 struct {
 	pad [120]byte
 }
 
-type leftright struct {
+type leftright[M any] struct {
 	active        atomic.Int64
 	writerVersion atomic.Uint64
 	readerVersion [2][]atomicInt64
 
-	left, right offheap.CRowsTable
+	left, right M
 }
 
-func (lr *leftright) init(maxprocs int) {
-	lr.left = make(offheap.CRowsTable)
-	lr.right = make(offheap.CRowsTable)
+func (lr *leftright[M]) init(maxprocs int, left, right M) {
+	lr.left, lr.right = left, right
 	lr.readerVersion = [2][]atomicInt64{
 		make([]atomicInt64, maxprocs),
 		make([]atomicInt64, maxprocs),
@@ -44,19 +41,19 @@ func (lr *leftright) init(maxprocs int) {
 	lr.active.Swap(Left)
 }
 
-func (lr *leftright) readerArrive(version uint64, tid int) {
+func (lr *leftright[M]) readerArrive(version uint64, tid int) {
 	v := lr.readerVersion[version&0x1]
 	// TODO: all Swaps in this file can be a Store when Go gets its shit together
 	// https://github.com/golang/go/issues/58020
 	v[tid].Swap(Reading)
 }
 
-func (lr *leftright) readerDepart(version uint64, tid int) {
+func (lr *leftright[M]) readerDepart(version uint64, tid int) {
 	v := lr.readerVersion[version&0x1]
 	v[tid].Swap(NotReading)
 }
 
-func (lr *leftright) readerIsEmpty(version uint64) bool {
+func (lr *leftright[M]) readerIsEmpty(version uint64) bool {
 	v := lr.readerVersion[version&0x1]
 	for t := range v {
 		if v[t].Load() == Reading {
@@ -66,7 +63,7 @@ func (lr *leftright) readerIsEmpty(version uint64) bool {
 	return true
 }
 
-func (lr *leftright) Read(callback func(tbl offheap.CRowsTable, version uint64)) {
+func (lr *leftright[M]) Read(callback func(tbl M, version uint64)) {
 	tid := sync_runtime_procPin()
 	vi := lr.writerVersion.Load()
 
@@ -82,7 +79,7 @@ func (lr *leftright) Read(callback func(tbl offheap.CRowsTable, version uint64))
 	sync_runtime_procUnpin()
 }
 
-func (lr *leftright) publish(active int64, callback func(tbl offheap.CRowsTable)) {
+func (lr *leftright[M]) publish(active int64, callback func(tbl M)) {
 	lr.active.Swap(-active)
 
 	prevVersion := lr.writerVersion.Load()
@@ -104,11 +101,11 @@ func (lr *leftright) publish(active int64, callback func(tbl offheap.CRowsTable)
 	}
 }
 
-func (lr *leftright) Publish(callback func(tbl offheap.CRowsTable)) {
+func (lr *leftright[M]) Publish(callback func(tbl M)) {
 	lr.publish(lr.active.Load(), callback)
 }
 
-func (lr *leftright) Write(callback func(tbl offheap.CRowsTable)) {
+func (lr *leftright[M]) Write(callback func(tbl M)) {
 	active := lr.active.Load()
 	if active == Left {
 		callback(lr.right)
@@ -118,7 +115,7 @@ func (lr *leftright) Write(callback func(tbl offheap.CRowsTable)) {
 	lr.publish(active, callback)
 }
 
-func (lr *leftright) Writer() offheap.CRowsTable {
+func (lr *leftright[M]) Writer() M {
 	if lr.active.Load() == Left {
 		return lr.right
 	}

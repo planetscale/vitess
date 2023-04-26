@@ -16,22 +16,17 @@ import (
 
 var _ NodeImpl = (*Reader)(nil)
 
-type ViewParameter = flownodepb.ViewParameter
+type ViewDescriptor = flownodepb.ViewDescriptor
+type ViewParameter = flownodepb.ViewDescriptor_Param
 
 type Reader struct {
 	// not serialized
 	writer *view.Writer
 
-	publicID   string
-	forNode    graph.NodeIdx
-	state      []int
-	parameters []ViewParameter
-
-	topkOrder Order
-	topkLimit int
-
-	columnsForView int
-	columnsForUser int
+	publicID string
+	forNode  graph.NodeIdx
+	state    []int
+	view     *ViewDescriptor
 }
 
 func (r *Reader) dataflow() {}
@@ -57,28 +52,24 @@ func traceParentOrdering(g *graph.Graph[*Node], node graph.NodeIdx) (Order, int)
 	}
 }
 
-func (r *Reader) OnConnected(ingredients *graph.Graph[*Node], key []int, parameters []ViewParameter, colLen int) {
-	r.state = slices.Clone(key)
-	r.parameters = slices.Clone(parameters)
-	r.columnsForUser = colLen
-	r.columnsForView = colLen
-	r.topkOrder, r.topkLimit = traceParentOrdering(ingredients, r.forNode)
+func (r *Reader) OnConnected(g *graph.Graph[*Node]) {
+	r.view.TopkOrder, r.view.TopkLimit = traceParentOrdering(g, r.forNode)
 
-	if r.topkOrder != nil {
-		for _, ord := range r.topkOrder {
-			if ord.Col >= r.columnsForUser {
-				r.columnsForView = 0
+	if r.view.TopkOrder != nil {
+		for _, ord := range r.view.TopkOrder {
+			if ord.Col >= r.view.ColumnsForUser {
+				r.view.ColumnsForView = 0
 			}
 		}
 	}
 }
 
 func (r *Reader) Order() (cols []int64, desc []bool, limit int) {
-	for _, ord := range r.topkOrder {
+	for _, ord := range r.view.TopkOrder {
 		cols = append(cols, int64(ord.Col))
 		desc = append(desc, ord.Desc)
 	}
-	return cols, desc, r.topkLimit
+	return cols, desc, r.view.TopkLimit
 }
 
 func (r *Reader) IsFor() graph.NodeIdx {
@@ -134,7 +125,7 @@ func (r *Reader) Process(ctx context.Context, m *packet.ActiveFlowPacket, swap b
 		}
 
 		dataToAdd := m.TakeRecords()
-		st.Add(dataToAdd, r.columnsForView)
+		st.Add(dataToAdd, r.view.ColumnsForView)
 		if swap {
 			st.Swap()
 		}
@@ -160,12 +151,12 @@ func (r *Reader) OnEviction(keys []sql.Row) {
 	}
 }
 
-func (r *Reader) Parameters() []ViewParameter {
-	return r.parameters
+func (r *Reader) Descriptor() *ViewDescriptor {
+	return r.view
 }
 
 func (r *Reader) PublicColumnLength() int {
-	return r.columnsForUser
+	return r.view.ColumnsForUser
 }
 
 func (r *Reader) KeySchema() []sql.Type {
@@ -181,25 +172,22 @@ func (r *Reader) EvictRandomKeys(rng *rand.Rand, bytesToEvict int64) {
 	r.writer.Swap()
 }
 
-func NewReader(forNode graph.NodeIdx) *Reader {
-	return &Reader{forNode: forNode}
+func NewReader(forNode graph.NodeIdx, publicID string, key []int, view *flownodepb.ViewDescriptor) *Reader {
+	return &Reader{
+		forNode:  forNode,
+		publicID: publicID,
+		state:    key,
+		view:     view,
+	}
 }
 
 func (r *Reader) ToProto() *flownodepb.Node_Reader {
 	return &flownodepb.Node_Reader{
-		PublicId:       r.publicID,
-		ForNode:        r.forNode,
-		State:          r.state,
-		Parameters:     r.parameters,
-		ColumnsForView: r.columnsForView,
-		ColumnsForUser: r.columnsForUser,
-		TopkOrder:      r.topkOrder,
-		TopkLimit:      r.topkLimit,
+		PublicId: r.publicID,
+		ForNode:  r.forNode,
+		State:    r.state,
+		View:     r.view,
 	}
-}
-
-func (r *Reader) SetPublicID(id string) {
-	r.publicID = id
 }
 
 func (r *Reader) PublicID() string {
@@ -208,14 +196,10 @@ func (r *Reader) PublicID() string {
 
 func NewReaderFromProto(r *flownodepb.Node_Reader) *Reader {
 	return &Reader{
-		writer:         nil,
-		publicID:       r.PublicId,
-		forNode:        r.ForNode,
-		state:          r.State,
-		parameters:     r.Parameters,
-		columnsForView: r.ColumnsForView,
-		columnsForUser: r.ColumnsForUser,
-		topkOrder:      r.TopkOrder,
-		topkLimit:      r.TopkLimit,
+		writer:   nil,
+		publicID: r.PublicId,
+		forNode:  r.ForNode,
+		state:    r.State,
+		view:     r.View,
 	}
 }

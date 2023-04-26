@@ -127,7 +127,7 @@ type Domain struct {
 	maxConcurrentReplays int
 	replayRequestQueue   *deque.Deque[replay.ReplayRequest]
 
-	readers     *common.SyncMap[ReaderID, *view.Reader]
+	readers     *common.SyncMap[ReaderID, view.Reader]
 	coordinator *boostrpc.ChannelCoordinator
 
 	bufferedReplayRequests map[tagshard]*bufferedReplay
@@ -178,7 +178,7 @@ type ReaderID struct {
 	Shard uint
 }
 
-type Readers = common.SyncMap[ReaderID, *view.Reader]
+type Readers = common.SyncMap[ReaderID, view.Reader]
 
 const MaxUpqueries = 32
 

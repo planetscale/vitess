@@ -1426,7 +1426,7 @@ func TestParseStringToFloat(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.str, func(t *testing.T) {
-			got := parseStringToFloat(tc.str)
+			got := ParseStringToFloat(tc.str)
 			require.EqualValues(t, tc.val, got)
 		})
 	}

@@ -262,7 +262,7 @@ func (v *View) AddColumns(ctx *PlanContext, col Columns) (Columns, error) {
 	col = col.Add(ctx, v.Columns...)
 
 	for _, parameter := range v.Parameters {
-		col = col.Add(ctx, parameter.key)
+		col = col.Add(ctx, parameter.Column)
 	}
 	return col, nil
 }

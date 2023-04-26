@@ -99,7 +99,7 @@ func (v *View) MarshalJSON() ([]byte, error) {
 	}
 
 	for _, p := range v.Parameters {
-		out.Params = append(out.Params, p.key.Name)
+		out.Params = append(out.Params, p.Column.Name)
 	}
 
 	return json.Marshal(out)

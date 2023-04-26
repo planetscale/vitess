@@ -8,6 +8,7 @@ import (
 	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/flownode"
+	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
 	"vitess.io/vitess/go/boost/sql"
@@ -19,7 +20,7 @@ import (
 type Migration interface {
 	AddTable(name string, fields []string, b *flownode.Table) graph.NodeIdx
 	AddIngredient(name string, fields []string, impl flownode.NodeImpl) (graph.NodeIdx, error)
-	AddView(name string, na graph.NodeIdx, connect func(g *graph.Graph[*flownode.Node], reader *flownode.Reader))
+	AddView(name string, reader *flownode.Reader)
 	AddUpquery(idx graph.NodeIdx, statement sqlparser.SelectStatement)
 }
 
@@ -191,27 +192,155 @@ func makeTableRefNode(mig Migration, op *operators.NodeTableRef) (operators.Flow
 	}, nil
 }
 
+var opToMatch = map[sqlparser.ComparisonExprOperator]flownodepb.ViewDescriptor_Param_Match{
+	sqlparser.EqualOp:        flownodepb.ViewDescriptor_Param_EQ,
+	sqlparser.InOp:           flownodepb.ViewDescriptor_Param_IN,
+	sqlparser.LessThanOp:     flownodepb.ViewDescriptor_Param_LT,
+	sqlparser.GreaterThanOp:  flownodepb.ViewDescriptor_Param_GT,
+	sqlparser.LessEqualOp:    flownodepb.ViewDescriptor_Param_LE,
+	sqlparser.GreaterEqualOp: flownodepb.ViewDescriptor_Param_GE,
+}
+
+func planViewNode(params []*operators.Parameter, columns operators.Columns) ([]int, *flownode.ViewDescriptor, error) {
+	type parameter struct {
+		Pos    int
+		Column *operators.Column
+		Param  *flownodepb.ViewDescriptor_Param
+	}
+
+	queryOrder := make([]flownode.ViewParameter, 0, len(params))
+	planOrder := make([]parameter, 0, len(params))
+	paramForColumn := make(map[int][]parameter)
+
+	for i, param := range params {
+		if param.ColumnOffset < 0 {
+			panic("did not resolve column for View parameter")
+		}
+		p := flownode.ViewParameter{
+			Name:  param.Name,
+			Match: opToMatch[param.Op],
+			Col:   param.ColumnOffset,
+		}
+
+		queryOrder = append(queryOrder, p)
+		internal := parameter{Pos: i, Column: param.Column, Param: &queryOrder[i]}
+		planOrder = append(planOrder, internal)
+		paramForColumn[param.ColumnOffset] = append(paramForColumn[param.ColumnOffset], internal)
+	}
+
+	slices.SortStableFunc(planOrder, func(a, b parameter) bool {
+		return a.Param.Match < b.Param.Match
+	})
+
+	var rangeColumns operators.Columns
+	for _, params := range paramForColumn {
+		switch len(params) {
+		case 1:
+			switch params[0].Param.Match {
+			case flownodepb.ViewDescriptor_Param_LT, flownodepb.ViewDescriptor_Param_LE,
+				flownodepb.ViewDescriptor_Param_GT, flownodepb.ViewDescriptor_Param_GE:
+				rangeColumns = append(rangeColumns, params[0].Column)
+				if len(rangeColumns) > 1 {
+					return nil, nil, rangeError(rangeColumns, operators.RangeMultipleColumns)
+				}
+			}
+		case 2:
+			rangeColumns = append(rangeColumns, params[0].Column)
+			if len(rangeColumns) > 1 {
+				return nil, nil, rangeError(rangeColumns, operators.RangeMultipleColumns)
+			}
+
+			switch params[0].Param.Match {
+			case flownodepb.ViewDescriptor_Param_EQ:
+				return nil, nil, rangeError(rangeColumns, operators.RangeEqualityOperator)
+
+			case flownodepb.ViewDescriptor_Param_LT, flownodepb.ViewDescriptor_Param_LE:
+				switch params[1].Param.Match {
+				case flownodepb.ViewDescriptor_Param_GT, flownodepb.ViewDescriptor_Param_GE:
+				default:
+					return nil, nil, rangeError(rangeColumns, operators.RangeSameDirection)
+				}
+			case flownodepb.ViewDescriptor_Param_GT, flownodepb.ViewDescriptor_Param_GE:
+				switch params[1].Param.Match {
+				case flownodepb.ViewDescriptor_Param_LT, flownodepb.ViewDescriptor_Param_LE:
+				default:
+					return nil, nil, rangeError(rangeColumns, operators.RangeSameDirection)
+				}
+			default:
+				switch params[1].Param.Match {
+				case flownodepb.ViewDescriptor_Param_EQ:
+					return nil, nil, rangeError(rangeColumns, operators.RangeEqualityOperator)
+				}
+			}
+		default:
+			rangeColumns = append(rangeColumns, params[0].Column)
+			return nil, nil, rangeError(rangeColumns, operators.RangeManyOperators)
+		}
+	}
+
+	var key []int
+	for _, p := range planOrder {
+		if !slices.Contains(key, p.Param.Col) {
+			key = append(key, p.Param.Col)
+		}
+	}
+
+	var vrange *flownodepb.ViewDescriptor_Range
+	if len(rangeColumns) > 0 {
+		vrange = &flownodepb.ViewDescriptor_Range{}
+		for _, p := range planOrder {
+			switch p.Param.Match {
+			case flownodepb.ViewDescriptor_Param_EQ:
+				vrange.LowerKey = append(vrange.LowerKey, p.Pos)
+				vrange.UpperKey = append(vrange.UpperKey, p.Pos)
+
+			case flownodepb.ViewDescriptor_Param_GE:
+				vrange.LowerInclusive = true
+				fallthrough
+
+			case flownodepb.ViewDescriptor_Param_GT:
+				vrange.LowerKey = append(vrange.LowerKey, p.Pos)
+
+			case flownodepb.ViewDescriptor_Param_LE:
+				vrange.UpperInclusive = true
+				fallthrough
+
+			case flownodepb.ViewDescriptor_Param_LT:
+				vrange.UpperKey = append(vrange.UpperKey, p.Pos)
+			}
+		}
+	}
+
+	view := &flownode.ViewDescriptor{
+		Parameters:     queryOrder,
+		Range:          vrange,
+		ColumnsForView: len(columns),
+		ColumnsForUser: len(columns),
+	}
+
+	return key, view, nil
+}
+
+func rangeError(columns operators.Columns, typ operators.UnsupportedRangeType) error {
+	cols := make([]string, 0, len(columns))
+	for _, col := range columns {
+		cols = append(cols, col.Name)
+	}
+	slices.Sort(cols)
+	return &operators.UnsupportedRangeError{Columns: cols, Type: typ}
+}
+
 func makeViewOpNode(mig Migration, node *operators.Node, op *operators.View) (operators.FlowNode, error) {
 	parent := node.Ancestors[0]
 	na := parent.FlowNodeAddr()
 
-	var parameters = make([]flownode.ViewParameter, 0, len(op.Parameters))
-	for _, param := range op.Parameters {
-		parameters = append(parameters, flownode.ViewParameter{
-			Name:  param.Name,
-			Multi: param.Op == sqlparser.InOp,
-		})
+	key, view, err := planViewNode(op.Parameters, op.Columns)
+	if err != nil {
+		return operators.FlowNode{}, err
 	}
 
-	mig.AddView(node.Name, na, func(g *graph.Graph[*flownode.Node], reader *flownode.Reader) {
-		reader.SetPublicID(op.PublicID)
-
-		if len(op.ParametersIdx) > 0 {
-			reader.OnConnected(g, op.ParametersIdx, parameters, len(op.Columns))
-		} else {
-			reader.OnConnected(g, []int{0}, nil, len(op.Columns))
-		}
-	})
+	reader := flownode.NewReader(na, op.PublicID, key, view)
+	mig.AddView(node.Name, reader)
 
 	switch parent.Flow.Age {
 	case operators.FlowNodeNew:

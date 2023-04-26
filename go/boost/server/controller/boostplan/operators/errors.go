@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -37,7 +38,7 @@ const (
 	DualTable
 	ParameterLocation
 	ParameterLocationCompare
-	ParameterNotEqual
+	ParameterNotSupported
 	JoinWithoutPredicates
 	JoinPredicates
 	MultipleIn
@@ -46,6 +47,19 @@ const (
 	Lock
 	SubQuery
 	NonConstantExpression
+	MultipleOperators
+	RangeAndIn
+)
+
+//enumcheck:exhaustive
+type UnsupportedRangeType int
+
+const (
+	UnknownRangeError UnsupportedRangeType = iota
+	RangeMultipleColumns
+	RangeEqualityOperator
+	RangeSameDirection
+	RangeManyOperators
 )
 
 type (
@@ -60,6 +74,10 @@ type (
 	UnknownColumnsError struct {
 		Keyspace, Table string
 		Columns         []string
+	}
+	UnsupportedRangeError struct {
+		Type    UnsupportedRangeType
+		Columns []string
 	}
 )
 
@@ -117,8 +135,8 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "select without an explicit table is not supported")
 	case ParameterLocation:
 		fmt.Fprintf(&sb, "unsupported parameter location: %s", sqlparser.CanonicalString(n.AST))
-	case ParameterNotEqual:
-		fmt.Fprintf(&sb, "parameter %s can only be compared for equality", sqlparser.CanonicalString(n.AST))
+	case ParameterNotSupported:
+		fmt.Fprintf(&sb, "parameter %s is not supported", sqlparser.CanonicalString(n.AST))
 	case ParameterLocationCompare:
 		fmt.Fprintf(&sb, "parameter %s needs to be used in a comparison expression", sqlparser.CanonicalString(n.AST))
 	case JoinWithoutPredicates:
@@ -138,6 +156,10 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "subqueries are not supported: %s", sqlparser.CanonicalString(n.AST))
 	case NonConstantExpression:
 		fmt.Fprintf(&sb, "non constant expression in query: %s", sqlparser.CanonicalString(n.AST))
+	case MultipleOperators:
+		fmt.Fprintf(&sb, "operator is used multiple times on the same column: %s", sqlparser.CanonicalString(n.AST))
+	case RangeAndIn:
+		fmt.Fprintf(&sb, "range combined with IN() is not supported: %s", sqlparser.CanonicalString(n.AST))
 	}
 
 	return sb.String()
@@ -149,4 +171,23 @@ func (u *UnknownColumnsError) Error() string {
 
 func (n *NoUniqueKeyError) Error() string {
 	return fmt.Sprintf("table %s.%s has no unique non nullable key", n.Keyspace, n.Table)
+}
+
+func (n *UnsupportedRangeError) Error() string {
+	var sb strings.Builder
+	sb.WriteString("query not supported by boost: ")
+	switch n.Type {
+	case UnknownRangeError:
+		sb.WriteString("unknown range problem")
+	case RangeMultipleColumns:
+		fmt.Fprintf(&sb, "multiple columns using range operators: %s", strings.Join(sqlescape.EscapeIDs(n.Columns), ", "))
+	case RangeEqualityOperator:
+		fmt.Fprintf(&sb, "equality operator used with range operator on column %s", sqlescape.EscapeID(n.Columns[0]))
+	case RangeSameDirection:
+		fmt.Fprintf(&sb, "multiple range operators with the same direction on column %s", sqlescape.EscapeID(n.Columns[0]))
+	case RangeManyOperators:
+		fmt.Fprintf(&sb, "too many range operators for column %s", sqlescape.EscapeID(n.Columns[0]))
+	}
+
+	return sb.String()
 }

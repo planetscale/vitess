@@ -22,17 +22,16 @@ message CachedQuery {
 message Materialization {
   CachedQuery query = 1;
   string normalized_sql = 2;
-  repeated Bound bounds = 3;
+  reserved 3;
   ViewDescriptor view = 4;
   bool fully_materialized = 5;
+  repeated Bind binds = 6;
 
-  message Bound {
+  message Bind {
     string name = 1;
-    int64 type = 2;
-    bytes bound_value = 3;
-    int64 pos = 4;
-    bool multi = 5;
-  };
+    query.BindVariable literal = 2;
+    int64 pos = 3;
+  }
 
   message ViewDescriptor {
     reserved 1; // was: name

@@ -7,9 +7,36 @@ import "gogoproto/gogo.proto";
 import "sql.proto";
 import "dataflow.proto";
 
-message ViewParameter {
-  string name = 1;
-  bool multi = 2;
+message ViewDescriptor {
+  message Param {
+    enum Match {
+      EQ = 0;
+      GE = 1;
+      GT = 2;
+      LT = 3;
+      LE = 4;
+      IN = -1;
+    };
+
+    string name = 1;
+    Match match = 2;
+    int64 col = 3 [(gogoproto.casttype) = "int"];
+  };
+
+  message Range {
+    repeated int64 lower_key = 1 [(gogoproto.casttype) = "int"];
+    bool lower_inclusive = 2;
+    repeated int64 upper_key = 3 [(gogoproto.casttype) = "int"];
+    bool upper_inclusive = 4;
+  };
+
+  repeated Param parameters = 1 [(gogoproto.nullable) = false];
+  Range range = 2;
+  repeated OrderedColumn topk_order = 3 [(gogoproto.nullable) = false];
+  int64 topk_limit = 4 [(gogoproto.casttype) = "int"];
+
+  int64 columns_for_view = 5 [(gogoproto.casttype) = "int"];
+  int64 columns_for_user = 6 [(gogoproto.casttype) = "int"];
 };
 
 message OrderedColumn {
@@ -44,7 +71,7 @@ message Node {
     string public_id = 1;
     uint32 for_node = 2 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
     repeated int64 state = 3 [(gogoproto.casttype) = "int"];
-    repeated ViewParameter parameters = 4 [(gogoproto.nullable) = false];
+    ViewDescriptor view = 4;
 
     repeated OrderedColumn topk_order = 5 [(gogoproto.nullable) = false];
     int64 topk_limit = 6 [(gogoproto.casttype) = "int"];

@@ -116,7 +116,7 @@ func (n *Node) RenderGraphviz(gvz *graphviz.Node, options GraphvizOptions) {
 			} else {
 				collname = "???"
 			}
-			if reader != nil && i >= reader.columnsForUser {
+			if reader != nil && i >= reader.view.ColumnsForUser {
 				fieldname = graphviz.Fmt(`<I><FONT COLOR="grey">[%s]</FONT></I>`, f)
 			} else {
 				fieldname = graphviz.Fmt("%s", f)

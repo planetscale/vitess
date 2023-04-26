@@ -94,7 +94,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		case v.IsFloat() || v.IsDecimal():
 			f, err = v.ToFloat64()
 		case v.IsQuoted():
-			f = parseStringToFloat(v.RawStr())
+			f = ParseStringToFloat(v.RawStr())
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
 		}
@@ -125,7 +125,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		case v.IsQuoted():
 			i, err = strconv.ParseInt(v.RawStr(), 10, 64)
 			if err != nil {
-				fval := parseStringToFloat(v.RawStr())
+				fval := ParseStringToFloat(v.RawStr())
 				if fval != math.Trunc(fval) {
 					return ErrHashCoercionIsNotExact
 				}
@@ -165,7 +165,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		case v.IsQuoted():
 			u, err = strconv.ParseUint(v.RawStr(), 10, 64)
 			if err != nil {
-				fval := parseStringToFloat(v.RawStr())
+				fval := ParseStringToFloat(v.RawStr())
 				if fval != math.Trunc(fval) || fval < 0 {
 					return ErrHashCoercionIsNotExact
 				}
@@ -208,7 +208,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			}
 			dec = decimal.NewFromFloat(fval)
 		case v.IsText() || v.IsBinary():
-			fval := parseStringToFloat(v.RawStr())
+			fval := ParseStringToFloat(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)
