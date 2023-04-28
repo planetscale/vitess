@@ -873,6 +873,22 @@ func TestNormalization(t *testing.T) {
 		{"set @my_secret_variable = 'secret'", "set @my_secret_variable = ?"},
 		{"select 1 from x where xyz not in (select distinct foo from bar where baz not in (1,2,3))", "select ? from x where xyz not in (select distinct foo from bar where baz not in (<elements>))"},
 
+		// unary operators
+		{"select * from users where id=-1", "select * from users where id = ?"},
+		{"select * from users where id=-:vtg1", "select * from users where id = ?"},
+		{"select * from users where id=+1", "select * from users where id = ?"},
+		{"select * from users where happy=!true", "select * from users where happy = ?"},
+		{"select * from users where bitfield=~1", "select * from users where bitfield = ?"},
+		{"select * from users where email=N'wut'", "select * from users where email = ?"},
+		{"select b'010101' from users", "select ? from users"},
+		{"select x'1f' from users", "select ? from users"},
+		{"select _utf8'hello' from users", "select ? from users"},
+
+		// negatives that shouldn't get squashed
+		{"select 5-4 from users", "select ? - ? from users"},
+		{"select * from users where id=-refcount", "select * from users where id = -refcount"},
+		{"select * from users where id=-(select id from users limit 1)", "select * from users where id = -(select id from users limit ?)"},
+
 		// comments should get stripped out
 		{"select /*+ SET_VAR(sql_mode = 'NO_ZERO_IN_DATE') */ sleep(:vtg1) from customer", "select sleep(?) from customer"},
 		{"select /* freeform comment */ sleep(:vtg1) from customer", "select sleep(?) from customer"},
