@@ -1078,12 +1078,26 @@ func (ii *Insights) normalizeSQL(stmt sqlparser.Statement, maybeReorderColumns b
 			buf.WriteString("savepoint <id>")
 		case *sqlparser.Release:
 			buf.WriteString("release savepoint <id>")
-		case *sqlparser.Argument, sqlparser.BoolVal, *sqlparser.NullVal, *sqlparser.Literal:
-			buf.WriteString("?")
+		case *sqlparser.UnaryExpr:
+			if normalizesToPlaceholder(node.Expr) {
+				buf.WriteRune('?')
+			} else {
+				node.Format(buf)
+			}
+		case *sqlparser.IntroducerExpr:
+			if normalizesToPlaceholder(node.Expr) {
+				buf.WriteRune('?')
+			} else {
+				node.Format(buf)
+			}
 		case *sqlparser.ParsedComments:
 			// elide comments entirely
 		default:
-			node.Format(buf)
+			if normalizesToPlaceholder(node) {
+				buf.WriteRune('?')
+			} else {
+				node.Format(buf)
+			}
 		}
 	})
 
@@ -1099,6 +1113,15 @@ func (ii *Insights) normalizeSQL(stmt sqlparser.Statement, maybeReorderColumns b
 		return ret, &hash
 	}
 	return ret, nil
+}
+
+// true for any node type that would generate a '?' placeholder
+func normalizesToPlaceholder(node sqlparser.SQLNode) bool {
+	switch node.(type) {
+	case *sqlparser.Argument, sqlparser.BoolVal, *sqlparser.NullVal, *sqlparser.Literal:
+		return true
+	}
+	return false
 }
 
 // First capture group in pattern is replaced with `replacment`
