@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -32,7 +33,7 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo Type) ([]byte, bool, er
 		case v.IsFloat() || v.IsDecimal():
 			f, err = v.ToFloat64()
 		case v.IsQuoted():
-			f = evalengine.ParseStringToFloat(v.RawStr())
+			f, _ = fastparse.ParseFloat64(v.RawStr())
 		default:
 			return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
 		}
@@ -68,7 +69,7 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo Type) ([]byte, bool, er
 		case v.IsQuoted():
 			i, err = strconv.ParseInt(v.RawStr(), 10, 64)
 			if err != nil {
-				fval := evalengine.ParseStringToFloat(v.RawStr())
+				fval, _ := fastparse.ParseFloat64(v.RawStr())
 				if fval != math.Trunc(fval) {
 					return dst, false, evalengine.ErrHashCoercionIsNotExact
 				}
@@ -105,7 +106,7 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo Type) ([]byte, bool, er
 		case v.IsQuoted():
 			u, err = strconv.ParseUint(v.RawStr(), 10, 64)
 			if err != nil {
-				fval := evalengine.ParseStringToFloat(v.RawStr())
+				fval, _ := fastparse.ParseFloat64(v.RawStr())
 				if fval != math.Trunc(fval) || fval < 0 {
 					return dst, false, evalengine.ErrHashCoercionIsNotExact
 				}
@@ -145,7 +146,7 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo Type) ([]byte, bool, er
 			}
 			dec = decimal.NewFromFloat(fval)
 		case v.IsText() || v.IsBinary():
-			fval := evalengine.ParseStringToFloat(v.RawStr())
+			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
 			return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)
