@@ -117,4 +117,10 @@ jobs:
         EOF
         {{end}}
 
+        {{if .EnableBinlogTransactionCompression}}
+        cat <<-EOF>>./config/mycnf/mysql80.cnf
+        binlog-transaction-compression=ON
+        EOF
+        {{end}}
+
         eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}}
