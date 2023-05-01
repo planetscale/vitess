@@ -124,6 +124,7 @@ require (
 	github.com/shopspring/decimal v1.3.1
 	github.com/tidwall/btree v1.6.0
 	github.com/twmb/murmur3 v1.1.6
+	github.com/xlab/treeprint v1.2.0
 	go.opentelemetry.io/otel v1.14.0
 	go.opentelemetry.io/otel/trace v1.14.0
 	go.uber.org/goleak v1.2.1
