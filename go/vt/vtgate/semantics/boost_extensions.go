@@ -35,7 +35,7 @@ func (n *noTable) authoritative() bool {
 	return false
 }
 
-func (n *noTable) getExpr() *sqlparser.AliasedTableExpr {
+func (n *noTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return nil
 }
 
