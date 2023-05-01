@@ -131,12 +131,12 @@ func main() {
 		log.Fatal("failed to configure external gateway", zap.Error(err))
 	}
 
-	http.HandleFunc("/debug/ready/controller", func(rw http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/ready/controller", func(rw http.ResponseWriter, r *http.Request) {
 		if !boost.Controller.IsReady() {
 			http.Error(rw, "Controller not ready", 503)
 		}
 	})
-	http.HandleFunc("/debug/ready/worker", func(rw http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/ready/worker", func(rw http.ResponseWriter, r *http.Request) {
 		if !boost.Worker.IsReady() {
 			http.Error(rw, "Worker not ready", 503)
 		}
