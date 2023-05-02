@@ -56,6 +56,7 @@ vttablet \
  --vtctld_addr http://$hostname:$vtctld_web_port/ \
  --disable_active_reparents \
  --throttler-config-via-topo --heartbeat_enable --heartbeat_interval=250ms --heartbeat_on_demand_duration=5s \
+ --queryserver-enable-views=true \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
 # Block waiting for the tablet to be listening

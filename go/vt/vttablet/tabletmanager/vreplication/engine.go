@@ -50,6 +50,7 @@ const (
 	vreplicationTableName      = "vreplication"
 	copyStateTableName         = "copy_state"
 	postCopyActionTableName    = "post_copy_action"
+	viewsTableName             = "views"
 
 	maxRows                      = 10000
 	throttlerVReplicationAppName = "vreplication"

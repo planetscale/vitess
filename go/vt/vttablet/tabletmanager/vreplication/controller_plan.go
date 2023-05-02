@@ -285,7 +285,7 @@ func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
 		return nil, fmt.Errorf("invalid database name: %s", tableName.Qualifier.String())
 	}
 	switch tableName.Name.String() {
-	case vreplicationTableName, reshardingJournalTableName, copyStateTableName, vreplicationLogTableName:
+	case vreplicationTableName, reshardingJournalTableName, copyStateTableName, vreplicationLogTableName, viewsTableName:
 		return &controllerPlan{
 			opcode: selectQuery,
 		}, nil

@@ -22,6 +22,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/PuerkitoBio/goquery"
+	"github.com/buger/jsonparser"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 	"io"
 	"net/http"
 	"os/exec"
@@ -31,12 +36,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/PuerkitoBio/goquery"
-	"github.com/buger/jsonparser"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
@@ -94,6 +93,17 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 	execQuery(t, conn, "begin")
 	qr := execQuery(t, conn, query)
 	execQuery(t, conn, "commit")
+	return qr
+}
+
+func execVtgateDDL(t *testing.T, conn *mysql.Conn, database string, query string) *sqltypes.Result {
+	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	if database != "" {
+		execQuery(t, conn, "use `"+database+"`;")
+	}
+	qr := execQuery(t, conn, query)
 	return qr
 }
 
@@ -335,6 +345,9 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 			require.NotNil(t, res)
 			row := res.Named().Row()
 			tableSchema := row["Create Table"].ToString()
+			if tableSchema == "" {
+				continue // not a table, possibly a view
+			}
 			parsedDDL, err := sqlparser.ParseStrictDDL(tableSchema)
 			require.NoError(t, err)
 			createTable, ok := parsedDDL.(*sqlparser.CreateTable)
@@ -696,4 +709,25 @@ func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool 
 	require.Equal(t, 1, len(rs.Rows))
 	mode := strings.ToLower(rs.Rows[0][0].ToString())
 	return mode == "noblob"
+}
+
+const (
+	customerViewName        = "customer_view"
+	createCustomerViewQuery = "create view customer_view as select cid, `name` from customer"
+	getCustomerViewQuery    = "select CREATE_STATEMENT from %s.views where TABLE_SCHEMA = 'vt_%s' and TABLE_NAME = '%s'"
+)
+
+func createViews(t *testing.T, conn *mysql.Conn) {
+	execVtgateDDL(t, vtgateConn, "customer", createCustomerViewQuery)
+}
+
+func validateViews(t *testing.T, vc *VitessCluster, keyspaceName string, shards []string) {
+	query := fmt.Sprintf(getCustomerViewQuery, sidecarDBIdentifier, keyspaceName, customerViewName)
+	for _, shardName := range shards {
+		primary := vc.getPrimaryTablet(t, keyspaceName, shardName)
+		qr, err := primary.QueryTabletWithDB(query, sidecarDBName)
+		require.NoError(t, err)
+		require.Equalf(t, 1, len(qr.Rows), "%s: %s: %+v", primary.Name, query, qr.Rows)
+		require.Equal(t, createCustomerViewQuery, qr.Rows[0][0].ToString())
+	}
 }

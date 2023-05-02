@@ -188,6 +188,10 @@ func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *workflow.Strea
 	return nil
 }
 
+func (dr *switcherDryRun) migrateSidecarTables(ctx context.Context, stm *workflow.SidecarTableMigrator) error {
+	return nil
+}
+
 func (dr *switcherDryRun) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
 	dr.drLog.Log(fmt.Sprintf("Wait for VReplication on stopped streams to catchup for up to %v", filteredReplicationWaitTime))
 	return nil

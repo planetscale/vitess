@@ -32,6 +32,7 @@ type iswitcher interface {
 	stopSourceWrites(ctx context.Context) error
 	waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error
 	migrateStreams(ctx context.Context, sm *workflow.StreamMigrator) error
+	migrateSidecarTables(ctx context.Context, stm *workflow.SidecarTableMigrator) error
 	createReverseVReplication(ctx context.Context) error
 	createJournals(ctx context.Context, sourceWorkflows []string) error
 	allowTargetWrites(ctx context.Context) error

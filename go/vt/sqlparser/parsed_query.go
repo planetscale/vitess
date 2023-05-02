@@ -20,14 +20,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-
 	"vitess.io/vitess/go/bytes2"
 	vjson "vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // ParsedQuery represents a parsed query where
@@ -121,6 +119,7 @@ func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field
 	// bind field values to locations
 	var offsetQuery int
 	for i, loc := range pq.bindLocations {
+
 		col := rowInfo[i]
 		buf.WriteString(pq.Query[offsetQuery:loc.offset])
 		typ := col.typ
