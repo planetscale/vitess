@@ -44,7 +44,7 @@ jobs:
         ref:
           - main
           - latest
-          - latest-*
+          - latest-16.0
         image:
           - mysql80
         include:
