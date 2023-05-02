@@ -444,7 +444,7 @@ func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 		printProcessListOnce.Do(func() {
 			dbconnpool.LogRedactedProcessList(killConn, dbc.conn.User)
 		})
-		dbc.stats.ErrorInKillingCounter.Add(1)
+		dbc.stats.ErrorDuringKillCounter.Add(1)
 		return err
 	}
 	return nil
