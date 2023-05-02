@@ -258,7 +258,7 @@ func TestDBConnKill(t *testing.T) {
 	}
 	require.NoError(t, err)
 	// Verify initial value of ErrorsInKilling counter
-	require.EqualValues(t, 0, dbConn.stats.ErrorInKillingCounter.Get())
+	require.EqualValues(t, 0, dbConn.stats.ErrorDuringKillCounter.Get())
 
 	query := fmt.Sprintf("kill %d", dbConn.ID())
 	db.AddQuery(query, &sqltypes.Result{})
@@ -268,7 +268,7 @@ func TestDBConnKill(t *testing.T) {
 	want := "errno 2013"
 	require.ErrorContains(t, err, want)
 	// Verify we don't increment ErrorInKillingCounter when getting a kill connection fails
-	require.EqualValues(t, 0, dbConn.stats.ErrorInKillingCounter.Get())
+	require.EqualValues(t, 0, dbConn.stats.ErrorDuringKillCounter.Get())
 	db.DisableConnFail()
 
 	// Kill succeed
@@ -284,7 +284,7 @@ func TestDBConnKill(t *testing.T) {
 	want = "rejected"
 	require.ErrorContains(t, err, want)
 	// Verify ErrorInKillingCounter got incremented
-	require.EqualValues(t, 1, dbConn.stats.ErrorInKillingCounter.Get())
+	require.EqualValues(t, 1, dbConn.stats.ErrorDuringKillCounter.Get())
 }
 
 // TestDBConnClose tests that an Exec returns immediately if a connection
