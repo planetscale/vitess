@@ -44,6 +44,7 @@ jobs:
         ref:
           - main
           - latest
+          - latest-*
         image:
           - mysql80
         include:
@@ -102,8 +103,9 @@ jobs:
             prefix=${{ matrix.image }}-,onlatest=true
           # head tag is so we have 2 well-known tags to a vitess image for CI
           tags: |
+            type=ref,event=branch
             type=raw,value={{date 'YYYY-MM-DD'}}.${{ steps.determine-sha.outputs.sha }}
-            type=raw,value=head,enable=${{ matrix.ref == 'latest' }}
+            type=raw,value=head,enable=${{ matrix.default == 'true' }}
 
         # This is a hack to let us retrieve the new image version being built
         # by this job, which is necessary because the GitHub Actions API
