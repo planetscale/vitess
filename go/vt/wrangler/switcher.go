@@ -96,6 +96,10 @@ func (r *switcher) migrateStreams(ctx context.Context, sm *workflow.StreamMigrat
 	return sm.MigrateStreams(ctx)
 }
 
+func (r *switcher) migrateSidecarTables(ctx context.Context, stm *workflow.SidecarTableMigrator) error {
+	return stm.MigrateTables(ctx)
+}
+
 func (r *switcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
 	return r.ts.waitForCatchup(ctx, filteredReplicationWaitTime)
 }

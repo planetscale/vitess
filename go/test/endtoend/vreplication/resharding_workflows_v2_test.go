@@ -264,6 +264,7 @@ func TestBasicV2Workflows(t *testing.T) {
 	defaultRdonly = 1
 	extraVTTabletArgs = []string{
 		parallelInsertWorkers,
+		"--queryserver-enable-views",
 	}
 	defer func() {
 		defaultRdonly = 0
@@ -279,7 +280,10 @@ func TestBasicV2Workflows(t *testing.T) {
 	tstApplySchemaOnlineDDL(t, ddlSQL, sourceKs)
 
 	testMoveTablesV2Workflow(t)
+	createViews(t, vtgateConn)
+	validateViews(t, vc, "customer", []string{"-80", "80-"})
 	testReshardV2Workflow(t)
+	validateViews(t, vc, "customer", []string{"-40", "40-80", "80-c0", "c0-"})
 	log.Flush()
 }
 

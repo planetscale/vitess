@@ -215,7 +215,7 @@ func (vrw *VReplicationWorkflow) Create(ctx context.Context) error {
 		excludeTables := strings.Split(vrw.params.ExcludeTables, ",")
 		keyspace := vrw.params.SourceKeyspace
 
-		vschmErr := vrw.wr.ValidateVSchema(ctx, keyspace, vrw.params.SourceShards, excludeTables, true /*includeViews*/)
+		vschmErr := vrw.wr.ValidateVSchema(ctx, keyspace, vrw.params.SourceShards, excludeTables, false /*includeViews*/)
 		if vschmErr != nil {
 			return fmt.Errorf("Create ReshardWorkflow failed: %v", vschmErr)
 		}

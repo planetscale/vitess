@@ -21,7 +21,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -315,6 +314,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	sendRule.Filter = sqlparser.String(tpb.sendSelect)
 
 	tablePlan := tpb.generate()
+
 	tablePlan.SendRule = sendRule
 	tablePlan.EnumValuesMap = enumValuesMap
 	tablePlan.ConvertCharset = rule.ConvertCharset
@@ -348,7 +348,6 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 			fieldsToSkip[colInfo.Name] = true
 		}
 	}
-
 	return &TablePlan{
 		TargetName:              tpb.name.String(),
 		Lastpk:                  tpb.lastpk,

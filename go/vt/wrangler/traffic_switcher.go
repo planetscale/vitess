@@ -531,6 +531,12 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			return 0, sw.logs(), nil
 		}
 
+		stm, err := workflow.BuildSidecarTableMigrator(ctx, ts)
+		if err != nil {
+			ts.Logger().Errorf("BuildSidecarTableMigrator failed: %v", err)
+			return 0, nil, err
+		}
+
 		ts.Logger().Infof("Stopping streams")
 		sourceWorkflows, err = sw.stopStreams(ctx, sm)
 		if err != nil {
@@ -577,6 +583,13 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		ts.Logger().Infof("Migrating streams")
 		if err := sw.migrateStreams(ctx, sm); err != nil {
 			ts.Logger().Errorf("migrateStreams failed: %v", err)
+			sw.cancelMigration(ctx, sm)
+			return 0, nil, err
+		}
+
+		ts.Logger().Infof("Migrating sidecar tables")
+		if err := sw.migrateSidecarTables(ctx, stm); err != nil {
+			ts.Logger().Errorf("Migrating sidecar tables failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}

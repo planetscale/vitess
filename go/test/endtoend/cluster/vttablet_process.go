@@ -449,6 +449,7 @@ func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) 
 		return nil, err
 	}
 	defer conn.Close()
+	log.Infof("Executing query %s on conn %s", query, conn.String())
 	return executeQuery(conn, query)
 }
 
