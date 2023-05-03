@@ -52,6 +52,10 @@ jobs:
           - image: mysql80
             ref: latest
             default: 'true'
+            vitess-version: 15
+          - image: mysql80
+            ref: latest-16.0
+            vitess-version: 16
 
     steps:
       - name: Checkout planetscale/vitess-private
@@ -99,13 +103,19 @@ jobs:
             ${{ format('us-docker.pkg.dev/planetscale-registry/{0}/vitess/lite', matrix.ref == 'main' && 'prod' || 'dev') }}
             ${{ format('997601596833.dkr.ecr.us-east-1.amazonaws.com/{0}/vitess', matrix.ref == 'main' && 'main' || 'branch') }}
           flavor: |
-            latest=${{ matrix.default == 'true' }}
             prefix=${{ matrix.image }}-,onlatest=true
           # head tag is so we have 2 well-known tags to a vitess image for CI
+          labels: |
+            planetscale.vitess-private.image.vitess-version=${{ matrix.vitess-version }}
+            planetscale.vitess-private.branch.ref=${{ matrix.ref }}
+            planetscale.vitess-private.branch.default=${{ matrix.default == 'true' }}
+
           tags: |
-            type=ref,event=branch
-            type=raw,value={{date 'YYYY-MM-DD'}}.${{ steps.determine-sha.outputs.sha }}
-            type=raw,value=head,enable=${{ matrix.default == 'true' }}
+            type=raw,value={{date 'YYYY-MM-DD'}}.${{ steps.determine-sha.outputs.sha }},priority=900
+            type=raw,value=latest-16,enable=${{ matrix.ref == 'latest-16.0' }},priority=600
+            type=raw,value=head-16,enable=${{ matrix.ref == 'latest-16.0' }},priority=600
+            type=raw,value=head,enable=${{ matrix.default == 'true' }},priority=600
+            type=raw,value=latest,enable=${{ matrix.default == 'true' }},priority=600
 
         # This is a hack to let us retrieve the new image version being built
         # by this job, which is necessary because the GitHub Actions API
