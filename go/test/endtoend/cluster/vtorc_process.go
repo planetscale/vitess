@@ -54,6 +54,7 @@ type VTOrcConfiguration struct {
 	MySQLReplicaUser                      string
 	MySQLReplicaPassword                  string
 	RecoveryPeriodBlockSeconds            int
+	TopologyRefreshSeconds                int    `json:",omitempty"`
 	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
 	LockShardTimeoutSeconds               int    `json:",omitempty"`
 	ReplicationLagQuery                   string `json:",omitempty"`
@@ -191,7 +192,7 @@ func (orc *VTOrcProcess) MakeAPICall(endpoint string) (status int, response stri
 	url := fmt.Sprintf("http://localhost:%d/%s", orc.Port, endpoint)
 	resp, err := http.Get(url)
 	if err != nil {
-		return resp.StatusCode, "", err
+		return 0, "", err
 	}
 	defer resp.Body.Close()
 

@@ -178,7 +178,7 @@ func handleDiscoveryRequests() {
 }
 
 // DiscoverInstance will attempt to discover (poll) an instance (unless
-// it is already up to date) and will also ensure that its primary and
+// it is already up-to-date) and will also ensure that its primary and
 // replicas (if any) are also checked.
 func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(&instanceKey) {
@@ -440,8 +440,27 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
-			go RefreshAllKeyspaces()
-			go refreshAllTablets()
+			// Create a wait group
+			var wg sync.WaitGroup
+
+			// Refresh all keyspace information.
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				RefreshAllKeyspaces()
+			}()
+
+			// Refresh all tablets.
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				refreshAllTablets()
+			}()
+
+			// Wait for both the refreshes to complete
+			wg.Wait()
+			// We have completed one discovery cycle in the entirety of it. We should update the process health.
+			process.FirstDiscoveryCycleComplete.Store(true)
 		}
 	}
 }
