@@ -134,7 +134,7 @@ require (
 	golang.org/x/sync v0.1.0
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	modernc.org/sqlite v1.21.0
-	storj.io/drpc v0.0.32
+	storj.io/drpc v0.0.33
 )
 
 require (
