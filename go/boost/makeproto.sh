@@ -11,7 +11,7 @@ fi
 export GOBIN="$VTROOT/bin"
 
 go install ./proto/cmd/protoc-gen-go-boost
-go install storj.io/drpc/cmd/protoc-gen-go-drpc@latest
+go install storj.io/drpc/cmd/protoc-gen-go-drpc@$(go list -m -f '{{ .Version }}' storj.io/drpc)
 
 for pb in ./proto/*.proto; do
   protoc \
