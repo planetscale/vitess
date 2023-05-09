@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 
@@ -1016,10 +1018,10 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 // TestPlayerCopyWildcardTableContinuationWithOptimizeInserts tests the copy workflow where tables have been partially copied
 // enabling the optimize inserts functionality
 func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
-	oldVreplicationExperimentalFlags := vreplicationExperimentalFlags
-	vreplicationExperimentalFlags = vreplicationExperimentalFlagOptimizeInserts
+	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
+	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagOptimizeInserts
 	defer func() {
-		vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
 
 	defer deleteTablet(addTablet(100))
