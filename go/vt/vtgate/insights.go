@@ -73,9 +73,10 @@ const (
 // specified in the global limiter, but prevent clients from immediately burning through the burst capacity by only
 // allowing #intervalMax per interval.
 type limiter struct {
-	global         *rate.Limiter
-	intervalMax    int
-	intervalRemain int
+	global            *rate.Limiter
+	intervalMax       int
+	intervalRemain    int
+	intervalAllotment int // The original number of messages that can be allowed in this interval, used for logging
 }
 
 func (lim *limiter) allow() bool {
@@ -101,6 +102,7 @@ func (lim *limiter) tickAt(t time.Time) {
 	}
 	lim.global.AllowN(t, take)
 	lim.intervalRemain += take
+	lim.intervalAllotment = lim.intervalRemain
 }
 
 type QueryPatternAggregation struct {
@@ -153,7 +155,6 @@ type Insights struct {
 	MaxPatterns               uint
 	RowsReadThreshold         uint
 	ResponseTimeThreshold     uint
-	MaxQueriesPerInterval     uint
 	KafkaText                 bool // use human-readable pb, for tests and debugging
 	SendRawQueries            bool
 	MaxRawQueryLength         uint
@@ -764,7 +765,7 @@ func (ii *Insights) sendAggregates() {
 		ii.LogPatternsExceeded = 0
 	}
 	if ii.LogMaxQueriesExceeded > 0 {
-		log.Infof("Too many queries: reached limit of %v.  %v statements not reported.", ii.MaxQueriesPerInterval, ii.LogMaxQueriesExceeded)
+		log.Infof("Too many queries: reached interval limit of %v.  %v statements not reported.", ii.LogQueriesLimiter.intervalAllotment, ii.LogMaxQueriesExceeded)
 		ii.LogMaxQueriesExceeded = 0
 	}
 
