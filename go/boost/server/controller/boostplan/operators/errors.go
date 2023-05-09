@@ -50,6 +50,7 @@ const (
 	NoIndexableColumn
 	RangeAndAggregation
 	PostAndAggregation
+	OffsetBindParameter
 )
 
 //enumcheck:exhaustive
@@ -170,6 +171,8 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "the ranged query for parameter %s on top of an aggregation must be grouped by that parameter", n.ast())
 	case PostAndAggregation:
 		fmt.Fprintf(&sb, "the explicit grouping for %s cannot be computed with the given filters", n.ast())
+	case OffsetBindParameter:
+		fmt.Fprintf(&sb, "offset bind parameter used on %s", n.ast())
 	}
 
 	return sb.String()

@@ -148,6 +148,11 @@
       "Keyspace": "main",
       "SQL": "select count(*) from votes where uid > :v1",
       "Error": "query not supported by boost: the ranged query for parameter `uid` on top of an aggregation must be grouped by that parameter"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from users where id = :0",
+      "Error": "query not supported by boost: offset bind parameter used on `id` = :0"
     }
   ]
 }

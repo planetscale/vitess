@@ -293,6 +293,11 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 	seen := map[string]struct{}{}
 	sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
 		switch n := cursor.Node().(type) {
+		case *sqlparser.Offset:
+			errors = append(errors, &UnsupportedError{
+				AST:  cursor.Parent(),
+				Type: OffsetBindParameter,
+			})
 		case *sqlparser.Argument:
 			switch parent := cursor.Parent().(type) {
 			case *sqlparser.ComparisonExpr:
