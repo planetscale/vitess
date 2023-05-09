@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
+	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/server/controller/domainrpc"
 	"vitess.io/vitess/go/boost/server/controller/materialization"
@@ -223,10 +224,14 @@ func (ctrl *Controller) viewDescriptor(node *flownode.Node) *vtboostpb.Materiali
 		shards = append(shards, ctrl.readAddrs[domain.Assignment(s)])
 	}
 
-	var desc = reader.Descriptor()
+	var desc = reader.ViewPlan()
 	var nodeSchema = node.Schema()
 	var keySchema []*querypb.Field
+	var queryMode = vtboostpb.Materialization_ViewDescriptor_QUERY_SINGLE
 	for _, param := range desc.Parameters {
+		if param.Kind == viewplan.Param_MULTI {
+			queryMode = vtboostpb.Materialization_ViewDescriptor_QUERY_MULTI
+		}
 		tt := nodeSchema[param.Col]
 		keySchema = append(keySchema, &querypb.Field{
 			Name:    param.Name,
@@ -257,6 +262,7 @@ func (ctrl *Controller) viewDescriptor(node *flownode.Node) *vtboostpb.Materiali
 		TopkOrderCols: orderCols,
 		TopkOrderDesc: orderColsDesc,
 		TopkLimit:     int64(orderLimit),
+		QueryMode:     queryMode,
 	}
 }
 
@@ -289,7 +295,7 @@ func (ctrl *Controller) GetMaterializations() ([]*vtboostpb.Materialization, err
 			normalizedSQL := topowatcher.ParametrizeQuery(view.Statement)
 			var binds []*vtboostpb.Materialization_Bind
 			var fullyMaterialized bool
-			binds, fullyMaterialized, err = topowatcher.GenerateBoundsForQuery(view.Statement, r.Descriptor())
+			binds, fullyMaterialized, err = topowatcher.GenerateBoundsForQuery(view.Statement, r.ViewPlan())
 			if err != nil {
 				return false
 			}

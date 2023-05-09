@@ -7,30 +7,59 @@ import (
 
 	"go.uber.org/multierr"
 
+	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStatement, publicID string) (*Node, error) {
-	node, params, columns, err := conv.selectStmtToOperator(ctx, stmt)
+	node, deps, columns, err := conv.selectStmtToOperator(ctx, stmt)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(params) == 0 {
-		params = []*Parameter{{
-			Name:   "bogokey",
-			Column: newBogoKeyColumn(),
-		}}
+	if len(deps) == 0 {
+		deps = []*Dependency{
+			newDependency("bogokey", newBogoKeyColumn(), sqlparser.EqualOp),
+		}
 	}
 
-	pushDownParameter(ctx.SemTable, node, params)
+	pushDownParameter(ctx.SemTable, node, deps)
+
+	var postFilter Columns
+	if needsPostFiltering(deps) {
+		sel, ok := stmt.(*sqlparser.Select)
+		if !ok {
+			return nil, &UnsupportedError{
+				AST:  sqlparser.NewStrLiteral("oops"),
+				Type: ParameterLocationCompare,
+			}
+		}
+
+	outer:
+		for _, expr := range sel.GroupBy {
+			for _, p := range deps {
+				if p.Column.EqualsAST(ctx.SemTable, expr, true) {
+					// already have it as grouping
+					continue outer
+				}
+			}
+			deps = append(deps, &Dependency{
+				Name:         sqlparser.String(expr),
+				Column:       ColumnFromAST(expr),
+				Op:           nil,
+				ColumnOffset: -1,
+			})
+		}
+	}
 
 	view := &View{
-		PublicID:   publicID,
-		Parameters: params,
-		Columns:    columns,
+		PublicID:     publicID,
+		Dependencies: deps,
+		Columns:      columns,
+		PostFilter:   postFilter,
 	}
 
 	viewNode := conv.NewNode("view", view, []*Node{node})
@@ -38,9 +67,19 @@ func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStateme
 	return viewNode, nil
 }
 
+func needsPostFiltering(params []*Dependency) bool {
+	for _, param := range params {
+		// should be safe to just dereference, since we are only adding nils at this point, not earlier
+		if paramKind(*param.Op) == viewplan.Param_POST {
+			return true
+		}
+	}
+	return false
+}
+
 func (conv *Converter) selectStmtToOperator(ctx *PlanContext, stmt sqlparser.SelectStatement) (
 	node *Node,
-	params []*Parameter,
+	params []*Dependency,
 	columns Columns,
 	err error,
 ) {
@@ -55,7 +94,7 @@ func (conv *Converter) selectStmtToOperator(ctx *PlanContext, stmt sqlparser.Sel
 	}
 }
 
-func (conv *Converter) addFilterIfNeeded(node *Node, where *sqlparser.Where, params []*Parameter) (*Node, []*Parameter, error) {
+func (conv *Converter) addFilterIfNeeded(node *Node, where *sqlparser.Where, params []*Dependency) (*Node, []*Dependency, error) {
 	if where == nil {
 		return node, params, nil
 	}
@@ -78,7 +117,7 @@ func (conv *Converter) addFilterIfNeeded(node *Node, where *sqlparser.Where, par
 
 func (conv *Converter) selectToOperator(ctx *PlanContext, sel *sqlparser.Select) (
 	node *Node,
-	params []*Parameter,
+	params []*Dependency,
 	columns Columns,
 	err error,
 ) {
@@ -251,29 +290,13 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 		})
 	}
 
-	var hasListArg bool
-	var hasRangeArg bool
-
 	seen := map[string]struct{}{}
 	sqlparser.Rewrite(sel, func(cursor *sqlparser.Cursor) bool {
 		switch n := cursor.Node().(type) {
 		case *sqlparser.Argument:
 			switch parent := cursor.Parent().(type) {
 			case *sqlparser.ComparisonExpr:
-				if !isComparisonSupported(parent.Operator) {
-					errors = append(errors, &UnsupportedError{
-						AST:  parent,
-						Type: ParameterNotSupported,
-					})
-				} else if parent.Operator != sqlparser.EqualOp && parent.Operator != sqlparser.InOp {
-					hasRangeArg = true
-					if hasListArg {
-						errors = append(errors, &UnsupportedError{
-							AST:  parent,
-							Type: RangeAndIn,
-						})
-					}
-				}
+				// TODO: anything we can't suport here?
 			case sqlparser.ValTuple:
 				if _, handled := seen[sqlparser.String(parent)]; !handled {
 					errors = append(errors, &UnsupportedError{
@@ -286,23 +309,6 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 				errors = append(errors, &UnsupportedError{
 					AST:  cursor.Parent(),
 					Type: ParameterLocationCompare,
-				})
-			}
-		case sqlparser.ListArg:
-			// because of the way `sqlparser` works, a ListArg can only appear on the right-hand side
-			// of an `IN` expression, so we don't need to check for anything specific here
-			if hasListArg {
-				errors = append(errors, &UnsupportedError{
-					AST:  cursor.Parent(),
-					Type: MultipleIn,
-				})
-			}
-			hasListArg = true
-
-			if hasRangeArg {
-				errors = append(errors, &UnsupportedError{
-					AST:  cursor.Parent(),
-					Type: RangeAndIn,
 				})
 			}
 		case *sqlparser.Subquery:
@@ -361,20 +367,6 @@ func markOther(st *semantics.SemTable, col sqlparser.Expr, tableID semantics.Tab
 			}
 		}
 		return true
-	}
-}
-
-func extractRangeColumn(cmpr *sqlparser.ComparisonExpr) sqlparser.SQLNode {
-	switch cmpr.Operator {
-	case sqlparser.EqualOp, sqlparser.InOp:
-		return nil
-	case sqlparser.LessThanOp,
-		sqlparser.GreaterThanOp,
-		sqlparser.LessEqualOp,
-		sqlparser.GreaterEqualOp:
-		return cmpr
-	default:
-		return nil
 	}
 }
 
@@ -470,10 +462,6 @@ func (conv *Converter) buildAggregation(ctx *PlanContext, sel *sqlparser.Select,
 		}
 	}
 
-	if len(groupBy.Grouping) == 0 {
-		groupBy.ScalarAggregation = true
-	}
-
 	// We add a projection before the aggregation so that if we are aggregating over
 	// something more complicated than a column, we can evaluate it first
 	projNode := conv.NewNode("projection", &Project{}, []*Node{input})
@@ -536,21 +524,19 @@ func isComparisonSupported(op sqlparser.ComparisonExprOperator) bool {
 	}
 }
 
-func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []*Parameter) {
+func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []*Dependency) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		if comp, ok := e.(*sqlparser.ComparisonExpr); ok {
-			if isComparisonSupported(comp.Operator) {
-				param := extractParam(comp.Left, comp.Right, comp.Operator)
-				if param != nil {
-					params = append(params, param)
-					continue
-				}
-			}
-
-			if _, ok := comp.Left.(*sqlparser.Argument); ok && sqlparser.Equals.Expr(comp.Left, comp.Right) {
+			if _, ok := comp.Left.(*sqlparser.Argument); ok && sqlparser.Equals.Expr(comp.Left, comp.Right) && comp.Operator == sqlparser.EqualOp {
 				// if we are comparing an argument with itself, we can be pretty sure that it's here because of
 				// normalization of literals, and that makes it safe to assume that this comparison will always be true,
 				// since normalization does not treat null-literals as something to normalize
+				continue
+			}
+
+			param := extractParam(comp.Left, comp.Right, comp.Operator)
+			if param != nil {
+				params = append(params, param)
 				continue
 			}
 		}
@@ -560,15 +546,13 @@ func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []*
 	return
 }
 
-func extractParam(lft, rgt sqlparser.Expr, op sqlparser.ComparisonExprOperator) *Parameter {
-	extract := func(lft, rgt sqlparser.Expr, op sqlparser.ComparisonExprOperator) *Parameter {
-		if col, cok := lft.(*sqlparser.ColName); cok {
-			switch arg := rgt.(type) {
-			case *sqlparser.Argument:
-				return &Parameter{Name: arg.Name, Column: ColumnFromAST(col), Op: op, ColumnOffset: -1}
-			case sqlparser.ListArg:
-				return &Parameter{Name: string(arg), Column: ColumnFromAST(col), Op: op, ColumnOffset: -1}
-			}
+func extractParam(lft, rgt sqlparser.Expr, op sqlparser.ComparisonExprOperator) *Dependency {
+	extract := func(lft, rgt sqlparser.Expr, op sqlparser.ComparisonExprOperator) *Dependency {
+		switch arg := rgt.(type) {
+		case *sqlparser.Argument:
+			return newDependency(arg.Name, ColumnFromAST(lft), op)
+		case sqlparser.ListArg:
+			return newDependency(string(arg), ColumnFromAST(lft), op)
 		}
 		return nil
 	}
@@ -598,7 +582,7 @@ func (conv *Converter) buildFilterOp(input *Node, predicate sqlparser.Expr) *Nod
 	return conv.NewNode("filter", &Filter{Predicates: predicate}, []*Node{input})
 }
 
-func (conv *Converter) buildFromTableExpr(ctx *PlanContext, tableExpr sqlparser.TableExpr) (node *Node, params []*Parameter, columns Columns, err error) {
+func (conv *Converter) buildFromTableExpr(ctx *PlanContext, tableExpr sqlparser.TableExpr) (node *Node, params []*Dependency, columns Columns, err error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		switch tbl := tableExpr.Expr.(type) {
@@ -649,7 +633,7 @@ func findClosestProjection(node *Node) (*Project, *Node) {
 	return findClosestProjection(node.Ancestors[0])
 }
 
-func (conv *Converter) buildFromJoin(ctx *PlanContext, join *sqlparser.JoinTableExpr) (node *Node, params []*Parameter, columns Columns, err error) {
+func (conv *Converter) buildFromJoin(ctx *PlanContext, join *sqlparser.JoinTableExpr) (node *Node, params []*Dependency, columns Columns, err error) {
 	if join.Join == sqlparser.RightJoinType {
 		join.Join = sqlparser.LeftJoinType
 		join.LeftExpr, join.RightExpr = join.RightExpr, join.LeftExpr
@@ -797,7 +781,7 @@ func (conv *Converter) buildFromTableName(ctx *PlanContext, tableExpr *sqlparser
 	return newTableRef(ctx.SemTable, tableNode, conv.version, tableID, tableExpr.Hints)
 }
 
-func (conv *Converter) buildFromOp(ctx *PlanContext, from []sqlparser.TableExpr) (last *Node, params []*Parameter, columns Columns, err error) {
+func (conv *Converter) buildFromOp(ctx *PlanContext, from []sqlparser.TableExpr) (last *Node, params []*Dependency, columns Columns, err error) {
 	for _, tableExpr := range from {
 		node, tParams, tCols, err := conv.buildFromTableExpr(ctx, tableExpr)
 		if err != nil {
@@ -823,7 +807,7 @@ func (conv *Converter) buildFromOp(ctx *PlanContext, from []sqlparser.TableExpr)
 func (conv *Converter) unionToOperator(
 	ctx *PlanContext,
 	stmt *sqlparser.Union,
-) (*Node, []*Parameter, Columns, error) {
+) (*Node, []*Dependency, Columns, error) {
 	// UNION can be used inside a query that has parameters, but the parameters cannot exist inside the UNION
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node.(type) {

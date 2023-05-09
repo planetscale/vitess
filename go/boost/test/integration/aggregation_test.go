@@ -564,3 +564,36 @@ select count(*), aid from votes where uid = :v1 group by aid, uid;
 
 	q0.Lookup(3).Expect("[[INT64(1) INT32(1)] [INT64(1) INT32(2)] [INT64(1) INT32(3)] [INT64(1) INT32(4)] [INT64(1) INT32(5)]]")
 }
+
+func TestPostFilterWithAggregation(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a INT, b INT, c INT, PRIMARY KEY(pk));
+	select count(*) from num as n where n.a = :v1 and b not in ::v2 group by n.b;
+	select count(*), num.b from num where num.b >= ? and num.b <= ? group by num.b;
+	select count(*), sum(n.c), min(n.c), max(n.c) from num as n where n.a = :v1 and b not in ::v2;
+	select count(*), sum(n.c) from num as n where n.a = :v1 and b not in ::v2 and c not in ::v3 group by n.b;
+	select count(*) from num where a = :v1 and c not in ::v2 group by b;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 0; i < 8; i++ {
+		g.TestExecute(`INSERT INTO num (a, b, c) VALUES (%d, %d, %d)`, i%2, i%3, i%5)
+	}
+
+	// 0, 0, 0
+	// 1, 1, 1
+	// 0, 2, 2
+	// 1, 0, 3
+	// 0, 1, 4
+	// 1, 2, 0
+	// 0, 0, 1
+	// 1, 1, 2
+
+	g.View("q0").LookupBvar(0, []any{0, 420, 69}).Expect(`[[INT64(1)] [INT64(1)]]`)
+	g.View("q1").LookupBvar(1, 2).Expect(`[[INT64(3) INT32(1)] [INT64(2) INT32(2)]]`)
+	g.View("q2").LookupBvar(0, []any{0, 420, 69}).Expect(`[[INT64(2) DECIMAL(6) INT32(2) INT32(4)]]`)
+	g.View("q3").LookupBvar(0, []any{0, 420, 69}, []any{3, 4}).Expect(`[[INT64(1) DECIMAL(2)]]`)
+	g.View("q3").LookupBvar(0, []any{0, 420, 69}, []any{420}).Expect(`[[INT64(1) DECIMAL(2)] [INT64(1) DECIMAL(4)]]`)
+	g.View("q4").LookupBvar(1, []any{0, 420, 69}).Expect(`[[INT64(2)] [INT64(1)]]`)
+}

@@ -173,6 +173,9 @@ func (col *Column) EqualsAST(semTable *semantics.SemTable, other sqlparser.Expr,
 	case *sqlparser.ColName:
 		otherID := semTable.DirectDeps(other)
 		for _, thisExpr := range col.AST {
+			if thisOffset, isOffset := thisExpr.(*sqlparser.Offset); isOffset {
+				thisExpr = thisOffset.Original
+			}
 			if thisCol, isCol := thisExpr.(*sqlparser.ColName); isCol {
 				if !thisCol.Name.Equal(other.Name) {
 					continue

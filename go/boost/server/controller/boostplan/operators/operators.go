@@ -1,6 +1,7 @@
 package operators
 
 import (
+	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -76,8 +77,7 @@ type (
 
 		// The evalengine expression that will actually run.
 		// It will do the comparisons using offsets
-		EvalExpr []evalengine.Expr
-		ExprStr  []string
+		EvalExpr []sqlparser.Expr
 
 		doesNotIntroduceColumn
 		keepsAncestorColumns
@@ -106,13 +106,13 @@ type (
 
 	GroupBy struct {
 		// Aggregations will contain AggrFuncs, plus any columns that are returned but not in the grouping clause
-		Aggregations Columns
-		TableID      semantics.TableSet
-		Grouping     Columns
+		Aggregations     Columns
+		TableID          semantics.TableSet
+		Grouping         Columns
+		ImplicitGrouping Columns
 
-		GroupingIdx       []int
-		ScalarAggregation bool
-		AggregationsIdx   []int
+		GroupingIdx     []int
+		AggregationsIdx []int
 
 		dontKeepsAncestorColumns
 	}
@@ -143,9 +143,11 @@ type (
 	}
 
 	View struct {
-		PublicID   string
-		Parameters []*Parameter
-		Columns    Columns
+		PublicID     string
+		Dependencies []*Dependency
+		PostFilter   Columns
+		Columns      Columns
+		Plan         *viewplan.Plan
 
 		doesNotIntroduceColumn
 		dontKeepsAncestorColumns
@@ -178,9 +180,11 @@ type (
 		keepsAncestorColumns
 	}
 
-	Parameter struct {
-		Name         string
-		Op           sqlparser.ComparisonExprOperator
+	Dependency struct {
+		Name string
+
+		// Op will be nil if it's not a parameter (implicit grouping that is needed for post-filter)
+		Op           *sqlparser.ComparisonExprOperator
 		ColumnOffset int
 		Column       *Column
 	}
@@ -288,4 +292,17 @@ func (g *GroupBy) IntroducesTableID() *semantics.TableSet {
 
 func (p *Project) IntroducesTableID() *semantics.TableSet {
 	return p.TableID
+}
+
+func (g *GroupBy) ScalarAggregation() bool {
+	return len(g.Grouping) == len(g.ImplicitGrouping)
+}
+
+func newDependency(name string, col *Column, op sqlparser.ComparisonExprOperator) *Dependency {
+	return &Dependency{
+		Name:         name,
+		Op:           &op,
+		ColumnOffset: -1,
+		Column:       col,
+	}
 }

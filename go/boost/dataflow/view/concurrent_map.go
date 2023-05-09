@@ -56,30 +56,28 @@ func (cm *ConcurrentMap) readerContains(key sql.Row, schema []sql.Type) (found b
 	return
 }
 
-func (cm *ConcurrentMap) writerAdd(rs []sql.Record, colLen int, pk []int, schema []sql.Type, memsize *atomic.Int64) {
+func (cm *ConcurrentMap) writerAdd(rs []sql.Record, pk []int, schema []sql.Type, memsize *atomic.Int64) {
 	tbl := cm.lr.Writer()
 	epoch := cm.lr.writerVersion.Load() + 1
 
 	for _, r := range rs {
 		k := r.Row.HashWithKeySchema(&cm.writeHasher, pk, schema)
-
 		rows, ok := tbl.Get(k)
-		truncatedRow := r.Row.Truncate(colLen)
 
 		if r.Positive {
 			if !ok {
-				newrow := offheap.NewConcurrent(truncatedRow, memsize)
+				newrow := offheap.NewConcurrent(r.Row, memsize)
 				tbl.Set(k, newrow)
 				cm.changelog.Do(changeInsert, k, newrow)
 			} else {
-				newrow, free := rows.Insert(truncatedRow, memsize)
+				newrow, free := rows.Insert(r.Row, memsize)
 				tbl.Set(k, newrow)
 				cm.changelog.Do(changeInsert, k, newrow)
 				cm.changelog.Free(free)
 			}
 		} else {
 			if ok {
-				tombstoned := rows.Tombstone(truncatedRow, epoch)
+				tombstoned := rows.Tombstone(r.Row, epoch)
 				cm.changelog.Tombstone(k, tombstoned)
 			}
 		}

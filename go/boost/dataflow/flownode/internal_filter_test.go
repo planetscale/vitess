@@ -1,7 +1,8 @@
 package flownode
 
 import (
-	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,43 +12,36 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/sql"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-func columnLookupFromColMap(colmap map[string]int) evalengine.ColumnResolver {
-	return func(col *sqlparser.ColName) (int, error) {
-		offset, ok := colmap[col.Name.Lowered()]
-		if !ok {
-			return 0, fmt.Errorf("unexpected column name: %q", col.Name.Lowered())
+func fakeFilter(t *testing.T, expr sqlparser.Expr, columns ...int) sql.EvalExpr {
+	expr = sqlparser.CloneExpr(expr)
+	expr = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+		switch col := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			offset, err := strconv.Atoi(strings.TrimPrefix(col.Name.Lowered(), "_col"))
+			if err != nil {
+				t.Fatalf("unexpected column name: %q", col.Name.Lowered())
+			}
+			cursor.Replace(sqlparser.NewOffset(columns[offset], col))
+			return false
 		}
-		return offset, nil
-	}
-}
+		return true
+	}, nil).(sqlparser.Expr)
 
-func fakeFilter(t *testing.T, expr sqlparser.Expr, columns ...int) FilterConditionTuple {
-	var colmap = make(map[string]int)
-	for n, c := range columns {
-		colmap[fmt.Sprintf("_col%d", n)] = c
+	e := sql.EvalExpr{Expr: expr}
+	if err := e.Compile(nil); err != nil {
+		t.Fatalf("evalengine failed to compile: %v", err)
 	}
-
-	evalexpr, err := evalengine.Translate(expr, &evalengine.Config{
-		ResolveColumn: columnLookupFromColMap(colmap),
-		Collation:     collations.CollationUtf8mb4ID,
-	})
-	if err != nil {
-		t.Fatalf("evalengine failed to translate: %v", err)
-	}
-
-	return FilterConditionTuple{ColumnID: columns[0], Cond: evalexpr}
+	return e
 }
 
 func TestFilter(t *testing.T) {
-	setup := func(t *testing.T, materialized bool, filters []FilterConditionTuple) *MockGraph {
+	setup := func(t *testing.T, materialized bool, filters []sql.EvalExpr) *MockGraph {
 		if filters == nil {
-			filters = []FilterConditionTuple{
+			filters = []sql.EvalExpr{
 				fakeFilter(t, &sqlparser.ComparisonExpr{
 					Operator: sqlparser.EqualOp,
 					Left:     sqlparser.NewColName("_col0"),
@@ -64,7 +58,7 @@ func TestFilter(t *testing.T) {
 	}
 
 	t.Run("it forwards with no filters", func(t *testing.T) {
-		g := setup(t, false, []FilterConditionTuple{})
+		g := setup(t, false, []sql.EvalExpr{})
 
 		left := sql.TestRow(1, "a")
 		assert.Equal(t, left.AsRecords(), g.NarrowOneRow(left, false))
@@ -90,7 +84,7 @@ func TestFilter(t *testing.T) {
 	})
 
 	t.Run("it forwards with multiple filters", func(t *testing.T) {
-		filters := []FilterConditionTuple{
+		filters := []sql.EvalExpr{
 			fakeFilter(t, &sqlparser.ComparisonExpr{
 				Operator: sqlparser.EqualOp,
 				Left:     sqlparser.NewColName("_col0"),
@@ -148,7 +142,7 @@ func TestFilter(t *testing.T) {
 	})
 
 	t.Run("it works with inequalities", func(t *testing.T) {
-		filters := []FilterConditionTuple{
+		filters := []sql.EvalExpr{
 			fakeFilter(t, &sqlparser.ComparisonExpr{
 				Operator: sqlparser.LessEqualOp,
 				Left:     sqlparser.NewColName("_col0"),
@@ -176,7 +170,7 @@ func TestFilter(t *testing.T) {
 	})
 
 	t.Run("it works with columns", func(t *testing.T) {
-		filters := []FilterConditionTuple{
+		filters := []sql.EvalExpr{
 			fakeFilter(t, &sqlparser.ComparisonExpr{
 				Operator: sqlparser.LessEqualOp,
 				Left:     sqlparser.NewColName("_col0"),
@@ -193,7 +187,7 @@ func TestFilter(t *testing.T) {
 	})
 
 	t.Run("it works with IN list", func(t *testing.T) {
-		filters := []FilterConditionTuple{
+		filters := []sql.EvalExpr{
 			fakeFilter(t, &sqlparser.ComparisonExpr{
 				Operator: sqlparser.InOp,
 				Left:     sqlparser.NewColName("_col0"),
@@ -234,7 +228,7 @@ func TestFilter(t *testing.T) {
 
 		var cases = []struct {
 			name     string
-			filters  []FilterConditionTuple
+			filters  []sql.EvalExpr
 			input    []sql.Row
 			expected int
 			column   int
@@ -242,7 +236,7 @@ func TestFilter(t *testing.T) {
 		}{
 			{
 				name:    "all",
-				filters: []FilterConditionTuple{cond0},
+				filters: []sql.EvalExpr{cond0},
 				input: []sql.Row{
 					sql.TestRow(1, 2, 3),
 				},
@@ -252,7 +246,7 @@ func TestFilter(t *testing.T) {
 			},
 			{
 				name:    "all but filtered",
-				filters: []FilterConditionTuple{cond0},
+				filters: []sql.EvalExpr{cond0},
 				input: []sql.Row{
 					sql.TestRow(2, 1, 3),
 				},

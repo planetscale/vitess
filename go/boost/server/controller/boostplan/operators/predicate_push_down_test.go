@@ -46,7 +46,6 @@ func TestOuterToInner(t *testing.T) {
 				Op: &Filter{
 					Predicates:             predicate,
 					EvalExpr:               nil,
-					ExprStr:                nil,
 					doesNotIntroduceColumn: doesNotIntroduceColumn{},
 					keepsAncestorColumns:   keepsAncestorColumns{},
 				},

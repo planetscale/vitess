@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/server/controller/materialization"
 	"vitess.io/vitess/go/boost/server/worker"
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testexecutor"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
 	"vitess.io/vitess/go/boost/topo/client"
@@ -325,6 +326,15 @@ func (c *Cluster) checkDomainSerialization() {
 			cmp.Comparer(func(a, b *sqlparser.Offset) bool {
 				return a.V == b.V
 			}),
+			cmp.Comparer(func(a, b sql.EvalExpr) bool {
+				_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+					if offset, ok := node.(*sqlparser.Offset); ok {
+						offset.Original = nil
+					}
+					return true, nil
+				}, a.Expr, b.Expr)
+				return sqlparser.Equals.Expr(a.Expr, b.Expr)
+			}),
 			// Exporter: ensure _all_ private fields for all the Domain data are compared
 			cmp.Exporter(func(reflect.Type) bool {
 				return true
@@ -561,7 +571,7 @@ func (l *Lookup) ExpectLen(expected int) *sqltypes.Result {
 	})
 }
 
-const MaxTries = 100
+const MaxTries = 10
 
 func (l *Lookup) expect(check func(result *sqltypes.Result) error) *sqltypes.Result {
 	l.t.Helper()

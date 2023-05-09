@@ -3,6 +3,7 @@ package sql
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -54,6 +55,7 @@ func TestWeightStrings(t *testing.T) {
 		{"varchar", randomVarChar, Type{T: sqltypes.VarChar, Collation: collations.CollationUtf8mb4ID}},
 		{"varbinary", randomVarBinary, Type{T: sqltypes.VarBinary, Collation: collations.CollationBinaryID}},
 		{"decimal", randomDecimal, Type{T: sqltypes.Decimal, Collation: collations.CollationBinaryID, Length: 20, Precision: 10}},
+		{"json", randomJSON, Type{T: sqltypes.TypeJSON, Collation: collations.CollationBinaryID}},
 	}
 
 	for _, tc := range cases {
@@ -79,7 +81,10 @@ func TestWeightStrings(t *testing.T) {
 				require.NoError(t, err)
 
 				if cmp > 0 {
-					t.Fatalf("expected %v [pos=%d] to come after %v [pos=%d]", a.value, i, b.value, i+1)
+					t.Fatalf("expected %v [pos=%d] to come after %v [pos=%d]\nav = %v\nbv = %v",
+						a.value, i, b.value, i+1,
+						[]byte(a.weight), []byte(b.weight),
+					)
 				}
 			}
 		})
@@ -115,4 +120,31 @@ func randomBytes() []byte {
 		b[i] = Dictionary[rand.Intn(len(Dictionary))]
 	}
 	return b
+}
+
+func randomJSON() sqltypes.Value {
+	var j string
+	switch rand.Intn(6) {
+	case 0:
+		j = "null"
+	case 1:
+		i := rand.Int63()
+		if rand.Int()&0x1 == 1 {
+			i = -i
+		}
+		j = strconv.FormatInt(i, 10)
+	case 2:
+		j = strconv.FormatFloat(rand.NormFloat64(), 'g', -1, 64)
+	case 3:
+		j = strconv.Quote(string(randomBytes()))
+	case 4:
+		j = "true"
+	case 5:
+		j = "false"
+	}
+	v, err := sqltypes.NewJSON(j)
+	if err != nil {
+		panic(err)
+	}
+	return v
 }

@@ -1,0 +1,58 @@
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/boost/server/controller/boostplan/viewplan";
+
+package viewplan;
+
+import "gogoproto/gogo.proto";
+import "sql.proto";
+
+message Param {
+  enum Kind {
+    UNSUPPORTED = 0;
+    SINGLE = 1;
+    MULTI = 2;
+    RANGE = 3;
+    POST = 4;
+  };
+
+  string name = 1;
+  Kind kind = 2;
+  int64 col = 3 [(gogoproto.casttype) = "int"];
+  sql.Expr post_filter = 4;
+};
+
+message OrderedColumn {
+  int64 col = 1 [(gogoproto.casttype) = "int"];
+  bool desc = 2;
+};
+
+enum Aggregation {
+  FIRST = 0;
+  COUNT = 1;
+  SUM = 2;
+  MIN = 3;
+  MAX = 4;
+};
+
+message Plan {
+  message TreeKey {
+    repeated int64 lower = 1 [(gogoproto.casttype) = "int"];
+    bool lower_inclusive = 2;
+    repeated int64 upper = 3 [(gogoproto.casttype) = "int"];
+    bool upper_inclusive = 4;
+  };
+
+  repeated Param parameters = 1;
+  TreeKey tree_key = 2;
+  repeated int64 map_key = 3 [(gogoproto.casttype) = "int"];
+
+  repeated OrderedColumn topk_order = 4 [(gogoproto.nullable) = false];
+  int64 topk_limit = 5 [(gogoproto.casttype) = "int"];
+  int64 columns_for_user = 6 [(gogoproto.casttype) = "int"];
+
+  repeated int64 trigger_key = 7 [(gogoproto.casttype) = "int"];
+
+  repeated Aggregation post_aggregation = 8;
+  repeated int64 post_group_by = 9 [(gogoproto.casttype) = "int"];
+};
+

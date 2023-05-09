@@ -7,6 +7,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -152,6 +153,12 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo Type) ([]byte, bool, er
 			return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)
 		}
 		return dec.WeightString(dst, coerceTo.Length, coerceTo.Precision), true, nil
+	case coerceTo.T == sqltypes.TypeJSON:
+		j, err := json.NewFromSQL(v)
+		if err != nil {
+			return dst, false, err
+		}
+		return j.WeightString(dst), true, nil
 
 	default:
 		return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())

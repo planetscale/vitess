@@ -17,7 +17,7 @@ import (
 func TestStoreWorks(t *testing.T) {
 	var hasher vthash.Hasher
 	a := sql.TestRow(1, "a")
-	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
+	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil, nil)
 
 	defer func() {
 		w.Free()
@@ -29,7 +29,7 @@ func TestStoreWorks(t *testing.T) {
 	})
 	assert.True(t, hit)
 
-	w.Add(a.AsRecords(), 0)
+	w.Add(a.AsRecords())
 
 	hit = r.Lookup(&hasher, a.Slice(0, 1), func(r Rows) {
 		assert.Equal(t, 0, r.Len())
@@ -47,15 +47,15 @@ func TestStoreWorks(t *testing.T) {
 func TestMinimalQuery(t *testing.T) {
 	a := sql.TestRow(1, "a")
 	b := sql.TestRow(1, "b")
-	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
+	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil, nil)
 
 	defer func() {
 		w.Free()
 		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
-	w.Add(a.AsRecords(), 0)
-	w.Add(b.AsRecords(), 0)
+	w.Add(a.AsRecords())
+	w.Add(b.AsRecords())
 	w.Swap()
 
 	var hasher vthash.Hasher
@@ -77,7 +77,7 @@ func TestBusy(t *testing.T) {
 	const N = 1000
 	var wg sync.WaitGroup
 
-	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64), nil)
+	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64), nil, nil)
 
 	defer func() {
 		w.Free()
@@ -88,7 +88,7 @@ func TestBusy(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for n := int64(0); n < N; n++ {
-			w.Add(sql.TestRow(n).AsRecords(), 0)
+			w.Add(sql.TestRow(n).AsRecords())
 			w.Swap()
 		}
 	}()
@@ -123,7 +123,7 @@ func assertLookup(t *testing.T, r *MapReader, key sql.Row, wantRowsLen int, want
 }
 
 func TestConcurrentRows(t *testing.T) {
-	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.Int64), func(iterator []sql.Row) bool {
+	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.Int64), nil, func(iterator []sql.Row) bool {
 		return true
 	})
 
@@ -137,15 +137,15 @@ func TestConcurrentRows(t *testing.T) {
 		sql.TestRow(1, 2).ToRecord(true),
 		sql.TestRow(1, 3).ToRecord(true),
 		sql.TestRow(1, 4).ToRecord(true),
-	}, 0)
+	})
 
 	assertLookup(t, r, sql.TestRow(1), 0, false)
 	w.Swap()
-	w.Add([]sql.Record{sql.TestRow(1, 2).ToRecord(false)}, 0)
+	w.Add([]sql.Record{sql.TestRow(1, 2).ToRecord(false)})
 	assertLookup(t, r, sql.TestRow(1), 4, true)
 	w.Swap()
 	assertLookup(t, r, sql.TestRow(1), 3, true)
-	w.Add([]sql.Record{sql.TestRow(1, 1).ToRecord(false)}, 0)
+	w.Add([]sql.Record{sql.TestRow(1, 1).ToRecord(false)})
 	assertLookup(t, r, sql.TestRow(1), 3, true)
 	w.Swap()
 	assertLookup(t, r, sql.TestRow(1), 2, true)
@@ -158,7 +158,7 @@ func TestConcurrentRows(t *testing.T) {
 func TestConcurrentRowsInternal(t *testing.T) {
 	key := []int{0}
 	schema := sql.TestSchema(sqltypes.Int64, sqltypes.Int64)
-	r, w := NewMapView(key, schema, func(iterator []sql.Row) bool {
+	r, w := NewMapView(key, schema, nil, func(iterator []sql.Row) bool {
 		return true
 	})
 
@@ -172,13 +172,13 @@ func TestConcurrentRowsInternal(t *testing.T) {
 		sql.TestRow(1, 2).ToRecord(true),
 		sql.TestRow(1, 3).ToRecord(true),
 		sql.TestRow(1, 4).ToRecord(true),
-	}, 0)
+	})
 
 	assertLookup(t, r, sql.TestRow(1), 0, false)
 	w.Swap()
 
 	row := sql.TestRow(1, 2)
-	w.Add([]sql.Record{row.ToRecord(false)}, 0)
+	w.Add([]sql.Record{row.ToRecord(false)})
 
 	var hasher vthash.Hasher
 	h := row.HashWithKey(&hasher, key, schema)
@@ -224,7 +224,7 @@ func TestUpdateRows(t *testing.T) {
 	key := []int{0}
 	schema := sql.TestSchema(sqltypes.Int64, sqltypes.Int64)
 
-	r, w := NewMapView(key, schema, func(iterator []sql.Row) bool {
+	r, w := NewMapView(key, schema, nil, func(iterator []sql.Row) bool {
 		return true
 	})
 
@@ -236,14 +236,13 @@ func TestUpdateRows(t *testing.T) {
 	row := sql.TestRow(1, 1)
 	w.Add([]sql.Record{
 		row.ToRecord(true),
-	}, 0)
+	})
 
 	assertLookup(t, r, sql.TestRow(1), 0, false)
 	w.Swap()
 	assertLookup(t, r, sql.TestRow(1), 1, true)
 
-	w.Add([]sql.Record{row.ToRecord(false),
-		sql.TestRow(1, 2).ToRecord(true)}, 0)
+	w.Add([]sql.Record{row.ToRecord(false), sql.TestRow(1, 2).ToRecord(true)})
 
 	assertLookup(t, r, sql.TestRow(1), 1, true)
 

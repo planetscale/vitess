@@ -12,6 +12,7 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -86,11 +87,51 @@ func (v Value) RawBytes() []byte {
 }
 
 func (v Value) ToVitess() sqltypes.Value {
-	return sqltypes.MakeTrusted(sqltypes.Type(getUint16s(string(v))), []byte(v[2:]))
+	tt := sqltypes.Type(getUint16s(string(v)))
+	if tt == sqltypes.Tuple {
+		panic("(Value).ToVitess on TUPLE")
+	}
+	return sqltypes.MakeTrusted(tt, []byte(v[2:]))
 }
 
 func (v Value) ToVitessUnsafe() sqltypes.Value {
-	return sqltypes.MakeTrusted(sqltypes.Type(getUint16s(string(v))), hack.StringBytes(string(v[2:])))
+	tt := sqltypes.Type(getUint16s(string(v)))
+	if tt == sqltypes.Tuple {
+		panic("(Value).ToVitess on TUPLE")
+	}
+	return sqltypes.MakeTrusted(tt, hack.StringBytes(string(v[2:])))
+}
+
+func (v Value) ToTuple() Row {
+	tt := sqltypes.Type(getUint16s(string(v)))
+	if tt != sqltypes.Tuple {
+		panic("(Value).ToTuple on non-TUPLE")
+	}
+	return Row(v[2:])
+}
+
+func (v Value) ToBindVarUnsafe() *querypb.BindVariable {
+	bv := &querypb.BindVariable{
+		Type: sqltypes.Type(getUint16s(string(v))),
+	}
+	if bv.Type == sqltypes.Tuple {
+		bv.Values = Row(v[2:]).ToBindVarValues()
+	} else {
+		bv.Value = hack.StringBytes(string(v[2:]))
+	}
+	return bv
+}
+
+func (v Value) ToBindVar() *querypb.BindVariable {
+	bv := &querypb.BindVariable{
+		Type: sqltypes.Type(getUint16s(string(v))),
+	}
+	if bv.Type == sqltypes.Tuple {
+		bv.Values = Row(v[2:]).ToBindVarValues()
+	} else {
+		bv.Value = []byte(v[2:])
+	}
+	return bv
 }
 
 func (r Row) ToVitess() (out sqltypes.Row) {
@@ -110,6 +151,29 @@ func (r Row) ToVitess() (out sqltypes.Row) {
 		tt := getUint16s(string(r)[last:])
 		vv := []byte(r[last+2 : pos])
 		out = append(out, sqltypes.MakeTrusted(sqltypes.Type(tt), vv))
+
+		last = pos
+	}
+	return
+}
+
+func (r Row) ToBindVarValues() (out []*querypb.Value) {
+	bytelen := uint16(len(r))
+	if bytelen == 0 {
+		return nil
+	}
+
+	s := string(r)
+	last := getUint16s(s)
+	s = s[2:]
+
+	for last < bytelen {
+		pos := getUint16s(s)
+		s = s[2:]
+
+		tt := getUint16s(string(r)[last:])
+		vv := []byte(r[last+2 : pos])
+		out = append(out, &querypb.Value{Type: sqltypes.Type(tt), Value: vv})
 
 		last = pos
 	}
@@ -560,15 +624,32 @@ func (rb *RowBuilder) Add(v Value) {
 }
 
 func (rb *RowBuilder) AddVitess(v sqltypes.Value) {
+	rb.AddRaw(v.Type(), v.Raw())
+}
+
+func (rb *RowBuilder) AddRaw(type_ sqltypes.Type, raw []byte) {
 	written := uint16(len(rb.row))
 	rb.row[rb.idx] = byte(written)
 	rb.row[rb.idx+1] = byte(written >> 8)
 
-	tt := uint16(v.Type())
+	tt := uint16(type_)
 	rb.row = append(rb.row, byte(tt), byte(tt>>8))
-	rb.row = append(rb.row, v.Raw()...)
+	rb.row = append(rb.row, raw...)
 
 	rb.idx += 2
+}
+
+func (rb *RowBuilder) AddBindVar(bvar *querypb.BindVariable) {
+	if bvar.Type == sqltypes.Tuple {
+		rb2 := NewRowBuilder(len(bvar.Values))
+		for _, v := range bvar.Values {
+			rb2.AddRaw(v.Type, v.Value)
+		}
+		rb2.Finish()
+		rb.AddRaw(sqltypes.Tuple, rb2.row)
+	} else {
+		rb.AddRaw(bvar.Type, bvar.Value)
+	}
 }
 
 func (rb *RowBuilder) Finish() Row {
