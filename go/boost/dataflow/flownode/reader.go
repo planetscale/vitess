@@ -11,13 +11,11 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/boost/dataflow/view"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/sql"
 )
 
 var _ NodeImpl = (*Reader)(nil)
-
-type ViewDescriptor = flownodepb.ViewDescriptor
-type ViewParameter = flownodepb.ViewDescriptor_Param
 
 type Reader struct {
 	// not serialized
@@ -25,14 +23,13 @@ type Reader struct {
 
 	publicID string
 	forNode  graph.NodeIdx
-	state    []int
-	view     *ViewDescriptor
+	plan     *viewplan.Plan
 }
 
 func (r *Reader) dataflow() {}
 
 func (r *Reader) Key() []int {
-	return r.state
+	return r.plan.TriggerKey
 }
 
 func traceParentOrdering(g *graph.Graph[*Node], node graph.NodeIdx) (Order, int) {
@@ -53,23 +50,15 @@ func traceParentOrdering(g *graph.Graph[*Node], node graph.NodeIdx) (Order, int)
 }
 
 func (r *Reader) OnConnected(g *graph.Graph[*Node]) {
-	r.view.TopkOrder, r.view.TopkLimit = traceParentOrdering(g, r.forNode)
-
-	if r.view.TopkOrder != nil {
-		for _, ord := range r.view.TopkOrder {
-			if ord.Col >= r.view.ColumnsForUser {
-				r.view.ColumnsForView = 0
-			}
-		}
-	}
+	r.plan.TopkOrder, r.plan.TopkLimit = traceParentOrdering(g, r.forNode)
 }
 
 func (r *Reader) Order() (cols []int64, desc []bool, limit int) {
-	for _, ord := range r.view.TopkOrder {
+	for _, ord := range r.plan.TopkOrder {
 		cols = append(cols, int64(ord.Col))
 		desc = append(desc, ord.Desc)
 	}
-	return cols, desc, r.view.TopkLimit
+	return cols, desc, r.plan.TopkLimit
 }
 
 func (r *Reader) IsFor() graph.NodeIdx {
@@ -77,7 +66,7 @@ func (r *Reader) IsFor() graph.NodeIdx {
 }
 
 func (r *Reader) IsMaterialized() bool {
-	return r.state != nil
+	return r.plan.TriggerKey != nil
 }
 
 func (r *Reader) IsPartial() bool {
@@ -125,7 +114,7 @@ func (r *Reader) Process(ctx context.Context, m *packet.ActiveFlowPacket, swap b
 		}
 
 		dataToAdd := m.TakeRecords()
-		st.Add(dataToAdd, r.view.ColumnsForView)
+		st.Add(dataToAdd)
 		if swap {
 			st.Swap()
 		}
@@ -151,12 +140,12 @@ func (r *Reader) OnEviction(keys []sql.Row) {
 	}
 }
 
-func (r *Reader) Descriptor() *ViewDescriptor {
-	return r.view
+func (r *Reader) ViewPlan() *viewplan.Plan {
+	return r.plan
 }
 
 func (r *Reader) PublicColumnLength() int {
-	return r.view.ColumnsForUser
+	return r.plan.ColumnsForUser
 }
 
 func (r *Reader) KeySchema() []sql.Type {
@@ -172,12 +161,11 @@ func (r *Reader) EvictRandomKeys(rng *rand.Rand, bytesToEvict int64) {
 	r.writer.Swap()
 }
 
-func NewReader(forNode graph.NodeIdx, publicID string, key []int, view *flownodepb.ViewDescriptor) *Reader {
+func NewReader(forNode graph.NodeIdx, publicID string, plan *viewplan.Plan) *Reader {
 	return &Reader{
 		forNode:  forNode,
 		publicID: publicID,
-		state:    key,
-		view:     view,
+		plan:     plan,
 	}
 }
 
@@ -185,8 +173,7 @@ func (r *Reader) ToProto() *flownodepb.Node_Reader {
 	return &flownodepb.Node_Reader{
 		PublicId: r.publicID,
 		ForNode:  r.forNode,
-		State:    r.state,
-		View:     r.view,
+		Plan:     r.plan,
 	}
 }
 
@@ -199,7 +186,6 @@ func NewReaderFromProto(r *flownodepb.Node_Reader) *Reader {
 		writer:   nil,
 		publicID: r.PublicId,
 		forNode:  r.ForNode,
-		state:    r.State,
-		view:     r.View,
+		plan:     r.Plan,
 	}
 }

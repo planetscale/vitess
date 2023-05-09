@@ -230,6 +230,7 @@ outer:
 		// This is usually a predicate with a parameter,
 		// and these are handled by adding the expression as a grouping expression.
 		g.Grouping = g.Grouping.Add(ctx, col)
+		g.ImplicitGrouping = g.ImplicitGrouping.Add(ctx, col)
 	}
 
 	needs := Columns{}.Add(ctx, g.Grouping...)
@@ -253,6 +254,7 @@ outer:
 		grpCol.Name = "bogo_group"
 		needs = needs.Add(ctx, grpCol)
 		g.Grouping = g.Grouping.Add(ctx, grpCol)
+		g.ImplicitGrouping = g.ImplicitGrouping.Add(ctx, grpCol)
 	}
 
 	return needs, nil
@@ -261,8 +263,11 @@ outer:
 func (v *View) AddColumns(ctx *PlanContext, col Columns) (Columns, error) {
 	col = col.Add(ctx, v.Columns...)
 
-	for _, parameter := range v.Parameters {
+	for _, parameter := range v.Dependencies {
 		col = col.Add(ctx, parameter.Column)
+	}
+	for _, pf := range v.PostFilter {
+		col = col.Add(ctx, pf)
 	}
 	return col, nil
 }

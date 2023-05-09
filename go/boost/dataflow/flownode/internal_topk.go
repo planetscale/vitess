@@ -14,11 +14,12 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
+	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-type OrderedColumn = flownodepb.OrderedColumn
+type OrderedColumn = viewplan.OrderedColumn
 type Order []OrderedColumn
 
 func (ord Order) Cmp(a, b sql.Row) int {

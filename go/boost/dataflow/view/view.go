@@ -6,10 +6,9 @@ import (
 	"sync/atomic"
 
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
-	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
-	"vitess.io/vitess/go/vt/vthash"
-
+	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/sql"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type Writer struct {
@@ -24,14 +23,17 @@ type Writer struct {
 type MapReader struct {
 	store     *ConcurrentMap
 	trigger   func([]sql.Row) bool
+	mapKey    []int
 	keySchema []sql.Type
+
+	PostFilter *Filter
 }
 
 type Store interface {
 	readerContains(key sql.Row, schema []sql.Type) (found bool)
 
 	writerLen() int
-	writerAdd(rs []sql.Record, colLen int, pk []int, schema []sql.Type, memsize *atomic.Int64)
+	writerAdd(rs []sql.Record, pk []int, schema []sql.Type, memsize *atomic.Int64)
 	writerEvict(_ *rand.Rand, bytesToEvict int64)
 	writerRefresh(memsize *atomic.Int64, force bool)
 	writerFree(memsize *atomic.Int64)
@@ -52,7 +54,16 @@ func makeSchema(key []int, schema []sql.Type) (keySchema []sql.Type) {
 	return
 }
 
-func NewMapView(key []int, schema []sql.Type, trigger func(iterator []sql.Row) bool) (*MapReader, *Writer) {
+func isIdentity(key []int) bool {
+	for i, k := range key {
+		if i != k {
+			return false
+		}
+	}
+	return true
+}
+
+func NewMapView(key []int, schema []sql.Type, desc *viewplan.Plan, trigger func(iterator []sql.Row) bool) (*MapReader, *Writer) {
 	keySchema := makeSchema(key, schema)
 	st := NewConcurrentMap()
 
@@ -61,6 +72,15 @@ func NewMapView(key []int, schema []sql.Type, trigger func(iterator []sql.Row) b
 		trigger:   trigger,
 		keySchema: keySchema,
 	}
+	if desc != nil {
+		r.PostFilter = newFilter(schema, desc)
+
+		r.mapKey = desc.MapKey
+		if len(keySchema) == len(desc.Parameters) && isIdentity(r.mapKey) {
+			r.mapKey = nil
+		}
+	}
+
 	w := &Writer{
 		store:      st,
 		partial:    trigger != nil,
@@ -71,15 +91,19 @@ func NewMapView(key []int, schema []sql.Type, trigger func(iterator []sql.Row) b
 	return r, w
 }
 
-func NewTreeView(key []int, schema []sql.Type, range_ *flownodepb.ViewDescriptor_Range) (*TreeReader, *Writer) {
+func NewTreeView(key []int, schema []sql.Type, desc *viewplan.Plan) (*TreeReader, *Writer) {
 	keySchema := makeSchema(key, schema)
 	st := NewConcurrentTree()
 
 	r := &TreeReader{
 		tree:      st,
 		keySchema: keySchema,
-		range_:    range_,
 	}
+	if desc != nil {
+		r.PostFilter = newFilter(schema, desc)
+		r.treeKey = desc.TreeKey
+	}
+
 	w := &Writer{
 		store:      st,
 		partial:    false,
@@ -90,8 +114,8 @@ func NewTreeView(key []int, schema []sql.Type, range_ *flownodepb.ViewDescriptor
 	return r, w
 }
 
-func (w *Writer) Add(records []sql.Record, colLen int) {
-	w.store.writerAdd(records, colLen, w.primaryKey, w.keySchema, &w.memsize)
+func (w *Writer) Add(records []sql.Record) {
+	w.store.writerAdd(records, w.primaryKey, w.keySchema, &w.memsize)
 }
 
 func (w *Writer) IsPartial() bool {
@@ -162,6 +186,11 @@ func (r *MapReader) Trigger(keys []sql.Row) bool {
 	if r.trigger == nil {
 		panic("tried to trigger a replay for a fully materialized view")
 	}
+	if r.mapKey != nil {
+		for i, k := range keys {
+			keys[i] = k.Extract(r.mapKey)
+		}
+	}
 	return r.trigger(keys)
 }
 
@@ -173,24 +202,22 @@ func (r *MapReader) FullyMaterialized() bool {
 	return r.trigger == nil
 }
 
-func (r *MapReader) Lookup(hasher *vthash.Hasher, key sql.Row, then func(rows Rows)) (hit bool) {
-	hash, exact := key.HashExact(hasher, r.keySchema)
-	if !exact {
-		then(Rows{})
-		return true
+func (r *MapReader) hash(h *vthash.Hasher, key sql.Row) vthash.Hash {
+	if r.mapKey == nil {
+		return key.Hash(h, r.keySchema)
 	}
-	return r.LookupHash(hash, then)
+	return key.HashWithKeySchema(h, r.mapKey, r.keySchema)
+}
+
+func (r *MapReader) Lookup(hasher *vthash.Hasher, key sql.Row, then func(rows Rows)) (hit bool) {
+	return r.LookupHash(r.hash(hasher, key), then)
 }
 
 func (r *MapReader) LookupMany(hasher *vthash.Hasher, keys []sql.Row, then func(rows Rows)) (misses []sql.Row) {
 	deduplicate := make(map[vthash.Hash]struct{}, len(keys))
 
 	for _, key := range keys {
-		hash, exact := key.HashExact(hasher, r.keySchema)
-		if !exact {
-			then(Rows{})
-			continue
-		}
+		hash := r.hash(hasher, key)
 		if _, found := deduplicate[hash]; found {
 			continue
 		}
@@ -219,7 +246,7 @@ func (r *MapReader) LookupHash(h vthash.Hash, then func(rows Rows)) (hit bool) {
 }
 
 func (r *MapReader) BlockingLookup(ctx context.Context, hasher *vthash.Hasher, key sql.Row, then func(rows Rows)) (hit bool) {
-	h := key.Hash(hasher, r.keySchema)
+	h := r.hash(hasher, key)
 	_ = r.store.waker.wait(ctx, h, func() bool {
 		r.store.lr.Read(func(tbl offheap.CRowsTable, version uint64) {
 			rows, ok := tbl.Get(h)
@@ -236,7 +263,9 @@ func (r *MapReader) BlockingLookup(ctx context.Context, hasher *vthash.Hasher, k
 type TreeReader struct {
 	tree      *ConcurrentTree
 	keySchema []sql.Type
-	range_    *flownodepb.ViewDescriptor_Range
+	treeKey   *viewplan.Plan_TreeKey
+
+	PostFilter *Filter
 }
 
 func (r *TreeReader) Len() int {
@@ -307,17 +336,17 @@ func (r *TreeReader) iterator(from, to Bound, tree *BTreeMap, version uint64, th
 }
 
 func (r *TreeReader) Bounds(row sql.Row) (from Bound, to Bound, err error) {
-	if r.range_.LowerKey != nil {
-		from.inclusive = r.range_.LowerInclusive
-		from.weight, err = row.WeightsWithKeySchema(r.range_.LowerKey, r.keySchema, 0)
+	if r.treeKey.Lower != nil {
+		from.inclusive = r.treeKey.LowerInclusive
+		from.weight, err = row.WeightsWithKeySchema(r.treeKey.Lower, r.keySchema, 0)
 		if err != nil {
 			return
 		}
 	}
 
-	if r.range_.UpperKey != nil {
-		to.inclusive = r.range_.UpperInclusive
-		to.weight, err = row.WeightsWithKeySchema(r.range_.UpperKey, r.keySchema, len(from.weight))
+	if r.treeKey.Upper != nil {
+		to.inclusive = r.treeKey.UpperInclusive
+		to.weight, err = row.WeightsWithKeySchema(r.treeKey.Upper, r.keySchema, len(from.weight))
 		if err != nil {
 			return
 		}

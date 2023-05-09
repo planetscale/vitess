@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -43,5 +42,5 @@ func TestCalculateOffsets(t *testing.T) {
 	err := bindOffsets(fNode, semTable)
 	require.NoError(t, err)
 	assert.NotNil(t, opF.EvalExpr)
-	assert.Equal(t, "[COLUMN 0] = INT64(12)", evalengine.FormatExpr(opF.EvalExpr[0]))
+	assert.Equal(t, ":0 = 12", sqlparser.String(opF.EvalExpr[0]))
 }

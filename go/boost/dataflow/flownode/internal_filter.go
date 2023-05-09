@@ -11,20 +11,13 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/sql"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-type FilterConditionTuple struct {
-	ColumnID int
-	Cond     evalengine.Expr
-	Expr     string
-}
-
 type Filter struct {
 	src    dataflow.IndexPair
-	filter []FilterConditionTuple
+	filter []sql.EvalExpr
 }
 
 func (f *Filter) internal() {}
@@ -34,7 +27,7 @@ func (f *Filter) dataflow() {}
 func (f *Filter) apply(env *evalengine.ExpressionEnv, r sql.Row) bool {
 	env.Row = r.ToVitess()
 	for _, f := range f.filter {
-		res, err := env.Evaluate(f.Cond)
+		res, err := env.Evaluate(f.Eval)
 		if err != nil {
 			panic(err)
 		}
@@ -105,7 +98,7 @@ func (f *Filter) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
 func (f *Filter) Description() string {
 	var fs []string
 	for _, f := range f.filter {
-		fs = append(fs, f.Expr)
+		fs = append(fs, sqlparser.String(f.Expr))
 	}
 	return "σ[" + strings.Join(fs, ", ") + "]"
 }
@@ -122,57 +115,23 @@ func (f *Filter) OnCommit(_ graph.NodeIdx, remap map[graph.NodeIdx]dataflow.Inde
 	f.src.Remap(remap)
 }
 
-func NewFilter(src graph.NodeIdx, filter []FilterConditionTuple) *Filter {
+func NewFilter(src graph.NodeIdx, filter []sql.EvalExpr) *Filter {
 	return &Filter{
 		src:    dataflow.NewIndexPair(src),
 		filter: filter,
 	}
 }
 
-func columnLookup(fakeColumn int) evalengine.ColumnResolver {
-	return func(name *sqlparser.ColName) (int, error) {
-		return fakeColumn, nil
-	}
-}
-
 func NewFilterFromProto(pbfilt *flownodepb.Node_InternalFilter) *Filter {
-	var filters []FilterConditionTuple
-	for _, f := range pbfilt.Filter {
-		expr, err := sqlparser.ParseExpr(f.Expr)
-		if err != nil {
-			panic(fmt.Errorf("should not fail to deserialize SQL expression %s (%v)", f.Expr, err))
-		}
-
-		evalf, err := evalengine.Translate(expr, &evalengine.Config{
-			ResolveColumn: columnLookup(f.Col),
-			Collation:     collations.CollationUtf8mb4ID,
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		filters = append(filters, FilterConditionTuple{
-			ColumnID: f.Col,
-			Cond:     evalf,
-			Expr:     f.Expr,
-		})
-	}
 	return &Filter{
 		src:    *pbfilt.Src,
-		filter: filters,
+		filter: sql.EvalExprsFromProto(pbfilt.Filter),
 	}
 }
 
 func (f *Filter) ToProto() *flownodepb.Node_InternalFilter {
-	pbfilt := &flownodepb.Node_InternalFilter{
+	return &flownodepb.Node_InternalFilter{
 		Src:    &f.src,
-		Filter: nil,
+		Filter: sql.EvalExprsToProto(f.filter),
 	}
-	for _, f := range f.filter {
-		pbfilt.Filter = append(pbfilt.Filter, &flownodepb.Node_InternalFilter_FilterExpr{
-			Expr: f.Expr,
-			Col:  f.ColumnID,
-		})
-	}
-	return pbfilt
 }

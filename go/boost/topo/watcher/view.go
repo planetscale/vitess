@@ -38,6 +38,7 @@ type View struct {
 
 	topkOrder []flownode.OrderedColumn
 	topkLimit int
+	multi     bool
 
 	shardKeyType sql.Type
 	metrics      *scopedMetrics
@@ -63,6 +64,7 @@ func NewViewClientFromProto(pb *vtboostpb.Materialization_ViewDescriptor, dialer
 		schema:    pb.Schema,
 		keySchema: pb.KeySchema,
 		topkLimit: int(pb.TopkLimit),
+		multi:     pb.QueryMode == vtboostpb.Materialization_ViewDescriptor_QUERY_MULTI,
 	}
 	if len(pb.Shards) > 1 {
 		if len(pb.KeySchema) != 1 {
@@ -106,27 +108,29 @@ func (v *View) makerow(bvars []*querypb.BindVariable) (sql.Row, error) {
 
 	keypb := sql.NewRowBuilder(len(bvars))
 	for _, bvar := range bvars {
-		keypb.AddVitess(sqltypes.MakeTrusted(bvar.Type, bvar.Value))
+		keypb.AddBindVar(bvar)
 	}
 	return keypb.Finish(), nil
 }
 
 func (v *View) LookupByBVar(ctx context.Context, key []*querypb.BindVariable, block bool) (*sqltypes.Result, error) {
-	for i, k := range key {
-		if k.Type == sqltypes.Tuple {
-			return v.multiLookupForTuple(ctx, i, key, block)
-		}
+	if v.multi {
+		return v.multiLookup(ctx, key, block)
 	}
 
 	k, err := v.makerow(key)
 	if err != nil {
 		return nil, err
 	}
-
 	return v.lookup(ctx, k, block)
 }
 
-func (v *View) multiLookupForTuple(ctx context.Context, tuplePosition int, key []*querypb.BindVariable, block bool) (*sqltypes.Result, error) {
+func (v *View) multiLookup(ctx context.Context, key []*querypb.BindVariable, block bool) (*sqltypes.Result, error) {
+	tuplePosition := slices.IndexFunc(key, func(bv *querypb.BindVariable) bool { return bv.Type == sqltypes.Tuple })
+	if tuplePosition < 0 {
+		return nil, fmt.Errorf("missing TUPLE bind variable in matched key")
+	}
+
 	queryCount := len(key[tuplePosition].Values)
 	keypbs := make([]sql.Row, 0, queryCount)
 
@@ -173,6 +177,9 @@ func (v *View) canCoerce(from querypb.Type, fieldPos int) error {
 	to := v.keySchema[fieldPos].Type
 
 	switch {
+	case to == sqltypes.TypeJSON:
+		// Allow this coercion always because it's very loose
+		return nil
 	case sqltypes.IsQuoted(to):
 		if !sqltypes.IsQuoted(from) {
 			return fmt.Errorf("cannot query field %q with an %s (textual fields can only be queried textually)", v.keySchema[fieldPos].Name, from.String())
@@ -293,13 +300,10 @@ func (v *View) fixResult(rows []sql.Row) *sqltypes.Result {
 		if v.topkLimit >= 0 && v.topkLimit < len(rows) {
 			limit = v.topkLimit
 		}
-		for _, r := range rows[:limit] {
-			rr.Rows = append(rr.Rows, r.ToVitessTruncate(len(v.schema)))
-		}
-	} else {
-		for _, r := range rows {
-			rr.Rows = append(rr.Rows, r.ToVitess())
-		}
+		rows = rows[:limit]
+	}
+	for _, r := range rows {
+		rr.Rows = append(rr.Rows, r.ToVitessTruncate(len(v.schema)))
 	}
 	return rr
 }

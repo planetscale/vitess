@@ -5,8 +5,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/server/controller/config"
-
 	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/dataflow"
@@ -14,6 +12,7 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 

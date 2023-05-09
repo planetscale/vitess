@@ -6,14 +6,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/boost/dataflow"
-	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
+	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestTopk(t *testing.T) {
 	setup := func(t *testing.T, desc bool) (*MockGraph, dataflow.IndexPair) {
-		cmprows := []flownodepb.OrderedColumn{{Col: 2, Desc: desc}}
+		cmprows := []viewplan.OrderedColumn{{Col: 2, Desc: desc}}
 		g := NewMockGraph(t)
 		s := g.AddBase(
 			"source",
@@ -202,7 +202,7 @@ func TestTopk(t *testing.T) {
 
 func TestTopkNoLimit(t *testing.T) {
 	setup := func(t *testing.T, desc bool) (*MockGraph, dataflow.IndexPair) {
-		cmprows := []flownodepb.OrderedColumn{{Col: 2, Desc: desc}}
+		cmprows := []viewplan.OrderedColumn{{Col: 2, Desc: desc}}
 		g := NewMockGraph(t)
 		s := g.AddBase(
 			"source",

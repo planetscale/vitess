@@ -18,3 +18,8 @@ message Type {
   int32 precision = 4;
   bool nullable = 5;
 };
+
+message Expr {
+  string expr = 1;
+};
+

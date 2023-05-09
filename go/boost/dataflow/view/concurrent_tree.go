@@ -57,30 +57,28 @@ func (ct *ConcurrentTree) readerContains(key sql.Row, schema []sql.Type) (found 
 	return
 }
 
-func (ct *ConcurrentTree) writerAdd(rs []sql.Record, colLen int, pk []int, schema []sql.Type, memsize *atomic.Int64) {
+func (ct *ConcurrentTree) writerAdd(rs []sql.Record, pk []int, schema []sql.Type, memsize *atomic.Int64) {
 	tbl := ct.lr.Writer()
 	epoch := ct.lr.writerVersion.Load() + 1
 
 	for _, r := range rs {
 		w, _ := r.Row.WeightsWithKeySchema(pk, schema, 0)
-
 		rows, ok := tbl.Get(w)
-		truncatedRow := r.Row.Truncate(colLen)
 
 		if r.Positive {
 			if !ok {
-				newrow := offheap.NewConcurrent(truncatedRow, memsize)
+				newrow := offheap.NewConcurrent(r.Row, memsize)
 				tbl.Set(w, newrow)
 				ct.changelog.Do(changeInsert, w, newrow)
 			} else {
-				newrow, free := rows.Insert(truncatedRow, memsize)
+				newrow, free := rows.Insert(r.Row, memsize)
 				tbl.Set(w, newrow)
 				ct.changelog.Do(changeInsert, w, newrow)
 				ct.changelog.Free(free)
 			}
 		} else {
 			if ok {
-				tombstoned := rows.Tombstone(truncatedRow, epoch)
+				tombstoned := rows.Tombstone(r.Row, epoch)
 				ct.changelog.Tombstone(w, tombstoned)
 			}
 		}

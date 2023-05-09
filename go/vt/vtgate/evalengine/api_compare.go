@@ -95,7 +95,7 @@ func isByteComparable(typ sqltypes.Type, collationID collations.ID) bool {
 	}
 	switch typ {
 	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum,
-		sqltypes.Set, sqltypes.TypeJSON, sqltypes.Bit, sqltypes.Geometry:
+		sqltypes.Set, sqltypes.Bit, sqltypes.Geometry:
 		return true
 	default:
 		return false
@@ -166,6 +166,17 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 			return 0, err
 		}
 		return compareNumeric(v1cast, v2cast)
+
+	case typ == sqltypes.TypeJSON:
+		v1cast, err := valueToEvalCast(v1, typ)
+		if err != nil {
+			return 0, err
+		}
+		v2cast, err := valueToEvalCast(v2, typ)
+		if err != nil {
+			return 0, err
+		}
+		return compareJSON(v1cast, v2cast)
 
 	default:
 		return 0, UnsupportedComparisonError{Type1: v1.Type(), Type2: v2.Type()}

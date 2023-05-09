@@ -31,15 +31,25 @@ func bindOffsets(node *Node, semTable *semantics.SemTable) error {
 
 func (v *View) PlanOffsets(node *Node, st *semantics.SemTable) error {
 	ancestor := node.Ancestors[0]
-	for _, param := range v.Parameters {
-		paramExpr, err := param.Column.SingleAST()
+	for _, param := range v.Dependencies {
+		var err error
+		dbg.Assert(len(param.Column.AST) == 1, "view with multiple ASTs for a parameter")
+
+		param.ColumnOffset, err = ancestor.ExprLookup(st, param.Column.AST[0])
 		if err != nil {
 			return err
 		}
-		param.ColumnOffset, err = ancestor.ExprLookup(st, paramExpr)
-		if err != nil {
-			return err
-		}
+
+		param.Column.AST[0] = sqlparser.Rewrite(param.Column.AST[0], func(cursor *sqlparser.Cursor) bool {
+			switch col := cursor.Node().(type) {
+			case *sqlparser.ColName:
+				cursor.Replace(sqlparser.NewOffset(param.ColumnOffset, col))
+				return false
+			case *sqlparser.Offset:
+				return false
+			}
+			return true
+		}, nil).(sqlparser.Expr)
 	}
 	return nil
 }
@@ -371,13 +381,10 @@ func (f *Filter) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 		return err
 	}
 	for _, expr := range sqlparser.SplitAndExpression(nil, newPredicate.(sqlparser.Expr)) {
-		evalEngineExpr, err := evalengine.Translate(expr, nil)
-		if err != nil {
+		if _, err := evalengine.Translate(expr, nil); err != nil {
 			return err
 		}
-		f.EvalExpr = append(f.EvalExpr, evalEngineExpr)
-		s := sqlparser.String(expr)
-		f.ExprStr = append(f.ExprStr, s)
+		f.EvalExpr = append(f.EvalExpr, expr)
 	}
 	return nil
 }

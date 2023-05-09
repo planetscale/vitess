@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
+	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
@@ -14,7 +14,7 @@ import (
 
 var errMismatch = errors.New("not matched")
 
-func GenerateBoundsForQuery(stmt sqlparser.Statement, view *flownodepb.ViewDescriptor) (bounds []*vtboostpb.Materialization_Bind, fullyMaterialized bool, err error) {
+func GenerateBoundsForQuery(stmt sqlparser.Statement, plan *viewplan.Plan) (bounds []*vtboostpb.Materialization_Bind, fullyMaterialized bool, err error) {
 	var arguments int
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -36,10 +36,6 @@ func GenerateBoundsForQuery(stmt sqlparser.Statement, view *flownodepb.ViewDescr
 				Name: string(node),
 				Pos:  int64(arguments),
 			}
-			p := view.Parameters[arguments]
-			if p.Match != flownodepb.ViewDescriptor_Param_IN {
-				return false, fmt.Errorf("unexpected placeholder for non-IN clause: %v", sqlparser.CanonicalString(node))
-			}
 			bounds = append(bounds, b)
 			arguments++
 
@@ -59,8 +55,8 @@ func GenerateBoundsForQuery(stmt sqlparser.Statement, view *flownodepb.ViewDescr
 	}
 
 	if arguments == 0 {
-		if len(view.Parameters) != 1 || view.Parameters[0].Name != "bogokey" {
-			return nil, false, fmt.Errorf("unexpected schema for fully materialized view %v", view.Parameters)
+		if len(plan.Parameters) != 1 || plan.Parameters[0].Name != "bogokey" {
+			return nil, false, fmt.Errorf("unexpected schema for fully materialized view %v", plan.Parameters)
 		}
 		fullyMaterialized = true
 	}

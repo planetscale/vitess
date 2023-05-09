@@ -48,7 +48,7 @@ func TestTreeIteration(t *testing.T) {
 		records = append(records, sql.TestRow(i, fmt.Sprintf("record-%d", i)).ToRecord(true))
 	}
 
-	w.Add(records, 0)
+	w.Add(records)
 	w.Swap()
 
 	found := lookupRange(r, inclusive(0), inclusive(69))
@@ -94,7 +94,7 @@ func TestTreeIterationWithVariablePrefix(t *testing.T) {
 		sql.TestRow("aaabbb", 0),
 	}
 
-	w.Add(slices2.Map(records, func(r sql.Row) sql.Record { return r.AsRecord() }), 0)
+	w.Add(slices2.Map(records, func(r sql.Row) sql.Record { return r.AsRecord() }))
 	w.Swap()
 
 	found := lookupRange(r, inclusive("aaaa", 1), inclusive("aaaa", 4))
@@ -119,7 +119,7 @@ func TestTreeIterationWithVariablePrefixConflict(t *testing.T) {
 		sql.TestRow([]byte("aaaab"), []byte("bbb")),
 	}
 
-	w.Add(slices2.Map(records, func(r sql.Row) sql.Record { return r.AsRecord() }), 0)
+	w.Add(slices2.Map(records, func(r sql.Row) sql.Record { return r.AsRecord() }))
 	w.Swap()
 
 	found := lookupRange(r, inclusive([]byte("aaaa"), []byte("bbbb")), inclusive([]byte("aaaa"), []byte("cccc")))

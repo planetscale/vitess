@@ -80,6 +80,11 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 		return
 	}
 
+	err = node.Op.(*View).plan(ctx, node)
+	if err != nil {
+		return
+	}
+
 	return node, tableReport, nil
 }
 

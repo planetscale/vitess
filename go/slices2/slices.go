@@ -48,3 +48,28 @@ func Map[From, To any](in []From, f func(From) To) []To {
 	}
 	return result
 }
+
+// Filter returns the slice obtained after retaining only those elements
+// in the given slice for which the given function returns true
+func Filter[T any](s []T, fn func(T) bool) []T {
+	ret := make([]T, 0)
+	for _, e := range s {
+		if fn(e) {
+			ret = append(ret, e)
+		}
+	}
+	return ret
+}
+
+// FilterIndexed returns the slice obtained after retaining only those elements
+// in the given slice for which the given function returns true. Predicate
+// receives the value as well as its index in the slice.
+func FilterIndexed[T any](s []T, fn func(int, T) bool) []T {
+	ret := make([]T, 0)
+	for i, e := range s {
+		if fn(i, e) {
+			ret = append(ret, e)
+		}
+	}
+	return ret
+}

@@ -47,8 +47,9 @@ const (
 	Lock
 	SubQuery
 	NonConstantExpression
-	MultipleOperators
-	RangeAndIn
+	NoIndexableColumn
+	RangeAndAggregation
+	PostAndAggregation
 )
 
 //enumcheck:exhaustive
@@ -56,10 +57,8 @@ type UnsupportedRangeType int
 
 const (
 	UnknownRangeError UnsupportedRangeType = iota
-	RangeMultipleColumns
 	RangeEqualityOperator
 	RangeSameDirection
-	RangeManyOperators
 )
 
 type (
@@ -81,6 +80,15 @@ type (
 	}
 )
 
+func (n *UnsupportedError) ast() string {
+	switch ast := n.AST.(type) {
+	case *sqlparser.Offset:
+		return sqlparser.CanonicalString(ast.Original)
+	default:
+		return sqlparser.CanonicalString(ast)
+	}
+}
+
 func (n *UnsupportedError) Error() string {
 	var sb strings.Builder
 	sb.WriteString("query not supported by boost: ")
@@ -88,78 +96,80 @@ func (n *UnsupportedError) Error() string {
 	case Unknown:
 		sb.WriteString("unknown problem")
 	case SelectColumnType:
-		fmt.Fprintf(&sb, "column reference of unknown type in select: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "column reference of unknown type in select: %s", n.ast())
 	case GroupingOnLiteral:
-		fmt.Fprintf(&sb, "query contains literal in group by clause: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "query contains literal in group by clause: %s", n.ast())
 	case GroupByNoAggregation:
-		fmt.Fprintf(&sb, "query contains group by with no aggregation: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "query contains group by with no aggregation: %s", n.ast())
 	case QueryType:
-		fmt.Fprintf(&sb, "unsupported query type: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "unsupported query type: %s", n.ast())
 	case SelectInto:
-		fmt.Fprintf(&sb, "select uses unsupported into: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "select uses unsupported into: %s", n.ast())
 	case SelectWith:
-		fmt.Fprintf(&sb, "select uses unsupported with: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "select uses unsupported with: %s", n.ast())
 	case SelectWindows:
-		fmt.Fprintf(&sb, "select uses unsupported windows: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "select uses unsupported windows: %s", n.ast())
 	case TableExpression:
-		fmt.Fprintf(&sb, "query contains an unsupported table expression: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "query contains an unsupported table expression: %s", n.ast())
 	case AliasedTableExpression:
-		fmt.Fprintf(&sb, "query contains an unsupported aliased table expression: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "query contains an unsupported aliased table expression: %s", n.ast())
 	case JoinType:
-		fmt.Fprintf(&sb, "query uses an unsupported join type: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "query uses an unsupported join type: %s", n.ast())
 	case JoinWithUsing:
-		fmt.Fprintf(&sb, "query uses unsupported using condition on join: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "query uses unsupported using condition on join: %s", n.ast())
 	case ParametersInsideUnion:
-		fmt.Fprintf(&sb, "query uses unsupported parameters inside a union: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "query uses unsupported parameters inside a union: %s", n.ast())
 	case OrderByNoLimit:
-		fmt.Fprintf(&sb, "query contains order by with no limit: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "query contains order by with no limit: %s", n.ast())
 	case LimitNoOrderBy:
-		fmt.Fprintf(&sb, "query contains limit with no order by: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "query contains limit with no order by: %s", n.ast())
 	case Offset:
-		fmt.Fprintf(&sb, "query contains offset: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "query contains offset: %s", n.ast())
 	case ColumnsNotExpanded:
-		fmt.Fprintf(&sb, "columns in select * are not expanded: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "columns in select * are not expanded: %s", n.ast())
 	case LiteralInAggregatingQuery:
-		fmt.Fprintf(&sb, "unsupported use of literal in aggregating query: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "unsupported use of literal in aggregating query: %s", n.ast())
 	case DerivedTableColumnAlias:
-		fmt.Fprintf(&sb, "derived table with a column alias is not supported: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "derived table with a column alias is not supported: %s", n.ast())
 	case NotAliasedExpression:
-		fmt.Fprintf(&sb, "column in query is not an aliased expression: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "column in query is not an aliased expression: %s", n.ast())
 	case AggregationInWhere:
-		fmt.Fprintf(&sb, "unsupported use of aggregation expression in where clause: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "unsupported use of aggregation expression in where clause: %s", n.ast())
 	case AggregationInComplexExpression:
-		fmt.Fprintf(&sb, "aggregation cannot be inside complex expression: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "aggregation cannot be inside complex expression: %s", n.ast())
 	case EvalEngineNotSupported:
-		fmt.Fprintf(&sb, "unsupported expression by the evaluation engine: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "unsupported expression by the evaluation engine: %s", n.ast())
 	case DualTable:
 		fmt.Fprintf(&sb, "select without an explicit table is not supported")
 	case ParameterLocation:
-		fmt.Fprintf(&sb, "unsupported parameter location: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "unsupported parameter location: %s", n.ast())
 	case ParameterNotSupported:
-		fmt.Fprintf(&sb, "parameter %s is not supported", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "parameter %s is not supported", n.ast())
 	case ParameterLocationCompare:
-		fmt.Fprintf(&sb, "parameter %s needs to be used in a comparison expression", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "parameter %s needs to be used in a comparison expression", n.ast())
 	case JoinWithoutPredicates:
 		fmt.Fprintf(&sb, "join without predicates is not supported")
 	case JoinPredicates:
-		fmt.Fprintf(&sb, "join predicates have to be in the form <tbl1.col> = <tbl2.col>, was '%s'", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "join predicates have to be in the form <tbl1.col> = <tbl2.col>, was '%s'", n.ast())
 	case MultipleIn:
-		fmt.Fprintf(&sb, "multiple IN() clauses for a parameter are not supported: %v", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "multiple IN() clauses for a parameter are not supported: %v", n.ast())
 	case Aggregation:
-		fmt.Fprintf(&sb, "group aggregation function '%s' is not supported", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "group aggregation function '%s' is not supported", n.ast())
 	case NoFullGroupBy:
-		fmt.Fprintf(&sb, "non aggregated column '%s' is not part of group by", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "non aggregated column '%s' is not part of group by", n.ast())
 	case Lock:
 		sel := n.AST.(*sqlparser.Select)
 		fmt.Fprintf(&sb, "row locking with '%s' is not supported", sel.Lock.ToString())
 	case SubQuery:
-		fmt.Fprintf(&sb, "subqueries are not supported: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "subqueries are not supported: %s", n.ast())
 	case NonConstantExpression:
-		fmt.Fprintf(&sb, "non constant expression in query: %s", sqlparser.CanonicalString(n.AST))
-	case MultipleOperators:
-		fmt.Fprintf(&sb, "operator is used multiple times on the same column: %s", sqlparser.CanonicalString(n.AST))
-	case RangeAndIn:
-		fmt.Fprintf(&sb, "range combined with IN() is not supported: %s", sqlparser.CanonicalString(n.AST))
+		fmt.Fprintf(&sb, "non constant expression in query: %s", n.ast())
+	case NoIndexableColumn:
+		fmt.Fprintf(&sb, "none of the provided filter operators can be indexed")
+	case RangeAndAggregation:
+		fmt.Fprintf(&sb, "the ranged query for parameter %s on top of an aggregation must be grouped by that parameter", n.ast())
+	case PostAndAggregation:
+		fmt.Fprintf(&sb, "the explicit grouping for %s cannot be computed with the given filters", n.ast())
 	}
 
 	return sb.String()
@@ -179,14 +189,10 @@ func (n *UnsupportedRangeError) Error() string {
 	switch n.Type {
 	case UnknownRangeError:
 		sb.WriteString("unknown range problem")
-	case RangeMultipleColumns:
-		fmt.Fprintf(&sb, "multiple columns using range operators: %s", strings.Join(sqlescape.EscapeIDs(n.Columns), ", "))
 	case RangeEqualityOperator:
 		fmt.Fprintf(&sb, "equality operator used with range operator on column %s", sqlescape.EscapeID(n.Columns[0]))
 	case RangeSameDirection:
 		fmt.Fprintf(&sb, "multiple range operators with the same direction on column %s", sqlescape.EscapeID(n.Columns[0]))
-	case RangeManyOperators:
-		fmt.Fprintf(&sb, "too many range operators for column %s", sqlescape.EscapeID(n.Columns[0]))
 	}
 
 	return sb.String()

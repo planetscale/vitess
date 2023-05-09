@@ -44,6 +44,12 @@ message Materialization {
     repeated bool topk_order_desc = 7;
     int64 topk_limit = 8;
     string public_id = 9;
+
+    enum QueryMode {
+      QUERY_SINGLE = 0;
+      QUERY_MULTI = 1;
+    }
+    QueryMode query_mode = 10;
   };
 };
 

@@ -279,6 +279,9 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a text: %v", v)
 		}
+
+	case typ == sqltypes.TypeJSON:
+		return json.NewFromSQL(v)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value: %v", v)
 }

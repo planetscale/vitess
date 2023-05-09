@@ -9,6 +9,7 @@ import (
 	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/dataflow"
+	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/dataflow/view"
 	"vitess.io/vitess/go/boost/sql"
@@ -30,7 +31,7 @@ func (d *Domain) memstate(node dataflow.LocalNodeIdx) *state.Memory {
 func partialGlobalState(
 	ctx context.Context,
 	coord *boostrpc.ChannelCoordinator,
-	node dataflow.LocalNodeIdx,
+	node *flownode.Node,
 	schema []sql.Type,
 	st *packet.PrepareStateRequest_PartialGlobal) (
 	view.Reader, *view.Writer, error,
@@ -38,6 +39,7 @@ func partialGlobalState(
 	triggerDomain := st.TriggerDomain.Domain
 	shards := st.TriggerDomain.Shards
 	k := st.Key
+	localAddr := node.LocalAddr()
 
 	var txs []chan []sql.Row
 	for shard := uint(0); shard < shards; shard++ {
@@ -60,7 +62,7 @@ func partialGlobalState(
 					return
 				case miss := <-tx:
 					pkt := &packet.ReaderReplayRequest{
-						Node: node,
+						Node: localAddr,
 						Cols: k,
 						Keys: miss,
 					}
@@ -118,7 +120,7 @@ func partialGlobalState(
 		}
 	}
 
-	r, w := view.NewMapView(k, schema, onMiss)
+	r, w := view.NewMapView(k, schema, node.AsReader().ViewPlan(), onMiss)
 	return r, w, nil
 }
 
@@ -140,7 +142,7 @@ func (d *Domain) handlePrepareState(ctx context.Context, pkt *packet.PrepareStat
 
 	case *packet.PrepareStateRequest_PartialGlobal_:
 		n := d.nodes.Get(node)
-		r, w, err := partialGlobalState(ctx, d.coordinator, node, n.Schema(), st.PartialGlobal)
+		r, w, err := partialGlobalState(ctx, d.coordinator, n, n.Schema(), st.PartialGlobal)
 		if err != nil {
 			return err
 		}
@@ -151,14 +153,14 @@ func (d *Domain) handlePrepareState(ctx context.Context, pkt *packet.PrepareStat
 	case *packet.PrepareStateRequest_Global_:
 		n := d.nodes.Get(node)
 		reader := n.AsReader()
-		desc := reader.Descriptor()
+		desc := reader.ViewPlan()
 
 		var r view.Reader
 		var w *view.Writer
-		if desc.Range != nil {
-			r, w = view.NewTreeView(st.Global.Key, n.Schema(), desc.Range)
+		if desc.TreeKey != nil {
+			r, w = view.NewTreeView(st.Global.Key, n.Schema(), desc)
 		} else {
-			r, w = view.NewMapView(st.Global.Key, n.Schema(), nil)
+			r, w = view.NewMapView(st.Global.Key, n.Schema(), desc, nil)
 		}
 
 		d.readers.Set(ReaderID{st.Global.Gid, d.shardn()}, r)

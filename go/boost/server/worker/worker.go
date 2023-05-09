@@ -90,7 +90,7 @@ func (w *Worker) ViewRead(ctx context.Context, req *service.ViewReadRequest) (*s
 	}
 }
 
-func (w *Worker) viewReadRange(_ context.Context, reader *view.TreeReader, key sql.Row) (*service.ViewReadResponse, error) {
+func (w *Worker) viewReadRange(ctx context.Context, reader *view.TreeReader, key sql.Row) (*service.ViewReadResponse, error) {
 	lower, upper, err := reader.Bounds(key)
 	if err != nil {
 		return nil, err
@@ -99,6 +99,8 @@ func (w *Worker) viewReadRange(_ context.Context, reader *view.TreeReader, key s
 	reader.LookupRange(lower, upper, func(rows view.Rows) {
 		rs = rows.Collect(rs)
 	})
+
+	rs = reader.PostFilter.Apply(ctx, key, rs)
 	return &service.ViewReadResponse{Rows: rs, Hits: 1}, nil
 }
 
@@ -111,6 +113,7 @@ func (w *Worker) viewReadMap(ctx context.Context, reader *view.MapReader, key sq
 		rs = rows.Collect(rs)
 	})
 	if ok {
+		rs = reader.PostFilter.Apply(ctx, key, rs)
 		return &service.ViewReadResponse{Rows: rs, Hits: 1}, nil
 	}
 
@@ -128,6 +131,7 @@ func (w *Worker) viewReadMap(ctx context.Context, reader *view.MapReader, key sq
 			rs = rows.Collect(rs)
 		})
 		if ok {
+			rs = reader.PostFilter.Apply(ctx, key, rs)
 			return &service.ViewReadResponse{Rows: rs}, nil
 		}
 	}

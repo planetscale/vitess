@@ -223,6 +223,11 @@ func (m *Materialization_ViewDescriptor) MarshalToSizedBufferVT(dAtA []byte) (in
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.QueryMode != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.QueryMode))
+		i--
+		dAtA[i] = 0x50
+	}
 	if len(m.PublicId) > 0 {
 		i -= len(m.PublicId)
 		copy(dAtA[i:], m.PublicId)
@@ -2163,6 +2168,9 @@ func (m *Materialization_ViewDescriptor) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.QueryMode != 0 {
+		n += 1 + sov(uint64(m.QueryMode))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -3585,6 +3593,25 @@ func (m *Materialization_ViewDescriptor) UnmarshalVT(dAtA []byte) error {
 			}
 			m.PublicId = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field QueryMode", wireType)
+			}
+			m.QueryMode = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.QueryMode |= Materialization_ViewDescriptor_QueryMode(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
