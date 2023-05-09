@@ -29,7 +29,7 @@ func (cached *View) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(192)
 	}
 	// field publicID string
 	size += hack.RuntimeAllocSize(int64(len(cached.publicID)))
@@ -63,7 +63,7 @@ func (cached *View) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field topkOrder []vitess.io/vitess/go/boost/dataflow/flownode/flownodepb.OrderedColumn
+	// field topkOrder []vitess.io/vitess/go/boost/server/controller/boostplan/viewplan.OrderedColumn
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.topkOrder)) * int64(9))
 	}
