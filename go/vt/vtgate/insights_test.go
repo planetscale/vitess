@@ -117,35 +117,36 @@ func TestLimiter(t *testing.T) {
 	t4 := t0.Add(4 * time.Second)
 
 	tests := []struct {
-		t              time.Time
-		intervalRemain int
-		global         int
-		tick           bool
-		runAllow       bool
-		allow          bool
+		t                 time.Time
+		intervalRemain    int
+		global            int
+		intervalAllotment int
+		tick              bool
+		runAllow          bool
+		allow             bool
 	}{
-		{t: t0, intervalRemain: 2, global: 4, tick: true},
-		{t: t0, intervalRemain: 1, global: 4, runAllow: true, allow: true},
-		{t: t0, intervalRemain: 0, global: 4, runAllow: true, allow: true},
-		{t: t0, intervalRemain: 0, global: 4, runAllow: true, allow: false},
-		{t: t0, intervalRemain: 2, global: 2, tick: true},
-		{t: t0, intervalRemain: 1, global: 2, runAllow: true, allow: true},
-		{t: t0, intervalRemain: 2, global: 1, tick: true},
-		{t: t0, intervalRemain: 1, global: 1, runAllow: true, allow: true},
-		{t: t0, intervalRemain: 0, global: 1, runAllow: true, allow: true},
-		{t: t0, intervalRemain: 0, global: 1, runAllow: true, allow: false},
-		{t: t0, intervalRemain: 1, global: 0, tick: true},
-		{t: t0, intervalRemain: 0, global: 0, runAllow: true, allow: true},
-		{t: t0, intervalRemain: 0, global: 0, runAllow: true, allow: false},
-		{t: t0, intervalRemain: 0, global: 0, tick: true},
-		{t: t1, intervalRemain: 0, global: 1},
-		{t: t1, intervalRemain: 1, global: 0, tick: true},
-		{t: t2, intervalRemain: 1, global: 1},
-		{t: t2, intervalRemain: 2, global: 0, tick: true},
-		{t: t2, intervalRemain: 1, global: 0, runAllow: true, allow: true},
-		{t: t3, intervalRemain: 1, global: 1},
-		{t: t3, intervalRemain: 2, global: 0, tick: true},
-		{t: t4, intervalRemain: 2, global: 1, tick: true},
+		{t: t0, intervalRemain: 2, intervalAllotment: 2, global: 4, tick: true},
+		{t: t0, intervalRemain: 1, intervalAllotment: 2, global: 4, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 0, intervalAllotment: 2, global: 4, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 0, intervalAllotment: 2, global: 4, runAllow: true, allow: false},
+		{t: t0, intervalRemain: 2, intervalAllotment: 2, global: 2, tick: true},
+		{t: t0, intervalRemain: 1, intervalAllotment: 2, global: 2, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 2, intervalAllotment: 2, global: 1, tick: true},
+		{t: t0, intervalRemain: 1, intervalAllotment: 2, global: 1, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 0, intervalAllotment: 2, global: 1, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 0, intervalAllotment: 2, global: 1, runAllow: true, allow: false},
+		{t: t0, intervalRemain: 1, intervalAllotment: 1, global: 0, tick: true},
+		{t: t0, intervalRemain: 0, intervalAllotment: 1, global: 0, runAllow: true, allow: true},
+		{t: t0, intervalRemain: 0, intervalAllotment: 1, global: 0, runAllow: true, allow: false},
+		{t: t0, intervalRemain: 0, intervalAllotment: 0, global: 0, tick: true},
+		{t: t1, intervalRemain: 0, intervalAllotment: 0, global: 1},
+		{t: t1, intervalRemain: 1, intervalAllotment: 1, global: 0, tick: true},
+		{t: t2, intervalRemain: 1, intervalAllotment: 1, global: 1},
+		{t: t2, intervalRemain: 2, intervalAllotment: 2, global: 0, tick: true},
+		{t: t2, intervalRemain: 1, intervalAllotment: 2, global: 0, runAllow: true, allow: true},
+		{t: t3, intervalRemain: 1, intervalAllotment: 2, global: 1},
+		{t: t3, intervalRemain: 2, intervalAllotment: 2, global: 0, tick: true},
+		{t: t4, intervalRemain: 2, intervalAllotment: 2, global: 1, tick: true},
 	}
 
 	for _, tc := range tests {
@@ -166,6 +167,7 @@ func TestLimiter(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.intervalRemain, limiter.intervalRemain)
+			assert.Equal(t, tc.intervalAllotment, limiter.intervalAllotment)
 			assert.Equal(t, tc.global, int(limiter.global.TokensAt(tc.t)))
 		})
 	}
