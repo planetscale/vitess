@@ -43,14 +43,14 @@ jobs:
       matrix:
         ref:
           - main
-          - latest
+          - latest-15.0
           - latest-16.0
         image:
           - mysql80
         include:
           # Default image is tagged as 'latest'
           - image: mysql80
-            ref: latest
+            ref: latest-15.0
             default: 'true'
             vitess-version: 15
           - image: mysql80
@@ -112,6 +112,8 @@ jobs:
 
           tags: |
             type=raw,value={{date 'YYYY-MM-DD'}}.${{ steps.determine-sha.outputs.sha }},priority=900
+            type=raw,value=head-15,enable=${{ matrix.ref == 'latest-15.0' }},priority=600
+            type=raw,value=latest-15,enable=${{ matrix.ref == 'latest-15.0' }},priority=600
             type=raw,value=latest-16,enable=${{ matrix.ref == 'latest-16.0' }},priority=600
             type=raw,value=head-16,enable=${{ matrix.ref == 'latest-16.0' }},priority=600
             type=raw,value=head,enable=${{ matrix.default == 'true' }},priority=600
