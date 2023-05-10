@@ -62,7 +62,7 @@ func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuf
 		case opExpr:
 			switch cexpr.colType {
 			case querypb.Type_JSON:
-				buf.Myprintf("%v", cexpr.expr)
+				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
 			case querypb.Type_DATETIME:
 				sourceTZ := tpb.source.SourceTimeZone
 				targetTZ := tpb.source.TargetTimeZone
@@ -161,7 +161,7 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 			bvf.mode = bvAfter
 			switch cexpr.colType {
 			case querypb.Type_JSON:
-				buf.Myprintf("%v", cexpr.expr)
+				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
 			case querypb.Type_DATETIME:
 				sourceTZ := tpb.source.SourceTimeZone
 				targetTZ := tpb.source.TargetTimeZone
