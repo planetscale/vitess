@@ -7,7 +7,7 @@ on:
       sourceBranch:
         description: 'Source Branch'
         required: true
-        default: 'latest'
+        default: 'latest-15.0'
       # This is kinda sad. It's a hack that makes it possible for us to tie a
       # workflow dispatch event we created back to the workflow run it creates.
       #
