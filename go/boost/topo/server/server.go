@@ -48,43 +48,15 @@ type LeadershipWatcher interface {
 }
 
 type WorkerWatcher interface {
-	RegisterWorker(ctx context.Context, worker *vtboostpb.TopoWorkerEntry)
+	UpdateWorker(ctx context.Context, worker *vtboostpb.TopoWorkerEntry)
+}
+
+func (ts *Server) VitessTopo() *topo.Server {
+	return ts.srv
 }
 
 func (ts *Server) Close() {
 	ts.srv.Close()
-}
-
-func (ts *Server) watchWorkersPoll(ctx context.Context, watcher WorkerWatcher, epoch int64) error {
-	ts.log.Debug("watching for workers (poll)", zap.Int64("epoch", epoch))
-
-	var activeWorkers = make(map[string]*vtboostpb.TopoWorkerEntry)
-	var ticker = time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		workers, err := ts.GetWorkersForEpoch(ctx, epoch)
-		if err == nil {
-			var newworkers int
-			for _, worker := range workers {
-				if _, exists := activeWorkers[worker.Uuid]; !exists {
-					activeWorkers[worker.Uuid] = worker
-					watcher.RegisterWorker(ctx, worker)
-					newworkers++
-				}
-			}
-
-			if newworkers > 0 {
-				ts.log.Debug("found new workers", zap.Int("count", newworkers))
-			}
-		}
-
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-		}
-	}
 }
 
 func (ts *Server) WatchWorkers(ctx context.Context, watcher WorkerWatcher, epoch int64) error {
@@ -95,9 +67,6 @@ func (ts *Server) WatchWorkers(ctx context.Context, watcher WorkerWatcher, epoch
 
 	initial, changes, err := conn.WatchRecursive(ctx, boosttopo.PathWorker(ts.clusterID, epoch))
 	if err != nil {
-		if topo.IsErrType(err, topo.NoImplementation) {
-			return ts.watchWorkersPoll(ctx, watcher, epoch)
-		}
 		return err
 	}
 
@@ -109,7 +78,7 @@ func (ts *Server) WatchWorkers(ctx context.Context, watcher WorkerWatcher, epoch
 			ts.log.Error("invalid Worker entry in topo server", zap.Error(err))
 			continue
 		}
-		watcher.RegisterWorker(ctx, &entry)
+		watcher.UpdateWorker(ctx, &entry)
 	}
 
 	for chg := range changes {
@@ -122,7 +91,7 @@ func (ts *Server) WatchWorkers(ctx context.Context, watcher WorkerWatcher, epoch
 			ts.log.Error("invalid Worker entry in topo server", zap.Error(err))
 			continue
 		}
-		watcher.RegisterWorker(ctx, &entry)
+		watcher.UpdateWorker(ctx, &entry)
 	}
 	return nil
 }
@@ -279,9 +248,17 @@ func (ts *Server) CreateWorker(ctx context.Context, epoch int64, worker *vtboost
 
 	ts.log.Debug("registered new worker", zap.Any("worker", worker))
 
-	prefix := path.Join(boosttopo.PathWorker(ts.clusterID, epoch), worker.Uuid)
+	prefix := ts.pathWorker(epoch, worker.Uuid)
 	_, err = conn.Create(ctx, prefix, data)
 	return err
+}
+
+func (ts *Server) pathWorker(epoch int64, workerId string) string {
+	return path.Join(boosttopo.PathWorker(ts.clusterID, epoch), workerId)
+}
+
+func (ts *Server) UpdateWorker(ctx context.Context, epoch int64, uuid string, update func(worker *vtboostpb.TopoWorkerEntry) error) (*vtboostpb.TopoWorkerEntry, error) {
+	return boosttopo.Update(ctx, ts.srv, ts.pathWorker(epoch, uuid), update)
 }
 
 func (ts *Server) UpdateControllerState(ctx context.Context, update func(state *vtboostpb.ControllerState) error) (*vtboostpb.ControllerState, error) {

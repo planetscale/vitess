@@ -51,15 +51,15 @@ func TestEndtoendVoteRecipeWithExternalBase(t *testing.T) {
 	rs := tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)
 	require.Equal(t, expectedResult, rs.Rows[0])
-	require.Equal(t, 2, tt.BoostTestCluster.WorkerReads())
+	tt.BoostTestCluster.AssertWorkerStats(2, worker.StatViewReads)
 
 	tt.ExecuteFetch("SET @@boost_cached_queries = true")
 
 	rs = tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)
 	require.Equal(t, expectedResult, rs.Rows[0])
-	require.Equal(t, 3, tt.BoostTestCluster.WorkerReads())
-	require.Equal(t, articleCount+votesCount, tt.BoostTestCluster.WorkerStats(worker.StatVStreamRows))
+	tt.BoostTestCluster.AssertWorkerStats(3, worker.StatViewReads)
+	tt.BoostTestCluster.AssertWorkerStats(articleCount+votesCount, worker.StatVStreamRows)
 }
 
 func TestEndtoendVoteRecipeRemoval(t *testing.T) {
@@ -82,8 +82,8 @@ func TestEndtoendVoteRecipeRemoval(t *testing.T) {
 	rs := tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)
 	require.Equal(t, expectedResult, rs.Rows[0])
-	require.Equal(t, 1, tt.BoostTestCluster.WorkerReads())
-	require.Equal(t, articleCount+votesCount, tt.BoostTestCluster.WorkerStats(worker.StatVStreamRows))
+	tt.BoostTestCluster.AssertWorkerStats(1, worker.StatViewReads)
+	tt.BoostTestCluster.AssertWorkerStats(articleCount+votesCount, worker.StatVStreamRows)
 
 	recipe, err := tt.BoostTopo.GetRecipe(context.Background(), &vtboostpb.GetRecipeRequest{})
 	require.NoError(t, err)
@@ -100,8 +100,9 @@ func TestEndtoendVoteRecipeRemoval(t *testing.T) {
 	rs = tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)
 	require.Equal(t, expectedResult, rs.Rows[0])
-	require.Equal(t, 1, tt.BoostTestCluster.WorkerReads())
-	require.Equal(t, articleCount+votesCount, tt.BoostTestCluster.WorkerStats(worker.StatVStreamRows))
+
+	tt.BoostTestCluster.AssertWorkerStats(1, worker.StatViewReads)
+	tt.BoostTestCluster.AssertWorkerStats(articleCount+votesCount, worker.StatVStreamRows)
 
 	_, err = tt.BoostTopo.PutRecipe(context.Background(), &vtboostpb.PutRecipeRequest{
 		Recipe: &vtboostpb.Recipe{
@@ -116,6 +117,6 @@ func TestEndtoendVoteRecipeRemoval(t *testing.T) {
 	rs = tt.ExecuteFetch(selectQuery)
 	require.Len(t, rs.Rows, 1)
 	require.Equal(t, expectedResult, rs.Rows[0])
-	require.Equal(t, 2, tt.BoostTestCluster.WorkerReads())
-	require.Equal(t, articleCount+votesCount, tt.BoostTestCluster.WorkerStats(worker.StatVStreamRows))
+	tt.BoostTestCluster.AssertWorkerStats(2, worker.StatViewReads)
+	tt.BoostTestCluster.AssertWorkerStats(articleCount+votesCount, worker.StatVStreamRows)
 }

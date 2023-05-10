@@ -276,7 +276,7 @@ func (test *Test) Conn() *mysql.Conn {
 	return conn
 }
 
-func (test *Test) ExecuteFetch(queryfmt string, args ...any) *sqltypes.Result {
+func (test *Test) executeFetch(queryfmt string, args ...any) (*sqltypes.Result, error) {
 	test.Helper()
 
 	if test.vtgateconn == nil {
@@ -284,11 +284,27 @@ func (test *Test) ExecuteFetch(queryfmt string, args ...any) *sqltypes.Result {
 	}
 
 	query := fmt.Sprintf(queryfmt, args...)
-	res, err := test.vtgateconn.ExecuteFetch(query, -1, false)
+	return test.vtgateconn.ExecuteFetch(query, -1, false)
+}
+
+func (test *Test) ExecuteFetch(queryfmt string, args ...any) *sqltypes.Result {
+	test.Helper()
+
+	res, err := test.executeFetch(queryfmt, args...)
 	if err != nil {
-		test.Fatalf("failed to ExecuteFetch(%q): %v", query, err)
+		test.Fatalf("failed to ExecuteFetch(%q): %v", queryfmt, err)
 	}
 	return res
+}
+
+func (test *Test) ExecuteFetchError(queryfmt string, args ...any) error {
+	test.Helper()
+
+	res, err := test.executeFetch(queryfmt, args...)
+	if err == nil {
+		test.Fatalf("expected to fail ExecuteFetch(%q), but it succeeded: %v", queryfmt, res.Rows)
+	}
+	return err
 }
 
 func (test *Test) ToggleBoost(enable bool) {

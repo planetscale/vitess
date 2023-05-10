@@ -23,18 +23,78 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
+type SchemaConflictTracker struct {
+	mu              sync.Mutex
+	affectedQueries map[string]struct{}
+	ch              chan []string
+	update          TopoUpdater
+}
+
+func (sct *SchemaConflictTracker) MarkAffectedQueries(dependencies []string) {
+	sct.ch <- dependencies
+}
+
+func (sct *SchemaConflictTracker) Clear(ctx context.Context) error {
+	sct.mu.Lock()
+	defer sct.mu.Unlock()
+
+	sct.affectedQueries = make(map[string]struct{})
+	return sct.update.UpdateTopo(ctx, func(worker *vtboostpb.TopoWorkerEntry) error {
+		worker.UnhealthyQueries = nil
+		return nil
+	})
+}
+
+func (sct *SchemaConflictTracker) updateDependencies(ctx context.Context, log *zap.Logger, dependencies []string) {
+	sct.mu.Lock()
+	defer sct.mu.Unlock()
+
+	var report []string
+	for _, dep := range dependencies {
+		if _, ok := sct.affectedQueries[dep]; !ok {
+			sct.affectedQueries[dep] = struct{}{}
+			report = append(report, dep)
+		}
+	}
+
+	log.Error("vstream inconsistency", zap.Strings("affected_queries", dependencies), zap.Strings("reported_queries", report))
+
+	err := sct.update.UpdateTopo(ctx, func(worker *vtboostpb.TopoWorkerEntry) error {
+		for _, dep := range report {
+			worker.UnhealthyQueries = append(worker.UnhealthyQueries, &vtboostpb.TopoWorkerEntry_Query{
+				QueryId: dep,
+				Status:  vtboostpb.TopoWorkerEntry_SCHEMA_CHANGE_CONFLICT,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error("failed to update Worker status in topo", zap.Error(err))
+	}
+}
+
+func (sct *SchemaConflictTracker) listen(ctx context.Context, log *zap.Logger) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case dependencies := <-sct.ch:
+			sct.updateDependencies(ctx, log, dependencies)
+		}
+	}
+}
+
 type ExternalTableClient struct {
 	desc        *service.ExternalTableDescriptor
 	shardingKey int
-	makerecord  func(row *querypb.Row, sign bool) sql.Record
 	shards      []boostrpc.DomainClient
 	next        *ExternalTableClient
-
-	offsetCache []int
 }
 
 type srcmap struct {
@@ -42,7 +102,13 @@ type srcmap struct {
 	t   sqltypes.Type
 }
 
-func computeSourceMap(oldColumns []string, oldFields []sql.Type, newFields []*querypb.Field) []srcmap {
+func trackColumnChange(desc *service.ExternalTableDescriptor, column string, conflict func(queryIDs []string)) {
+	if dep, ok := desc.DependentColumns[column]; ok {
+		conflict(dep.DependentQueries)
+	}
+}
+
+func computeSourceMap(desc *service.ExternalTableDescriptor, newFields []*querypb.Field, conflict func(queryIDs []string)) []srcmap {
 	newColIdx := make(map[string]int)
 	for idx, f := range newFields {
 		name := strings.ToLower(f.Name)
@@ -50,15 +116,20 @@ func computeSourceMap(oldColumns []string, oldFields []sql.Type, newFields []*qu
 	}
 
 	var identity = true
-	var output = make([]srcmap, len(oldFields))
-	for oldIdx, col := range oldColumns {
+	var output = make([]srcmap, len(desc.Columns))
+	for oldIdx, col := range desc.Columns {
 		col = strings.ToLower(col)
 
 		newIdx, found := newColIdx[col]
 		if !found {
+			trackColumnChange(desc, col, conflict)
 			output[oldIdx] = srcmap{col: -1}
 			identity = false
 			continue
+		}
+
+		if !isTypeChangeSafe(desc.Schema[oldIdx].T, newFields[newIdx].Type) {
+			trackColumnChange(desc, col, conflict)
 		}
 
 		output[oldIdx] = srcmap{col: newIdx, t: newFields[newIdx].Type}
@@ -67,27 +138,41 @@ func computeSourceMap(oldColumns []string, oldFields []sql.Type, newFields []*qu
 		}
 	}
 
-	if len(oldFields) == len(newFields) && identity {
+	if len(desc.Columns) == len(newFields) && identity {
 		return nil
 	}
 	return output
 }
 
-func (etc *ExternalTableClient) OnSchemaChange(newFields []*querypb.Field) {
-	mapping := computeSourceMap(etc.desc.Columns, etc.desc.Schema, newFields)
+func isTypeChangeSafe(t1 sqltypes.Type, t2 querypb.Type) bool {
+	switch {
+	case t1 == t2:
+		return true
+	case sqltypes.IsSigned(t1) && sqltypes.IsSigned(t2):
+		return true
+	case sqltypes.IsUnsigned(t1) && sqltypes.IsUnsigned(t2):
+		return true
+	default:
+		return false
+	}
+}
+
+func (target *vstreamTarget) OnSchemaChange(client *ExternalTableClient, newFields []*querypb.Field, qt *SchemaConflictTracker) {
+	mapping := computeSourceMap(client.desc, newFields, qt.MarkAffectedQueries)
 	if mapping == nil {
 		return
 	}
 
-	etc.offsetCache = make([]int, len(newFields))
-	etc.makerecord = func(row *querypb.Row, sign bool) sql.Record {
+	offsetCache := make([]int, len(newFields))
+
+	target.mappers[client] = func(row *querypb.Row, sign bool) sql.Record {
 		var offset int
-		for i := 0; i < len(etc.offsetCache); i++ {
+		for i := 0; i < len(offsetCache); i++ {
 			length := row.Lengths[i]
 			if length < 0 {
 				continue
 			}
-			etc.offsetCache[i] = offset
+			offsetCache[i] = offset
 			offset += int(length)
 		}
 
@@ -104,8 +189,8 @@ func (etc *ExternalTableClient) OnSchemaChange(newFields []*querypb.Field) {
 				continue
 			}
 
-			offset := etc.offsetCache[m.col]
-			build.AddVitess(sqltypes.MakeTrusted(m.t, row.Values[offset:offset+length]))
+			cachedOffset := offsetCache[m.col]
+			build.AddVitess(sqltypes.MakeTrusted(m.t, row.Values[cachedOffset:cachedOffset+length]))
 		}
 
 		return build.Finish().ToRecord(sign)
@@ -118,7 +203,7 @@ func (etc *ExternalTableClient) adjustOffsets(rs []sql.Record) {
 	}
 }
 
-func (etc *ExternalTableClient) OnEvent(ctx context.Context, events []*binlogdatapb.RowChange, gtid string) error {
+func (etc *ExternalTableClient) OnEvent(ctx context.Context, makerecord mapper, events []*binlogdatapb.RowChange, gtid string) error {
 	if len(etc.shards) == 1 {
 		vstream := &packet.Message{
 			Link:    &packet.Link{Dst: etc.desc.Addr, Src: etc.desc.Addr},
@@ -127,10 +212,10 @@ func (etc *ExternalTableClient) OnEvent(ctx context.Context, events []*binlogdat
 		}
 		for _, ev := range events {
 			if ev.Before != nil {
-				vstream.Records = append(vstream.Records, etc.makerecord(ev.Before, false))
+				vstream.Records = append(vstream.Records, makerecord(ev.Before, false))
 			}
 			if ev.After != nil {
-				vstream.Records = append(vstream.Records, etc.makerecord(ev.After, true))
+				vstream.Records = append(vstream.Records, makerecord(ev.After, true))
 			}
 		}
 		vstream.Records = sql.OffsetRecords(vstream.Records)
@@ -149,14 +234,14 @@ func (etc *ExternalTableClient) OnEvent(ctx context.Context, events []*binlogdat
 		var before bool
 
 		if ev.Before != nil {
-			r := etc.makerecord(ev.Before, false)
+			r := makerecord(ev.Before, false)
 			shard = r.Row.ShardValue(&hasher, shardKey, shardType, shardCount)
 			before = true
 
 			shardWrites[shard] = append(shardWrites[shard], r)
 		}
 		if ev.After != nil {
-			r := etc.makerecord(ev.After, true)
+			r := makerecord(ev.After, true)
 			shard2 := r.Row.ShardValue(&hasher, shardKey, shardType, shardCount)
 
 			if before && shard2 != shard {
@@ -195,15 +280,20 @@ type EventProcessor struct {
 
 	tables  map[string]*ExternalTableClient
 	targets []*vstreamTarget
+
+	conflicts SchemaConflictTracker
 }
 
 type vstreamTarget struct {
 	pb       *querypb.Target
 	position string
 	started  atomic.Bool
+	mappers  map[*ExternalTableClient]mapper
 }
 
-func NewEventProcessor(log *zap.Logger, stats *workerStats, coord *boostrpc.ChannelCoordinator, resolver Resolver) *EventProcessor {
+type mapper func(row *querypb.Row, sign bool) sql.Record
+
+func NewEventProcessor(topo TopoUpdater, log *zap.Logger, stats *workerStats, coord *boostrpc.ChannelCoordinator, resolver Resolver) *EventProcessor {
 	return &EventProcessor{
 		log:      log.With(zap.String("context", "EventProcessor")),
 		resolver: resolver,
@@ -213,6 +303,11 @@ func NewEventProcessor(log *zap.Logger, stats *workerStats, coord *boostrpc.Chan
 		},
 		stats:  stats,
 		tables: make(map[string]*ExternalTableClient),
+		conflicts: SchemaConflictTracker{
+			affectedQueries: make(map[string]struct{}),
+			ch:              make(chan []string, 4),
+			update:          topo,
+		},
 	}
 }
 
@@ -240,8 +335,15 @@ func NewExternalTableClientFromProto(pb *service.ExternalTableDescriptor, sender
 		shardingKey = pb.Key[0]
 	}
 
-	schema := pb.Schema
-	makerecord := func(row *querypb.Row, sign bool) sql.Record {
+	return &ExternalTableClient{
+		desc:        pb,
+		shardingKey: shardingKey,
+		shards:      shards,
+	}, nil
+}
+
+func defaultMapper(schema []sql.Type) mapper {
+	return func(row *querypb.Row, sign bool) sql.Record {
 		offset := int64(0)
 		build := sql.NewRowBuilder(len(schema))
 		for i, length := range row.Lengths {
@@ -249,20 +351,11 @@ func NewExternalTableClientFromProto(pb *service.ExternalTableDescriptor, sender
 				build.AddVitess(sqltypes.NULL)
 				continue
 			}
-
 			build.AddVitess(sqltypes.MakeTrusted(schema[i].T, row.Values[offset:offset+length]))
 			offset += length
 		}
-
 		return build.Finish().ToRecord(sign)
 	}
-
-	return &ExternalTableClient{
-		desc:        pb,
-		shardingKey: shardingKey,
-		shards:      shards,
-		makerecord:  makerecord,
-	}, nil
 }
 
 func (ep *EventProcessor) AssignTables(ctx context.Context, tables []*service.ExternalTableDescriptor) error {
@@ -275,13 +368,26 @@ func (ep *EventProcessor) AssignTables(ctx context.Context, tables []*service.Ex
 		ep.cancel = nil
 	}
 
+	err := ep.conflicts.Clear(ctx)
+	if err != nil {
+		return err
+	}
+
+nextTable:
 	for _, table := range tables {
+		tname := table.Keyspace + "." + table.TableName
+
+		for t := ep.tables[tname]; t != nil; t = t.next {
+			if t.desc.Node == table.Node {
+				continue nextTable
+			}
+		}
+
 		client, err := NewExternalTableClientFromProto(table, ep.sender)
 		if err != nil {
 			return err
 		}
 
-		tname := table.Keyspace + "." + table.TableName
 		client.next = ep.tables[tname]
 		ep.tables[tname] = client
 	}
@@ -317,7 +423,10 @@ func (ep *EventProcessor) process(ctx context.Context) error {
 				}
 			}
 			if target == nil {
-				target = &vstreamTarget{pb: shard.Target}
+				target = &vstreamTarget{
+					pb:      shard.Target,
+					mappers: make(map[*ExternalTableClient]mapper),
+				}
 				ep.targets = append(ep.targets, target)
 			}
 
@@ -388,6 +497,14 @@ func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gat
 		request.Position = mysql.Mysql56FlavorID + "/" + target.position
 	}
 
+	for _, tableClient := range ep.tables {
+		for client := tableClient; client != nil; client = client.next {
+			if _, found := target.mappers[client]; !found {
+				target.mappers[client] = defaultMapper(client.desc.Schema)
+			}
+		}
+	}
+
 	var retries int
 	for {
 		err := gateway.VStream(ctx, request, func(events []*binlogdatapb.VEvent) error {
@@ -406,7 +523,8 @@ func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gat
 					}
 
 					for client := ep.tables[tablename]; client != nil; client = client.next {
-						if err := client.OnEvent(ctx, rowev.RowChanges, target.position); err != nil {
+						mapper := target.mappers[client]
+						if err := client.OnEvent(ctx, mapper, rowev.RowChanges, target.position); err != nil {
 							log.Error("failed to process Event on client", zap.String("table", tablename), zap.Error(err))
 							ep.stats.onVStreamError()
 						}
@@ -418,9 +536,14 @@ func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gat
 					tablename := fieldev.Keyspace + "." + fieldev.TableName
 
 					for client := ep.tables[tablename]; client != nil; client = client.next {
-						client.OnSchemaChange(fieldev.Fields)
+						target.OnSchemaChange(client, fieldev.Fields, &ep.conflicts)
 					}
 					ep.stats.onVStreamFields()
+
+				case binlogdatapb.VEventType_DDL:
+					if err := ep.handleDDLStatement(target, ev.Keyspace, ev.Statement); err != nil {
+						return err
+					}
 
 				case binlogdatapb.VEventType_GTID:
 					var flavor string
@@ -433,10 +556,13 @@ func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gat
 			return nil
 		})
 
+		// explicit context cancellation
 		if ctx.Err() != nil {
-			if !errors.Is(ctx.Err(), context.Canceled) {
-				log.Warn("vstream finished with unexpected error", zap.Error(ctx.Err()))
-			}
+			return
+		}
+
+		// forced cancellation from VStream because of unrecoverable error
+		if errors.Is(err, context.Canceled) {
 			return
 		}
 
@@ -450,4 +576,25 @@ func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gat
 		ep.stats.onVStreamError()
 		time.Sleep(delay)
 	}
+}
+
+func (ep *EventProcessor) handleDDLStatement(target *vstreamTarget, ks, statement string) error {
+	ddl, err := sqlparser.ParseStrictDDL(statement)
+	if err != nil {
+		// if we don't know how to parse a statement we assume it's not something that
+		// will affect the behavior of Boost
+		return nil
+	}
+
+	switch ddl := ddl.(type) {
+	case *sqlparser.DropTable:
+		for _, tbl := range ddl.FromTables {
+			tablename := ks + "." + tbl.Name.String()
+			for client := ep.tables[tablename]; client != nil; client = client.next {
+				target.OnSchemaChange(client, nil, &ep.conflicts)
+			}
+		}
+	}
+
+	return nil
 }

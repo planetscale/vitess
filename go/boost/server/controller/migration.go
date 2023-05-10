@@ -17,6 +17,7 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
+	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
 	"vitess.io/vitess/go/boost/server/controller/domainrpc"
 	"vitess.io/vitess/go/boost/server/controller/materialization"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -28,12 +29,26 @@ type migration struct {
 	log    *zap.Logger
 	target MigrationTarget
 
-	added     map[graph.NodeIdx]bool
-	readers   map[graph.NodeIdx]graph.NodeIdx
-	upqueries map[graph.NodeIdx]sqlparser.SelectStatement
+	added        map[graph.NodeIdx]bool
+	readers      map[graph.NodeIdx]graph.NodeIdx
+	upqueries    map[graph.NodeIdx]sqlparser.SelectStatement
+	dependencies map[graph.NodeIdx]*TableDependency
 
 	start time.Time
 	uuid  uuid.UUID
+}
+
+type TableDependency struct {
+	Columns map[string]map[string]struct{}
+}
+
+func (td *TableDependency) addColumnDependency(column string, queryID string) {
+	colmap, ok := td.Columns[column]
+	if !ok {
+		colmap = make(map[string]struct{})
+		td.Columns[column] = colmap
+	}
+	colmap[queryID] = struct{}{}
 }
 
 func (mig *migration) AddUpquery(idx graph.NodeIdx, statement sqlparser.SelectStatement) {
@@ -137,6 +152,22 @@ func (mig *migration) AddView(name string, r *flownode.Reader) {
 	g.AddEdge(na, ri)
 	mig.added[ri] = true
 	mig.readers[na] = ri
+}
+
+func (mig *migration) AddTableReport(queryID string, report []*operators.TableReport) {
+	for _, tr := range report {
+		n := tr.Node.FlowNodeAddr()
+
+		tdep, ok := mig.dependencies[n]
+		if !ok {
+			tdep = &TableDependency{Columns: map[string]map[string]struct{}{}}
+			mig.dependencies[n] = tdep
+		}
+
+		for _, col := range tr.Columns {
+			tdep.addColumnDependency(col.Name, queryID)
+		}
+	}
 }
 
 func (mig *migration) Commit() error {
@@ -355,18 +386,20 @@ func (mig *migration) Commit() error {
 	return nil
 }
 
-func (mig *migration) describeExternalTable(node graph.NodeIdx) *service.ExternalTableDescriptor {
+func (mig *migration) describeExternalTable(node graph.NodeIdx, dep *TableDependency, new bool) *service.ExternalTableDescriptor {
 	table := mig.target.graph().Value(node)
 	desc := &service.ExternalTableDescriptor{
-		Txs:          nil,
-		Node:         table.GlobalAddr(),
-		Addr:         table.LocalAddr(),
-		KeyIsPrimary: false,
-		Key:          nil,
-		TableName:    table.AsTable().Name(),
-		Columns:      slices.Clone(table.Fields()),
-		Schema:       slices.Clone(table.Schema()),
-		Keyspace:     table.AsTable().Keyspace(),
+		Txs:              nil,
+		Node:             table.GlobalAddr(),
+		Addr:             table.LocalAddr(),
+		KeyIsPrimary:     false,
+		Key:              nil,
+		TableName:        table.AsTable().Name(),
+		Columns:          slices.Clone(table.Fields()),
+		Schema:           slices.Clone(table.Schema()),
+		Keyspace:         table.AsTable().Keyspace(),
+		DependentColumns: make(map[string]*service.ExternalTableDescriptor_Dependency),
+		New:              new,
 	}
 
 	key := table.SuggestIndexes(node)[node]
@@ -383,21 +416,24 @@ func (mig *migration) describeExternalTable(node graph.NodeIdx) *service.Externa
 	for s := uint(0); s < shards; s++ {
 		desc.Txs = append(desc.Txs, &dataflow.DomainAddr{Domain: table.Domain(), Shard: s})
 	}
+
+	for column, dependendQueries := range dep.Columns {
+		desc.DependentColumns[column] = &service.ExternalTableDescriptor_Dependency{
+			DependentQueries: maps.Keys(dependendQueries),
+		}
+	}
+
 	return desc
 }
 
 func (mig *migration) streamSetup(newnodes map[graph.NodeIdx]bool) error {
-	g := mig.target.graph()
 	var externals []*service.ExternalTableDescriptor
-	for n := range newnodes {
-		node := g.Value(n)
-		if node.IsTable() {
-			externals = append(externals, mig.describeExternalTable(n))
-		}
+
+	for n, dep := range mig.dependencies {
+		externals = append(externals, mig.describeExternalTable(n, dep, newnodes[n]))
 	}
 
-	var request = service.AssignStreamRequest{Tables: externals}
-
+	request := service.AssignStreamRequest{Tables: externals}
 	return mig.target.domainAssignStream(mig, &request)
 }
 
@@ -432,14 +468,15 @@ type Migration interface {
 func NewMigration(ctx context.Context, log *zap.Logger, target MigrationTarget) Migration {
 	miguuid := uuid.New()
 	return &migration{
-		Context:   ctx,
-		log:       log.With(zap.String("migration", miguuid.String())),
-		target:    target,
-		added:     make(map[graph.NodeIdx]bool),
-		readers:   make(map[graph.NodeIdx]graph.NodeIdx),
-		upqueries: make(map[graph.NodeIdx]sqlparser.SelectStatement),
-		start:     time.Now(),
-		uuid:      miguuid,
+		Context:      ctx,
+		log:          log.With(zap.String("migration", miguuid.String())),
+		target:       target,
+		added:        make(map[graph.NodeIdx]bool),
+		readers:      make(map[graph.NodeIdx]graph.NodeIdx),
+		upqueries:    make(map[graph.NodeIdx]sqlparser.SelectStatement),
+		dependencies: make(map[graph.NodeIdx]*TableDependency),
+		start:        time.Now(),
+		uuid:         miguuid,
 	}
 }
 

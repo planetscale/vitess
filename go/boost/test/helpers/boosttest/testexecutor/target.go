@@ -2,8 +2,8 @@ package testexecutor
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
 	"strings"
 	"sync"
 	"testing"
@@ -80,12 +80,19 @@ func (target *memTarget) execute(querySQL string, variables map[string]*querypb.
 	target.lock.Lock()
 	defer target.lock.Unlock()
 
-	if len(variables) > 0 {
-		stmt, _, err := sqlparser.Parse2(querySQL)
-		if err != nil {
-			return nil, err
-		}
+	stmt, _, err := sqlparser.Parse2(querySQL)
+	if err != nil {
+		return nil, err
+	}
 
+	if ddl, ok := stmt.(sqlparser.DDLStatement); ok {
+		if !ddl.IsFullyParsed() {
+			return nil, fmt.Errorf("DDL statement '%s' is not fully parsed", querySQL)
+		}
+		target.gtid.emitDDL(target.target, ddl)
+	}
+
+	if len(variables) > 0 {
 		pquery := sqlparser.NewParsedQuery(stmt)
 		querySQL, err = pquery.GenerateQuery(variables, nil)
 		if err != nil {
@@ -224,7 +231,6 @@ func newMemoryTarget(t testing.TB, target *querypb.Target) *memTarget {
 		gtid: &GTIDTracker{
 			sequence: 1,
 			shard:    target.Shard,
-			subs:     make(map[chan []*binlogdatapb.VEvent]map[string]struct{}),
 		},
 	}
 	_, _ = rand.Read(db.gtid.sid[:])

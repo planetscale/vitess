@@ -3,7 +3,9 @@ package worker
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/boost/boostrpc/service"
 
 	"vitess.io/vitess/go/boost/common/xslice"
 	"vitess.io/vitess/go/boost/sql"
@@ -20,13 +22,13 @@ func TestVStreamSchemaMappings(t *testing.T) {
 	var C1 = simpletype{
 		Name: "col1",
 		Type: sql.Type{
-			T: sqltypes.Int64,
+			T: sqltypes.Int32,
 		},
 	}
 	var C2 = simpletype{
 		Name: "col2",
 		Type: sql.Type{
-			T: sqltypes.Int64,
+			T: sqltypes.Int32,
 		},
 	}
 	var C3 = simpletype{
@@ -43,10 +45,12 @@ func TestVStreamSchemaMappings(t *testing.T) {
 	}
 
 	type testcase struct {
-		Name     string
-		Old      []simpletype
-		New      []simpletype
-		Expected []srcmap
+		Name           string
+		Old            []simpletype
+		New            []simpletype
+		Dependent      map[string]string
+		Expected       []srcmap
+		DroppedQueries []string
 	}
 
 	var testcases = []testcase{
@@ -61,8 +65,8 @@ func TestVStreamSchemaMappings(t *testing.T) {
 			Old:  []simpletype{C1, C2},
 			New:  []simpletype{C2, C1},
 			Expected: []srcmap{
-				{col: 1, t: sqltypes.Int64},
-				{col: 0, t: sqltypes.Int64},
+				{col: 1, t: sqltypes.Int32},
+				{col: 0, t: sqltypes.Int32},
 			},
 		},
 		{
@@ -70,8 +74,8 @@ func TestVStreamSchemaMappings(t *testing.T) {
 			Old:  []simpletype{C1, C2},
 			New:  []simpletype{C1, C2, C3},
 			Expected: []srcmap{
-				{col: 0, t: sqltypes.Int64},
-				{col: 1, t: sqltypes.Int64},
+				{col: 0, t: sqltypes.Int32},
+				{col: 1, t: sqltypes.Int32},
 			},
 		},
 		{
@@ -79,8 +83,8 @@ func TestVStreamSchemaMappings(t *testing.T) {
 			Old:  []simpletype{C1, C2},
 			New:  []simpletype{C3, C1, C2},
 			Expected: []srcmap{
-				{col: 1, t: sqltypes.Int64},
-				{col: 2, t: sqltypes.Int64},
+				{col: 1, t: sqltypes.Int32},
+				{col: 2, t: sqltypes.Int32},
 			},
 		},
 		{
@@ -88,8 +92,8 @@ func TestVStreamSchemaMappings(t *testing.T) {
 			Old:  []simpletype{C1, C2, C3},
 			New:  []simpletype{C3, C2, C1},
 			Expected: []srcmap{
-				{col: 2, t: sqltypes.Int64},
-				{col: 1, t: sqltypes.Int64},
+				{col: 2, t: sqltypes.Int32},
+				{col: 1, t: sqltypes.Int32},
 				{col: 0, t: sqltypes.VarChar},
 			},
 		},
@@ -98,7 +102,7 @@ func TestVStreamSchemaMappings(t *testing.T) {
 			Old:  []simpletype{C1, C4, C3},
 			New:  []simpletype{C1, C3},
 			Expected: []srcmap{
-				{col: 0, t: sqltypes.Int64},
+				{col: 0, t: sqltypes.Int32},
 				{col: -1},
 				{col: 1, t: sqltypes.VarChar},
 			},
@@ -108,10 +112,76 @@ func TestVStreamSchemaMappings(t *testing.T) {
 			Old:  []simpletype{C1, C2, C3, C4},
 			New:  []simpletype{C1, C2, C3},
 			Expected: []srcmap{
-				{col: 0, t: sqltypes.Int64},
-				{col: 1, t: sqltypes.Int64},
+				{col: 0, t: sqltypes.Int32},
+				{col: 1, t: sqltypes.Int32},
 				{col: 2, t: sqltypes.VarChar},
 				{col: -1},
+			},
+		},
+		{
+			Name: "Drop a column with a dependency",
+			Old:  []simpletype{C1, C4, C3},
+			New:  []simpletype{C1, C3},
+			Expected: []srcmap{
+				{col: 0, t: sqltypes.Int32},
+				{col: -1},
+				{col: 1, t: sqltypes.VarChar},
+			},
+			Dependent: map[string]string{
+				C4.Name: "q1",
+			},
+			DroppedQueries: []string{"q1"},
+		},
+		{
+			Name: "Unsafe type change with a dependency",
+			Old:  []simpletype{C1, C4, C3},
+			New: []simpletype{
+				{
+					Name: "col1",
+					Type: sql.Type{
+						T: sqltypes.VarChar,
+					},
+				},
+				{
+					Name: "col3",
+					Type: sql.Type{
+						T: sqltypes.VarChar,
+					},
+				},
+			}, Expected: []srcmap{
+				{col: 0, t: sqltypes.VarChar},
+				{col: -1},
+				{col: 1, t: sqltypes.VarChar},
+			},
+			Dependent: map[string]string{
+				C1.Name: "q1",
+			},
+			DroppedQueries: []string{"q1"},
+		},
+		{
+			Name: "Safe type change with a dependency",
+			Old:  []simpletype{C1, C4, C3},
+			New: []simpletype{
+				{
+					Name: "col1",
+					Type: sql.Type{
+						T: sqltypes.Int64,
+					},
+				},
+				{
+					Name: "col3",
+					Type: sql.Type{
+						T: sqltypes.VarChar,
+					},
+				},
+			},
+			Expected: []srcmap{
+				{col: 0, t: sqltypes.Int64},
+				{col: -1},
+				{col: 1, t: sqltypes.VarChar},
+			},
+			Dependent: map[string]string{
+				C1.Name: "q1",
 			},
 		},
 	}
@@ -127,8 +197,24 @@ func TestVStreamSchemaMappings(t *testing.T) {
 				}
 			})
 
-			result := computeSourceMap(oldColumns, oldFields, newFields)
-			require.Equal(t, tc.Expected, result)
+			deps := map[string]*service.ExternalTableDescriptor_Dependency{}
+			for k, v := range tc.Dependent {
+				deps[k] = &service.ExternalTableDescriptor_Dependency{
+					DependentQueries: []string{v},
+				}
+			}
+			desc := &service.ExternalTableDescriptor{
+				Columns:          oldColumns,
+				Schema:           oldFields,
+				DependentColumns: deps,
+			}
+			var dropped []string
+			conflict := func(queryIDs []string) {
+				dropped = append(dropped, queryIDs...)
+			}
+			result := computeSourceMap(desc, newFields, conflict)
+			assert.Equal(t, tc.Expected, result)
+			assert.ElementsMatch(t, tc.DroppedQueries, dropped)
 		})
 	}
 }

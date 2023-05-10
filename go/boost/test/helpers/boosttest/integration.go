@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/boost/server/controller"
 	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/server/controller/materialization"
-	"vitess.io/vitess/go/boost/server/worker"
 	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testexecutor"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
@@ -685,7 +684,7 @@ type Metric interface {
 	Counts() map[string]int64
 }
 
-func (c *Cluster) WorkerStats(metric Metric) (total int) {
+func (c *Cluster) workerStats(metric Metric) (total int) {
 	counts := metric.Counts()
 	for _, instance := range c.ServerInstances() {
 		total += int(counts[instance.Worker.UUID().String()])
@@ -693,6 +692,14 @@ func (c *Cluster) WorkerStats(metric Metric) (total int) {
 	return total
 }
 
-func (c *Cluster) WorkerReads() int {
-	return c.WorkerStats(worker.StatViewReads)
+func (c *Cluster) AssertWorkerStats(expected int, metric Metric) {
+	var stats int
+	for tries := 0; tries < MaxTries; tries++ {
+		stats = c.workerStats(metric)
+		if stats == expected {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	c.t.Fatalf("expected %v = %d, got %d", metric, expected, stats)
 }

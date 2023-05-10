@@ -5,8 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/boost/server/worker"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
@@ -81,8 +79,8 @@ select /*vt+ VIEW=simplejoin */ article.id, article.title, vote.id, vote.article
 			join2 := g.View("simplejoin")
 			join2.Lookup("Article 1").ExpectLen(expectedCount)
 
-			require.Equal(t, 5, g.WorkerReads())
-			require.Equal(t, articleCount+(2*votesCount), g.WorkerStats(worker.StatVStreamRows))
+			g.AssertWorkerStats(5, worker.StatViewReads)
+			g.AssertWorkerStats(articleCount+(2*votesCount), worker.StatVStreamRows)
 		})
 	}
 }

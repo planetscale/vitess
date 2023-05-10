@@ -28,7 +28,7 @@ func NewTestIncorporator(schemaInfo *SchemaInformation, mig Migration) *TestInco
 	}
 }
 
-func (ti *TestIncorporator) add(keyspace string, stmt sqlparser.Statement) (*operators.TableReport, error) {
+func (ti *TestIncorporator) add(keyspace string, stmt sqlparser.Statement) ([]*operators.TableReport, error) {
 	qfp, err := ti.inc.AddParsedQuery(keyspace, stmt, uuid.NewString(), ti.mig, ti.schema)
 	if err != nil {
 		return nil, err
@@ -49,6 +49,6 @@ func (ti *TestIncorporator) AddQuery(keyspace, sql string) error {
 
 // AddParsedQuery attempt to plan the given previously-parsed statement, returning a detailed
 // error if the planning was unsuccessful.
-func (ti *TestIncorporator) AddParsedQuery(keyspace string, stmt sqlparser.Statement) (*operators.TableReport, error) {
+func (ti *TestIncorporator) AddParsedQuery(keyspace string, stmt sqlparser.Statement) ([]*operators.TableReport, error) {
 	return ti.add(keyspace, sqlparser.CloneStatement(stmt))
 }

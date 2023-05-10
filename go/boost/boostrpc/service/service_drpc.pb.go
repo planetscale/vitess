@@ -7,10 +7,8 @@ package service
 import (
 	context "context"
 	errors "errors"
-
 	drpc "storj.io/drpc"
 	drpcerr "storj.io/drpc/drpcerr"
-
 	codec "vitess.io/vitess/go/boost/boostrpc/codec"
 )
 
