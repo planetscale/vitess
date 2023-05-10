@@ -460,7 +460,10 @@ func ContinuousDiscovery() {
 			// Wait for both the refreshes to complete
 			wg.Wait()
 			// We have completed one discovery cycle in the entirety of it. We should update the process health.
-			process.FirstDiscoveryCycleComplete.Store(true)
+
+			process.FirstDiscoveryCycleCompleteMu.Lock()
+			process.FirstDiscoveryCycleComplete = true
+			process.FirstDiscoveryCycleCompleteMu.Unlock()
 		}
 	}
 }

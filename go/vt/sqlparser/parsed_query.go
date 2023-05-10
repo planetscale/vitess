@@ -21,14 +21,11 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/bytes2"
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/bytes2"
-
-	"vitess.io/vitess/go/sqltypes"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // ParsedQuery represents a parsed query where

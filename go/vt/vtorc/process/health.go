@@ -32,7 +32,8 @@ import (
 var lastHealthCheckUnixNano int64
 var lastGoodHealthCheckUnixNano int64
 var LastContinousCheckHealthy int64
-var FirstDiscoveryCycleComplete atomic.Bool
+var FirstDiscoveryCycleComplete bool
+var FirstDiscoveryCycleCompleteMu sync.Mutex
 
 var lastHealthCheckCache = cache.New(config.HealthPollSeconds*time.Second, time.Second)
 
@@ -121,7 +122,9 @@ func HealthTest() (health *HealthStatus, err error) {
 		return health, err
 	}
 	health.Healthy = healthy
-	health.DiscoveredOnce = FirstDiscoveryCycleComplete.Load()
+	FirstDiscoveryCycleCompleteMu.Lock()
+	health.DiscoveredOnce = FirstDiscoveryCycleComplete
+	FirstDiscoveryCycleCompleteMu.Unlock()
 
 	if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
 		health.Error = err

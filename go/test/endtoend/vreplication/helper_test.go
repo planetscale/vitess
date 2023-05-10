@@ -539,3 +539,53 @@ func getShardRoutingRules(t *testing.T) string {
 	output = strings.TrimSpace(output)
 	return output
 }
+
+func getIntVal(t *testing.T, vars map[string]interface{}, key string) int {
+	i, ok := vars[key].(float64)
+	require.True(t, ok)
+	return int(i)
+}
+
+func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (int, int, int, int) {
+	vars := tab.GetVars()
+	insertKey := fmt.Sprintf("%s.insert", key)
+	updateKey := fmt.Sprintf("%s.insert", key)
+	cacheSizes := vars["VReplicationPartialQueryCacheSize"].(map[string]interface{})
+	queryCounts := vars["VReplicationPartialQueryCount"].(map[string]interface{})
+	if cacheSizes[insertKey] == nil || cacheSizes[updateKey] == nil ||
+		queryCounts[insertKey] == nil || queryCounts[updateKey] == nil {
+		return 0, 0, 0, 0
+	}
+	inserts := getIntVal(t, cacheSizes, insertKey)
+	updates := getIntVal(t, cacheSizes, updateKey)
+	insertQueries := getIntVal(t, queryCounts, insertKey)
+	updateQueries := getIntVal(t, queryCounts, updateKey)
+	return inserts, updates, insertQueries, updateQueries
+}
+
+// check that the connection's binlog row image is set to NOBLOB
+func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool {
+	rs, err := tablet.QueryTablet("select @@global.binlog_row_image", "", false)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(rs.Rows))
+	mode := strings.ToLower(rs.Rows[0][0].ToString())
+	return mode == "noblob"
+}
+
+var blobTableQueries = []string{
+	"insert into blob_tbl(id, val1, txt1) values (1, 'Jøhn \"❤️\" Paül','Jøhn \"❤️\" Paül keyböard ⌨️ jo˙n')",
+	"insert into blob_tbl(id, val1, blb1, blb2) values (2, 'val1_aaa', 'blb1_aaa', 'blb2_AAAA')",
+	"update blob_tbl set val1 = 'val1_bbb', blb2 = 'blb2_bbb' where id = 1",
+	"insert into blob_tbl(id, val2, txt1, txt2, blb4) values (3, 'val2_ccc', 'txt1_ccc', 'txt2_ccc', 'blb4_CCC')",
+	"update blob_tbl set txt1 = 'txt1_ddd'",
+	"update blob_tbl set blb3 = 'blb3_eee'",
+	"delete from blob_tbl where id = 2",
+	"insert into blob_tbl(id, val2, txt1, txt2, blb4) values (4, 'val2_fff', 'txt1_fff', 'txt2_fff', 'blb4_FFF')",
+	"update blob_tbl set txt1 = 'txt1_eee', blb3 = 'blb3_eee' where id = 4",
+}
+
+func insertIntoBlobTable(t *testing.T) {
+	for _, query := range blobTableQueries {
+		execVtgateQuery(t, vtgateConn, "product:0", query)
+	}
+}

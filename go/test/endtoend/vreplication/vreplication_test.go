@@ -162,10 +162,10 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 func TestBasicVreplicationWorkflow(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
-	testBasicVreplicationWorkflow(t)
+	testBasicVreplicationWorkflow(t, "noblob")
 }
 
-func testBasicVreplicationWorkflow(t *testing.T) {
+func testBasicVreplicationWorkflow(t *testing.T, binlogRowImage string) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
@@ -177,6 +177,10 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	defaultRdonly = 0
 	defer func() { defaultReplicas = 1 }()
 
+	if binlogRowImage != "" {
+		require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
+		defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
+	}
 	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
@@ -220,7 +224,7 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
-	testBasicVreplicationWorkflow(t)
+	testBasicVreplicationWorkflow(t, "")
 }
 
 func TestMultiCellVreplicationWorkflow(t *testing.T) {
@@ -232,6 +236,8 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
 
+	require.NoError(t, utils.SetBinlogRowImageMode("noblob", vc.ClusterConfig.tmpDir))
+	defer utils.SetBinlogRowImageMode("", vc.ClusterConfig.tmpDir)
 	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
@@ -580,7 +586,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,db_order_test"
+		tables := "blob_tbl,customer,Lead,Lead-1,db_order_test"
 		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -590,6 +596,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// Wait to finish the copy phase for all tables
 		catchup(t, customerTab1, workflow, "MoveTables")
 		catchup(t, customerTab2, workflow, "MoveTables")
+
+		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
+		// blob-related dmls we execute here are vreplicated.
+		insertIntoBlobTable(t)
 
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
 		dec80Replicated := false
@@ -603,6 +613,32 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			}
 		}
 		require.Equal(t, true, dec80Replicated)
+
+		// Confirm that all partial query metrics get updated when we are testing the noblob mode.
+		t.Run("validate partial query counts", func(t *testing.T) {
+			if !isBinlogRowImageNoBlob(t, productTab) {
+				return
+			}
+
+			// the two primaries of the new reshard targets
+			tablet200 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+			tablet300 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+
+			totalInserts, totalUpdates, totalInsertQueries, totalUpdateQueries := 0, 0, 0, 0
+			for _, tab := range []*cluster.VttabletProcess{tablet200, tablet300} {
+				insertCount, updateCount, insertQueries, updateQueries := getPartialMetrics(t, "product.0.p2c.1", tab)
+				totalInserts += insertCount
+				totalUpdates += updateCount
+				totalInsertQueries += insertQueries
+				totalUpdateQueries += updateQueries
+			}
+			// Counts are total queries from `blobTableQueries` across shards + customer updates from above.
+			require.NotZero(t, totalInserts)
+			require.NotZero(t, totalUpdates)
+			require.NotZero(t, totalInsertQueries)
+			require.NotZero(t, totalUpdateQueries)
+			log.Infof("All partial query metrics are updated correctly")
+		})
 
 		query := "select cid from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))

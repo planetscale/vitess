@@ -24,6 +24,9 @@ import (
 	"strings"
 	"time"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -54,8 +57,6 @@ var (
 	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
 	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
 	vreplicationMinimumHeartbeatUpdateInterval = 60
-
-	vreplicationExperimentalFlagOptimizeInserts int64 = 1
 )
 
 const (
@@ -144,6 +145,41 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 	}
 }
 
+// We do not support "minimal" at the moment. "noblob" will provide significant performance improvements. Implementing
+// "minimal" will result in a lot of edge cases which will not work, in Online DDL and Materialize. We will be
+// soon supporting MySQL binlog compression which should provide some benefits similar to "minimal" in terms of storage
+// and performance.
+// To start with, we only allow "noblob" for MoveTables, Reshard and Online DDL. We need to identify edge cases for
+// other workflow types like Materialize and add validations before we open it up for all workflow types.
+func (vr *vreplicator) validateBinlogRowImage() error {
+	rs, err := vr.dbClient.Execute("select @@binlog_row_image")
+	if err != nil {
+		return err
+	}
+	if len(rs.Rows) != 1 {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("'select @@binlog_row_image' returns an invalid result: %+v", rs.Rows))
+	}
+
+	binlogRowImage := strings.ToLower(rs.Rows[0][0].ToString())
+	switch binlogRowImage {
+	case "full":
+	case "noblob":
+		switch binlogdatapb.VReplicationWorkflowType(vr.WorkflowType) {
+		case binlogdatapb.VReplicationWorkflowType_MoveTables,
+			binlogdatapb.VReplicationWorkflowType_Reshard,
+			binlogdatapb.VReplicationWorkflowType_OnlineDDL:
+		case 0:
+		// used in unit tests only
+		default:
+			return vterrors.New(vtrpcpb.Code_INTERNAL,
+				fmt.Sprintf("noblob binlog_row_image is not supported for %s", binlogdatapb.VReplicationWorkflowType_name[vr.WorkflowType]))
+		}
+	default:
+		return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("%s binlog_row_image is not supported by Vitess VReplication", binlogRowImage))
+	}
+	return nil
+}
+
 // Replicate starts a vreplication stream. It can be in one of three phases:
 // 1. Init: If a request is issued with no starting position, we assume that the
 // contents of the tables must be copied first. During this phase, the list of
@@ -210,6 +246,11 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
+		if err := vr.validateBinlogRowImage(); err != nil {
+			return err
+		}
+
 		// If any of the operations below changed state to Stopped or Error, we should return.
 		if settings.State == binlogplayer.BlpStopped || settings.State == binlogplayer.BlpError {
 			return nil
