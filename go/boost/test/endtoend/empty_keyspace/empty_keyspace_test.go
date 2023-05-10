@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/boost/server/worker"
+
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtboost"
@@ -48,5 +50,5 @@ func TestEmptyKeyspace(t *testing.T) {
 		{sqltypes.NewInt32(200), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 		{sqltypes.NewInt32(300), sqltypes.NewInt64(1), sqltypes.NewInt64(1)},
 	}, rs.Rows)
-	require.Equal(t, 1, tt.BoostTestCluster.WorkerReads())
+	tt.BoostTestCluster.AssertWorkerStats(1, worker.StatViewReads)
 }

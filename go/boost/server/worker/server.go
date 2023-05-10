@@ -145,11 +145,12 @@ func (srv *Server) LeaderChange(st *vtboostpb.ControllerState) {
 		executor:         srv.executor,
 		topo:             srv.topo,
 		stats:            stats,
-		stream:           NewEventProcessor(srv.log, stats, srv.coord, srv.resolver),
 		domainListenAddr: netutil.JoinHostPort(host, 0),
 		readerListenAddr: netutil.JoinHostPort(host, 0),
 		readTimeout:      srv.cfg.WorkerReadTimeout,
 	}
+
+	srv.active.stream = NewEventProcessor(srv.active, srv.log, stats, srv.coord, srv.resolver)
 
 	if err := srv.active.start(srv.ctx, srv.cfg, srv.globalAddr); err != nil {
 		srv.log.Error("failed to start worker on leader change", zap.Error(err))

@@ -15,7 +15,7 @@ import (
 
 type QFP interface {
 	Leaf() graph.NodeIdx
-	GetTableReport() *operators.TableReport
+	GetTableReport() []*operators.TableReport
 }
 
 type VersionedRecipe struct {

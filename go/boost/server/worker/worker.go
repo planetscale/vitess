@@ -267,10 +267,15 @@ func (w *Worker) start(ctx context.Context, globalCfg *config.Config, globalAddr
 		}
 	}()
 
+	go func() {
+		w.stream.conflicts.listen(w.ctx, w.log)
+	}()
+
 	w.log.Debug("started inner worker",
 		zap.String("reader_addr", readerListener.Addr().String()),
 		zap.String("ctrl_addr", globalAddress),
 	)
+
 	err = w.topo.CreateWorker(w.ctx, int64(w.epoch), &vtboostpb.TopoWorkerEntry{
 		Uuid:       w.uuid.String(),
 		AdminAddr:  globalAddress,
@@ -305,4 +310,13 @@ func (w *Worker) start(ctx context.Context, globalCfg *config.Config, globalAddr
 
 func (w *Worker) AssignTables(request *service.AssignStreamRequest) error {
 	return w.stream.AssignTables(w.ctx, request.Tables)
+}
+
+func (w *Worker) UpdateTopo(ctx context.Context, update func(worker *vtboostpb.TopoWorkerEntry) error) error {
+	_, err := w.topo.UpdateWorker(ctx, int64(w.epoch), w.uuid.String(), update)
+	return err
+}
+
+type TopoUpdater interface {
+	UpdateTopo(ctx context.Context, update func(worker *vtboostpb.TopoWorkerEntry) error) error
 }

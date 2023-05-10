@@ -1,4 +1,4 @@
-package votes
+package repositories
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/boost/server/worker"
 
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
 	"vitess.io/vitess/go/vt/proto/vtboost"
@@ -69,9 +71,9 @@ select count(*) as count_all, stars.repository_id as stars_repository_id from st
 
 	rs := tt.ExecuteFetch(Query, "('tag-6', 'tag-7', 'tag-8')")
 	require.Len(t, rs.Rows, 3)
-	require.Equal(t, 1, tt.BoostTestCluster.WorkerReads())
+	tt.BoostTestCluster.AssertWorkerStats(1, worker.StatViewReads)
 
 	rs = tt.ExecuteFetch(Query, "('tag-3')")
 	require.Len(t, rs.Rows, 1)
-	require.Equal(t, 2, tt.BoostTestCluster.WorkerReads())
+	tt.BoostTestCluster.AssertWorkerStats(2, worker.StatViewReads)
 }

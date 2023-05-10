@@ -1,6 +1,10 @@
 package operators
 
 import (
+	"fmt"
+	"strings"
+
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -12,15 +16,37 @@ type (
 		LoadTableSpec(keyspace, table string) (string, *sqlparser.TableSpec, error)
 	}
 
+	ColumnReport struct {
+		Name     string
+		Expanded bool
+	}
+
 	TableReport struct {
-		TableUsage      map[sqlparser.TableName][]string
-		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
+		Node    *Node
+		Name    sqlparser.TableName
+		Columns []ColumnReport
 	}
 )
 
+func (cr *ColumnReport) String() string {
+	if cr.Expanded {
+		return cr.Name + " (expanded)"
+	}
+	return cr.Name
+}
+
+func (tr *TableReport) String() string {
+	var columns []string
+	for _, col := range tr.Columns {
+		columns = append(columns, col.String())
+	}
+	slices.Sort(columns)
+	return fmt.Sprintf("%s: %s", sqlparser.CanonicalString(tr.Name), strings.Join(columns, ", "))
+}
+
 func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt sqlparser.Statement, keyspace, publicID string) (
 	view *Node,
-	usage *TableReport,
+	usage []*TableReport,
 	err error,
 ) {
 	semTable, err := conv.semanticAnalyze(stmt, keyspace, si)
@@ -28,7 +54,10 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 		return nil, nil, err
 	}
 
-	tableReport := computeColumnUsage(semTable)
+	tr := make(tableUsageMap)
+	if err = tr.compute(semTable); err != nil {
+		return nil, nil, err
+	}
 
 	ctx := &PlanContext{
 		SemTable: semTable,
@@ -85,45 +114,75 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 		return
 	}
 
-	return node, tableReport, nil
+	return node, tr.resolve(node), nil
 }
 
-func addStringButKeepItUnique(in []string, n string) []string {
-	in = append(in, n)
-	slices.Sort(in)
-	return slices.Compact(in)
-}
+type tableUsageMap map[semantics.TableSet]*TableReport
 
-func computeColumnUsage(semTable *semantics.SemTable) *TableReport {
-	tblUsage := make(map[sqlparser.TableName][]string)
-	for expr, set := range semTable.Direct {
-		col, isCol := expr.(*sqlparser.ColName)
-		if !isCol {
+func (report tableUsageMap) compute(semTable *semantics.SemTable) (err error) {
+	for expr, tblID := range semTable.Direct {
+		colName, ok := expr.(*sqlparser.ColName)
+		if !ok {
 			continue
 		}
-		infoFor, err := semTable.TableInfoFor(set)
-		if err != nil {
+
+		tr, found := report[tblID]
+		if !found {
+			infoFor, err := semTable.TableInfoFor(tblID)
+			if err != nil {
+				return err
+			}
+
+			vtbl := infoFor.GetVindexTable()
+			if vtbl == nil {
+				continue
+			}
+
+			tr = &TableReport{
+				Name: sqlparser.TableName{
+					Name:      sqlparser.NewIdentifierCS(vtbl.Name.String()),
+					Qualifier: sqlparser.NewIdentifierCS(vtbl.Keyspace.Name),
+				},
+			}
+			report[tblID] = tr
+		}
+
+		// only add this column if it's not already there
+		if slices.ContainsFunc(tr.Columns, func(col ColumnReport) bool { return colName.Name.EqualString(col.Name) }) {
 			continue
 		}
-		vt := infoFor.GetVindexTable()
-		if vt == nil {
-			continue
-		}
-		tableName := sqlparser.TableName{
-			Name:      vt.Name,
-			Qualifier: sqlparser.NewIdentifierCS(vt.Keyspace.Name),
-		}
-		for _, column := range vt.Columns {
-			if column.Name.Equal(col.Name) {
-				tblUsage[tableName] = addStringButKeepItUnique(tblUsage[tableName], column.Name.String())
-				break
+
+		tr.Columns = append(tr.Columns, ColumnReport{
+			Name: strings.ToLower(colName.Name.String()),
+		})
+	}
+
+	for _, tr := range report {
+		expandedCols := semTable.ExpandedColumns[tr.Name]
+		for _, colExp := range expandedCols {
+			for i, col := range tr.Columns {
+				if colExp.Name.EqualString(col.Name) {
+					tr.Columns[i].Expanded = true
+				}
 			}
 		}
 	}
-	return &TableReport{
-		TableUsage:      tblUsage,
-		ExpandedColumns: semTable.ExpandedColumns,
+
+	return nil
+}
+
+func (report tableUsageMap) resolve(node *Node) []*TableReport {
+	switch tableRef := node.Op.(type) {
+	case *NodeTableRef:
+		if tr, ok := report[tableRef.TableID]; ok {
+			tr.Node = node
+		}
+	default:
+		for _, n := range node.Ancestors {
+			report.resolve(n)
+		}
 	}
+	return maps.Values(report)
 }
 
 func (conv *Converter) semanticAnalyze(stmt sqlparser.Statement, keyspace string, si semantics.SchemaInformation) (*semantics.SemTable, error) {

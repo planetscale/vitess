@@ -19,10 +19,10 @@ type QueryFlowParts struct {
 	NewNodes    []graph.NodeIdx
 	ReusedNodes []graph.NodeIdx
 	QueryLeaf   graph.NodeIdx
-	TableReport *TableReport
+	TableReport []*TableReport
 }
 
-func (qfp *QueryFlowParts) GetTableReport() *TableReport {
+func (qfp *QueryFlowParts) GetTableReport() []*TableReport {
 	return qfp.TableReport
 }
 

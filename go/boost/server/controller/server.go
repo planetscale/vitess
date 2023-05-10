@@ -39,14 +39,14 @@ func NewServer(log *zap.Logger, id uuid.UUID, ts *toposerver.Server, cfg *config
 	return &Server{topo: ts, log: log, uuid: id, cfg: cfg}
 }
 
-func (srv *Server) RegisterWorker(ctx context.Context, worker *vtboostpb.TopoWorkerEntry) {
+func (srv *Server) UpdateWorker(ctx context.Context, worker *vtboostpb.TopoWorkerEntry) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	if srv.inner == nil {
 		return
 	}
 
-	srv.inner.registerWorker(worker)
+	srv.inner.updateWorker(ctx, worker)
 	srv.checkForReady(ctx)
 }
 
@@ -233,7 +233,7 @@ func (srv *Server) PutRecipeWithOptions(ctx context.Context, recipepb *vtboostpb
 			return err
 		}
 	}
-	_, err := srv.inner.ModifyRecipe(ctx, recipepb, si)
+	_, err := srv.inner.PutRecipe(ctx, recipepb, si)
 	return err
 }
 

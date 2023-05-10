@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
@@ -44,11 +45,12 @@ func testVoteRecipe(t *testing.T, recipe *testrecipe.Recipe) {
 		g.TestExecute("INSERT INTO `vote` (`article_id`, `user`) values (%d, %d)", (i%articleCount)+1, rand.Intn(userCount)+1)
 	}
 
-	awvc.Lookup(1).Expect(`[[INT64(1) VARCHAR("Article 1") INT64(10)]]`)
-	awvc.Lookup(2).Expect(`[[INT64(2) VARCHAR("Article 2") INT64(10)]]`)
+	for i := 1; i <= articleCount; i++ {
+		awvc.Lookup(i).Expect(fmt.Sprintf(`[[INT64(%d) VARCHAR("Article %d") INT64(10)]]`, i, i))
+	}
 
-	require.Equal(t, 2, g.WorkerReads())
-	require.Equal(t, articleCount+votesCount, g.WorkerStats(worker.StatVStreamRows))
+	g.AssertWorkerStats(articleCount, worker.StatViewReads)
+	g.AssertWorkerStats(articleCount+votesCount, worker.StatVStreamRows)
 }
 
 func TestAlbumsRecipe(t *testing.T) {
@@ -132,7 +134,7 @@ func TestAlbumsRecipe(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	assertAll()
-	require.Equal(t, 10, g.WorkerStats(worker.StatVStreamRows))
+	g.AssertWorkerStats(10, worker.StatVStreamRows)
 }
 
 func TestPokemon(t *testing.T) {
@@ -213,7 +215,7 @@ func TestSQLRecipe(t *testing.T) {
 
 	getter.Lookup("Volvo").Expect(`[[INT64(2)]]`)
 
-	require.Equal(t, 3, g.WorkerStats(worker.StatVStreamRows))
+	g.AssertWorkerStats(3, worker.StatVStreamRows)
 }
 
 func TestDoubleShuffle(t *testing.T) {
@@ -227,7 +229,7 @@ func TestDoubleShuffle(t *testing.T) {
 	carPrice.Lookup(1).Expect(`[[INT32(1) INT32(100)]]`)
 	carPrice.Lookup(int32(1)).Expect(`[[INT32(1) INT32(100)]]`)
 
-	require.Equal(t, 2, g.WorkerStats(worker.StatVStreamRows))
+	g.AssertWorkerStats(2, worker.StatVStreamRows)
 
 	g.TestExecute("UPDATE `Price` SET `price` = %d WHERE `pid` = %d", 200, 1)
 

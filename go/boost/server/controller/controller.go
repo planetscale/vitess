@@ -14,6 +14,8 @@ import (
 	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/slices2"
+
 	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/boostrpc/service"
@@ -111,16 +113,41 @@ func (ctrl *Controller) IsReady() bool {
 	return ctrl.expectedWorkerCount > 0 && len(ctrl.workers) >= ctrl.expectedWorkerCount
 }
 
-func (ctrl *Controller) registerWorker(req *vtboostpb.TopoWorkerEntry) {
+func (ctrl *Controller) updateWorker(ctx context.Context, req *vtboostpb.TopoWorkerEntry) {
 	workerid := domainrpc.WorkerID(req.Uuid)
-	ws, err := domainrpc.NewWorker(workerid, req.AdminAddr)
-	if err != nil {
-		ctrl.log.Error("failed to register worker", zap.Error(err))
-		return
+	w, exists := ctrl.workers[workerid]
+	if exists {
+		w.Update(req)
+	} else {
+		var err error
+		w, err = domainrpc.NewWorker(workerid, req.AdminAddr)
+		if err != nil {
+			ctrl.log.Error("failed to register worker", zap.Error(err))
+			return
+		}
+		ctrl.workers[workerid] = w
+		ctrl.readAddrs[workerid] = req.ReaderAddr
 	}
 
-	ctrl.workers[workerid] = ws
-	ctrl.readAddrs[workerid] = req.ReaderAddr
+	var removed []string
+	for _, query := range req.UnhealthyQueries {
+		switch query.Status {
+		case vtboostpb.TopoWorkerEntry_SCHEMA_CHANGE_CONFLICT:
+			ctrl.log.Warn("schema change conflict", zap.String("query", query.QueryId))
+			removed = append(removed, query.QueryId)
+		}
+	}
+	if len(removed) > 0 {
+		_, err := ctrl.ModifyRecipe(ctx, nil, func(recipe *vtboostpb.Recipe) error {
+			recipe.Queries = slices2.DeleteFunc(recipe.Queries, func(q *vtboostpb.CachedQuery) bool {
+				return slices.Contains(removed, q.PublicId)
+			})
+			return nil
+		})
+		if err != nil {
+			ctrl.log.Error("failed to modify recipe", zap.Error(err))
+		}
+	}
 }
 
 func (ctrl *Controller) domainPlace(ctx context.Context, idx dataflow.DomainIdx, maybeShardNumber *uint, innodes []nodeWithAge) error {
@@ -314,7 +341,7 @@ func (ctrl *Controller) GetMaterializations() ([]*vtboostpb.Materialization, err
 	return res, err
 }
 
-func (ctrl *Controller) ModifyRecipe(ctx context.Context, recipepb *vtboostpb.Recipe, si *boostplan.SchemaInformation) (*boostplan.ActivationResult, error) {
+func (ctrl *Controller) PutRecipe(ctx context.Context, recipepb *vtboostpb.Recipe, si *boostplan.SchemaInformation) (*boostplan.ActivationResult, error) {
 	if recipepb.Version <= ctrl.recipe.Version() {
 		return &boostplan.ActivationResult{}, nil
 	}
@@ -325,6 +352,19 @@ func (ctrl *Controller) ModifyRecipe(ctx context.Context, recipepb *vtboostpb.Re
 	}
 
 	return ctrl.applyRecipe(ctx, newrecipe, si)
+}
+
+func (ctrl *Controller) ModifyRecipe(ctx context.Context, si *boostplan.SchemaInformation, modify func(recipe *vtboostpb.Recipe) error) (*boostplan.ActivationResult, error) {
+	recipepb := &vtboostpb.Recipe{
+		Version: ctrl.recipe.Version() + 1,
+		Queries: ctrl.recipe.ToProto(),
+	}
+
+	if err := modify(recipepb); err != nil {
+		return nil, err
+	}
+
+	return ctrl.PutRecipe(ctx, recipepb, si)
 }
 
 func (ctrl *Controller) cleanupRecipe(ctx context.Context, activation *boostplan.ActivationResult) error {

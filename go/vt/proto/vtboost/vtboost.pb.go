@@ -273,6 +273,52 @@ func (ControllerState_RecipeStatus_Progress) EnumDescriptor() ([]byte, []int) {
 	return file_vtboost_proto_rawDescGZIP(), []int{33, 0, 0}
 }
 
+type TopoWorkerEntry_Status int32
+
+const (
+	TopoWorkerEntry_HEALTHY                TopoWorkerEntry_Status = 0
+	TopoWorkerEntry_SCHEMA_CHANGE_CONFLICT TopoWorkerEntry_Status = 1
+)
+
+// Enum value maps for TopoWorkerEntry_Status.
+var (
+	TopoWorkerEntry_Status_name = map[int32]string{
+		0: "HEALTHY",
+		1: "SCHEMA_CHANGE_CONFLICT",
+	}
+	TopoWorkerEntry_Status_value = map[string]int32{
+		"HEALTHY":                0,
+		"SCHEMA_CHANGE_CONFLICT": 1,
+	}
+)
+
+func (x TopoWorkerEntry_Status) Enum() *TopoWorkerEntry_Status {
+	p := new(TopoWorkerEntry_Status)
+	*p = x
+	return p
+}
+
+func (x TopoWorkerEntry_Status) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TopoWorkerEntry_Status) Descriptor() protoreflect.EnumDescriptor {
+	return file_vtboost_proto_enumTypes[5].Descriptor()
+}
+
+func (TopoWorkerEntry_Status) Type() protoreflect.EnumType {
+	return &file_vtboost_proto_enumTypes[5]
+}
+
+func (x TopoWorkerEntry_Status) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TopoWorkerEntry_Status.Descriptor instead.
+func (TopoWorkerEntry_Status) EnumDescriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{34, 0}
+}
+
 type Recipe struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -2054,9 +2100,10 @@ type TopoWorkerEntry struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Uuid       string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	AdminAddr  string `protobuf:"bytes,2,opt,name=admin_addr,json=adminAddr,proto3" json:"admin_addr,omitempty"`
-	ReaderAddr string `protobuf:"bytes,3,opt,name=reader_addr,json=readerAddr,proto3" json:"reader_addr,omitempty"`
+	Uuid             string                   `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	AdminAddr        string                   `protobuf:"bytes,2,opt,name=admin_addr,json=adminAddr,proto3" json:"admin_addr,omitempty"`
+	ReaderAddr       string                   `protobuf:"bytes,3,opt,name=reader_addr,json=readerAddr,proto3" json:"reader_addr,omitempty"`
+	UnhealthyQueries []*TopoWorkerEntry_Query `protobuf:"bytes,4,rep,name=unhealthy_queries,json=unhealthyQueries,proto3" json:"unhealthy_queries,omitempty"`
 }
 
 func (x *TopoWorkerEntry) Reset() {
@@ -2110,6 +2157,13 @@ func (x *TopoWorkerEntry) GetReaderAddr() string {
 		return x.ReaderAddr
 	}
 	return ""
+}
+
+func (x *TopoWorkerEntry) GetUnhealthyQueries() []*TopoWorkerEntry_Query {
+	if x != nil {
+		return x.UnhealthyQueries
+	}
+	return nil
 }
 
 type Materialization_Bind struct {
@@ -2475,6 +2529,61 @@ func (x *ControllerState_RecipeStatus_Query) GetError() string {
 	return ""
 }
 
+type TopoWorkerEntry_Query struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	QueryId string                 `protobuf:"bytes,1,opt,name=query_id,json=queryId,proto3" json:"query_id,omitempty"`
+	Status  TopoWorkerEntry_Status `protobuf:"varint,2,opt,name=status,proto3,enum=vtboost.TopoWorkerEntry_Status" json:"status,omitempty"`
+}
+
+func (x *TopoWorkerEntry_Query) Reset() {
+	*x = TopoWorkerEntry_Query{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtboost_proto_msgTypes[43]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TopoWorkerEntry_Query) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TopoWorkerEntry_Query) ProtoMessage() {}
+
+func (x *TopoWorkerEntry_Query) ProtoReflect() protoreflect.Message {
+	mi := &file_vtboost_proto_msgTypes[43]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TopoWorkerEntry_Query.ProtoReflect.Descriptor instead.
+func (*TopoWorkerEntry_Query) Descriptor() ([]byte, []int) {
+	return file_vtboost_proto_rawDescGZIP(), []int{34, 0}
+}
+
+func (x *TopoWorkerEntry_Query) GetQueryId() string {
+	if x != nil {
+		return x.QueryId
+	}
+	return ""
+}
+
+func (x *TopoWorkerEntry_Query) GetStatus() TopoWorkerEntry_Status {
+	if x != nil {
+		return x.Status
+	}
+	return TopoWorkerEntry_HEALTHY
+}
+
 var File_vtboost_proto protoreflect.FileDescriptor
 
 var file_vtboost_proto_rawDesc = []byte{
@@ -2760,40 +2869,54 @@ var file_vtboost_proto_rawDesc = []byte{
 	0x25, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x43, 0x6f, 0x6e, 0x74, 0x72, 0x6f,
 	0x6c, 0x6c, 0x65, 0x72, 0x53, 0x74, 0x61, 0x74, 0x65, 0x2e, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65,
 	0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38,
-	0x01, 0x22, 0x65, 0x0a, 0x0f, 0x54, 0x6f, 0x70, 0x6f, 0x57, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x45,
-	0x6e, 0x74, 0x72, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x61, 0x64, 0x6d, 0x69,
-	0x6e, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x61, 0x64,
-	0x6d, 0x69, 0x6e, 0x41, 0x64, 0x64, 0x72, 0x12, 0x1f, 0x0a, 0x0b, 0x72, 0x65, 0x61, 0x64, 0x65,
-	0x72, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x72, 0x65,
-	0x61, 0x64, 0x65, 0x72, 0x41, 0x64, 0x64, 0x72, 0x32, 0xf8, 0x02, 0x0a, 0x11, 0x43, 0x6f, 0x6e,
-	0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x12, 0x42,
-	0x0a, 0x09, 0x47, 0x65, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x12, 0x19, 0x2e, 0x76, 0x74,
-	0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47, 0x65, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74,
-	0x2e, 0x47, 0x65, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x12, 0x3b, 0x0a, 0x0a, 0x52, 0x65, 0x61, 0x64, 0x79, 0x43, 0x68, 0x65, 0x63, 0x6b,
-	0x12, 0x15, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x52, 0x65, 0x61, 0x64, 0x79,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73,
-	0x74, 0x2e, 0x52, 0x65, 0x61, 0x64, 0x79, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
-	0x3f, 0x0a, 0x08, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69, 0x7a, 0x12, 0x18, 0x2e, 0x76, 0x74,
-	0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69, 0x7a, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
-	0x47, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69, 0x7a, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x12, 0x5a, 0x0a, 0x13, 0x47, 0x65, 0x74, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69,
-	0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x20, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73,
+	0x01, 0x22, 0xc2, 0x02, 0x0a, 0x0f, 0x54, 0x6f, 0x70, 0x6f, 0x57, 0x6f, 0x72, 0x6b, 0x65, 0x72,
+	0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x61, 0x64, 0x6d,
+	0x69, 0x6e, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x61,
+	0x64, 0x6d, 0x69, 0x6e, 0x41, 0x64, 0x64, 0x72, 0x12, 0x1f, 0x0a, 0x0b, 0x72, 0x65, 0x61, 0x64,
+	0x65, 0x72, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x72,
+	0x65, 0x61, 0x64, 0x65, 0x72, 0x41, 0x64, 0x64, 0x72, 0x12, 0x4b, 0x0a, 0x11, 0x75, 0x6e, 0x68,
+	0x65, 0x61, 0x6c, 0x74, 0x68, 0x79, 0x5f, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x18, 0x04,
+	0x20, 0x03, 0x28, 0x0b, 0x32, 0x1e, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x54,
+	0x6f, 0x70, 0x6f, 0x57, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x2e, 0x51,
+	0x75, 0x65, 0x72, 0x79, 0x52, 0x10, 0x75, 0x6e, 0x68, 0x65, 0x61, 0x6c, 0x74, 0x68, 0x79, 0x51,
+	0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x1a, 0x5b, 0x0a, 0x05, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12,
+	0x19, 0x0a, 0x08, 0x71, 0x75, 0x65, 0x72, 0x79, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x07, 0x71, 0x75, 0x65, 0x72, 0x79, 0x49, 0x64, 0x12, 0x37, 0x0a, 0x06, 0x73, 0x74,
+	0x61, 0x74, 0x75, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x1f, 0x2e, 0x76, 0x74, 0x62,
+	0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x54, 0x6f, 0x70, 0x6f, 0x57, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x45,
+	0x6e, 0x74, 0x72, 0x79, 0x2e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x06, 0x73, 0x74, 0x61,
+	0x74, 0x75, 0x73, 0x22, 0x31, 0x0a, 0x06, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x0b, 0x0a,
+	0x07, 0x48, 0x45, 0x41, 0x4c, 0x54, 0x48, 0x59, 0x10, 0x00, 0x12, 0x1a, 0x0a, 0x16, 0x53, 0x43,
+	0x48, 0x45, 0x4d, 0x41, 0x5f, 0x43, 0x48, 0x41, 0x4e, 0x47, 0x45, 0x5f, 0x43, 0x4f, 0x4e, 0x46,
+	0x4c, 0x49, 0x43, 0x54, 0x10, 0x01, 0x32, 0xf8, 0x02, 0x0a, 0x11, 0x43, 0x6f, 0x6e, 0x74, 0x72,
+	0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x12, 0x42, 0x0a, 0x09,
+	0x47, 0x65, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x12, 0x19, 0x2e, 0x76, 0x74, 0x62, 0x6f,
+	0x6f, 0x73, 0x74, 0x2e, 0x47, 0x65, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47,
+	0x65, 0x74, 0x52, 0x65, 0x63, 0x69, 0x70, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x3b, 0x0a, 0x0a, 0x52, 0x65, 0x61, 0x64, 0x79, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x12, 0x15,
+	0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x52, 0x65, 0x61, 0x64, 0x79, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
+	0x52, 0x65, 0x61, 0x64, 0x79, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x3f, 0x0a,
+	0x08, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69, 0x7a, 0x12, 0x18, 0x2e, 0x76, 0x74, 0x62, 0x6f,
+	0x6f, 0x73, 0x74, 0x2e, 0x47, 0x72, 0x61, 0x70, 0x68, 0x76, 0x69, 0x7a, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x47, 0x72,
+	0x61, 0x70, 0x68, 0x76, 0x69, 0x7a, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5a,
+	0x0a, 0x13, 0x47, 0x65, 0x74, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61,
+	0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x20, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e,
+	0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x21, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73,
 	0x74, 0x2e, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f,
-	0x6e, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x21, 0x2e, 0x76, 0x74, 0x62, 0x6f,
-	0x6f, 0x73, 0x74, 0x2e, 0x4d, 0x61, 0x74, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74,
-	0x69, 0x6f, 0x6e, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x45, 0x0a, 0x0a,
-	0x53, 0x65, 0x74, 0x53, 0x63, 0x69, 0x65, 0x6e, 0x63, 0x65, 0x12, 0x1a, 0x2e, 0x76, 0x74, 0x62,
-	0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x53, 0x65, 0x74, 0x53, 0x63, 0x69, 0x65, 0x6e, 0x63, 0x65, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1b, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74,
-	0x2e, 0x53, 0x65, 0x74, 0x53, 0x63, 0x69, 0x65, 0x6e, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f,
-	0x6e, 0x73, 0x65, 0x42, 0x26, 0x5a, 0x24, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f,
-	0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x2f, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x33,
+	0x6e, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x45, 0x0a, 0x0a, 0x53, 0x65,
+	0x74, 0x53, 0x63, 0x69, 0x65, 0x6e, 0x63, 0x65, 0x12, 0x1a, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f,
+	0x73, 0x74, 0x2e, 0x53, 0x65, 0x74, 0x53, 0x63, 0x69, 0x65, 0x6e, 0x63, 0x65, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x1a, 0x1b, 0x2e, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x2e, 0x53,
+	0x65, 0x74, 0x53, 0x63, 0x69, 0x65, 0x6e, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x42, 0x26, 0x5a, 0x24, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76,
+	0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x2f, 0x76, 0x74, 0x62, 0x6f, 0x6f, 0x73, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -2808,112 +2931,116 @@ func file_vtboost_proto_rawDescGZIP() []byte {
 	return file_vtboost_proto_rawDescData
 }
 
-var file_vtboost_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_vtboost_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
+var file_vtboost_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_vtboost_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_vtboost_proto_goTypes = []interface{}{
 	(Materialization_ViewDescriptor_QueryMode)(0), // 0: vtboost.Materialization.ViewDescriptor.QueryMode
 	(GraphvizRequest_Clustering)(0),               // 1: vtboost.GraphvizRequest.Clustering
 	(ClusterState_State)(0),                       // 2: vtboost.ClusterState.State
 	(Science_FailureMode)(0),                      // 3: vtboost.Science.FailureMode
 	(ControllerState_RecipeStatus_Progress)(0),    // 4: vtboost.ControllerState.RecipeStatus.Progress
-	(*Recipe)(nil),                                // 5: vtboost.Recipe
-	(*CachedQuery)(nil),                           // 6: vtboost.CachedQuery
-	(*Materialization)(nil),                       // 7: vtboost.Materialization
-	(*GraphvizRequest)(nil),                       // 8: vtboost.GraphvizRequest
-	(*GraphvizResponse)(nil),                      // 9: vtboost.GraphvizResponse
-	(*ReadyRequest)(nil),                          // 10: vtboost.ReadyRequest
-	(*ReadyResponse)(nil),                         // 11: vtboost.ReadyResponse
-	(*MaterializationsRequest)(nil),               // 12: vtboost.MaterializationsRequest
-	(*MaterializationsResponse)(nil),              // 13: vtboost.MaterializationsResponse
-	(*PutRecipeRequest)(nil),                      // 14: vtboost.PutRecipeRequest
-	(*PutRecipeResponse)(nil),                     // 15: vtboost.PutRecipeResponse
-	(*GetRecipeRequest)(nil),                      // 16: vtboost.GetRecipeRequest
-	(*GetRecipeResponse)(nil),                     // 17: vtboost.GetRecipeResponse
-	(*DescribeRecipeRequest)(nil),                 // 18: vtboost.DescribeRecipeRequest
-	(*DescribeRecipeResponse)(nil),                // 19: vtboost.DescribeRecipeResponse
-	(*ClusterState)(nil),                          // 20: vtboost.ClusterState
-	(*ClusterStates)(nil),                         // 21: vtboost.ClusterStates
-	(*GetClusterRequest)(nil),                     // 22: vtboost.GetClusterRequest
-	(*GetClusterResponse)(nil),                    // 23: vtboost.GetClusterResponse
-	(*ListClustersRequest)(nil),                   // 24: vtboost.ListClustersRequest
-	(*ListClustersResponse)(nil),                  // 25: vtboost.ListClustersResponse
-	(*AddClusterRequest)(nil),                     // 26: vtboost.AddClusterRequest
-	(*RemoveClusterRequest)(nil),                  // 27: vtboost.RemoveClusterRequest
-	(*ClusterChangeResponse)(nil),                 // 28: vtboost.ClusterChangeResponse
-	(*PrimaryClusterRequest)(nil),                 // 29: vtboost.PrimaryClusterRequest
-	(*PrimaryClusterResponse)(nil),                // 30: vtboost.PrimaryClusterResponse
-	(*DrainClusterRequest)(nil),                   // 31: vtboost.DrainClusterRequest
-	(*DrainClusterResponse)(nil),                  // 32: vtboost.DrainClusterResponse
-	(*PurgeRequest)(nil),                          // 33: vtboost.PurgeRequest
-	(*PurgeResponse)(nil),                         // 34: vtboost.PurgeResponse
-	(*SetScienceRequest)(nil),                     // 35: vtboost.SetScienceRequest
-	(*SetScienceResponse)(nil),                    // 36: vtboost.SetScienceResponse
-	(*Science)(nil),                               // 37: vtboost.Science
-	(*ControllerState)(nil),                       // 38: vtboost.ControllerState
-	(*TopoWorkerEntry)(nil),                       // 39: vtboost.TopoWorkerEntry
-	(*Materialization_Bind)(nil),                  // 40: vtboost.Materialization.Bind
-	(*Materialization_ViewDescriptor)(nil),        // 41: vtboost.Materialization.ViewDescriptor
-	nil,                                           // 42: vtboost.GraphvizRequest.ForceMemoryLimitsEntry
-	nil,                                           // 43: vtboost.ClusterState.VtgatesEntry
-	(*ListClustersResponse_State)(nil),            // 44: vtboost.ListClustersResponse.State
-	(*ControllerState_RecipeStatus)(nil),          // 45: vtboost.ControllerState.RecipeStatus
-	nil,                                           // 46: vtboost.ControllerState.RecipeVersionStatusEntry
-	(*ControllerState_RecipeStatus_Query)(nil),    // 47: vtboost.ControllerState.RecipeStatus.Query
-	(*vttime.Time)(nil),                           // 48: vttime.Time
-	(*query.BindVariable)(nil),                    // 49: query.BindVariable
-	(*query.Field)(nil),                           // 50: query.Field
+	(TopoWorkerEntry_Status)(0),                   // 5: vtboost.TopoWorkerEntry.Status
+	(*Recipe)(nil),                                // 6: vtboost.Recipe
+	(*CachedQuery)(nil),                           // 7: vtboost.CachedQuery
+	(*Materialization)(nil),                       // 8: vtboost.Materialization
+	(*GraphvizRequest)(nil),                       // 9: vtboost.GraphvizRequest
+	(*GraphvizResponse)(nil),                      // 10: vtboost.GraphvizResponse
+	(*ReadyRequest)(nil),                          // 11: vtboost.ReadyRequest
+	(*ReadyResponse)(nil),                         // 12: vtboost.ReadyResponse
+	(*MaterializationsRequest)(nil),               // 13: vtboost.MaterializationsRequest
+	(*MaterializationsResponse)(nil),              // 14: vtboost.MaterializationsResponse
+	(*PutRecipeRequest)(nil),                      // 15: vtboost.PutRecipeRequest
+	(*PutRecipeResponse)(nil),                     // 16: vtboost.PutRecipeResponse
+	(*GetRecipeRequest)(nil),                      // 17: vtboost.GetRecipeRequest
+	(*GetRecipeResponse)(nil),                     // 18: vtboost.GetRecipeResponse
+	(*DescribeRecipeRequest)(nil),                 // 19: vtboost.DescribeRecipeRequest
+	(*DescribeRecipeResponse)(nil),                // 20: vtboost.DescribeRecipeResponse
+	(*ClusterState)(nil),                          // 21: vtboost.ClusterState
+	(*ClusterStates)(nil),                         // 22: vtboost.ClusterStates
+	(*GetClusterRequest)(nil),                     // 23: vtboost.GetClusterRequest
+	(*GetClusterResponse)(nil),                    // 24: vtboost.GetClusterResponse
+	(*ListClustersRequest)(nil),                   // 25: vtboost.ListClustersRequest
+	(*ListClustersResponse)(nil),                  // 26: vtboost.ListClustersResponse
+	(*AddClusterRequest)(nil),                     // 27: vtboost.AddClusterRequest
+	(*RemoveClusterRequest)(nil),                  // 28: vtboost.RemoveClusterRequest
+	(*ClusterChangeResponse)(nil),                 // 29: vtboost.ClusterChangeResponse
+	(*PrimaryClusterRequest)(nil),                 // 30: vtboost.PrimaryClusterRequest
+	(*PrimaryClusterResponse)(nil),                // 31: vtboost.PrimaryClusterResponse
+	(*DrainClusterRequest)(nil),                   // 32: vtboost.DrainClusterRequest
+	(*DrainClusterResponse)(nil),                  // 33: vtboost.DrainClusterResponse
+	(*PurgeRequest)(nil),                          // 34: vtboost.PurgeRequest
+	(*PurgeResponse)(nil),                         // 35: vtboost.PurgeResponse
+	(*SetScienceRequest)(nil),                     // 36: vtboost.SetScienceRequest
+	(*SetScienceResponse)(nil),                    // 37: vtboost.SetScienceResponse
+	(*Science)(nil),                               // 38: vtboost.Science
+	(*ControllerState)(nil),                       // 39: vtboost.ControllerState
+	(*TopoWorkerEntry)(nil),                       // 40: vtboost.TopoWorkerEntry
+	(*Materialization_Bind)(nil),                  // 41: vtboost.Materialization.Bind
+	(*Materialization_ViewDescriptor)(nil),        // 42: vtboost.Materialization.ViewDescriptor
+	nil,                                           // 43: vtboost.GraphvizRequest.ForceMemoryLimitsEntry
+	nil,                                           // 44: vtboost.ClusterState.VtgatesEntry
+	(*ListClustersResponse_State)(nil),            // 45: vtboost.ListClustersResponse.State
+	(*ControllerState_RecipeStatus)(nil),          // 46: vtboost.ControllerState.RecipeStatus
+	nil,                                           // 47: vtboost.ControllerState.RecipeVersionStatusEntry
+	(*ControllerState_RecipeStatus_Query)(nil),    // 48: vtboost.ControllerState.RecipeStatus.Query
+	(*TopoWorkerEntry_Query)(nil),                 // 49: vtboost.TopoWorkerEntry.Query
+	(*vttime.Time)(nil),                           // 50: vttime.Time
+	(*query.BindVariable)(nil),                    // 51: query.BindVariable
+	(*query.Field)(nil),                           // 52: query.Field
 }
 var file_vtboost_proto_depIdxs = []int32{
-	6,  // 0: vtboost.Recipe.queries:type_name -> vtboost.CachedQuery
-	6,  // 1: vtboost.Materialization.query:type_name -> vtboost.CachedQuery
-	41, // 2: vtboost.Materialization.view:type_name -> vtboost.Materialization.ViewDescriptor
-	40, // 3: vtboost.Materialization.binds:type_name -> vtboost.Materialization.Bind
+	7,  // 0: vtboost.Recipe.queries:type_name -> vtboost.CachedQuery
+	7,  // 1: vtboost.Materialization.query:type_name -> vtboost.CachedQuery
+	42, // 2: vtboost.Materialization.view:type_name -> vtboost.Materialization.ViewDescriptor
+	41, // 3: vtboost.Materialization.binds:type_name -> vtboost.Materialization.Bind
 	1,  // 4: vtboost.GraphvizRequest.clustering:type_name -> vtboost.GraphvizRequest.Clustering
-	42, // 5: vtboost.GraphvizRequest.force_memory_limits:type_name -> vtboost.GraphvizRequest.ForceMemoryLimitsEntry
-	7,  // 6: vtboost.MaterializationsResponse.materializations:type_name -> vtboost.Materialization
-	5,  // 7: vtboost.PutRecipeRequest.recipe:type_name -> vtboost.Recipe
-	5,  // 8: vtboost.GetRecipeResponse.recipe:type_name -> vtboost.Recipe
-	8,  // 9: vtboost.DescribeRecipeRequest.graphviz:type_name -> vtboost.GraphvizRequest
-	9,  // 10: vtboost.DescribeRecipeResponse.graphviz:type_name -> vtboost.GraphvizResponse
+	43, // 5: vtboost.GraphvizRequest.force_memory_limits:type_name -> vtboost.GraphvizRequest.ForceMemoryLimitsEntry
+	8,  // 6: vtboost.MaterializationsResponse.materializations:type_name -> vtboost.Materialization
+	6,  // 7: vtboost.PutRecipeRequest.recipe:type_name -> vtboost.Recipe
+	6,  // 8: vtboost.GetRecipeResponse.recipe:type_name -> vtboost.Recipe
+	9,  // 9: vtboost.DescribeRecipeRequest.graphviz:type_name -> vtboost.GraphvizRequest
+	10, // 10: vtboost.DescribeRecipeResponse.graphviz:type_name -> vtboost.GraphvizResponse
 	2,  // 11: vtboost.ClusterState.state:type_name -> vtboost.ClusterState.State
-	48, // 12: vtboost.ClusterState.drained_at:type_name -> vttime.Time
-	43, // 13: vtboost.ClusterState.vtgates:type_name -> vtboost.ClusterState.VtgatesEntry
-	48, // 14: vtboost.ClusterState.created_at:type_name -> vttime.Time
-	20, // 15: vtboost.ClusterStates.clusters:type_name -> vtboost.ClusterState
-	20, // 16: vtboost.GetClusterResponse.cluster:type_name -> vtboost.ClusterState
-	38, // 17: vtboost.GetClusterResponse.controller:type_name -> vtboost.ControllerState
-	44, // 18: vtboost.ListClustersResponse.clusters:type_name -> vtboost.ListClustersResponse.State
-	48, // 19: vtboost.AddClusterRequest.created_at:type_name -> vttime.Time
-	48, // 20: vtboost.DrainClusterRequest.drained_at:type_name -> vttime.Time
-	37, // 21: vtboost.SetScienceRequest.science:type_name -> vtboost.Science
+	50, // 12: vtboost.ClusterState.drained_at:type_name -> vttime.Time
+	44, // 13: vtboost.ClusterState.vtgates:type_name -> vtboost.ClusterState.VtgatesEntry
+	50, // 14: vtboost.ClusterState.created_at:type_name -> vttime.Time
+	21, // 15: vtboost.ClusterStates.clusters:type_name -> vtboost.ClusterState
+	21, // 16: vtboost.GetClusterResponse.cluster:type_name -> vtboost.ClusterState
+	39, // 17: vtboost.GetClusterResponse.controller:type_name -> vtboost.ControllerState
+	45, // 18: vtboost.ListClustersResponse.clusters:type_name -> vtboost.ListClustersResponse.State
+	50, // 19: vtboost.AddClusterRequest.created_at:type_name -> vttime.Time
+	50, // 20: vtboost.DrainClusterRequest.drained_at:type_name -> vttime.Time
+	38, // 21: vtboost.SetScienceRequest.science:type_name -> vtboost.Science
 	3,  // 22: vtboost.Science.failure_mode:type_name -> vtboost.Science.FailureMode
-	46, // 23: vtboost.ControllerState.recipe_version_status:type_name -> vtboost.ControllerState.RecipeVersionStatusEntry
-	37, // 24: vtboost.ControllerState.science:type_name -> vtboost.Science
-	49, // 25: vtboost.Materialization.Bind.literal:type_name -> query.BindVariable
-	50, // 26: vtboost.Materialization.ViewDescriptor.schema:type_name -> query.Field
-	50, // 27: vtboost.Materialization.ViewDescriptor.key_schema:type_name -> query.Field
-	0,  // 28: vtboost.Materialization.ViewDescriptor.query_mode:type_name -> vtboost.Materialization.ViewDescriptor.QueryMode
-	20, // 29: vtboost.ListClustersResponse.State.cluster:type_name -> vtboost.ClusterState
-	38, // 30: vtboost.ListClustersResponse.State.controller:type_name -> vtboost.ControllerState
-	4,  // 31: vtboost.ControllerState.RecipeStatus.progress:type_name -> vtboost.ControllerState.RecipeStatus.Progress
-	47, // 32: vtboost.ControllerState.RecipeStatus.queries:type_name -> vtboost.ControllerState.RecipeStatus.Query
-	45, // 33: vtboost.ControllerState.RecipeVersionStatusEntry.value:type_name -> vtboost.ControllerState.RecipeStatus
-	4,  // 34: vtboost.ControllerState.RecipeStatus.Query.progress:type_name -> vtboost.ControllerState.RecipeStatus.Progress
-	16, // 35: vtboost.ControllerService.GetRecipe:input_type -> vtboost.GetRecipeRequest
-	10, // 36: vtboost.ControllerService.ReadyCheck:input_type -> vtboost.ReadyRequest
-	8,  // 37: vtboost.ControllerService.Graphviz:input_type -> vtboost.GraphvizRequest
-	12, // 38: vtboost.ControllerService.GetMaterializations:input_type -> vtboost.MaterializationsRequest
-	35, // 39: vtboost.ControllerService.SetScience:input_type -> vtboost.SetScienceRequest
-	17, // 40: vtboost.ControllerService.GetRecipe:output_type -> vtboost.GetRecipeResponse
-	11, // 41: vtboost.ControllerService.ReadyCheck:output_type -> vtboost.ReadyResponse
-	9,  // 42: vtboost.ControllerService.Graphviz:output_type -> vtboost.GraphvizResponse
-	13, // 43: vtboost.ControllerService.GetMaterializations:output_type -> vtboost.MaterializationsResponse
-	36, // 44: vtboost.ControllerService.SetScience:output_type -> vtboost.SetScienceResponse
-	40, // [40:45] is the sub-list for method output_type
-	35, // [35:40] is the sub-list for method input_type
-	35, // [35:35] is the sub-list for extension type_name
-	35, // [35:35] is the sub-list for extension extendee
-	0,  // [0:35] is the sub-list for field type_name
+	47, // 23: vtboost.ControllerState.recipe_version_status:type_name -> vtboost.ControllerState.RecipeVersionStatusEntry
+	38, // 24: vtboost.ControllerState.science:type_name -> vtboost.Science
+	49, // 25: vtboost.TopoWorkerEntry.unhealthy_queries:type_name -> vtboost.TopoWorkerEntry.Query
+	51, // 26: vtboost.Materialization.Bind.literal:type_name -> query.BindVariable
+	52, // 27: vtboost.Materialization.ViewDescriptor.schema:type_name -> query.Field
+	52, // 28: vtboost.Materialization.ViewDescriptor.key_schema:type_name -> query.Field
+	0,  // 29: vtboost.Materialization.ViewDescriptor.query_mode:type_name -> vtboost.Materialization.ViewDescriptor.QueryMode
+	21, // 30: vtboost.ListClustersResponse.State.cluster:type_name -> vtboost.ClusterState
+	39, // 31: vtboost.ListClustersResponse.State.controller:type_name -> vtboost.ControllerState
+	4,  // 32: vtboost.ControllerState.RecipeStatus.progress:type_name -> vtboost.ControllerState.RecipeStatus.Progress
+	48, // 33: vtboost.ControllerState.RecipeStatus.queries:type_name -> vtboost.ControllerState.RecipeStatus.Query
+	46, // 34: vtboost.ControllerState.RecipeVersionStatusEntry.value:type_name -> vtboost.ControllerState.RecipeStatus
+	4,  // 35: vtboost.ControllerState.RecipeStatus.Query.progress:type_name -> vtboost.ControllerState.RecipeStatus.Progress
+	5,  // 36: vtboost.TopoWorkerEntry.Query.status:type_name -> vtboost.TopoWorkerEntry.Status
+	17, // 37: vtboost.ControllerService.GetRecipe:input_type -> vtboost.GetRecipeRequest
+	11, // 38: vtboost.ControllerService.ReadyCheck:input_type -> vtboost.ReadyRequest
+	9,  // 39: vtboost.ControllerService.Graphviz:input_type -> vtboost.GraphvizRequest
+	13, // 40: vtboost.ControllerService.GetMaterializations:input_type -> vtboost.MaterializationsRequest
+	36, // 41: vtboost.ControllerService.SetScience:input_type -> vtboost.SetScienceRequest
+	18, // 42: vtboost.ControllerService.GetRecipe:output_type -> vtboost.GetRecipeResponse
+	12, // 43: vtboost.ControllerService.ReadyCheck:output_type -> vtboost.ReadyResponse
+	10, // 44: vtboost.ControllerService.Graphviz:output_type -> vtboost.GraphvizResponse
+	14, // 45: vtboost.ControllerService.GetMaterializations:output_type -> vtboost.MaterializationsResponse
+	37, // 46: vtboost.ControllerService.SetScience:output_type -> vtboost.SetScienceResponse
+	42, // [42:47] is the sub-list for method output_type
+	37, // [37:42] is the sub-list for method input_type
+	37, // [37:37] is the sub-list for extension type_name
+	37, // [37:37] is the sub-list for extension extendee
+	0,  // [0:37] is the sub-list for field type_name
 }
 
 func init() { file_vtboost_proto_init() }
@@ -3402,6 +3529,18 @@ func file_vtboost_proto_init() {
 				return nil
 			}
 		}
+		file_vtboost_proto_msgTypes[43].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*TopoWorkerEntry_Query); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	file_vtboost_proto_msgTypes[13].OneofWrappers = []interface{}{
 		(*DescribeRecipeRequest_Graphviz)(nil),
@@ -3414,8 +3553,8 @@ func file_vtboost_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_vtboost_proto_rawDesc,
-			NumEnums:      5,
-			NumMessages:   43,
+			NumEnums:      6,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

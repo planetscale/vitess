@@ -22,9 +22,10 @@ type Migration interface {
 	AddIngredient(name string, fields []string, impl flownode.NodeImpl) (graph.NodeIdx, error)
 	AddView(name string, reader *flownode.Reader)
 	AddUpquery(idx graph.NodeIdx, statement sqlparser.SelectStatement)
+	AddTableReport(id string, report []*operators.TableReport)
 }
 
-func queryToFlowParts(mig Migration, tr *operators.TableReport, query *operators.Query) (*operators.QueryFlowParts, error) {
+func queryToFlowParts(mig Migration, tr []*operators.TableReport, query *operators.Query) (*operators.QueryFlowParts, error) {
 	var newNodes []graph.NodeIdx
 	var reusedNodes []graph.NodeIdx
 
@@ -69,6 +70,8 @@ func queryToFlowParts(mig Migration, tr *operators.TableReport, query *operators
 			edgeCounts[nd] = inEdges - 1
 		}
 	}
+
+	mig.AddTableReport(query.PublicID, tr)
 
 	return &operators.QueryFlowParts{
 		Name:        query.PublicID,

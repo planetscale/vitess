@@ -49,6 +49,32 @@ func Map[From, To any](in []From, f func(From) To) []To {
 	return result
 }
 
+// DeleteFunc removes any elements from s for which del returns true,
+// returning the modified slice.
+// DeleteFunc modifies the contents of the slice s;
+// it does not create a new slice.
+// When DeleteFunc removes m elements, it might not modify the elements
+// s[len(s)-m:len(s)]. If those elements contain pointers you might consider
+// zeroing those elements so that objects they reference can be garbage
+// collected.
+func DeleteFunc[S ~[]E, E any](s S, del func(E) bool) S {
+	// Don't start copying elements until we find one to delete.
+	for i, v := range s {
+		if del(v) {
+			j := i
+			for i++; i < len(s); i++ {
+				v = s[i]
+				if !del(v) {
+					s[j] = v
+					j++
+				}
+			}
+			return s[:j]
+		}
+	}
+	return s
+}
+
 // Filter returns the slice obtained after retaining only those elements
 // in the given slice for which the given function returns true
 func Filter[T any](s []T, fn func(T) bool) []T {

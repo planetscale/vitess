@@ -236,6 +236,17 @@ message TopoWorkerEntry {
   string uuid = 1;
   string admin_addr = 2;
   string reader_addr = 3;
+
+  enum Status {
+    HEALTHY = 0;
+    SCHEMA_CHANGE_CONFLICT = 1;
+  };
+  message Query {
+    string query_id = 1;
+    Status status = 2;
+  };
+
+  repeated Query unhealthy_queries = 4;
 };
 
 service ControllerService {

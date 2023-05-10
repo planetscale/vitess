@@ -47,8 +47,6 @@ message DomainBootedRequest {
 
 message DomainBootedResponse{};
 
-message HeartbeatPacket {}
-
 message AssignStreamRequest {
   repeated ExternalTableDescriptor tables = 1;
 }
@@ -93,6 +91,12 @@ message ExternalTableDescriptor {
   repeated string columns = 8;
   repeated sql.Type schema = 9 [(gogoproto.nullable) = false];
   string keyspace = 10;
+
+  message Dependency {
+    repeated string dependent_queries = 1;
+  };
+  map<string, Dependency> dependent_columns = 11;
+  bool new = 12;
 }
 
 message DomainBuilder {

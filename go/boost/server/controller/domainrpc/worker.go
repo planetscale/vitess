@@ -6,6 +6,8 @@ import (
 
 	"storj.io/drpc/drpcconn"
 
+	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
+
 	"vitess.io/vitess/go/boost/boostrpc/service"
 )
 
@@ -19,6 +21,10 @@ type Worker struct {
 	LastHeartbeat time.Time
 
 	addr string
+}
+
+func (w *Worker) Update(_ *vtboostpb.TopoWorkerEntry) {
+	w.LastHeartbeat = time.Now()
 }
 
 func NewWorker(id WorkerID, addr string) (*Worker, error) {

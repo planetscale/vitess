@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/boost/server/worker"
+
 	"vitess.io/vitess/go/boost/test/helpers/booste2e"
 )
 
@@ -31,9 +33,9 @@ CREATE TABLE mike (
 
 	rs := tt.ExecuteFetch(`select id from mike where season = 'season1'`)
 	require.Len(t, rs.Rows, 7)
-	require.Equal(t, 1, tt.BoostTestCluster.WorkerReads())
+	tt.BoostTestCluster.AssertWorkerStats(1, worker.StatViewReads)
 
 	rs = tt.ExecuteFetch(`select id from mike where season = 'foo'`)
 	require.Len(t, rs.Rows, 0)
-	require.Equal(t, 2, tt.BoostTestCluster.WorkerReads())
+	tt.BoostTestCluster.AssertWorkerStats(2, worker.StatViewReads)
 }
