@@ -191,7 +191,7 @@ func TestLoadingExternalRecipes(t *testing.T) {
 		{"tpc-h", false},
 		{"tpc-w", false},
 		{"connections", true},
-		{"big_union", false},
+		{"big_union", true},
 	}
 	for _, r := range recipes {
 		t.Run(r.name, func(t *testing.T) {
