@@ -10,7 +10,7 @@ import (
 )
 
 func TestVTBoostStartupAndCleanup(t *testing.T) {
-	tt := booste2e.Setup(t, booste2e.WithBoostInstance(), booste2e.WithRecipe("basic"))
+	tt := booste2e.Setup(t, booste2e.WithBoostInstance(), booste2e.WithRecipe("votes"))
 
 	for i := 0; ; i++ {
 		if i == 10 {

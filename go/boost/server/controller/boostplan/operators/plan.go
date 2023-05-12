@@ -94,7 +94,7 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 	}
 
 	// Finally, we go through the operator tree and figure out the column offsets for all the column accesses
-	err = bindOffsets(node, semTable)
+	err = conv.bindOffsets(node, semTable)
 	if err != nil {
 		return
 	}

@@ -24,7 +24,7 @@ type (
 		// KeepAncestorColumns should return true if the operator passes rows through, like filtering and ordering do.
 		KeepAncestorColumns() bool
 
-		PlanOffsets(node *Node, st *semantics.SemTable) error
+		PlanOffsets(node *Node, st *semantics.SemTable, conn *Converter) error
 
 		Equals(st *semantics.SemTable, op Operator) bool
 	}

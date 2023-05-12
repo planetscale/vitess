@@ -109,7 +109,7 @@ func (u *unionEmitProject) ColumnType(g *graph.Graph[*Node], col int) (sql.Type,
 			return sql.Type{}, err
 		}
 		if tt.T >= 0 && tt.T != t.T {
-			panic("wut")
+			return sql.Type{}, fmt.Errorf("column %d has one input of type %v and one input of type %v", col, tt.T.String(), t.T.String())
 		}
 		tt = t
 	}

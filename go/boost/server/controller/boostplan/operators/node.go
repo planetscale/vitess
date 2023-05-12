@@ -2,6 +2,9 @@ package operators
 
 import (
 	"fmt"
+	"strings"
+
+	"vitess.io/vitess/go/slices2"
 
 	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/boost/graph"
@@ -84,18 +87,8 @@ func (node *Node) ExprLookup(st *semantics.SemTable, expr sqlparser.Expr) (int, 
 		}
 	}
 
-	fail := func() (int, error) {
-		dbg.Bug("column not found: %s", sqlparser.String(expr))
-		return -1, nil
-	}
-
-	p, ok := node.Op.(*Project)
-	if !ok || !p.isDerivedTable() {
-		return fail()
-	}
-
 	var err error
-	expr, err = p.rewriteDerivedExpr(st, expr)
+	expr, err = node.tryRewriteDerivedExpressions(st, expr)
 	if err != nil {
 		return 0, err
 	}
@@ -108,6 +101,39 @@ func (node *Node) ExprLookup(st *semantics.SemTable, expr sqlparser.Expr) (int, 
 
 	dbg.Bug("column not found: %s", sqlparser.String(expr))
 	return -1, nil
+}
+
+func (node *Node) tryRewriteDerivedExpressions(st *semantics.SemTable, expr sqlparser.Expr) (sqlparser.Expr, error) {
+	fail := func() error {
+		exprs := slices2.Map(node.Columns, func(from *Column) string {
+			return sqlparser.String(from.AST[0])
+		})
+
+		dbg.Bug("column not found: %s, available: %s", sqlparser.String(expr), strings.Join(exprs, ","))
+		return nil
+	}
+
+	n := node
+	for {
+		// columnKeepers just pass through all columns, so we can dig a
+		//little deeper in the ancestry trying to find a derived table
+		if !n.Op.KeepAncestorColumns() || len(n.Ancestors) > 1 {
+			break
+		}
+		n = n.Ancestors[0]
+	}
+
+	p, ok := n.Op.(*Project)
+	if !ok || !p.isDerivedTable() {
+		return nil, fail()
+	}
+
+	var err error
+	expr, err = p.rewriteDerivedExpr(st, expr)
+	if err != nil {
+		return nil, err
+	}
+	return expr, nil
 }
 
 func (node *Node) Equals(st *semantics.SemTable, other *Node) bool {
