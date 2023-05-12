@@ -163,7 +163,7 @@ func (f *fakeOp) KeepAncestorColumns() bool {
 	panic("implement me")
 }
 
-func (f *fakeOp) PlanOffsets(node *Node, st *semantics.SemTable) error {
+func (f *fakeOp) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) error {
 	// TODO implement me
 	panic("implement me")
 }

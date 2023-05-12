@@ -39,7 +39,7 @@ func TestCalculateOffsets(t *testing.T) {
 			Name: "colName",
 		},
 	}
-	err := bindOffsets(fNode, semTable)
+	err := conv.bindOffsets(fNode, semTable)
 	require.NoError(t, err)
 	assert.NotNil(t, opF.EvalExpr)
 	assert.Equal(t, ":0 = 12", sqlparser.String(opF.EvalExpr[0]))

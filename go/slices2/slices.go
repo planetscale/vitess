@@ -49,6 +49,17 @@ func Map[From, To any](in []From, f func(From) To) []To {
 	return result
 }
 
+func MapIdx[From, To any](in []From, f func(int, From) To) []To {
+	if in == nil {
+		return nil
+	}
+	result := make([]To, len(in))
+	for i, col := range in {
+		result[i] = f(i, col)
+	}
+	return result
+}
+
 // DeleteFunc removes any elements from s for which del returns true,
 // returning the modified slice.
 // DeleteFunc modifies the contents of the slice s;

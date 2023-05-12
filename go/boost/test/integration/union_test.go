@@ -114,3 +114,26 @@ select sum(k) from sbtest4;
 	g.View("q0").Lookup().Expect(`[[DECIMAL(6)] [DECIMAL(9)] [NULL]]`)
 	g.View("q1").Lookup().Expect(`[[DECIMAL(6)] [DECIMAL(9)] [NULL] [NULL]]`)
 }
+
+func TestUnionPlannerCrashes(t *testing.T) {
+	const Recipe = `
+CREATE TABLE a (
+	c1 bigint NOT NULL,
+	c2 bigint NOT NULL,
+	PRIMARY KEY (c1)
+);
+
+CREATE TABLE b (
+	c1 bigint NOT NULL,
+	c2 bigint NOT NULL,
+	PRIMARY KEY (c1)
+);
+
+SELECT * FROM (SELECT c1, c2 FROM a UNION SELECT c1, c2 FROM b) AS u WHERE u.c1 = :a;
+SELECT * FROM (SELECT c1, c2 FROM a UNION SELECT c1, c2 FROM b) AS u ORDER BY u.c1;
+SELECT * FROM (SELECT c1, c2 FROM a UNION SELECT c2, c1 FROM b) AS u ORDER BY u.c1;
+`
+
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	_ = SetupExternal(t, boosttest.WithTestRecipe(recipe))
+}

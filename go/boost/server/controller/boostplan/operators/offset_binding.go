@@ -4,6 +4,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/common/dbg"
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -12,7 +13,7 @@ import (
 // bindOffsets finds the offsets between operators, and creates the evalengine expressions needed
 // We don't do this when the operators are created because they will be rewritten and changed,
 // and the offsets are not stable during the rewriting (for example when a filter can be moved under a join)
-func bindOffsets(node *Node, semTable *semantics.SemTable) error {
+func (conv *Converter) bindOffsets(node *Node, semTable *semantics.SemTable) error {
 	if len(node.Ancestors) == 0 {
 		// if we are not fetching data from an incoming operator, no need to do column offset resolution
 		return nil
@@ -20,16 +21,16 @@ func bindOffsets(node *Node, semTable *semantics.SemTable) error {
 
 	// first we visit the children, so we can do this bottom up
 	for _, ancestor := range node.Ancestors {
-		err := bindOffsets(ancestor, semTable)
+		err := conv.bindOffsets(ancestor, semTable)
 		if err != nil {
 			return err
 		}
 	}
 
-	return node.Op.PlanOffsets(node, semTable)
+	return node.Op.PlanOffsets(node, semTable, conv)
 }
 
-func (v *View) PlanOffsets(node *Node, st *semantics.SemTable) error {
+func (v *View) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) error {
 	ancestor := node.Ancestors[0]
 	for _, param := range v.Dependencies {
 		var err error
@@ -54,7 +55,7 @@ func (v *View) PlanOffsets(node *Node, st *semantics.SemTable) error {
 	return nil
 }
 
-func (g *GroupBy) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
+func (g *GroupBy) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) error {
 	input := node.Ancestors[0]
 
 	for _, grouping := range g.Grouping {
@@ -62,7 +63,7 @@ func (g *GroupBy) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 		if err != nil {
 			return err
 		}
-		offset, err := input.ExprLookup(semTable, ast)
+		offset, err := input.ExprLookup(st, ast)
 		if err != nil {
 			return err
 		}
@@ -78,12 +79,12 @@ func (g *GroupBy) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 		switch aggr := ast.(type) {
 		case *sqlparser.CountStar:
 		case sqlparser.AggrFunc:
-			offset, err = input.ExprLookup(semTable, aggr.GetArg())
+			offset, err = input.ExprLookup(st, aggr.GetArg())
 			if err != nil {
 				return err
 			}
 		default:
-			offset, err = input.ExprLookup(semTable, aggr)
+			offset, err = input.ExprLookup(st, aggr)
 			if err != nil {
 				return err
 			}
@@ -94,7 +95,7 @@ func (g *GroupBy) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 	return nil
 }
 
-func (j *Join) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
+func (j *Join) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) error {
 	lhsNode := node.Ancestors[0]
 	rhsNode := node.Ancestors[1]
 	lhsID := lhsNode.Covers()
@@ -104,7 +105,7 @@ func (j *Join) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 		isJoinCondition := slices.Index(j.JoinColumns, col) >= 0
 
 		if isJoinCondition && j.Inner {
-			err := j.handleJoinColumn(col, semTable, lhsID, rhsID, lhsNode, rhsNode)
+			err := j.handleJoinColumn(col, st, lhsID, rhsID, lhsNode, rhsNode)
 			if err != nil {
 				return err
 			}
@@ -112,10 +113,10 @@ func (j *Join) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 		}
 
 		for _, expr := range col.AST {
-			deps := semTable.DirectDeps(expr)
+			deps := st.DirectDeps(expr)
 			switch {
 			case deps.IsSolvedBy(lhsID):
-				offset, err := lhsNode.ExprLookup(semTable, expr)
+				offset, err := lhsNode.ExprLookup(st, expr)
 				if err != nil {
 					return err
 				}
@@ -124,7 +125,7 @@ func (j *Join) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 					j.On[0] = offset
 				}
 			case deps.IsSolvedBy(rhsID):
-				offset, err := rhsNode.ExprLookup(semTable, expr)
+				offset, err := rhsNode.ExprLookup(st, expr)
 				if err != nil {
 					return err
 				}
@@ -225,7 +226,7 @@ func getComparisons(expr sqlparser.Expr) (predicates []*sqlparser.ComparisonExpr
 	return
 }
 
-func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
+func (p *Project) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) error {
 	input := node.Ancestors[0]
 
 	for _, col := range p.Columns {
@@ -236,7 +237,7 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 		var proj Projection
 		switch expr := ast.(type) {
 		case *sqlparser.ColName, sqlparser.AggrFunc:
-			offset, err := input.ExprLookup(semTable, expr)
+			offset, err := input.ExprLookup(st, expr)
 			if err != nil {
 				return err
 			}
@@ -246,14 +247,14 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 		case *sqlparser.Offset:
 			proj = Projection{Kind: ProjectionColumn, Column: expr.V}
 		default:
-			newExpr, err := rewriteColNamesToOffsets(semTable, node.Ancestors[0], expr)
+			newExpr, err := rewriteColNamesToOffsets(st, node.Ancestors[0], expr)
 			if err != nil {
 				return err
 			}
 			eexpr, err := evalengine.Translate(newExpr, &evalengine.Config{
-				ResolveColumn: columnLookup(input, semTable),
-				ResolveType:   semTable.TypeForExpr,
-				Collation:     semTable.Collation,
+				ResolveColumn: columnLookup(input, st),
+				ResolveType:   st.TypeForExpr,
+				Collation:     st.Collation,
 			})
 			if err != nil {
 				return &UnsupportedError{AST: expr, Type: EvalEngineNotSupported}
@@ -266,7 +267,7 @@ func (p *Project) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 	return nil
 }
 
-func (n *NullFilter) PlanOffsets(node *Node, st *semantics.SemTable) error {
+func (n *NullFilter) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) error {
 	input := node.Ancestors[0]
 
 	newPredicate := sqlparser.Rewrite(sqlparser.CloneExpr(n.Predicates), findOffsets(st, input), nil).(sqlparser.Expr)
@@ -373,10 +374,10 @@ func findOffsets(semTable *semantics.SemTable, input *Node) func(cursor *sqlpars
 	}
 }
 
-func (f *Filter) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
+func (f *Filter) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) error {
 	input := node.Ancestors[0]
 	var err error
-	newPredicate := sqlparser.Rewrite(sqlparser.CloneExpr(f.Predicates), findOffsets(semTable, input), nil)
+	newPredicate := sqlparser.Rewrite(sqlparser.CloneExpr(f.Predicates), findOffsets(st, input), nil)
 	if err != nil {
 		return err
 	}
@@ -389,33 +390,33 @@ func (f *Filter) PlanOffsets(node *Node, semTable *semantics.SemTable) error {
 	return nil
 }
 
-func (u *Union) PlanOffsets(node *Node, st *semantics.SemTable) error {
+func (u *Union) PlanOffsets(node *Node, st *semantics.SemTable, conv *Converter) error {
 	var err error
-	u.ColumnsIdx[0], err = bindUnionSideOffset(u.InputColumns[0], node.Ancestors[0], st)
+	node.Ancestors[0], u.ColumnsIdx[0], err = conv.bindUnionSideOffset(u.InputColumns[0], node.Ancestors[0], st)
 	if err != nil {
 		return err
 	}
-	u.ColumnsIdx[1], err = bindUnionSideOffset(u.InputColumns[1], node.Ancestors[1], st)
+	node.Ancestors[1], u.ColumnsIdx[1], err = conv.bindUnionSideOffset(u.InputColumns[1], node.Ancestors[1], st)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (n *NodeTableRef) PlanOffsets(*Node, *semantics.SemTable) error {
+func (n *NodeTableRef) PlanOffsets(*Node, *semantics.SemTable, *Converter) error {
 	// do nothing
 	return nil
 }
 
-func (t *Table) PlanOffsets(*Node, *semantics.SemTable) error {
+func (t *Table) PlanOffsets(*Node, *semantics.SemTable, *Converter) error {
 	// do nothing
 	return nil
 }
 
-func (t *TopK) PlanOffsets(node *Node, table *semantics.SemTable) error {
+func (t *TopK) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) error {
 	ancestor := node.Ancestors[0]
 	for _, param := range t.Order {
-		offset, err := ancestor.ExprLookup(table, param.Expr)
+		offset, err := ancestor.ExprLookup(st, param.Expr)
 		if err != nil {
 			return err
 		}
@@ -427,7 +428,7 @@ func (t *TopK) PlanOffsets(node *Node, table *semantics.SemTable) error {
 		if err != nil {
 			return err
 		}
-		offset, err := ancestor.ExprLookup(table, col)
+		offset, err := ancestor.ExprLookup(st, col)
 		if err != nil {
 			return err
 		}
@@ -436,25 +437,64 @@ func (t *TopK) PlanOffsets(node *Node, table *semantics.SemTable) error {
 	return nil
 }
 
-func (d *Distinct) PlanOffsets(*Node, *semantics.SemTable) error {
+func (d *Distinct) PlanOffsets(*Node, *semantics.SemTable, *Converter) error {
 	// nothing to do
 	return nil
 }
 
-func bindUnionSideOffset(columns Columns, node *Node, st *semantics.SemTable) ([]int, error) {
+func (conv *Converter) bindUnionSideOffset(columns Columns, node *Node, st *semantics.SemTable) (*Node, []int, error) {
 	var offsets []int
 	for _, column := range columns {
 		ast, err := column.SingleAST()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		idx, err := node.ExprLookup(st, ast)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		offsets = append(offsets, idx)
 	}
-	return offsets, nil
+
+	if slices.IsSorted(offsets) {
+		return node, offsets, nil
+	}
+
+	// Union requires input columns to be sorted. If they aren't already, we stick a projection in front
+	// that will do nothing except rearrange the columns
+	proj := &Project{}
+
+	projNode := conv.NewNode("union_align_project", proj, []*Node{node})
+
+	type tuple struct {
+		oldIdx, offset int
+	}
+
+	newColumns := slices2.MapIdx(offsets, func(idx, from int) tuple {
+		t := tuple{
+			oldIdx: idx,
+			offset: from,
+		}
+		return t
+	})
+
+	slices.SortFunc(newColumns, func(a, b tuple) bool {
+		return a.offset < b.offset
+	})
+
+	for idx, col := range newColumns {
+		column := node.Columns[col.oldIdx]
+		proj.Columns = append(proj.Columns, column)
+		projNode.Columns = append(projNode.Columns, column)
+		proj.Projections = append(proj.Projections, Projection{
+			Kind:     ProjectionColumn,
+			Original: column.AST[0],
+			Column:   col.offset,
+		})
+		offsets[idx] = idx
+	}
+
+	return projNode, offsets, nil
 }
 
 func columnLookup(node *Node, semTable *semantics.SemTable) evalengine.ColumnResolver {
