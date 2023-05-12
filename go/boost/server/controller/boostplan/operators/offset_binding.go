@@ -489,7 +489,7 @@ func (conv *Converter) bindUnionSideOffset(columns Columns, node *Node, st *sema
 		proj.Projections = append(proj.Projections, Projection{
 			Kind:     ProjectionColumn,
 			Original: column.AST[0],
-			Column:   col.offset,
+			Column:   col.oldIdx,
 		})
 		offsets[idx] = idx
 	}
