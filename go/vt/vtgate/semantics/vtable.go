@@ -38,14 +38,31 @@ var _ TableInfo = (*vTableInfo)(nil)
 // dependencies implements the TableInfo interface
 func (v *vTableInfo) dependencies(colName string, org originable) (dependencies, error) {
 	var deps dependencies = &nothing{}
+	var found sqlparser.Expr
+
 	for i, name := range v.columnNames {
 		if name != colName {
 			continue
 		}
-		directDeps, recursiveDeps, qt := org.depsForExpr(v.cols[i])
 
-		newDeps := createCertain(directDeps, recursiveDeps, qt)
-		deps = deps.merge(newDeps, false)
+		thisExpr := v.cols[i]
+		if found != nil {
+			if sqlparser.Equals.Expr(found, thisExpr) {
+				continue
+			}
+			_, thisCol := thisExpr.(*sqlparser.ColName)
+			_, foundCol := found.(*sqlparser.ColName)
+			if thisCol && foundCol {
+				return nil, &AmbiguousColumnError{Column: colName}
+			}
+			if thisCol {
+				continue
+			}
+		}
+
+		found = thisExpr
+		directDeps, recursiveDeps, qt := org.depsForExpr(thisExpr)
+		deps = createCertain(directDeps, recursiveDeps, qt)
 	}
 	if deps.empty() && v.hasStar() {
 		return createUncertain(v.tables, v.tables), nil

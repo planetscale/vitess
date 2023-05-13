@@ -28,6 +28,10 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	"database/sql"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var T0 TableSet
@@ -1492,6 +1496,99 @@ func TestUpdateErrors(t *testing.T) {
 			assert.EqualError(t, err, test.expectedError)
 		})
 	}
+}
+
+func TestFailAmbiguousColumns(t *testing.T) {
+	cols := []string{"uid", "uid+1", "1"}
+	aliases := []string{" as id", ""}
+	tails := []string{"", " order by id", " group by id"}
+	db, err := sql.Open("mysql", "root:@tcp(127.0.0.1:3306)/test")
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	require.NoError(t, err)
+	for _, tail := range tails {
+		for _, c1 := range cols {
+			for _, c2 := range cols {
+				for _, a1 := range aliases {
+					for _, a2 := range aliases {
+						q := fmt.Sprintf("select %s%s, %s%s from t2%s", c1, a1, c2, a2, tail)
+						_, mysqlErr := db.Exec(q)
+
+						parse, err := sqlparser.Parse(q)
+						require.NoError(t, err)
+
+						_, vitessErr := Analyze(parse, "d", fakeSchemaInfo())
+						// if vitessErr == nil {
+						// 	vitessErr = st.NotUnshardedErr
+						// }
+						// if vitessErr == nil {
+						// 	vitessErr = st.NotSingleRouteErr
+						// }
+						m := mysqlErr != nil
+						v := vitessErr != nil
+
+						if (m && !v) || (!m && v) {
+							fmt.Println(q)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// tests := []struct {
+	// 	success string
+	// 	fail    string
+	// }{
+	// 	// {fail: "select * from (select uid, name as uid from t2) x"},
+	// 	// {fail: "select * from (select uid, uid+1 as uid from t2) x"},
+	// 	// {fail: "select uid, name as uid from t2 order by uid"},
+	// 	// {fail: "select uid, name as uid, count(*) from t2 group by uid"},
+	// 	// {success: "select id, 1 as id, count(*) from t2 order by id"},
+	// 	// {success: "select id, id+1 as id, count(*) from t2 order by id"},
+	// 	// {success: "select id, id+1 as id, count(*) from t2 group by id"},
+	// 	// {success: "select id, '1' as id, count(*) from t2 order by id"},
+	// 	// {success: "select id, id+1 as id, count(*) from t2"},
+	// 	// {success: "select id, id, count(*) from t2 group by id"},
+	// 	// {success: "select id, id, count(*) from t2 order by id"},
+	// 	{fail: "select a.uid, b.uid from t1 as a, t1 as b union select 1, 2 order by id"},
+	//
+	// 	// same queries with the column order reversed
+	// 	// {fail: "select * from (select name as uid, uid  from t2) x"},
+	// 	// {fail: "select * from (select uid+1 as uid, uid from t2) x"},
+	// 	// {fail: "select name as uid, uid from t2 order by uid"},
+	// 	// {fail: "select name as uid, uid, count(*) from t2 group by uid"},
+	// 	// {success: "select 1 as id, id, count(*) from t2 order by id"},
+	// 	// {success: "select id+1 as id, id, count(*) from t2 order by id"},
+	// 	// {success: "select id+1 as id, id, count(*) from t2 group by id"},
+	// 	// {success: "select '1' as id, id, count(*) from t2 order by id"},
+	// 	// {success: "select id+1 as id, id, count(*) from t2"},
+	// }
+
+	// for _, test := range tests {
+	// 	name := test.success + test.fail
+	// 	t.Run(name, func(t *testing.T) {
+	// 		q, s := test.success, true
+	// 		if q == "" {
+	// 			q, s = test.fail, false
+	// 		}
+	//
+	// 		parse, err := sqlparser.Parse(q)
+	// 		require.NoError(t, err)
+	//
+	// 		_, err = Analyze(parse, "d", fakeSchemaInfo())
+	// 		if s {
+	// 			require.NoError(t, err)
+	// 		} else {
+	// 			require.Error(t, err)
+	// 		}
+	//
+	// 	})
+	// }
+
 }
 
 // TestScopingSubQueryJoinClause tests the scoping behavior of a subquery containing a join clause.
