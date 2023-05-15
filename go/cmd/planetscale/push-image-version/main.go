@@ -32,6 +32,7 @@ type PushRequest struct {
 }
 
 type VitessImageVersion struct {
+	BranchName string `json:"vitess_branch_name"`
 	CommitSha  string `json:"commit_sha"`
 	CommitDate string `json:"commit_date"`
 	Major      int64  `json:"major_version"`
@@ -46,6 +47,7 @@ func (v *VitessImageVersion) ImageVersion() string {
 
 func (v *VitessImageVersion) String() string {
 	var b strings.Builder
+	fmt.Fprintf(&b, "\t - Branch Name: %s\n", v.BranchName)
 	fmt.Fprintf(&b, "\t - Commit SHA: %s\n", v.CommitSha)
 	fmt.Fprintf(&b, "\t - Commit Date: %s\n", v.CommitDate)
 	fmt.Fprintf(&b, "\t - Vitess Version: %d.%d.%d\n", v.Major, v.Minor, v.Patch)
@@ -67,6 +69,7 @@ func realMain() error {
 	log.SetPrefix("push-image-version: ")
 	log.SetOutput(os.Stdout)
 
+	branchName := flag.String("branch-name", "", "the branch name of the image")
 	prNumber := flag.Int64("pr-number", 0, "the pull request number (if present)")
 	commitSHA := flag.String("commit-sha", "", "the commit/build sha of the image")
 	commitDate := flag.String("commit-date", "", "the commit/build date of the image")
@@ -114,6 +117,10 @@ func realMain() error {
 	}
 	if isFlagPassed("pr-number") {
 		v.PRNumber = prNumber
+	}
+
+	if branchName != nil {
+		v.BranchName = *branchName
 	}
 
 	log.Printf("verifying if version already exists: %q", v.ImageVersion())

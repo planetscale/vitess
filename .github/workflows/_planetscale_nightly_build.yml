@@ -179,6 +179,7 @@ jobs:
           --url "https://admin.planetscale.com/external/vitess-image-versions"
           --commit-sha ${{ steps.determine-sha.outputs.sha }}
           --commit-date ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          --branch-name ${{ matrix.ref }}
 
   slack-notify:
     name: "Send Slack Notification to #builds"
