@@ -100,8 +100,11 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            ${{ format('us-docker.pkg.dev/planetscale-registry/{0}/vitess/lite', matrix.ref == 'main' && 'prod' || 'dev') }}
-            ${{ format('997601596833.dkr.ecr.us-east-1.amazonaws.com/{0}/vitess', matrix.ref == 'main' && 'main' || 'branch') }}
+            us-docker.pkg.dev/planetscale-registry/dev/vitess/lite
+            us-docker.pkg.dev/planetscale-registry/prod/vitess/lite
+            997601596833.dkr.ecr.us-east-1.amazonaws.com/branch/vitess
+            997601596833.dkr.ecr.us-east-1.amazonaws.com/main/vitess
+
           flavor: |
             prefix=${{ matrix.image }}-,onlatest=true
           # head tag is so we have 2 well-known tags to a vitess image for CI
@@ -149,7 +152,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           push: true
           secrets: github_token=${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
-          build-args: | 
+          build-args: |
             BUILD_TIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
 
       - name: Install Go
