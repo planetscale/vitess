@@ -205,6 +205,7 @@ func (sc *StatefulConnection) ID() int64 {
 
 // Kill kills the currently executing query and connection
 func (sc *StatefulConnection) Kill(reason string, elapsed time.Duration) error {
+	defer sc.Releasef("kill")
 	return sc.dbConn.Kill(reason, elapsed)
 }
 

@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -215,4 +216,30 @@ func newActivePool() *StatefulConnectionPool {
 	env := newEnv("ActivePoolTest")
 
 	return NewStatefulConnPool(env)
+}
+
+// TestKillStatefulConnectionInAPool tests that killing a query also removes it from the active connections in the pool
+// and waiting for the pool to empty works fine.
+func TestKillStatefulConnectionInAPool(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	pool := newActivePool()
+	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	conn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, pool.active.Size())
+	conn.Kill("testing", 1*time.Second)
+	require.EqualValues(t, 0, pool.active.Size())
+
+	completed := make(chan bool)
+	go func() {
+		pool.WaitForEmpty()
+		completed <- true
+	}()
+
+	select {
+	case <-completed:
+	case <-time.After(30 * time.Second):
+		t.Errorf("WaitForEmpty failed to complete in the given time.")
+	}
 }
