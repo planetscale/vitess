@@ -657,28 +657,19 @@ func (p *Plan) finalize(mig Migration) ([]pendingReplay, error) {
 
 	if r := node.AsReader(); r != nil {
 		if p.partial {
-			if !r.IsMaterialized() {
-				panic("expected reader to be materialized")
-			}
-
 			lastDomain := node.Domain()
 			numShards := mig.DomainShards(lastDomain)
 
 			p.state.State = &packet.PrepareStateRequest_PartialGlobal_{PartialGlobal: &packet.PrepareStateRequest_PartialGlobal{
-				Gid:  p.node,
-				Cols: len(node.Fields()),
-				Key:  r.Key(),
+				Gid: p.node,
 				TriggerDomain: &packet.PrepareStateRequest_PartialGlobal_TriggerDomain{
 					Domain: lastDomain,
 					Shards: numShards,
 				},
-			},
-			}
+			}}
 		} else {
 			st := &packet.PrepareStateRequest_Global{
-				Gid:  p.node,
-				Cols: len(node.Fields()),
-				Key:  r.Key(),
+				Gid: p.node,
 			}
 			p.state.State = &packet.PrepareStateRequest_Global_{Global: st}
 		}

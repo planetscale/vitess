@@ -2,9 +2,11 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"time"
 
+	"github.com/google/uuid"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 
@@ -141,6 +143,8 @@ type Domain struct {
 	upquerySlots chan uint8
 	upqueryMode  config.UpqueryMode
 	gtidTrackers *dataflow.Map[flownode.GtidTracker]
+
+	stats domainStats
 }
 
 func (d *Domain) Index() dataflow.DomainIdx {
@@ -185,6 +189,7 @@ const MaxUpqueries = 32
 // FromProto creates a Domain from proto data.
 func FromProto(
 	log *zap.Logger,
+	worker uuid.UUID,
 	builder *service.DomainBuilder,
 	readers *Readers,
 	coord *boostrpc.ChannelCoordinator,
@@ -250,6 +255,10 @@ func FromProto(
 		upquerySlots: upquerySlots,
 		upqueryMode:  builder.Config.UpqueryMode,
 		gtidTrackers: new(dataflow.Map[flownode.GtidTracker]),
+
+		stats: domainStats{
+			labels: []string{worker.String(), fmt.Sprintf("%d-%d", builder.Index, builder.Shard)},
+		},
 	}
 }
 

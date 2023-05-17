@@ -209,20 +209,16 @@ message PrepareStateRequest {
 
   message PartialGlobal {
     uint32 gid = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
-    int32 cols = 2 [(gogoproto.casttype) = "int"];
-    repeated int64 key = 3 [(gogoproto.casttype) = "int"];
 
     message TriggerDomain {
       uint64 domain = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.DomainIdx"];
       uint64 shards = 2 [(gogoproto.casttype) = "uint"];
     };
-    TriggerDomain trigger_domain = 4;
+    TriggerDomain trigger_domain = 2;
   };
 
   message Global {
     uint32 gid = 1 [(gogoproto.casttype) = "vitess.io/vitess/go/boost/dataflow.NodeIdx"];
-    int32 cols = 2 [(gogoproto.casttype) = "int"];
-    repeated int64 key = 3 [(gogoproto.casttype) = "int"];
   };
 
   oneof state {

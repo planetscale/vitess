@@ -256,7 +256,7 @@ func (ctrl *Controller) viewDescriptor(node *flownode.Node) *vtboostpb.Materiali
 	var keySchema []*querypb.Field
 	var queryMode = vtboostpb.Materialization_ViewDescriptor_QUERY_SINGLE
 	for _, param := range desc.Parameters {
-		if param.Kind == viewplan.Param_MULTI {
+		if param.Kind == viewplan.Param_MULTI_EQUALITY {
 			queryMode = vtboostpb.Materialization_ViewDescriptor_QUERY_MULTI
 		}
 		tt := nodeSchema[param.Col]

@@ -28,8 +28,8 @@ type Reader struct {
 
 func (r *Reader) dataflow() {}
 
-func (r *Reader) Key() []int {
-	return r.plan.TriggerKey
+func (r *Reader) StateKey() []int {
+	return r.plan.InternalStateKey
 }
 
 func traceParentOrdering(g *graph.Graph[*Node], node graph.NodeIdx) (Order, int) {
@@ -63,10 +63,6 @@ func (r *Reader) Order() (cols []int64, desc []bool, limit int) {
 
 func (r *Reader) IsFor() graph.NodeIdx {
 	return r.forNode
-}
-
-func (r *Reader) IsMaterialized() bool {
-	return r.plan.TriggerKey != nil
 }
 
 func (r *Reader) IsPartial() bool {

@@ -17,7 +17,7 @@ import (
 func TestStoreWorks(t *testing.T) {
 	var hasher vthash.Hasher
 	a := sql.TestRow(1, "a")
-	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil, nil)
+	r, w := newMapView(testPlan([]int{0}), sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
 
 	defer func() {
 		w.Free()
@@ -47,7 +47,7 @@ func TestStoreWorks(t *testing.T) {
 func TestMinimalQuery(t *testing.T) {
 	a := sql.TestRow(1, "a")
 	b := sql.TestRow(1, "b")
-	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil, nil)
+	r, w := newMapView(testPlan([]int{0}), sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
 
 	defer func() {
 		w.Free()
@@ -77,7 +77,7 @@ func TestBusy(t *testing.T) {
 	const N = 1000
 	var wg sync.WaitGroup
 
-	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64), nil, nil)
+	r, w := newMapView(testPlan([]int{0}), sql.TestSchema(sqltypes.Int64), nil)
 
 	defer func() {
 		w.Free()
@@ -123,7 +123,7 @@ func assertLookup(t *testing.T, r *MapReader, key sql.Row, wantRowsLen int, want
 }
 
 func TestConcurrentRows(t *testing.T) {
-	r, w := NewMapView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.Int64), nil, func(iterator []sql.Row) bool {
+	r, w := newMapView(testPlan([]int{0}), sql.TestSchema(sqltypes.Int64, sqltypes.Int64), func(iterator []sql.Row) bool {
 		return true
 	})
 
@@ -158,7 +158,7 @@ func TestConcurrentRows(t *testing.T) {
 func TestConcurrentRowsInternal(t *testing.T) {
 	key := []int{0}
 	schema := sql.TestSchema(sqltypes.Int64, sqltypes.Int64)
-	r, w := NewMapView(key, schema, nil, func(iterator []sql.Row) bool {
+	r, w := newMapView(testPlan(key), schema, func(iterator []sql.Row) bool {
 		return true
 	})
 
@@ -224,7 +224,7 @@ func TestUpdateRows(t *testing.T) {
 	key := []int{0}
 	schema := sql.TestSchema(sqltypes.Int64, sqltypes.Int64)
 
-	r, w := NewMapView(key, schema, nil, func(iterator []sql.Row) bool {
+	r, w := newMapView(testPlan(key), schema, func(iterator []sql.Row) bool {
 		return true
 	})
 

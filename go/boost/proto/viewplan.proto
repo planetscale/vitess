@@ -9,8 +9,8 @@ import "sql.proto";
 message Param {
   enum Kind {
     UNSUPPORTED = 0;
-    SINGLE = 1;
-    MULTI = 2;
+    EQUALITY = 1;
+    MULTI_EQUALITY = 2;
     RANGE = 3;
     POST = 4;
   };
@@ -34,25 +34,80 @@ enum Aggregation {
   MAX = 4;
 };
 
+// Plan describes the way data is indexed in a reader and the way
+// it is queried into the materialized state.
 message Plan {
   message TreeKey {
+    // Lower is the column indexes of the lower bound of the range query.
+    // The offsets map the input parameters of the original query into
+    // the weight key that will be used as a lower bound for the materialized
+    // state.
     repeated int64 lower = 1 [(gogoproto.casttype) = "int"];
+    // LowerInclusive is true if the lower bound is inclusive (>=).
     bool lower_inclusive = 2;
+    // Upper is the column indexes of the upper bound of the range query.
+    // This mirrors how the lower offset works.
     repeated int64 upper = 3 [(gogoproto.casttype) = "int"];
+    // UpperInclusive is true if the upper bound is inclusive (<=).
     bool upper_inclusive = 4;
   };
 
-  repeated Param parameters = 1;
-  TreeKey tree_key = 2;
-  repeated int64 map_key = 3 [(gogoproto.casttype) = "int"];
+  // AllowPartialMaterialization is true if we can partially materialize the view.
+  // This is true if we either have no range query parameters, or if we have
+  // at least also another equality parameter next to the range parameters.
+  // Even if this is set to true, the planner might still decide to not
+  // partially materialized due to other constraints in the flow graph.
+  bool allow_partial_materialization = 1;
 
-  repeated OrderedColumn topk_order = 4 [(gogoproto.nullable) = false];
-  int64 topk_limit = 5 [(gogoproto.casttype) = "int"];
-  int64 columns_for_user = 6 [(gogoproto.casttype) = "int"];
+  // Parameters describes the query parameters that are used to query the view.
+  // They are always in the same order as they appear in the original SQL query.
+  repeated Param parameters = 2;
 
-  repeated int64 trigger_key = 7 [(gogoproto.casttype) = "int"];
+  // TreeKey is present if we have a range query in our view. This implies
+  // that we will materialize the view using a b-tree.
+  TreeKey tree_key = 3;
 
-  repeated Aggregation post_aggregation = 8;
-  repeated int64 post_group_by = 9 [(gogoproto.casttype) = "int"];
+  // ParameterKey maps the input parameters of the original query into the
+  // key used to query the materialized state. For a b-tree materialization,
+  // this only maps the equality parameters.
+  repeated int64 parameter_key = 4 [(gogoproto.casttype) = "int"];
+
+  // TopkOrder is the column ordering for any columns that need to be sorted
+  // as a post-processing step. This is for example needed for a MULTI_EQUALITY
+  // lookup with an ORDER BY clause. The sorting is performed on the vtgate.
+  repeated OrderedColumn topk_order = 5 [(gogoproto.nullable) = false];
+
+  // TopkLimit is the limit for the result which is applied as a post-processing step.
+  // This is for example needed for a MULTI_EQUALITY lookup with a LIMIT clause.
+  // The truncation is performed on the vtgate.
+  int64 topk_limit = 6 [(gogoproto.casttype) = "int"];
+
+  // ColumnsForUser is the number of columns in the final result returned to
+  // the user. There are cases where the materialized state needs to have more
+  // columns that can only be truncated after the post filtering step.
+  // For example an ORDER BY clause on a column that is not part of the results.
+  int64 columns_for_user = 7 [(gogoproto.casttype) = "int"];
+
+  // InternalStateKey is the key used for the materialized state as it is seen
+  // internally by the dataflow.
+  // For the map materialized state this is always equal to the external state key.
+  // For the b-tree materialized state, this is different in case of partial materialization.
+  // It will only contain the equality parameters, which are the ones that the dataflow considers
+  // when performing upqueries and storing results.
+  // The external state key will be used for the client queries and will include the
+  // range parameters as well.
+  repeated int64 internal_state_key = 8 [(gogoproto.casttype) = "int"];
+
+  // ExternalStateKey is the key used to query the materialized state externally
+  // by the client.
+  repeated int64 external_state_key = 9 [(gogoproto.casttype) = "int"];
+
+  // PostAggregation is the aggregation that needs to be performed as a post filtering
+  // step. This is for example needed if the query has an aggregation and a post filter
+  // operation that changes the aggregation result.
+  repeated Aggregation post_aggregation = 10;
+  // PostGroupBy is the group by column(s) to be used while applying the post aggregation.
+  // This might not be set if the post aggregation needs no grouping itself.
+  repeated int64 post_group_by = 11 [(gogoproto.casttype) = "int"];
 };
 

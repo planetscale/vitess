@@ -86,10 +86,10 @@ func (n *Node) RenderGraphviz(gvz *graphviz.Node, options GraphvizOptions) {
 		gvz.Row("shard by " + n.fields[impl.ShardedBy()])
 	case *Reader:
 		var key string
-		if impl.Key() == nil {
+		if impl.StateKey() == nil {
 			key = "none"
 		} else {
-			key = fmt.Sprintf("%v", impl.Key())
+			key = fmt.Sprintf("%v", impl.StateKey())
 		}
 		gvz.Row(addr, graphviz.Fmt("<B>%s</B>", impl.PublicID()), materialized)
 		gvz.Row("(reader / ⚷: " + key + ")")

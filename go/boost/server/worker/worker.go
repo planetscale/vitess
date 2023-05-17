@@ -84,24 +84,48 @@ func (w *Worker) ViewRead(ctx context.Context, req *service.ViewReadRequest) (*s
 	case *view.MapReader:
 		return w.viewReadMap(ctx, reader, req.Key, req.Block)
 	case *view.TreeReader:
-		return w.viewReadRange(ctx, reader, req.Key)
+		return w.viewReadRange(ctx, reader, req.Key, req.Block)
 	default:
 		panic("unexpected reader type")
 	}
 }
 
-func (w *Worker) viewReadRange(ctx context.Context, reader *view.TreeReader, key sql.Row) (*service.ViewReadResponse, error) {
-	lower, upper, err := reader.Bounds(key)
+func (w *Worker) viewReadRange(ctx context.Context, reader *view.TreeReader, key sql.Row, block bool) (*service.ViewReadResponse, error) {
+	bounds, err := reader.Bounds(key)
 	if err != nil {
 		return nil, err
 	}
+
 	var rs []sql.Row
-	reader.LookupRange(lower, upper, func(rows view.Rows) {
+	ok := reader.LookupRange(bounds, func(rows view.Rows) {
 		rs = rows.Collect(rs)
 	})
+	if ok {
+		rs = reader.PostFilter.Apply(ctx, key, rs)
+		return &service.ViewReadResponse{Rows: rs, Hits: 1}, nil
+	}
 
-	rs = reader.PostFilter.Apply(ctx, key, rs)
-	return &service.ViewReadResponse{Rows: rs, Hits: 1}, nil
+	if log := w.log.Check(zapcore.DebugLevel, "viewReadRange trigger replay"); log != nil {
+		log.Write(key.Zap("key"))
+	}
+
+	reader.Trigger([]sql.Row{key})
+	if !block {
+		return &service.ViewReadResponse{Hits: 0}, nil
+	}
+
+	for ctx.Err() == nil {
+		ok = reader.BlockingLookup(ctx, bounds, func(rows view.Rows) {
+			rs = rows.Collect(rs)
+		})
+		if ok {
+			rs = reader.PostFilter.Apply(ctx, key, rs)
+			return &service.ViewReadResponse{Rows: rs}, nil
+		}
+	}
+
+	w.log.Warn("viewReadRange request timed out", zap.Error(ctx.Err()), key.Zap("key"))
+	return nil, ctx.Err()
 }
 
 func (w *Worker) viewReadMap(ctx context.Context, reader *view.MapReader, key sql.Row, block bool) (*service.ViewReadResponse, error) {
@@ -209,7 +233,7 @@ func (w *Worker) PlaceDomain(builder *service.DomainBuilder) (*service.AssignDom
 	idx := builder.Index
 	shard := builder.Shard
 
-	d := domain.FromProto(w.log, builder, w.readers, w.coord, w.executor, w.memstats)
+	d := domain.FromProto(w.log, w.uuid, builder, w.readers, w.coord, w.executor, w.memstats)
 
 	if err := d.OnDeploy(); err != nil {
 		return nil, err

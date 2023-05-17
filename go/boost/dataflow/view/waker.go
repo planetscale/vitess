@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"vitess.io/vitess/go/boost/sql"
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -16,8 +18,12 @@ type condvar struct {
 	ch atomic.Pointer[chan struct{}]
 }
 
-func hash32(hash vthash.Hash) uint32 {
+func hashToHash32(hash vthash.Hash) uint32 {
 	return binary.LittleEndian.Uint32(hash[:4])
+}
+
+func weightsToHash32(weights sql.Weights) uint32 {
+	return uint32(hack.RuntimeStrhash(string(weights), 0x0))
 }
 
 func (c *condvar) Init() {
@@ -64,8 +70,8 @@ func newWaker() *waker {
 	return w
 }
 
-func (w *waker) wait(ctx context.Context, hash vthash.Hash, try func() bool) error {
-	cond := &w.conds[hash32(hash)%wakerSize]
+func (w *waker) wait32(ctx context.Context, hash uint32, try func() bool) error {
+	cond := &w.conds[hash%wakerSize]
 
 	cond.mu.Lock()
 	defer cond.mu.Unlock()
@@ -76,6 +82,14 @@ func (w *waker) wait(ctx context.Context, hash vthash.Hash, try func() bool) err
 		}
 	}
 	return nil
+}
+
+func (w *waker) waitHash(ctx context.Context, hash vthash.Hash, try func() bool) error {
+	return w.wait32(ctx, hashToHash32(hash), try)
+}
+
+func (w *waker) waitWeights(ctx context.Context, weights sql.Weights, try func() bool) error {
+	return w.wait32(ctx, weightsToHash32(weights), try)
 }
 
 func (w *waker) wakeupMany(mask wakeupSet) {
@@ -91,6 +105,10 @@ func (w *waker) wakeupMany(mask wakeupSet) {
 
 type wakeupSet uint64
 
-func (set *wakeupSet) Add(hash vthash.Hash) {
-	*set = *set | (1 << (hash32(hash) % wakerSize))
+func (set *wakeupSet) AddHash(hash vthash.Hash) {
+	*set = *set | (1 << (hashToHash32(hash) % wakerSize))
+}
+
+func (set *wakeupSet) AddWeights(weights sql.Weights) {
+	*set = *set | (1 << (weightsToHash32(weights) % wakerSize))
 }
