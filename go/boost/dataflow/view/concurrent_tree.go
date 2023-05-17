@@ -12,30 +12,38 @@ import (
 
 type BTreeMap = btree.Map[sql.Weights, *offheap.ConcurrentRows]
 
+type conctree struct {
+	b      *BTreeMap
+	filled map[sql.Weights]struct{}
+}
+
 type ConcurrentTree struct {
-	lr        leftright[*BTreeMap]
+	lr        leftright[conctree]
 	changelog Changelog[sql.Weights]
+
+	waker *waker
+}
+
+func newConctree() conctree {
+	return conctree{
+		b:      btree.NewMap[sql.Weights, *offheap.ConcurrentRows](0),
+		filled: make(map[sql.Weights]struct{}),
+	}
 }
 
 func NewConcurrentTree() *ConcurrentTree {
-	store := &ConcurrentTree{}
-	store.lr.init(
-		runtime.GOMAXPROCS(0),
-		btree.NewMap[sql.Weights, *offheap.ConcurrentRows](0),
-		btree.NewMap[sql.Weights, *offheap.ConcurrentRows](0),
-	)
+	store := &ConcurrentTree{
+		waker: newWaker(),
+	}
+	store.lr.init(runtime.GOMAXPROCS(0), newConctree(), newConctree())
 	return store
 }
 
-func (ct *ConcurrentTree) writerClear(key sql.Row, schema []sql.Type, memsize *atomic.Int64) {
+func (ct *ConcurrentTree) writerClear(key sql.Row, schema []sql.Type) {
 	w, _ := key.Weights(schema)
 	tbl := ct.lr.Writer()
 
-	if rows, ok := tbl.Get(w); ok {
-		ct.changelog.Free(rows)
-	}
-
-	tbl.Set(w, nil)
+	tbl.filled[w] = struct{}{}
 	ct.changelog.Do(changeInsert, w, nil)
 }
 
@@ -43,16 +51,14 @@ func (ct *ConcurrentTree) writerEmpty(key sql.Row, schema []sql.Type) {
 	tbl := ct.lr.Writer()
 	w, _ := key.Weights(schema)
 
-	if free, ok := tbl.Delete(w); ok {
-		ct.changelog.Do(changeRemove, w, nil)
-		ct.changelog.Free(free)
-	}
+	delete(tbl.filled, w)
+	panic("TODO: prefix removal")
 }
 
 func (ct *ConcurrentTree) readerContains(key sql.Row, schema []sql.Type) (found bool) {
 	w, _ := key.Weights(schema)
-	ct.lr.Read(func(tbl *BTreeMap, _ uint64) {
-		_, found = tbl.Get(w)
+	ct.lr.Read(func(tbl conctree, _ uint64) {
+		_, found = tbl.filled[w]
 	})
 	return
 }
@@ -63,16 +69,16 @@ func (ct *ConcurrentTree) writerAdd(rs []sql.Record, pk []int, schema []sql.Type
 
 	for _, r := range rs {
 		w, _ := r.Row.WeightsWithKeySchema(pk, schema, 0)
-		rows, ok := tbl.Get(w)
+		rows, ok := tbl.b.Get(w)
 
 		if r.Positive {
 			if !ok {
 				newrow := offheap.NewConcurrent(r.Row, memsize)
-				tbl.Set(w, newrow)
+				tbl.b.Set(w, newrow)
 				ct.changelog.Do(changeInsert, w, newrow)
 			} else {
 				newrow, free := rows.Insert(r.Row, memsize)
-				tbl.Set(w, newrow)
+				tbl.b.Set(w, newrow)
 				ct.changelog.Do(changeInsert, w, newrow)
 				ct.changelog.Free(free)
 			}
@@ -91,19 +97,19 @@ func (ct *ConcurrentTree) writerEvict(_ *rand.Rand, bytesToEvict int64) {
 
 func (ct *ConcurrentTree) writerFree(memsize *atomic.Int64) {
 	ct.writerRefresh(memsize, true)
-	ct.lr.left.Scan(func(_ sql.Weights, rows *offheap.ConcurrentRows) bool {
+	ct.lr.left.b.Scan(func(_ sql.Weights, rows *offheap.ConcurrentRows) bool {
 		rows.Free(memsize)
 		return true
 	})
 }
 
 func (ct *ConcurrentTree) writerLen() int {
-	return ct.lr.Writer().Len()
+	return ct.lr.Writer().b.Len()
 }
 
 func (ct *ConcurrentTree) readerLen() (length int) {
-	ct.lr.Read(func(tbl *BTreeMap, _ uint64) {
-		length = tbl.Len()
+	ct.lr.Read(func(tbl conctree, _ uint64) {
+		length = tbl.b.Len()
 	})
 	return
 }
@@ -113,12 +119,12 @@ func (ct *ConcurrentTree) writerRefresh(memsize *atomic.Int64, force bool) {
 		return
 	}
 
-	ct.lr.Publish(func(tbl *BTreeMap) {
+	ct.lr.Publish(func(tbl conctree) {
 		ct.applyChangelog(tbl, memsize)
 	})
 }
 
-func (ct *ConcurrentTree) applyChangelog(table *BTreeMap, memsize *atomic.Int64) {
+func (ct *ConcurrentTree) applyChangelog(ctree conctree, memsize *atomic.Int64) {
 	ops := ct.changelog.ops
 	diffs := ct.changelog.diffs
 	tombstones := ct.changelog.tombstones
@@ -131,29 +137,39 @@ func (ct *ConcurrentTree) applyChangelog(table *BTreeMap, memsize *atomic.Int64)
 	ct.changelog.heads = ct.changelog.heads[:0]
 	ct.changelog.freelist = nil
 
+	var wakeup wakeupSet
+
 	for _, head := range heads {
-		table.Set(head.key, head.value)
+		ctree.b.Set(head.key, head.value)
 	}
 
 	for i, do := range ops {
 		d := diffs[i]
 		switch do {
 		case changeInsert:
-			table.Set(d.key, d.value)
+			if d.value == nil {
+				ctree.filled[d.key] = struct{}{}
+				wakeup.AddWeights(d.key)
+			} else {
+				ctree.b.Set(d.key, d.value)
+			}
 		case changeRemove:
-			table.Delete(d.key)
+			delete(ctree.filled, d.key)
+			panic("TODO: prefix removal for d.key")
 		}
 	}
 
+	ct.waker.wakeupMany(wakeup)
+
 	for _, ts := range tombstones {
-		w, ok := table.Get(ts.key)
+		w, ok := ctree.b.Get(ts.key)
 		if !ok {
 			panic("missing tombstoned entry")
 		}
 		newhead, free := w.Remove(ts.value)
 
 		if newhead != w {
-			table.Set(ts.key, newhead)
+			ctree.b.Set(ts.key, newhead)
 			heads = append(heads, diff[sql.Weights]{ts.key, newhead})
 		}
 

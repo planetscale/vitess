@@ -38,7 +38,8 @@ func partialGlobalState(
 ) {
 	triggerDomain := st.TriggerDomain.Domain
 	shards := st.TriggerDomain.Shards
-	k := st.Key
+	desc := node.AsReader().ViewPlan()
+	key := desc.InternalStateKey
 	localAddr := node.LocalAddr()
 
 	var txs []chan []sql.Row
@@ -63,7 +64,7 @@ func partialGlobalState(
 				case miss := <-tx:
 					pkt := &packet.ReaderReplayRequest{
 						Node: localAddr,
-						Cols: k,
+						Cols: key,
 						Keys: miss,
 					}
 					if _, err := sender.StartReaderReplay(ctx, pkt); err != nil {
@@ -95,7 +96,7 @@ func partialGlobalState(
 		}
 	} else {
 		var hasher vthash.Hasher
-		var shardKeyType = schema[k[0]]
+		var shardKeyType = schema[key[0]]
 
 		onMiss = func(misses []sql.Row) bool {
 			perShard := make(map[uint][]sql.Row)
@@ -120,7 +121,7 @@ func partialGlobalState(
 		}
 	}
 
-	r, w := view.NewMapView(k, schema, node.AsReader().ViewPlan(), onMiss)
+	r, w := view.NewView(desc, schema, onMiss)
 	return r, w, nil
 }
 
@@ -153,15 +154,8 @@ func (d *Domain) handlePrepareState(ctx context.Context, pkt *packet.PrepareStat
 	case *packet.PrepareStateRequest_Global_:
 		n := d.nodes.Get(node)
 		reader := n.AsReader()
-		desc := reader.ViewPlan()
 
-		var r view.Reader
-		var w *view.Writer
-		if desc.TreeKey != nil {
-			r, w = view.NewTreeView(st.Global.Key, n.Schema(), desc)
-		} else {
-			r, w = view.NewMapView(st.Global.Key, n.Schema(), desc, nil)
-		}
+		r, w := view.NewView(reader.ViewPlan(), n.Schema(), nil)
 
 		d.readers.Set(ReaderID{st.Global.Gid, d.shardn()}, r)
 		d.memstats.Register(d.index, d.shard, n.GlobalAddr(), w.StateSizeAtomic())

@@ -183,10 +183,9 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 		var indices = make(map[graph.NodeIdx]coltuple)
 
 		if reader := n.AsReader(); reader != nil {
-			key := reader.Key()
+			key := reader.StateKey()
 			if key == nil {
-				// only streaming, no indexing needed
-				continue
+				panic("missing TriggerKey on reader")
 			}
 
 			// for a reader that will get lookups, we'd like to have an index above us
@@ -296,8 +295,7 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 			able = false
 		}
 
-		// TODO: for now Readers with range parameters must always be fully materialized
-		if r := nn.AsReader(); r != nil && !r.ViewPlan().CanMaterializePartially() {
+		if r := nn.AsReader(); r != nil && !r.ViewPlan().AllowPartialMaterialization {
 			able = false
 		}
 
@@ -320,7 +318,7 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 					stack = stack[:0]
 					able = false
 				}
-			} else if childN.IsReader() && childN.AsReader().Key() != nil {
+			} else if childN.IsReader() && childN.AsReader().StateKey() != nil {
 				// reader child (which is effectively materialized)
 				if !mat.partial[child] {
 					stack = stack[:0]
@@ -742,9 +740,7 @@ func (mat *Materialization) readyOne(mig Migration, ni graph.NodeIdx, indexOn []
 	}
 
 	if r := n.AsReader(); r != nil {
-		if r.IsMaterialized() {
-			hasState = true
-		}
+		hasState = true
 	}
 	if !hasState {
 		log.Debug("no need to replay non-materialized view")
@@ -764,10 +760,10 @@ func (mat *Materialization) setup(mig Migration, ni graph.NodeIdx, indexOn [][]i
 		// we must be reconstructing a Reader.
 		// figure out what key that Reader is using
 		reader := mig.Graph().Value(ni).AsReader()
-		if reader == nil || !reader.IsMaterialized() {
+		if reader == nil {
 			panic("expected to have a materialized reader")
 		}
-		if rh := reader.Key(); rh != nil {
+		if rh := reader.StateKey(); rh != nil {
 			indexOn = append(indexOn, rh)
 		}
 	}
@@ -822,7 +818,7 @@ func (mat *Materialization) GetStatus(node *flownode.Node) dataflow.Materializat
 	case mat.have.contains(idx):
 		isMaterialized = true
 	case node.IsReader():
-		isMaterialized = node.AsReader().IsMaterialized()
+		isMaterialized = true
 	}
 
 	if !isMaterialized {

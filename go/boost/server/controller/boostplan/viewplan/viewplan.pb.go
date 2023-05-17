@@ -5,11 +5,13 @@ package viewplan
 
 import (
 	fmt "fmt"
-	_ "github.com/gogo/protobuf/gogoproto"
-	proto "github.com/gogo/protobuf/proto"
 	io "io"
 	math "math"
 	math_bits "math/bits"
+
+	_ "github.com/gogo/protobuf/gogoproto"
+	proto "github.com/gogo/protobuf/proto"
+
 	sql "vitess.io/vitess/go/boost/sql"
 )
 
@@ -61,27 +63,27 @@ func (Aggregation) EnumDescriptor() ([]byte, []int) {
 type Param_Kind int32
 
 const (
-	Param_UNSUPPORTED Param_Kind = 0
-	Param_SINGLE      Param_Kind = 1
-	Param_MULTI       Param_Kind = 2
-	Param_RANGE       Param_Kind = 3
-	Param_POST        Param_Kind = 4
+	Param_UNSUPPORTED    Param_Kind = 0
+	Param_EQUALITY       Param_Kind = 1
+	Param_MULTI_EQUALITY Param_Kind = 2
+	Param_RANGE          Param_Kind = 3
+	Param_POST           Param_Kind = 4
 )
 
 var Param_Kind_name = map[int32]string{
 	0: "UNSUPPORTED",
-	1: "SINGLE",
-	2: "MULTI",
+	1: "EQUALITY",
+	2: "MULTI_EQUALITY",
 	3: "RANGE",
 	4: "POST",
 }
 
 var Param_Kind_value = map[string]int32{
-	"UNSUPPORTED": 0,
-	"SINGLE":      1,
-	"MULTI":       2,
-	"RANGE":       3,
-	"POST":        4,
+	"UNSUPPORTED":    0,
+	"EQUALITY":       1,
+	"MULTI_EQUALITY": 2,
+	"RANGE":          3,
+	"POST":           4,
 }
 
 func (x Param_Kind) String() string {
@@ -170,16 +172,57 @@ func (m *OrderedColumn) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_OrderedColumn proto.InternalMessageInfo
 
+// Plan describes the way data is indexed in a reader and the way
+// it is queried into the materialized state.
 type Plan struct {
-	Parameters      []*Param        `protobuf:"bytes,1,rep,name=parameters,proto3" json:"parameters,omitempty"`
-	TreeKey         *Plan_TreeKey   `protobuf:"bytes,2,opt,name=tree_key,json=treeKey,proto3" json:"tree_key,omitempty"`
-	MapKey          []int           `protobuf:"varint,3,rep,packed,name=map_key,json=mapKey,proto3,casttype=int" json:"map_key,omitempty"`
-	TopkOrder       []OrderedColumn `protobuf:"bytes,4,rep,name=topk_order,json=topkOrder,proto3" json:"topk_order"`
-	TopkLimit       int             `protobuf:"varint,5,opt,name=topk_limit,json=topkLimit,proto3,casttype=int" json:"topk_limit,omitempty"`
-	ColumnsForUser  int             `protobuf:"varint,6,opt,name=columns_for_user,json=columnsForUser,proto3,casttype=int" json:"columns_for_user,omitempty"`
-	TriggerKey      []int           `protobuf:"varint,7,rep,packed,name=trigger_key,json=triggerKey,proto3,casttype=int" json:"trigger_key,omitempty"`
-	PostAggregation []Aggregation   `protobuf:"varint,8,rep,packed,name=post_aggregation,json=postAggregation,proto3,enum=viewplan.Aggregation" json:"post_aggregation,omitempty"`
-	PostGroupBy     []int           `protobuf:"varint,9,rep,packed,name=post_group_by,json=postGroupBy,proto3,casttype=int" json:"post_group_by,omitempty"`
+	// AllowPartialMaterialization is true if we can partially materialize the view.
+	// This is true if we either have no range query parameters, or if we have
+	// at least also another equality parameter next to the range parameters.
+	// Even if this is set to true, the planner might still decide to not
+	// partially materialized due to other constraints in the flow graph.
+	AllowPartialMaterialization bool `protobuf:"varint,1,opt,name=allow_partial_materialization,json=allowPartialMaterialization,proto3" json:"allow_partial_materialization,omitempty"`
+	// Parameters describes the query parameters that are used to query the view.
+	// They are always in the same order as they appear in the original SQL query.
+	Parameters []*Param `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty"`
+	// TreeKey is present if we have a range query in our view. This implies
+	// that we will materialize the view using a b-tree.
+	TreeKey *Plan_TreeKey `protobuf:"bytes,3,opt,name=tree_key,json=treeKey,proto3" json:"tree_key,omitempty"`
+	// ParameterKey maps the input parameters of the original query into the
+	// key used to query the materialized state. For a b-tree materialization,
+	// this only maps the equality parameters.
+	ParameterKey []int `protobuf:"varint,4,rep,packed,name=parameter_key,json=parameterKey,proto3,casttype=int" json:"parameter_key,omitempty"`
+	// TopkOrder is the column ordering for any columns that need to be sorted
+	// as a post-processing step. This is for example needed for a MULTI_EQUALITY
+	// lookup with an ORDER BY clause. The sorting is performed on the vtgate.
+	TopkOrder []OrderedColumn `protobuf:"bytes,5,rep,name=topk_order,json=topkOrder,proto3" json:"topk_order"`
+	// TopkLimit is the limit for the result which is applied as a post-processing step.
+	// This is for example needed for a MULTI_EQUALITY lookup with a LIMIT clause.
+	// The truncation is performed on the vtgate.
+	TopkLimit int `protobuf:"varint,6,opt,name=topk_limit,json=topkLimit,proto3,casttype=int" json:"topk_limit,omitempty"`
+	// ColumnsForUser is the number of columns in the final result returned to
+	// the user. There are cases where the materialized state needs to have more
+	// columns that can only be truncated after the post filtering step.
+	// For example an ORDER BY clause on a column that is not part of the results.
+	ColumnsForUser int `protobuf:"varint,7,opt,name=columns_for_user,json=columnsForUser,proto3,casttype=int" json:"columns_for_user,omitempty"`
+	// InternalStateKey is the key used for the materialized state as it is seen
+	// internally by the dataflow.
+	// For the map materialized state this is always equal to the external state key.
+	// For the b-tree materialized state, this is different in case of partial materialization.
+	// It will only contain the equality parameters, which are the ones that the dataflow considers
+	// when performing upqueries and storing results.
+	// The external state key will be used for the client queries and will include the
+	// range parameters as well.
+	InternalStateKey []int `protobuf:"varint,8,rep,packed,name=internal_state_key,json=internalStateKey,proto3,casttype=int" json:"internal_state_key,omitempty"`
+	// ExternalStateKey is the key used to query the materialized state externally
+	// by the client.
+	ExternalStateKey []int `protobuf:"varint,9,rep,packed,name=external_state_key,json=externalStateKey,proto3,casttype=int" json:"external_state_key,omitempty"`
+	// PostAggregation is the aggregation that needs to be performed as a post filtering
+	// step. This is for example needed if the query has an aggregation and a post filter
+	// operation that changes the aggregation result.
+	PostAggregation []Aggregation `protobuf:"varint,10,rep,packed,name=post_aggregation,json=postAggregation,proto3,enum=viewplan.Aggregation" json:"post_aggregation,omitempty"`
+	// PostGroupBy is the group by column(s) to be used while applying the post aggregation.
+	// This might not be set if the post aggregation needs no grouping itself.
+	PostGroupBy []int `protobuf:"varint,11,rep,packed,name=post_group_by,json=postGroupBy,proto3,casttype=int" json:"post_group_by,omitempty"`
 }
 
 func (m *Plan) Reset()         { *m = Plan{} }
@@ -216,10 +259,18 @@ func (m *Plan) XXX_DiscardUnknown() {
 var xxx_messageInfo_Plan proto.InternalMessageInfo
 
 type Plan_TreeKey struct {
-	Lower          []int `protobuf:"varint,1,rep,packed,name=lower,proto3,casttype=int" json:"lower,omitempty"`
-	LowerInclusive bool  `protobuf:"varint,2,opt,name=lower_inclusive,json=lowerInclusive,proto3" json:"lower_inclusive,omitempty"`
-	Upper          []int `protobuf:"varint,3,rep,packed,name=upper,proto3,casttype=int" json:"upper,omitempty"`
-	UpperInclusive bool  `protobuf:"varint,4,opt,name=upper_inclusive,json=upperInclusive,proto3" json:"upper_inclusive,omitempty"`
+	// Lower is the column indexes of the lower bound of the range query.
+	// The offsets map the input parameters of the original query into
+	// the weight key that will be used as a lower bound for the materialized
+	// state.
+	Lower []int `protobuf:"varint,1,rep,packed,name=lower,proto3,casttype=int" json:"lower,omitempty"`
+	// LowerInclusive is true if the lower bound is inclusive (>=).
+	LowerInclusive bool `protobuf:"varint,2,opt,name=lower_inclusive,json=lowerInclusive,proto3" json:"lower_inclusive,omitempty"`
+	// Upper is the column indexes of the upper bound of the range query.
+	// This mirrors how the lower offset works.
+	Upper []int `protobuf:"varint,3,rep,packed,name=upper,proto3,casttype=int" json:"upper,omitempty"`
+	// UpperInclusive is true if the upper bound is inclusive (<=).
+	UpperInclusive bool `protobuf:"varint,4,opt,name=upper_inclusive,json=upperInclusive,proto3" json:"upper_inclusive,omitempty"`
 }
 
 func (m *Plan_TreeKey) Reset()         { *m = Plan_TreeKey{} }
@@ -267,49 +318,54 @@ func init() {
 func init() { proto.RegisterFile("viewplan.proto", fileDescriptor_5595b9753c52ea97) }
 
 var fileDescriptor_5595b9753c52ea97 = []byte{
-	// 672 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x54, 0xcd, 0x6a, 0xdb, 0x4c,
-	0x14, 0xf5, 0x44, 0xf2, 0xdf, 0x35, 0xb1, 0xc5, 0x90, 0xef, 0xab, 0x1a, 0xa8, 0x22, 0xbc, 0x68,
-	0x45, 0x0a, 0x16, 0x71, 0xb7, 0x25, 0x34, 0x4e, 0x9d, 0x60, 0x92, 0xd8, 0x46, 0xb6, 0xa1, 0x94,
-	0x82, 0x50, 0xec, 0x89, 0x10, 0x91, 0x35, 0xea, 0x68, 0xec, 0xd4, 0x6f, 0xd1, 0x6d, 0xdf, 0x28,
-	0xcb, 0x74, 0x57, 0xba, 0x08, 0x6d, 0xf2, 0x16, 0x5d, 0x95, 0x19, 0xd9, 0x89, 0x1c, 0xba, 0x31,
-	0xc7, 0xe7, 0x9c, 0x7b, 0xe6, 0xde, 0x3b, 0x83, 0xa0, 0x3a, 0x0f, 0xc8, 0x55, 0x1c, 0x7a, 0x51,
-	0x23, 0x66, 0x94, 0x53, 0x5c, 0x5a, 0xfd, 0xdf, 0xde, 0xf2, 0xa9, 0x4f, 0x25, 0x69, 0x0b, 0x94,
-	0xea, 0xdb, 0xe5, 0xe4, 0x73, 0x98, 0xc2, 0xfa, 0x77, 0x04, 0xf9, 0xbe, 0xc7, 0xbc, 0x29, 0xc6,
-	0xa0, 0x46, 0xde, 0x94, 0xe8, 0xc8, 0x44, 0x56, 0xd9, 0x91, 0x18, 0x5b, 0xa0, 0x5e, 0x06, 0xd1,
-	0x44, 0xdf, 0x30, 0x91, 0x55, 0x6d, 0x6e, 0x35, 0x1e, 0xce, 0x91, 0x25, 0x8d, 0x93, 0x20, 0x9a,
-	0x38, 0xd2, 0x81, 0x9f, 0x83, 0x32, 0xa6, 0xa1, 0xae, 0x98, 0xc8, 0x52, 0x5a, 0xc5, 0x3f, 0xb7,
-	0x3b, 0x4a, 0x10, 0x71, 0x47, 0x70, 0x78, 0x17, 0x2a, 0x31, 0x4d, 0xb8, 0x7b, 0x11, 0x84, 0x9c,
-	0x30, 0x5d, 0x35, 0x91, 0x55, 0x69, 0x96, 0x1b, 0xa2, 0x87, 0xf6, 0x97, 0x98, 0x39, 0x20, 0xd4,
-	0x23, 0x29, 0xd6, 0x0f, 0x41, 0x15, 0xa1, 0xb8, 0x06, 0x95, 0x51, 0x77, 0x30, 0xea, 0xf7, 0x7b,
-	0xce, 0xb0, 0xfd, 0x5e, 0xcb, 0x61, 0x80, 0xc2, 0xa0, 0xd3, 0x3d, 0x3e, 0x6d, 0x6b, 0x08, 0x97,
-	0x21, 0x7f, 0x36, 0x3a, 0x1d, 0x76, 0xb4, 0x0d, 0x01, 0x9d, 0x83, 0xee, 0x71, 0x5b, 0x53, 0x70,
-	0x09, 0xd4, 0x7e, 0x6f, 0x30, 0xd4, 0xd4, 0xfa, 0x3e, 0x6c, 0xf6, 0xd8, 0x84, 0x30, 0x32, 0x39,
-	0xa4, 0xe1, 0x6c, 0x1a, 0xad, 0x9a, 0x43, 0xff, 0x68, 0x0e, 0x83, 0x3a, 0x21, 0xc9, 0x58, 0x4e,
-	0x58, 0x72, 0x24, 0xae, 0xff, 0x54, 0x41, 0xed, 0x87, 0x5e, 0x84, 0x6d, 0x80, 0x58, 0x0c, 0x4a,
-	0x38, 0x61, 0x89, 0x8e, 0x4c, 0xc5, 0xaa, 0x34, 0x6b, 0x4f, 0x96, 0xe0, 0x64, 0x2c, 0x78, 0x0f,
-	0x4a, 0x9c, 0x11, 0xe2, 0x5e, 0x92, 0x85, 0x4c, 0xac, 0x34, 0xff, 0xcf, 0xd8, 0xc5, 0xcf, 0x90,
-	0x11, 0x72, 0x42, 0x16, 0x4e, 0x91, 0xa7, 0x00, 0x9b, 0x50, 0x9c, 0x7a, 0xb1, 0xac, 0x50, 0x4c,
-	0x25, 0xdb, 0x5f, 0x61, 0xea, 0xc5, 0xc2, 0xf1, 0x16, 0x80, 0xd3, 0xf8, 0xd2, 0xa5, 0x62, 0x26,
-	0x5d, 0x95, 0x5d, 0x3c, 0x7b, 0x8c, 0x5d, 0x1b, 0xb5, 0xa5, 0x5e, 0xdf, 0xee, 0xe4, 0x9c, 0xb2,
-	0x28, 0x90, 0x02, 0x7e, 0xb9, 0xac, 0x0e, 0x83, 0x69, 0xc0, 0xf5, 0xfc, 0xfa, 0x0a, 0xa4, 0xef,
-	0x54, 0x28, 0x78, 0x0f, 0xb4, 0xb1, 0x8c, 0x48, 0xdc, 0x0b, 0xca, 0xdc, 0x59, 0x42, 0x98, 0x5e,
-	0x58, 0x77, 0x57, 0x97, 0x86, 0x23, 0xca, 0x46, 0x09, 0x61, 0xd8, 0x82, 0x0a, 0x67, 0x81, 0xef,
-	0x13, 0x26, 0xdb, 0x2f, 0xae, 0xb7, 0x0f, 0x4b, 0x4d, 0x8c, 0xf0, 0x0e, 0x34, 0xf9, 0x04, 0x3c,
-	0xdf, 0x67, 0xc4, 0xf7, 0x78, 0x40, 0x23, 0xbd, 0x64, 0x2a, 0x56, 0xb5, 0xf9, 0xdf, 0xe3, 0x20,
-	0x07, 0x8f, 0xa2, 0x53, 0x13, 0xf6, 0x0c, 0x81, 0x5f, 0xc3, 0xa6, 0x4c, 0xf0, 0x19, 0x9d, 0xc5,
-	0xee, 0xf9, 0x42, 0x2f, 0xaf, 0x9f, 0x26, 0x9f, 0xd8, 0xb1, 0x10, 0x5b, 0x8b, 0xed, 0x6f, 0x08,
-	0x8a, 0xcb, 0x45, 0xe3, 0x17, 0x90, 0x0f, 0xe9, 0x15, 0x61, 0xf2, 0xfa, 0x32, 0x05, 0x29, 0x8b,
-	0x5f, 0x41, 0x4d, 0x02, 0x37, 0x88, 0xc6, 0xe1, 0x2c, 0x09, 0xe6, 0x64, 0xf9, 0x14, 0xaa, 0x92,
-	0xee, 0xac, 0x58, 0x91, 0x33, 0x8b, 0x63, 0xc2, 0x9e, 0xde, 0x52, 0xca, 0x8a, 0x1c, 0x09, 0x32,
-	0x39, 0x6a, 0x9a, 0x23, 0xe9, 0x87, 0x9c, 0xdd, 0x7d, 0xa8, 0x64, 0xe7, 0x2a, 0x43, 0xfe, 0xa8,
-	0xe3, 0x0c, 0x86, 0x5a, 0x4e, 0xc0, 0xc3, 0xde, 0xa8, 0x3b, 0xd4, 0x10, 0x2e, 0x82, 0x32, 0x18,
-	0x9d, 0x69, 0x1b, 0x02, 0x9c, 0x75, 0xba, 0x9a, 0x22, 0xc1, 0xc1, 0x07, 0x4d, 0x6d, 0x7d, 0xba,
-	0xfe, 0x6d, 0xe4, 0xae, 0xef, 0x0c, 0x74, 0x73, 0x67, 0xa0, 0x5f, 0x77, 0x06, 0xfa, 0x7a, 0x6f,
-	0xe4, 0x6e, 0xee, 0x8d, 0xdc, 0x8f, 0x7b, 0x23, 0xf7, 0x71, 0x7f, 0x1e, 0x70, 0x92, 0x24, 0x8d,
-	0x80, 0xda, 0x29, 0xb2, 0x7d, 0x6a, 0x9f, 0x53, 0x9a, 0x70, 0x3b, 0x21, 0x6c, 0x4e, 0x98, 0x3d,
-	0xa6, 0x11, 0x67, 0x34, 0x0c, 0x09, 0x4b, 0x79, 0xb1, 0x7a, 0x7b, 0x75, 0x07, 0xe7, 0x05, 0xf9,
-	0x55, 0x78, 0xf3, 0x37, 0x00, 0x00, 0xff, 0xff, 0x8d, 0xd9, 0x54, 0x6a, 0x52, 0x04, 0x00, 0x00,
+	// 739 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x54, 0xcf, 0x6f, 0x1a, 0x47,
+	0x14, 0x66, 0xd9, 0xc5, 0xc0, 0xc3, 0x86, 0xd5, 0xc8, 0x6d, 0xb7, 0xae, 0x8c, 0x11, 0x87, 0x16,
+	0xb9, 0x15, 0x2b, 0x53, 0xf9, 0x56, 0x59, 0x05, 0x17, 0x5b, 0xc8, 0xe6, 0x47, 0x17, 0x90, 0x92,
+	0x28, 0xd2, 0x6a, 0x0d, 0x63, 0x34, 0xf2, 0xb0, 0xb3, 0x99, 0x1d, 0xb0, 0xc9, 0x5f, 0x91, 0x6b,
+	0xfe, 0x23, 0x1f, 0x7d, 0xcc, 0x21, 0xb2, 0x12, 0xfb, 0x9e, 0x3f, 0x20, 0xa7, 0x68, 0x66, 0x01,
+	0x83, 0x93, 0x0b, 0xfa, 0xf8, 0xde, 0xf7, 0xbe, 0x79, 0xef, 0x9b, 0x01, 0xc8, 0x4e, 0x09, 0xbe,
+	0x0e, 0xa8, 0xe7, 0x97, 0x03, 0xce, 0x04, 0x43, 0xa9, 0xc5, 0xf7, 0x9d, 0xed, 0x11, 0x1b, 0x31,
+	0x45, 0xda, 0x12, 0x45, 0xf5, 0x9d, 0x74, 0xf8, 0x86, 0x46, 0xb0, 0xf8, 0x51, 0x83, 0x44, 0xc7,
+	0xe3, 0xde, 0x18, 0x21, 0x30, 0x7c, 0x6f, 0x8c, 0x2d, 0xad, 0xa0, 0x95, 0xd2, 0x8e, 0xc2, 0xa8,
+	0x04, 0xc6, 0x15, 0xf1, 0x87, 0x56, 0xbc, 0xa0, 0x95, 0xb2, 0x95, 0xed, 0xf2, 0xf2, 0x1c, 0xd5,
+	0x52, 0x3e, 0x23, 0xfe, 0xd0, 0x51, 0x0a, 0xf4, 0x2b, 0xe8, 0x03, 0x46, 0x2d, 0xbd, 0xa0, 0x95,
+	0xf4, 0x5a, 0xf2, 0xeb, 0xfd, 0x9e, 0x4e, 0x7c, 0xe1, 0x48, 0x0e, 0xed, 0x43, 0x26, 0x60, 0xa1,
+	0x70, 0x2f, 0x09, 0x15, 0x98, 0x5b, 0x46, 0x41, 0x2b, 0x65, 0x2a, 0xe9, 0xb2, 0x9c, 0xa1, 0x7e,
+	0x13, 0x70, 0x07, 0x64, 0xf5, 0x44, 0x15, 0x8b, 0x2d, 0x30, 0xa4, 0x29, 0xca, 0x41, 0xa6, 0xdf,
+	0xea, 0xf6, 0x3b, 0x9d, 0xb6, 0xd3, 0xab, 0xff, 0x67, 0xc6, 0xd0, 0x26, 0xa4, 0xea, 0xff, 0xf7,
+	0xab, 0xe7, 0x8d, 0xde, 0x4b, 0x53, 0x43, 0x08, 0xb2, 0xcd, 0xfe, 0x79, 0xaf, 0xe1, 0x2e, 0xb9,
+	0x38, 0x4a, 0x43, 0xc2, 0xa9, 0xb6, 0x4e, 0xeb, 0xa6, 0x8e, 0x52, 0x60, 0x74, 0xda, 0xdd, 0x9e,
+	0x69, 0x14, 0x8f, 0x60, 0xab, 0xcd, 0x87, 0x98, 0xe3, 0xe1, 0x31, 0xa3, 0x93, 0xb1, 0xbf, 0x98,
+	0x53, 0xfb, 0xc1, 0x9c, 0x08, 0x8c, 0x21, 0x0e, 0x07, 0x6a, 0xd9, 0x94, 0xa3, 0x70, 0xf1, 0x4b,
+	0x02, 0x8c, 0x0e, 0xf5, 0x7c, 0x54, 0x83, 0x5d, 0x8f, 0x52, 0x76, 0xed, 0x06, 0x1e, 0x17, 0xc4,
+	0xa3, 0xee, 0xd8, 0x13, 0x98, 0x13, 0x8f, 0x92, 0xb7, 0x9e, 0x20, 0xcc, 0x57, 0x8e, 0x29, 0xe7,
+	0x37, 0x25, 0xea, 0x44, 0x9a, 0xe6, 0xba, 0x04, 0xd9, 0x00, 0x81, 0xcc, 0x0d, 0x0b, 0xcc, 0x43,
+	0x2b, 0x5e, 0xd0, 0x4b, 0x99, 0x4a, 0xee, 0x59, 0xa6, 0xce, 0x8a, 0x04, 0x1d, 0x40, 0x4a, 0x70,
+	0x8c, 0xdd, 0x2b, 0x3c, 0x53, 0xc9, 0x66, 0x2a, 0x3f, 0xaf, 0xc8, 0xe5, 0x47, 0x8f, 0x63, 0x7c,
+	0x86, 0x67, 0x4e, 0x52, 0x44, 0x00, 0xfd, 0x05, 0x5b, 0x4b, 0x03, 0xd5, 0x67, 0x14, 0xf4, 0xd5,
+	0x4d, 0x37, 0x97, 0x55, 0xa9, 0xfe, 0x07, 0x40, 0xb0, 0xe0, 0xca, 0x65, 0x32, 0x23, 0x2b, 0xa1,
+	0x26, 0xfa, 0xe5, 0xe9, 0x88, 0xb5, 0xe8, 0x6a, 0xc6, 0xed, 0xfd, 0x5e, 0xcc, 0x49, 0xcb, 0x06,
+	0x55, 0x40, 0xbf, 0xcf, 0xbb, 0x29, 0x19, 0x13, 0x61, 0x6d, 0xac, 0x47, 0xaa, 0x74, 0xe7, 0xb2,
+	0x82, 0x0e, 0xc0, 0x1c, 0x28, 0x8b, 0xd0, 0xbd, 0x64, 0xdc, 0x9d, 0x84, 0x98, 0x5b, 0xc9, 0x75,
+	0x75, 0x76, 0x2e, 0x38, 0x61, 0xbc, 0x1f, 0x62, 0x8e, 0x0e, 0x01, 0x11, 0x5f, 0x60, 0xee, 0x7b,
+	0xd4, 0x0d, 0x85, 0x27, 0xa2, 0x0c, 0x52, 0xeb, 0xbb, 0x98, 0x0b, 0x49, 0x57, 0x2a, 0xe4, 0x3e,
+	0x87, 0x80, 0xf0, 0xcd, 0x77, 0x6d, 0xe9, 0x67, 0x6d, 0x0b, 0xc9, 0xb2, 0xed, 0x5f, 0x30, 0xd5,
+	0x0b, 0xf5, 0x46, 0x23, 0x8e, 0x47, 0xd1, 0x7d, 0x42, 0x41, 0x2f, 0x65, 0x2b, 0x3f, 0x3d, 0x85,
+	0x51, 0x7d, 0x2a, 0x3a, 0x39, 0x29, 0x5f, 0x21, 0xd0, 0x9f, 0xb0, 0xa5, 0x1c, 0x46, 0x9c, 0x4d,
+	0x02, 0xf7, 0x62, 0x66, 0x65, 0xd6, 0xcf, 0x54, 0xbf, 0x80, 0x53, 0x59, 0xac, 0xcd, 0x76, 0xde,
+	0x6b, 0x90, 0x9c, 0x5f, 0x1c, 0xda, 0x85, 0x04, 0x65, 0xd7, 0x98, 0x5b, 0xda, 0x7a, 0x43, 0xc4,
+	0xa2, 0x3f, 0x20, 0xa7, 0x80, 0x4b, 0xfc, 0x01, 0x9d, 0x84, 0x64, 0x8a, 0xe7, 0xcf, 0x33, 0xab,
+	0xe8, 0xc6, 0x82, 0x95, 0x3e, 0x93, 0x20, 0xc0, 0xdc, 0xd2, 0x9f, 0xf9, 0x28, 0x56, 0xfa, 0x28,
+	0xb0, 0xe2, 0x63, 0x44, 0x3e, 0x8a, 0x5e, 0xfa, 0xec, 0x1f, 0x41, 0x66, 0x75, 0xaf, 0x34, 0x24,
+	0x4e, 0x1a, 0x4e, 0xb7, 0x67, 0xc6, 0x24, 0x3c, 0x6e, 0xf7, 0x5b, 0x3d, 0x53, 0x43, 0x49, 0xd0,
+	0xbb, 0xfd, 0xa6, 0x19, 0x97, 0xa0, 0xd9, 0x68, 0x99, 0xba, 0x02, 0xd5, 0x17, 0xa6, 0x51, 0x7b,
+	0x7d, 0xfb, 0x39, 0x1f, 0xbb, 0x7d, 0xc8, 0x6b, 0x77, 0x0f, 0x79, 0xed, 0xd3, 0x43, 0x5e, 0x7b,
+	0xf7, 0x98, 0x8f, 0xdd, 0x3d, 0xe6, 0x63, 0x1f, 0x1e, 0xf3, 0xb1, 0x57, 0x47, 0x53, 0x22, 0x70,
+	0x18, 0x96, 0x09, 0xb3, 0x23, 0x64, 0x8f, 0x98, 0x7d, 0xc1, 0x58, 0x28, 0xec, 0x10, 0xf3, 0x29,
+	0xe6, 0xf6, 0x80, 0xf9, 0x82, 0x33, 0x4a, 0x31, 0x8f, 0x78, 0x19, 0xbd, 0xbd, 0xb8, 0x83, 0x8b,
+	0x0d, 0xf5, 0xa7, 0xf5, 0xf7, 0xb7, 0x00, 0x00, 0x00, 0xff, 0xff, 0xc5, 0x83, 0xd2, 0xe1, 0xf1,
+	0x04, 0x00, 0x00,
 }
 
 func (m *Param) Marshal() (dAtA []byte, err error) {
@@ -439,7 +495,7 @@ func (m *Plan) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		copy(dAtA[i:], dAtA3[:j2])
 		i = encodeVarintViewplan(dAtA, i, uint64(j2))
 		i--
-		dAtA[i] = 0x4a
+		dAtA[i] = 0x5a
 	}
 	if len(m.PostAggregation) > 0 {
 		dAtA5 := make([]byte, len(m.PostAggregation)*10)
@@ -457,12 +513,12 @@ func (m *Plan) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		copy(dAtA[i:], dAtA5[:j4])
 		i = encodeVarintViewplan(dAtA, i, uint64(j4))
 		i--
-		dAtA[i] = 0x42
+		dAtA[i] = 0x52
 	}
-	if len(m.TriggerKey) > 0 {
-		dAtA7 := make([]byte, len(m.TriggerKey)*10)
+	if len(m.ExternalStateKey) > 0 {
+		dAtA7 := make([]byte, len(m.ExternalStateKey)*10)
 		var j6 int
-		for _, num1 := range m.TriggerKey {
+		for _, num1 := range m.ExternalStateKey {
 			num := uint64(num1)
 			for num >= 1<<7 {
 				dAtA7[j6] = uint8(uint64(num)&0x7f | 0x80)
@@ -476,36 +532,12 @@ func (m *Plan) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		copy(dAtA[i:], dAtA7[:j6])
 		i = encodeVarintViewplan(dAtA, i, uint64(j6))
 		i--
-		dAtA[i] = 0x3a
+		dAtA[i] = 0x4a
 	}
-	if m.ColumnsForUser != 0 {
-		i = encodeVarintViewplan(dAtA, i, uint64(m.ColumnsForUser))
-		i--
-		dAtA[i] = 0x30
-	}
-	if m.TopkLimit != 0 {
-		i = encodeVarintViewplan(dAtA, i, uint64(m.TopkLimit))
-		i--
-		dAtA[i] = 0x28
-	}
-	if len(m.TopkOrder) > 0 {
-		for iNdEx := len(m.TopkOrder) - 1; iNdEx >= 0; iNdEx-- {
-			{
-				size, err := m.TopkOrder[iNdEx].MarshalToSizedBuffer(dAtA[:i])
-				if err != nil {
-					return 0, err
-				}
-				i -= size
-				i = encodeVarintViewplan(dAtA, i, uint64(size))
-			}
-			i--
-			dAtA[i] = 0x22
-		}
-	}
-	if len(m.MapKey) > 0 {
-		dAtA9 := make([]byte, len(m.MapKey)*10)
+	if len(m.InternalStateKey) > 0 {
+		dAtA9 := make([]byte, len(m.InternalStateKey)*10)
 		var j8 int
-		for _, num1 := range m.MapKey {
+		for _, num1 := range m.InternalStateKey {
 			num := uint64(num1)
 			for num >= 1<<7 {
 				dAtA9[j8] = uint8(uint64(num)&0x7f | 0x80)
@@ -519,7 +551,50 @@ func (m *Plan) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		copy(dAtA[i:], dAtA9[:j8])
 		i = encodeVarintViewplan(dAtA, i, uint64(j8))
 		i--
-		dAtA[i] = 0x1a
+		dAtA[i] = 0x42
+	}
+	if m.ColumnsForUser != 0 {
+		i = encodeVarintViewplan(dAtA, i, uint64(m.ColumnsForUser))
+		i--
+		dAtA[i] = 0x38
+	}
+	if m.TopkLimit != 0 {
+		i = encodeVarintViewplan(dAtA, i, uint64(m.TopkLimit))
+		i--
+		dAtA[i] = 0x30
+	}
+	if len(m.TopkOrder) > 0 {
+		for iNdEx := len(m.TopkOrder) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.TopkOrder[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintViewplan(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x2a
+		}
+	}
+	if len(m.ParameterKey) > 0 {
+		dAtA11 := make([]byte, len(m.ParameterKey)*10)
+		var j10 int
+		for _, num1 := range m.ParameterKey {
+			num := uint64(num1)
+			for num >= 1<<7 {
+				dAtA11[j10] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j10++
+			}
+			dAtA11[j10] = uint8(num)
+			j10++
+		}
+		i -= j10
+		copy(dAtA[i:], dAtA11[:j10])
+		i = encodeVarintViewplan(dAtA, i, uint64(j10))
+		i--
+		dAtA[i] = 0x22
 	}
 	if m.TreeKey != nil {
 		{
@@ -531,7 +606,7 @@ func (m *Plan) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			i = encodeVarintViewplan(dAtA, i, uint64(size))
 		}
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x1a
 	}
 	if len(m.Parameters) > 0 {
 		for iNdEx := len(m.Parameters) - 1; iNdEx >= 0; iNdEx-- {
@@ -544,8 +619,18 @@ func (m *Plan) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 				i = encodeVarintViewplan(dAtA, i, uint64(size))
 			}
 			i--
-			dAtA[i] = 0xa
+			dAtA[i] = 0x12
 		}
+	}
+	if m.AllowPartialMaterialization {
+		i--
+		if m.AllowPartialMaterialization {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -581,21 +666,21 @@ func (m *Plan_TreeKey) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		dAtA[i] = 0x20
 	}
 	if len(m.Upper) > 0 {
-		dAtA12 := make([]byte, len(m.Upper)*10)
-		var j11 int
+		dAtA14 := make([]byte, len(m.Upper)*10)
+		var j13 int
 		for _, num1 := range m.Upper {
 			num := uint64(num1)
 			for num >= 1<<7 {
-				dAtA12[j11] = uint8(uint64(num)&0x7f | 0x80)
+				dAtA14[j13] = uint8(uint64(num)&0x7f | 0x80)
 				num >>= 7
-				j11++
+				j13++
 			}
-			dAtA12[j11] = uint8(num)
-			j11++
+			dAtA14[j13] = uint8(num)
+			j13++
 		}
-		i -= j11
-		copy(dAtA[i:], dAtA12[:j11])
-		i = encodeVarintViewplan(dAtA, i, uint64(j11))
+		i -= j13
+		copy(dAtA[i:], dAtA14[:j13])
+		i = encodeVarintViewplan(dAtA, i, uint64(j13))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -610,21 +695,21 @@ func (m *Plan_TreeKey) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 	}
 	if len(m.Lower) > 0 {
-		dAtA14 := make([]byte, len(m.Lower)*10)
-		var j13 int
+		dAtA16 := make([]byte, len(m.Lower)*10)
+		var j15 int
 		for _, num1 := range m.Lower {
 			num := uint64(num1)
 			for num >= 1<<7 {
-				dAtA14[j13] = uint8(uint64(num)&0x7f | 0x80)
+				dAtA16[j15] = uint8(uint64(num)&0x7f | 0x80)
 				num >>= 7
-				j13++
+				j15++
 			}
-			dAtA14[j13] = uint8(num)
-			j13++
+			dAtA16[j15] = uint8(num)
+			j15++
 		}
-		i -= j13
-		copy(dAtA[i:], dAtA14[:j13])
-		i = encodeVarintViewplan(dAtA, i, uint64(j13))
+		i -= j15
+		copy(dAtA[i:], dAtA16[:j15])
+		i = encodeVarintViewplan(dAtA, i, uint64(j15))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -686,6 +771,9 @@ func (m *Plan) Size() (n int) {
 	}
 	var l int
 	_ = l
+	if m.AllowPartialMaterialization {
+		n += 2
+	}
 	if len(m.Parameters) > 0 {
 		for _, e := range m.Parameters {
 			l = e.Size()
@@ -696,9 +784,9 @@ func (m *Plan) Size() (n int) {
 		l = m.TreeKey.Size()
 		n += 1 + l + sovViewplan(uint64(l))
 	}
-	if len(m.MapKey) > 0 {
+	if len(m.ParameterKey) > 0 {
 		l = 0
-		for _, e := range m.MapKey {
+		for _, e := range m.ParameterKey {
 			l += sovViewplan(uint64(e))
 		}
 		n += 1 + sovViewplan(uint64(l)) + l
@@ -715,9 +803,16 @@ func (m *Plan) Size() (n int) {
 	if m.ColumnsForUser != 0 {
 		n += 1 + sovViewplan(uint64(m.ColumnsForUser))
 	}
-	if len(m.TriggerKey) > 0 {
+	if len(m.InternalStateKey) > 0 {
 		l = 0
-		for _, e := range m.TriggerKey {
+		for _, e := range m.InternalStateKey {
+			l += sovViewplan(uint64(e))
+		}
+		n += 1 + sovViewplan(uint64(l)) + l
+	}
+	if len(m.ExternalStateKey) > 0 {
+		l = 0
+		for _, e := range m.ExternalStateKey {
 			l += sovViewplan(uint64(e))
 		}
 		n += 1 + sovViewplan(uint64(l)) + l
@@ -1049,6 +1144,26 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowPartialMaterialization", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowViewplan
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AllowPartialMaterialization = bool(v != 0)
+		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Parameters", wireType)
 			}
@@ -1082,7 +1197,7 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 2:
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TreeKey", wireType)
 			}
@@ -1118,7 +1233,7 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 3:
+		case 4:
 			if wireType == 0 {
 				var v int
 				for shift := uint(0); ; shift += 7 {
@@ -1135,7 +1250,7 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 						break
 					}
 				}
-				m.MapKey = append(m.MapKey, v)
+				m.ParameterKey = append(m.ParameterKey, v)
 			} else if wireType == 2 {
 				var packedLen int
 				for shift := uint(0); ; shift += 7 {
@@ -1170,8 +1285,8 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 					}
 				}
 				elementCount = count
-				if elementCount != 0 && len(m.MapKey) == 0 {
-					m.MapKey = make([]int, 0, elementCount)
+				if elementCount != 0 && len(m.ParameterKey) == 0 {
+					m.ParameterKey = make([]int, 0, elementCount)
 				}
 				for iNdEx < postIndex {
 					var v int
@@ -1189,12 +1304,12 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 							break
 						}
 					}
-					m.MapKey = append(m.MapKey, v)
+					m.ParameterKey = append(m.ParameterKey, v)
 				}
 			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field MapKey", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ParameterKey", wireType)
 			}
-		case 4:
+		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TopkOrder", wireType)
 			}
@@ -1228,7 +1343,7 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 5:
+		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TopkLimit", wireType)
 			}
@@ -1247,7 +1362,7 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 6:
+		case 7:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ColumnsForUser", wireType)
 			}
@@ -1266,7 +1381,7 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 7:
+		case 8:
 			if wireType == 0 {
 				var v int
 				for shift := uint(0); ; shift += 7 {
@@ -1283,7 +1398,7 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 						break
 					}
 				}
-				m.TriggerKey = append(m.TriggerKey, v)
+				m.InternalStateKey = append(m.InternalStateKey, v)
 			} else if wireType == 2 {
 				var packedLen int
 				for shift := uint(0); ; shift += 7 {
@@ -1318,8 +1433,8 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 					}
 				}
 				elementCount = count
-				if elementCount != 0 && len(m.TriggerKey) == 0 {
-					m.TriggerKey = make([]int, 0, elementCount)
+				if elementCount != 0 && len(m.InternalStateKey) == 0 {
+					m.InternalStateKey = make([]int, 0, elementCount)
 				}
 				for iNdEx < postIndex {
 					var v int
@@ -1337,12 +1452,88 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 							break
 						}
 					}
-					m.TriggerKey = append(m.TriggerKey, v)
+					m.InternalStateKey = append(m.InternalStateKey, v)
 				}
 			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field TriggerKey", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field InternalStateKey", wireType)
 			}
-		case 8:
+		case 9:
+			if wireType == 0 {
+				var v int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowViewplan
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.ExternalStateKey = append(m.ExternalStateKey, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowViewplan
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLengthViewplan
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLengthViewplan
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				var count int
+				for _, integer := range dAtA[iNdEx:postIndex] {
+					if integer < 128 {
+						count++
+					}
+				}
+				elementCount = count
+				if elementCount != 0 && len(m.ExternalStateKey) == 0 {
+					m.ExternalStateKey = make([]int, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowViewplan
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.ExternalStateKey = append(m.ExternalStateKey, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExternalStateKey", wireType)
+			}
+		case 10:
 			if wireType == 0 {
 				var v Aggregation
 				for shift := uint(0); ; shift += 7 {
@@ -1411,7 +1602,7 @@ func (m *Plan) Unmarshal(dAtA []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field PostAggregation", wireType)
 			}
-		case 9:
+		case 11:
 			if wireType == 0 {
 				var v int
 				for shift := uint(0); ; shift += 7 {

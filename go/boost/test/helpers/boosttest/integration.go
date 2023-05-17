@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 	"vitess.io/vitess/go/boost/topo/client"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	topowatcher "vitess.io/vitess/go/boost/topo/watcher"
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtboost"
@@ -685,9 +687,14 @@ type Metric interface {
 }
 
 func (c *Cluster) workerStats(metric Metric) (total int) {
-	counts := metric.Counts()
-	for _, instance := range c.ServerInstances() {
-		total += int(counts[instance.Worker.UUID().String()])
+	workers := slices2.Map(c.ServerInstances(), func(srv *server.Server) string {
+		return srv.Worker.UUID().String()
+	})
+
+	for key, m := range metric.Counts() {
+		if slices.ContainsFunc(workers, func(w string) bool { return strings.HasPrefix(key, w) }) {
+			total += int(m)
+		}
 	}
 	return total
 }
@@ -701,5 +708,5 @@ func (c *Cluster) AssertWorkerStats(expected int, metric Metric) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	c.t.Fatalf("expected %v = %d, got %d", metric, expected, stats)
+	c.t.Errorf("expected %v = %d, got %d", metric, expected, stats)
 }

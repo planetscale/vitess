@@ -65,7 +65,7 @@ nodes:
 			}
 
 			var s dataflow.Sharding
-			ckey := graphNode.AsReader().Key()
+			ckey := graphNode.AsReader().StateKey()
 			if len(ckey) == 1 {
 				if graphNode.Fields()[ckey[0]] == "bogokey" {
 					s = dataflow.NewShardingForcedNone()

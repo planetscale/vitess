@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"sync/atomic"
 
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/sql"
@@ -16,15 +18,17 @@ type Writer struct {
 	memsize atomic.Int64
 	partial bool
 
-	primaryKey []int
-	keySchema  []sql.Type
+	internalKey       []int
+	externalKey       []int
+	internalKeySchema []sql.Type
+	externalKeySchema []sql.Type
 }
 
 type MapReader struct {
-	store     *ConcurrentMap
-	trigger   func([]sql.Row) bool
-	mapKey    []int
-	keySchema []sql.Type
+	store        *ConcurrentMap
+	trigger      Trigger
+	parameterKey []int
+	keySchema    []sql.Type
 
 	PostFilter *Filter
 }
@@ -38,10 +42,11 @@ type Store interface {
 	writerRefresh(memsize *atomic.Int64, force bool)
 	writerFree(memsize *atomic.Int64)
 	writerEmpty(key sql.Row, schema []sql.Type)
-	writerClear(key sql.Row, schema []sql.Type, memsize *atomic.Int64)
+	writerClear(key sql.Row, schema []sql.Type)
 }
 
 type Reader interface {
+	Trigger(keys []sql.Row) bool
 	FullyMaterialized() bool
 	Len() int
 }
@@ -63,59 +68,84 @@ func isIdentity(key []int) bool {
 	return true
 }
 
-func NewMapView(key []int, schema []sql.Type, desc *viewplan.Plan, trigger func(iterator []sql.Row) bool) (*MapReader, *Writer) {
-	keySchema := makeSchema(key, schema)
+type Trigger func(iterator []sql.Row) bool
+
+func NewView(desc *viewplan.Plan, schema []sql.Type, trigger Trigger) (Reader, *Writer) {
+	if desc.TreeKey != nil {
+		return newTreeView(desc, schema, trigger)
+	}
+	return newMapView(desc, schema, trigger)
+}
+
+func newMapView(desc *viewplan.Plan, schema []sql.Type, trigger Trigger) (*MapReader, *Writer) {
+	if desc == nil {
+		panic("newMapView: no plan description")
+	}
+	if !slices.Equal(desc.InternalStateKey, desc.ExternalStateKey) {
+		panic("newMapView: internal state key is different from external")
+	}
+
+	keySchema := makeSchema(desc.ExternalStateKey, schema)
 	st := NewConcurrentMap()
 
 	r := &MapReader{
-		store:     st,
-		trigger:   trigger,
-		keySchema: keySchema,
+		PostFilter:   newFilter(schema, desc),
+		store:        st,
+		trigger:      trigger,
+		keySchema:    keySchema,
+		parameterKey: desc.ParameterKey,
 	}
-	if desc != nil {
-		r.PostFilter = newFilter(schema, desc)
 
-		r.mapKey = desc.MapKey
-		if len(keySchema) == len(desc.Parameters) && isIdentity(r.mapKey) {
-			r.mapKey = nil
-		}
+	if len(keySchema) == len(desc.Parameters) && isIdentity(r.parameterKey) {
+		r.parameterKey = nil
 	}
 
 	w := &Writer{
-		store:      st,
-		partial:    trigger != nil,
-		primaryKey: key,
-		keySchema:  keySchema,
+		store:             st,
+		partial:           trigger != nil,
+		internalKey:       desc.InternalStateKey,
+		externalKey:       desc.ExternalStateKey,
+		externalKeySchema: keySchema,
+		internalKeySchema: keySchema,
 	}
 
 	return r, w
 }
 
-func NewTreeView(key []int, schema []sql.Type, desc *viewplan.Plan) (*TreeReader, *Writer) {
-	keySchema := makeSchema(key, schema)
+func newTreeView(desc *viewplan.Plan, schema []sql.Type, trigger Trigger) (*TreeReader, *Writer) {
+	if desc == nil {
+		panic("newTreeView: no plan description")
+	}
+
+	keySchema := makeSchema(desc.ExternalStateKey, schema)
 	st := NewConcurrentTree()
 
 	r := &TreeReader{
-		tree:      st,
-		keySchema: keySchema,
-	}
-	if desc != nil {
-		r.PostFilter = newFilter(schema, desc)
-		r.treeKey = desc.TreeKey
+		PostFilter:   newFilter(schema, desc),
+		tree:         st,
+		keySchema:    keySchema,
+		trigger:      trigger,
+		treeKey:      desc.TreeKey,
+		parameterKey: desc.ParameterKey,
 	}
 
 	w := &Writer{
-		store:      st,
-		partial:    false,
-		primaryKey: key,
-		keySchema:  keySchema,
+		store:             st,
+		partial:           trigger != nil,
+		internalKey:       desc.InternalStateKey,
+		externalKey:       desc.ExternalStateKey,
+		externalKeySchema: keySchema,
+		internalKeySchema: makeSchema(desc.InternalStateKey, schema),
 	}
 
 	return r, w
 }
 
 func (w *Writer) Add(records []sql.Record) {
-	w.store.writerAdd(records, w.primaryKey, w.keySchema, &w.memsize)
+	if len(records) == 0 {
+		return
+	}
+	w.store.writerAdd(records, w.externalKey, w.externalKeySchema, &w.memsize)
 }
 
 func (w *Writer) IsPartial() bool {
@@ -127,18 +157,18 @@ func (w *Writer) IsEmpty() bool {
 }
 
 func (w *Writer) keyFromRecord(row sql.Row) sql.Row {
-	var builder = sql.NewRowBuilder(len(w.primaryKey))
-	for _, k := range w.primaryKey {
+	var builder = sql.NewRowBuilder(len(w.internalKey))
+	for _, k := range w.internalKey {
 		builder.Add(row.ValueAt(k))
 	}
 	return builder.Finish()
 }
 
-func (w *Writer) WithKey(key sql.Row) *WriteEntry {
-	return &WriteEntry{writer: w, key: key}
+func (w *Writer) WithKey(key sql.Row) *InternalEntry {
+	return &InternalEntry{writer: w, key: key}
 }
 
-func (w *Writer) EntryFromRecord(row sql.Row) *WriteEntry {
+func (w *Writer) EntryFromRecord(row sql.Row) *InternalEntry {
 	return w.WithKey(w.keyFromRecord(row))
 }
 
@@ -147,7 +177,7 @@ func (w *Writer) Swap() {
 }
 
 func (w *Writer) KeySchema() []sql.Type {
-	return w.keySchema
+	return w.internalKeySchema
 }
 
 func (w *Writer) StateSizeAtomic() *atomic.Int64 {
@@ -162,33 +192,33 @@ func (w *Writer) Free() {
 	w.store.writerFree(&w.memsize)
 }
 
-type WriteEntry struct {
+type InternalEntry struct {
 	writer *Writer
 	key    sql.Row
 }
 
-func (entry *WriteEntry) Found() bool {
+func (entry *InternalEntry) Found() bool {
 	w := entry.writer
-	return w.store.readerContains(entry.key, w.keySchema)
+	return w.store.readerContains(entry.key, w.internalKeySchema)
 }
 
-func (entry *WriteEntry) MarkFilled() {
+func (entry *InternalEntry) MarkFilled() {
 	w := entry.writer
-	w.store.writerClear(entry.key, w.keySchema, &w.memsize)
+	w.store.writerClear(entry.key, w.internalKeySchema)
 }
 
-func (entry *WriteEntry) MarkHole() {
+func (entry *InternalEntry) MarkHole() {
 	w := entry.writer
-	w.store.writerEmpty(entry.key, w.keySchema)
+	w.store.writerEmpty(entry.key, w.internalKeySchema)
 }
 
 func (r *MapReader) Trigger(keys []sql.Row) bool {
 	if r.trigger == nil {
 		panic("tried to trigger a replay for a fully materialized view")
 	}
-	if r.mapKey != nil {
+	if r.parameterKey != nil {
 		for i, k := range keys {
-			keys[i] = k.Extract(r.mapKey)
+			keys[i] = k.Extract(r.parameterKey)
 		}
 	}
 	return r.trigger(keys)
@@ -203,10 +233,10 @@ func (r *MapReader) FullyMaterialized() bool {
 }
 
 func (r *MapReader) hash(h *vthash.Hasher, key sql.Row) vthash.Hash {
-	if r.mapKey == nil {
+	if r.parameterKey == nil {
 		return key.Hash(h, r.keySchema)
 	}
-	return key.HashWithKeySchema(h, r.mapKey, r.keySchema)
+	return key.HashWithKeySchema(h, r.parameterKey, r.keySchema)
 }
 
 func (r *MapReader) Lookup(hasher *vthash.Hasher, key sql.Row, then func(rows Rows)) (hit bool) {
@@ -247,7 +277,7 @@ func (r *MapReader) LookupHash(h vthash.Hash, then func(rows Rows)) (hit bool) {
 
 func (r *MapReader) BlockingLookup(ctx context.Context, hasher *vthash.Hasher, key sql.Row, then func(rows Rows)) (hit bool) {
 	h := r.hash(hasher, key)
-	_ = r.store.waker.wait(ctx, h, func() bool {
+	_ = r.store.waker.waitHash(ctx, h, func() bool {
 		r.store.lr.Read(func(tbl offheap.CRowsTable, version uint64) {
 			rows, ok := tbl.Get(h)
 			if ok {
@@ -261,9 +291,11 @@ func (r *MapReader) BlockingLookup(ctx context.Context, hasher *vthash.Hasher, k
 }
 
 type TreeReader struct {
-	tree      *ConcurrentTree
-	keySchema []sql.Type
-	treeKey   *viewplan.Plan_TreeKey
+	tree         *ConcurrentTree
+	trigger      Trigger
+	keySchema    []sql.Type
+	parameterKey []int
+	treeKey      *viewplan.Plan_TreeKey
 
 	PostFilter *Filter
 }
@@ -273,8 +305,20 @@ func (r *TreeReader) Len() int {
 }
 
 func (r *TreeReader) FullyMaterialized() bool {
-	// for now Tree views are always fully materialized
-	return true
+	return r.trigger == nil
+}
+
+func (r *TreeReader) Trigger(keys []sql.Row) bool {
+	if r.trigger == nil {
+		panic("tried to trigger a replay for a fully materialized view")
+	}
+	if r.parameterKey == nil {
+		panic("missing parameterKey in partially materialized view")
+	}
+	for i, k := range keys {
+		keys[i] = k.Extract(r.parameterKey)
+	}
+	return r.trigger(keys)
 }
 
 type Bound struct {
@@ -335,18 +379,31 @@ func (r *TreeReader) iterator(from, to Bound, tree *BTreeMap, version uint64, th
 	}
 }
 
-func (r *TreeReader) Bounds(row sql.Row) (from Bound, to Bound, err error) {
+type Bounds struct {
+	Lower  Bound
+	Upper  Bound
+	Prefix sql.Weights
+}
+
+func (r *TreeReader) Bounds(row sql.Row) (bounds Bounds, err error) {
 	if r.treeKey.Lower != nil {
-		from.inclusive = r.treeKey.LowerInclusive
-		from.weight, err = row.WeightsWithKeySchema(r.treeKey.Lower, r.keySchema, 0)
+		bounds.Lower.inclusive = r.treeKey.LowerInclusive
+		bounds.Lower.weight, err = row.WeightsWithKeySchema(r.treeKey.Lower, r.keySchema, 0)
 		if err != nil {
 			return
 		}
 	}
 
 	if r.treeKey.Upper != nil {
-		to.inclusive = r.treeKey.UpperInclusive
-		to.weight, err = row.WeightsWithKeySchema(r.treeKey.Upper, r.keySchema, len(from.weight))
+		bounds.Upper.inclusive = r.treeKey.UpperInclusive
+		bounds.Upper.weight, err = row.WeightsWithKeySchema(r.treeKey.Upper, r.keySchema, len(bounds.Lower.weight))
+		if err != nil {
+			return
+		}
+	}
+
+	if r.trigger != nil {
+		bounds.Prefix, err = row.WeightsWithKeySchema(r.parameterKey, r.keySchema, 0)
 		if err != nil {
 			return
 		}
@@ -355,8 +412,28 @@ func (r *TreeReader) Bounds(row sql.Row) (from Bound, to Bound, err error) {
 	return
 }
 
-func (r *TreeReader) LookupRange(from, to Bound, then func(rows Rows)) {
-	r.tree.lr.Read(func(tree *BTreeMap, version uint64) {
-		r.iterator(from, to, tree, version, then)
+func (r *TreeReader) LookupRange(bounds Bounds, then func(rows Rows)) (hit bool) {
+	r.tree.lr.Read(func(tree conctree, version uint64) {
+		if r.trigger != nil {
+			if _, filled := tree.filled[bounds.Prefix]; !filled {
+				return
+			}
+		}
+		r.iterator(bounds.Lower, bounds.Upper, tree.b, version, then)
+		hit = true
 	})
+	return
+}
+
+func (r *TreeReader) BlockingLookup(ctx context.Context, bounds Bounds, then func(rows Rows)) (hit bool) {
+	_ = r.tree.waker.waitWeights(ctx, bounds.Prefix, func() bool {
+		r.tree.lr.Read(func(tree conctree, version uint64) {
+			_, hit = tree.filled[bounds.Prefix]
+			if hit {
+				r.iterator(bounds.Lower, bounds.Upper, tree.b, version, then)
+			}
+		})
+		return hit
+	})
+	return
 }

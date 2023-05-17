@@ -103,10 +103,7 @@ func (d *Domain) handleReplay(ctx context.Context, m *packet.ReplayPiece, execut
 
 	// let's collect some information about the destination of this replay
 	dst := pathLast.Node
-	dstIsReader := false
-	if r := d.nodes.Get(dst).AsReader(); r != nil {
-		dstIsReader = r.IsMaterialized()
-	}
+	dstIsReader := d.nodes.Get(dst).IsReader()
 	dstIsTarget := !d.nodes.Get(dst).IsSender()
 
 	if dstIsTarget {
@@ -198,10 +195,7 @@ func (d *Domain) handleReplay(ctx context.Context, m *packet.ReplayPiece, execut
 			}
 		}
 		n := d.nodes.Get(segment.Node)
-		isReader := false
-		if r := n.AsReader(); r != nil {
-			isReader = r.IsMaterialized()
-		}
+		isReader := n.IsReader()
 
 		// keep track of whether we're filling any partial holes
 		partialKeyCols := segment.PartialKey
@@ -1398,6 +1392,8 @@ func (d *Domain) sendReplayUnified(ctx context.Context, tag dataflow.Tag, link *
 			replayPiece.External.Failed = true
 			d.log.Error("upquery failed", zap.Error(err))
 		}
+
+		d.stats.onUpqueryFinished(err, len(replayPiece.Records))
 
 		d.delayForSelf(replayPiece)
 	}()

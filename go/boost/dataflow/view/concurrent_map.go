@@ -24,7 +24,7 @@ func NewConcurrentMap() *ConcurrentMap {
 	return store
 }
 
-func (cm *ConcurrentMap) writerClear(key sql.Row, schema []sql.Type, memsize *atomic.Int64) {
+func (cm *ConcurrentMap) writerClear(key sql.Row, schema []sql.Type) {
 	h := key.Hash(&cm.writeHasher, schema)
 	tbl := cm.lr.Writer()
 
@@ -147,7 +147,7 @@ func (cm *ConcurrentMap) applyChangelog(table offheap.CRowsTable, memsize *atomi
 		switch do {
 		case changeInsert:
 			table.Set(d.key, d.value)
-			wakeup.Add(d.key)
+			wakeup.AddHash(d.key)
 		case changeRemove:
 			table.Remove(d.key)
 		}

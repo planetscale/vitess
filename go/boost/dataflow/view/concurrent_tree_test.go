@@ -7,14 +7,22 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
+	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 )
 
-func lookupRange(r *TreeReader, from, to Bound) (found []sql.Row) {
-	r.LookupRange(from, to, func(rows Rows) { found = rows.Collect(found) })
+func lookupRange(r *TreeReader, bounds Bounds) (found []sql.Row) {
+	r.LookupRange(bounds, func(rows Rows) { found = rows.Collect(found) })
 	return
+}
+
+func testPlan(key []int) *viewplan.Plan {
+	return &viewplan.Plan{
+		InternalStateKey: key,
+		ExternalStateKey: key,
+	}
 }
 
 func bounds(t *testing.T, r *TreeReader) (func(...any) Bound, func(...any) Bound) {
@@ -35,7 +43,7 @@ func bounds(t *testing.T, r *TreeReader) (func(...any) Bound, func(...any) Bound
 }
 
 func TestTreeIteration(t *testing.T) {
-	r, w := NewTreeView([]int{0}, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
+	r, w := newTreeView(testPlan([]int{0}), sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
 	inclusive, exclusive := bounds(t, r)
 
 	defer func() {
@@ -51,28 +59,28 @@ func TestTreeIteration(t *testing.T) {
 	w.Add(records)
 	w.Swap()
 
-	found := lookupRange(r, inclusive(0), inclusive(69))
+	found := lookupRange(r, Bounds{Lower: inclusive(0), Upper: inclusive(69)})
 	assert.Len(t, found, 70)
 	assert.Equal(t, `[INT64(0) VARCHAR("record-0")]`, found[0].String())
 	assert.Equal(t, `[INT64(69) VARCHAR("record-69")]`, found[69].String())
 
-	found = lookupRange(r, exclusive(11), exclusive(13))
+	found = lookupRange(r, Bounds{Lower: exclusive(11), Upper: exclusive(13)})
 	assert.Len(t, found, 1)
 	assert.Equal(t, `[INT64(12) VARCHAR("record-12")]`, found[0].String())
 
-	found = lookupRange(r, Bound{}, Bound{})
+	found = lookupRange(r, Bounds{})
 	assert.Len(t, found, 100)
 
-	found = lookupRange(r, Bound{}, inclusive(10))
+	found = lookupRange(r, Bounds{Upper: inclusive(10)})
 	assert.Len(t, found, 11)
 
-	found = lookupRange(r, exclusive(10), Bound{})
+	found = lookupRange(r, Bounds{Lower: exclusive(10)})
 	assert.Len(t, found, 89)
 	assert.Equal(t, `[INT64(11) VARCHAR("record-11")]`, found[0].String())
 }
 
 func TestTreeIterationWithVariablePrefix(t *testing.T) {
-	r, w := NewTreeView([]int{0, 1}, sql.TestSchema(sqltypes.VarChar, sqltypes.Int64), nil)
+	r, w := newTreeView(testPlan([]int{0, 1}), sql.TestSchema(sqltypes.VarChar, sqltypes.Int64), nil)
 	inclusive, _ := bounds(t, r)
 
 	defer func() {
@@ -97,16 +105,16 @@ func TestTreeIterationWithVariablePrefix(t *testing.T) {
 	w.Add(slices2.Map(records, func(r sql.Row) sql.Record { return r.AsRecord() }))
 	w.Swap()
 
-	found := lookupRange(r, inclusive("aaaa", 1), inclusive("aaaa", 4))
+	found := lookupRange(r, Bounds{Lower: inclusive("aaaa", 1), Upper: inclusive("aaaa", 4)})
 	assert.Len(t, found, 3)
 	t.Logf("found: %v", found)
 
-	found = lookupRange(r, inclusive("aaaabbbb", 1), inclusive("aaaabbbb", 4))
+	found = lookupRange(r, Bounds{Lower: inclusive("aaaabbbb", 1), Upper: inclusive("aaaabbbb", 4)})
 	assert.Len(t, found, 3)
 }
 
 func TestTreeIterationWithVariablePrefixConflict(t *testing.T) {
-	r, w := NewTreeView([]int{0, 1}, sql.TestSchema(sqltypes.VarBinary, sqltypes.VarBinary), nil)
+	r, w := newTreeView(testPlan([]int{0, 1}), sql.TestSchema(sqltypes.VarBinary, sqltypes.VarBinary), nil)
 	inclusive, _ := bounds(t, r)
 
 	defer func() {
@@ -122,7 +130,7 @@ func TestTreeIterationWithVariablePrefixConflict(t *testing.T) {
 	w.Add(slices2.Map(records, func(r sql.Row) sql.Record { return r.AsRecord() }))
 	w.Swap()
 
-	found := lookupRange(r, inclusive([]byte("aaaa"), []byte("bbbb")), inclusive([]byte("aaaa"), []byte("cccc")))
+	found := lookupRange(r, Bounds{Lower: inclusive([]byte("aaaa"), []byte("bbbb")), Upper: inclusive([]byte("aaaa"), []byte("cccc"))})
 	assert.Len(t, found, 1)
 	t.Logf("found: %v", found)
 }
