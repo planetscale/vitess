@@ -299,10 +299,12 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return err
 			}
 		default:
-			if err := vr.resetFKCheckAfterCopy(vr.dbClient); err != nil {
-				log.Warningf("Unable to reset FK check %v", err)
-				return err
-			}
+			if !vr.vplayerRequiresNoFKChecks() {
+				if err := vr.resetFKCheckAfterCopy(vr.dbClient); err != nil {
+					log.Warningf("Unable to reset FK check %v", err)
+					return err
+				}
+			} // remember that vt.resetFKCheckAfterCopy is deferred at the beginning of the function, so we know it will eventually execute
 			if vr.source.StopAfterCopy {
 				return vr.setState(binlogplayer.BlpStopped, "Stopped after copy.")
 			}
@@ -1013,6 +1015,11 @@ func (vr *vreplicator) supportsDeferredSecondaryKeys() bool {
 	return vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_MoveTables) ||
 		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Migrate) ||
 		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Reshard)
+}
+
+// vplayerRequiresNoFKChecks returns 'true' when vplayer requires FOREIGN_KEY_CHECKS=0
+func (vr *vreplicator) vplayerRequiresNoFKChecks() bool {
+	return vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL)
 }
 
 func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, error) {

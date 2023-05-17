@@ -22,6 +22,7 @@ package onlineddl
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -140,8 +141,11 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 				assert.NoError(t, err)
 			}
 			uniqueConstraintNames := map[string]bool{}
+			foreignReferencedTableNames := map[string]bool{}
 			err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 				switch node := node.(type) {
+				case *sqlparser.ForeignKeyDefinition:
+					foreignReferencedTableNames[node.ReferenceDefinition.ReferencedTable.Name.String()] = true
 				case *sqlparser.ConstraintDefinition:
 					uniqueConstraintNames[node.Name.String()] = true
 				}
@@ -150,6 +154,11 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tc.countConstraints, len(uniqueConstraintNames))
 			assert.Equalf(t, tc.countConstraints, len(constraintMap), "got contraints: %v", constraintMap)
+			if tc.expectError == "" {
+				for name := range foreignReferencedTableNames {
+					assert.True(t, strings.HasPrefix(name, ":"))
+				}
+			}
 		})
 	}
 }
@@ -194,19 +203,19 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 		},
 		{
 			alter:  "alter table t add foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint fk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			expect: []string{"alter table t add constraint fk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references `:onlineddl_test_parent` (id) on delete no action, algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add constraint myfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint myfk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			expect: []string{"alter table t add constraint myfk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references `:onlineddl_test_parent` (id) on delete no action, algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add constraint t_fk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
-			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, algorithm = copy"},
+			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references `:onlineddl_test_parent` (id) on delete no action, algorithm = copy"},
 		},
 		{
 			alter:  "alter table t add constraint t_fk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check check (id != 1)",
-			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
+			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references `:onlineddl_test_parent` (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), algorithm = copy"},
 		},
 	}
 	for _, tc := range tt {

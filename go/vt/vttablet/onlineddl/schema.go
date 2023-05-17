@@ -566,6 +566,9 @@ const (
 	sqlUnlockTables       = "UNLOCK TABLES"
 	sqlCreateSentryTable  = "CREATE TABLE IF NOT EXISTS `%a` (id INT PRIMARY KEY)"
 	sqlFindProcess        = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a AND Info LIKE %a"
+	sqlSaveFKChecks       = "SET @vt_foreign_key_checks=@@foreign_key_checks"
+	sqlDisableFKChecks    = "SET @@foreign_key_checks=0"
+	sqlRestoreFKChecks    = "SET @@foreign_key_checks=@vt_foreign_key_checks"
 )
 
 const (

@@ -1149,6 +1149,13 @@ func (e *Executor) newConstraintName(onlineDDL *schema.OnlineDDL, constraintType
 	return newName
 }
 
+// obfuscatedReferencedTableName returns a
+func obfuscatedReferencedTableName(name sqlparser.IdentifierCS) sqlparser.IdentifierCS {
+	referencedTableName := name.String()
+	newReferencedTableName := ":" + referencedTableName
+	return sqlparser.NewIdentifierCS(newReferencedTableName)
+}
+
 // validateAndEditCreateTableStatement inspects the CreateTable AST and does the following:
 // - extra validation (no FKs for now...)
 // - generate new and unique names for all constraints (CHECK and FK; yes, why not handle FK names; even as we don't support FKs today, we may in the future)
@@ -1162,6 +1169,7 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 			if !onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
 				return false, schema.ErrForeignKeyFound
 			}
+			node.ReferenceDefinition.ReferencedTable.Name = obfuscatedReferencedTableName(node.ReferenceDefinition.ReferencedTable.Name)
 		case *sqlparser.ConstraintDefinition:
 			oldName := node.Name.String()
 			newName := e.newConstraintName(onlineDDL, GetConstraintType(node.Details), hashExists, sqlparser.CanonicalString(node.Details), oldName)
@@ -1197,6 +1205,11 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 			newName := e.newConstraintName(onlineDDL, GetConstraintType(node.ConstraintDefinition.Details), hashExists, sqlparser.CanonicalString(node.ConstraintDefinition.Details), oldName)
 			node.ConstraintDefinition.Name = sqlparser.NewIdentifierCI(newName)
 			constraintMap[oldName] = newName
+
+			if fkDefinition, ok := node.ConstraintDefinition.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				fkDefinition.ReferenceDefinition.ReferencedTable.Name = obfuscatedReferencedTableName(fkDefinition.ReferenceDefinition.ReferencedTable.Name)
+			}
+
 		}
 		return true, nil
 	}
@@ -1259,6 +1272,17 @@ func (e *Executor) createTableLike(ctx context.Context, newTableName string, onl
 		return nil, err
 	}
 	// Create the table
+
+	if onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
+		// Disable FOREIGN_KEY_CHECKS, because the CREATE TABLE statement we're about to issue may have invalid foreign key references.
+		if _, err := conn.ExecuteFetch(sqlSaveFKChecks, 0, false); err != nil {
+			return nil, err
+		}
+		defer conn.ExecuteFetch(sqlRestoreFKChecks, 0, false)
+		if _, err := conn.ExecuteFetch(sqlDisableFKChecks, 0, false); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(createTable), 0, false); err != nil {
 		return nil, err
 	}
