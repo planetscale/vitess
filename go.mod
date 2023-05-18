@@ -117,7 +117,7 @@ require (
 	github.com/mitchellh/hashstructure v1.1.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
-	github.com/planetscale/psevents v0.0.0-20221121213838-d4e095ec2d68
+	github.com/planetscale/psevents v0.0.0-20230516180608-30c33e2ddd12
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/segmentio/fasthash v1.0.3
 	github.com/segmentio/kafka-go v0.4.39
