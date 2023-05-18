@@ -294,20 +294,16 @@ func TestInsightsSummaries(t *testing.T) {
 		})
 }
 
-func TestInsightsSummariesByKeyspace(t *testing.T) {
+func TestInsightsSummariesByActiveKeyspace(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
-			{sql: "select * from foo", responseTime: 1 * time.Nanosecond, keyspace: "a", activeKeyspace: "1"},
-			{sql: "select * from foo", responseTime: 2 * time.Nanosecond, keyspace: "a", activeKeyspace: "1"},
-			{sql: "select * from foo", responseTime: 3 * time.Nanosecond, keyspace: "a", activeKeyspace: "2"},
-			{sql: "select * from foo", responseTime: 4 * time.Nanosecond, keyspace: "a", activeKeyspace: "2"},
-			{sql: "select * from foo", responseTime: 5 * time.Nanosecond, keyspace: "b", activeKeyspace: "1"},
-			{sql: "select * from foo", responseTime: 6 * time.Nanosecond, keyspace: "b", activeKeyspace: "1"},
+			{sql: "select * from foo", responseTime: 1 * time.Nanosecond, activeKeyspace: "1"},
+			{sql: "select * from foo", responseTime: 2 * time.Nanosecond, activeKeyspace: "2"},
+			{sql: "select * from foo", responseTime: 3 * time.Nanosecond, activeKeyspace: "2"},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryStatsBundleTopic, "select * from foo", "sum_total_duration:{nanos:3}", `keyspace:{value:\"a\"}`, `active_keyspace:{value:\"1\"}`),
-			expect(queryStatsBundleTopic, "select * from foo", "sum_total_duration:{nanos:7}", `keyspace:{value:\"a\"}`, `active_keyspace:{value:\"2\"}`),
-			expect(queryStatsBundleTopic, "select * from foo", "sum_total_duration:{nanos:11}", `keyspace:{value:\"b\"}`, `active_keyspace:{value:\"1\"}`),
+			expect(queryStatsBundleTopic, "select * from foo", "sum_total_duration:{nanos:1}", `active_keyspace:{value:\"1\"}`),
+			expect(queryStatsBundleTopic, "select * from foo", "sum_total_duration:{nanos:5}", `active_keyspace:{value:\"2\"}`),
 		})
 }
 
@@ -616,145 +612,6 @@ func TestMakeKafkaKeyIsDeterministic(t *testing.T) {
 	sql = `another string value`
 	key = insights.makeKafkaKey(sql)
 	assert.Equal(t, "mumblefoo/67374b03", key)
-}
-
-func TestTables(t *testing.T) {
-	testCases := []struct {
-		name, input    string
-		split          []string
-		message, avoid string
-	}{
-		{
-			"empty",
-			"",
-			nil,
-			"",
-			"tables",
-		},
-		{
-			"one table",
-			"foo",
-			[]string{"foo"},
-			`tables:\"foo\"`,
-			"",
-		},
-		{
-			"two tables",
-			"foo, bar",
-			[]string{"foo", "bar"},
-			`tables:\"foo\" tables:\"bar\"`,
-			",",
-		},
-		{
-			"two tables without a space",
-			"foo,bar",
-			[]string{"foo", "bar"},
-			`tables:\"foo\" tables:\"bar\"`,
-			",",
-		},
-		{
-			"one table name with backticks",
-			"`foo`",
-			[]string{"foo"},
-			`tables:\"foo\"`,
-			"`",
-		},
-		{
-			"two table names with backticks",
-			"`foo`, `bar`",
-			[]string{"foo", "bar"},
-			`tables:\"foo\" tables:\"bar\"`,
-			"`",
-		},
-		{
-			"two table names with backticks, no space",
-			"`foo`,`bar`",
-			[]string{"foo", "bar"},
-			`tables:\"foo\" tables:\"bar\"`,
-			"`",
-		},
-		{
-			"table name has a comma",
-			"`foo, bar`",
-			[]string{"foo, bar"},
-			`tables:\"foo, bar\"`,
-			"`",
-		},
-		{
-			"table name is only partially quoted",
-			"foo.`order`,b,`c,d`.e",
-			[]string{"foo.order", "b", "c,d.e"},
-			`tables:\"foo.order\" tables:\"b\" tables:\"c,d.e\"`,
-			"`",
-		},
-		{
-			"many parts, some in backticks",
-			"`abc`.`def`.ghi.`j,kl`,`mno`.pqr.`stu`",
-			[]string{"abc.def.ghi.j,kl", "mno.pqr.stu"},
-			`tables:\"abc.def.ghi.j,kl\" tables:\"mno.pqr.stu\"`,
-			"`",
-		},
-		{
-			"unterminated backtick",
-			"foo, `bar, baz",
-			[]string{"foo", "bar, baz"},
-			`tables:\"foo\" tables:\"bar, baz\"`,
-			"`",
-		},
-		{
-			"ends with a comma",
-			"foo,bar,",
-			[]string{"foo", "bar"},
-			`tables:\"foo\" tables:\"bar\"`,
-			"`",
-		},
-		{
-			"extra commas",
-			"foo,,,bar,,",
-			[]string{"foo", "bar"},
-			`tables:\"foo\" tables:\"bar\"`,
-			",",
-		},
-		{
-			"only a comma",
-			",",
-			nil,
-			"",
-			"tables",
-		},
-		{
-			"commas and backticks extravaganza",
-			"`foo,bar`, baz, `blah`, `lorem`, ipsum, `abc, xyz`",
-			[]string{"foo,bar", "baz", "blah", "lorem", "ipsum", "abc, xyz"},
-			`tables:\"foo,bar\" tables:\"baz\" tables:\"blah\" tables:\"lorem\" tables:\"ipsum\" tables:\"abc, xyz\"`,
-			"`",
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			op := splitTables(tc.input)
-			assert.Equal(t, tc.split, op)
-
-			e1 := expect(queryTopic, "select ?", " total_duration:{seconds:5}")
-			e2 := expect(queryStatsBundleTopic, "select ?", "query_count:1 sum_total_duration:{seconds:5} max_total_duration:{seconds:5}")
-			if tc.message != "" {
-				e1.patterns = append(e1.patterns, tc.message)
-				e2.patterns = append(e2.patterns, tc.message)
-			}
-			if tc.avoid != "" {
-				e1 = e1.butNot(tc.avoid)
-				e2 = e2.butNot(tc.avoid)
-			}
-			insightsTestHelper(t, true, setupOptions{tableString: tc.input},
-				[]insightsQuery{
-					{sql: "select 1", responseTime: 5 * time.Second},
-				},
-				[]insightsKafkaExpectation{
-					e1,
-					e2,
-				})
-		})
-	}
 }
 
 func TestNormalization(t *testing.T) {
@@ -1222,9 +1079,9 @@ const (
 )
 
 type insightsQuery struct {
-	sql, error, rawSQL, keyspace, activeKeyspace string
-	responseTime                                 time.Duration
-	rowsRead                                     int
+	sql, error, rawSQL, activeKeyspace string
+	responseTime                       time.Duration
+	rowsRead                           int
 
 	// insightsTestHelper sets ls.IsNormalized to false for errors, true otherwise.
 	// Set normalized=YES or normalized=NO to override this, e.g., to simulate an error
@@ -1324,7 +1181,6 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 				Subcomponent: "PSDB API",
 			}, nil),
 			Table:          options.tableString,
-			Keyspace:       q.keyspace,
 			ActiveKeyspace: q.activeKeyspace,
 			BoostQueryID:   q.boostQueryID,
 		}

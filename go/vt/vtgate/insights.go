@@ -133,12 +133,10 @@ type QueryPatternAggregation struct {
 	TotalDurationSketchBuckets map[uint32]uint32
 
 	StatementType string
-	Tables        []string
 	TablesUsed    []string
 }
 
 type QueryPatternKey struct {
-	Keyspace           string
 	ActiveKeyspace     string
 	SQL                string
 	BoostQueryPublicID string
@@ -359,10 +357,9 @@ func argOrEnv(argVal, envKey string) string {
 	return os.Getenv(envKey)
 }
 
-func (ii *Insights) newPatternAggregation(statementType string, tables []string, tablesUsed []string) *QueryPatternAggregation {
+func (ii *Insights) newPatternAggregation(statementType string, tablesUsed []string) *QueryPatternAggregation {
 	agg := QueryPatternAggregation{
 		StatementType: statementType,
-		Tables:        tables,
 		TablesUsed:    tablesUsed,
 	}
 
@@ -469,47 +466,6 @@ func (ii *Insights) logToKafka(logger *streamlog.StreamLogger[*logstats.LogStats
 	return nil
 }
 
-// Regex to pull off the first chunk, which is either a token in matched backticks, or a token with no backticks.
-// A token may be just part of a table name.  E.g., information_schema.`engines` is two tokens:
-// "information_schema." and "`engines`".
-var reSplitTables = regexp.MustCompile("^(?:`[^`]+`|[^,`]+)")
-
-// splitTables splits a string of table names like "a, b, c" into an array like {"a", "b", "c"}.
-// Table names with commas in them are wrapped in backticks, so we need to handle that.
-// e.g., "a, `b,2,3`, c" -> {"a", "b,2,3", "c"}
-// If the table string is empty, the returned array is nil.
-// If there is an unmatched backtick, from that point to the end of the string is treated as a single token.
-func splitTables(tableList string) []string {
-	var ret []string
-	curTable := ""
-	for tableList != "" {
-		if idx := reSplitTables.FindStringSubmatchIndex(tableList); len(idx) >= 2 {
-			curTable += strings.Trim(tableList[:idx[1]], "`")
-			tableList = tableList[idx[1]:]
-		} else if tableList[0] == '`' {
-			// Unterminated backtick, as might happen if tableList got truncated before it got here.
-			// The remainder of the string is treated as a single token.
-			curTable += tableList[1:]
-			break
-		} else if tableList[0] == ',' {
-			// Bare comma (not in backticks) means end of this table name.
-			if curTable != "" {
-				ret = append(ret, curTable)
-				curTable = ""
-			}
-			tableList = strings.TrimSpace(tableList[1:])
-		} else {
-			// The /[^,`]+/ part of the regex matches anything that doesn't start with '`' or ',', so
-			// we can never get to this else block.
-			panic("unreachable")
-		}
-	}
-	if curTable != "" {
-		ret = append(ret, curTable)
-	}
-	return ret
-}
-
 func (ii *Insights) makeSchemaChangeMessage(ls *logstats.LogStats) ([]byte, error) {
 	stmt, err := sqlparser.Parse(ls.SQL)
 
@@ -559,7 +515,6 @@ func (ii *Insights) makeSchemaChangeMessage(ls *logstats.LogStats) ([]byte, erro
 		Ddl:                    ddl,
 		Normalized:             fullyParsed,
 		Operation:              operation,
-		Keyspace:               ls.Keyspace,
 	}
 
 	var out []byte
@@ -613,15 +568,12 @@ func (ii *Insights) handleMessage(record any) {
 		sql, ciHash = ii.normalizeSQL(ls.AST, ls.StmtType == "INSERT")
 	} else {
 		sql = "<error>"
-		ls.Table = ""
 	}
 	if ls.Error != nil && ls.StmtType == "" {
 		ls.StmtType = "ERROR"
 	}
 
-	tables := splitTables(ls.Table)
-
-	ii.addToAggregates(ls, sql, ciHash, tables)
+	ii.addToAggregates(ls, sql, ciHash)
 
 	if !ii.shouldSendToInsights(ls) {
 		return
@@ -632,7 +584,7 @@ func (ii *Insights) handleMessage(record any) {
 		return
 	}
 
-	buf, err := ii.makeQueryMessage(ls, sql, tables, parseCommentTags(comments))
+	buf, err := ii.makeQueryMessage(ls, sql, parseCommentTags(comments))
 	if err != nil {
 		log.Warningf("Could not serialize %s message: %v", queryTopic, err)
 	} else {
@@ -688,17 +640,15 @@ func maxDuration(a time.Duration, b time.Duration) time.Duration {
 	return b
 }
 
-func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *uint32, tables []string) bool {
+func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *uint32) bool {
 	// no locks needed if all callers are on the same thread
 
 	var pa *QueryPatternAggregation
 	key := QueryPatternKey{
-		Keyspace:           ls.Keyspace,
 		ActiveKeyspace:     ls.ActiveKeyspace,
 		BoostQueryPublicID: ls.BoostQueryID,
+		SQL:                sql,
 	}
-
-	key.SQL = sql
 
 	pa, ok := ii.Aggregations[key]
 	if !ok {
@@ -709,7 +659,7 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *u
 		// ls.StmtType, ls.Table and ls.TablesUsed depend only on the contents of sql, so we don't separately make them
 		// part of the key, and we don't track them as separate values in the QueryPatternAggregation values.
 		// In other words, we assume they don't change, so we only need to track a single value for each.
-		pa = ii.newPatternAggregation(ls.StmtType, tables, ls.TablesUsed)
+		pa = ii.newPatternAggregation(ls.StmtType, ls.TablesUsed)
 		ii.Aggregations[key] = pa
 
 		if ciHash != nil && !ii.ReorderInsertColumns {
@@ -795,7 +745,7 @@ func hostnameOrEmpty() string {
 	return hostname
 }
 
-func (ii *Insights) makeQueryMessage(ls *logstats.LogStats, sql string, tables []string, tags []*pbvtgate.Query_Tag) ([]byte, error) {
+func (ii *Insights) makeQueryMessage(ls *logstats.LogStats, sql string, tags []*pbvtgate.Query_Tag) ([]byte, error) {
 	addr, user := ls.RemoteAddrUsername()
 	// use the effective caller id if its present.
 	// all queries sent to PlanetScale databases should have the effective caller-id set.
@@ -822,9 +772,7 @@ func (ii *Insights) makeQueryMessage(ls *logstats.LogStats, sql string, tables [
 		VtgateName:             hostnameOrEmpty(),
 		NormalizedSql:          stringOrNil(sql),
 		StatementType:          stringOrNil(ls.StmtType),
-		Tables:                 tables,
 		TablesUsed:             ls.TablesUsed,
-		Keyspace:               stringOrNil(ls.Keyspace),
 		ActiveKeyspace:         stringOrNil(ls.ActiveKeyspace),
 		TabletType:             stringOrNil(ls.TabletType),
 		ShardQueries:           uint32(ls.ShardQueries),
@@ -962,9 +910,7 @@ func (ii *Insights) makeQueryPatternMessage(key QueryPatternKey, pa *QueryPatter
 		VtgateName:             hostnameOrEmpty(),
 		NormalizedSql:          stringOrNil(key.SQL),
 		StatementType:          pa.StatementType,
-		Tables:                 pa.Tables,
 		TablesUsed:             pa.TablesUsed,
-		Keyspace:               stringOrNil(key.Keyspace),
 		ActiveKeyspace:         stringOrNil(key.ActiveKeyspace),
 		QueryCount:             pa.QueryCount,
 		ErrorCount:             pa.ErrorCount,
