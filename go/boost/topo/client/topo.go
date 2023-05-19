@@ -328,11 +328,11 @@ func (c *Client) DescribeRecipe(ctx context.Context, req *vtboostpb.DescribeReci
 		return nil, err
 	}
 
-	leader, err := boostrpc.NewControllerClient(controller.GetLeader())
+	leader, grpcConn, err := boostrpc.NewControllerClient(controller.GetLeader())
 	if err != nil {
 		return nil, err
 	}
-	defer leader.DRPCConn().Close()
+	defer grpcConn.Close()
 
 	var res vtboostpb.DescribeRecipeResponse
 	switch req := req.GetRequest().(type) {

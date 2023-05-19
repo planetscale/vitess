@@ -20,7 +20,7 @@ import (
 )
 
 type Server struct {
-	vtboostpb.DRPCControllerServiceUnimplementedServer
+	vtboostpb.UnimplementedControllerServiceServer
 
 	topo *toposerver.Server
 
@@ -157,6 +157,7 @@ func (srv *Server) StartLeaderCampaign(ctx context.Context, state *vtboostpb.Con
 	<-ctx.Done()
 
 	srv.mu.Lock()
+	srv.inner.Close()
 	srv.inner = nil
 	srv.cancel = nil
 	srv.mu.Unlock()

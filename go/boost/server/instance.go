@@ -8,9 +8,8 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"storj.io/drpc/drpcmux"
-	"storj.io/drpc/drpcserver"
 
+	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
@@ -171,24 +170,29 @@ func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, t
 }
 
 func (s *Server) Serve(ctx context.Context, listen net.Listener) error {
-	m := drpcmux.New()
-	if err := vtboost.DRPCRegisterControllerService(m, s.Controller); err != nil {
-		return err
-	}
-	if err := service.DRPCRegisterWorkerService(m, s.Worker); err != nil {
-		return err
-	}
+	srv := boostrpc.NewServer()
+	vtboost.RegisterControllerServiceServer(srv, s.Controller)
+	service.RegisterWorkerServiceServer(srv, s.Worker)
 
 	s.Worker.SetGlobalAddress(listen.Addr().String())
 
 	var wg errgroup.Group
+
 	wg.Go(func() error {
 		return s.Topo.WatchLeadership(ctx, s, listen.Addr().String())
 	})
+
 	wg.Go(func() error {
-		return drpcserver.New(m).Serve(ctx, listen)
+		return srv.Serve(listen)
 	})
 
-	defer s.Stop()
+	wg.Go(func() error {
+		<-ctx.Done()
+
+		srv.GracefulStop()
+		s.Stop()
+		return nil
+	})
+
 	return wg.Wait()
 }

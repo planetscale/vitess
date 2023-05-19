@@ -16,6 +16,7 @@ go install storj.io/drpc/cmd/protoc-gen-go-drpc@$(go list -m -f '{{ .Version }}'
 for pb in ./proto/*.proto; do
   protoc \
     --go-boost_out=. --plugin protoc-gen-go-boost="${GOBIN}/protoc-gen-go-boost" \
+		--go-grpc_out=. --plugin protoc-gen-go-grpc="${GOBIN}/protoc-gen-go-grpc" \
     --go-drpc_out=. --plugin protoc-gen-go-drpc="${GOBIN}/protoc-gen-go-drpc" \
     --go-drpc_opt=protolib=vitess.io/vitess/go/boost/boostrpc/codec \
     -I "$VTROOT/proto" -I ./proto "$pb"

@@ -54,7 +54,7 @@ func (cached *View) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
-	// field shards []vitess.io/vitess/go/boost/boostrpc/service.DRPCReaderClient
+	// field shards []vitess.io/vitess/go/boost/boostrpc/service.ReaderClient
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.shards)) * int64(16))
 		for _, elem := range cached.shards {

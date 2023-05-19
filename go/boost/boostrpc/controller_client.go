@@ -1,26 +1,27 @@
 package boostrpc
 
 import (
-	"vitess.io/vitess/go/boost/boostrpc/drpc"
-	"vitess.io/vitess/go/boost/boostrpc/drpc/middleware/client"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"vitess.io/vitess/go/vt/proto/vtboost"
 )
 
-func NewControllerClient(address string) (vtboost.DRPCControllerServiceClient, error) {
+func NewControllerClient(address string) (vtboost.ControllerServiceClient, *grpc.ClientConn, error) {
 	conn, err := NewClientConn(address)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return vtboost.NewDRPCControllerServiceClient(conn), nil
+	return vtboost.NewControllerServiceClient(conn), conn, nil
 }
 
-func NewClientConn(address string) (*drpc.Client, error) {
-	// TODO: TLS when needed
-	clientOptions := []drpc.ClientOption{
-		drpc.WithPoolCapacity(5),
-		drpc.WithClientMiddleware(
-			client.PanicRecovery(),
-		),
-	}
-	return drpc.NewClient("tcp", address, clientOptions...)
+func NewClientConn(address string) (*grpc.ClientConn, error) {
+	return grpc.Dial(address,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.ForceCodec(ProtoCodec{})),
+	)
+}
+
+func NewServer() *grpc.Server {
+	return grpc.NewServer(grpc.ForceServerCodec(ProtoCodec{}))
 }

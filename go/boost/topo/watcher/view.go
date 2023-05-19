@@ -34,7 +34,7 @@ type View struct {
 	schema    []*querypb.Field
 	keySchema []*querypb.Field
 	addrs     []string
-	shards    []service.DRPCReaderClient
+	shards    []service.ReaderClient
 
 	topkOrder []flownode.OrderedColumn
 	topkLimit int
@@ -52,7 +52,7 @@ func (v *View) addShards(shards []string, dialer Dialer) error {
 		}
 
 		v.addrs = append(v.addrs, addr)
-		v.shards = append(v.shards, service.NewDRPCReaderClient(conn))
+		v.shards = append(v.shards, service.NewReaderClient(conn))
 	}
 	return nil
 }

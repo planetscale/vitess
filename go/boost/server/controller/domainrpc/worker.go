@@ -1,11 +1,11 @@
 package domainrpc
 
 import (
-	"net"
 	"time"
 
-	"storj.io/drpc/drpcconn"
+	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/boost/boostrpc"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
 
 	"vitess.io/vitess/go/boost/boostrpc/service"
@@ -17,27 +17,52 @@ type WorkerID string
 type Worker struct {
 	UUID          WorkerID
 	Healthy       bool
-	Client        service.DRPCWorkerServiceClient
+	Client        service.WorkerServiceClient
 	LastHeartbeat time.Time
 
-	addr string
+	entry *vtboostpb.TopoWorkerEntry
+	conn  *grpc.ClientConn
 }
 
-func (w *Worker) Update(_ *vtboostpb.TopoWorkerEntry) {
+func (w *Worker) Update(entry *vtboostpb.TopoWorkerEntry) error {
 	w.LastHeartbeat = time.Now()
+
+	if entry.AdminAddr != w.entry.AdminAddr {
+		_ = w.conn.Close()
+		if err := w.connectToAdmin(entry.AdminAddr); err != nil {
+			return err
+		}
+	}
+	w.entry = entry
+	return nil
 }
 
-func NewWorker(id WorkerID, addr string) (*Worker, error) {
-	conn, err := net.Dial("tcp", addr)
+func (w *Worker) Close() error {
+	return w.conn.Close()
+}
+
+func (w *Worker) ReaderAddr() string {
+	return w.entry.GetReaderAddr()
+}
+
+func (w *Worker) connectToAdmin(addr string) (err error) {
+	w.conn, err = boostrpc.NewClientConn(addr)
 	if err != nil {
-		return nil, err
+		w.Healthy = false
+		return err
 	}
 
-	return &Worker{
+	w.Client = service.NewWorkerServiceClient(w.conn)
+	return
+}
+
+func NewWorker(id WorkerID, entry *vtboostpb.TopoWorkerEntry) (*Worker, error) {
+	w := &Worker{
 		UUID:          id,
 		Healthy:       true,
-		Client:        service.NewDRPCWorkerServiceClient(drpcconn.New(conn)),
 		LastHeartbeat: time.Now(),
-		addr:          addr,
-	}, nil
+		entry:         entry,
+	}
+
+	return w, w.connectToAdmin(entry.AdminAddr)
 }

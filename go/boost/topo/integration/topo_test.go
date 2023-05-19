@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"storj.io/drpc"
+	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/boost/test/helpers/boosttest"
 	"vitess.io/vitess/go/boost/topo/client"
@@ -97,32 +97,28 @@ type fakeControllerClient struct {
 	ins *FakeBoostInstance
 }
 
-func (f *fakeControllerClient) DRPCConn() drpc.Conn {
-	return nil
-}
-
-func (f *fakeControllerClient) GetRecipe(ctx context.Context, in *vtboost.GetRecipeRequest) (*vtboost.GetRecipeResponse, error) {
+func (f *fakeControllerClient) GetRecipe(ctx context.Context, in *vtboost.GetRecipeRequest, _ ...grpc.CallOption) (*vtboost.GetRecipeResponse, error) {
 	panic("should not be called")
 }
 
-func (f *fakeControllerClient) ReadyCheck(ctx context.Context, in *vtboost.ReadyRequest) (*vtboost.ReadyResponse, error) {
+func (f *fakeControllerClient) ReadyCheck(ctx context.Context, in *vtboost.ReadyRequest, _ ...grpc.CallOption) (*vtboost.ReadyResponse, error) {
 	panic("should not be called")
 }
 
-func (f *fakeControllerClient) SetScience(ctx context.Context, in *vtboost.SetScienceRequest) (*vtboost.SetScienceResponse, error) {
+func (f *fakeControllerClient) SetScience(ctx context.Context, in *vtboost.SetScienceRequest, _ ...grpc.CallOption) (*vtboost.SetScienceResponse, error) {
 	panic("should not be called")
 }
 
-func (f *fakeControllerClient) Graphviz(ctx context.Context, in *vtboost.GraphvizRequest) (*vtboost.GraphvizResponse, error) {
+func (f *fakeControllerClient) Graphviz(ctx context.Context, in *vtboost.GraphvizRequest, _ ...grpc.CallOption) (*vtboost.GraphvizResponse, error) {
 	panic("should not be called")
 }
 
-func (f *fakeControllerClient) GetMaterializations(ctx context.Context, in *vtboost.MaterializationsRequest) (*vtboost.MaterializationsResponse, error) {
+func (f *fakeControllerClient) GetMaterializations(ctx context.Context, in *vtboost.MaterializationsRequest, _ ...grpc.CallOption) (*vtboost.MaterializationsResponse, error) {
 	return f.ins.GetMaterializations()
 }
 
-func (ins *FakeBoostInstance) DialControllerClient() (vtboost.DRPCControllerServiceClient, error) {
-	return &fakeControllerClient{ins: ins}, nil
+func (ins *FakeBoostInstance) DialControllerClient() (vtboost.ControllerServiceClient, *grpc.ClientConn, error) {
+	return &fakeControllerClient{ins: ins}, nil, nil
 }
 
 func (ins *FakeBoostInstance) GetMaterializations() (*vtboost.MaterializationsResponse, error) {
@@ -176,7 +172,7 @@ func TestRecipeApplications(t *testing.T) {
 	}
 
 	watch := watcher.NewWatcher(ts)
-	watch.Dial = func(address string) (vtboost.DRPCControllerServiceClient, error) {
+	watch.Dial = func(address string) (vtboost.ControllerServiceClient, *grpc.ClientConn, error) {
 		return instances[address].DialControllerClient()
 	}
 	err = watch.Start()

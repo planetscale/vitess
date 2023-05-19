@@ -242,7 +242,6 @@ install_protoc-gen-go:
 	GOBIN=$(VTROOTBIN) go install google.golang.org/protobuf/cmd/protoc-gen-go@$(shell go list -m -f '{{ .Version }}' google.golang.org/protobuf)
 	GOBIN=$(VTROOTBIN) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0 # the GRPC compiler its own pinned version
 	GOBIN=$(VTROOTBIN) go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@$(shell go list -m -f '{{ .Version }}' github.com/planetscale/vtprotobuf)
-	GOBIN=$(VTROOTBIN) go install storj.io/drpc/cmd/protoc-gen-go-drpc@$(shell go list -m -f '{{ .Version }}' storj.io/drpc)
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -263,10 +262,6 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamRowsResponse \
 		-I${PWD}/dist/vt-protoc-21.3/include:proto $(PROTO_SRCS)
-
-	$(VTROOT)/bin/protoc \
-		--go-drpc_out=. --plugin protoc-gen-go-drpc="${VTROOTBIN}/protoc-gen-go-drpc" \
-		-I${PWD}/dist/vt-protoc-21.3/include:proto proto/vtboost.proto
 
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/

@@ -23,7 +23,7 @@ import (
 )
 
 type Server struct {
-	service.DRPCWorkerServiceUnimplementedServer
+	service.UnimplementedWorkerServiceServer
 
 	uuid       uuid.UUID
 	globalAddr string
@@ -185,6 +185,10 @@ func (srv *Server) Stop() {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 
+	if srv.active != nil {
+		srv.active.Stop()
+		srv.active = nil
+	}
 	srv.cancel()
 }
 

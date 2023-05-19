@@ -17,7 +17,7 @@ limitations under the License.
 
 package service
 
-func (cached *drpcReaderClient) CachedSize(alloc bool) int64 {
+func (cached *readerClient) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
