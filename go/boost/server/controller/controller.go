@@ -58,7 +58,6 @@ type Controller struct {
 	workersReady        bool
 	expectedWorkerCount int
 	workers             map[domainrpc.WorkerID]*domainrpc.Worker
-	readAddrs           map[domainrpc.WorkerID]string
 
 	topo *toposerver.Server
 	log  *zap.Logger
@@ -102,7 +101,6 @@ func NewController(log *zap.Logger, uuid uuid.UUID, cfg *config.Config, state *v
 		remap:              make(map[dataflow.DomainIdx]map[graph.NodeIdx]dataflow.IndexPair),
 		chanCoordinator:    boostrpc.NewChannelCoordinator(),
 		workers:            make(map[domainrpc.WorkerID]*domainrpc.Worker),
-		readAddrs:          make(map[domainrpc.WorkerID]string),
 		topo:               ts,
 		log:                log.With(zap.Int64("epoch", state.Epoch)),
 		BuildDomain:        domain.ToProto,
@@ -113,20 +111,32 @@ func (ctrl *Controller) IsReady() bool {
 	return ctrl.expectedWorkerCount > 0 && len(ctrl.workers) >= ctrl.expectedWorkerCount
 }
 
+func (ctrl *Controller) Close() {
+	for _, w := range ctrl.workers {
+		if err := w.Close(); err != nil {
+			ctrl.log.Warn("failed to close Worker connection", zap.Error(err))
+		}
+	}
+	ctrl.workers = make(map[domainrpc.WorkerID]*domainrpc.Worker)
+}
+
 func (ctrl *Controller) updateWorker(ctx context.Context, req *vtboostpb.TopoWorkerEntry) {
+	var err error
 	workerid := domainrpc.WorkerID(req.Uuid)
 	w, exists := ctrl.workers[workerid]
 	if exists {
-		w.Update(req)
+		err = w.Update(req)
+		if err != nil {
+			ctrl.log.Error("failed to update worker", zap.Error(err))
+			return
+		}
 	} else {
-		var err error
-		w, err = domainrpc.NewWorker(workerid, req.AdminAddr)
+		w, err = domainrpc.NewWorker(workerid, req)
 		if err != nil {
 			ctrl.log.Error("failed to register worker", zap.Error(err))
 			return
 		}
 		ctrl.workers[workerid] = w
-		ctrl.readAddrs[workerid] = req.ReaderAddr
 	}
 
 	var removed []string
@@ -248,7 +258,13 @@ func (ctrl *Controller) viewDescriptor(node *flownode.Node) *vtboostpb.Materiali
 
 	var shards []string
 	for s := uint(0); s < domain.Shards(); s++ {
-		shards = append(shards, ctrl.readAddrs[domain.Assignment(s)])
+		w, ok := ctrl.workers[domain.Assignment(s)]
+		if !ok {
+			ctrl.log.Warn("missing worker in domain assignment", node.Domain().Zap(), zap.Uint("shard", s))
+			continue
+		}
+
+		shards = append(shards, w.ReaderAddr())
 	}
 
 	var desc = reader.ViewPlan()

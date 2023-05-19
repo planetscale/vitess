@@ -9,8 +9,10 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"storj.io/drpc/drpcmigrate"
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
 
@@ -29,7 +31,8 @@ import (
 )
 
 type Worker struct {
-	service.DRPCReaderUnimplementedServer
+	service.UnimplementedReaderServer
+	srv *grpc.Server
 
 	log      *zap.Logger
 	executor domain.Executor
@@ -54,6 +57,7 @@ type Worker struct {
 }
 
 func (w *Worker) Stop() {
+	w.srv.GracefulStop()
 	w.cancel()
 }
 
@@ -279,15 +283,37 @@ func (w *Worker) start(ctx context.Context, globalCfg *config.Config, globalAddr
 		return err
 	}
 
+	w.srv = boostrpc.NewServer()
+	service.RegisterReaderServer(w.srv, w)
+
+	// create a listen mux that evalutes enough bytes to recognize the DRPC header
+	lisMux := drpcmigrate.NewListenMux(readerListener, len(drpcmigrate.DRPCHeader))
+
+	// grap the listen mux route for the DRPC Header and default listener
+	drpcListener := lisMux.Route(drpcmigrate.DRPCHeader)
+	grpcListener := lisMux.Default()
+
+	go func() {
+		if err := w.srv.Serve(grpcListener); err != nil {
+			w.log.Error("grpc.Serve failed", zap.Error(err))
+		}
+	}()
+
 	go func() {
 		m := drpcmux.New()
 		err := service.DRPCRegisterReader(m, w)
 		if err != nil {
 			panic(err)
 		}
+		if err := drpcserver.New(m).Serve(w.ctx, drpcListener); err != nil {
+			w.log.Error("drpc.Serve failed", zap.Error(err))
+		}
+	}()
 
-		if err := drpcserver.New(m).Serve(w.ctx, readerListener); err != nil {
-			w.log.Error("grpc.Serve failed", zap.Error(err))
+	go func() {
+		err := lisMux.Run(w.ctx)
+		if err != nil {
+			w.log.Error("lisMux.Run failed", zap.Error(err))
 		}
 	}()
 
