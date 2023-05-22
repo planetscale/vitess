@@ -1,5 +1,20 @@
 # This file is auto-included when MySQL 8.0 is detected.
 
+# Suppress MySQL errors to minimize log spam.
+#
+# MY-010956
+# Clock skew log messages for 500 microseconds.
+# https://app.shortcut.com/planetscale/story/2095/change-the-logging-setting-for-mysql-so-we-don-t-get-log-messages-for-clock-skew-for-only-500-microseconds
+#
+# MY-010235
+# CREATE USER IF NOT EXISTS" but user already exists. Vitess runs this
+# as part of vttablet-up, so it's purely noise for PlanetScale.
+#
+# MY-010957
+# A fellow traveller of MY-010956.
+# https://bugs.mysql.com/bug.php?id=95422
+log_error_suppression_list = MY-010956,MY-010235,MY-010957
+
 # MySQL 8.0 enables binlog by default with sync_binlog and TABLE info repositories
 # It does not enable GTIDs or enforced GTID consistency
 
