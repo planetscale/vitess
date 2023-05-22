@@ -83,7 +83,7 @@ require (
 	golang.org/x/time v0.3.0
 	golang.org/x/tools v0.8.0
 	google.golang.org/api v0.111.0
-	google.golang.org/genproto v0.0.0-20230306155012-7f2fa6fef1f4
+	google.golang.org/genproto v0.0.0-20230306155012-7f2fa6fef1f4 // indirect
 	google.golang.org/grpc v1.53.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.3.0
 	google.golang.org/grpc/examples v0.0.0-20210430044426-28078834f35b
@@ -133,6 +133,7 @@ require (
 	golang.org/x/exp v0.0.0-20230307190834-24139beb5833
 	golang.org/x/sync v0.1.0
 	gopkg.in/src-d/go-errors.v1 v1.0.0
+	k8s.io/utils v0.0.0-20230308161112-d77c459e9343
 	modernc.org/sqlite v1.21.0
 	storj.io/drpc v0.0.33
 )
@@ -221,7 +222,6 @@ require (
 	k8s.io/gengo v0.0.0-20230306165830-ab3349d207d4 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a // indirect
-	k8s.io/utils v0.0.0-20230308161112-d77c459e9343 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
 	modernc.org/cc/v3 v3.40.0 // indirect
 	modernc.org/ccgo/v3 v3.16.13 // indirect
