@@ -5,7 +5,8 @@ bootstrap.sh @deepthi
 /.github/workflows/ @frouioui
 /.github/workflows/_planetscale* @Sinjo @dctrwatson @Verolop
 /config/mycnf/ @deepthi @shlomi-noach @mattlord
-/docker/ @mattlord
+/doc/ @deepthi @frouioui @GuptaManan100
+/docker/ @deepthi @mattlord @GuptaManan100 @frouioui
 /examples/compose @shlomi-noach @GuptaManan100 @frouioui
 /examples/demo @sougou @mattlord
 /examples/local @rohit-nayak-ps @frouioui @mattlord @GuptaManan100
@@ -24,21 +25,22 @@ bootstrap.sh @deepthi
 /go/test/endtoend/onlineddl @shlomi-noach
 /go/test/endtoend/messaging @mattlord @rohit-nayak-ps
 /go/test/endtoend/vtgate @harshit-gangal @systay @frouioui
-/go/test/endtoend/vtorc @deepthi @shlomi-noach @GuptaManan100 @rsajwani
+/go/test/endtoend/vtorc @deepthi @shlomi-noach @GuptaManan100
 /go/tools/ @frouioui @systay
-/go/vt/dbconnpool @harshit-gangal
-/go/vt/discovery @deepthi
-/go/vt/mysqlctl @deepthi @mattlord @rsajwani
 /go/vt/mysqlctl/kmsbackup @yields
-/go/vt/proto @harshit-gangal
+/go/vt/dbconnpool @harshit-gangal @mattlord
+/go/vt/discovery @deepthi @frouioui
+/go/vt/discovery/*tablet_picker* @rohit-nayak-ps @mattlord
+/go/vt/mysqlctl @deepthi @mattlord
+/go/vt/proto @deepthi @harshit-gangal @mattlord
 /go/vt/proto/vtadmin @ajm188 @notfelineit
 /go/vt/schema @shlomi-noach
 /go/vt/servenv @deepthi @ajm188
 /go/vt/sqlparser @harshit-gangal @systay @GuptaManan100
 /go/vt/srvtopo @mattlord
 /go/vt/sysvars @harshit-gangal @systay
-/go/vt/topo @deepthi @mattlord @rsajwani
-/go/vt/topotools @deepthi @mattlord @rsajwani
+/go/vt/topo @deepthi @mattlord
+/go/vt/topotools @deepthi @mattlord
 /go/vt/vitessdriver @harshit-gangal
 /go/vt/vtadmin @ajm188 @notfelineit @rohit-nayak-ps
 /go/vt/vtctl @deepthi
@@ -52,15 +54,25 @@ bootstrap.sh @deepthi
 /go/vt/vtexplain @systay @harshit-gangal
 /go/vt/vtgate @harshit-gangal @systay @frouioui @GuptaManan100
 /go/vt/vtgate/insights* @piki @rafer
-/go/vt/vtorc @deepthi @shlomi-noach @GuptaManan100 @rsajwani
+/go/vt/vtgate/endtoend/*vstream* @rohit-nayak-ps @mattlord
+/go/vt/vtgate/planbuilder @harshit-gangal @systay @frouioui @GuptaManan100 @arthurschreiber
+/go/vt/vtgate/*vstream* @rohit-nayak-ps @mattlord
+/go/vt/vtorc @deepthi @shlomi-noach @GuptaManan100
+/go/vt/vttablet/*conn* @harshit-gangal @systay
+/go/vt/vttablet/endtoend @harshit-gangal @mattlord @rohit-nayak-ps @systay
+/go/vt/vttablet/grpc* @ajm188 @rohit-nayak-ps @shlomi-noach @harshit-gangal
+/go/vt/vttablet/onlineddl @mattlord @rohit-nayak-ps @shlomi-noach
 /go/vt/vttablet/queryservice @harshit-gangal @systay
-/go/vt/vttablet/tabletmanager @deepthi @shlomi-noach @rsajwani @rohit-nayak-ps
+/go/vt/vttablet/tabletmanager @deepthi @GuptaManan100 @rohit-nayak-ps @shlomi-noach
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps @mattlord
 /go/vt/vttablet/tabletmanager/vstreamer @rohit-nayak-ps @mattlord
-/go/vt/vttablet/tabletserver @harshit-gangal @systay @shlomi-noach @rohit-nayak-ps
+/go/vt/vttablet/tabletserver* @harshit-gangal @systay @shlomi-noach @rohit-nayak-ps
 /go/vt/vttablet/tabletserver/messager @mattlord @rohit-nayak-ps
-/go/vt/wrangler @deepthi @rohit-nayak-ps @mattlord
-/go/vt/workflow @rohit-nayak-ps @mattlord
+/go/vt/vttablet/*tmclient* @ajm188 @GuptaManan100 @rohit-nayak-ps @shlomi-noach
+/go/vt/vttablet/vexec @mattlord @rohit-nayak-ps @shlomi-noach
+/go/vt/wrangler @deepthi @mattlord @rohit-nayak-ps
+/go/vt/workflow @mattlord @rohit-nayak-ps
+/proto/ @deepthi @harshit-gangal
 /proto/vtadmin.proto @ajm188 @notfelineit
 /proto/vtctldata.proto @ajm188 @notfelineit
 /proto/vtctlservice.proto @ajm188 @notfelineit
