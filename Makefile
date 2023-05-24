@@ -86,12 +86,18 @@ ifndef NOBANNER
 endif
 	bash ./build.env
 	go env -w GOPRIVATE=github.com/planetscale/*
-	# build all the binaries by default with CGO enabled for now because of Boost
+	# build all the binaries by default with CGO disabled.
 	# Binaries will be placed in ${VTROOTBIN}.
-	CGO_ENABLED=1 go build \
+	CGO_ENABLED=0 go build \
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		    -ldflags "$(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
+
+	# build vtboost with CGO, because it depends on libc
+	CGO_ENABLED=1 go build \
+		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
+		    -ldflags "$(shell tools/build_version_flags.sh)" \
+		    -o ${VTROOTBIN} ./go/boost/cmd/vtboost/...
 
 # cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
