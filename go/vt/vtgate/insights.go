@@ -140,6 +140,7 @@ type QueryPatternKey struct {
 	ActiveKeyspace     string
 	SQL                string
 	BoostQueryPublicID string
+	TabletType         string
 }
 
 type Insights struct {
@@ -647,6 +648,7 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *u
 	key := QueryPatternKey{
 		ActiveKeyspace:     ls.ActiveKeyspace,
 		BoostQueryPublicID: ls.BoostQueryID,
+		TabletType:         ls.TabletType,
 		SQL:                sql,
 	}
 
@@ -911,6 +913,7 @@ func (ii *Insights) makeQueryPatternMessage(key QueryPatternKey, pa *QueryPatter
 		NormalizedSql:          stringOrNil(key.SQL),
 		StatementType:          pa.StatementType,
 		TablesUsed:             pa.TablesUsed,
+		TabletType:             stringOrNil(key.TabletType),
 		ActiveKeyspace:         stringOrNil(key.ActiveKeyspace),
 		QueryCount:             pa.QueryCount,
 		ErrorCount:             pa.ErrorCount,
