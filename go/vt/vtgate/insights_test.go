@@ -328,6 +328,27 @@ func TestInsightsBoostQueryId(t *testing.T) {
 		})
 }
 
+func TestInsightsTabletType(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			{sql: "select * from foo", tabletType: "PRIMARY", responseTime: 5 * time.Second},
+			{sql: "select * from foo", tabletType: "REPLICA", responseTime: 5 * time.Second},
+			{sql: "select * from foo", tabletType: "REPLICA", responseTime: 5 * time.Second},
+			{sql: "select * from bar", tabletType: "", responseTime: 5 * time.Second},
+			{sql: "select * from bar", tabletType: "", responseTime: 5 * time.Second},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryStatsBundleTopic, "select * from foo", "tablet_type:{value:\\\"PRIMARY\\\"}", "query_count:1"),
+			expect(queryTopic, "select * from foo", "tablet_type:{value:\\\"PRIMARY\\\"}").count(1),
+
+			expect(queryStatsBundleTopic, "select * from foo", "tablet_type:{value:\\\"REPLICA\\\"}", "query_count:2"),
+			expect(queryTopic, "select * from foo", "tablet_type:{value:\\\"REPLICA\\\"}").count(2),
+
+			expect(queryStatsBundleTopic, "select * from bar", "query_count:2"),
+			expect(queryTopic, "select * from bar").count(2),
+		})
+}
+
 func TestInsightsSchemaChanges(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
@@ -1093,6 +1114,7 @@ type insightsQuery struct {
 
 	boostQueryID string
 	method       string
+	tabletType   string
 }
 
 type insightsKafkaExpectation struct {
@@ -1167,6 +1189,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 		}
 
 		ls := &logstats.LogStats{
+			TabletType:   q.tabletType,
 			Method:       q.method,
 			SQL:          q.sql,
 			RawSQL:       q.rawSQL,
