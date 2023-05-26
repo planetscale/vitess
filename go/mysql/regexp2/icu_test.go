@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql/regexp2/syntax"
+	"vitess.io/vitess/go/slices2"
 )
 
 var ErrSkip = errors.New("ignored test")
@@ -23,12 +24,9 @@ type TestPattern struct {
 	Pattern string
 	Flags   syntax.RegexOptions
 	Options struct {
-		FindCount    int
-		MatchOnly    bool
-		MustError    bool
-		UseLookingAt bool
-		UseMatches   bool
-		Literal      bool
+		FindCount int
+		MatchOnly bool
+		MustError bool
 	}
 	Input  string
 	Groups []TestGroup
@@ -56,10 +54,10 @@ func (tp *TestPattern) parseFlags(line string) (string, error) {
 			tp.Flags |= syntax.Multiline
 		case 'D':
 			tp.Flags |= syntax.UnixLines
+		case 'Q':
+			tp.Flags |= syntax.Literal
 		case '2', '3', '4', '5', '6', '7', '8', '9':
 			tp.Options.FindCount = int(line[0] - '0')
-		case 'Q':
-			tp.Options.Literal = true
 		case 'G':
 			tp.Options.MatchOnly = true
 		case 'E':
@@ -242,13 +240,27 @@ func TestCornerCases(t *testing.T) {
 	var cases = []struct {
 		Pattern string
 		Input   string
+		Flags   syntax.RegexOptions
+		Match   bool
 	}{
-		{`xyz$`, "xyz\n"},
+		{`xyz$`, "xyz\n", 0, true},
+		{`a*+`, "abbxx", 0, true},
+		{`(ABC){1,2}+ABC`, "ABCABCABC", 0, true},
+		{`(ABC){2,3}+ABC`, "ABCABCABC", 0, false},
+		{`(abc)*+a`, "abcabcabc", 0, false},
+		{`(abc)*+a`, "abcabcab", 0, true},
+		{`a\N{LATIN SMALL LETTER B}c`, "abc", 0, true},
+		{`a.b`, "a\rb", syntax.UnixLines, true},
+		{`a.b`, "a\rb", 0, false},
+		{`(?d)abc$`, "abc\r", 0, false},
+		{`[ \b]`, "b", syntax.Debug, true},
+		{`[abcd-\N{LATIN SMALL LETTER G}]+`, "xyz-abcdefghij-", 0, true},
+		{`[[abcd]&&[ac]]+`, "bacacd", 0, true},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.Pattern, func(t *testing.T) {
-			re, err := Compile(tc.Pattern, syntax.Debug)
+			re, err := Compile(tc.Pattern, tc.Flags)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -257,7 +269,16 @@ func TestCornerCases(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			t.Logf("%q ~= /%s/\n\t%v", tc.Input, tc.Pattern, m.String())
+			var match []string
+			if m != nil {
+				match = slices2.Map(m.Groups(), func(c Group) string {
+					return strconv.Quote(c.String())
+				})
+			}
+
+			if tc.Match != (m != nil) {
+				t.Errorf("%q ~= /%s/\n\t%v", tc.Input, tc.Pattern, match)
+			}
 		})
 	}
 }

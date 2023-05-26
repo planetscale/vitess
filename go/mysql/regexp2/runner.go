@@ -508,8 +508,22 @@ func (r *runner) execute() error {
 
 			break
 
+		case syntax.Bol | syntax.D:
+			if r.leftchars() > 0 && r.charAt(r.textPos()-1) != '\n' {
+				break
+			}
+			r.advance(0)
+			continue
+
 		case syntax.Bol:
 			if r.leftchars() > 0 && !r.isEOL(r.textPos()-1) {
+				break
+			}
+			r.advance(0)
+			continue
+
+		case syntax.Eol | syntax.D:
+			if r.rightchars() > 0 && r.charAt(r.textPos()) != '\n' {
 				break
 			}
 			r.advance(0)
@@ -563,6 +577,13 @@ func (r *runner) execute() error {
 			}
 			r.advance(0)
 			continue
+
+		case syntax.EndZ | syntax.D:
+			if r.rightchars() == 1 && r.charAt(r.textPos()) == '\n' {
+				r.advance(0)
+				continue
+			}
+			break
 
 		case syntax.EndZ:
 			tpos := r.textPos()
@@ -1549,9 +1570,6 @@ func (r *runner) isECMABoundary(index, startpos, endpos int) bool {
 }
 
 func (r *runner) isEOL(index int) bool {
-	if r.re.options&syntax.UnixLines != 0 {
-		return r.runtext[index] == '\n'
-	}
 	switch r.runtext[index] {
 	case 0xa, 0xb, 0xc, 0xd, 0x85, 0x2028, 0x2029:
 		return true

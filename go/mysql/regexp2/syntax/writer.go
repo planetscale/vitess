@@ -1,7 +1,6 @@
 package syntax
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 	"os"
@@ -356,7 +355,13 @@ func (w *writer) emitFragment(nodetype nodeType, node *regexNode, curIndex int) 
 	case ntRef:
 		w.emit1(InstOp(node.t|ntBits), w.mapCapnum(node.m))
 
-	case ntNothing, ntBol, ntEol, ntBoundary, ntNonboundary, ntECMABoundary, ntNonECMABoundary, ntBeginning, ntStart, ntEndZ, ntEnd:
+	case ntBol, ntEol, ntEndZ:
+		if node.options&UnixLines != 0 {
+			w.emit(InstOp(node.t) | InstOp(D))
+		}
+		fallthrough
+
+	case ntNothing, ntBoundary, ntNonboundary, ntECMABoundary, ntNonECMABoundary, ntBeginning, ntStart, ntEnd:
 		w.emit(InstOp(node.t))
 
 	default:
@@ -405,10 +410,7 @@ func (w *writer) setCode(set *CharSet) int {
 		return 0
 	}
 
-	buf := &bytes.Buffer{}
-
-	set.mapHashFill(buf)
-	hash := buf.String()
+	hash := set.Hash()
 	i, ok := w.sethash[hash]
 	if !ok {
 		i = len(w.sethash)

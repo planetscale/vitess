@@ -82,11 +82,12 @@ const (
 
 	// Modifiers for alternate modes
 
-	Mask  = 63  // Mask to get unmodified ordinary operator
-	Rtl   = 64  // bit to indicate that we're reverse scanning.
-	Back  = 128 // bit to indicate that we're backtracking.
-	Back2 = 256 // bit to indicate that we're backtracking on a second branch.
-	Ci    = 512 // bit to indicate that we're case-insensitive.
+	Mask  = 63   // Mask to get unmodified ordinary operator
+	Rtl   = 64   // bit to indicate that we're reverse scanning.
+	Back  = 128  // bit to indicate that we're backtracking.
+	Back2 = 256  // bit to indicate that we're backtracking on a second branch.
+	Ci    = 512  // bit to indicate that we're case-insensitive.
+	D     = 1024 // bit to indicate that we're in unix line mode
 )
 
 type Code struct {
