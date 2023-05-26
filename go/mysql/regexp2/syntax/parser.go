@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"unicode"
+
+	unicode15 "vitess.io/vitess/go/mysql/regexp2/unicode"
 )
 
 type RegexOptions int32
@@ -22,29 +24,28 @@ const (
 	Debug                                = 0x0080 // "d"
 	UnixLines                            = 0x0100
 	UnicodeWord                          = 0x0200
+	Literal                              = 0x0400
 )
 
-func optionFromCode(ch rune) RegexOptions {
+func optionFromCode(ch rune) (RegexOptions, bool) {
 	// case-insensitive
 	switch ch {
-	case 'i', 'I':
-		return IgnoreCase
-	case 'r', 'R':
-		return RightToLeft
-	case 'm', 'M':
-		return Multiline
-	case 'n', 'N':
-		return ExplicitCapture
-	case 's', 'S':
-		return Singleline
-	case 'x', 'X':
-		return IgnorePatternWhitespace
-	case 'd', 'D':
-		return Debug
+	case 'i':
+		return IgnoreCase, true
+	case 'm':
+		return Multiline, true
+	case 's':
+		return Singleline, true
+	case 'x':
+		return IgnorePatternWhitespace, true
+	case 'd':
+		return UnixLines, true
 	case 'w':
-		return UnicodeWord
+		return UnicodeWord, true
+	case 'u':
+		return 0, true
 	default:
-		return 0
+		return 0, false
 	}
 }
 
@@ -105,6 +106,8 @@ const (
 	ErrUnterminatedBracket        = "unterminated [] set"
 	ErrSubtractionMustBeLast      = "a subtraction must be the last element in a character class"
 	ErrReversedCharRange          = "[%c-%c] range in reverse order"
+	ErrDuplicateCaptureGroup      = "capture group %q cannot be duplicated"
+	ErrUnknownSlashN              = "unknown Unicode codepoint name %q"
 )
 
 func (e ErrorCode) String() string {
@@ -153,7 +156,9 @@ func Parse(re string, op RegexOptions) (*RegexTree, error) {
 	}
 	p.setPattern(re)
 
-	if err := p.countCaptures(); err != nil {
+	if op&Literal != 0 {
+		p.noteCaptureSlot(0, 0)
+	} else if err := p.countCaptures(); err != nil {
 		return nil, err
 	}
 
@@ -209,15 +214,18 @@ func (p *parser) noteCaptureSlot(i, pos int) {
 	}
 }
 
-func (p *parser) noteCaptureName(name string, pos int) {
+func (p *parser) noteCaptureName(name string, pos int) error {
 	if p.capnames == nil {
 		p.capnames = make(map[string]int)
 	}
 
-	if _, ok := p.capnames[name]; !ok {
-		p.capnames[name] = pos
-		p.capnamelist = append(p.capnamelist, name)
+	if _, ok := p.capnames[name]; ok {
+		return p.getErr(ErrDuplicateCaptureGroup, name)
 	}
+
+	p.capnames[name] = pos
+	p.capnamelist = append(p.capnamelist, name)
+	return nil
 }
 
 func (p *parser) assignNameSlots() {
@@ -302,7 +310,6 @@ func (p *parser) countCaptures() error {
 	var ch rune
 
 	p.noteCaptureSlot(0, 0)
-
 	p.autocap = 1
 
 	for p.charsRight() > 0 {
@@ -352,17 +359,11 @@ func (p *parser) countCaptures() error {
 								}
 								p.noteCaptureSlot(dec, pos)
 							} else {
-								p.noteCaptureName(p.scanCapname(), pos)
+								if err := p.noteCaptureName(p.scanCapname(), pos); err != nil {
+									return err
+								}
 							}
 						}
-					} else if p.useRE2() && p.charsRight() > 2 && (p.rightChar(0) == 'P' && p.rightChar(1) == '<') {
-						// RE2-compat (?P<)
-						p.moveRight(2)
-						ch = p.rightChar(0)
-						if IsWordChar(ch) {
-							p.noteCaptureName(p.scanCapname(), pos)
-						}
-
 					} else {
 						// (?...
 
@@ -418,6 +419,11 @@ func (p *parser) scanRegex() (*regexNode, error) {
 	isQuant := false
 
 	p.startGroup(newRegexNodeMN(ntCapture, p.options, 0, -1))
+
+	if p.options&Literal != 0 {
+		p.addToConcatenate(0, len(p.pattern), false)
+		goto BreakOuterScan
+	}
 
 	for p.charsRight() > 0 {
 		wasPrevQuantifier := isQuant
@@ -550,12 +556,12 @@ func (p *parser) scanRegex() (*regexNode, error) {
 			}
 
 		case '.':
-			if p.useOptionE() {
-				p.addUnitSet(ECMAAnyClass())
-			} else if p.useOptionS() {
+			if p.useOptionS() {
 				p.addUnitSet(AnyClass())
-			} else {
+			} else if p.useOptionD() {
 				p.addUnitNotone('\n')
+			} else {
+				p.addUnitSet(ICUAnyClass())
 			}
 
 		case '{', '*', '+', '?':
@@ -591,6 +597,7 @@ func (p *parser) scanRegex() (*regexNode, error) {
 		for p.unit != nil {
 			var min, max int
 			var lazy bool
+			var possessive bool
 
 			switch ch {
 			case '*':
@@ -641,26 +648,28 @@ func (p *parser) scanRegex() (*regexNode, error) {
 				return nil, err
 			}
 
-			if p.charsRight() == 0 || p.rightChar(0) != '?' {
-				lazy = false
-			} else {
-				p.moveRight(1)
-				lazy = true
+			if p.charsRight() > 0 {
+				switch p.rightChar(0) {
+				case '?':
+					p.moveRight(1)
+					lazy = true
+				case '+':
+					p.moveRight(1)
+					possessive = true
+				}
 			}
 
 			if min > max {
 				return nil, p.getErr(ErrInvalidRepeatSize)
 			}
 
-			p.addConcatenate3(lazy, min, max)
+			p.addConcatenate3(lazy, possessive, min, max)
 		}
 
 	ContinueOuterScan:
 	}
 
 BreakOuterScan:
-	;
-
 	if !p.emptyStack() {
 		return nil, p.getErr(ErrMissingParen)
 	}
@@ -670,7 +679,6 @@ BreakOuterScan:
 	}
 
 	return p.unit, nil
-
 }
 
 /*
@@ -777,7 +785,7 @@ func (p *parser) scanDollar() (*regexNode, error) {
 				}
 			}
 		}
-	} else if angled && IsWordChar(ch) {
+	} else if angled && isCapChar(ch) {
 		capname := p.scanCapname()
 
 		if p.charsRight() > 0 && p.moveRightGetChar() == '}' {
@@ -1031,50 +1039,6 @@ func (p *parser) scanGroupOpen() (*regexNode, error) {
 				}
 			}
 
-		case 'P':
-			if p.useRE2() {
-				// support for P<name> syntax
-				if p.charsRight() < 3 {
-					goto BreakRecognize
-				}
-
-				ch = p.moveRightGetChar()
-				if ch != '<' {
-					goto BreakRecognize
-				}
-
-				ch = p.moveRightGetChar()
-				p.moveLeft()
-
-				if IsWordChar(ch) {
-					capnum := -1
-					capname := p.scanCapname()
-
-					if p.isCaptureName(capname) {
-						capnum = p.captureSlotFromName(capname)
-					}
-
-					// check if we have bogus character after the name
-					if p.charsRight() > 0 && p.rightChar(0) != '>' {
-						return nil, p.getErr(ErrInvalidGroupName)
-					}
-
-					// actually make the node
-
-					if capnum != -1 && p.charsRight() > 0 && p.moveRightGetChar() == '>' {
-						return newRegexNodeMN(ntCapture, p.options, capnum, -1), nil
-					}
-					goto BreakRecognize
-
-				} else {
-					// bad group name - starts with something other than a word character and isn't a number
-					return nil, p.getErr(ErrInvalidGroupName)
-				}
-			}
-			// if we're not using RE2 compat mode then
-			// we just behave like normal
-			fallthrough
-
 		default:
 			p.moveLeft()
 
@@ -1101,9 +1065,7 @@ func (p *parser) scanGroupOpen() (*regexNode, error) {
 	}
 
 BreakRecognize:
-
 	// break Recognize comes here
-
 	return nil, p.getErr(ErrUnrecognizedGrouping, string(p.pattern[start:p.textpos()]))
 }
 
@@ -1118,6 +1080,14 @@ func (p *parser) scanBackslash(scanOnly bool) (*regexNode, error) {
 	case 'b', 'B', 'A', 'G', 'Z', 'z':
 		p.moveRight(1)
 		return newRegexNode(p.typeFromCode(ch), p.options), nil
+
+	case 'v':
+		p.moveRight(1)
+		return newRegexNodeSet(ntSet, p.options, ICUNewLineClass()), nil
+
+	case 'V':
+		p.moveRight(1)
+		return newRegexNodeSet(ntSet, p.options, ICUAnyClass()), nil
 
 	case 'w':
 		p.moveRight(1)
@@ -1172,12 +1142,29 @@ func (p *parser) scanBackslash(scanOnly bool) (*regexNode, error) {
 			return nil, err
 		}
 		cc := &CharSet{}
-		cc.addCategory(prop, (ch != 'p'), p.useOptionI(), p.patternRaw)
+		if !cc.addPropertyName(prop, ch != 'p', p.useOptionI()) {
+			return nil, p.getErr(ErrUnknownSlashP, prop)
+		}
 		if p.useOptionI() {
 			cc.addLowercase()
 		}
 
 		return newRegexNodeSet(ntSet, p.options, cc), nil
+
+	case 'N':
+		p.moveRight(1)
+		prop, err := p.parseProperty()
+		if err != nil {
+			return nil, err
+		}
+		ch, ok := unicode15.CharsByName[prop]
+		if !ok {
+			return nil, p.getErr(ErrUnknownSlashN, prop)
+		}
+		if p.useOptionI() {
+			ch = unicode.ToLower(ch)
+		}
+		return newRegexNodeCh(ntOne, p.options, ch), nil
 
 	default:
 		return p.scanBasicBackslash(scanOnly)
@@ -1202,7 +1189,7 @@ func (p *parser) scanBasicBackslash(scanOnly bool) (*regexNode, error) {
 	// there is at least one group name in the regexp.
 	// See https://www.ecma-international.org/ecma-262/#sec-isvalidregularexpressionliteral, step 7.
 	// Note, during the first (scanOnly) run we may not have all group names scanned, but that's ok.
-	if ch == 'k' && (!p.useOptionE() || len(p.capnames) > 0) {
+	if ch == 'k' {
 		if p.charsRight() >= 2 {
 			p.moveRight(1)
 			ch = p.moveRightGetChar()
@@ -1271,7 +1258,6 @@ func (p *parser) scanBasicBackslash(scanOnly bool) (*regexNode, error) {
 		capname := p.scanCapname()
 
 		if capname != "" && p.charsRight() > 0 && p.moveRightGetChar() == close {
-
 			if scanOnly {
 				return nil, nil
 			}
@@ -1308,17 +1294,6 @@ func (p *parser) scanBasicBackslash(scanOnly bool) (*regexNode, error) {
 
 // Scans X for \p{X} or \P{X}
 func (p *parser) parseProperty() (string, error) {
-	// RE2 and PCRE supports \pX syntax (no {} and only 1 letter unicode cats supported)
-	// since this is purely additive syntax it's not behind a flag
-	if p.charsRight() >= 1 && p.rightChar(0) != '{' {
-		ch := string(p.moveRightGetChar())
-		// check if it's a valid cat
-		if !isValidUnicodeCat(ch) {
-			return "", p.getErr(ErrUnknownSlashP, ch)
-		}
-		return ch, nil
-	}
-
 	if p.charsRight() < 3 {
 		return "", p.getErr(ErrIncompleteSlashP)
 	}
@@ -1330,22 +1305,12 @@ func (p *parser) parseProperty() (string, error) {
 	startpos := p.textpos()
 	for p.charsRight() > 0 {
 		ch = p.moveRightGetChar()
-		if !(IsWordChar(ch) || ch == '-') {
-			p.moveLeft()
-			break
+		if ch == '}' {
+			return string(p.pattern[startpos : p.textpos()-1]), nil
 		}
 	}
-	capname := string(p.pattern[startpos:p.textpos()])
 
-	if p.charsRight() == 0 || p.moveRightGetChar() != '}' {
-		return "", p.getErr(ErrIncompleteSlashP)
-	}
-
-	if !isValidUnicodeCat(capname) {
-		return "", p.getErr(ErrUnknownSlashP, capname)
-	}
-
-	return capname, nil
+	return "", p.getErr(ErrIncompleteSlashP)
 }
 
 // Returns ReNode type for zero-length assertions with a \ code.
@@ -1422,11 +1387,15 @@ func (p *parser) scanBlank() error {
 	return nil
 }
 
+func isCapChar(r rune) bool {
+	return r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z'
+}
+
 func (p *parser) scanCapname() string {
 	startpos := p.textpos()
 
 	for p.charsRight() > 0 {
-		if !IsWordChar(p.moveRightGetChar()) {
+		if !isCapChar(p.moveRightGetChar()) {
 			p.moveLeft()
 			break
 		}
@@ -1500,6 +1469,15 @@ func (p *parser) scanCharSet(caseInsensitive, scanOnly bool) (*CharSet, error) {
 				}
 				continue
 
+			case 'v', 'V':
+				if !scanOnly {
+					if inRange {
+						return nil, p.getErr(ErrBadClassInCharRange, ch)
+					}
+
+					cc.addNewlines(ch == 'V')
+				}
+
 			case 'p', 'P':
 				if !scanOnly {
 					if inRange {
@@ -1509,12 +1487,32 @@ func (p *parser) scanCharSet(caseInsensitive, scanOnly bool) (*CharSet, error) {
 					if err != nil {
 						return nil, err
 					}
-					cc.addCategory(prop, (ch != 'p'), caseInsensitive, p.patternRaw)
+					if !cc.addPropertyName(prop, ch != 'p', caseInsensitive) {
+						return nil, p.getErr(ErrUnknownSlashP, prop)
+					}
 				} else {
-					p.parseProperty()
+					_, err := p.parseProperty()
+					if err != nil {
+						return nil, err
+					}
 				}
-
 				continue
+
+			case 'N':
+				prop, err := p.parseProperty()
+				if err != nil {
+					return nil, err
+				}
+				if scanOnly {
+					continue
+				}
+				var ok bool
+				ch, ok = unicode15.CharsByName[prop]
+				if !ok {
+					return nil, p.getErr(ErrUnknownSlashN, prop)
+				}
+				fTranslatedChar = true
+				break
 
 			case '-':
 				if !scanOnly {
@@ -1533,31 +1531,34 @@ func (p *parser) scanCharSet(caseInsensitive, scanOnly bool) (*CharSet, error) {
 				break // this break will only break out of the switch
 			}
 		} else if ch == '[' {
-			// This is code for Posix style properties - [:Ll:] or [:IsTibetan:].
-			// It currently doesn't do anything other than skip the whole thing!
-			if p.charsRight() > 0 && p.rightChar(0) == ':' && !inRange {
-				savePos := p.textpos()
+			if p.charsRight() > 0 && !inRange {
+				if p.rightChar(0) == ':' {
+					savePos := p.textpos()
 
-				p.moveRight(1)
-				negate := false
-				if p.charsRight() > 1 && p.rightChar(0) == '^' {
-					negate = true
 					p.moveRight(1)
-				}
-
-				nm := p.scanCapname() // snag the name
-				if !scanOnly && p.useRE2() {
-					// look up the name since these are valid for RE2
-					// add the group based on the name
-					if ok := cc.addNamedASCII(nm, negate); !ok {
-						return nil, p.getErr(ErrInvalidCharRange)
+					negate := false
+					if p.charsRight() > 1 && p.rightChar(0) == '^' {
+						negate = true
+						p.moveRight(1)
 					}
-				}
-				if p.charsRight() < 2 || p.moveRightGetChar() != ':' || p.moveRightGetChar() != ']' {
-					p.textto(savePos)
-				} else if p.useRE2() {
-					// move on
-					continue
+
+					nm := p.scanCapname() // snag the name
+					if !scanOnly && p.useRE2() {
+						// look up the name since these are valid for RE2
+						// add the group based on the name
+						if ok := cc.addNamedASCII(nm, negate); !ok {
+							return nil, p.getErr(ErrInvalidCharRange)
+						}
+					}
+					if p.charsRight() < 2 || p.moveRightGetChar() != ':' || p.moveRightGetChar() != ']' {
+						p.textto(savePos)
+					} else if p.useRE2() {
+						// move on
+						continue
+					}
+				} else {
+					// TODO: nested char ranges
+					return nil, p.getErr(ErrInvalidCharRange)
 				}
 			}
 		}
@@ -1651,11 +1652,6 @@ func (p *parser) scanDecimal() (int, error) {
 	return int(i), nil
 }
 
-// Returns true for options allowed only at the top level
-func isOnlyTopOption(option RegexOptions) bool {
-	return option == RightToLeft
-}
-
 // Scans cimsx-cimsx option string, stops at the first unrecognized char.
 func (p *parser) scanOptions() {
 
@@ -1667,8 +1663,8 @@ func (p *parser) scanOptions() {
 		} else if ch == '+' {
 			off = false
 		} else {
-			option := optionFromCode(ch)
-			if option == 0 || isOnlyTopOption(option) {
+			option, ok := optionFromCode(ch)
+			if !ok {
 				return
 			}
 
@@ -1713,7 +1709,7 @@ func (p *parser) scanCharEscape() (r rune, err error) {
 	case 'a':
 		return '\u0007', nil
 	case 'b':
-		return '\b', nil
+		return 'b', nil
 	case 'e':
 		return '\u001B', nil
 	case 'f':
@@ -1971,6 +1967,10 @@ func (p *parser) useOptionS() bool {
 	return (p.options & Singleline) != 0
 }
 
+func (p *parser) useOptionD() bool {
+	return (p.options & UnixLines) != 0
+}
+
 // True if X option enabling whitespace/comment mode is on.
 func (p *parser) useOptionX() bool {
 	return (p.options & IgnorePatternWhitespace) != 0
@@ -1999,8 +1999,16 @@ func (p *parser) addConcatenate() {
 }
 
 // Finish the current quantifiable (when a quantifier is found)
-func (p *parser) addConcatenate3(lazy bool, min, max int) {
-	p.concatenation.addChild(p.unit.makeQuantifier(lazy, min, max))
+func (p *parser) addConcatenate3(lazy, possessive bool, min, max int) {
+	n := p.unit.makeQuantifier(lazy, min, max)
+	if possessive {
+		pos := newRegexNode(ntGreedy, n.options)
+		pos.addChild(n)
+		p.concatenation.addChild(pos)
+	} else {
+		p.concatenation.addChild(n)
+	}
+
 	p.unit = nil
 }
 
