@@ -106,6 +106,7 @@ require github.com/bndr/gotabulate v1.1.2
 require github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 
 require (
+	github.com/Shopify/toxiproxy/v2 v2.5.0
 	github.com/cespare/xxhash v1.1.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/safehtml v0.1.0
