@@ -17,11 +17,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Backport to: latest-17.0')}}" == "true" ]]; then
+            echo 'The "Backport to: latest-17.0" label is set.'
+            if [[ "${{contains( github.event.pull_request.labels.*.name, 'Backport to: latest-16.0')}}" == "true" ]]; then
+              echo 'The "Backport to: latest-16.0" label is set.'
+              exit 0
+            fi
+            if [[ "${{contains( github.event.pull_request.labels.*.name, 'Backport to: latest-15.0')}}" == "true" ]]; then
+              echo 'The "Backport to: latest-15.0" label is set.'
+              gh pr edit ${{ github.event.pull_request.number }} --add-label 'Backport to: latest-16.0'
+              exit 0
+            fi
+            exit 0
+          fi
           if [[ "${{contains( github.event.pull_request.labels.*.name, 'Backport to: latest-16.0')}}" == "true" ]]; then
             echo 'The "Backport to: latest-16.0" label is set.'
+            gh pr edit ${{ github.event.pull_request.number }} --add-label 'Backport to: latest-17.0'
             exit 0
           fi
           if [[ "${{contains( github.event.pull_request.labels.*.name, 'Backport to: latest-15.0')}}" == "true" ]]; then
             echo 'The "Backport to: latest-15.0" label is set.'
-            gh pr edit ${{ github.event.pull_request.number }} --add-label 'Backport to: latest-16.0'
+            gh pr edit ${{ github.event.pull_request.number }} --add-label 'Backport to: latest-16.0','Backport to: latest-17.0'
           fi
