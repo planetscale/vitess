@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/regexp2/syntax"
 )
 
@@ -58,10 +58,8 @@ type runner struct {
 
 	runmatch *Match // result object
 
-	ignoreTimeout bool
-	timeout       time.Duration // timeout in milliseconds (needed for actual)
-	deadline      fasttime
-
+	timeout         int64
+	ticks           int64
 	operator        syntax.InstOp
 	codepos         int
 	rightToLeft     bool
@@ -101,8 +99,9 @@ func (re *Regexp) run(quick bool, textstart int, input []rune) (*Match, error) {
 // and we could use a separate method Skip() that will quickly scan past
 // any characters that we know can't match.
 func (r *runner) scan(rt []rune, textstart int, quick bool, timeout time.Duration) (*Match, error) {
-	r.timeout = timeout
-	r.ignoreTimeout = (time.Duration(math.MaxInt64) == timeout)
+	if timeout != 0 {
+		r.timeout = hack.RuntimeNano() + int64(timeout*time.Nanosecond)
+	}
 	r.runtextstart = textstart
 	r.runtext = rt
 	r.runtextend = len(rt)
@@ -118,7 +117,6 @@ func (r *runner) scan(rt []rune, textstart int, quick bool, timeout time.Duratio
 	r.runtextpos = textstart
 	initted := false
 
-	r.startTimeoutWatch()
 	for {
 		if r.re.Debug() {
 			//fmt.Printf("\nSearch content: %v\n", string(r.runtext))
@@ -127,8 +125,8 @@ func (r *runner) scan(rt []rune, textstart int, quick bool, timeout time.Duratio
 		}
 
 		if r.findFirstChar() {
-			if err := r.checkTimeout(); err != nil {
-				return nil, err
+			if r.checkTimeout() {
+				return nil, ErrTimeout
 			}
 
 			if !initted {
@@ -181,8 +179,8 @@ func (r *runner) execute() error {
 			r.dumpState()
 		}
 
-		if err := r.checkTimeout(); err != nil {
-			return err
+		if r.checkTimeout() {
+			return ErrTimeout
 		}
 
 		switch r.operator {
@@ -1578,29 +1576,20 @@ func (r *runner) isEOL(index int) bool {
 	}
 }
 
-func (r *runner) startTimeoutWatch() {
-	if r.ignoreTimeout {
-		return
-	}
-	r.deadline = makeDeadline(r.timeout)
-}
+const timeoutTickRatio = 32
 
-func (r *runner) checkTimeout() error {
-	if r.ignoreTimeout || !r.deadline.reached() {
-		return nil
+var ErrTimeout = errors.New("match timeout")
+
+func (r *runner) checkTimeout() bool {
+	if r.timeout == 0 {
+		return false
 	}
 
-	if r.re.Debug() {
-		//Debug.WriteLine("")
-		//Debug.WriteLine("RegEx match timeout occurred!")
-		//Debug.WriteLine("Specified timeout:       " + TimeSpan.FromMilliseconds(_timeout).ToString())
-		//Debug.WriteLine("Timeout check frequency: " + TimeoutCheckFrequency)
-		//Debug.WriteLine("Search pattern:          " + _runregex._pattern)
-		//Debug.WriteLine("Input:                   " + r.runtext)
-		//Debug.WriteLine("About to throw RegexMatchTimeoutException.")
+	r.ticks++
+	if r.ticks%timeoutTickRatio != 0 {
+		return false
 	}
-
-	return fmt.Errorf("match timeout after %v on input `%v`", r.timeout, string(r.runtext))
+	return hack.RuntimeNano() > r.timeout
 }
 
 func (r *runner) initTrackCount() {
