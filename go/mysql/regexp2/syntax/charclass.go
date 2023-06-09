@@ -8,8 +8,6 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
-
-	unicode15 "vitess.io/vitess/go/mysql/regexp2/unicode"
 )
 
 // CharSet combines start-end rune ranges and unicode categories representing a set of characters
@@ -23,7 +21,7 @@ type CharSet struct {
 
 type category struct {
 	negate bool
-	cat    *unicode15.RangeTable
+	cat    *unicode.RangeTable
 }
 
 type singleRange struct {
@@ -31,7 +29,7 @@ type singleRange struct {
 	last  rune
 }
 
-var wordCategoryRange = &unicode15.RangeTable{}
+var wordCategoryRange = &unicode.RangeTable{}
 
 var (
 	ecmaSpace = []rune{0x0009, 0x000e, 0x0020, 0x0021, 0x00a0, 0x00a1, 0x1680, 0x1681, 0x2000, 0x200b, 0x2028, 0x202a, 0x202f, 0x2030, 0x205f, 0x2060, 0x3000, 0x3001, 0xfeff, 0xff00}
@@ -56,30 +54,30 @@ var (
 
 	WordClass     = getCharSetFromCategoryString(false, false, wordCategoryRange)
 	NotWordClass  = getCharSetFromCategoryString(true, false, wordCategoryRange)
-	SpaceClass    = getCharSetFromCategoryString(false, false, unicode15.White_Space)
-	NotSpaceClass = getCharSetFromCategoryString(true, false, unicode15.White_Space)
-	DigitClass    = getCharSetFromCategoryString(false, false, unicode15.Nd)
-	NotDigitClass = getCharSetFromCategoryString(false, true, unicode15.Nd)
+	SpaceClass    = getCharSetFromCategoryString(false, false, unicode.White_Space)
+	NotSpaceClass = getCharSetFromCategoryString(true, false, unicode.White_Space)
+	DigitClass    = getCharSetFromCategoryString(false, false, unicode.Nd)
+	NotDigitClass = getCharSetFromCategoryString(false, true, unicode.Nd)
 
 	RE2SpaceClass    = getCharSetFromOldString(re2Space, false)
 	NotRE2SpaceClass = getCharSetFromOldString(re2Space, true)
 )
 
-var unicodeCategories = func() map[string]*unicode15.RangeTable {
-	retVal := make(map[string]*unicode15.RangeTable)
-	for k, v := range unicode15.Scripts {
+var unicodeCategories = func() map[string]*unicode.RangeTable {
+	retVal := make(map[string]*unicode.RangeTable)
+	for k, v := range unicode.Scripts {
 		retVal[k] = v
 	}
-	for k, v := range unicode15.Categories {
+	for k, v := range unicode.Categories {
 		retVal[k] = v
 	}
-	for k, v := range unicode15.Properties {
+	for k, v := range unicode.Properties {
 		retVal[k] = v
 	}
 	return retVal
 }()
 
-func getCharSetFromCategoryString(negateSet bool, negateCat bool, cats ...*unicode15.RangeTable) func() *CharSet {
+func getCharSetFromCategoryString(negateSet bool, negateCat bool, cats ...*unicode.RangeTable) func() *CharSet {
 	if negateCat && negateSet {
 		panic("BUG!  You should only negate the set OR the category in a constant setup, but not both")
 	}
@@ -291,7 +289,7 @@ func (c CharSet) CharIn(ch rune) bool {
 
 func (c category) String() string {
 	switch c.cat {
-	case unicode15.White_Space:
+	case unicode.White_Space:
 		if c.negate {
 			return "\\S"
 		}
@@ -334,15 +332,15 @@ func CharDescription(ch rune) string {
 func IsWordChar(r rune) bool {
 	//"L", "Mn", "Nd", "Pc"
 	return unicode.In(r,
-		unicode15.Categories["L"], unicode15.Categories["Mn"],
-		unicode15.Categories["Nd"], unicode15.Categories["Pc"]) || r == '\u200D' || r == '\u200C'
+		unicode.Categories["L"], unicode.Categories["Mn"],
+		unicode.Categories["Nd"], unicode.Categories["Pc"]) || r == '\u200D' || r == '\u200C'
 	//return 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' || '0' <= r && r <= '9' || r == '_'
 }
 
 func IsECMAWordChar(r rune) bool {
 	return unicode.In(r,
-		unicode15.Categories["L"], unicode15.Categories["Mn"],
-		unicode15.Categories["Nd"], unicode15.Categories["Pc"])
+		unicode.Categories["L"], unicode.Categories["Mn"],
+		unicode.Categories["Nd"], unicode.Categories["Pc"])
 
 	//return 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' || '0' <= r && r <= '9' || r == '_'
 }
@@ -391,7 +389,7 @@ func (c *CharSet) addDigit(ecma, negate bool, pattern string) {
 			c.addRanges(ECMADigitClass().ranges)
 		}
 	} else {
-		c.addCategories(category{cat: unicode15.Nd, negate: negate})
+		c.addCategories(category{cat: unicode.Nd, negate: negate})
 	}
 }
 
@@ -413,7 +411,7 @@ func (c *CharSet) addSpace(ecma, re2, negate bool) {
 			c.addRanges(RE2SpaceClass().ranges)
 		}
 	} else {
-		c.addCategories(category{cat: unicode15.White_Space, negate: negate})
+		c.addCategories(category{cat: unicode.White_Space, negate: negate})
 	}
 }
 
@@ -433,7 +431,7 @@ func (c *CharSet) addWord(ecma, negate bool) {
 			c.addRanges(ECMAWordClass().ranges)
 		}
 	} else {
-		c.addCategories(category{cat: unicode15.White_Space, negate: negate})
+		c.addCategories(category{cat: unicode.White_Space, negate: negate})
 	}
 }
 
@@ -550,9 +548,9 @@ func (c *CharSet) addPropertyName(propname string, negate, caseInsensitive bool)
 	if caseInsensitive && (propname == "Ll" || propname == "Lu" || propname == "Lt") {
 		// when RegexOptions.IgnoreCase is specified then {Ll} {Lu} and {Lt} cases should all match
 		c.addCategories(
-			category{cat: unicode15.Ll, negate: negate},
-			category{cat: unicode15.Lu, negate: negate},
-			category{cat: unicode15.Lt, negate: negate})
+			category{cat: unicode.Ll, negate: negate},
+			category{cat: unicode.Lu, negate: negate},
+			category{cat: unicode.Lt, negate: negate})
 	}
 	c.addCategories(category{cat: cat, negate: negate})
 	return true

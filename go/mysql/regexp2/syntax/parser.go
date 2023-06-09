@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"unicode"
 
-	unicode15 "vitess.io/vitess/go/mysql/regexp2/unicode"
+	"vitess.io/vitess/go/mysql/regexp2/unicode2"
 )
 
 type RegexOptions int32
@@ -1157,7 +1157,7 @@ func (p *parser) scanBackslash(scanOnly bool) (*regexNode, error) {
 		if err != nil {
 			return nil, err
 		}
-		ch, ok := unicode15.CharsByName[prop]
+		ch, ok := unicode2.CharacterNames[prop]
 		if !ok {
 			return nil, p.getErr(ErrUnknownSlashN, prop)
 		}
@@ -1507,7 +1507,7 @@ func (p *parser) scanCharSet(caseInsensitive, scanOnly bool) (*CharSet, error) {
 					continue
 				}
 				var ok bool
-				ch, ok = unicode15.CharsByName[prop]
+				ch, ok = unicode2.CharacterNames[prop]
 				if !ok {
 					return nil, p.getErr(ErrUnknownSlashN, prop)
 				}
