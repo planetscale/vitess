@@ -312,7 +312,6 @@ func BenchmarkLeading(b *testing.B) {
 func BenchmarkShortSearch(b *testing.B) {
 	// set to default check period for benchmarking purposes
 	// unit tests tend to send this low
-	SetTimeoutCheckPeriod(DefaultClockPeriod)
 	type benchmark struct {
 		name     string
 		parallel bool // Run in parallel?
@@ -320,10 +319,10 @@ func BenchmarkShortSearch(b *testing.B) {
 		increase time.Duration // timeout increase per match
 	}
 	for _, mode := range []benchmark{
-		{"serial-no-timeout", false, DefaultMatchTimeout, 0},
+		{"serial-no-timeout", false, 0, 0},
 		{"serial-fixed-timeout", false, time.Second, 0},
 		{"serial-increasing-timeout", false, time.Second, time.Second},
-		{"parallel-no-timeout", true, DefaultMatchTimeout, 0},
+		{"parallel-no-timeout", true, 0, 0},
 		{"parallel-fixed-timeout", true, time.Second, 0},
 		{"parallel-increasing-timeout", true, time.Second, time.Second},
 	} {

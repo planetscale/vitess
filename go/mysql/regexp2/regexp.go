@@ -10,16 +10,12 @@ package regexp2
 
 import (
 	"errors"
-	"math"
 	"strconv"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql/regexp2/syntax"
 )
-
-// Default timeout used when running regexp matches -- "forever"
-var DefaultMatchTimeout = time.Duration(math.MaxInt64)
 
 // Regexp is the representation of a compiled regular expression.
 // A Regexp is safe for concurrent use by multiple goroutines.
@@ -64,14 +60,13 @@ func Compile(expr string, opt syntax.RegexOptions) (*Regexp, error) {
 
 	// return it
 	return &Regexp{
-		pattern:      expr,
-		options:      opt,
-		caps:         code.Caps,
-		capnames:     tree.Capnames,
-		capslist:     tree.Caplist,
-		capsize:      code.Capsize,
-		code:         code,
-		MatchTimeout: DefaultMatchTimeout,
+		pattern:  expr,
+		options:  opt,
+		caps:     code.Caps,
+		capnames: tree.Capnames,
+		capslist: tree.Caplist,
+		capsize:  code.Capsize,
+		code:     code,
 	}, nil
 }
 
@@ -94,19 +89,6 @@ func Escape(input string) string {
 // Unescape removes any backslashes from previously-escaped special characters in the input string
 func Unescape(input string) (string, error) {
 	return syntax.Unescape(input)
-}
-
-// SetTimeoutPeriod is a debug function that sets the frequency of the timeout goroutine's sleep cycle.
-// Defaults to 100ms. The only benefit of setting this lower is that the 1 background goroutine that manages
-// timeouts may exit slightly sooner after all the timeouts have expired. See Github issue #63
-func SetTimeoutCheckPeriod(d time.Duration) {
-	clockPeriod = d
-}
-
-// StopTimeoutClock should only be used in unit tests to prevent the timeout clock goroutine
-// from appearing like a leaking goroutine
-func StopTimeoutClock() {
-	stopClock()
 }
 
 // String returns the source text used to compile the regular expression.

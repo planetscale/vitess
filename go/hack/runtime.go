@@ -56,3 +56,8 @@ func RuntimeAllocSize(size int64) int64 {
 
 //go:linkname ParseFloatPrefix strconv.parseFloatPrefix
 func ParseFloatPrefix(s string, bitSize int) (float64, int, error)
+
+// RuntimeNano returns the current value of the runtime clock in nanoseconds.
+//
+//go:linkname RuntimeNano runtime.nanotime
+func RuntimeNano() int64
