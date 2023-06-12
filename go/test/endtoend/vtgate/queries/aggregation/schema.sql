@@ -76,3 +76,11 @@ CREATE TABLE t10 (
    a INT,
    b INT
 );
+
+create table user (
+    id bigint primary key,
+    name varchar(50),
+    email varchar(50),
+    phone int(11),
+    address varchar(100)
+)

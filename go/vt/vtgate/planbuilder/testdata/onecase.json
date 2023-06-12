@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "select distinct min(textcol1), col from user group by col, col2",
     "plan": {
 
     }
