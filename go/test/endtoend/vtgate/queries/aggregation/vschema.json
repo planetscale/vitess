@@ -131,6 +131,14 @@
           "name": "hash"
         }
       ]
+    },
+    "user": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
     }
   }
 }
