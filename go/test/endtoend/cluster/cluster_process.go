@@ -707,7 +707,7 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 		cluster.Cell,
 		cluster.Cell,
 		cluster.Hostname,
-		"PRIMARY,REPLICA",
+		"PRIMARY",
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
 		cluster.VtGateExtraArgs,
