@@ -1,58 +1,64 @@
 Usage of vtexplain:
-      --alsologtostderr                              log to standard error as well as files
-      --batch-interval duration                      Interval between logical time slots. (default 10ms)
-      --database_branch_public_id string             The public ID of the database branch this cluster hosts, used for Insights
-      --dbname string                                Optional database target to override normal routing
-      --default_tablet_type topodatapb.TabletType    The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
-      --execution-mode string                        The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")
-  -h, --help                                         display usage and exit
-      --insights_flush_interval uint                 Send aggregated metrics for all query patterns every N seconds (default 15)
-      --insights_kafka_brokers string                Enable Kafka metrics to the given host:port endpoint
-      --insights_kafka_buffer uint                   Maximum memory dedicated to unsent Kafka messages; above this threshold, messages will be dropped (default 5242880)
-      --insights_kafka_password string               Password for the Kafka endpoint
-      --insights_kafka_text                          Send Insights messages as plain text
-      --insights_kafka_username string               Username for the Kafka endpoint
-      --insights_max_queries_per_interval uint       Limit on individual queries reported per flush interval (default 100)
-      --insights_pattern_limit uint                  Maximum number of unique patterns to track in a flush interval (default 1000)
-      --insights_queries_limiter_burst uint          Burst limit on individual queries reported (default 2000)
-      --insights_queries_limiter_rate float          Limit on (average) queries reported per second (default 0.1)
-      --insights_raw_queries                         Send unnormalized SQL for individually reported queries
-      --insights_raw_queries_max_length uint         Maximum size for unnormalized SQL (default 8192)
-      --insights_reorder_threshold uint              Reorder INSERT columns if more than this many redundant patterns in an interval (default 5)
-      --insights_rows_read_threshold uint            Report individual transactions that read (scan) at least this many rows (default 10000)
-      --insights_rt_threshold uint                   Report individual queries that take at least this many milliseconds (default 1000)
-      --insights_total_duration_sketch_alpha float   Relative accuracy for total query duration sketches (default 0.01)
-      --insights_total_duration_sketch_units int     Base 10 exponent for the units of the total query duration sketches, relative to seconds (0 = seconds, -3 = milliseconds, -6 = microseconds) (default -6)
-      --insights_total_duration_sketches             Send quantile sketches for total query duration
-      --keep_logs duration                           keep logs for this long (using ctime) (zero to keep forever)
-      --keep_logs_by_mtime duration                  keep logs for this long (using mtime) (zero to keep forever)
-      --ks-shard-map string                          JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace
-      --ks-shard-map-file string                     File containing json blob of keyspace name -> shard name -> ShardReference object
-      --log_backtrace_at traceLocations              when logging hits line file:N, emit a stack trace
-      --log_dir string                               If non-empty, write log files in this directory
-      --log_err_stacks                               log stack traces for errors
-      --log_link string                              If non-empty, add symbolic links in this directory to the log files
-      --log_rotate_max_size uint                     size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --logbuflevel int                              Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
-      --logtostderr                                  log to standard error instead of files
-      --mysql_server_version string                  MySQL server version to advertise. (default "8.0.30-Vitess")
-      --normalize                                    Whether to enable vtgate normalization
-      --output-mode string                           Output in human-friendly text or json (default "text")
-      --planner-version string                       Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4. An empty value will use VTGate's default planner
-      --pprof strings                                enable profiling
-      --purge_logs_interval duration                 how often try to remove old logs (default 1h0m0s)
-      --replication-mode string                      The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")
-      --schema string                                The SQL table schema
-      --schema-file string                           Identifies the file that contains the SQL table schema
-      --security_policy string                       the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --shards int                                   Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored. (default 2)
-      --sql string                                   A list of semicolon-delimited SQL commands to analyze
-      --sql-file string                              Identifies the file that contains the SQL commands to analyze
-      --sql-max-length-errors int                    truncate queries in error logs to the given length (default unlimited)
-      --sql-max-length-ui int                        truncate queries in debug UIs to the given length (default 512) (default 512)
-      --stderrthreshold severityFlag                 logs at or above this threshold go to stderr (default 1)
-      --v Level                                      log level for V logs
-  -v, --version                                      print binary version
-      --vmodule vModuleFlag                          comma-separated list of pattern=N settings for file-filtered logging
-      --vschema string                               Identifies the VTGate routing schema
-      --vschema-file string                          Identifies the VTGate routing schema file
+      --alsologtostderr                                             log to standard error as well as files
+      --batch-interval duration                                     Interval between logical time slots. (default 10ms)
+      --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
+      --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
+      --config-name string                                          Name of the config file (without extension) to search for. (default "vtconfig")
+      --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
+      --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
+      --config-type string                                          Config file type (omit to infer config type from file extension).
+      --database_branch_public_id string                            The public ID of the database branch this cluster hosts, used for Insights
+      --dbname string                                               Optional database target to override normal routing
+      --default_tablet_type topodatapb.TabletType                   The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
+      --execution-mode string                                       The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")
+  -h, --help                                                        display usage and exit
+      --insights_flush_interval uint                                Send aggregated metrics for all query patterns every N seconds (default 15)
+      --insights_kafka_brokers string                               Enable Kafka metrics to the given host:port endpoint
+      --insights_kafka_buffer uint                                  Maximum memory dedicated to unsent Kafka messages; above this threshold, messages will be dropped (default 5242880)
+      --insights_kafka_password string                              Password for the Kafka endpoint
+      --insights_kafka_text                                         Send Insights messages as plain text
+      --insights_kafka_username string                              Username for the Kafka endpoint
+      --insights_max_queries_per_interval uint                      Limit on individual queries reported per flush interval (default 100)
+      --insights_pattern_limit uint                                 Maximum number of unique patterns to track in a flush interval (default 1000)
+      --insights_queries_limiter_burst uint                         Burst limit on individual queries reported (default 2000)
+      --insights_queries_limiter_rate float                         Limit on (average) queries reported per second (default 0.1)
+      --insights_raw_queries                                        Send unnormalized SQL for individually reported queries
+      --insights_raw_queries_max_length uint                        Maximum size for unnormalized SQL (default 8192)
+      --insights_reorder_threshold uint                             Reorder INSERT columns if more than this many redundant patterns in an interval (default 5)
+      --insights_rows_read_threshold uint                           Report individual transactions that read (scan) at least this many rows (default 10000)
+      --insights_rt_threshold uint                                  Report individual queries that take at least this many milliseconds (default 1000)
+      --insights_total_duration_sketch_alpha float                  Relative accuracy for total query duration sketches (default 0.01)
+      --insights_total_duration_sketch_units int                    Base 10 exponent for the units of the total query duration sketches, relative to seconds (0 = seconds, -3 = milliseconds, -6 = microseconds) (default -6)
+      --insights_total_duration_sketches                            Send quantile sketches for total query duration
+      --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
+      --ks-shard-map string                                         JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace
+      --ks-shard-map-file string                                    File containing json blob of keyspace name -> shard name -> ShardReference object
+      --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
+      --log_dir string                                              If non-empty, write log files in this directory
+      --log_err_stacks                                              log stack traces for errors
+      --log_link string                                             If non-empty, add symbolic links in this directory to the log files
+      --log_rotate_max_size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logbuflevel int                                             Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
+      --logtostderr                                                 log to standard error instead of files
+      --mysql_server_version string                                 MySQL server version to advertise. (default "8.0.30-Vitess")
+      --normalize                                                   Whether to enable vtgate normalization
+      --output-mode string                                          Output in human-friendly text or json (default "text")
+      --planner-version string                                      Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4. An empty value will use VTGate's default planner
+      --pprof strings                                               enable profiling
+      --purge_logs_interval duration                                how often try to remove old logs (default 1h0m0s)
+      --replication-mode string                                     The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")
+      --schema string                                               The SQL table schema
+      --schema-file string                                          Identifies the file that contains the SQL table schema
+      --security_policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --shards int                                                  Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored. (default 2)
+      --sql string                                                  A list of semicolon-delimited SQL commands to analyze
+      --sql-file string                                             Identifies the file that contains the SQL commands to analyze
+      --sql-max-length-errors int                                   truncate queries in error logs to the given length (default unlimited)
+      --sql-max-length-ui int                                       truncate queries in debug UIs to the given length (default 512) (default 512)
+      --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)
+      --v Level                                                     log level for V logs
+  -v, --version                                                     print binary version
+      --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging
+      --vschema string                                              Identifies the VTGate routing schema
+      --vschema-file string                                         Identifies the VTGate routing schema file
