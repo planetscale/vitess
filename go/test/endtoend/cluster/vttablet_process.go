@@ -354,19 +354,23 @@ func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) err
 
 // WaitForBinlogServerState wait for the tablet's binlog server to be in the provided state.
 func (vttablet *VttabletProcess) WaitForBinlogServerState(expectedStatus string) error {
-	timeout := time.Now().Add(vttabletStateTimeout)
-	for time.Now().Before(timeout) {
+	ctx, cancel := context.WithTimeout(context.Background(), vttabletStateTimeout)
+	defer cancel()
+	t := time.NewTicker(300 * time.Millisecond)
+	defer t.Stop()
+	for {
 		if vttablet.getVarValue("UpdateStreamState") == expectedStatus {
 			return nil
 		}
 		select {
 		case err := <-vttablet.exit:
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
-		default:
-			time.Sleep(300 * time.Millisecond)
+		case <-ctx.Done():
+			return fmt.Errorf("vttablet %s, expected status of %s not reached before timeout of %v",
+				vttablet.TabletPath, expectedStatus, vttabletStateTimeout)
+		case <-t.C:
 		}
 	}
-	return fmt.Errorf("vttablet %s, expected status not reached", vttablet.TabletPath)
 }
 
 func (vttablet *VttabletProcess) getVReplStreamCount() string {
@@ -379,7 +383,7 @@ func (vttablet *VttabletProcess) getVarValue(keyname string) string {
 	return fmt.Sprintf("%v", object)
 }
 
-// TearDown shuts down the running vttablet service and fails after the timeout
+// TearDown shuts down the running vttablet service and fails after a timeout
 func (vttablet *VttabletProcess) TearDown() error {
 	return vttablet.TearDownWithTimeout(vttabletStateTimeout)
 }
