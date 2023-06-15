@@ -62,7 +62,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 			continue
 		}
 
-		if inner.ExtractedSubquery.OpCode == int(popcode.PulloutExists) {
+		if inner.ExtractedSubquery.OpCode == popcode.PulloutExists {
 			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
 			if err != nil {
 				return nil, nil, err
@@ -404,7 +404,7 @@ func createCorrelatedSubqueryOp(
 func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate *sqlparser.ExtractedSubquery) bool {
 	left := predicate.OtherSide
 	opCode := predicate.OpCode
-	if opCode != int(popcode.PulloutValue) && opCode != int(popcode.PulloutIn) {
+	if opCode != popcode.PulloutValue && opCode != popcode.PulloutIn {
 		return false
 	}
 

@@ -645,7 +645,7 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 			if extractedSubquery == nil {
 				continue
 			}
-			switch popcode.PulloutOpcode(extractedSubquery.OpCode) {
+			switch extractedSubquery.OpCode {
 			case popcode.PulloutIn, popcode.PulloutNotIn:
 				expr = sqlparser.NewListArg(extractedSubquery.GetArgName())
 			case popcode.PulloutValue, popcode.PulloutExists:

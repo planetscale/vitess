@@ -19,6 +19,7 @@ package sqlparser
 import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 /*
@@ -2480,7 +2481,7 @@ type (
 	// CAUTION: you should only change argName and hasValuesArg through the setter methods
 	ExtractedSubquery struct {
 		Original  Expr // original expression that was replaced by this ExtractedSubquery
-		OpCode    int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
+		OpCode    opcode.PulloutOpcode
 		Subquery  *Subquery
 		OtherSide Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
 		Merged    bool // tells whether we need to rewrite this subquery to Original or not
