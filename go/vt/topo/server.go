@@ -174,7 +174,7 @@ var (
 	}
 
 	FlagBinaries = []string{"vttablet", "vtctl", "vtctld", "vtcombo", "vtgate",
-		"vtgr", "vtorc", "vtbackup", "vtboost"}
+		"vtorc", "vtbackup", "vtboost"}
 )
 
 func init() {
