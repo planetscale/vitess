@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -75,7 +77,7 @@ func TestNotInSubqueryPrecedence(t *testing.T) {
 
 	extracted := &ExtractedSubquery{
 		Original:  cmp,
-		OpCode:    1,
+		OpCode:    opcode.PulloutIn,
 		Subquery:  subq,
 		OtherSide: cmp.Left,
 	}
@@ -97,7 +99,7 @@ func TestSubqueryPrecedence(t *testing.T) {
 
 	extracted := &ExtractedSubquery{
 		Original:  andExpr.Left,
-		OpCode:    1,
+		OpCode:    opcode.PulloutIn,
 		Subquery:  subq,
 		OtherSide: cmp.Left,
 	}

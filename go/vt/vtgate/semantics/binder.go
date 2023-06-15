@@ -214,16 +214,16 @@ func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *sc
 	sq := &sqlparser.ExtractedSubquery{
 		Subquery: subq,
 		Original: subq,
-		OpCode:   int(opcode.PulloutValue),
+		OpCode:   opcode.PulloutValue,
 	}
 
 	switch par := cursor.Parent().(type) {
 	case *sqlparser.ComparisonExpr:
 		switch par.Operator {
 		case sqlparser.InOp:
-			sq.OpCode = int(opcode.PulloutIn)
+			sq.OpCode = opcode.PulloutIn
 		case sqlparser.NotInOp:
-			sq.OpCode = int(opcode.PulloutNotIn)
+			sq.OpCode = opcode.PulloutNotIn
 		}
 		subq, exp := GetSubqueryAndOtherSide(par)
 		sq.Original = &sqlparser.ComparisonExpr{
@@ -233,7 +233,7 @@ func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *sc
 		}
 		sq.OtherSide = exp
 	case *sqlparser.ExistsExpr:
-		sq.OpCode = int(opcode.PulloutExists)
+		sq.OpCode = opcode.PulloutExists
 		sq.Original = par
 	}
 	return sq, nil

@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -42,7 +41,7 @@ func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.SubQu
 	if merged != nil {
 		return merged, nil
 	}
-	plan := newPulloutSubquery(opcode.PulloutOpcode(op.Extracted.OpCode), argName, hasValuesArg, innerPlan)
+	plan := newPulloutSubquery(op.Extracted.OpCode, argName, hasValuesArg, innerPlan)
 	if err != nil {
 		return nil, err
 	}
