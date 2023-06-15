@@ -30,8 +30,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// createLogicalOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func createLogicalOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op ops.Operator, err error) {
+// createOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
+func createOperatorFromAST(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op ops.Operator, err error) {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
 		op, err = createOperatorFromSelect(ctx, node)
@@ -88,7 +88,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 }
 
 func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.Union) (ops.Operator, error) {
-	opLHS, err := createLogicalOperatorFromAST(ctx, node.Left)
+	opLHS, err := createOperatorFromAST(ctx, node.Left)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	if isRHSUnion {
 		return nil, vterrors.VT12001("nesting of UNIONs on the right-hand side")
 	}
-	opRHS, err := createLogicalOperatorFromAST(ctx, node.Right)
+	opRHS, err := createOperatorFromAST(ctx, node.Right)
 	if err != nil {
 		return nil, err
 	}
@@ -591,7 +591,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		qg.Tables = append(qg.Tables, qt)
 		return qg, nil
 	case *sqlparser.DerivedTable:
-		inner, err := createLogicalOperatorFromAST(ctx, tbl.Select)
+		inner, err := createOperatorFromAST(ctx, tbl.Select)
 		if err != nil {
 			return nil, err
 		}
