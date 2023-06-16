@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: vitess
+  description: Fork of Vitess
+  annotations:
+    github.com/project-slug: sendbird/vitess
+spec:
+  type: service
+  lifecycle: experimental
+  owner: team-data-infrastructure
+  system: sendbird-internal-tools
