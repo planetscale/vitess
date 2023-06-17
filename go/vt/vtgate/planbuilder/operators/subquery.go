@@ -27,9 +27,6 @@ type (
 	SubQuery struct {
 		Outer ops.Operator
 		Inner []*SubQueryInner
-
-		noColumns
-		noPredicates
 	}
 
 	// SubQueryInner stores the subquery information for a select statement
@@ -46,6 +43,29 @@ type (
 		noPredicates
 	}
 )
+
+func (s *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	newSrc, err := s.Outer.AddPredicate(ctx, expr)
+	if err != nil {
+		return nil, err
+	}
+	s.Outer = newSrc
+	return s, nil
+}
+
+func (s *SubQuery) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	newSrc, offset, err := s.Outer.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
+	if err != nil {
+		return nil, 0, err
+	}
+	s.Outer = newSrc
+	return s, offset, nil
+
+}
+
+func (s *SubQuery) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	return s.Outer.GetColumns()
+}
 
 var _ ops.Operator = (*SubQuery)(nil)
 var _ ops.Operator = (*SubQueryInner)(nil)

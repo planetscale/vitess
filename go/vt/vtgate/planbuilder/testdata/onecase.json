@@ -1,9 +1,66 @@
 [
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
-    "plan": {
-
+    "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
+    "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
+    "v3-plan": "VT03020: column ue.col not found in subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
+      "Instructions": {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              0
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Filter",
+                "Predicate": ":1 > 10",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "random(0) AS 1, sum_count(1) AS count(ue.col)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1, count(ue.col) from `user` as u where 1 != 1",
+                        "Query": "select 1, count(ue.col) from `user` as u",
+                        "Table": "`user`"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select :__sq1 from user_extra as ue where 1 != 1",
+            "Query": "select :__sq1 from user_extra as ue",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
     }
-  }
-]
+  }]

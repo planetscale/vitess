@@ -44,7 +44,7 @@ type (
 )
 
 func errHorizonNotPlanned() error {
-	return _errHorizonNotPlanned
+	panic(_errHorizonNotPlanned)
 }
 
 var _errHorizonNotPlanned = vterrors.VT12001("query cannot be fully operator planned")
@@ -67,8 +67,7 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 
 	_, ok := root.(*Horizon)
 
-	if !ok || len(ctx.SemTable.SubqueryMap) > 0 || len(ctx.SemTable.SubqueryRef) > 0 {
-		// we are not ready to deal with subqueries yet
+	if !ok {
 		return root, errHorizonNotPlanned()
 	}
 
