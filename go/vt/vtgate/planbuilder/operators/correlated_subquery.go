@@ -19,6 +19,7 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
@@ -32,19 +33,56 @@ type (
 
 		// arguments that need to be copied from the outer to inner
 		Vars map[string]int
-
-		noColumns
-		noPredicates
 	}
 
 	SubQueryOp struct {
 		Outer, Inner ops.Operator
 		Extracted    *sqlparser.ExtractedSubquery
-
-		noColumns
-		noPredicates
 	}
 )
+
+func (c *CorrelatedSubQueryOp) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	return c.Outer.GetColumns()
+}
+
+func (c *CorrelatedSubQueryOp) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	newSrc, err := c.Outer.AddPredicate(ctx, expr)
+	if err != nil {
+		return nil, err
+	}
+	c.Outer = newSrc
+	return c, nil
+}
+
+func (c *CorrelatedSubQueryOp) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	newSrc, offset, err := c.Outer.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
+	if err != nil {
+		return nil, 0, err
+	}
+	c.Outer = newSrc
+	return c, offset, nil
+}
+func (s *SubQueryOp) GetColumns() ([]*sqlparser.AliasedExpr, error) {
+	return s.Outer.GetColumns()
+}
+
+func (s *SubQueryOp) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	newSrc, err := s.Outer.AddPredicate(ctx, expr)
+	if err != nil {
+		return nil, err
+	}
+	s.Outer = newSrc
+	return s, nil
+}
+
+func (s *SubQueryOp) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseExisting, addToGroupBy bool) (ops.Operator, int, error) {
+	newSrc, offset, err := s.Outer.AddColumn(ctx, expr, reuseExisting, addToGroupBy)
+	if err != nil {
+		return nil, 0, err
+	}
+	s.Outer = newSrc
+	return s, offset, nil
+}
 
 // Clone implements the Operator interface
 func (s *SubQueryOp) Clone(inputs []ops.Operator) ops.Operator {

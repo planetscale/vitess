@@ -54,8 +54,8 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 			return optimizeJoin(ctx, op)
 		case *Derived:
 			return pushDownDerived(ctx, op)
-		case *SubQuery:
-			return optimizeSubQuery(ctx, op, ts)
+		//case *SubQuery:
+		//	return optimizeSubQuery(ctx, op, ts)
 		case *Filter:
 			return pushDownFilter(op)
 		default:
