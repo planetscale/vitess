@@ -322,11 +322,6 @@ func (s *Schema) normalize() error {
 		errs = errors.Join(errs, err)
 	}
 
-	// Validate views' referenced columns: do these columns actually exist in referenced tables/views?
-	if err := s.ValidateViewReferences(); err != nil {
-		errs = errors.Join(errs, err)
-	}
-
 	// Validate table definitions
 	for _, t := range s.tables {
 		if err := t.validate(); err != nil {
