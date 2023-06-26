@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 // ErrKeyspaceNotFound is a fixed error message used when a keyspace is not found in the database.
@@ -72,4 +73,13 @@ func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
 		keyspace.GetDurabilityPolicy(),
 	)
 	return err
+}
+
+// GetDurabilityPolicyByKeyspace gets the durability policy for the given keyspace.
+func GetDurabilityPolicyByKeyspace(keyspace string) (reparentutil.Durabler, error) {
+	ki, err := ReadKeyspace(keyspace)
+	if err != nil {
+		return nil, err
+	}
+	return reparentutil.GetDurabilityPolicy(ki.DurabilityPolicy)
 }

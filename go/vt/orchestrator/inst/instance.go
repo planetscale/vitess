@@ -34,7 +34,8 @@ const ReasonableDiscoveryLatency = 500 * time.Millisecond
 // Instance represents a database instance, including its current configuration & status.
 // It presents important replication configuration and detailed replication status.
 type Instance struct {
-	Key                          InstanceKey
+	Hostname                     string
+	Port                         int
 	InstanceAlias                string
 	Uptime                       uint
 	ServerID                     uint
@@ -48,7 +49,8 @@ type Instance struct {
 	LogBinEnabled                bool
 	LogReplicationUpdatesEnabled bool
 	SelfBinlogCoordinates        BinlogCoordinates
-	SourceKey                    InstanceKey
+	SourceHost                   string
+	SourcePort                   int
 	SourceUUID                   string
 	AncestryUUID                 string
 	IsDetachedPrimary            bool
@@ -166,7 +168,7 @@ func (instance *Instance) MarshalJSON() ([]byte, error) {
 // Equals tests that this instance is the same instance as other. The function does not test
 // configuration or status.
 func (instance *Instance) Equals(other *Instance) bool {
-	return instance.Key == other.Key
+	return instance.InstanceAlias == other.InstanceAlias
 }
 
 // MajorVersion returns this instance's major version number (e.g. for 5.5.36 it returns "5.5")
@@ -239,11 +241,14 @@ func (instance *Instance) IsReplicationGroupMember() bool {
 }
 
 func (instance *Instance) IsReplicationGroupPrimary() bool {
-	return instance.IsReplicationGroupMember() && instance.ReplicationGroupPrimaryInstanceKey.Equals(&instance.Key)
+	return instance.IsReplicationGroupMember() && instance.ReplicationGroupPrimaryInstanceKey.Equals(&InstanceKey{
+		Hostname: instance.Hostname,
+		Port:     instance.Port,
+	})
 }
 
 func (instance *Instance) IsReplicationGroupSecondary() bool {
-	return instance.IsReplicationGroupMember() && !instance.ReplicationGroupPrimaryInstanceKey.Equals(&instance.Key)
+	return instance.IsReplicationGroupMember() && !instance.ReplicationGroupPrimaryInstanceKey.Equals(instance.Key())
 }
 
 // IsBinlogServer checks whether this is any type of a binlog server
@@ -300,27 +305,13 @@ func (instance *Instance) FlavorNameAndMajorVersion() string {
 
 // IsReplica makes simple heuristics to decide whether this instance is a replica of another instance
 func (instance *Instance) IsReplica() bool {
-	return instance.SourceKey.Hostname != "" && instance.SourceKey.Hostname != "_" && instance.SourceKey.Port != 0 && (instance.ReadBinlogCoordinates.LogFile != "" || instance.UsingGTID())
+	return instance.SourceHost != "" && instance.SourceHost != "_" && instance.SourcePort != 0 && (instance.ReadBinlogCoordinates.LogFile != "" || instance.UsingGTID())
 }
 
 // IsPrimary makes simple heuristics to decide whether this instance is a primary (not replicating from any other server),
 // either via traditional async/semisync replication or group replication
 func (instance *Instance) IsPrimary() bool {
-	// If traditional replication is configured, it is for sure not a primary
-	if instance.IsReplica() {
-		return false
-	}
-	// If traditional replication is not configured, and it is also not part of a replication group, this host is
-	// a primary
-	if !instance.IsReplicationGroupMember() {
-		return true
-	}
-	// If traditional replication is not configured, and this host is part of a group, it is only considered a
-	// primary if it has the role of group Primary. Otherwise it is not a primary.
-	if instance.ReplicationGroupMemberRole == GroupReplicationMemberRolePrimary {
-		return true
-	}
-	return false
+	return !instance.IsReplica()
 }
 
 // ReplicaRunning returns true when this instance's status is of a replicating replica.
@@ -396,16 +387,6 @@ func (instance *Instance) GetNextBinaryLog(binlogCoordinates BinlogCoordinates) 
 	return binlogCoordinates.NextFileCoordinates()
 }
 
-// IsReplicaOf returns true if this instance claims to replicate from given primary
-func (instance *Instance) IsReplicaOf(primary *Instance) bool {
-	return instance.SourceKey.Equals(&primary.Key)
-}
-
-// IsReplicaOf returns true if this i supposed primary of given replica
-func (instance *Instance) IsPrimaryOf(replica *Instance) bool {
-	return replica.IsReplicaOf(instance)
-}
-
 // IsDescendantOf returns true if this is replication directly or indirectly from other
 func (instance *Instance) IsDescendantOf(other *Instance) bool {
 	for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
@@ -419,40 +400,40 @@ func (instance *Instance) IsDescendantOf(other *Instance) bool {
 // CanReplicateFrom uses heursitics to decide whether this instacne can practically replicate from other instance.
 // Checks are made to binlog format, version number, binary logs etc.
 func (instance *Instance) CanReplicateFrom(other *Instance) (bool, error) {
-	if instance.Key.Equals(&other.Key) {
-		return false, fmt.Errorf("instance cannot replicate from itself: %+v", instance.Key)
+	if instance.Key().Equals(other.Key()) {
+		return false, fmt.Errorf("instance cannot replicate from itself: %+v", instance.Key())
 	}
 	if !other.LogBinEnabled {
-		return false, fmt.Errorf("instance does not have binary logs enabled: %+v", other.Key)
+		return false, fmt.Errorf("instance does not have binary logs enabled: %+v", other.Key())
 	}
 	if other.IsReplica() {
 		if !other.LogReplicationUpdatesEnabled {
-			return false, fmt.Errorf("instance does not have log_slave_updates enabled: %+v", other.Key)
+			return false, fmt.Errorf("instance does not have log_slave_updates enabled: %+v", other.Key())
 		}
 		// OK for a primary to not have log_slave_updates
 		// Not OK for a replica, for it has to relay the logs.
 	}
 	if instance.IsSmallerMajorVersion(other) && !instance.IsBinlogServer() {
-		return false, fmt.Errorf("instance %+v has version %s, which is lower than %s on %+v ", instance.Key, instance.Version, other.Version, other.Key)
+		return false, fmt.Errorf("instance %+v has version %s, which is lower than %s on %+v ", instance.Key(), instance.Version, other.Version, other.Key())
 	}
 	if instance.LogBinEnabled && instance.LogReplicationUpdatesEnabled {
 		if instance.IsSmallerBinlogFormat(other) {
-			return false, fmt.Errorf("Cannot replicate from %+v binlog format on %+v to %+v on %+v", other.BinlogFormat, other.Key, instance.BinlogFormat, instance.Key)
+			return false, fmt.Errorf("Cannot replicate from %+v binlog format on %+v to %+v on %+v", other.BinlogFormat, other.Key(), instance.BinlogFormat, instance.Key())
 		}
 	}
 	if config.Config.VerifyReplicationFilters {
 		if other.HasReplicationFilters && !instance.HasReplicationFilters {
-			return false, fmt.Errorf("%+v has replication filters", other.Key)
+			return false, fmt.Errorf("%+v has replication filters", other.Key())
 		}
 	}
 	if instance.ServerID == other.ServerID && !instance.IsBinlogServer() {
-		return false, fmt.Errorf("Identical server id: %+v, %+v both have %d", other.Key, instance.Key, instance.ServerID)
+		return false, fmt.Errorf("Identical server id: %+v, %+v both have %d", other.Key(), instance.Key(), instance.ServerID)
 	}
 	if instance.ServerUUID == other.ServerUUID && instance.ServerUUID != "" && !instance.IsBinlogServer() {
-		return false, fmt.Errorf("Identical server UUID: %+v, %+v both have %s", other.Key, instance.Key, instance.ServerUUID)
+		return false, fmt.Errorf("Identical server UUID: %+v, %+v both have %s", other.Key(), instance.Key(), instance.ServerUUID)
 	}
 	if instance.SQLDelay < other.SQLDelay && int64(other.SQLDelay) > int64(config.Config.ReasonableMaintenanceReplicationLagSeconds) {
-		return false, fmt.Errorf("%+v has higher SQL_Delay (%+v seconds) than %+v does (%+v seconds)", other.Key, other.SQLDelay, instance.Key, instance.SQLDelay)
+		return false, fmt.Errorf("%+v has higher SQL_Delay (%+v seconds) than %+v does (%+v seconds)", other.Key(), other.SQLDelay, instance.Key(), instance.SQLDelay)
 	}
 	return true, nil
 }
@@ -470,22 +451,22 @@ func (instance *Instance) HasReasonableMaintenanceReplicationLag() bool {
 // if this instance lags too much, it will not be moveable.
 func (instance *Instance) CanMove() (bool, error) {
 	if !instance.IsLastCheckValid {
-		return false, fmt.Errorf("%+v: last check invalid", instance.Key)
+		return false, fmt.Errorf("%+v: last check invalid", instance.Key())
 	}
 	if !instance.IsRecentlyChecked {
-		return false, fmt.Errorf("%+v: not recently checked", instance.Key)
+		return false, fmt.Errorf("%+v: not recently checked", instance.Key())
 	}
 	if !instance.ReplicationSQLThreadState.IsRunning() {
-		return false, fmt.Errorf("%+v: instance is not replicating", instance.Key)
+		return false, fmt.Errorf("%+v: instance is not replicating", instance.Key())
 	}
 	if !instance.ReplicationIOThreadState.IsRunning() {
-		return false, fmt.Errorf("%+v: instance is not replicating", instance.Key)
+		return false, fmt.Errorf("%+v: instance is not replicating", instance.Key())
 	}
 	if !instance.SecondsBehindPrimary.Valid {
-		return false, fmt.Errorf("%+v: cannot determine replication lag", instance.Key)
+		return false, fmt.Errorf("%+v: cannot determine replication lag", instance.Key())
 	}
 	if !instance.HasReasonableMaintenanceReplicationLag() {
-		return false, fmt.Errorf("%+v: lags too much", instance.Key)
+		return false, fmt.Errorf("%+v: lags too much", instance.Key())
 	}
 	return true, nil
 }
@@ -493,10 +474,10 @@ func (instance *Instance) CanMove() (bool, error) {
 // CanMoveAsCoPrimary returns true if this instance's state allows it to be repositioned.
 func (instance *Instance) CanMoveAsCoPrimary() (bool, error) {
 	if !instance.IsLastCheckValid {
-		return false, fmt.Errorf("%+v: last check invalid", instance.Key)
+		return false, fmt.Errorf("%+v: last check invalid", instance.Key())
 	}
 	if !instance.IsRecentlyChecked {
-		return false, fmt.Errorf("%+v: not recently checked", instance.Key)
+		return false, fmt.Errorf("%+v: not recently checked", instance.Key())
 	}
 	return true, nil
 }
@@ -600,4 +581,18 @@ func (instance *Instance) TabulatedDescription(separator string) string {
 	tokens := instance.descriptionTokens()
 	description := strings.Join(tokens, separator)
 	return description
+}
+
+func (instance *Instance) Key() *InstanceKey {
+	return &InstanceKey{
+		Hostname: instance.Hostname,
+		Port:     instance.Port,
+	}
+}
+
+func (instance *Instance) SourceKey() *InstanceKey {
+	return &InstanceKey{
+		Hostname: instance.SourceHost,
+		Port:     instance.SourcePort,
+	}
 }

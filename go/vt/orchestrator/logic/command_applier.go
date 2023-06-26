@@ -93,7 +93,7 @@ func (applier *CommandApplier) discover(value []byte) any {
 	if err := json.Unmarshal(value, &instanceKey); err != nil {
 		return log.Errore(err)
 	}
-	DiscoverInstance(instanceKey, false /* forceDiscovery */)
+	DiscoverInstanceByKey(&instanceKey, false /* forceDiscovery */)
 	return nil
 }
 
@@ -102,7 +102,7 @@ func (applier *CommandApplier) forget(value []byte) any {
 	if err := json.Unmarshal(value, &instanceKey); err != nil {
 		return log.Errore(err)
 	}
-	err := inst.ForgetInstance(&instanceKey)
+	err := inst.ForgetInstanceByKey(&instanceKey)
 	return err
 }
 

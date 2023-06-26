@@ -154,7 +154,7 @@ func (httpAPI *API) InstanceReplicas(params martini.Params, r render.Render, req
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	replicas, err := inst.ReadReplicaInstances(&instanceKey)
+	replicas, err := inst.ReadReplicaInstances(instanceKey.Hostname, instanceKey.Port)
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
@@ -171,7 +171,7 @@ func (httpAPI *API) Instance(params martini.Params, r render.Render, req *http.R
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, err := inst.ReadInstanceByKey(&instanceKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
@@ -208,7 +208,7 @@ func (httpAPI *API) Discover(params martini.Params, r render.Render, req *http.R
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.ReadTopologyInstance(&instanceKey)
+	instance, err := inst.ReadTopologyInstanceByKey(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -217,10 +217,10 @@ func (httpAPI *API) Discover(params martini.Params, r render.Render, req *http.R
 	if orcraft.IsRaftEnabled() {
 		orcraft.PublishCommand("discover", instanceKey)
 	} else {
-		logic.DiscoverInstance(instanceKey, false /* forceDiscovery */)
+		logic.DiscoverInstanceByKey(&instanceKey, false /* forceDiscovery */)
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance discovered: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance discovered: %+v", instance.Key()), Details: instance})
 }
 
 // Refresh synchronuously re-reads a topology instance
@@ -260,7 +260,7 @@ func (httpAPI *API) Forget(params martini.Params, r render.Render, req *http.Req
 	if orcraft.IsRaftEnabled() {
 		_, err = orcraft.PublishCommand("forget", instanceKey)
 	} else {
-		err = inst.ForgetInstance(&instanceKey)
+		err = inst.ForgetInstanceByKey(&instanceKey)
 	}
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -505,7 +505,7 @@ func (httpAPI *API) MoveUpReplicas(params martini.Params, r render.Render, req *
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Moved up %d replicas of %+v below %+v; %d errors: %+v", len(replicas), instanceKey, newPrimary.Key, len(errs), errs), Details: replicas})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Moved up %d replicas of %+v below %+v; %d errors: %+v", len(replicas), instanceKey, newPrimary.Key(), len(errs), errs), Details: replicas})
 }
 
 // Repoint positiones a replica under another (or same) primary with exact same coordinates.
@@ -574,7 +574,7 @@ func (httpAPI *API) MakeCoPrimary(params martini.Params, r render.Render, req *h
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance made co-primary: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance made co-primary: %+v", instance.Key()), Details: instance})
 }
 
 // ResetReplication makes a replica forget about its primary, effectively breaking the replication
@@ -595,7 +595,7 @@ func (httpAPI *API) ResetReplication(params martini.Params, r render.Render, req
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica reset on %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica reset on %+v", instance.Key()), Details: instance})
 }
 
 // DetachReplicaPrimaryHost detaches a replica from its primary by setting an invalid
@@ -617,7 +617,7 @@ func (httpAPI *API) DetachReplicaPrimaryHost(params martini.Params, r render.Ren
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica detached: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica detached: %+v", instance.Key()), Details: instance})
 }
 
 // ReattachReplicaPrimaryHost reverts a detachReplicaPrimaryHost command
@@ -639,7 +639,7 @@ func (httpAPI *API) ReattachReplicaPrimaryHost(params martini.Params, r render.R
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica reattached: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica reattached: %+v", instance.Key()), Details: instance})
 }
 
 // EnableGTID attempts to enable GTID on a replica
@@ -660,7 +660,7 @@ func (httpAPI *API) EnableGTID(params martini.Params, r render.Render, req *http
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Enabled GTID on %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Enabled GTID on %+v", instance.Key()), Details: instance})
 }
 
 // DisableGTID attempts to disable GTID on a replica, and revert to binlog file:pos
@@ -681,7 +681,7 @@ func (httpAPI *API) DisableGTID(params martini.Params, r render.Render, req *htt
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Disabled GTID on %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Disabled GTID on %+v", instance.Key()), Details: instance})
 }
 
 // LocateErrantGTID identifies the binlog positions for errant GTIDs on an instance
@@ -718,7 +718,7 @@ func (httpAPI *API) ErrantGTIDResetPrimary(params martini.Params, r render.Rende
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Removed errant GTID on %+v and issued a RESET MASTER", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Removed errant GTID on %+v and issued a RESET MASTER", instance.Key()), Details: instance})
 }
 
 // ErrantGTIDInjectEmpty removes errant transactions by injecting and empty transaction on the cluster's primary
@@ -739,7 +739,7 @@ func (httpAPI *API) ErrantGTIDInjectEmpty(params martini.Params, r render.Render
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Have injected %+v transactions on cluster primary %+v", countInjectedTransactions, clusterPrimary.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Have injected %+v transactions on cluster primary %+v", countInjectedTransactions, clusterPrimary.Key()), Details: instance})
 }
 
 // MoveBelow attempts to move an instance below its supposed sibling
@@ -936,7 +936,7 @@ func (httpAPI *API) RegroupReplicas(params martini.Params, r render.Render, req 
 	}
 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("promoted replica: %s, lost: %d, trivial: %d, pseudo-gtid: %d",
-		promotedReplica.Key.DisplayString(), len(lostReplicas), len(equalReplicas), len(aheadReplicas)), Details: promotedReplica.Key})
+		promotedReplica.Key().DisplayString(), len(lostReplicas), len(equalReplicas), len(aheadReplicas)), Details: promotedReplica.Key})
 }
 
 // RegroupReplicasGTID attempts to pick a replica of a given instance and make it take its siblings, efficiently, using GTID
@@ -960,7 +960,7 @@ func (httpAPI *API) RegroupReplicasGTID(params martini.Params, r render.Render, 
 	}
 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("promoted replica: %s, lost: %d, moved: %d",
-		promotedReplica.Key.DisplayString(), len(lostReplicas), len(movedReplicas)), Details: promotedReplica.Key})
+		promotedReplica.Key().DisplayString(), len(lostReplicas), len(movedReplicas)), Details: promotedReplica.Key})
 }
 
 // RegroupReplicasBinlogServers attempts to pick a replica of a given instance and make it take its siblings, efficiently, using GTID
@@ -983,7 +983,7 @@ func (httpAPI *API) RegroupReplicasBinlogServers(params martini.Params, r render
 	}
 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("promoted binlog server: %s",
-		promotedBinlogServer.Key.DisplayString()), Details: promotedBinlogServer.Key})
+		promotedBinlogServer.Key().DisplayString()), Details: promotedBinlogServer.Key})
 }
 
 // SkipQuery skips a single query on a failed replication instance
@@ -1004,7 +1004,7 @@ func (httpAPI *API) SkipQuery(params martini.Params, r render.Render, req *http.
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Query skipped on %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Query skipped on %+v", instance.Key()), Details: instance})
 }
 
 // StartReplication starts replication on given instance
@@ -1025,7 +1025,7 @@ func (httpAPI *API) StartReplication(params martini.Params, r render.Render, req
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica started: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica started: %+v", instance.Key()), Details: instance})
 }
 
 // RestartReplication stops & starts replication on given instance
@@ -1046,7 +1046,7 @@ func (httpAPI *API) RestartReplication(params martini.Params, r render.Render, r
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica restarted: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica restarted: %+v", instance.Key()), Details: instance})
 }
 
 // StopReplication stops replication on given instance
@@ -1067,7 +1067,7 @@ func (httpAPI *API) StopReplication(params martini.Params, r render.Render, req 
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica stopped: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica stopped: %+v", instance.Key()), Details: instance})
 }
 
 // StopReplicationNicely stops replication on given instance, such that sql thead is aligned with IO thread
@@ -1088,7 +1088,7 @@ func (httpAPI *API) StopReplicationNicely(params martini.Params, r render.Render
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica stopped nicely: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica stopped nicely: %+v", instance.Key()), Details: instance})
 }
 
 // FlushBinaryLogs runs a single FLUSH BINARY LOGS
@@ -1109,7 +1109,7 @@ func (httpAPI *API) FlushBinaryLogs(params martini.Params, r render.Render, req 
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Binary logs flushed on: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Binary logs flushed on: %+v", instance.Key()), Details: instance})
 }
 
 // PurgeBinaryLogs purges binary logs up to given binlog file
@@ -1141,7 +1141,7 @@ func (httpAPI *API) PurgeBinaryLogs(params martini.Params, r render.Render, req 
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Binary logs flushed on: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Binary logs flushed on: %+v", instance.Key()), Details: instance})
 }
 
 // RestartReplicationStatements receives a query to execute that requires a replication restart to apply.
@@ -1177,7 +1177,7 @@ func (httpAPI *API) CanReplicateFrom(params martini.Params, r render.Render, req
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, err := inst.ReadInstanceByKey(&instanceKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
@@ -1187,7 +1187,7 @@ func (httpAPI *API) CanReplicateFrom(params martini.Params, r render.Render, req
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	belowInstance, found, err := inst.ReadInstance(&belowKey)
+	belowInstance, found, err := inst.ReadInstanceByKey(&belowKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", belowKey)})
 		return
@@ -1209,7 +1209,7 @@ func (httpAPI *API) CanReplicateFromGTID(params martini.Params, r render.Render,
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, err := inst.ReadInstanceByKey(&instanceKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
@@ -1219,7 +1219,7 @@ func (httpAPI *API) CanReplicateFromGTID(params martini.Params, r render.Render,
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	belowInstance, found, err := inst.ReadInstance(&belowKey)
+	belowInstance, found, err := inst.ReadInstanceByKey(&belowKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", belowKey)})
 		return
@@ -1309,7 +1309,7 @@ func (httpAPI *API) KillQuery(params martini.Params, r render.Render, req *http.
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Query killed on : %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Query killed on : %+v", instance.Key()), Details: instance})
 }
 
 // ASCIITopology returns an ascii graph of cluster's instances
@@ -1392,7 +1392,7 @@ func (httpAPI *API) ClusterByInstance(params martini.Params, r render.Render, re
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, err := inst.ReadInstanceByKey(&instanceKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
@@ -1734,7 +1734,11 @@ func (httpAPI *API) Audit(params martini.Params, r render.Render, req *http.Requ
 		auditedInstanceKey = &instanceKey
 	}
 
-	audits, err := inst.ReadRecentAudit(auditedInstanceKey, page)
+	auditedInstance, _, err := inst.ReadInstanceByKey(auditedInstanceKey)
+	if err != nil {
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+	}
+	audits, err := inst.ReadRecentAudit(auditedInstance.InstanceAlias, page)
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -2183,7 +2187,7 @@ func (httpAPI *API) ReloadConfiguration(params martini.Params, r render.Render, 
 	}
 	extraConfigFile := req.URL.Query().Get("config")
 	config.Reload(extraConfigFile)
-	inst.AuditOperation("reload-configuration", nil, "Triggered via API")
+	inst.AuditOperation("reload-configuration", "", "Triggered via API")
 
 	Respond(r, &APIResponse{Code: OK, Message: "Config reloaded", Details: extraConfigFile})
 }
@@ -2300,7 +2304,7 @@ func (httpAPI *API) gracefulPrimaryTakeover(params martini.Params, r render.Rend
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), Details: topologyRecovery})
 		return
 	}
-	if topologyRecovery == nil || topologyRecovery.SuccessorKey == nil {
+	if topologyRecovery == nil || topologyRecovery.SuccessorAlias == "" {
 		Respond(r, &APIResponse{Code: ERROR, Message: "graceful-primary-takeover: no successor promoted", Details: topologyRecovery})
 		return
 	}
@@ -2335,7 +2339,7 @@ func (httpAPI *API) ForcePrimaryFailover(params martini.Params, r render.Render,
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	if topologyRecovery.SuccessorKey != nil {
+	if topologyRecovery.SuccessorAlias != "" {
 		Respond(r, &APIResponse{Code: OK, Message: "Primary failed over", Details: topologyRecovery})
 	} else {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Primary not failed over", Details: topologyRecovery})
@@ -2354,7 +2358,7 @@ func (httpAPI *API) ForcePrimaryTakeover(params martini.Params, r render.Render,
 		return
 	}
 	designatedKey, _ := httpAPI.getInstanceKey(params["designatedHost"], params["designatedPort"])
-	designatedInstance, _, err := inst.ReadInstance(&designatedKey)
+	designatedInstance, _, err := inst.ReadInstanceByKey(&designatedKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -2369,7 +2373,7 @@ func (httpAPI *API) ForcePrimaryTakeover(params martini.Params, r render.Render,
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	if topologyRecovery.SuccessorKey != nil {
+	if topologyRecovery.SuccessorAlias != "" {
 		Respond(r, &APIResponse{Code: OK, Message: "Primary failed over", Details: topologyRecovery})
 	} else {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Primary not failed over", Details: topologyRecovery})

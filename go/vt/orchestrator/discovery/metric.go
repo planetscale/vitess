@@ -26,7 +26,8 @@ import (
 
 // Metric holds a set of information of instance discovery metrics
 type Metric struct {
-	Timestamp       time.Time        // time the collection was taken
+	Timestamp       time.Time // time the collection was taken
+	TabletAlias     string
 	InstanceKey     inst.InstanceKey // instance being monitored
 	BackendLatency  time.Duration    // time taken talking to the backend
 	InstanceLatency time.Duration    // time taken talking to the instance

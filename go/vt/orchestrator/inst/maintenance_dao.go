@@ -103,7 +103,7 @@ func BeginBoundedMaintenance(instanceKey *InstanceKey, owner string, reason stri
 	} else {
 		// success
 		maintenanceToken, _ = res.LastInsertId()
-		AuditOperation("begin-maintenance", instanceKey, fmt.Sprintf("maintenanceToken: %d, owner: %s, reason: %s", maintenanceToken, owner, reason))
+		AuditOperation("begin-maintenance", instanceKey.StringCode(), fmt.Sprintf("maintenanceToken: %d, owner: %s, reason: %s", maintenanceToken, owner, reason))
 	}
 	return maintenanceToken, err
 }
@@ -136,7 +136,7 @@ func EndMaintenanceByInstanceKey(instanceKey *InstanceKey) (wasMaintenance bool,
 	if affected, _ := res.RowsAffected(); affected > 0 {
 		// success
 		wasMaintenance = true
-		AuditOperation("end-maintenance", instanceKey, "")
+		AuditOperation("end-maintenance", instanceKey.StringCode(), "")
 	}
 	return wasMaintenance, err
 }
@@ -208,7 +208,7 @@ func EndMaintenance(maintenanceToken int64) (wasMaintenance bool, err error) {
 		// success
 		wasMaintenance = true
 		instanceKey, _ := ReadMaintenanceInstanceKey(maintenanceToken)
-		AuditOperation("end-maintenance", instanceKey, fmt.Sprintf("maintenanceToken: %d", maintenanceToken))
+		AuditOperation("end-maintenance", instanceKey.StringCode(), fmt.Sprintf("maintenanceToken: %d", maintenanceToken))
 	}
 	return wasMaintenance, err
 }
@@ -229,7 +229,7 @@ func ExpireMaintenance() error {
 			return log.Errore(err)
 		}
 		if rowsAffected, _ := res.RowsAffected(); rowsAffected > 0 {
-			AuditOperation("expire-maintenance", nil, fmt.Sprintf("Purged historical entries: %d", rowsAffected))
+			AuditOperation("expire-maintenance", "", fmt.Sprintf("Purged historical entries: %d", rowsAffected))
 		}
 	}
 	{
@@ -245,7 +245,7 @@ func ExpireMaintenance() error {
 			return log.Errore(err)
 		}
 		if rowsAffected, _ := res.RowsAffected(); rowsAffected > 0 {
-			AuditOperation("expire-maintenance", nil, fmt.Sprintf("Expired bounded: %d", rowsAffected))
+			AuditOperation("expire-maintenance", "", fmt.Sprintf("Expired bounded: %d", rowsAffected))
 		}
 	}
 	{
@@ -263,7 +263,7 @@ func ExpireMaintenance() error {
 			return log.Errore(err)
 		}
 		if rowsAffected, _ := res.RowsAffected(); rowsAffected > 0 {
-			AuditOperation("expire-maintenance", nil, fmt.Sprintf("Expired dead: %d", rowsAffected))
+			AuditOperation("expire-maintenance", "", fmt.Sprintf("Expired dead: %d", rowsAffected))
 		}
 	}
 

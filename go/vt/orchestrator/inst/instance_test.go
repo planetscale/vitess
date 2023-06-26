@@ -30,8 +30,8 @@ func init() {
 	log.SetLevel(log.ERROR)
 }
 
-var instance1 = Instance{Key: key1}
-var instance2 = Instance{Key: key2}
+var instance1 = Instance{InstanceAlias: "zone1-100"}
+var instance2 = Instance{InstanceAlias: "zone1-200"}
 
 func TestIsSmallerMajorVersion(t *testing.T) {
 	i55 := Instance{Version: "5.5"}
@@ -58,9 +58,9 @@ func TestIsVersion(t *testing.T) {
 }
 
 func TestIsSmallerBinlogFormat(t *testing.T) {
-	iStatement := &Instance{Key: key1, BinlogFormat: "STATEMENT"}
-	iRow := &Instance{Key: key2, BinlogFormat: "ROW"}
-	iMixed := &Instance{Key: key3, BinlogFormat: "MIXED"}
+	iStatement := &Instance{BinlogFormat: "STATEMENT"}
+	iRow := &Instance{BinlogFormat: "ROW"}
+	iMixed := &Instance{BinlogFormat: "MIXED"}
 	test.S(t).ExpectTrue(iStatement.IsSmallerBinlogFormat(iRow))
 	test.S(t).ExpectFalse(iStatement.IsSmallerBinlogFormat(iStatement))
 	test.S(t).ExpectFalse(iRow.IsSmallerBinlogFormat(iStatement))
@@ -73,46 +73,46 @@ func TestIsSmallerBinlogFormat(t *testing.T) {
 
 func TestIsDescendant(t *testing.T) {
 	{
-		i57 := Instance{Key: key1, Version: "5.7"}
-		i56 := Instance{Key: key2, Version: "5.6"}
+		i57 := Instance{Hostname: key1.Hostname, Port: key1.Port, Version: "5.7"}
+		i56 := Instance{Hostname: key2.Hostname, Port: key2.Port, Version: "5.6"}
 		isDescendant := i57.IsDescendantOf(&i56)
 		test.S(t).ExpectEquals(isDescendant, false)
 	}
 	{
-		i57 := Instance{Key: key1, Version: "5.7", AncestryUUID: "00020192-1111-1111-1111-111111111111"}
-		i56 := Instance{Key: key2, Version: "5.6", ServerUUID: ""}
+		i57 := Instance{Hostname: key1.Hostname, Port: key1.Port, Version: "5.7", AncestryUUID: "00020192-1111-1111-1111-111111111111"}
+		i56 := Instance{Hostname: key2.Hostname, Port: key2.Port, Version: "5.6", ServerUUID: ""}
 		isDescendant := i57.IsDescendantOf(&i56)
 		test.S(t).ExpectEquals(isDescendant, false)
 	}
 	{
-		i57 := Instance{Key: key1, Version: "5.7", AncestryUUID: ""}
-		i56 := Instance{Key: key2, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
+		i57 := Instance{Hostname: key1.Hostname, Port: key1.Port, Version: "5.7", AncestryUUID: ""}
+		i56 := Instance{Hostname: key2.Hostname, Port: key2.Port, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
 		isDescendant := i57.IsDescendantOf(&i56)
 		test.S(t).ExpectEquals(isDescendant, false)
 	}
 	{
-		i57 := Instance{Key: key1, Version: "5.7", AncestryUUID: "00020193-2222-2222-2222-222222222222"}
-		i56 := Instance{Key: key2, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
+		i57 := Instance{Hostname: key1.Hostname, Port: key1.Port, Version: "5.7", AncestryUUID: "00020193-2222-2222-2222-222222222222"}
+		i56 := Instance{Hostname: key2.Hostname, Port: key2.Port, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
 		isDescendant := i57.IsDescendantOf(&i56)
 		test.S(t).ExpectEquals(isDescendant, false)
 	}
 	{
-		i57 := Instance{Key: key1, Version: "5.7", AncestryUUID: "00020193-2222-2222-2222-222222222222,00020193-3333-3333-3333-222222222222"}
-		i56 := Instance{Key: key2, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
+		i57 := Instance{Hostname: key1.Hostname, Port: key1.Port, Version: "5.7", AncestryUUID: "00020193-2222-2222-2222-222222222222,00020193-3333-3333-3333-222222222222"}
+		i56 := Instance{Hostname: key2.Hostname, Port: key2.Port, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
 		isDescendant := i57.IsDescendantOf(&i56)
 		test.S(t).ExpectEquals(isDescendant, false)
 	}
 	{
-		i57 := Instance{Key: key1, Version: "5.7", AncestryUUID: "00020193-2222-2222-2222-222222222222,00020192-1111-1111-1111-111111111111"}
-		i56 := Instance{Key: key2, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
+		i57 := Instance{Hostname: key1.Hostname, Port: key1.Port, Version: "5.7", AncestryUUID: "00020193-2222-2222-2222-222222222222,00020192-1111-1111-1111-111111111111"}
+		i56 := Instance{Hostname: key2.Hostname, Port: key2.Port, Version: "5.6", ServerUUID: "00020192-1111-1111-1111-111111111111"}
 		isDescendant := i57.IsDescendantOf(&i56)
 		test.S(t).ExpectEquals(isDescendant, true)
 	}
 }
 
 func TestCanReplicateFrom(t *testing.T) {
-	i55 := Instance{Key: key1, Version: "5.5"}
-	i56 := Instance{Key: key2, Version: "5.6"}
+	i55 := Instance{Hostname: key1.Hostname, Port: key1.Port, Version: "5.5"}
+	i56 := Instance{Hostname: key2.Hostname, Port: key2.Port, Version: "5.6"}
 
 	var canReplicate bool
 	canReplicate, _ = i56.CanReplicateFrom(&i55)
@@ -134,8 +134,8 @@ func TestCanReplicateFrom(t *testing.T) {
 	canReplicate, _ = i55.CanReplicateFrom(&i56)
 	test.S(t).ExpectFalse(canReplicate)
 
-	iStatement := Instance{Key: key1, BinlogFormat: "STATEMENT", ServerID: 1, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
-	iRow := Instance{Key: key2, BinlogFormat: "ROW", ServerID: 2, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
+	iStatement := Instance{Hostname: key1.Hostname, Port: key1.Port, BinlogFormat: "STATEMENT", ServerID: 1, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
+	iRow := Instance{Hostname: key2.Hostname, Port: key2.Port, BinlogFormat: "ROW", ServerID: 2, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
 	canReplicate, err = iRow.CanReplicateFrom(&iStatement)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectTrue(canReplicate)
@@ -234,7 +234,7 @@ func TestReplicationThreads(t *testing.T) {
 		test.S(t).ExpectTrue(instance1.ReplicationThreadsStopped())
 	}
 	{
-		i := Instance{Key: key1, ReplicationIOThreadState: ReplicationThreadStateNoThread, ReplicationSQLThreadState: ReplicationThreadStateNoThread}
+		i := Instance{InstanceAlias: "zone1-100", ReplicationIOThreadState: ReplicationThreadStateNoThread, ReplicationSQLThreadState: ReplicationThreadStateNoThread}
 		test.S(t).ExpectFalse(i.ReplicationThreadsExist())
 	}
 }

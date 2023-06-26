@@ -95,7 +95,7 @@ func Untag(instanceKey *InstanceKey, tag *Tag) (tagged *InstanceKeyMap, err erro
 	if _, err = db.ExecOrchestrator(query, args...); err != nil {
 		return tagged, log.Errore(err)
 	}
-	AuditOperation("delete-instance-tag", instanceKey, tag.String())
+	AuditOperation("delete-instance-tag", instanceKey.StringCode(), tag.String())
 	return tagged, nil
 }
 

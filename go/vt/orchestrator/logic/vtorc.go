@@ -37,6 +37,7 @@ import (
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	"vitess.io/vitess/go/vt/orchestrator/util"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 const (
@@ -47,7 +48,7 @@ const (
 // that were requested for discovery.  It can be continuously updated
 // as discovery process progresses.
 var discoveryQueue *discovery.Queue
-var snapshotDiscoveryKeys chan inst.InstanceKey
+var snapshotDiscoveryKeys chan string
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
 
@@ -66,7 +67,7 @@ var recentDiscoveryOperationKeys *cache.Cache
 var kvFoundCache = cache.New(10*time.Minute, time.Minute)
 
 func init() {
-	snapshotDiscoveryKeys = make(chan inst.InstanceKey, 10)
+	snapshotDiscoveryKeys = make(chan string, 10)
 
 	metrics.Register("discoveries.attempt", discoveriesCounter)
 	metrics.Register("discoveries.fail", failedDiscoveriesCounter)
@@ -117,7 +118,7 @@ func acceptSignals() {
 			switch sig {
 			case syscall.SIGHUP:
 				log.Infof("Received SIGHUP. Reloading configuration")
-				inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
+				inst.AuditOperation("reload-configuration", "", "Triggered via SIGHUP")
 				config.Reload()
 				discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
 			case syscall.SIGTERM:
@@ -125,7 +126,7 @@ func acceptSignals() {
 				atomic.StoreInt32(&hasReceivedSIGTERM, 1)
 				discoveryMetrics.StopAutoExpiration()
 				// probably should poke other go routines to stop cleanly here ...
-				inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
+				inst.AuditOperation("shutdown", "", "Triggered via SIGTERM")
 				timeout := time.After(*shutdownWaitTime)
 				func() {
 					for {
@@ -158,18 +159,18 @@ func handleDiscoveryRequests() {
 	for i := uint(0); i < config.Config.DiscoveryMaxConcurrency; i++ {
 		go func() {
 			for {
-				instanceKey := discoveryQueue.Consume()
+				tabletAlias := discoveryQueue.Consume()
 				// Possibly this used to be the elected node, but has
 				// been demoted, while still the queue is full.
 				if !IsLeaderOrActive() {
 					log.Debugf("Node apparently demoted. Skipping discovery of %+v. "+
-						"Remaining queue size: %+v", instanceKey, discoveryQueue.QueueLen())
-					discoveryQueue.Release(instanceKey)
+						"Remaining queue size: %+v", tabletAlias, discoveryQueue.QueueLen())
+					discoveryQueue.Release(tabletAlias)
 					continue
 				}
 
-				DiscoverInstance(instanceKey, false /* forceDiscovery */)
-				discoveryQueue.Release(instanceKey)
+				DiscoverInstance(tabletAlias, false /* forceDiscovery */)
+				discoveryQueue.Release(tabletAlias)
 			}
 		}()
 	}
@@ -178,13 +179,9 @@ func handleDiscoveryRequests() {
 // DiscoverInstance will attempt to discover (poll) an instance (unless
 // it is already up to date) and will also ensure that its primary and
 // replicas (if any) are also checked.
-func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
-	if inst.InstanceIsForgotten(&instanceKey) {
-		log.Debugf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", instanceKey)
-		return
-	}
-	if inst.RegexpMatchPatterns(instanceKey.StringCode(), config.Config.DiscoveryIgnoreHostnameFilters) {
-		log.Debugf("discoverInstance: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", instanceKey)
+func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
+	if inst.InstanceIsForgotten(tabletAlias) {
+		log.Debugf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", tabletAlias)
 		return
 	}
 
@@ -201,35 +198,39 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		discoveryTime := latency.Elapsed("total")
 		if discoveryTime > instancePollSecondsDuration() {
 			instancePollSecondsExceededCounter.Inc(1)
-			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", instanceKey, discoveryTime.Seconds())
+			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAlias, discoveryTime.Seconds())
 		}
 	}()
 
-	instanceKey.ResolveHostname()
-	if !instanceKey.IsValid() {
+	if tabletAlias == "" {
 		return
 	}
 
 	// Calculate the expiry period each time as InstancePollSeconds
 	// _may_ change during the run of the process (via SIGHUP) and
 	// it is not possible to change the cache's default expiry..
-	if existsInCacheError := recentDiscoveryOperationKeys.Add(instanceKey.DisplayString(), true, instancePollSecondsDuration()); existsInCacheError != nil && !forceDiscovery {
+	if existsInCacheError := recentDiscoveryOperationKeys.Add(tabletAlias, true, instancePollSecondsDuration()); existsInCacheError != nil && !forceDiscovery {
 		// Just recently attempted
 		return
 	}
 
 	latency.Start("backend")
-	instance, found, _ := inst.ReadInstance(&instanceKey)
+	instance, found, _ := inst.ReadInstance(tabletAlias)
 	latency.Stop("backend")
 	if !forceDiscovery && found && instance.IsUpToDate && instance.IsLastCheckValid {
 		// we've already discovered this one. Skip!
 		return
 	}
 
+	if inst.RegexpMatchPatterns(instance.Key().StringCode(), config.Config.DiscoveryIgnoreHostnameFilters) {
+		log.Debugf("discoverInstance: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", tabletAlias)
+		return
+	}
+
 	discoveriesCounter.Inc(1)
 
 	// First we've ever heard of this instance. Continue investigation:
-	instance, err := inst.ReadTopologyInstanceBufferable(&instanceKey, config.Config.BufferInstanceWrites, latency)
+	instance, err := inst.ReadTopologyInstanceBufferable(tabletAlias, config.Config.BufferInstanceWrites, latency)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
 	totalLatency := latency.Elapsed("total")
@@ -240,15 +241,15 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 		failedDiscoveriesCounter.Inc(1)
 		discoveryMetrics.Append(&discovery.Metric{
 			Timestamp:       time.Now(),
-			InstanceKey:     instanceKey,
+			TabletAlias:     tabletAlias,
 			TotalLatency:    totalLatency,
 			BackendLatency:  backendLatency,
 			InstanceLatency: instanceLatency,
 			Err:             err,
 		})
-		if util.ClearToLog("discoverInstance", instanceKey.StringCode()) {
+		if util.ClearToLog("discoverInstance", tabletAlias) {
 			log.Warningf(" DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
-				instanceKey,
+				instance.Key(),
 				totalLatency.Seconds(),
 				backendLatency.Seconds(),
 				instanceLatency.Seconds(),
@@ -259,12 +260,19 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 
 	discoveryMetrics.Append(&discovery.Metric{
 		Timestamp:       time.Now(),
-		InstanceKey:     instanceKey,
+		TabletAlias:     tabletAlias,
 		TotalLatency:    totalLatency,
 		BackendLatency:  backendLatency,
 		InstanceLatency: instanceLatency,
 		Err:             nil,
 	})
+}
+
+func DiscoverInstanceByKey(instanceKey *inst.InstanceKey, forceDiscovery bool) {
+	tablet, err := inst.ReadTabletByKey(instanceKey)
+	if err != nil {
+		DiscoverInstance(topoproto.TabletAliasString(tablet.Alias), forceDiscovery)
+	}
 }
 
 // onHealthTick handles the actions to take to discover/poll instances
@@ -292,7 +300,7 @@ func onHealthTick() {
 	if !IsLeaderOrActive() {
 		return
 	}
-	instanceKeys, err := inst.ReadOutdatedInstanceKeys()
+	tabletAliases, err := inst.ReadOutdatedInstanceKeys()
 	if err != nil {
 		log.Errore(err)
 	}
@@ -311,14 +319,14 @@ func onHealthTick() {
 
 		countSnapshotKeys := len(snapshotDiscoveryKeys)
 		for i := 0; i < countSnapshotKeys; i++ {
-			instanceKeys = append(instanceKeys, <-snapshotDiscoveryKeys)
+			tabletAliases = append(tabletAliases, <-snapshotDiscoveryKeys)
 		}
 	}()
 	// avoid any logging unless there's something to be done
-	if len(instanceKeys) > 0 {
-		for _, instanceKey := range instanceKeys {
-			if instanceKey.IsValid() {
-				discoveryQueue.Push(instanceKey)
+	if len(tabletAliases) > 0 {
+		for _, tabletAlias := range tabletAliases {
+			if tabletAlias != "" {
+				discoveryQueue.Push(tabletAlias)
 			}
 		}
 	}
@@ -383,7 +391,7 @@ func injectSeeds(seedOnce *sync.Once) {
 // ContinuousDiscovery starts an asynchronuous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
-//nolint SA1015: using time.Tick leaks the underlying ticker
+// nolint SA1015: using time.Tick leaks the underlying ticker
 func ContinuousDiscovery() {
 	log.Infof("continuous discovery: setting up")
 	continuousDiscoveryStartTime := time.Now()

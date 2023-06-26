@@ -18,16 +18,15 @@ limitations under the License.
 Package topotools contains high level functions based on vt/topo and
 vt/actionnode. It should not depend on anything else that's higher
 level. In particular, it cannot depend on:
-- vt/wrangler: much higher level, wrangler depends on topotools.
-- vt/tabletmanager/initiator: we don't want the various remote
-  protocol dependencies here.
+  - vt/wrangler: much higher level, wrangler depends on topotools.
+  - vt/tabletmanager/initiator: we don't want the various remote
+    protocol dependencies here.
 
 topotools is used by wrangler, so it ends up in all tools using
 wrangler (vtctl, vtctld, ...). It is also included by vttablet, so it contains:
-- most of the logic to create a shard / keyspace (tablet's init code)
-- some of the logic to perform a TabletExternallyReparented (RPC call
-  to primary vttablet to let it know it's the primary).
-
+  - most of the logic to create a shard / keyspace (tablet's init code)
+  - some of the logic to perform a TabletExternallyReparented (RPC call
+    to primary vttablet to let it know it's the primary).
 */
 package topotools
 
@@ -246,4 +245,30 @@ func TabletIdent(tablet *topodatapb.Tablet) string {
 // TargetIdent returns a concise string representation of a query target
 func TargetIdent(target *querypb.Target) string {
 	return fmt.Sprintf("%s/%s (%s)", target.Keyspace, target.Shard, target.TabletType)
+}
+
+// TabletEquality returns true iff two Tablets are identical for testing purposes
+func TabletEquality(left, right *topodatapb.Tablet) bool {
+	if left.Keyspace != right.Keyspace {
+		return false
+	}
+	if left.Shard != right.Shard {
+		return false
+	}
+	if left.Hostname != right.Hostname {
+		return false
+	}
+	if left.Type != right.Type {
+		return false
+	}
+	if left.MysqlHostname != right.MysqlHostname {
+		return false
+	}
+	if left.MysqlPort != right.MysqlPort {
+		return false
+	}
+	if left.PrimaryTermStartTime.String() != right.PrimaryTermStartTime.String() {
+		return false
+	}
+	return topoproto.TabletAliasString(left.Alias) == topoproto.TabletAliasString(right.Alias)
 }
