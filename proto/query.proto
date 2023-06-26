@@ -837,8 +837,14 @@ message ReleaseRequest {
 message ReleaseResponse {
 }
 
+enum StreamHealthRequestType {
+  DEFAULT = 0;
+  TABLET_THROTTLER = 1;
+}
+
 // StreamHealthRequest is the payload for StreamHealth
 message StreamHealthRequest {
+  StreamHealthRequestType type = 1;
 }
 
 // RealtimeStats contains information about the tablet status.

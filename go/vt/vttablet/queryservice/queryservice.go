@@ -102,7 +102,7 @@ type QueryService interface {
 	VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error
 
 	// StreamHealth streams health status.
-	StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error
+	StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error
 
 	// HandlePanic will be called if any of the functions panic.
 	HandlePanic(err *error)

@@ -85,7 +85,7 @@ type TabletGateway struct {
 }
 
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
-	return discovery.NewHealthCheck(ctx, retryDelay, timeout, ts, cell, cellsToWatch)
+	return discovery.NewHealthCheck(ctx, retryDelay, timeout, ts, cell, cellsToWatch, querypb.StreamHealthRequestType_DEFAULT)
 }
 
 // NewTabletGateway creates and returns a new TabletGateway

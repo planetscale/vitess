@@ -46,7 +46,7 @@ func TestCreateViewDDL(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+		err := client.StreamHealthWithContext(ctx, &querypb.StreamHealthRequest{}, func(shr *querypb.StreamHealthResponse) error {
 			views := shr.RealtimeStats.ViewSchemaChanged
 			if len(views) != 0 && views[0] == "vitess_view" {
 				ch <- true
@@ -103,7 +103,7 @@ func TestAlterViewDDL(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+		err := client.StreamHealthWithContext(ctx, &querypb.StreamHealthRequest{}, func(shr *querypb.StreamHealthResponse) error {
 			views := shr.RealtimeStats.ViewSchemaChanged
 			if len(views) != 0 && views[0] == "vitess_view" {
 				ch <- true

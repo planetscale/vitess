@@ -211,7 +211,7 @@ type fakeTabletConn struct {
 }
 
 // StreamHealth is part of queryservice.QueryService.
-func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
 	return callback(&querypb.StreamHealthResponse{
 		Serving: true,
 		Target: &querypb.Target{

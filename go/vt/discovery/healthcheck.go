@@ -284,6 +284,8 @@ type HealthCheckImpl struct {
 	subscribers map[chan *TabletHealth]struct{}
 	// loadTablets trigger is used to immediately load a new primary tablet when the current one has been demoted
 	loadTabletsTrigger chan struct{}
+	// healthRequestType specifies a specific type of health checks to subscribe to
+	healthRequestType query.StreamHealthRequestType
 }
 
 // NewHealthCheck creates a new HealthCheck object.
@@ -310,7 +312,7 @@ type HealthCheckImpl struct {
 // callback.
 //
 //	A function to call when there is a primary change. Used to notify vtgate's buffer to stop buffering.
-func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string) *HealthCheckImpl {
+func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, healthRequestType query.StreamHealthRequestType) *HealthCheckImpl {
 	log.Infof("loading tablets for cells: %v", cellsToWatch)
 
 	hc := &HealthCheckImpl{
@@ -324,6 +326,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		subscribers:        make(map[chan *TabletHealth]struct{}),
 		cellAliases:        make(map[string]string),
 		loadTabletsTrigger: make(chan struct{}),
+		healthRequestType:  healthRequestType,
 	}
 	var topoWatchers []*TopologyWatcher
 	var filter TabletFilter

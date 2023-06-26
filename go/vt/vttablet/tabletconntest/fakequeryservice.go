@@ -670,7 +670,7 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 var TestStreamHealthErrorMsg = "to trigger a server error"
 
 // StreamHealth is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+func (f *FakeQueryService) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
 	if f.HasError {
 		return errors.New(TestStreamHealthErrorMsg)
 	}

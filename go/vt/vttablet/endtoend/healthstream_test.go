@@ -68,7 +68,7 @@ func TestSchemaChange(t *testing.T) {
 
 	ch := make(chan []string, 100)
 	go func(ch chan []string) {
-		client.StreamHealth(func(response *querypb.StreamHealthResponse) error {
+		client.StreamHealth(&querypb.StreamHealthRequest{}, func(response *querypb.StreamHealthResponse) error {
 			if response.RealtimeStats.TableSchemaChanged != nil {
 				ch <- response.RealtimeStats.TableSchemaChanged
 			}

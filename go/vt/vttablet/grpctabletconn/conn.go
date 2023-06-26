@@ -613,7 +613,7 @@ func (conn *gRPCQueryClient) MessageAck(ctx context.Context, target *querypb.Tar
 }
 
 // StreamHealth starts a streaming RPC for VTTablet health status updates.
-func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
 	// Please see comments in StreamExecute to see how this works.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -625,7 +625,7 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*qu
 			return nil, tabletconn.ConnClosed
 		}
 
-		stream, err := conn.c.StreamHealth(ctx, &querypb.StreamHealthRequest{})
+		stream, err := conn.c.StreamHealth(ctx, req)
 		if err != nil {
 			return nil, tabletconn.ErrorFromGRPC(err)
 		}

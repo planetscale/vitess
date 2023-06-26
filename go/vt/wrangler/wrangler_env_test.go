@@ -276,7 +276,7 @@ func newTestWranglerTablet(tablet *topodatapb.Tablet) *testWranglerTablet {
 	}
 }
 
-func (tvt *testWranglerTablet) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+func (tvt *testWranglerTablet) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
 	return callback(&querypb.StreamHealthResponse{
 		Serving: true,
 		Target: &querypb.Target{

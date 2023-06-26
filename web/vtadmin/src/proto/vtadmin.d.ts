@@ -36977,8 +36977,17 @@ export namespace query {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** StreamHealthRequestType enum. */
+    enum StreamHealthRequestType {
+        DEFAULT = 0,
+        TABLET_THROTTLER = 1
+    }
+
     /** Properties of a StreamHealthRequest. */
     interface IStreamHealthRequest {
+
+        /** StreamHealthRequest type */
+        type?: (query.StreamHealthRequestType|null);
     }
 
     /** Represents a StreamHealthRequest. */
@@ -36989,6 +36998,9 @@ export namespace query {
          * @param [properties] Properties to set
          */
         constructor(properties?: query.IStreamHealthRequest);
+
+        /** StreamHealthRequest type. */
+        public type: query.StreamHealthRequestType;
 
         /**
          * Creates a new StreamHealthRequest instance using the specified properties.

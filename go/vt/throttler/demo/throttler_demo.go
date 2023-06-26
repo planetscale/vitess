@@ -237,7 +237,7 @@ func newClient(primary *primary, replica *replica, ts *topo.Server) *client {
 		log.Fatal(err)
 	}
 
-	healthCheck := discovery.NewHealthCheck(context.Background(), 5*time.Second, 1*time.Minute, ts, "cell1", "")
+	healthCheck := discovery.NewHealthCheck(context.Background(), 5*time.Second, 1*time.Minute, ts, "cell1", "", querypb.StreamHealthRequestType_DEFAULT)
 	c := &client{
 		primary:     primary,
 		healthCheck: healthCheck,

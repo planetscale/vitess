@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
@@ -591,7 +592,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 
 	var healthCheckCh chan *discovery.TabletHealth
 	if throttlerReadRealtimeStats {
-		healthCheck := discovery.NewHealthCheck(ctx, discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, throttler.ts, throttler.cell, strings.Join(throttler.knownCells, ","))
+		healthCheck := discovery.NewHealthCheck(ctx, discovery.DefaultHealthCheckRetryDelay, discovery.DefaultHealthCheckTimeout, throttler.ts, throttler.cell, strings.Join(throttler.knownCells, ","), querypb.StreamHealthRequestType_TABLET_THROTTLER)
 		healthCheckCh = healthCheck.Subscribe()
 	}
 	go func() {

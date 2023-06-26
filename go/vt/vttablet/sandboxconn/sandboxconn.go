@@ -415,7 +415,7 @@ func (sbc *SandboxConn) MessageAck(ctx context.Context, target *querypb.Target, 
 var SandboxSQRowCount = int64(10)
 
 // StreamHealth is not implemented.
-func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+func (sbc *SandboxConn) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
 	return fmt.Errorf("not implemented in test")
 }
 

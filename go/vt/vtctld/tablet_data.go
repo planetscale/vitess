@@ -120,7 +120,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts *topo.Server, tabletAlias
 	defer conn.Close(ctx)
 
 	first := true
-	return conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+	return conn.StreamHealth(ctx, &querypb.StreamHealthRequest{}, func(shr *querypb.StreamHealthResponse) error {
 		th.mu.Lock()
 		th.result = shr
 		th.mu.Unlock()

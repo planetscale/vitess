@@ -71,6 +71,8 @@ type tabletHealthCheck struct {
 	// possibly delete both these
 	loggedServingState    bool
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
+
+	healthRequestType query.StreamHealthRequestType
 }
 
 // String is defined because we want to print a []*tabletHealthCheck array nicely.
@@ -122,13 +124,13 @@ func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
 }
 
 // stream streams healthcheck responses to callback.
-func (thc *tabletHealthCheck) stream(ctx context.Context, callback func(*query.StreamHealthResponse) error) error {
+func (thc *tabletHealthCheck) stream(ctx context.Context, request *query.StreamHealthRequest, callback func(*query.StreamHealthResponse) error) error {
 	conn := thc.Connection()
 	if conn == nil {
 		// This signals the caller to retry
 		return nil
 	}
-	err := conn.StreamHealth(ctx, callback)
+	err := conn.StreamHealth(ctx, request, callback)
 	if err != nil {
 		// Depending on the specific error the caller can take action
 		thc.closeConnection(ctx, err)
@@ -272,7 +274,8 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		}()
 
 		// Read stream health responses.
-		err := thc.stream(streamCtx, func(shr *query.StreamHealthResponse) error {
+		var req = &query.StreamHealthRequest{Type: thc.healthRequestType}
+		err := thc.stream(streamCtx, req, func(shr *query.StreamHealthResponse) error {
 			// We received a message. Reset the back-off.
 			retryDelay = hc.retryDelay
 			// Don't block on send to avoid deadlocks.
