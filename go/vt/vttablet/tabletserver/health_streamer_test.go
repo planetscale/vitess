@@ -136,8 +136,10 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		RealtimeStats: &querypb.RealtimeStats{
 			ReplicationLagSeconds:         1,
 			FilteredReplicationLagSeconds: 1,
-			ThrottlerMetric:               1.0,
 			BinlogPlayersCount:            2,
+			ThrottlerStats: &querypb.RealtimeStats_ThrottlerStats{
+				ThrottlerMetric: 1.0,
+			},
 		},
 	}
 	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)

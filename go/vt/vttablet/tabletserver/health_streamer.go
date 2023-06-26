@@ -246,13 +246,14 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 	hs.state.RealtimeStats.FilteredReplicationLagSeconds, hs.state.RealtimeStats.BinlogPlayersCount = blpFunc()
 	hs.state.RealtimeStats.Qps = hs.stats.QPSRates.TotalRate()
 
-	hs.state.RealtimeStats.ThrottlerMetric = throttlerMetric
+	hs.state.RealtimeStats.ThrottlerStats = &querypb.RealtimeStats_ThrottlerStats{}
+	hs.state.RealtimeStats.ThrottlerStats.ThrottlerMetric = throttlerMetric
 	if throttlerMetricsErr != nil {
-		hs.state.RealtimeStats.ThrottlerMetricError = throttlerMetricsErr.Error()
+		hs.state.RealtimeStats.ThrottlerStats.ThrottlerMetricError = throttlerMetricsErr.Error()
 	} else {
-		hs.state.RealtimeStats.ThrottlerMetricError = ""
+		hs.state.RealtimeStats.ThrottlerStats.ThrottlerMetricError = ""
 	}
-	hs.state.RealtimeStats.ThrottlerMetricCollected = true // the field `ThrottlerMetricCollected` will be removed in v18
+	hs.state.RealtimeStats.ThrottlerStats.ThrottlerMetricCollected = true // the field `ThrottlerMetricCollected` will be removed in v18
 
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 

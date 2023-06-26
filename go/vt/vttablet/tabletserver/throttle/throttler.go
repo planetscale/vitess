@@ -719,14 +719,17 @@ func (throttler *Throttler) readMetricFromTabletHealth(tabletHealth *discovery.T
 		return
 	}
 	var metricError error
-	if tabletHealth.Stats.ThrottlerMetricError != "" {
-		metricError = errors.New(tabletHealth.Stats.ThrottlerMetricError)
+	if tabletHealth.Stats.ThrottlerStats == nil {
+		return
+	}
+	if tabletHealth.Stats.ThrottlerStats.ThrottlerMetricError != "" {
+		metricError = errors.New(tabletHealth.Stats.ThrottlerStats.ThrottlerMetricError)
 	}
 	// Construct a MySQLThrottleMetric that would look like it was returned from a probe.
 	metric := &mysql.MySQLThrottleMetric{
 		ClusterName: shardStoreName,
 		Key:         mysql.InstanceKey{Hostname: tabletHealth.Tablet.MysqlHostname, Port: int(tabletHealth.Tablet.MysqlPort)},
-		Value:       tabletHealth.Stats.ThrottlerMetric,
+		Value:       tabletHealth.Stats.ThrottlerStats.ThrottlerMetric,
 		Err:         metricError,
 	}
 	throttler.mysqlInventory.InstanceKeyMetrics[metric.GetClusterInstanceKey()] = metric

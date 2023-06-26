@@ -37107,17 +37107,8 @@ export namespace query {
         /** RealtimeStats view_schema_changed */
         view_schema_changed?: (string[]|null);
 
-        /** RealtimeStats throttler_metric_error */
-        throttler_metric_error?: (string|null);
-
-        /** RealtimeStats throttler_replication_lag_seconds */
-        throttler_replication_lag_seconds?: (number|null);
-
-        /** RealtimeStats throttler_metric */
-        throttler_metric?: (number|null);
-
-        /** RealtimeStats throttler_metric_collected */
-        throttler_metric_collected?: (boolean|null);
+        /** RealtimeStats throttler_stats */
+        throttler_stats?: (query.RealtimeStats.IThrottlerStats|null);
     }
 
     /** Represents a RealtimeStats. */
@@ -37153,17 +37144,8 @@ export namespace query {
         /** RealtimeStats view_schema_changed. */
         public view_schema_changed: string[];
 
-        /** RealtimeStats throttler_metric_error. */
-        public throttler_metric_error: string;
-
-        /** RealtimeStats throttler_replication_lag_seconds. */
-        public throttler_replication_lag_seconds: number;
-
-        /** RealtimeStats throttler_metric. */
-        public throttler_metric: number;
-
-        /** RealtimeStats throttler_metric_collected. */
-        public throttler_metric_collected: boolean;
+        /** RealtimeStats throttler_stats. */
+        public throttler_stats?: (query.RealtimeStats.IThrottlerStats|null);
 
         /**
          * Creates a new RealtimeStats instance using the specified properties.
@@ -37241,6 +37223,124 @@ export namespace query {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace RealtimeStats {
+
+        /** Properties of a ThrottlerStats. */
+        interface IThrottlerStats {
+
+            /** ThrottlerStats throttler_metric_error */
+            throttler_metric_error?: (string|null);
+
+            /** ThrottlerStats throttler_replication_lag_seconds */
+            throttler_replication_lag_seconds?: (number|null);
+
+            /** ThrottlerStats throttler_metric */
+            throttler_metric?: (number|null);
+
+            /** ThrottlerStats throttler_metric_collected */
+            throttler_metric_collected?: (boolean|null);
+        }
+
+        /** Represents a ThrottlerStats. */
+        class ThrottlerStats implements IThrottlerStats {
+
+            /**
+             * Constructs a new ThrottlerStats.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: query.RealtimeStats.IThrottlerStats);
+
+            /** ThrottlerStats throttler_metric_error. */
+            public throttler_metric_error: string;
+
+            /** ThrottlerStats throttler_replication_lag_seconds. */
+            public throttler_replication_lag_seconds: number;
+
+            /** ThrottlerStats throttler_metric. */
+            public throttler_metric: number;
+
+            /** ThrottlerStats throttler_metric_collected. */
+            public throttler_metric_collected: boolean;
+
+            /**
+             * Creates a new ThrottlerStats instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns ThrottlerStats instance
+             */
+            public static create(properties?: query.RealtimeStats.IThrottlerStats): query.RealtimeStats.ThrottlerStats;
+
+            /**
+             * Encodes the specified ThrottlerStats message. Does not implicitly {@link query.RealtimeStats.ThrottlerStats.verify|verify} messages.
+             * @param message ThrottlerStats message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: query.RealtimeStats.IThrottlerStats, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified ThrottlerStats message, length delimited. Does not implicitly {@link query.RealtimeStats.ThrottlerStats.verify|verify} messages.
+             * @param message ThrottlerStats message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: query.RealtimeStats.IThrottlerStats, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a ThrottlerStats message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns ThrottlerStats
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.RealtimeStats.ThrottlerStats;
+
+            /**
+             * Decodes a ThrottlerStats message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns ThrottlerStats
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.RealtimeStats.ThrottlerStats;
+
+            /**
+             * Verifies a ThrottlerStats message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a ThrottlerStats message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns ThrottlerStats
+             */
+            public static fromObject(object: { [k: string]: any }): query.RealtimeStats.ThrottlerStats;
+
+            /**
+             * Creates a plain object from a ThrottlerStats message. Also converts values to other types if specified.
+             * @param message ThrottlerStats
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: query.RealtimeStats.ThrottlerStats, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this ThrottlerStats to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for ThrottlerStats
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of an AggregateStats. */
