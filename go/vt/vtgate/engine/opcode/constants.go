@@ -115,13 +115,20 @@ func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // Type returns the opcode return sql type.
-func (code AggregateOpcode) Type(field *querypb.Field) querypb.Type {
+func (code AggregateOpcode) Type(typ querypb.Type) querypb.Type {
 	switch code {
 	case AggregateGroupConcat:
-		if sqltypes.IsBinary(field.Type) {
+		if sqltypes.IsBinary(typ) {
 			return sqltypes.Blob
 		}
 		return sqltypes.Text
+	case AggregateMax, AggregateMin, AggregateRandom:
+		return typ
+	case AggregateSumDistinct, AggregateSum:
+		if sqltypes.IsFloat(typ) {
+			return sqltypes.Float64
+		}
+		return sqltypes.Decimal
 	default:
 		return OpcodeType[code]
 	}

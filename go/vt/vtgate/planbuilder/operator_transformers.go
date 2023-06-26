@@ -83,6 +83,7 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 			logicalPlanCommon: newBuilderCommon(plan),
 			weightStrings:     make(map[*resultColumn]int),
 		},
+		preProcess: !op.Pushed,
 	}
 
 	for _, aggr := range op.Aggregations {
@@ -90,12 +91,8 @@ func transformAggregator(ctx *plancontext.PlanningContext, op *operators.Aggrega
 		case opcode.AggregateUnassigned:
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", sqlparser.String(aggr.Original)))
 		case opcode.AggregateGroupConcat:
+			// TODO: should change this once group_concat can be pushed down.
 			oa.preProcess = true
-			fallthrough
-		case opcode.AggregateSum:
-			if !op.Pushed {
-				oa.aggrOnEngine = true
-			}
 		}
 		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 			Opcode:      aggr.OpCode,
