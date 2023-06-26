@@ -1680,7 +1680,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 
 // StreamHealth streams the health status to callback.
 func (tsv *TabletServer) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
-	return tsv.hs.Stream(ctx, callback)
+	return tsv.hs.Stream(ctx, req, callback)
 }
 
 // BroadcastHealth will broadcast the current health to all listeners

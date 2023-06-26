@@ -123,7 +123,9 @@ type stateManager struct {
 	tableGC     tableGarbageCollector
 
 	// hcticks starts on initialiazation and runs forever.
-	hcticks *timer.Timer
+	// hcticks starts on initialiazation and runs forever.
+	hcticks          *timer.Timer
+	throttlerHCTicks *timer.Timer
 
 	// checkMySQLThrottler ensures that CheckMysql
 	// doesn't get spammed.
@@ -197,6 +199,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
 	sm.checkMySQLThrottler = semaphore.NewWeighted(1)
 	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
 	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
+	sm.throttlerHCTicks = timer.NewTimer(time.Second) // TODO(Shlomi) make this configurable
 	sm.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
 	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
 	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
@@ -214,6 +217,7 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTime
 
 	sm.hs.Open()
 	sm.hcticks.Start(sm.Broadcast)
+	sm.throttlerHCTicks.Start(sm.BroadcastThrottler)
 
 	if tabletType == topodatapb.TabletType_RESTORE || tabletType == topodatapb.TabletType_BACKUP {
 		state = StateNotConnected
@@ -373,6 +377,7 @@ func (sm *stateManager) StopService() {
 
 	log.Info("Stopping TabletServer")
 	sm.SetServingType(sm.Target().TabletType, time.Time{}, StateNotConnected, "service stopped")
+	sm.throttlerHCTicks.Stop()
 	sm.hcticks.Stop()
 	sm.hs.Close()
 }
@@ -665,8 +670,17 @@ func (sm *stateManager) Broadcast() {
 	defer sm.mu.Unlock()
 
 	lag, stateErr := sm.refreshReplHealthLocked()
+	sm.hs.ChangeState(sm.target.TabletType, sm.terTimestamp, lag, stateErr, sm.isServingLocked())
+}
+
+// Broadcast fetches the replication status and broadcasts
+// the state to all subscribed.
+func (sm *stateManager) BroadcastThrottler() {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
 	throttlerMetric, throttlerMetricsErr := sm.throttler.SelfMetrics()
-	sm.hs.ChangeState(sm.target.TabletType, sm.terTimestamp, lag, throttlerMetric, throttlerMetricsErr, stateErr, sm.isServingLocked())
+	sm.hs.ChangeThrottlerState(sm.target.TabletType, throttlerMetric, throttlerMetricsErr)
 }
 
 func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {

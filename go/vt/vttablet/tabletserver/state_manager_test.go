@@ -631,7 +631,7 @@ func TestStateManagerNotify(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := sm.hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+		err := sm.hs.Stream(context.Background(), &querypb.StreamHealthRequest{}, func(shr *querypb.StreamHealthResponse) error {
 			ch <- shr
 			return nil
 		})

@@ -74,7 +74,7 @@ var (
 	throttleMetricThreshold    = math.MaxFloat64
 	throttlerCheckAsCheckSelf  = false
 	throttlerConfigViaTopo     = false
-	throttlerReadRealtimeStats = false
+	throttlerReadRealtimeStats = true
 )
 
 func init() {
@@ -700,6 +700,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 // We treat this info as if it were the result of a probe.
 // The metric is collected to the "shard" store name. We're only interested in remote tablets.
 func (throttler *Throttler) readMetricFromTabletHealth(tabletHealth *discovery.TabletHealth) {
+	fmt.Printf("======== QQQ readMetricFromTabletHealth. tabletHealth=%+v\n", tabletHealth)
 	if !throttlerReadRealtimeStats {
 		return
 	}
@@ -719,6 +720,7 @@ func (throttler *Throttler) readMetricFromTabletHealth(tabletHealth *discovery.T
 		return
 	}
 	var metricError error
+	fmt.Printf("======== QQQ readMetricFromTabletHealth. alias=%v tabletHealth.ThrottlerStats=%+v\n", tabletHealth.Tablet.GetAlias(), tabletHealth.Stats.ThrottlerStats)
 	if tabletHealth.Stats.ThrottlerStats == nil {
 		return
 	}
