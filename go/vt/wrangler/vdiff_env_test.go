@@ -230,7 +230,7 @@ func newTestVDiffTablet(tablet *topodatapb.Tablet) *testVDiffTablet {
 	}
 }
 
-func (tvt *testVDiffTablet) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+func (tvt *testVDiffTablet) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
 	return callback(&querypb.StreamHealthResponse{
 		Serving: true,
 		Target: &querypb.Target{

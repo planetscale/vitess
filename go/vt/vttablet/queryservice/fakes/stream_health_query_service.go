@@ -70,7 +70,7 @@ func (q *StreamHealthQueryService) Execute(ctx context.Context, target *querypb.
 // StreamHealth implements the QueryService interface.
 // It sends all queued and future healthResponses to the connected client e.g.
 // the healthcheck module.
-func (q *StreamHealthQueryService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+func (q *StreamHealthQueryService) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
 	for shr := range q.healthResponses {
 		callback(shr) // nolint:errcheck
 	}

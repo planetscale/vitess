@@ -707,7 +707,7 @@ func WaitForTabletToBeServing(t *testing.T, clusterInstance *cluster.LocalProces
 	require.NoError(t, err)
 
 	newCtx, cancel := context.WithTimeout(context.Background(), timeout)
-	err = tConn.StreamHealth(newCtx, func(shr *querypb.StreamHealthResponse) error {
+	err = tConn.StreamHealth(newCtx, &querypb.StreamHealthRequest{}, func(shr *querypb.StreamHealthResponse) error {
 		if shr.Serving {
 			cancel()
 		}

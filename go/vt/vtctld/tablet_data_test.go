@@ -57,7 +57,7 @@ func newStreamHealthTabletServer(t *testing.T) *streamHealthTabletServer {
 	}
 }
 
-func (s *streamHealthTabletServer) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+func (s *streamHealthTabletServer) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
 	id, ch := s.streamHealthRegister()
 	defer s.streamHealthUnregister(id)
 	for shr := range ch {

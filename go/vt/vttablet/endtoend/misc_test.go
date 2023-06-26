@@ -407,7 +407,7 @@ func TestHealth(t *testing.T) {
 func TestStreamHealth(t *testing.T) {
 	var health *querypb.StreamHealthResponse
 	framework.Server.BroadcastHealth()
-	if err := framework.Server.StreamHealth(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+	if err := framework.Server.StreamHealth(context.Background(), &querypb.StreamHealthRequest{}, func(shr *querypb.StreamHealthResponse) error {
 		health = shr
 		return io.EOF
 	}); err != nil {

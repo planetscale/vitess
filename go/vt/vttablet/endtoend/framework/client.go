@@ -401,13 +401,13 @@ func (client *QueryClient) SetReservedID(id int64) {
 }
 
 // StreamHealth receives the health response
-func (client *QueryClient) StreamHealth(sendFunc func(*querypb.StreamHealthResponse) error) error {
-	return client.server.StreamHealth(client.ctx, sendFunc)
+func (client *QueryClient) StreamHealth(req *querypb.StreamHealthRequest, sendFunc func(*querypb.StreamHealthResponse) error) error {
+	return client.server.StreamHealth(client.ctx, req, sendFunc)
 }
 
 // StreamHealthWithContext receives the health response
-func (client *QueryClient) StreamHealthWithContext(ctx context.Context, sendFunc func(*querypb.StreamHealthResponse) error) error {
-	return client.server.StreamHealth(ctx, sendFunc)
+func (client *QueryClient) StreamHealthWithContext(ctx context.Context, req *querypb.StreamHealthRequest, sendFunc func(*querypb.StreamHealthResponse) error) error {
+	return client.server.StreamHealth(ctx, req, sendFunc)
 }
 
 func (client *QueryClient) UpdateContext(ctx context.Context) {

@@ -107,7 +107,8 @@ func (wr *Wrangler) WaitForFilteredReplication(ctx context.Context, keyspace, sh
 	}
 
 	var lastSeenDelay time.Duration
-	err = conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+	var req = &querypb.StreamHealthRequest{}
+	err = conn.StreamHealth(ctx, req, func(shr *querypb.StreamHealthResponse) error {
 		stats := shr.RealtimeStats
 		if stats == nil {
 			return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)

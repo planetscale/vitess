@@ -151,7 +151,7 @@ func newTestVTCtlTablet(tablet *topodatapb.Tablet) *testVTCtlTablet {
 	}
 }
 
-func (tvt *testVTCtlTablet) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+func (tvt *testVTCtlTablet) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
 	return callback(&querypb.StreamHealthResponse{
 		Serving: true,
 		Target: &querypb.Target{

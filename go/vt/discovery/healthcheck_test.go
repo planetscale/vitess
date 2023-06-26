@@ -966,7 +966,7 @@ func TestGetHealthyTablets(t *testing.T) {
 
 func TestPrimaryInOtherCell(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
-	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2", querypb.StreamHealthRequestType_DEFAULT)
 	defer hc.Close()
 
 	// add a tablet as primary in different cell
@@ -1023,7 +1023,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 
 func TestReplicaInOtherCell(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
-	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2", querypb.StreamHealthRequestType_DEFAULT)
 	defer hc.Close()
 
 	// add a tablet as replica
@@ -1125,7 +1125,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 
 func TestCellAliases(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
-	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
+	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2", querypb.StreamHealthRequestType_DEFAULT)
 	defer hc.Close()
 
 	cellsAlias := &topodatapb.CellsAlias{
@@ -1271,7 +1271,7 @@ func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservic
 }
 
 func createTestHc(ts *topo.Server) *HealthCheckImpl {
-	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell", "")
+	return NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell", "", querypb.StreamHealthRequestType_DEFAULT)
 }
 
 type fakeConn struct {
@@ -1305,7 +1305,7 @@ func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthRespo
 }
 
 // StreamHealth implements queryservice.QueryService.
-func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb.StreamHealthResponse) error) error {
+func (fc *fakeConn) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(shr *querypb.StreamHealthResponse) error) error {
 	if fc.fixedResult != nil {
 		return callback(fc.fixedResult)
 	}

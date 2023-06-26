@@ -322,7 +322,7 @@ func (q *query) MessageAck(ctx context.Context, request *querypb.MessageAckReque
 // StreamHealth is part of the queryservice.QueryServer interface
 func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream queryservicepb.Query_StreamHealthServer) (err error) {
 	defer q.server.HandlePanic(&err)
-	err = q.server.StreamHealth(stream.Context(), stream.Send)
+	err = q.server.StreamHealth(stream.Context(), request, stream.Send)
 	return vterrors.ToGRPC(err)
 }
 

@@ -678,8 +678,8 @@ func (itc *internalTabletConn) Tablet() *topodatapb.Tablet {
 }
 
 // StreamHealth is part of queryservice.QueryService
-func (itc *internalTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	err := itc.tablet.qsc.QueryService().StreamHealth(ctx, callback)
+func (itc *internalTabletConn) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
+	err := itc.tablet.qsc.QueryService().StreamHealth(ctx, req, callback)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 

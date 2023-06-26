@@ -261,9 +261,9 @@ func (ws *wrappedService) VStreamResults(ctx context.Context, target *querypb.Ta
 	})
 }
 
-func (ws *wrappedService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+func (ws *wrappedService) StreamHealth(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
 	return ws.wrapper(ctx, nil, ws.impl, "StreamHealth", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		innerErr := conn.StreamHealth(ctx, callback)
+		innerErr := conn.StreamHealth(ctx, req, callback)
 		return canRetry(ctx, innerErr), innerErr
 	})
 }

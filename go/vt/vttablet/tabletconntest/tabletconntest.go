@@ -883,7 +883,8 @@ func testStreamHealth(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 	ctx := context.Background()
 
 	var health *querypb.StreamHealthResponse
-	err := conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+	var req = &querypb.StreamHealthRequest{}
+	err := conn.StreamHealth(ctx, req, func(shr *querypb.StreamHealthResponse) error {
 		health = shr
 		return io.EOF
 	})
@@ -898,8 +899,9 @@ func testStreamHealth(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 func testStreamHealthError(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testStreamHealthError")
 	f.HasError = true
+	var req = &querypb.StreamHealthRequest{}
 	ctx := context.Background()
-	err := conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+	err := conn.StreamHealth(ctx, req, func(shr *querypb.StreamHealthResponse) error {
 		t.Fatalf("Unexpected call to callback")
 		return nil
 	})
@@ -912,7 +914,8 @@ func testStreamHealthError(t *testing.T, conn queryservice.QueryService, f *Fake
 func testStreamHealthPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testStreamHealthPanics")
 	testPanicHelper(t, f, "StreamHealth", func(ctx context.Context) error {
-		return conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+		req := &querypb.StreamHealthRequest{}
+		return conn.StreamHealth(ctx, req, func(shr *querypb.StreamHealthResponse) error {
 			t.Fatalf("Unexpected call to callback")
 			return nil
 		})

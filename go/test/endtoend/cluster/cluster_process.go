@@ -908,7 +908,7 @@ func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vtta
 	}
 
 	i := 0
-	err = conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+	err = conn.StreamHealth(ctx, &querypb.StreamHealthRequest{}, func(shr *querypb.StreamHealthResponse) error {
 		responses = append(responses, shr)
 
 		i++
