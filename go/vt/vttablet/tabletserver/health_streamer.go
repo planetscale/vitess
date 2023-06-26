@@ -82,7 +82,7 @@ type healthStreamer struct {
 	mu      sync.Mutex
 	ctx     context.Context
 	cancel  context.CancelFunc
-	clients map[chan *querypb.StreamHealthResponse]struct{}
+	clients map[chan *querypb.StreamHealthResponse]querypb.StreamHealthRequestType
 	state   *querypb.StreamHealthResponse
 
 	history *history.History
@@ -110,7 +110,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 	hs := &healthStreamer{
 		stats:             env.Stats(),
 		degradedThreshold: env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
-		clients:           make(map[chan *querypb.StreamHealthResponse]struct{}),
+		clients:           make(map[chan *querypb.StreamHealthResponse]querypb.StreamHealthRequestType),
 
 		state: &querypb.StreamHealthResponse{
 			Target:      &querypb.Target{},
@@ -170,8 +170,8 @@ func (hs *healthStreamer) Close() {
 	}
 }
 
-func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	ch, hsCtx := hs.register()
+func (hs *healthStreamer) Stream(ctx context.Context, req *querypb.StreamHealthRequest, callback func(*querypb.StreamHealthResponse) error) error {
+	ch, hsCtx := hs.register(req.Type)
 	if hsCtx == nil {
 		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "tabletserver is shutdown")
 	}
@@ -202,7 +202,7 @@ func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.Str
 	}
 }
 
-func (hs *healthStreamer) register() (chan *querypb.StreamHealthResponse, context.Context) {
+func (hs *healthStreamer) register(healthRequestType querypb.StreamHealthRequestType) (chan *querypb.StreamHealthResponse, context.Context) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
@@ -211,7 +211,7 @@ func (hs *healthStreamer) register() (chan *querypb.StreamHealthResponse, contex
 	}
 
 	ch := make(chan *querypb.StreamHealthResponse, streamHealthBufferSize)
-	hs.clients[ch] = struct{}{}
+	hs.clients[ch] = healthRequestType
 
 	// Send the current state immediately.
 	ch <- proto.Clone(hs.state).(*querypb.StreamHealthResponse)
@@ -225,7 +225,7 @@ func (hs *healthStreamer) unregister(ch chan *querypb.StreamHealthResponse) {
 	delete(hs.clients, ch)
 }
 
-func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, throttlerMetric float64, throttlerMetricsErr error, stateErr error, serving bool) {
+func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, stateErr error, serving bool) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
@@ -246,6 +246,29 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 	hs.state.RealtimeStats.FilteredReplicationLagSeconds, hs.state.RealtimeStats.BinlogPlayersCount = blpFunc()
 	hs.state.RealtimeStats.Qps = hs.stats.QPSRates.TotalRate()
 
+	hs.state.RealtimeStats.ThrottlerStats = nil
+
+	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+
+	hs.broadCastToClients(shr, querypb.StreamHealthRequestType_DEFAULT)
+	hs.history.Add(&historyRecord{
+		Time:       time.Now(),
+		serving:    shr.Serving,
+		tabletType: shr.Target.TabletType,
+		lag:        lag,
+		err:        stateErr,
+	})
+}
+
+func (hs *healthStreamer) ChangeThrottlerState(tabletType topodatapb.TabletType, throttlerMetric float64, throttlerMetricsErr error) {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+
+	hs.state.Target.TabletType = tabletType
+	hs.state.TabletExternallyReparentedTimestamp = 0
+	hs.state.RealtimeStats.HealthError = ""
+	hs.state.RealtimeStats.ReplicationLagSeconds = 0
+
 	hs.state.RealtimeStats.ThrottlerStats = &querypb.RealtimeStats_ThrottlerStats{}
 	hs.state.RealtimeStats.ThrottlerStats.ThrottlerMetric = throttlerMetric
 	if throttlerMetricsErr != nil {
@@ -257,18 +280,14 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 
-	hs.broadCastToClients(shr)
-	hs.history.Add(&historyRecord{
-		Time:       time.Now(),
-		serving:    shr.Serving,
-		tabletType: shr.Target.TabletType,
-		lag:        lag,
-		err:        stateErr,
-	})
+	hs.broadCastToClients(shr, querypb.StreamHealthRequestType_TABLET_THROTTLER)
 }
 
-func (hs *healthStreamer) broadCastToClients(shr *querypb.StreamHealthResponse) {
-	for ch := range hs.clients {
+func (hs *healthStreamer) broadCastToClients(shr *querypb.StreamHealthResponse, healthRequestType querypb.StreamHealthRequestType) {
+	for ch, reqType := range hs.clients {
+		if reqType != healthRequestType {
+			continue
+		}
 		select {
 		case ch <- shr:
 		default:
@@ -374,7 +393,7 @@ func (hs *healthStreamer) reload() error {
 	hs.state.RealtimeStats.TableSchemaChanged = tables
 	hs.state.RealtimeStats.ViewSchemaChanged = views
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
-	hs.broadCastToClients(shr)
+	hs.broadCastToClients(shr, querypb.StreamHealthRequestType_DEFAULT)
 	hs.state.RealtimeStats.TableSchemaChanged = nil
 	hs.state.RealtimeStats.ViewSchemaChanged = nil
 

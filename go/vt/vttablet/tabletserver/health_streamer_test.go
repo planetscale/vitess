@@ -49,7 +49,7 @@ func TestHealthStreamerClosed(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
-	err := hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+	err := hs.Stream(context.Background(), &querypb.StreamHealthRequest{}, func(shr *querypb.StreamHealthResponse) error {
 		return nil
 	})
 	assert.Contains(t, err.Error(), "tabletserver is shutdown")
@@ -93,7 +93,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	}
 	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
-	hs.ChangeState(topodatapb.TabletType_REPLICA, time.Time{}, 0, 0, nil, nil, false)
+	hs.ChangeState(topodatapb.TabletType_REPLICA, time.Time{}, 0, nil, false)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
@@ -109,7 +109,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 
 	// Test primary and timestamp.
 	now := time.Now()
-	hs.ChangeState(topodatapb.TabletType_PRIMARY, now, 0, 0, nil, nil, true)
+	hs.ChangeState(topodatapb.TabletType_PRIMARY, now, 0, nil, true)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
@@ -126,7 +126,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	// Test non-serving, and 0 timestamp for non-primary.
-	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 1*time.Second, 1.0, nil, nil, false)
+	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 1*time.Second, nil, false)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
@@ -137,15 +137,12 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			ReplicationLagSeconds:         1,
 			FilteredReplicationLagSeconds: 1,
 			BinlogPlayersCount:            2,
-			ThrottlerStats: &querypb.RealtimeStats_ThrottlerStats{
-				ThrottlerMetric: 1.0,
-			},
 		},
 	}
 	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	// Test Health error.
-	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 0, 0, nil, errors.New("repl err"), false)
+	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 0, errors.New("repl err"), false)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
@@ -201,7 +198,7 @@ func TestReloadSchema(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
+		hs.Stream(ctx, &querypb.StreamHealthRequest{}, func(response *querypb.StreamHealthResponse) error {
 			if response.RealtimeStats.TableSchemaChanged != nil {
 				assert.Equal(t, []string{"product", "users"}, response.RealtimeStats.TableSchemaChanged)
 				wg.Done()
@@ -246,7 +243,7 @@ func TestDoesNotReloadSchema(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
+		hs.Stream(ctx, &querypb.StreamHealthRequest{}, func(response *querypb.StreamHealthResponse) error {
 			if response.RealtimeStats.TableSchemaChanged != nil {
 				wg.Done()
 			}
@@ -314,7 +311,7 @@ func TestInitialReloadSchema(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
+		hs.Stream(ctx, &querypb.StreamHealthRequest{}, func(response *querypb.StreamHealthResponse) error {
 			if response.RealtimeStats.TableSchemaChanged != nil {
 				assert.Equal(t, []string{"product", "users"}, response.RealtimeStats.TableSchemaChanged)
 				wg.Done()
@@ -434,7 +431,7 @@ func TestReloadView(t *testing.T) {
 	ch := make(chan struct{})
 
 	go func() {
-		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
+		hs.Stream(ctx, &querypb.StreamHealthRequest{}, func(response *querypb.StreamHealthResponse) error {
 			if response.RealtimeStats.ViewSchemaChanged != nil {
 				sort.Strings(response.RealtimeStats.ViewSchemaChanged)
 				assert.Equal(t, tcases[tcCount.Load()].expTbl, response.RealtimeStats.ViewSchemaChanged)
@@ -471,7 +468,7 @@ func testStream(hs *healthStreamer) (<-chan *querypb.StreamHealthResponse, conte
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan *querypb.StreamHealthResponse)
 	go func() {
-		_ = hs.Stream(ctx, func(shr *querypb.StreamHealthResponse) error {
+		_ = hs.Stream(ctx, &querypb.StreamHealthRequest{}, func(shr *querypb.StreamHealthResponse) error {
 			ch <- shr
 			return nil
 		})
