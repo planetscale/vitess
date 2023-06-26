@@ -238,9 +238,8 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 					Col:    0,
 					Alias:  "group_concat(c2)",
 				}},
-				Input:        fp,
-				AggrOnEngine: true,
-				PreProcess:   true,
+				Input:      fp,
+				PreProcess: true,
 			}
 			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)

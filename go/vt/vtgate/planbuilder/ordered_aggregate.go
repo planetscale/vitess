@@ -65,8 +65,6 @@ type orderedAggregate struct {
 	// preProcess is true if one of the aggregates needs preprocessing.
 	preProcess bool
 
-	aggrOnEngine bool
-
 	// aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	aggregates []*engine.AggregateParams
@@ -182,7 +180,7 @@ func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *ro
 			if node.Type != sqlparser.IntVal {
 				continue
 			}
-			num, err := strconv.ParseInt(string(node.Val), 0, 64)
+			num, err := strconv.ParseInt(node.Val, 0, 64)
 			if err != nil {
 				continue
 			}
@@ -229,7 +227,6 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 	if len(oa.groupByKeys) == 0 {
 		return &engine.ScalarAggregate{
 			PreProcess:          oa.preProcess,
-			AggrOnEngine:        oa.aggrOnEngine,
 			Aggregates:          oa.aggregates,
 			TruncateColumnCount: oa.truncateColumnCount,
 			Input:               input,
@@ -238,7 +235,6 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 
 	return &engine.OrderedAggregate{
 		PreProcess:          oa.preProcess,
-		AggrOnEngine:        oa.aggrOnEngine,
 		Aggregates:          oa.aggregates,
 		GroupByKeys:         oa.groupByKeys,
 		TruncateColumnCount: oa.truncateColumnCount,

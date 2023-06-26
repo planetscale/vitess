@@ -168,6 +168,8 @@ func TestAggrOnJoin(t *testing.T) {
 
 	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ a.val1 from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1 having count(*) = 4",
 		`[[VARCHAR("a")]]`)
+
+	mcmp.Exec("select /*vt+ PLANNER=gen4 */ count(t1.val1) from aggr_test t1, t3 t2 group by t2.id6 order by id6")
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {

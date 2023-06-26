@@ -326,8 +326,9 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 			Alias:  "count(distinct col2)",
 		}, {
 			// Also add a count(*)
-			Opcode: AggregateSum,
-			Col:    2,
+			OrigOpcode: AggregateCount,
+			Opcode:     AggregateSum,
+			Col:        2,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
@@ -351,7 +352,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 		"h|3|4",
 		"i|2|2",
 	)
-	assert.Equal(wantResult, result)
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
@@ -1188,10 +1189,9 @@ func TestGroupConcatWithAggrOnEngine(t *testing.T) {
 					Col:    1,
 					Alias:  "group_concat(c2)",
 				}},
-				GroupByKeys:  []*GroupByParams{{KeyCol: 0}},
-				Input:        fp,
-				AggrOnEngine: true,
-				PreProcess:   true,
+				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
+				Input:       fp,
+				PreProcess:  true,
 			}
 			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)
