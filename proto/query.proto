@@ -889,23 +889,26 @@ message RealtimeStats {
   // view_schema_changed is to provide list of views that have schema changes detected by the tablet.
   repeated string view_schema_changed = 8;
 
-  // ThrottlerMetricError indicates failure in grabbing the throttler metrics. This does not necessarily mean
-  // the tablet is in error.
-  string throttler_metric_error = 9;
+  message ThrottlerStats {
+    // ThrottlerMetricError indicates failure in grabbing the throttler metrics. This does not necessarily mean
+    // the tablet is in error.
+    string throttler_metric_error = 1;
 
-  // ThrottlerReplicationLagSeconds measures MySQL replication lag in subsecond precision,
-  // and is used by the tablet throttler.
-  // Reserved for future use.
-  double throttler_replication_lag_seconds = 10;
+    // ThrottlerReplicationLagSeconds measures MySQL replication lag in subsecond precision,
+    // and is used by the tablet throttler.
+    // Reserved for future use.
+    double throttler_replication_lag_seconds = 2;
 
-  // ThrottlerMetric stores the result of a tablet throttler's "self" collected metric,
-  // i.e. the metric collected from the throttler's tablet's mysqld
-  double throttler_metric = 11;
+    // ThrottlerMetric stores the result of a tablet throttler's "self" collected metric,
+    // i.e. the metric collected from the throttler's tablet's mysqld
+    double throttler_metric = 3;
 
-  // ThrottlerMetricCollected is a _temporary_ flag, always set to 'true', to help distinguish between `ThrottlerMetric==0` and
-  // `ThrottlerMetric` not existing. It is useful in v17 because before v17 `ThrottlerMetric` does not exist. It can be removed in v18
-  // because we can then expect it to always exist.
-  bool throttler_metric_collected = 12;
+    // ThrottlerMetricCollected is a _temporary_ flag, always set to 'true', to help distinguish between `ThrottlerMetric==0` and
+    // `ThrottlerMetric` not existing. It is useful in v17 because before v17 `ThrottlerMetric` does not exist. It can be removed in v18
+    // because we can then expect it to always exist.
+    bool throttler_metric_collected = 4;
+  }
+  ThrottlerStats throttler_stats = 9;
 }
 
 // AggregateStats contains information about the health of a group of
