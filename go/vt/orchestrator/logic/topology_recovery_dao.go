@@ -32,8 +32,7 @@ import (
 // AttemptFailureDetectionRegistration tries to add a failure-detection entry; if this fails that means the problem has already been detected
 func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis) (registrationSuccessful bool, err error) {
 	args := sqlutils.Args(
-		analysisEntry.AnalyzedInstanceKey.Hostname,
-		analysisEntry.AnalyzedInstanceKey.Port,
+		analysisEntry.AnalyzedInstanceAlias,
 		process.ThisHostname,
 		util.ProcessToken.Hash,
 		string(analysisEntry.Analysis),
@@ -52,8 +51,7 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 	query := fmt.Sprintf(`
 			insert ignore
 				into topology_failure_detection (
-					hostname,
-					port,
+					alias,
 					in_active_period,
 					end_active_period_unixtime,
 					processing_node_hostname,
@@ -66,7 +64,6 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					is_actionable,
 					start_active_period
 				) values (
-					?,
 					?,
 					1,
 					0,
@@ -143,8 +140,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 				into topology_recovery (
 					recovery_id,
 					uid,
-					hostname,
-					port,
+					alias,
 					in_active_period,
 					start_active_period,
 					end_active_period_unixtime,
@@ -160,7 +156,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
-					?,
 					1,
 					NOW(),
 					0,
@@ -171,18 +166,18 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
-					(select ifnull(max(detection_id), 0) from topology_failure_detection where hostname=? and port=?)
+					(select ifnull(max(detection_id), 0) from topology_failure_detection where alias = ?)
 				)
 			`,
 		sqlutils.NilIfZero(topologyRecovery.ID),
 		topologyRecovery.UID,
-		analysisEntry.AnalyzedInstanceKey.Hostname, analysisEntry.AnalyzedInstanceKey.Port,
+		analysisEntry.AnalyzedInstanceAlias,
 		process.ThisHostname, util.ProcessToken.Hash,
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.ClusterName,
 		analysisEntry.ClusterDetails.ClusterAlias,
 		analysisEntry.CountReplicas, analysisEntry.Replicas.ToCommaDelimitedList(),
-		analysisEntry.AnalyzedInstanceKey.Hostname, analysisEntry.AnalyzedInstanceKey.Port,
+		analysisEntry.AnalyzedInstanceAlias,
 	)
 	if err != nil {
 		return nil, err
@@ -207,13 +202,13 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIf
 	if failIfFailedInstanceInActiveRecovery {
 		// Let's check if this instance has just been promoted recently and is still in active period.
 		// If so, we reject recovery registration to avoid flapping.
-		recoveries, err := ReadInActivePeriodSuccessorInstanceRecovery(&analysisEntry.AnalyzedInstanceKey)
+		recoveries, err := ReadInActivePeriodSuccessorInstanceRecovery(analysisEntry.AnalyzedInstanceAlias)
 		if err != nil {
 			return nil, log.Errore(err)
 		}
 		if len(recoveries) > 0 {
 			RegisterBlockedRecoveries(analysisEntry, recoveries)
-			return nil, log.Errorf("AttemptRecoveryRegistration: instance %+v has recently been promoted (by failover of %+v) and is in active period. It will not be failed over. You may acknowledge the failure on %+v (-c ack-instance-recoveries) to remove this blockage", analysisEntry.AnalyzedInstanceKey, recoveries[0].AnalysisEntry.AnalyzedInstanceKey, recoveries[0].AnalysisEntry.AnalyzedInstanceKey)
+			return nil, log.Errorf("AttemptRecoveryRegistration: instance %+v has recently been promoted (by failover of %+v) and is in active period. It will not be failed over. You may acknowledge the failure on %+v (-c ack-instance-recoveries) to remove this blockage", analysisEntry.AnalyzedInstanceAlias, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias)
 		}
 	}
 	if failIfClusterInActiveRecovery {
@@ -225,12 +220,12 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIf
 		}
 		if len(recoveries) > 0 {
 			RegisterBlockedRecoveries(analysisEntry, recoveries)
-			return nil, log.Errorf("AttemptRecoveryRegistration: cluster %+v has recently experienced a failover (of %+v) and is in active period. It will not be failed over again. You may acknowledge the failure on this cluster (-c ack-cluster-recoveries) or on %+v (-c ack-instance-recoveries) to remove this blockage", analysisEntry.ClusterDetails.ClusterName, recoveries[0].AnalysisEntry.AnalyzedInstanceKey, recoveries[0].AnalysisEntry.AnalyzedInstanceKey)
+			return nil, log.Errorf("AttemptRecoveryRegistration: cluster %+v has recently experienced a failover (of %+v) and is in active period. It will not be failed over again. You may acknowledge the failure on this cluster (-c ack-cluster-recoveries) or on %+v (-c ack-instance-recoveries) to remove this blockage", analysisEntry.ClusterDetails.ClusterName, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias, recoveries[0].AnalysisEntry.AnalyzedInstanceAlias)
 		}
 	}
 	if !failIfFailedInstanceInActiveRecovery {
 		// Implicitly acknowledge this instance's possibly existing active recovery, provided they are completed.
-		AcknowledgeInstanceCompletedRecoveries(&analysisEntry.AnalyzedInstanceKey, "orchestrator", fmt.Sprintf("implicit acknowledge due to user invocation of recovery on same instance: %+v", analysisEntry.AnalyzedInstanceKey))
+		AcknowledgeInstanceCompletedRecoveries(analysisEntry.AnalyzedInstanceAlias, "orchestrator", fmt.Sprintf("implicit acknowledge due to user invocation of recovery on same instance: %+v", analysisEntry.AnalyzedInstanceAlias))
 		// The fact we only acknowledge a completed recovery solves the possible case of two DBAs simultaneously
 		// trying to recover the same instance at the same time
 	}
@@ -267,14 +262,12 @@ func RegisterBlockedRecoveries(analysisEntry *inst.ReplicationAnalysis, blocking
 		_, err := db.ExecOrchestrator(`
 			insert
 				into blocked_topology_recovery (
-					hostname,
-					port,
+					alias,
 					cluster_name,
 					analysis,
 					last_blocked_timestamp,
 					blocking_recovery_id
 				) values (
-					?,
 					?,
 					?,
 					?,
@@ -286,8 +279,7 @@ func RegisterBlockedRecoveries(analysisEntry *inst.ReplicationAnalysis, blocking
 					analysis=values(analysis),
 					last_blocked_timestamp=values(last_blocked_timestamp),
 					blocking_recovery_id=values(blocking_recovery_id)
-			`, analysisEntry.AnalyzedInstanceKey.Hostname,
-			analysisEntry.AnalyzedInstanceKey.Port,
+			`, analysisEntry.AnalyzedInstanceAlias,
 			analysisEntry.ClusterDetails.ClusterName,
 			string(analysisEntry.Analysis),
 			recovery.ID,
@@ -307,30 +299,27 @@ func ExpireBlockedRecoveries() error {
 
 	query := `
 		select
-				blocked_topology_recovery.hostname,
-				blocked_topology_recovery.port
+				blocked_topology_recovery.alias
 			from
 				blocked_topology_recovery
 				left join topology_recovery on (blocking_recovery_id = topology_recovery.recovery_id and acknowledged = 0)
 			where
 				acknowledged is null
 		`
-	expiredKeys := inst.NewInstanceKeyMap()
+	var expiredAliases []string
 	err := db.QueryOrchestrator(query, sqlutils.Args(), func(m sqlutils.RowMap) error {
-		key := inst.InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
-		expiredKeys.AddKey(key)
+		expiredAliases = append(expiredAliases, m.GetString("alias"))
 		return nil
 	})
 
-	for _, expiredKey := range expiredKeys.GetInstanceKeys() {
+	for _, expiredAlias := range expiredAliases {
 		_, err := db.ExecOrchestrator(`
 				delete
 					from blocked_topology_recovery
 				where
-						hostname = ?
-						and port = ?
+						alias = ?
 				`,
-			expiredKey.Hostname, expiredKey.Port,
+			expiredAlias,
 		)
 		if err != nil {
 			return log.Errore(err)
@@ -446,13 +435,12 @@ func AcknowledgeInstanceRecoveries(instanceKey *inst.InstanceKey, owner string, 
 
 // AcknowledgeInstanceCompletedRecoveries marks active and COMPLETED recoveries for given instane as acknowledged.
 // This also implied clearing their active period, which in turn enables further recoveries on those topologies
-func AcknowledgeInstanceCompletedRecoveries(instanceKey *inst.InstanceKey, owner string, comment string) (countAcknowledgedEntries int64, err error) {
+func AcknowledgeInstanceCompletedRecoveries(tabletAlias string, owner string, comment string) (countAcknowledgedEntries int64, err error) {
 	whereClause := `
-			hostname = ?
-			and port = ?
+			alias = ?
 			and end_recovery is not null
 		`
-	return acknowledgeRecoveries(owner, comment, false, whereClause, sqlutils.Args(instanceKey.Hostname, instanceKey.Port))
+	return acknowledgeRecoveries(owner, comment, false, whereClause, sqlutils.Args(tabletAlias))
 }
 
 // AcknowledgeCrashedRecoveries marks recoveries whose processing nodes has crashed as acknowledged.
@@ -470,15 +458,19 @@ func AcknowledgeCrashedRecoveries() (countAcknowledgedEntries int64, err error) 
 // ResolveRecovery is called on completion of a recovery process and updates the recovery status.
 // It does not clear the "active period" as this still takes place in order to avoid flapping.
 func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
-	var successorKeyToWrite inst.InstanceKey
-	if topologyRecovery.IsSuccessful {
-		successorKeyToWrite = *topologyRecovery.SuccessorKey
+	var lostReplicas []string
+	for k := range topologyRecovery.LostReplicas {
+		lostReplicas = append(lostReplicas, k)
 	}
+
+	var participatingInstanceAliases []string
+	for k := range topologyRecovery.ParticipatingInstanceAliases {
+		participatingInstanceAliases = append(participatingInstanceAliases, k)
+	}
+
 	_, err := db.ExecOrchestrator(`
 			update topology_recovery set
 				is_successful = ?,
-				successor_hostname = ?,
-				successor_port = ?,
 				successor_alias = ?,
 				lost_replicas = ?,
 				participating_instances = ?,
@@ -486,9 +478,9 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 				end_recovery = NOW()
 			where
 				uid = ?
-			`, topologyRecovery.IsSuccessful, successorKeyToWrite.Hostname, successorKeyToWrite.Port,
-		topologyRecovery.SuccessorAlias, topologyRecovery.LostReplicas.ToCommaDelimitedList(),
-		topologyRecovery.ParticipatingInstanceKeys.ToCommaDelimitedList(),
+			`, topologyRecovery.IsSuccessful, topologyRecovery.SuccessorAlias,
+		topologyRecovery.SuccessorAlias, strings.Join(lostReplicas, ","),
+		strings.Join(participatingInstanceAliases, ","),
 		strings.Join(topologyRecovery.AllErrors, "\n"),
 		topologyRecovery.UID,
 	)
@@ -502,8 +494,7 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		select
       recovery_id,
 			uid,
-      hostname,
-      port,
+			alias,
       (IFNULL(end_active_period_unixtime, 0) = 0) as is_active,
       start_active_period,
       IFNULL(end_active_period_unixtime, 0) as end_active_period_unixtime,
@@ -511,8 +502,6 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
       is_successful,
       processing_node_hostname,
       processcing_node_token,
-      ifnull(successor_hostname, '') as successor_hostname,
-      ifnull(successor_port, 0) as successor_port,
       ifnull(successor_alias, '') as successor_alias,
       analysis,
       cluster_name,
@@ -546,7 +535,7 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.ProcessingNodeHostname = m.GetString("processing_node_hostname")
 		topologyRecovery.ProcessingNodeToken = m.GetString("processcing_node_token")
 
-		topologyRecovery.AnalysisEntry.AnalyzedInstanceKey.Hostname = m.GetString("hostname")
+		topologyRecovery.AnalysisEntry.AnalyzedInstanceAlias = m.GetString("alias")
 		topologyRecovery.AnalysisEntry.AnalyzedInstanceKey.Port = m.GetInt("port")
 		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		topologyRecovery.AnalysisEntry.ClusterDetails.ClusterName = m.GetString("cluster_name")
@@ -554,16 +543,17 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.AnalysisEntry.CountReplicas = m.GetUint("count_affected_replicas")
 		topologyRecovery.AnalysisEntry.ReadReplicaHostsFromString(m.GetString("replica_hosts"))
 
-		topologyRecovery.SuccessorKey = &inst.InstanceKey{}
-		topologyRecovery.SuccessorKey.Hostname = m.GetString("successor_hostname")
-		topologyRecovery.SuccessorKey.Port = m.GetInt("successor_port")
 		topologyRecovery.SuccessorAlias = m.GetString("successor_alias")
 
 		topologyRecovery.AnalysisEntry.ClusterDetails.ReadRecoveryInfo()
 
 		topologyRecovery.AllErrors = strings.Split(m.GetString("all_errors"), "\n")
-		topologyRecovery.LostReplicas.ReadCommaDelimitedList(m.GetString("lost_replicas"))
-		topologyRecovery.ParticipatingInstanceKeys.ReadCommaDelimitedList(m.GetString("participating_instances"))
+		for _, lostReplica := range strings.Split(m.GetString("lost_replicas"), ",") {
+			topologyRecovery.LostReplicas[lostReplica] = true
+		}
+		for _, participatingInstanceAlias := range strings.Split(m.GetString("participating_instances"), ",") {
+			topologyRecovery.ParticipatingInstanceAliases[participatingInstanceAlias] = true
+		}
 
 		topologyRecovery.Acknowledged = m.GetBool("acknowledged")
 		topologyRecovery.AcknowledgedAt = m.GetString("acknowledged_at")
@@ -610,13 +600,13 @@ func ReadRecentlyActiveClusterRecovery(clusterName string) ([]*TopologyRecovery,
 
 // ReadInActivePeriodSuccessorInstanceRecovery reads completed recoveries for a given instance, where said instance
 // was promoted as result, still in active period (may be used to block further recoveries should this instance die)
-func ReadInActivePeriodSuccessorInstanceRecovery(instanceKey *inst.InstanceKey) ([]*TopologyRecovery, error) {
+func ReadInActivePeriodSuccessorInstanceRecovery(tabletAlias string) ([]*TopologyRecovery, error) {
 	whereClause := `
 		where
 			in_active_period=1
 			and
-				successor_hostname=? and successor_port=?`
-	return readRecoveries(whereClause, ``, sqlutils.Args(instanceKey.Hostname, instanceKey.Port))
+				successor_alias=?`
+	return readRecoveries(whereClause, ``, sqlutils.Args(tabletAlias))
 }
 
 // ReadRecentlyActiveInstanceRecovery reads recently completed entries for a given instance

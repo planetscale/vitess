@@ -116,6 +116,10 @@ const (
 type ReplicationAnalysis struct {
 	AnalyzedInstanceKey                       InstanceKey
 	AnalyzedInstancePrimaryKey                InstanceKey
+	AnalyzedInstanceHostname                  string
+	AnalyzedInstancePort                      int
+	AnalyzedInstanceAlias                     string
+	AnalyzedInstancePrimaryAlias              string
 	TabletType                                topodatapb.TabletType
 	PrimaryTimeStamp                          time.Time
 	SuggestedClusterAlias                     string

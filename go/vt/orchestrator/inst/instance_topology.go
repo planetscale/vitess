@@ -70,7 +70,7 @@ func getASCIITopologyEntry(depth int, instance *Instance, replicationMap map[*In
 	if instance.InstanceAlias != "" {
 		entryAlias = fmt.Sprintf(" (%s)", instance.InstanceAlias)
 	}
-	entry := fmt.Sprintf("%s%s%s", prefix, instance.Key.DisplayString(), entryAlias)
+	entry := fmt.Sprintf("%s%s%s", prefix, instance.Key().DisplayString(), entryAlias)
 	if extendedOutput {
 		if tabulated {
 			entry = fmt.Sprintf("%s%s%s", entry, tabulatorScharacter, instance.TabulatedDescription(tabulatorScharacter))
@@ -78,7 +78,7 @@ func getASCIITopologyEntry(depth int, instance *Instance, replicationMap map[*In
 			entry = fmt.Sprintf("%s%s%s", entry, fillerCharacter, instance.HumanReadableDescription())
 		}
 		if printTags {
-			tags, _ := ReadInstanceTags(&instance.Key)
+			tags, _ := ReadInstanceTags(instance.Key())
 			tagsString := make([]string, len(tags))
 			for idx, tag := range tags {
 				tagsString[idx] = tag.Display()
@@ -107,17 +107,17 @@ func ASCIITopology(clusterName string, historyTimestampPattern string, tabulated
 		return "", err
 	}
 
-	instancesMap := make(map[InstanceKey](*Instance))
+	instancesMap := make(map[string](*Instance))
 	for _, instance := range instances {
-		log.Debugf("instanceKey: %+v", instance.Key)
-		instancesMap[instance.Key] = instance
+		log.Debugf("instanceKey: %+v", instance.Key())
+		instancesMap[instance.InstanceAlias] = instance
 	}
 
 	replicationMap := make(map[*Instance]([]*Instance))
 	var primaryInstance *Instance
 	// Investigate replicas:
 	for _, instance := range instances {
-		primary, ok := instancesMap[instance.SourceKey]
+		primary, ok := instancesMap[instance.InstanceAlias]
 		if ok {
 			if _, ok := replicationMap[primary]; !ok {
 				replicationMap[primary] = [](*Instance){}
@@ -182,7 +182,7 @@ func shouldPostponeRelocatingReplica(replica *Instance, postponedFunctionsContai
 // GetInstancePrimary synchronously reaches into the replication topology
 // and retrieves primary's data
 func GetInstancePrimary(instance *Instance) (*Instance, error) {
-	primary, err := ReadTopologyInstance(&instance.SourceKey)
+	primary, err := ReadTopologyInstance(instance.InstanceAlias)
 	return primary, err
 }
 
@@ -194,11 +194,11 @@ func InstancesAreSiblings(instance0, instance1 *Instance) bool {
 	if !instance1.IsReplica() {
 		return false
 	}
-	if instance0.Key.Equals(&instance1.Key) {
+	if instance0.Key().Equals(instance1.Key()) {
 		// same instance...
 		return false
 	}
-	return instance0.SourceKey.Equals(&instance1.SourceKey)
+	return instance0.InstanceAlias == instance1.InstanceAlias
 }
 
 // InstanceIsPrimaryOf checks whether an instance is the primary of another
@@ -206,35 +206,35 @@ func InstanceIsPrimaryOf(allegedPrimary, allegedReplica *Instance) bool {
 	if !allegedReplica.IsReplica() {
 		return false
 	}
-	if allegedPrimary.Key.Equals(&allegedReplica.Key) {
+	if allegedPrimary.Key().Equals(allegedReplica.Key()) {
 		// same instance...
 		return false
 	}
-	return allegedPrimary.Key.Equals(&allegedReplica.SourceKey)
+	return allegedPrimary.InstanceAlias == allegedReplica.InstanceAlias
 }
 
 // MoveUp will attempt moving instance indicated by instanceKey up the topology hierarchy.
 // It will perform all safety and sanity checks and will tamper with this instance's replication
 // as well as its primary.
 func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
 	if !instance.IsReplica() {
 		return instance, fmt.Errorf("instance is not a replica: %+v", instanceKey)
 	}
-	rinstance, _, _ := ReadInstance(&instance.Key)
+	rinstance, _, _ := ReadInstanceByKey(instance.Key())
 	if canMove, merr := rinstance.CanMove(); !canMove {
 		return instance, merr
 	}
 	primary, err := GetInstancePrimary(instance)
 	if err != nil {
-		return instance, log.Errorf("Cannot GetInstancePrimary() for %+v. error=%+v", instance.Key, err)
+		return instance, log.Errorf("Cannot GetInstancePrimary() for %+v. error=%+v", instance.Key(), err)
 	}
 
 	if !primary.IsReplica() {
-		return instance, fmt.Errorf("primary is not a replica itself: %+v", primary.Key)
+		return instance, fmt.Errorf("primary is not a replica itself: %+v", primary.Key())
 	}
 
 	if canReplicate, err := instance.CanReplicateFrom(primary); !canReplicate {
@@ -242,7 +242,11 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 	}
 	if primary.IsBinlogServer() {
 		// Quick solution via binlog servers
-		return Repoint(instanceKey, &primary.SourceKey, GTIDHintDeny)
+		sourceKey := &InstanceKey{
+			Hostname: primary.SourceHost,
+			Port:     primary.SourcePort,
+		}
+		return Repoint(instanceKey, sourceKey, GTIDHintDeny)
 	}
 
 	log.Infof("Will move %+v up the topology", *instanceKey)
@@ -253,15 +257,15 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 	} else {
 		defer EndMaintenance(maintenanceToken)
 	}
-	if maintenanceToken, merr := BeginMaintenance(&primary.Key, GetMaintenanceOwner(), fmt.Sprintf("child %+v moves up", *instanceKey)); merr != nil {
-		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", primary.Key, merr)
+	if maintenanceToken, merr := BeginMaintenance(primary.Key(), GetMaintenanceOwner(), fmt.Sprintf("child %+v moves up", *instanceKey)); merr != nil {
+		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", primary.InstanceAlias, merr)
 		goto Cleanup
 	} else {
 		defer EndMaintenance(maintenanceToken)
 	}
 
 	if !instance.UsingMariaDBGTID {
-		primary, err = StopReplication(&primary.Key)
+		primary, err = StopReplication(primary.Key())
 		if err != nil {
 			goto Cleanup
 		}
@@ -280,7 +284,7 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	// We can skip hostname unresolve; we just copy+paste whatever our primary thinks of its primary.
-	_, err = ChangePrimaryTo(instanceKey, &primary.SourceKey, &primary.ExecBinlogCoordinates, true, GTIDHintDeny)
+	_, err = ChangePrimaryTo(instanceKey, instance.SourceKey(), &primary.ExecBinlogCoordinates, true, GTIDHintDeny)
 	if err != nil {
 		goto Cleanup
 	}
@@ -288,13 +292,13 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 Cleanup:
 	instance, _ = StartReplication(instanceKey)
 	if !instance.UsingMariaDBGTID {
-		primary, _ = StartReplication(&primary.Key)
+		primary, _ = StartReplication(primary.Key())
 	}
 	if err != nil {
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("move-up", instanceKey, fmt.Sprintf("moved up %+v. Previous primary: %+v", *instanceKey, primary.Key))
+	AuditOperation("move-up", instance.InstanceAlias, fmt.Sprintf("moved up %+v. Previous primary: %+v", *instanceKey, primary.Key()))
 
 	return instance, err
 }
@@ -308,7 +312,7 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([]*Instance, *Ins
 	replicaMutex := make(chan bool, 1)
 	var barrier chan *InstanceKey
 
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return res, nil, errs, err
 	}
@@ -317,16 +321,16 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([]*Instance, *Ins
 	}
 	_, err = GetInstancePrimary(instance)
 	if err != nil {
-		return res, instance, errs, log.Errorf("Cannot GetInstancePrimary() for %+v. error=%+v", instance.Key, err)
+		return res, instance, errs, log.Errorf("Cannot GetInstancePrimary() for %+v. error=%+v", instance.Key(), err)
 	}
 
 	if instance.IsBinlogServer() {
-		replicas, errors, err := RepointReplicasTo(instanceKey, pattern, &instance.SourceKey)
+		replicas, errors, err := RepointReplicasTo(instanceKey, pattern, instance.SourceKey())
 		// Bail out!
 		return replicas, instance, errors, err
 	}
 
-	replicas, err := ReadReplicaInstances(instanceKey)
+	replicas, err := ReadReplicaInstances(instance.Hostname, instance.Port)
 	if err != nil {
 		return res, instance, errs, err
 	}
@@ -343,8 +347,8 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([]*Instance, *Ins
 		defer EndMaintenance(maintenanceToken)
 	}
 	for _, replica := range replicas {
-		if maintenanceToken, merr := BeginMaintenance(&replica.Key, GetMaintenanceOwner(), fmt.Sprintf("%+v moves up", replica.Key)); merr != nil {
-			err = fmt.Errorf("Cannot begin maintenance on %+v: %v", replica.Key, merr)
+		if maintenanceToken, merr := BeginMaintenance(replica.Key(), GetMaintenanceOwner(), fmt.Sprintf("%+v moves up", replica.Key())); merr != nil {
+			err = fmt.Errorf("Cannot begin maintenance on %+v: %v", replica.Key(), merr)
 			goto Cleanup
 		} else {
 			defer EndMaintenance(maintenanceToken)
@@ -361,8 +365,8 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([]*Instance, *Ins
 		replica := replica
 		go func() {
 			defer func() {
-				defer func() { barrier <- &replica.Key }()
-				StartReplication(&replica.Key)
+				defer func() { barrier <- replica.Key() }()
+				StartReplication(replica.Key())
 			}()
 
 			var replicaErr error
@@ -373,25 +377,25 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([]*Instance, *Ins
 				}
 				if instance.IsBinlogServer() {
 					// Special case. Just repoint
-					replica, err = Repoint(&replica.Key, instanceKey, GTIDHintDeny)
+					replica, err = Repoint(replica.Key(), instanceKey, GTIDHintDeny)
 					if err != nil {
 						replicaErr = err
 						return
 					}
 				} else {
 					// Normal case. Do the math.
-					replica, err = StopReplication(&replica.Key)
+					replica, err = StopReplication(replica.Key())
 					if err != nil {
 						replicaErr = err
 						return
 					}
-					replica, err = StartReplicationUntilPrimaryCoordinates(&replica.Key, &instance.SelfBinlogCoordinates)
+					replica, err = StartReplicationUntilPrimaryCoordinates(replica.Key(), &instance.SelfBinlogCoordinates)
 					if err != nil {
 						replicaErr = err
 						return
 					}
 
-					replica, err = ChangePrimaryTo(&replica.Key, &instance.SourceKey, &instance.ExecBinlogCoordinates, false, GTIDHintDeny)
+					replica, err = ChangePrimaryTo(replica.Key(), instance.SourceKey(), &instance.ExecBinlogCoordinates, false, GTIDHintDeny)
 					if err != nil {
 						replicaErr = err
 						return
@@ -423,7 +427,7 @@ Cleanup:
 		// All returned with error
 		return res, instance, errs, log.Error("Error on all operations")
 	}
-	AuditOperation("move-up-replicas", instanceKey, fmt.Sprintf("moved up %d/%d replicas of %+v. New primary: %+v", len(res), len(replicas), *instanceKey, instance.SourceKey))
+	AuditOperation("move-up-replicas", instance.InstanceAlias, fmt.Sprintf("moved up %d/%d replicas of %+v. New primary: %+v", len(res), len(replicas), *instanceKey, instance.SourceKey()))
 
 	return res, instance, errs, err
 }
@@ -432,32 +436,32 @@ Cleanup:
 // It will perform all safety and sanity checks and will tamper with this instance's replication
 // as well as its sibling.
 func MoveBelow(instanceKey, siblingKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
-	sibling, err := ReadTopologyInstance(siblingKey)
+	sibling, err := ReadTopologyInstanceByKey(siblingKey)
 	if err != nil {
 		return instance, err
 	}
 	// Relocation of group secondaries makes no sense, group secondaries, by definition, always replicate from the group
 	// primary
 	if instance.IsReplicationGroupSecondary() {
-		return instance, log.Errorf("MoveBelow: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
+		return instance, log.Errorf("MoveBelow: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key())
 	}
 
 	if sibling.IsBinlogServer() {
 		// Binlog server has same coordinates as primary
 		// Easy solution!
-		return Repoint(instanceKey, &sibling.Key, GTIDHintDeny)
+		return Repoint(instanceKey, sibling.Key(), GTIDHintDeny)
 	}
 
-	rinstance, _, _ := ReadInstance(&instance.Key)
+	rinstance, _, _ := ReadInstance(instance.InstanceAlias)
 	if canMove, merr := rinstance.CanMove(); !canMove {
 		return instance, merr
 	}
 
-	rinstance, _, _ = ReadInstance(&sibling.Key)
+	rinstance, _, _ = ReadInstance(sibling.InstanceAlias)
 	if canMove, merr := rinstance.CanMove(); !canMove {
 		return instance, merr
 	}
@@ -505,7 +509,7 @@ func MoveBelow(instanceKey, siblingKey *InstanceKey) (*Instance, error) {
 	}
 	// At this point both siblings have executed exact same statements and are identical
 
-	_, err = ChangePrimaryTo(instanceKey, &sibling.Key, &sibling.SelfBinlogCoordinates, false, GTIDHintDeny)
+	_, err = ChangePrimaryTo(instanceKey, sibling.Key(), &sibling.SelfBinlogCoordinates, false, GTIDHintDeny)
 	if err != nil {
 		goto Cleanup
 	}
@@ -518,13 +522,13 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("move-below", instanceKey, fmt.Sprintf("moved %+v below %+v", *instanceKey, *siblingKey))
+	AuditOperation("move-below", instance.InstanceAlias, fmt.Sprintf("moved %+v below %+v", *instanceKey, *siblingKey))
 
 	return instance, err
 }
 
 func canReplicateAssumingOracleGTID(instance, primaryInstance *Instance) (canReplicate bool, err error) {
-	subtract, err := GTIDSubtract(&instance.Key, primaryInstance.GtidPurged, instance.ExecutedGtidSet)
+	subtract, err := GTIDSubtract(instance.Key(), primaryInstance.GtidPurged, instance.ExecutedGtidSet)
 	if err != nil {
 		return false, err
 	}
@@ -545,7 +549,7 @@ func instancesAreGTIDAndCompatible(instance, otherInstance *Instance) (isOracleG
 func CheckMoveViaGTID(instance, otherInstance *Instance) (err error) {
 	isOracleGTID, _, moveCompatible := instancesAreGTIDAndCompatible(instance, otherInstance)
 	if !moveCompatible {
-		return fmt.Errorf("Instances %+v, %+v not GTID compatible or not using GTID", instance.Key, otherInstance.Key)
+		return fmt.Errorf("Instances %+v, %+v not GTID compatible or not using GTID", instance.Key(), otherInstance.Key())
 	}
 	if isOracleGTID {
 		canReplicate, err := canReplicateAssumingOracleGTID(instance, otherInstance)
@@ -553,7 +557,7 @@ func CheckMoveViaGTID(instance, otherInstance *Instance) (err error) {
 			return err
 		}
 		if !canReplicate {
-			return fmt.Errorf("Instance %+v has purged GTID entries not found on %+v", otherInstance.Key, instance.Key)
+			return fmt.Errorf("Instance %+v has purged GTID entries not found on %+v", otherInstance.Key(), instance.Key())
 		}
 	}
 
@@ -568,10 +572,10 @@ func moveInstanceBelowViaGTID(instance, otherInstance *Instance) (*Instance, err
 	if err := CheckMoveViaGTID(instance, otherInstance); err != nil {
 		return instance, err
 	}
-	log.Infof("Will move %+v below %+v via GTID", instance.Key, otherInstance.Key)
+	log.Infof("Will move %+v below %+v via GTID", instance.Key(), otherInstance.Key())
 
-	instanceKey := &instance.Key
-	otherInstanceKey := &otherInstance.Key
+	instanceKey := instance.Key()
+	otherInstanceKey := otherInstance.Key()
 
 	var err error
 	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), fmt.Sprintf("move below %+v", *otherInstanceKey)); merr != nil {
@@ -586,7 +590,7 @@ func moveInstanceBelowViaGTID(instance, otherInstance *Instance) (*Instance, err
 		goto Cleanup
 	}
 
-	_, err = ChangePrimaryTo(instanceKey, &otherInstance.Key, &otherInstance.SelfBinlogCoordinates, false, GTIDHintForce)
+	_, err = ChangePrimaryTo(instanceKey, otherInstance.Key(), &otherInstance.SelfBinlogCoordinates, false, GTIDHintForce)
 	if err != nil {
 		goto Cleanup
 	}
@@ -596,25 +600,25 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("move-below-gtid", instanceKey, fmt.Sprintf("moved %+v below %+v", *instanceKey, *otherInstanceKey))
+	AuditOperation("move-below-gtid", instance.InstanceAlias, fmt.Sprintf("moved %+v below %+v", *instanceKey, *otherInstanceKey))
 
 	return instance, err
 }
 
 // MoveBelowGTID will attempt moving instance indicated by instanceKey below another instance using either Oracle GTID or MariaDB GTID.
 func MoveBelowGTID(instanceKey, otherKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
-	other, err := ReadTopologyInstance(otherKey)
+	other, err := ReadTopologyInstanceByKey(otherKey)
 	if err != nil {
 		return instance, err
 	}
 	// Relocation of group secondaries makes no sense, group secondaries, by definition, always replicate from the group
 	// primary
 	if instance.IsReplicationGroupSecondary() {
-		return instance, log.Errorf("MoveBelowGTID: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
+		return instance, log.Errorf("MoveBelowGTID: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key())
 	}
 	return moveInstanceBelowViaGTID(instance, other)
 }
@@ -623,7 +627,7 @@ func MoveBelowGTID(instanceKey, otherKey *InstanceKey) (*Instance, error) {
 // that could not be moved (do not use GTID or had GTID errors)
 func MoveReplicasViaGTID(replicas []*Instance, other *Instance, postponedFunctionsContainer *PostponedFunctionsContainer) (movedReplicas []*Instance, unmovedReplicas []*Instance, errs []error, err error) {
 	replicas = RemoveNilInstances(replicas)
-	replicas = RemoveInstance(replicas, &other.Key)
+	replicas = RemoveInstance(replicas, other.Key())
 	if len(replicas) == 0 {
 		// Nothing to do
 		return movedReplicas, unmovedReplicas, errs, nil
@@ -631,7 +635,7 @@ func MoveReplicasViaGTID(replicas []*Instance, other *Instance, postponedFunctio
 
 	log.Infof("MoveReplicasViaGTID: Will move %+v replicas below %+v via GTID, max concurrency: %v",
 		len(replicas),
-		other.Key,
+		other.Key(),
 		config.Config.MaxConcurrentReplicaOperations)
 
 	var waitGroup sync.WaitGroup
@@ -669,7 +673,7 @@ func MoveReplicasViaGTID(replicas []*Instance, other *Instance, postponedFunctio
 				return replicaErr
 			}
 			if shouldPostponeRelocatingReplica(replica, postponedFunctionsContainer) {
-				postponedFunctionsContainer.AddPostponedFunction(moveFunc, fmt.Sprintf("move-replicas-gtid %+v", replica.Key))
+				postponedFunctionsContainer.AddPostponedFunction(moveFunc, fmt.Sprintf("move-replicas-gtid %+v", replica.Key()))
 				// We bail out and trust our invoker to later call upon this postponed function
 			} else {
 				ExecuteOnTopology(func() { moveFunc() })
@@ -682,21 +686,21 @@ func MoveReplicasViaGTID(replicas []*Instance, other *Instance, postponedFunctio
 		// All returned with error
 		return movedReplicas, unmovedReplicas, errs, fmt.Errorf("MoveReplicasViaGTID: Error on all %+v operations", len(errs))
 	}
-	AuditOperation("move-replicas-gtid", &other.Key, fmt.Sprintf("moved %d/%d replicas below %+v via GTID", len(movedReplicas), len(replicas), other.Key))
+	AuditOperation("move-replicas-gtid", other.InstanceAlias, fmt.Sprintf("moved %d/%d replicas below %+v via GTID", len(movedReplicas), len(replicas), other.Key()))
 
 	return movedReplicas, unmovedReplicas, errs, err
 }
 
 // MoveReplicasGTID will (attempt to) move all replicas of given primary below given instance.
 func MoveReplicasGTID(primaryKey *InstanceKey, belowKey *InstanceKey, pattern string) (movedReplicas []*Instance, unmovedReplicas []*Instance, errs []error, err error) {
-	belowInstance, err := ReadTopologyInstance(belowKey)
+	belowInstance, err := ReadTopologyInstanceByKey(belowKey)
 	if err != nil {
 		// Can't access "below" ==> can't move replicas beneath it
 		return movedReplicas, unmovedReplicas, errs, err
 	}
 
 	// replicas involved
-	replicas, err := ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryKey)
+	replicas, err := ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryKey.Hostname, primaryKey.Port)
 	if err != nil {
 		return movedReplicas, unmovedReplicas, errs, err
 	}
@@ -719,7 +723,7 @@ func MoveReplicasGTID(primaryKey *InstanceKey, belowKey *InstanceKey, pattern st
 // - primaryKey is nil: use case is corrupted relay logs on replica
 // - primaryKey is not nil: using Binlog servers (coordinates remain the same)
 func Repoint(instanceKey *InstanceKey, primaryKey *InstanceKey, gtidHint OperationGTIDHint) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
@@ -729,18 +733,18 @@ func Repoint(instanceKey *InstanceKey, primaryKey *InstanceKey, gtidHint Operati
 	// Relocation of group secondaries makes no sense, group secondaries, by definition, always replicate from the group
 	// primary
 	if instance.IsReplicationGroupSecondary() {
-		return instance, fmt.Errorf("repoint: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
+		return instance, fmt.Errorf("repoint: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key())
 	}
 	if primaryKey == nil {
-		primaryKey = &instance.SourceKey
+		primaryKey = instance.SourceKey()
 	}
 	// With repoint we *prefer* the primary to be alive, but we don't strictly require it.
 	// The use case for the primary being alive is with hostname-resolve or hostname-unresolve: asking the replica
 	// to reconnect to its same primary while changing the MASTER_HOST in CHANGE MASTER TO due to DNS changes etc.
-	primary, err := ReadTopologyInstance(primaryKey)
+	primary, err := ReadTopologyInstanceByKey(primaryKey)
 	primaryIsAccessible := (err == nil)
 	if !primaryIsAccessible {
-		primary, _, err = ReadInstance(primaryKey)
+		primary, _, err = ReadInstanceByKey(primaryKey)
 		if primary == nil || err != nil {
 			return instance, err
 		}
@@ -788,7 +792,7 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v repointed to primary: %+v", *instanceKey, *primaryKey))
+	AuditOperation("repoint", instance.InstanceAlias, fmt.Sprintf("replica %+v repointed to primary: %+v", *instanceKey, *primaryKey))
 
 	return instance, err
 
@@ -817,9 +821,9 @@ func RepointTo(replicas []*Instance, belowKey *InstanceKey) ([]*Instance, []erro
 
 		// Parallelize repoints
 		go func() {
-			defer func() { barrier <- &replica.Key }()
+			defer func() { barrier <- replica.Key() }()
 			ExecuteOnTopology(func() {
-				replica, replicaErr := Repoint(&replica.Key, belowKey, GTIDHintNeutral)
+				replica, replicaErr := Repoint(replica.Key(), belowKey, GTIDHintNeutral)
 
 				func() {
 					// Instantaneous mutex.
@@ -842,7 +846,7 @@ func RepointTo(replicas []*Instance, belowKey *InstanceKey) ([]*Instance, []erro
 		// All returned with error
 		return res, errs, log.Error("Error on all operations")
 	}
-	AuditOperation("repoint-to", belowKey, fmt.Sprintf("repointed %d/%d replicas to %+v", len(res), len(replicas), *belowKey))
+	AuditOperation("repoint-to", belowKey.StringCode(), fmt.Sprintf("repointed %d/%d replicas to %+v", len(res), len(replicas), *belowKey))
 
 	return res, errs, nil
 }
@@ -853,7 +857,7 @@ func RepointReplicasTo(instanceKey *InstanceKey, pattern string, belowKey *Insta
 	res := [](*Instance){}
 	errs := []error{}
 
-	replicas, err := ReadReplicaInstances(instanceKey)
+	replicas, err := ReadReplicaInstances(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return res, errs, err
 	}
@@ -865,7 +869,7 @@ func RepointReplicasTo(instanceKey *InstanceKey, pattern string, belowKey *Insta
 	}
 	if belowKey == nil {
 		// Default to existing primary. All replicas are of the same primary, hence just pick one.
-		belowKey = &replicas[0].SourceKey
+		belowKey = replicas[0].SourceKey()
 	}
 	log.Infof("Will repoint replicas of %+v to %+v", *instanceKey, *belowKey)
 	return RepointTo(replicas, belowKey)
@@ -879,7 +883,7 @@ func RepointReplicas(instanceKey *InstanceKey, pattern string) ([]*Instance, []e
 // MakeCoPrimary will attempt to make an instance co-primary with its primary, by making its primary a replica of its own.
 // This only works out if the primary is not replicating; the primary does not have a known primary (it may have an unknown primary).
 func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
@@ -893,17 +897,17 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	// Relocation of group secondaries makes no sense, group secondaries, by definition, always replicate from the group
 	// primary
 	if instance.IsReplicationGroupSecondary() {
-		return instance, fmt.Errorf("MakeCoPrimary: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
+		return instance, fmt.Errorf("MakeCoPrimary: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key())
 	}
-	log.Debugf("Will check whether %+v's primary (%+v) can become its co-primary", instance.Key, primary.Key)
+	log.Debugf("Will check whether %+v's primary (%+v) can become its co-primary", instance.Key(), primary.Key())
 	if canMove, merr := primary.CanMoveAsCoPrimary(); !canMove {
 		return instance, merr
 	}
-	if instanceKey.Equals(&primary.SourceKey) {
-		return instance, fmt.Errorf("instance %+v is already co primary of %+v", instance.Key, primary.Key)
+	if instanceKey.Equals(primary.SourceKey()) {
+		return instance, fmt.Errorf("instance %+v is already co primary of %+v", instance.Key(), primary.Key())
 	}
 	if !instance.ReadOnly {
-		return instance, fmt.Errorf("instance %+v is not read-only; first make it read-only before making it co-primary", instance.Key)
+		return instance, fmt.Errorf("instance %+v is not read-only; first make it read-only before making it co-primary", instance.Key())
 	}
 	if primary.IsCoPrimary {
 		// We allow breaking of an existing co-primary replication. Here's the breakdown:
@@ -916,28 +920,28 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 		// - M2 is read-only or is unreachable/invalid
 		// - S  is read-only
 		// And so we will be replacing one read-only co-primary with another.
-		otherCoPrimary, found, _ := ReadInstance(&primary.SourceKey)
+		otherCoPrimary, found, _ := ReadInstanceByKey(primary.SourceKey())
 		if found && otherCoPrimary.IsLastCheckValid && !otherCoPrimary.ReadOnly {
-			return instance, fmt.Errorf("primary %+v is already co-primary with %+v, and %+v is alive, and not read-only; cowardly refusing to demote it. Please set it as read-only beforehand", primary.Key, otherCoPrimary.Key, otherCoPrimary.Key)
+			return instance, fmt.Errorf("primary %+v is already co-primary with %+v, and %+v is alive, and not read-only; cowardly refusing to demote it. Please set it as read-only beforehand", primary.Key(), otherCoPrimary.Key(), otherCoPrimary.Key())
 		}
 		// OK, good to go.
-	} else if _, found, _ := ReadInstance(&primary.SourceKey); found {
-		return instance, fmt.Errorf("%+v is not a real primary; it replicates from: %+v", primary.Key, primary.SourceKey)
+	} else if _, found, _ := ReadInstance(primary.InstanceAlias); found {
+		return instance, fmt.Errorf("%+v is not a real primary; it replicates from: %+v", primary.Key(), primary.SourceKey())
 	}
 	if canReplicate, err := primary.CanReplicateFrom(instance); !canReplicate {
 		return instance, err
 	}
-	log.Infof("Will make %+v co-primary of %+v", instanceKey, primary.Key)
+	log.Infof("Will make %+v co-primary of %+v", instanceKey, primary.Key())
 
 	var gitHint = GTIDHintNeutral
-	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), fmt.Sprintf("make co-primary of %+v", primary.Key)); merr != nil {
+	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), fmt.Sprintf("make co-primary of %+v", primary.Key())); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
 		defer EndMaintenance(maintenanceToken)
 	}
-	if maintenanceToken, merr := BeginMaintenance(&primary.Key, GetMaintenanceOwner(), fmt.Sprintf("%+v turns into co-primary of this", *instanceKey)); merr != nil {
-		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", primary.Key, merr)
+	if maintenanceToken, merr := BeginMaintenance(primary.Key(), GetMaintenanceOwner(), fmt.Sprintf("%+v turns into co-primary of this", *instanceKey)); merr != nil {
+		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", primary.Key(), merr)
 		goto Cleanup
 	} else {
 		defer EndMaintenance(maintenanceToken)
@@ -948,7 +952,7 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	if primary.IsReplica() {
 		// this is the case of a co-primary. For primaries, the StopReplication operation throws an error, and
 		// there's really no point in doing it.
-		primary, err = StopReplication(&primary.Key)
+		primary, err = StopReplication(primary.Key())
 		if err != nil {
 			goto Cleanup
 		}
@@ -956,7 +960,7 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 
 	if instance.AllowTLS {
 		log.Debugf("Enabling SSL replication")
-		_, err = EnablePrimarySSL(&primary.Key)
+		_, err = EnablePrimarySSL(primary.Key())
 		if err != nil {
 			goto Cleanup
 		}
@@ -965,25 +969,25 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	if instance.UsingOracleGTID {
 		gitHint = GTIDHintForce
 	}
-	primary, err = ChangePrimaryTo(&primary.Key, instanceKey, &instance.SelfBinlogCoordinates, false, gitHint)
+	primary, err = ChangePrimaryTo(primary.Key(), instanceKey, &instance.SelfBinlogCoordinates, false, gitHint)
 	if err != nil {
 		goto Cleanup
 	}
 
 Cleanup:
-	primary, _ = StartReplication(&primary.Key)
+	primary, _ = StartReplication(primary.Key())
 	if err != nil {
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("make-co-primary", instanceKey, fmt.Sprintf("%+v made co-primary of %+v", *instanceKey, primary.Key))
+	AuditOperation("make-co-primary", primary.InstanceAlias, fmt.Sprintf("%+v made co-primary of %+v", *instanceKey, primary.Key()))
 
 	return instance, err
 }
 
 // ResetReplicationOperation will reset a replica
 func ResetReplicationOperation(instanceKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
@@ -1017,24 +1021,24 @@ Cleanup:
 	}
 
 	// and we're done (pending deferred functions)
-	AuditOperation("reset-replica", instanceKey, fmt.Sprintf("%+v replication reset", *instanceKey))
+	AuditOperation("reset-replica", instance.InstanceAlias, fmt.Sprintf("%+v replication reset", *instanceKey))
 
 	return instance, err
 }
 
 // DetachReplicaPrimaryHost detaches a replica from its primary by corrupting the Master_Host (in such way that is reversible)
 func DetachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
 	if !instance.IsReplica() {
 		return instance, fmt.Errorf("instance is not a replica: %+v", *instanceKey)
 	}
-	if instance.SourceKey.IsDetached() {
+	if instance.SourceKey().IsDetached() {
 		return instance, fmt.Errorf("instance already detached: %+v", *instanceKey)
 	}
-	detachedPrimaryKey := instance.SourceKey.DetachedKey()
+	detachedPrimaryKey := instance.SourceKey().DetachedKey()
 
 	log.Infof("Will detach primary host on %+v. Detached key is %+v", *instanceKey, *detachedPrimaryKey)
 
@@ -1061,25 +1065,25 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v detached from primary into %+v", *instanceKey, *detachedPrimaryKey))
+	AuditOperation("repoint", instance.InstanceAlias, fmt.Sprintf("replica %+v detached from primary into %+v", *instanceKey, *detachedPrimaryKey))
 
 	return instance, err
 }
 
 // ReattachReplicaPrimaryHost reattaches a replica back onto its primary by undoing a DetachReplicaPrimaryHost operation
 func ReattachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
 	if !instance.IsReplica() {
 		return instance, fmt.Errorf("instance is not a replica: %+v", *instanceKey)
 	}
-	if !instance.SourceKey.IsDetached() {
+	if !instance.SourceKey().IsDetached() {
 		return instance, fmt.Errorf("instance does not seem to be detached: %+v", *instanceKey)
 	}
 
-	reattachedPrimaryKey := instance.SourceKey.ReattachedKey()
+	reattachedPrimaryKey := instance.SourceKey().ReattachedKey()
 
 	log.Infof("Will reattach primary host on %+v. Reattached key is %+v", *instanceKey, *reattachedPrimaryKey)
 
@@ -1108,14 +1112,14 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v reattached to primary %+v", *instanceKey, *reattachedPrimaryKey))
+	AuditOperation("repoint", instance.InstanceAlias, fmt.Sprintf("replica %+v reattached to primary %+v", *instanceKey, *reattachedPrimaryKey))
 
 	return instance, err
 }
 
 // EnableGTID will attempt to enable GTID-mode (either Oracle or MariaDB)
 func EnableGTID(instanceKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
@@ -1133,14 +1137,14 @@ func EnableGTID(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, fmt.Errorf("Cannot enable GTID on %+v", *instanceKey)
 	}
 
-	AuditOperation("enable-gtid", instanceKey, fmt.Sprintf("enabled GTID on %+v", *instanceKey))
+	AuditOperation("enable-gtid", "", fmt.Sprintf("enabled GTID on %+v", *instanceKey))
 
 	return instance, err
 }
 
 // DisableGTID will attempt to disable GTID-mode (either Oracle or MariaDB) and revert to binlog file:pos replication
 func DisableGTID(instanceKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
@@ -1158,13 +1162,13 @@ func DisableGTID(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, fmt.Errorf("Cannot disable GTID on %+v", *instanceKey)
 	}
 
-	AuditOperation("disable-gtid", instanceKey, fmt.Sprintf("disabled GTID on %+v", *instanceKey))
+	AuditOperation("disable-gtid", instance.InstanceAlias, fmt.Sprintf("disabled GTID on %+v", *instanceKey))
 
 	return instance, err
 }
 
 func LocateErrantGTID(instanceKey *InstanceKey) (errantBinlogs []string, err error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return errantBinlogs, err
 	}
@@ -1219,7 +1223,7 @@ func LocateErrantGTID(instanceKey *InstanceKey) (errantBinlogs []string, err err
 // this will enable new replicas to be attached to given instance without complaints about missing/purged entries.
 // This function requires that the instance does not have replicas.
 func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err error) {
-	instance, err = ReadTopologyInstance(instanceKey)
+	instance, err = ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
@@ -1256,7 +1260,7 @@ func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err e
 			goto Cleanup
 		}
 		if !replicationStopped {
-			err = fmt.Errorf("gtid-errant-reset-primary: timeout while waiting for replication to stop on %+v", instance.Key)
+			err = fmt.Errorf("gtid-errant-reset-primary: timeout while waiting for replication to stop on %+v", instance.Key())
 			goto Cleanup
 		}
 	}
@@ -1277,21 +1281,21 @@ func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err e
 		time.Sleep(waitInterval)
 	}
 	if err != nil {
-		err = fmt.Errorf("gtid-errant-reset-primary: error while resetting primary on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
+		err = fmt.Errorf("gtid-errant-reset-primary: error while resetting primary on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key(), gtidSubtract, err)
 		goto Cleanup
 	}
 
 	primaryStatusFound, executedGtidSet, err = ShowPrimaryStatus(instanceKey)
 	if err != nil {
-		err = fmt.Errorf("gtid-errant-reset-primary: error getting primary status on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
+		err = fmt.Errorf("gtid-errant-reset-primary: error getting primary status on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key(), gtidSubtract, err)
 		goto Cleanup
 	}
 	if !primaryStatusFound {
-		err = fmt.Errorf("gtid-errant-reset-primary: cannot get primary status on %+v, after which intended to set gtid_purged to: %s", instance.Key, gtidSubtract)
+		err = fmt.Errorf("gtid-errant-reset-primary: cannot get primary status on %+v, after which intended to set gtid_purged to: %s", instance.Key(), gtidSubtract)
 		goto Cleanup
 	}
 	if executedGtidSet != "" {
-		err = fmt.Errorf("gtid-errant-reset-primary: Unexpected non-empty Executed_Gtid_Set found on %+v following RESET MASTER, after which intended to set gtid_purged to: %s. Executed_Gtid_Set found to be: %+v", instance.Key, gtidSubtract, executedGtidSet)
+		err = fmt.Errorf("gtid-errant-reset-primary: Unexpected non-empty Executed_Gtid_Set found on %+v following RESET MASTER, after which intended to set gtid_purged to: %s. Executed_Gtid_Set found to be: %+v", instance.Key(), gtidSubtract, executedGtidSet)
 		goto Cleanup
 	}
 
@@ -1304,7 +1308,7 @@ func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err e
 		time.Sleep(waitInterval)
 	}
 	if err != nil {
-		err = fmt.Errorf("gtid-errant-reset-primary: error setting gtid_purged on %+v to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
+		err = fmt.Errorf("gtid-errant-reset-primary: error setting gtid_purged on %+v to: %s. Error was: %+v", instance.Key(), gtidSubtract, err)
 		goto Cleanup
 	}
 
@@ -1318,7 +1322,7 @@ Cleanup:
 	}
 
 	// and we're done (pending deferred functions)
-	AuditOperation("gtid-errant-reset-primary", instanceKey, fmt.Sprintf("%+v primary reset", *instanceKey))
+	AuditOperation("gtid-errant-reset-primary", instance.InstanceAlias, fmt.Sprintf("%+v primary reset", *instanceKey))
 
 	return instance, err
 }
@@ -1326,7 +1330,7 @@ Cleanup:
 // ErrantGTIDInjectEmpty will inject an empty transaction on the primary of an instance's cluster in order to get rid
 // of an errant transaction observed on the instance.
 func ErrantGTIDInjectEmpty(instanceKey *InstanceKey) (instance *Instance, clusterPrimary *Instance, countInjectedTransactions int64, err error) {
-	instance, err = ReadTopologyInstance(instanceKey)
+	instance, err = ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, clusterPrimary, countInjectedTransactions, err
 	}
@@ -1347,7 +1351,7 @@ func ErrantGTIDInjectEmpty(instanceKey *InstanceKey) (instance *Instance, cluste
 	clusterPrimary = primaries[0]
 
 	if !clusterPrimary.SupportsOracleGTID {
-		return instance, clusterPrimary, countInjectedTransactions, log.Errorf("gtid-errant-inject-empty requested for %+v but the cluster's primary %+v does not support oracle-gtid", *instanceKey, clusterPrimary.Key)
+		return instance, clusterPrimary, countInjectedTransactions, log.Errorf("gtid-errant-inject-empty requested for %+v but the cluster's primary %+v does not support oracle-gtid", *instanceKey, clusterPrimary.Key())
 	}
 
 	gtidSet, err := NewOracleGtidSet(instance.GtidErrant)
@@ -1355,16 +1359,16 @@ func ErrantGTIDInjectEmpty(instanceKey *InstanceKey) (instance *Instance, cluste
 		return instance, clusterPrimary, countInjectedTransactions, err
 	}
 	explodedEntries := gtidSet.Explode()
-	log.Infof("gtid-errant-inject-empty: about to inject %+v empty transactions %+v on cluster primary %+v", len(explodedEntries), gtidSet.String(), clusterPrimary.Key)
+	log.Infof("gtid-errant-inject-empty: about to inject %+v empty transactions %+v on cluster primary %+v", len(explodedEntries), gtidSet.String(), clusterPrimary.Key())
 	for _, entry := range explodedEntries {
-		if err := injectEmptyGTIDTransaction(&clusterPrimary.Key, entry); err != nil {
+		if err := injectEmptyGTIDTransaction(clusterPrimary.Key(), entry); err != nil {
 			return instance, clusterPrimary, countInjectedTransactions, err
 		}
 		countInjectedTransactions++
 	}
 
 	// and we're done (pending deferred functions)
-	AuditOperation("gtid-errant-inject-empty", instanceKey, fmt.Sprintf("injected %+v empty transactions on %+v", countInjectedTransactions, clusterPrimary.Key))
+	AuditOperation("gtid-errant-inject-empty", instance.InstanceAlias, fmt.Sprintf("injected %+v empty transactions on %+v", countInjectedTransactions, clusterPrimary.Key()))
 
 	return instance, clusterPrimary, countInjectedTransactions, err
 }
@@ -1373,14 +1377,14 @@ func ErrantGTIDInjectEmpty(instanceKey *InstanceKey) (instance *Instance, cluste
 // This operation is a syntatctic sugar on top relocate-replicas, which uses any available means to the objective:
 // GTID, binlog servers, standard replication...
 func TakeSiblings(instanceKey *InstanceKey) (instance *Instance, takenSiblings int, err error) {
-	instance, err = ReadTopologyInstance(instanceKey)
+	instance, err = ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, 0, err
 	}
 	if !instance.IsReplica() {
 		return instance, takenSiblings, log.Errorf("take-siblings: instance %+v is not a replica.", *instanceKey)
 	}
-	relocatedReplicas, _, _, err := RelocateReplicas(&instance.SourceKey, instanceKey, "")
+	relocatedReplicas, _, _, err := RelocateReplicas(instance.SourceKey(), instanceKey, "")
 
 	return instance, len(relocatedReplicas), err
 }
@@ -1393,8 +1397,8 @@ func TakePrimaryHook(successor *Instance, demoted *Instance) {
 	if successor == nil {
 		return
 	}
-	successorKey := successor.Key
-	demotedKey := demoted.Key
+	successorKey := successor.Key()
+	demotedKey := demoted.Key()
 	env := goos.Environ()
 
 	env = append(env, fmt.Sprintf("ORC_SUCCESSOR_HOST=%s", successorKey))
@@ -1425,38 +1429,38 @@ func TakePrimaryHook(successor *Instance, demoted *Instance) {
 // Note that the primary must itself be a replica; however the grandparent does not necessarily have to be reachable
 // and can in fact be dead.
 func TakePrimary(instanceKey *InstanceKey, allowTakingCoPrimary bool) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, err
 	}
 	// Relocation of group secondaries makes no sense, group secondaries, by definition, always replicate from the group
 	// primary
 	if instance.IsReplicationGroupSecondary() {
-		return instance, fmt.Errorf("takePrimary: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
+		return instance, fmt.Errorf("takePrimary: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key())
 	}
-	primaryInstance, found, err := ReadInstance(&instance.SourceKey)
+	primaryInstance, found, err := ReadInstance(instance.InstanceAlias)
 	if err != nil || !found {
 		return instance, err
 	}
 	if primaryInstance.IsCoPrimary && !allowTakingCoPrimary {
-		return instance, fmt.Errorf("%+v is co-primary. Cannot take it", primaryInstance.Key)
+		return instance, fmt.Errorf("%+v is co-primary. Cannot take it", primaryInstance.Key())
 	}
-	log.Debugf("TakePrimary: will attempt making %+v take its primary %+v, now resolved as %+v", *instanceKey, instance.SourceKey, primaryInstance.Key)
+	log.Debugf("TakePrimary: will attempt making %+v take its primary %+v, now resolved as %+v", *instanceKey, instance.SourceKey(), primaryInstance.Key())
 
 	if canReplicate, err := primaryInstance.CanReplicateFrom(instance); !canReplicate {
 		return instance, err
 	}
 	// We begin
-	primaryInstance, err = StopReplication(&primaryInstance.Key)
+	primaryInstance, err = StopReplication(primaryInstance.Key())
 	if err != nil {
 		goto Cleanup
 	}
-	instance, err = StopReplication(&instance.Key)
+	instance, err = StopReplication(instance.Key())
 	if err != nil {
 		goto Cleanup
 	}
 
-	instance, err = StartReplicationUntilPrimaryCoordinates(&instance.Key, &primaryInstance.SelfBinlogCoordinates)
+	instance, err = StartReplicationUntilPrimaryCoordinates(instance.Key(), &primaryInstance.SelfBinlogCoordinates)
 	if err != nil {
 		goto Cleanup
 	}
@@ -1465,33 +1469,33 @@ func TakePrimary(instanceKey *InstanceKey, allowTakingCoPrimary bool) (*Instance
 	// We skip name unresolve. It is OK if the primary's primary is dead, unreachable, does not resolve properly.
 	// We just copy+paste info from the primary.
 	// In particular, this is commonly calledin DeadPrimary recovery
-	instance, err = ChangePrimaryTo(&instance.Key, &primaryInstance.SourceKey, &primaryInstance.ExecBinlogCoordinates, true, GTIDHintNeutral)
+	instance, err = ChangePrimaryTo(instance.Key(), primaryInstance.SourceKey(), &primaryInstance.ExecBinlogCoordinates, true, GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
 	}
 	// instance is now sibling of primary
-	primaryInstance, err = ChangePrimaryTo(&primaryInstance.Key, &instance.Key, &instance.SelfBinlogCoordinates, false, GTIDHintNeutral)
+	primaryInstance, err = ChangePrimaryTo(primaryInstance.Key(), instance.Key(), &instance.SelfBinlogCoordinates, false, GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
 	}
 	// swap is done!
 	// we make it official by now writing the results in topo server and changing the types for the tablets
-	err = SwitchPrimary(instance.Key, primaryInstance.Key)
+	err = SwitchPrimary(*instance.Key(), *primaryInstance.Key())
 	if err != nil {
 		goto Cleanup
 	}
 
 Cleanup:
 	if instance != nil {
-		instance, _ = StartReplication(&instance.Key)
+		instance, _ = StartReplication(instance.Key())
 	}
 	if primaryInstance != nil {
-		primaryInstance, _ = StartReplication(&primaryInstance.Key)
+		primaryInstance, _ = StartReplication(primaryInstance.Key())
 	}
 	if err != nil {
 		return instance, err
 	}
-	AuditOperation("take-primary", instanceKey, fmt.Sprintf("took primary: %+v", primaryInstance.Key))
+	AuditOperation("take-primary", instance.InstanceAlias, fmt.Sprintf("took primary: %+v", primaryInstance.Key()))
 
 	// Created this to enable a custom hook to be called after a TakePrimary success.
 	// This only runs if there is a hook configured in orchestrator.conf.json
@@ -1517,9 +1521,9 @@ func sortInstances(instances [](*Instance)) {
 // getReplicasForSorting returns a list of replicas of a given primary potentially for candidate choosing
 func getReplicasForSorting(primaryKey *InstanceKey, includeBinlogServerSubReplicas bool) (replicas [](*Instance), err error) {
 	if includeBinlogServerSubReplicas {
-		replicas, err = ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryKey)
+		replicas, err = ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryKey.Hostname, primaryKey.Port)
 	} else {
-		replicas, err = ReadReplicaInstances(primaryKey)
+		replicas, err = ReadReplicaInstances(primaryKey.Hostname, primaryKey.Port)
 	}
 	return replicas, err
 }
@@ -1541,7 +1545,7 @@ func sortedReplicasDataCenterHint(replicas [](*Instance), stopReplicationMethod 
 
 	SortInstancesDataCenterHint(replicas, dataCenterHint)
 	for _, replica := range replicas {
-		log.Debugf("- sorted replica: %+v %+v", replica.Key, replica.ExecBinlogCoordinates)
+		log.Debugf("- sorted replica: %+v %+v", replica.Key(), replica.ExecBinlogCoordinates)
 	}
 
 	return replicas
@@ -1611,11 +1615,11 @@ func isValidAsCandidatePrimaryInBinlogServerTopology(replica *Instance) bool {
 
 func IsBannedFromBeingCandidateReplica(replica *Instance) bool {
 	if replica.PromotionRule == promotionrule.MustNot {
-		log.Debugf("instance %+v is banned because of promotion rule", replica.Key)
+		log.Debugf("instance %+v is banned because of promotion rule", replica.Key())
 		return true
 	}
 	for _, filter := range config.Config.PromotionIgnoreHostnameFilters {
-		if matched, _ := regexp.MatchString(filter, replica.Key.Hostname); matched {
+		if matched, _ := regexp.MatchString(filter, replica.Hostname); matched {
 			return true
 		}
 	}
@@ -1691,18 +1695,18 @@ func ChooseCandidateReplica(replicas [](*Instance)) (candidateReplica *Instance,
 			}
 		}
 		if candidateReplica != nil {
-			replicas = RemoveInstance(replicas, &candidateReplica.Key)
+			replicas = RemoveInstance(replicas, candidateReplica.Key())
 		}
 		return candidateReplica, replicas, equalReplicas, laterReplicas, cannotReplicateReplicas, fmt.Errorf("ChooseCandidateReplica: no candidate replica found")
 	}
-	replicas = RemoveInstance(replicas, &candidateReplica.Key)
+	replicas = RemoveInstance(replicas, candidateReplica.Key())
 	for _, replica := range replicas {
 		replica := replica
 		if canReplicate, err := replica.CanReplicateFrom(candidateReplica); !canReplicate {
 			// lost due to inability to replicate
 			cannotReplicateReplicas = append(cannotReplicateReplicas, replica)
 			if err != nil {
-				log.Errorf("ChooseCandidateReplica(): error checking CanReplicateFrom(). replica: %v; error: %v", replica.Key, err)
+				log.Errorf("ChooseCandidateReplica(): error checking CanReplicateFrom(). replica: %v; error: %v", replica.Key(), err)
 			}
 		} else if replica.ExecBinlogCoordinates.SmallerThan(&candidateReplica.ExecBinlogCoordinates) {
 			laterReplicas = append(laterReplicas, replica)
@@ -1725,7 +1729,7 @@ func GetCandidateReplica(primaryKey *InstanceKey, forRematchPurposes bool) (*Ins
 	cannotReplicateReplicas := [](*Instance){}
 
 	dataCenterHint := ""
-	if primary, _, _ := ReadInstance(primaryKey); primary != nil {
+	if primary, _, _ := ReadInstanceByKey(primaryKey); primary != nil {
 		dataCenterHint = primary.DataCenter
 	}
 	replicas, err := getReplicasForSorting(primaryKey, false)
@@ -1750,10 +1754,10 @@ func GetCandidateReplica(primaryKey *InstanceKey, forRematchPurposes bool) (*Ins
 	if candidateReplica != nil {
 		mostUpToDateReplica := replicas[0]
 		if candidateReplica.ExecBinlogCoordinates.SmallerThan(&mostUpToDateReplica.ExecBinlogCoordinates) {
-			log.Warningf("GetCandidateReplica: chosen replica: %+v is behind most-up-to-date replica: %+v", candidateReplica.Key, mostUpToDateReplica.Key)
+			log.Warningf("GetCandidateReplica: chosen replica: %+v is behind most-up-to-date replica: %+v", candidateReplica.Key(), mostUpToDateReplica.Key())
 		}
 	}
-	log.Debugf("GetCandidateReplica: candidate: %+v, ahead: %d, equal: %d, late: %d, break: %d", candidateReplica.Key, len(aheadReplicas), len(equalReplicas), len(laterReplicas), len(cannotReplicateReplicas))
+	log.Debugf("GetCandidateReplica: candidate: %+v, ahead: %d, equal: %d, late: %d, break: %d", candidateReplica.Key(), len(aheadReplicas), len(equalReplicas), len(laterReplicas), len(cannotReplicateReplicas))
 	return candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, nil
 }
 
@@ -1778,7 +1782,7 @@ func GetCandidateReplicaOfBinlogServerTopology(primaryKey *InstanceKey) (candida
 		}
 	}
 	if candidateReplica != nil {
-		log.Debugf("GetCandidateReplicaOfBinlogServerTopology: returning %+v as candidate replica for %+v", candidateReplica.Key, *primaryKey)
+		log.Debugf("GetCandidateReplicaOfBinlogServerTopology: returning %+v as candidate replica for %+v", candidateReplica.Key(), *primaryKey)
 	} else {
 		log.Debugf("GetCandidateReplicaOfBinlogServerTopology: no candidate replica found for %+v", *primaryKey)
 	}
@@ -1839,7 +1843,7 @@ func RegroupReplicasGTID(
 		}
 	}
 
-	if err := SwitchPrimary(candidateReplica.Key, *primaryKey); err != nil {
+	if err := SwitchPrimary(*candidateReplica.Key(), *primaryKey); err != nil {
 		return emptyReplicas, emptyReplicas, emptyReplicas, candidateReplica, err
 	}
 
@@ -1851,15 +1855,15 @@ func RegroupReplicasGTID(
 		return log.Errore(err)
 	}
 	if postponedFunctionsContainer != nil && postponeAllMatchOperations != nil && postponeAllMatchOperations(candidateReplica, hasBestPromotionRule) {
-		postponedFunctionsContainer.AddPostponedFunction(moveGTIDFunc, fmt.Sprintf("regroup-replicas-gtid %+v", candidateReplica.Key))
+		postponedFunctionsContainer.AddPostponedFunction(moveGTIDFunc, fmt.Sprintf("regroup-replicas-gtid %+v", candidateReplica.Key()))
 	} else {
 		err = moveGTIDFunc()
 	}
 
-	StartReplication(&candidateReplica.Key)
+	StartReplication(candidateReplica.Key())
 
 	log.Debugf("RegroupReplicasGTID: done")
-	AuditOperation("regroup-replicas-gtid", primaryKey, fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *primaryKey, candidateReplica.Key))
+	AuditOperation("regroup-replicas-gtid", primaryKey.StringCode(), fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *primaryKey, candidateReplica.Key()))
 	return unmovedReplicas, movedReplicas, cannotReplicateReplicas, candidateReplica, err
 }
 
@@ -1880,12 +1884,12 @@ func RegroupReplicasBinlogServers(primaryKey *InstanceKey, returnReplicaEvenOnFa
 		return resultOnError(err)
 	}
 
-	repointedBinlogServers, _, err = RepointTo(binlogServerReplicas, &promotedBinlogServer.Key)
+	repointedBinlogServers, _, err = RepointTo(binlogServerReplicas, promotedBinlogServer.Key())
 
 	if err != nil {
 		return resultOnError(err)
 	}
-	AuditOperation("regroup-replicas-bls", primaryKey, fmt.Sprintf("regrouped binlog server replicas of %+v; promoted %+v", *primaryKey, promotedBinlogServer.Key))
+	AuditOperation("regroup-replicas-bls", primaryKey.StringCode(), fmt.Sprintf("regrouped binlog server replicas of %+v; promoted %+v", *primaryKey, promotedBinlogServer.Key()))
 	return repointedBinlogServers, promotedBinlogServer, nil
 }
 
@@ -1905,7 +1909,7 @@ func RegroupReplicas(primaryKey *InstanceKey, returnReplicaEvenOnFailureToRegrou
 	//
 	var emptyReplicas [](*Instance)
 
-	replicas, err := ReadReplicaInstances(primaryKey)
+	replicas, err := ReadReplicaInstances(primaryKey.Hostname, primaryKey.Port)
 	if err != nil {
 		return emptyReplicas, emptyReplicas, emptyReplicas, emptyReplicas, instance, err
 	}
@@ -1943,55 +1947,55 @@ func RegroupReplicas(primaryKey *InstanceKey, returnReplicaEvenOnFailureToRegrou
 // or it may combine any of the above in a multi-step operation.
 func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 	if canReplicate, err := instance.CanReplicateFrom(other); !canReplicate {
-		return instance, log.Errorf("%+v cannot replicate from %+v. Reason: %+v", instance.Key, other.Key, err)
+		return instance, log.Errorf("%+v cannot replicate from %+v. Reason: %+v", instance.Key(), other.Key(), err)
 	}
 	// simplest:
 	if InstanceIsPrimaryOf(other, instance) {
 		// already the desired setup.
-		return Repoint(&instance.Key, &other.Key, GTIDHintNeutral)
+		return Repoint(instance.Key(), other.Key(), GTIDHintNeutral)
 	}
 
 	// Try and take advantage of binlog servers:
 	if InstancesAreSiblings(instance, other) && other.IsBinlogServer() {
-		return MoveBelow(&instance.Key, &other.Key)
+		return MoveBelow(instance.Key(), other.Key())
 	}
-	instancePrimary, _, err := ReadInstance(&instance.SourceKey)
+	instancePrimary, _, err := ReadInstance(instance.InstanceAlias)
 	if err != nil {
 		return instance, err
 	}
-	if instancePrimary != nil && instancePrimary.SourceKey.Equals(&other.Key) && instancePrimary.IsBinlogServer() {
+	if instancePrimary != nil && instancePrimary.SourceKey().Equals(other.Key()) && instancePrimary.IsBinlogServer() {
 		// Moving to grandparent via binlog server
-		return Repoint(&instance.Key, &instancePrimary.SourceKey, GTIDHintDeny)
+		return Repoint(instance.Key(), instancePrimary.SourceKey(), GTIDHintDeny)
 	}
 	if other.IsBinlogServer() {
 		if instancePrimary != nil && instancePrimary.IsBinlogServer() && InstancesAreSiblings(instancePrimary, other) {
 			// Special case: this is a binlog server family; we move under the uncle, in one single step
-			return Repoint(&instance.Key, &other.Key, GTIDHintDeny)
+			return Repoint(instance.Key(), other.Key(), GTIDHintDeny)
 		}
 
 		// Relocate to its primary, then repoint to the binlog server
-		otherPrimary, found, err := ReadInstance(&other.SourceKey)
+		otherPrimary, found, err := ReadInstance(other.InstanceAlias)
 		if err != nil {
 			return instance, err
 		}
 		if !found {
-			return instance, log.Errorf("Cannot find primary %+v", other.SourceKey)
+			return instance, log.Errorf("Cannot find primary %+v", other.SourceKey())
 		}
 		if !other.IsLastCheckValid {
-			return instance, log.Errorf("Binlog server %+v is not reachable. It would take two steps to relocate %+v below it, and I won't even do the first step.", other.Key, instance.Key)
+			return instance, log.Errorf("Binlog server %+v is not reachable. It would take two steps to relocate %+v below it, and I won't even do the first step.", other.Key(), instance.Key())
 		}
 
-		log.Debugf("Relocating to a binlog server; will first attempt to relocate to the binlog server's primary: %+v, and then repoint down", otherPrimary.Key)
+		log.Debugf("Relocating to a binlog server; will first attempt to relocate to the binlog server's primary: %+v, and then repoint down", otherPrimary.Key())
 		if _, err := relocateBelowInternal(instance, otherPrimary); err != nil {
 			return instance, err
 		}
-		return Repoint(&instance.Key, &other.Key, GTIDHintDeny)
+		return Repoint(instance.Key(), other.Key(), GTIDHintDeny)
 	}
 	if instance.IsBinlogServer() {
 		// Can only move within the binlog-server family tree
 		// And these have been covered just now: move up from a primary binlog server, move below a binling binlog server.
 		// sure, the family can be more complex, but we keep these operations atomic
-		return nil, log.Errorf("Relocating binlog server %+v below %+v turns to be too complex; please do it manually", instance.Key, other.Key)
+		return nil, log.Errorf("Relocating binlog server %+v below %+v turns to be too complex; please do it manually", instance.Key(), other.Key())
 	}
 	// Next, try GTID
 	if _, _, gtidCompatible := instancesAreGTIDAndCompatible(instance, other); gtidCompatible {
@@ -2002,39 +2006,39 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 	if InstancesAreSiblings(instance, other) {
 		// If co-primarying, only move below if it's read-only
 		if !other.IsCoPrimary || other.ReadOnly {
-			return MoveBelow(&instance.Key, &other.Key)
+			return MoveBelow(instance.Key(), other.Key())
 		}
 	}
 	// See if we need to MoveUp
-	if instancePrimary != nil && instancePrimary.SourceKey.Equals(&other.Key) {
+	if instancePrimary != nil && instancePrimary.SourceKey().Equals(other.Key()) {
 		// Moving to grandparent--handles co-primary writable case
-		return MoveUp(&instance.Key)
+		return MoveUp(instance.Key())
 	}
 	if instancePrimary != nil && instancePrimary.IsBinlogServer() {
 		// Break operation into two: move (repoint) up, then continue
-		if _, err := MoveUp(&instance.Key); err != nil {
+		if _, err := MoveUp(instance.Key()); err != nil {
 			return instance, err
 		}
 		return relocateBelowInternal(instance, other)
 	}
 	// Too complex
-	return nil, log.Errorf("Relocating %+v below %+v turns to be too complex; please do it manually", instance.Key, other.Key)
+	return nil, log.Errorf("Relocating %+v below %+v turns to be too complex; please do it manually", instance.Key(), other.Key())
 }
 
 // RelocateBelow will attempt moving instance indicated by instanceKey below another instance.
 // Orchestrator will try and figure out the best way to relocate the server. This could span normal
 // binlog-position, repointing, binlog servers...
 func RelocateBelow(instanceKey, otherKey *InstanceKey) (*Instance, error) {
-	instance, found, err := ReadInstance(instanceKey)
+	instance, found, err := ReadInstanceByKey(instanceKey)
 	if err != nil || !found {
 		return instance, log.Errorf("Error reading %+v", *instanceKey)
 	}
 	// Relocation of group secondaries makes no sense, group secondaries, by definition, always replicate from the group
 	// primary
 	if instance.IsReplicationGroupSecondary() {
-		return instance, log.Errorf("relocate: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
+		return instance, log.Errorf("relocate: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key())
 	}
-	other, found, err := ReadInstance(otherKey)
+	other, found, err := ReadInstanceByKey(otherKey)
 	if err != nil || !found {
 		return instance, log.Errorf("Error reading %+v", *otherKey)
 	}
@@ -2043,11 +2047,11 @@ func RelocateBelow(instanceKey, otherKey *InstanceKey) (*Instance, error) {
 		return instance, log.Errorf("relocate: Setting a group primary to replicate from another member of its group is disallowed")
 	}
 	if other.IsDescendantOf(instance) {
-		return instance, log.Errorf("relocate: %+v is a descendant of %+v", *otherKey, instance.Key)
+		return instance, log.Errorf("relocate: %+v is a descendant of %+v", *otherKey, instance.Key())
 	}
 	instance, err = relocateBelowInternal(instance, other)
 	if err == nil {
-		AuditOperation("relocate-below", instanceKey, fmt.Sprintf("relocated %+v below %+v", *instanceKey, *otherKey))
+		AuditOperation("relocate-below", instance.InstanceAlias, fmt.Sprintf("relocated %+v below %+v", *instanceKey, *otherKey))
 	}
 	return instance, err
 }
@@ -2059,26 +2063,26 @@ func RelocateBelow(instanceKey, otherKey *InstanceKey) (*Instance, error) {
 func relocateReplicasInternal(replicas []*Instance, instance, other *Instance) ([]*Instance, []error, error) {
 	errs := []error{}
 	// simplest:
-	if instance.Key.Equals(&other.Key) {
+	if instance.Key().Equals(other.Key()) {
 		// already the desired setup.
-		return RepointTo(replicas, &other.Key)
+		return RepointTo(replicas, other.Key())
 	}
 	// Try and take advantage of binlog servers:
 	if InstanceIsPrimaryOf(other, instance) && instance.IsBinlogServer() {
 		// Up from a binlog server
-		return RepointTo(replicas, &other.Key)
+		return RepointTo(replicas, other.Key())
 	}
 	if InstanceIsPrimaryOf(instance, other) && other.IsBinlogServer() {
 		// Down under a binlog server
-		return RepointTo(replicas, &other.Key)
+		return RepointTo(replicas, other.Key())
 	}
 	if InstancesAreSiblings(instance, other) && instance.IsBinlogServer() && other.IsBinlogServer() {
 		// Between siblings
-		return RepointTo(replicas, &other.Key)
+		return RepointTo(replicas, other.Key())
 	}
 	if other.IsBinlogServer() {
 		// Relocate to binlog server's parent (recursive call), then repoint down
-		otherPrimary, found, err := ReadInstance(&other.SourceKey)
+		otherPrimary, found, err := ReadInstance(other.InstanceAlias)
 		if err != nil || !found {
 			return nil, errs, err
 		}
@@ -2087,7 +2091,7 @@ func relocateReplicasInternal(replicas []*Instance, instance, other *Instance) (
 			return replicas, errs, err
 		}
 
-		return RepointTo(replicas, &other.Key)
+		return RepointTo(replicas, other.Key())
 	}
 	// GTID
 	{
@@ -2104,7 +2108,7 @@ func relocateReplicasInternal(replicas []*Instance, instance, other *Instance) (
 	}
 
 	// Too complex
-	return nil, errs, log.Errorf("Relocating %+v replicas of %+v below %+v turns to be too complex; please do it manually", len(replicas), instance.Key, other.Key)
+	return nil, errs, log.Errorf("Relocating %+v replicas of %+v below %+v turns to be too complex; please do it manually", len(replicas), instance.Key(), other.Key())
 }
 
 // RelocateReplicas will attempt moving replicas of an instance indicated by instanceKey below another instance.
@@ -2112,16 +2116,16 @@ func relocateReplicasInternal(replicas []*Instance, instance, other *Instance) (
 // binlog-position, repointing, binlog servers...
 func RelocateReplicas(instanceKey, otherKey *InstanceKey, pattern string) (replicas []*Instance, other *Instance, errs []error, err error) {
 
-	instance, found, err := ReadInstance(instanceKey)
+	instance, found, err := ReadInstanceByKey(instanceKey)
 	if err != nil || !found {
 		return replicas, other, errs, log.Errorf("Error reading %+v", *instanceKey)
 	}
-	other, found, err = ReadInstance(otherKey)
+	other, found, err = ReadInstanceByKey(otherKey)
 	if err != nil || !found {
 		return replicas, other, errs, log.Errorf("Error reading %+v", *otherKey)
 	}
 
-	replicas, err = ReadReplicaInstances(instanceKey)
+	replicas, err = ReadReplicaInstances(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return replicas, other, errs, err
 	}
@@ -2133,20 +2137,20 @@ func RelocateReplicas(instanceKey, otherKey *InstanceKey, pattern string) (repli
 	}
 	for _, replica := range replicas {
 		if other.IsDescendantOf(replica) {
-			return replicas, other, errs, log.Errorf("relocate-replicas: %+v is a descendant of %+v", *otherKey, replica.Key)
+			return replicas, other, errs, log.Errorf("relocate-replicas: %+v is a descendant of %+v", *otherKey, replica.Key())
 		}
 	}
 	replicas, errs, err = relocateReplicasInternal(replicas, instance, other)
 
 	if err == nil {
-		AuditOperation("relocate-replicas", instanceKey, fmt.Sprintf("relocated %+v replicas of %+v below %+v", len(replicas), *instanceKey, *otherKey))
+		AuditOperation("relocate-replicas", instanceKey.StringCode(), fmt.Sprintf("relocated %+v replicas of %+v below %+v", len(replicas), *instanceKey, *otherKey))
 	}
 	return replicas, other, errs, err
 }
 
 // PurgeBinaryLogsTo attempts to 'PURGE BINARY LOGS' until given binary log is reached
 func PurgeBinaryLogsTo(instanceKey *InstanceKey, logFile string, force bool) (*Instance, error) {
-	replicas, err := ReadReplicaInstances(instanceKey)
+	replicas, err := ReadReplicaInstances(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return nil, err
 	}
@@ -2154,7 +2158,7 @@ func PurgeBinaryLogsTo(instanceKey *InstanceKey, logFile string, force bool) (*I
 		purgeCoordinates := &BinlogCoordinates{LogFile: logFile, LogPos: 0}
 		for _, replica := range replicas {
 			if !purgeCoordinates.SmallerThan(&replica.ExecBinlogCoordinates) {
-				return nil, log.Errorf("Unsafe to purge binary logs on %+v up to %s because replica %+v has only applied up to %+v", *instanceKey, logFile, replica.Key, replica.ExecBinlogCoordinates)
+				return nil, log.Errorf("Unsafe to purge binary logs on %+v up to %s because replica %+v has only applied up to %+v", *instanceKey, logFile, replica.Key(), replica.ExecBinlogCoordinates)
 			}
 		}
 	}
@@ -2163,7 +2167,7 @@ func PurgeBinaryLogsTo(instanceKey *InstanceKey, logFile string, force bool) (*I
 
 // PurgeBinaryLogsToLatest attempts to 'PURGE BINARY LOGS' until latest binary log
 func PurgeBinaryLogsToLatest(instanceKey *InstanceKey, force bool) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
+	instance, err := ReadTopologyInstanceByKey(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
 	}

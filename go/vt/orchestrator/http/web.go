@@ -130,7 +130,7 @@ func (httpWeb *Web) ClusterByInstance(params martini.Params, r render.Render, re
 		r.JSON(200, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, err := inst.ReadInstanceByKey(&instanceKey)
 	if (!found) || (err != nil) {
 		r.JSON(200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return

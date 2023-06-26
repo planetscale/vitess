@@ -46,11 +46,7 @@ func SemiSyncAckers[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparen
 }
 
 // PromotionRule returns the promotion rule for the instance.
-func PromotionRule[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, instance V) promotionrule.CandidatePromotionRule {
-	tablet, err := getTablet(instance)
-	if err != nil {
-		return promotionrule.MustNot
-	}
+func PromotionRule(durabilityPolicy reparentutil.Durabler, tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
 	return reparentutil.PromotionRule(durabilityPolicy, tablet)
 }
 
@@ -59,7 +55,7 @@ func getTablet[V InstanceKey | *topodatapb.Tablet](instance V) (*topodatapb.Tabl
 	var err error
 	switch node := any(instance).(type) {
 	case InstanceKey:
-		instanceTablet, err = ReadTablet(node)
+		instanceTablet, err = ReadTabletByKey(&node)
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +66,7 @@ func getTablet[V InstanceKey | *topodatapb.Tablet](instance V) (*topodatapb.Tabl
 }
 
 // GetDurabilityPolicy gets the durability policy for the keyspace of the given instance
-func GetDurabilityPolicy[V InstanceKey | *topodatapb.Tablet](instance V) (reparentutil.Durabler, error) {
+func GetDurabilityPolicyByKeyOrTablet[V InstanceKey | *topodatapb.Tablet](instance V) (reparentutil.Durabler, error) {
 	tablet, err := getTablet(instance)
 	if err != nil {
 		return nil, err

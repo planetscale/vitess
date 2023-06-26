@@ -164,7 +164,7 @@ func filterInstancesByPattern(instances [](*Instance), pattern string) [](*Insta
 	}
 	filtered := [](*Instance){}
 	for _, instance := range instances {
-		if matched, _ := regexp.MatchString(pattern, instance.Key.DisplayString()); matched {
+		if matched, _ := regexp.MatchString(pattern, instance.Key().DisplayString()); matched {
 			filtered = append(filtered, instance)
 		}
 	}
@@ -177,7 +177,7 @@ func RemoveInstance(instances [](*Instance), instanceKey *InstanceKey) [](*Insta
 		return instances
 	}
 	for i := len(instances) - 1; i >= 0; i-- {
-		if instances[i].Key.Equals(instanceKey) {
+		if instances[i].Key().Equals(instanceKey) {
 			instances = append(instances[:i], instances[i+1:]...)
 		}
 	}

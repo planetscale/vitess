@@ -83,7 +83,7 @@ func BeginDowntime(downtime *Downtime) (err error) {
 	if err != nil {
 		return log.Errore(err)
 	}
-	AuditOperation("begin-downtime", downtime.Key, fmt.Sprintf("owner: %s, reason: %s", downtime.Owner, downtime.Reason))
+	AuditOperation("begin-downtime", downtime.Key.StringCode(), fmt.Sprintf("owner: %s, reason: %s", downtime.Owner, downtime.Reason))
 
 	return nil
 }
@@ -106,7 +106,7 @@ func EndDowntime(instanceKey *InstanceKey) (wasDowntimed bool, err error) {
 
 	if affected, _ := res.RowsAffected(); affected > 0 {
 		wasDowntimed = true
-		AuditOperation("end-downtime", instanceKey, "")
+		AuditOperation("end-downtime", instanceKey.StringCode(), "")
 	}
 	return wasDowntimed, err
 }
@@ -161,7 +161,7 @@ func expireLostInRecoveryDowntime() error {
 		} else if instance.ReplicationDepth == 0 {
 			// instance makes the appearance of a primary
 			if unambiguousKey, ok := unambiguousAliases[instance.SuggestedClusterAlias]; ok {
-				if unambiguousKey.Equals(&instance.Key) {
+				if unambiguousKey.Equals(instance.Key()) {
 					// This instance seems to be a primary, which is valid, and has a suggested alias,
 					// and is the _only_ one to have this suggested alias (i.e. no one took its place)
 					endDowntime = true
@@ -169,7 +169,7 @@ func expireLostInRecoveryDowntime() error {
 			}
 		}
 		if endDowntime {
-			if _, err := EndDowntime(&instance.Key); err != nil {
+			if _, err := EndDowntime(instance.Key()); err != nil {
 				return err
 			}
 		}
@@ -197,7 +197,7 @@ func ExpireDowntime() error {
 			return log.Errore(err)
 		}
 		if rowsAffected, _ := res.RowsAffected(); rowsAffected > 0 {
-			AuditOperation("expire-downtime", nil, fmt.Sprintf("Expired %d entries", rowsAffected))
+			AuditOperation("expire-downtime", "", fmt.Sprintf("Expired %d entries", rowsAffected))
 		}
 	}
 

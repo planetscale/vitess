@@ -20,6 +20,7 @@ package db
 var generateSQLBase = []string{
 	`
         CREATE TABLE IF NOT EXISTS database_instance (
+          alias varchar(256) NOT NULL,
           hostname varchar(128) CHARACTER SET ascii NOT NULL,
           port smallint(5) unsigned NOT NULL,
           last_checked timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -44,7 +45,7 @@ var generateSQLBase = []string{
           num_replica_hosts int(10) unsigned NOT NULL,
           replica_hosts text CHARACTER SET ascii NOT NULL,
           cluster_name varchar(128) CHARACTER SET ascii NOT NULL,
-          PRIMARY KEY (hostname,port)
+          PRIMARY KEY (alias)
         ) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
@@ -111,10 +112,9 @@ var generateSQLBase = []string{
           audit_id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
           audit_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
           audit_type varchar(128) CHARACTER SET ascii NOT NULL,
-          hostname varchar(128) CHARACTER SET ascii NOT NULL DEFAULT '',
-          port smallint(5) unsigned NOT NULL,
+          alias varchar(256) NOT NULL,
           message text CHARACTER SET utf8 NOT NULL,
-          PRIMARY KEY (audit_id)
+          PRIMARY KEY (alias)
         ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 	`,
 	`
@@ -124,10 +124,10 @@ var generateSQLBase = []string{
 				CREATE INDEX audit_timestamp_idx_audit ON audit (audit_timestamp)
 	`,
 	`
-				DROP INDEX host_port_idx ON audit
+				DROP INDEX alias_idx ON audit
 	`,
 	`
-				CREATE INDEX host_port_idx_audit ON audit (hostname, port, audit_timestamp)
+				CREATE INDEX alias_idx_audit ON audit (alias, audit_timestamp)
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS host_agent (
@@ -312,16 +312,14 @@ var generateSQLBase = []string{
 	`
 		CREATE TABLE IF NOT EXISTS topology_recovery (
 			recovery_id bigint unsigned not null auto_increment,
-			hostname varchar(128) NOT NULL,
-			port smallint unsigned NOT NULL,
+			alias varchar(256) NOT NULL,
 			in_active_period tinyint unsigned NOT NULL DEFAULT 0,
 			start_active_period timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			end_active_period_unixtime int unsigned,
 			end_recovery timestamp NULL DEFAULT NULL,
 			processing_node_hostname varchar(128) CHARACTER SET ascii NOT NULL,
 			processcing_node_token varchar(128) NOT NULL,
-			successor_hostname varchar(128) DEFAULT NULL,
-			successor_port smallint unsigned DEFAULT NULL,
+			successor_alias varchar(256) DEFAULT NULL,
 			PRIMARY KEY (recovery_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
@@ -338,10 +336,10 @@ var generateSQLBase = []string{
 		CREATE INDEX start_active_period_idx_topology_recovery ON topology_recovery (start_active_period)
 	`,
 	`
-		DROP INDEX hostname_port_active_period_uidx ON topology_recovery
+		DROP INDEX alias_active_period_uidx ON topology_recovery
 	`,
 	`
-		CREATE UNIQUE INDEX hostname_port_active_period_uidx_topology_recovery ON topology_recovery (hostname, port, in_active_period, end_active_period_unixtime)
+		CREATE UNIQUE INDEX alias_active_period_uidx_topology_recovery ON topology_recovery (alias, in_active_period, end_active_period_unixtime)
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS hostname_unresolve (
@@ -373,12 +371,11 @@ var generateSQLBase = []string{
 	`
 		CREATE TABLE IF NOT EXISTS database_instance_topology_history (
 			snapshot_unix_timestamp INT UNSIGNED NOT NULL,
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
-			port smallint(5) unsigned NOT NULL,
+			alias varchar(256) NOT NULL,
 			source_host varchar(128) CHARACTER SET ascii NOT NULL,
 			source_port smallint(5) unsigned NOT NULL,
 			cluster_name tinytext CHARACTER SET ascii NOT NULL,
-			PRIMARY KEY (snapshot_unix_timestamp, hostname, port)
+			PRIMARY KEY (snapshot_unix_timestamp, alias)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
@@ -389,10 +386,9 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS candidate_database_instance (
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
-			port smallint(5) unsigned NOT NULL,
+			alias varchar(256) NOT NULL,
 			last_suggested TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (hostname, port)
+			PRIMARY KEY (alias)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
@@ -416,8 +412,7 @@ var generateSQLBase = []string{
 	`
 		CREATE TABLE IF NOT EXISTS topology_failure_detection (
 			detection_id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-			hostname varchar(128) NOT NULL,
-			port smallint unsigned NOT NULL,
+			alias varchar(256) NOT NULL,
 			in_active_period tinyint unsigned NOT NULL DEFAULT '0',
 			start_active_period timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			end_active_period_unixtime int unsigned NOT NULL,
@@ -556,13 +551,12 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS blocked_topology_recovery (
-			hostname varchar(128) NOT NULL,
-			port smallint(5) unsigned NOT NULL,
+			alias varchar(256) NOT NULL,
 			cluster_name varchar(128) NOT NULL,
 			analysis varchar(128) NOT NULL,
 			last_blocked_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			blocking_recovery_id bigint unsigned,
-			PRIMARY KEY (hostname, port)
+			PRIMARY KEY (alias)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
@@ -573,11 +567,10 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS database_instance_last_analysis (
-		  hostname varchar(128) NOT NULL,
-		  port smallint(5) unsigned NOT NULL,
+		  alias varchar(256) NOT NULL,
 		  analysis_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		  analysis varchar(128) NOT NULL,
-		  PRIMARY KEY (hostname, port)
+		  PRIMARY KEY (alias)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
@@ -589,11 +582,10 @@ var generateSQLBase = []string{
 	`
 		CREATE TABLE IF NOT EXISTS database_instance_analysis_changelog (
 			changelog_id bigint unsigned not null auto_increment,
-			hostname varchar(128) NOT NULL,
-			port smallint(5) unsigned NOT NULL,
+			alias varchar(256) NOT NULL,
 			analysis_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			analysis varchar(128) NOT NULL,
-			PRIMARY KEY (changelog_id)
+			PRIMARY KEY (alias)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
@@ -840,12 +832,11 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS database_instance_stale_binlog_coordinates (
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
-			port smallint(5) unsigned NOT NULL,
+			alias varchar(256) NOT NULL,
 			binary_log_file varchar(128) NOT NULL,
 			binary_log_pos bigint(20) unsigned NOT NULL,
 			first_seen timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (hostname, port)
+			PRIMARY KEY (alias)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
@@ -862,8 +853,7 @@ var generateSQLBase = []string{
 			tablet_type smallint(5) NOT NULL,
 			primary_timestamp timestamp NOT NULL,
 			info varchar(512) CHARACTER SET ascii NOT NULL,
-			UNIQUE (alias),
-			PRIMARY KEY (hostname, port)
+			PRIMARY KEY (alias)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`

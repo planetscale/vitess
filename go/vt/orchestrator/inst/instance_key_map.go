@@ -44,7 +44,7 @@ func (instanceKeyMap *InstanceKeyMap) AddKeys(keys []InstanceKey) {
 // AddInstances adds keys of all given instances to this map
 func (instanceKeyMap *InstanceKeyMap) AddInstances(instances [](*Instance)) {
 	for _, instance := range instances {
-		instanceKeyMap.AddKey(instance.Key)
+		instanceKeyMap.AddKey(*instance.Key())
 	}
 }
 

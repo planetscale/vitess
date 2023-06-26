@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	// import the gRPC client implementation for tablet manager
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -118,10 +119,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	err = inst.SaveTablet(tablet)
 	require.NoError(t, err)
 	analysisEntry := inst.ReplicationAnalysis{
-		AnalyzedInstanceKey: inst.InstanceKey{
-			Hostname: tablet.MysqlHostname,
-			Port:     int(tablet.MysqlPort),
-		},
+		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
 	}
 	ts = memorytopo.NewServer("zone1")
 	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry, nil, false, false)

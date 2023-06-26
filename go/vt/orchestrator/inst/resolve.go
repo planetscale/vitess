@@ -253,18 +253,18 @@ func UnresolveHostname(instanceKey *InstanceKey) (InstanceKey, bool, error) {
 	// We unresovled to a different hostname. We will now re-resolve to double-check!
 	unresolvedKey := &InstanceKey{Hostname: unresolvedHostname, Port: instanceKey.Port}
 
-	instance, err := ReadTopologyInstance(unresolvedKey)
+	instance, err := ReadTopologyInstanceByKey(unresolvedKey)
 	if err != nil {
 		return *instanceKey, false, log.Errore(err)
 	}
 	if instance.IsBinlogServer() && config.Config.SkipBinlogServerUnresolveCheck {
 		// Do nothing. Everything is assumed to be fine.
-	} else if instance.Key.Hostname != instanceKey.Hostname {
+	} else if instance.Hostname != instanceKey.Hostname {
 		// Resolve(Unresolve(hostname)) != hostname ==> Bad; reject
 		if *config.RuntimeCLIFlags.SkipUnresolveCheck {
 			return *instanceKey, false, nil
 		}
-		return *instanceKey, false, log.Errorf("Error unresolving; hostname=%s, unresolved=%s, re-resolved=%s; mismatch. Skip/ignore with --skip-unresolve-check", instanceKey.Hostname, unresolvedKey.Hostname, instance.Key.Hostname)
+		return *instanceKey, false, log.Errorf("Error unresolving; hostname=%s, unresolved=%s, re-resolved=%s; mismatch. Skip/ignore with --skip-unresolve-check", instanceKey.Hostname, unresolvedKey.Hostname, instance.Key().Hostname)
 	}
 	return *unresolvedKey, true, nil
 }

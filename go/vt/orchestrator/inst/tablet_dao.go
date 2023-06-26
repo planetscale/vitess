@@ -46,7 +46,7 @@ var ErrTabletAliasNil = errors.New("tablet alias is nil")
 // The proactive propagation allows a competing Orchestrator from discovering
 // the successful action of a previous one, which reduces churn.
 func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
-	durability, err := GetDurabilityPolicy(newPrimaryKey)
+	durability, err := GetDurabilityPolicyByKeyOrTablet(newPrimaryKey)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType,
 	if instanceKey.Hostname == "" {
 		return nil, errors.New("can't set tablet to primary: instance is unspecified")
 	}
-	tablet, err := ReadTablet(instanceKey)
+	tablet, err := ReadTabletByKey(&instanceKey)
 	if err != nil {
 		return nil, err
 	}
@@ -119,13 +119,36 @@ func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType,
 }
 
 // ReadTablet reads the vitess tablet record.
-func ReadTablet(instanceKey InstanceKey) (*topodatapb.Tablet, error) {
+func ReadTablet(tabletAlias string) (*topodatapb.Tablet, error) {
 	query := `
 		select
 			info
 		from
 			vitess_tablet
-		where hostname=? and port=?
+		where alias = ?
+		`
+	args := sqlutils.Args(tabletAlias)
+	tablet := &topodatapb.Tablet{}
+	err := db.QueryOrchestrator(query, args, func(row sqlutils.RowMap) error {
+		return prototext.Unmarshal([]byte(row.GetString("info")), tablet)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if tablet.Alias == nil {
+		return nil, ErrTabletAliasNil
+	}
+	return tablet, nil
+}
+
+// ReadTabletByKey reads the vitess tablet record.
+func ReadTabletByKey(instanceKey *InstanceKey) (*topodatapb.Tablet, error) {
+	query := `
+		select
+			info
+		from
+			vitess_tablet
+		where hostname = ? and port = ?
 		`
 	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port)
 	tablet := &topodatapb.Tablet{}

@@ -25,22 +25,23 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 func TestSaveAndReadKeyspace(t *testing.T) {
-	orcDb, err := db.OpenOrchestrator()
-	require.NoError(t, err)
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
-		_, err = orcDb.Exec("delete from vitess_keyspace")
-		require.NoError(t, err)
+		db.ClearOrchestratorDatabase()
 	}()
 
 	tests := []struct {
-		name           string
-		keyspaceName   string
-		keyspace       *topodatapb.Keyspace
-		keyspaceWanted *topodatapb.Keyspace
-		err            string
+		name                  string
+		keyspaceName          string
+		keyspace              *topodatapb.Keyspace
+		keyspaceWanted        *topodatapb.Keyspace
+		err                   string
+		errInDurabilityPolicy string
+		semiSyncAckersWanted  int
 	}{
 		{
 			name:         "Success with keyspaceType and durability",
@@ -49,16 +50,16 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: "semi_sync",
 			},
-			keyspaceWanted: nil,
-			err:            "",
+			keyspaceWanted:       nil,
+			semiSyncAckersWanted: 1,
 		}, {
 			name:         "Success with keyspaceType and no durability",
 			keyspaceName: "ks2",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
 			},
-			keyspaceWanted: nil,
-			err:            "",
+			keyspaceWanted:        nil,
+			errInDurabilityPolicy: "durability policy  not found",
 		}, {
 			name:         "Success with snapshot keyspaceType",
 			keyspaceName: "ks3",
@@ -66,7 +67,6 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 				KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
 			},
 			keyspaceWanted: nil,
-			err:            "",
 		}, {
 			name:         "Success with fields that are not stored",
 			keyspaceName: "ks4",
@@ -79,7 +79,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: "none",
 			},
-			err: "",
+			semiSyncAckersWanted: 0,
 		}, {
 			name:           "No keyspace found",
 			keyspaceName:   "ks5",
@@ -106,11 +106,21 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			readKeyspaceInfo, err := ReadKeyspace(tt.keyspaceName)
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)
-			} else {
-				require.NoError(t, err)
-				require.True(t, topotools.KeyspaceEquality(tt.keyspaceWanted, readKeyspaceInfo.Keyspace))
-				require.Equal(t, tt.keyspaceName, readKeyspaceInfo.KeyspaceName())
+				return
 			}
+			require.NoError(t, err)
+			require.True(t, topotools.KeyspaceEquality(tt.keyspaceWanted, readKeyspaceInfo.Keyspace))
+			require.Equal(t, tt.keyspaceName, readKeyspaceInfo.KeyspaceName())
+			if tt.keyspace.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
+				return
+			}
+			durabilityPolicy, err := GetDurabilityPolicyByKeyspace(tt.keyspaceName)
+			if tt.errInDurabilityPolicy != "" {
+				require.EqualError(t, err, tt.errInDurabilityPolicy)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, tt.semiSyncAckersWanted, reparentutil.SemiSyncAckers(durabilityPolicy, nil))
 		})
 	}
 }

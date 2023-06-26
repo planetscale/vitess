@@ -36,24 +36,20 @@ var key3 = InstanceKey{Hostname: "host3", Port: 3306}
 
 func TestInstanceKeyEquals(t *testing.T) {
 	i1 := Instance{
-		Key: InstanceKey{
-			Hostname: "sql00.db",
-			Port:     3306,
-		},
-		Version: "5.6",
+		Hostname: "sql00.db",
+		Port:     3306,
+		Version:  "5.6",
 	}
 	i2 := Instance{
-		Key: InstanceKey{
-			Hostname: "sql00.db",
-			Port:     3306,
-		},
-		Version: "5.5",
+		Hostname: "sql00.db",
+		Port:     3306,
+		Version:  "5.5",
 	}
 
-	test.S(t).ExpectEquals(i1.Key, i2.Key)
+	test.S(t).ExpectEquals(i1.Key(), i2.Key())
 
-	i2.Key.Port = 3307
-	test.S(t).ExpectNotEquals(i1.Key, i2.Key)
+	i2.Port = 3307
+	test.S(t).ExpectNotEquals(i1.Key(), i2.Key())
 }
 
 func TestNewResolveInstanceKey(t *testing.T) {

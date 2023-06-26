@@ -300,6 +300,15 @@ func deployStatements(db *sql.DB, queries []string) error {
 	return nil
 }
 
+// ClearOrchestratorDatabase is used to clear the VTOrc database. This function is meant to be used by tests to clear the
+// database to get a clean slate without starting a new one.
+func ClearOrchestratorDatabase() {
+	db, _, _ := sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
+	if db != nil {
+		_ = initOrchestratorDB(db)
+	}
+}
+
 // initOrchestratorDB attempts to create/upgrade the orchestrator backend database. It is created once in the
 // application's lifetime.
 func initOrchestratorDB(db *sql.DB) error {

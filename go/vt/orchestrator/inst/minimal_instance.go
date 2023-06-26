@@ -8,8 +8,10 @@ type MinimalInstance struct {
 
 func (minimalInstance *MinimalInstance) ToInstance() *Instance {
 	return &Instance{
-		Key:         minimalInstance.Key,
-		SourceKey:   minimalInstance.PrimaryKey,
+		Hostname:    minimalInstance.Key.Hostname,
+		Port:        minimalInstance.Key.Port,
+		SourceHost:  minimalInstance.PrimaryKey.Hostname,
+		SourcePort:  minimalInstance.PrimaryKey.Port,
 		ClusterName: minimalInstance.ClusterName,
 	}
 }
