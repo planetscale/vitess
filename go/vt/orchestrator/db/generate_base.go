@@ -585,7 +585,7 @@ var generateSQLBase = []string{
 			alias varchar(256) NOT NULL,
 			analysis_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			analysis varchar(128) NOT NULL,
-			PRIMARY KEY (alias)
+			PRIMARY KEY (changelog_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
