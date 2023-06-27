@@ -863,8 +863,8 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		primaryOrGroupPrimaryInstanceKey = instance.ReplicationGroupPrimaryInstanceKey
 	} else {
 		primaryOrGroupPrimaryInstanceKey = InstanceKey{
-			Hostname: instance.Hostname,
-			Port:     instance.Port,
+			Hostname: instance.SourceHost,
+			Port:     instance.SourcePort,
 		}
 	}
 	args := sqlutils.Args(primaryOrGroupPrimaryInstanceKey.Hostname, primaryOrGroupPrimaryInstanceKey.Port)
@@ -2768,7 +2768,7 @@ func SnapshotTopologies() error {
         		UNIX_TIMESTAMP(NOW()),
         		vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port,
 				database_instance.source_host, database_instance.source_port,
-				vitess_tablet.cluster_name, database_instance.version
+				database_instance.cluster_name, database_instance.version
 			from
 				vitess_tablet left join database_instance using (alias, hostname, port)
 				`,
