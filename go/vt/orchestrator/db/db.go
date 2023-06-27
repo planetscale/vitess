@@ -305,6 +305,10 @@ func deployStatements(db *sql.DB, queries []string) error {
 func ClearOrchestratorDatabase() {
 	db, _, _ := sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
 	if db != nil {
+		tables := []string{"database_instance", "vitess_tablet", "vitess_keyspace"}
+		for _, table := range tables {
+			db.Exec(fmt.Sprintf("drop table %v", table))
+		}
 		_ = initOrchestratorDB(db)
 	}
 }
