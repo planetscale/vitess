@@ -30,16 +30,15 @@ func RegisterCandidateInstance(candidate *CandidateDatabaseInstance) error {
 	if candidate.LastSuggestedString == "" {
 		candidate = candidate.WithCurrentTime()
 	}
-	args := sqlutils.Args(candidate.Hostname, candidate.Port, string(candidate.PromotionRule), candidate.LastSuggestedString)
+	args := sqlutils.Args(candidate.Alias, string(candidate.PromotionRule), candidate.LastSuggestedString)
 
 	query := `
 			insert into candidate_database_instance (
-					hostname,
-					port,
+					alias,
 					promotion_rule,
 					last_suggested
 				) values (
-					?, ?, ?, ?
+					?, ?, ?
 				) on duplicate key update
 					last_suggested=values(last_suggested),
 					promotion_rule=values(promotion_rule)
@@ -82,8 +81,7 @@ func BulkReadCandidateDatabaseInstance() ([]CandidateDatabaseInstance, error) {
 	// Read all promotion rules from the table
 	query := `
 		SELECT
-			hostname,
-			port,
+			alias,
 			promotion_rule,
 			last_suggested,
 			last_suggested + INTERVAL ? MINUTE AS promotion_rule_expiry
@@ -92,8 +90,7 @@ func BulkReadCandidateDatabaseInstance() ([]CandidateDatabaseInstance, error) {
 	`
 	err := db.QueryOrchestrator(query, sqlutils.Args(config.Config.CandidateInstanceExpireMinutes), func(m sqlutils.RowMap) error {
 		cdi := CandidateDatabaseInstance{
-			Hostname:            m.GetString("hostname"),
-			Port:                m.GetInt("port"),
+			Alias:               m.GetString("alias"),
 			PromotionRule:       promotionrule.CandidatePromotionRule(m.GetString("promotion_rule")),
 			LastSuggestedString: m.GetString("last_suggested"),
 			PromotionRuleExpiry: m.GetString("promotion_rule_expiry"),

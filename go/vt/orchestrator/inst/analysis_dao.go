@@ -345,7 +345,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		database_instance_maintenance.database_instance_maintenance_id IS NULL
 		AND ? IN ('', primary_instance.cluster_name)
 	GROUP BY
-		vitess_tablet.alias,
+		vitess_tablet.alias
 	ORDER BY
 		vitess_tablet.tablet_type ASC,
 		vitess_tablet.primary_timestamp DESC

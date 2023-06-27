@@ -2391,13 +2391,17 @@ func (httpAPI *API) RegisterCandidate(params martini.Params, r render.Render, re
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
+	instance, _, err := inst.ReadInstanceByKey(&instanceKey)
+	if err != nil {
+		log.Fatale(err)
+	}
 	promotionRule, err := promotionrule.Parse(params["promotionRule"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	candidate := inst.NewCandidateDatabaseInstance(&instanceKey, promotionRule).WithCurrentTime()
+	candidate := inst.NewCandidateDatabaseInstance(instance.InstanceAlias, promotionRule).WithCurrentTime()
 
 	if orcraft.IsRaftEnabled() {
 		_, err = orcraft.PublishCommand("register-candidate", candidate)
