@@ -2,12 +2,12 @@ package inst
 
 import (
 	"math/rand"
-
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
-	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
@@ -54,18 +54,18 @@ func applyGeneralGoodToGoReplicationParams(instances [](*Instance)) {
 }
 
 func TestInitial(t *testing.T) {
-	test.S(t).ExpectTrue(true)
+	require.True(t, true)
 }
 
 func TestSortInstances(t *testing.T) {
 	instances, _ := generateTestInstances()
 	sortInstances(instances)
-	test.S(t).ExpectEquals(instances[0].Key(), i830Key)
-	test.S(t).ExpectEquals(instances[1].Key(), i820Key)
-	test.S(t).ExpectEquals(instances[2].Key(), i810Key)
-	test.S(t).ExpectEquals(instances[3].Key(), i730Key)
-	test.S(t).ExpectEquals(instances[4].Key(), i720Key)
-	test.S(t).ExpectEquals(instances[5].Key(), i710Key)
+	require.EqualValues(t, instances[0].Key().String(), i830Key.String())
+	require.EqualValues(t, instances[1].Key().String(), i820Key.String())
+	require.EqualValues(t, instances[2].Key().String(), i810Key.String())
+	require.EqualValues(t, instances[3].Key().String(), i730Key.String())
+	require.EqualValues(t, instances[4].Key().String(), i720Key.String())
+	require.EqualValues(t, instances[5].Key().String(), i710Key.String())
 }
 
 func TestSortInstancesSameCoordinatesDifferingBinlogFormats(t *testing.T) {
@@ -77,8 +77,8 @@ func TestSortInstancesSameCoordinatesDifferingBinlogFormats(t *testing.T) {
 	instancesMap[i810Key.StringCode()].BinlogFormat = "STATEMENT"
 	instancesMap[i720Key.StringCode()].BinlogFormat = "ROW"
 	sortInstances(instances)
-	test.S(t).ExpectEquals(instances[0].Key(), i810Key)
-	test.S(t).ExpectEquals(instances[5].Key(), i720Key)
+	require.EqualValues(t, instances[0].Key().String(), i810Key.String())
+	require.EqualValues(t, instances[5].Key().String(), i720Key.String())
 }
 
 func TestSortInstancesSameCoordinatesDifferingVersions(t *testing.T) {
@@ -89,8 +89,8 @@ func TestSortInstancesSameCoordinatesDifferingVersions(t *testing.T) {
 	instancesMap[i810Key.StringCode()].Version = "5.5.1"
 	instancesMap[i720Key.StringCode()].Version = "5.7.8"
 	sortInstances(instances)
-	test.S(t).ExpectEquals(instances[0].Key(), i810Key)
-	test.S(t).ExpectEquals(instances[5].Key(), i720Key)
+	require.EqualValues(t, instances[0].Key().String(), i810Key.String())
+	require.EqualValues(t, instances[5].Key().String(), i720Key.String())
 }
 
 func TestSortInstancesDataCenterHint(t *testing.T) {
@@ -101,7 +101,7 @@ func TestSortInstancesDataCenterHint(t *testing.T) {
 	}
 	instancesMap[i810Key.StringCode()].DataCenter = "localdc"
 	SortInstancesDataCenterHint(instances, "localdc")
-	test.S(t).ExpectEquals(instances[0].Key(), i810Key)
+	require.EqualValues(t, instances[0].Key().String(), i810Key.String())
 }
 
 func TestSortInstancesGtidErrant(t *testing.T) {
@@ -112,7 +112,7 @@ func TestSortInstancesGtidErrant(t *testing.T) {
 	}
 	instancesMap[i810Key.StringCode()].GtidErrant = ""
 	sortInstances(instances)
-	test.S(t).ExpectEquals(instances[0].Key(), i810Key)
+	require.EqualValues(t, instances[0].Key().String(), i810Key.String())
 }
 
 func TestGetPriorityMajorVersionForCandidate(t *testing.T) {
@@ -120,22 +120,22 @@ func TestGetPriorityMajorVersionForCandidate(t *testing.T) {
 		instances, instancesMap := generateTestInstances()
 
 		priorityMajorVersion, err := getPriorityMajorVersionForCandidate(instances)
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(priorityMajorVersion, "5.6")
+		require.NoError(t, err)
+		require.EqualValues(t, priorityMajorVersion, "5.6")
 
 		instancesMap[i810Key.StringCode()].Version = "5.5.1"
 		instancesMap[i720Key.StringCode()].Version = "5.7.8"
 		priorityMajorVersion, err = getPriorityMajorVersionForCandidate(instances)
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(priorityMajorVersion, "5.6")
+		require.NoError(t, err)
+		require.EqualValues(t, priorityMajorVersion, "5.6")
 
 		instancesMap[i710Key.StringCode()].Version = "5.7.8"
 		instancesMap[i720Key.StringCode()].Version = "5.7.8"
 		instancesMap[i730Key.StringCode()].Version = "5.7.8"
 		instancesMap[i830Key.StringCode()].Version = "5.7.8"
 		priorityMajorVersion, err = getPriorityMajorVersionForCandidate(instances)
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(priorityMajorVersion, "5.7")
+		require.NoError(t, err)
+		require.EqualValues(t, priorityMajorVersion, "5.7")
 	}
 	{
 		instances, instancesMap := generateTestInstances()
@@ -147,8 +147,8 @@ func TestGetPriorityMajorVersionForCandidate(t *testing.T) {
 		instancesMap[i820Key.StringCode()].Version = "5.7.8"
 		instancesMap[i830Key.StringCode()].Version = "5.6.9"
 		priorityMajorVersion, err := getPriorityMajorVersionForCandidate(instances)
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(priorityMajorVersion, "5.6")
+		require.NoError(t, err)
+		require.EqualValues(t, priorityMajorVersion, "5.6")
 	}
 	// We will be testing under conditions that map iteration is in random order.
 	for range rand.Perm(20) { // Just running many iterations to cover multiple possible map iteration ordering. Perm() is just used as an array generator here.
@@ -156,7 +156,7 @@ func TestGetPriorityMajorVersionForCandidate(t *testing.T) {
 		for _, instance := range instances {
 			instance.Version = "5.6.9"
 		}
-		test.S(t).ExpectEquals(len(instances), 6)
+		require.EqualValues(t, len(instances), 6)
 		// Randomly populating different elements of the array/map
 		perm := rand.Perm(len(instances))[0 : len(instances)/2]
 		for _, i := range perm {
@@ -164,8 +164,8 @@ func TestGetPriorityMajorVersionForCandidate(t *testing.T) {
 		}
 		// getPriorityMajorVersionForCandidate uses map iteration
 		priorityMajorVersion, err := getPriorityMajorVersionForCandidate(instances)
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(priorityMajorVersion, "5.6")
+		require.NoError(t, err)
+		require.EqualValues(t, priorityMajorVersion, "5.6")
 	}
 }
 
@@ -174,22 +174,22 @@ func TestGetPriorityBinlogFormatForCandidate(t *testing.T) {
 		instances, instancesMap := generateTestInstances()
 
 		priorityBinlogFormat, err := getPriorityBinlogFormatForCandidate(instances)
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(priorityBinlogFormat, "STATEMENT")
+		require.NoError(t, err)
+		require.EqualValues(t, priorityBinlogFormat, "STATEMENT")
 
 		instancesMap[i810Key.StringCode()].BinlogFormat = "MIXED"
 		instancesMap[i720Key.StringCode()].BinlogFormat = "ROW"
 		priorityBinlogFormat, err = getPriorityBinlogFormatForCandidate(instances)
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(priorityBinlogFormat, "STATEMENT")
+		require.NoError(t, err)
+		require.EqualValues(t, priorityBinlogFormat, "STATEMENT")
 
 		instancesMap[i710Key.StringCode()].BinlogFormat = "ROW"
 		instancesMap[i720Key.StringCode()].BinlogFormat = "ROW"
 		instancesMap[i730Key.StringCode()].BinlogFormat = "ROW"
 		instancesMap[i830Key.StringCode()].BinlogFormat = "ROW"
 		priorityBinlogFormat, err = getPriorityBinlogFormatForCandidate(instances)
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(priorityBinlogFormat, "ROW")
+		require.NoError(t, err)
+		require.EqualValues(t, priorityBinlogFormat, "ROW")
 	}
 	for _, lowBinlogFormat := range []string{"STATEMENT", "MIXED"} {
 		// We will be testing under conditions that map iteration is in random order.
@@ -198,7 +198,7 @@ func TestGetPriorityBinlogFormatForCandidate(t *testing.T) {
 			for _, instance := range instances {
 				instance.BinlogFormat = lowBinlogFormat
 			}
-			test.S(t).ExpectEquals(len(instances), 6)
+			require.EqualValues(t, len(instances), 6)
 			// Randomly populating different elements of the array/map
 			perm := rand.Perm(len(instances))[0 : len(instances)/2]
 			for _, i := range perm {
@@ -206,8 +206,8 @@ func TestGetPriorityBinlogFormatForCandidate(t *testing.T) {
 			}
 			// getPriorityBinlogFormatForCandidate uses map iteration
 			priorityBinlogFormat, err := getPriorityBinlogFormatForCandidate(instances)
-			test.S(t).ExpectNil(err)
-			test.S(t).ExpectEquals(priorityBinlogFormat, lowBinlogFormat)
+			require.NoError(t, err)
+			require.EqualValues(t, priorityBinlogFormat, lowBinlogFormat)
 		}
 	}
 }
@@ -215,18 +215,18 @@ func TestGetPriorityBinlogFormatForCandidate(t *testing.T) {
 func TestIsGenerallyValidAsBinlogSource(t *testing.T) {
 	instances, _ := generateTestInstances()
 	for _, instance := range instances {
-		test.S(t).ExpectFalse(isGenerallyValidAsBinlogSource(instance))
+		require.False(t, isGenerallyValidAsBinlogSource(instance))
 	}
 	applyGeneralGoodToGoReplicationParams(instances)
 	for _, instance := range instances {
-		test.S(t).ExpectTrue(isGenerallyValidAsBinlogSource(instance))
+		require.True(t, isGenerallyValidAsBinlogSource(instance))
 	}
 }
 
 func TestIsGenerallyValidAsCandidateReplica(t *testing.T) {
 	instances, _ := generateTestInstances()
 	for _, instance := range instances {
-		test.S(t).ExpectFalse(isGenerallyValidAsCandidateReplica(instance))
+		require.False(t, isGenerallyValidAsCandidateReplica(instance))
 	}
 	for _, instance := range instances {
 		instance.IsLastCheckValid = true
@@ -234,11 +234,11 @@ func TestIsGenerallyValidAsCandidateReplica(t *testing.T) {
 		instance.LogReplicationUpdatesEnabled = false
 	}
 	for _, instance := range instances {
-		test.S(t).ExpectFalse(isGenerallyValidAsCandidateReplica(instance))
+		require.False(t, isGenerallyValidAsCandidateReplica(instance))
 	}
 	applyGeneralGoodToGoReplicationParams(instances)
 	for _, instance := range instances {
-		test.S(t).ExpectTrue(isGenerallyValidAsCandidateReplica(instance))
+		require.True(t, isGenerallyValidAsCandidateReplica(instance))
 	}
 }
 
@@ -246,7 +246,7 @@ func TestIsBannedFromBeingCandidateReplica(t *testing.T) {
 	{
 		instances, _ := generateTestInstances()
 		for _, instance := range instances {
-			test.S(t).ExpectFalse(IsBannedFromBeingCandidateReplica(instance))
+			require.False(t, IsBannedFromBeingCandidateReplica(instance))
 		}
 	}
 	{
@@ -255,7 +255,7 @@ func TestIsBannedFromBeingCandidateReplica(t *testing.T) {
 			instance.PromotionRule = promotionrule.MustNot
 		}
 		for _, instance := range instances {
-			test.S(t).ExpectTrue(IsBannedFromBeingCandidateReplica(instance))
+			require.True(t, IsBannedFromBeingCandidateReplica(instance))
 		}
 	}
 	{
@@ -265,7 +265,7 @@ func TestIsBannedFromBeingCandidateReplica(t *testing.T) {
 			"i8[0-9]0",
 		}
 		for _, instance := range instances {
-			test.S(t).ExpectTrue(IsBannedFromBeingCandidateReplica(instance))
+			require.True(t, IsBannedFromBeingCandidateReplica(instance))
 		}
 		config.Config.PromotionIgnoreHostnameFilters = []string{}
 	}
@@ -279,7 +279,7 @@ func TestChooseCandidateReplicaNoCandidateReplica(t *testing.T) {
 		instance.LogReplicationUpdatesEnabled = false
 	}
 	_, _, _, _, _, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNotNil(err)
+	require.NotNil(t, err)
 }
 
 func TestChooseCandidateReplica(t *testing.T) {
@@ -287,12 +287,12 @@ func TestChooseCandidateReplica(t *testing.T) {
 	applyGeneralGoodToGoReplicationParams(instances)
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i830Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 0)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 5)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i830Key.String())
+	require.EqualValues(t, len(aheadReplicas), 0)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 5)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplica2(t *testing.T) {
@@ -302,12 +302,12 @@ func TestChooseCandidateReplica2(t *testing.T) {
 	instancesMap[i820Key.StringCode()].LogBinEnabled = false
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i810Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 2)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 3)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i810Key.String())
+	require.EqualValues(t, len(aheadReplicas), 2)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 3)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaSameCoordinatesDifferentVersions(t *testing.T) {
@@ -320,12 +320,12 @@ func TestChooseCandidateReplicaSameCoordinatesDifferentVersions(t *testing.T) {
 	instancesMap[i720Key.StringCode()].Version = "5.7.8"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i810Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 0)
-	test.S(t).ExpectEquals(len(equalReplicas), 5)
-	test.S(t).ExpectEquals(len(laterReplicas), 0)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i810Key.String())
+	require.EqualValues(t, len(aheadReplicas), 0)
+	require.EqualValues(t, len(equalReplicas), 5)
+	require.EqualValues(t, len(laterReplicas), 0)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPriorityVersionNoLoss(t *testing.T) {
@@ -334,12 +334,12 @@ func TestChooseCandidateReplicaPriorityVersionNoLoss(t *testing.T) {
 	instancesMap[i830Key.StringCode()].Version = "5.5.1"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i830Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 0)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 5)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i830Key.String())
+	require.EqualValues(t, len(aheadReplicas), 0)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 5)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPriorityVersionLosesOne(t *testing.T) {
@@ -348,12 +348,12 @@ func TestChooseCandidateReplicaPriorityVersionLosesOne(t *testing.T) {
 	instancesMap[i830Key.StringCode()].Version = "5.7.8"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i820Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 1)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 4)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i820Key.String())
+	require.EqualValues(t, len(aheadReplicas), 1)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 4)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPriorityVersionLosesTwo(t *testing.T) {
@@ -363,12 +363,12 @@ func TestChooseCandidateReplicaPriorityVersionLosesTwo(t *testing.T) {
 	instancesMap[i820Key.StringCode()].Version = "5.7.18"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i810Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 2)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 3)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i810Key.String())
+	require.EqualValues(t, len(aheadReplicas), 2)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 3)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPriorityVersionHigherVersionOverrides(t *testing.T) {
@@ -380,12 +380,12 @@ func TestChooseCandidateReplicaPriorityVersionHigherVersionOverrides(t *testing.
 	instancesMap[i730Key.StringCode()].Version = "5.7.30"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i830Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 0)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 3)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 2)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i830Key.String())
+	require.EqualValues(t, len(aheadReplicas), 0)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 3)
+	require.EqualValues(t, len(cannotReplicateReplicas), 2)
 }
 
 func TestChooseCandidateReplicaLosesOneDueToBinlogFormat(t *testing.T) {
@@ -398,12 +398,12 @@ func TestChooseCandidateReplicaLosesOneDueToBinlogFormat(t *testing.T) {
 
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i830Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 0)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 4)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 1)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i830Key.String())
+	require.EqualValues(t, len(aheadReplicas), 0)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 4)
+	require.EqualValues(t, len(cannotReplicateReplicas), 1)
 }
 
 func TestChooseCandidateReplicaPriorityBinlogFormatNoLoss(t *testing.T) {
@@ -415,12 +415,12 @@ func TestChooseCandidateReplicaPriorityBinlogFormatNoLoss(t *testing.T) {
 	instancesMap[i830Key.StringCode()].BinlogFormat = "STATEMENT"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i830Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 0)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 5)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i830Key.String())
+	require.EqualValues(t, len(aheadReplicas), 0)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 5)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPriorityBinlogFormatLosesOne(t *testing.T) {
@@ -429,12 +429,12 @@ func TestChooseCandidateReplicaPriorityBinlogFormatLosesOne(t *testing.T) {
 	instancesMap[i830Key.StringCode()].BinlogFormat = "ROW"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i820Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 1)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 4)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i820Key.String())
+	require.EqualValues(t, len(aheadReplicas), 1)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 4)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPriorityBinlogFormatLosesTwo(t *testing.T) {
@@ -444,12 +444,12 @@ func TestChooseCandidateReplicaPriorityBinlogFormatLosesTwo(t *testing.T) {
 	instancesMap[i820Key.StringCode()].BinlogFormat = "ROW"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i810Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 2)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 3)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i810Key.String())
+	require.EqualValues(t, len(aheadReplicas), 2)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 3)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPriorityBinlogFormatRowOverrides(t *testing.T) {
@@ -461,12 +461,12 @@ func TestChooseCandidateReplicaPriorityBinlogFormatRowOverrides(t *testing.T) {
 	instancesMap[i730Key.StringCode()].BinlogFormat = "ROW"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i830Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 0)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 3)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 2)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i830Key.String())
+	require.EqualValues(t, len(aheadReplicas), 0)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 3)
+	require.EqualValues(t, len(cannotReplicateReplicas), 2)
 }
 
 func TestChooseCandidateReplicaMustNotPromoteRule(t *testing.T) {
@@ -475,12 +475,12 @@ func TestChooseCandidateReplicaMustNotPromoteRule(t *testing.T) {
 	instancesMap[i830Key.StringCode()].PromotionRule = promotionrule.MustNot
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i820Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 1)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 4)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i820Key.String())
+	require.EqualValues(t, len(aheadReplicas), 1)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 4)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPreferNotPromoteRule(t *testing.T) {
@@ -490,12 +490,12 @@ func TestChooseCandidateReplicaPreferNotPromoteRule(t *testing.T) {
 	instancesMap[i820Key.StringCode()].PromotionRule = promotionrule.PreferNot
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i820Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 1)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 4)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i820Key.String())
+	require.EqualValues(t, len(aheadReplicas), 1)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 4)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPreferNotPromoteRule2(t *testing.T) {
@@ -507,12 +507,12 @@ func TestChooseCandidateReplicaPreferNotPromoteRule2(t *testing.T) {
 	instancesMap[i830Key.StringCode()].PromotionRule = promotionrule.MustNot
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i820Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 1)
-	test.S(t).ExpectEquals(len(equalReplicas), 0)
-	test.S(t).ExpectEquals(len(laterReplicas), 4)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i820Key.String())
+	require.EqualValues(t, len(aheadReplicas), 1)
+	require.EqualValues(t, len(equalReplicas), 0)
+	require.EqualValues(t, len(laterReplicas), 4)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPromoteRuleOrdering(t *testing.T) {
@@ -525,12 +525,12 @@ func TestChooseCandidateReplicaPromoteRuleOrdering(t *testing.T) {
 	instancesMap[i830Key.StringCode()].PromotionRule = promotionrule.Prefer
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i830Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 0)
-	test.S(t).ExpectEquals(len(equalReplicas), 5)
-	test.S(t).ExpectEquals(len(laterReplicas), 0)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i830Key.String())
+	require.EqualValues(t, len(aheadReplicas), 0)
+	require.EqualValues(t, len(equalReplicas), 5)
+	require.EqualValues(t, len(laterReplicas), 0)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPromoteRuleOrdering2(t *testing.T) {
@@ -543,12 +543,12 @@ func TestChooseCandidateReplicaPromoteRuleOrdering2(t *testing.T) {
 	instancesMap[i820Key.StringCode()].PromotionRule = promotionrule.Must
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i820Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 0)
-	test.S(t).ExpectEquals(len(equalReplicas), 5)
-	test.S(t).ExpectEquals(len(laterReplicas), 0)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i820Key.String())
+	require.EqualValues(t, len(aheadReplicas), 0)
+	require.EqualValues(t, len(equalReplicas), 5)
+	require.EqualValues(t, len(laterReplicas), 0)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
 
 func TestChooseCandidateReplicaPromoteRuleOrdering3(t *testing.T) {
@@ -563,10 +563,10 @@ func TestChooseCandidateReplicaPromoteRuleOrdering3(t *testing.T) {
 	instancesMap[i830Key.StringCode()].PromotionRule = promotionrule.PreferNot
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(candidate.Key(), i730Key)
-	test.S(t).ExpectEquals(len(aheadReplicas), 0)
-	test.S(t).ExpectEquals(len(equalReplicas), 5)
-	test.S(t).ExpectEquals(len(laterReplicas), 0)
-	test.S(t).ExpectEquals(len(cannotReplicateReplicas), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, candidate.Key().String(), i730Key.String())
+	require.EqualValues(t, len(aheadReplicas), 0)
+	require.EqualValues(t, len(equalReplicas), 5)
+	require.EqualValues(t, len(laterReplicas), 0)
+	require.EqualValues(t, len(cannotReplicateReplicas), 0)
 }
