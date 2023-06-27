@@ -478,7 +478,7 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 				end_recovery = NOW()
 			where
 				uid = ?
-			`, topologyRecovery.IsSuccessful, topologyRecovery.SuccessorAlias,
+			`, topologyRecovery.IsSuccessful,
 		topologyRecovery.SuccessorAlias, strings.Join(lostReplicas, ","),
 		strings.Join(participatingInstanceAliases, ","),
 		strings.Join(topologyRecovery.AllErrors, "\n"),
