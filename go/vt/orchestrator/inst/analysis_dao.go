@@ -461,7 +461,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			clusters[a.SuggestedClusterAlias] = &clusterAnalysis{}
 			if a.TabletType == topodatapb.TabletType_PRIMARY {
 				a.IsClusterPrimary = true
-				clusters[a.SuggestedClusterAlias].primaryAlias = a.AnalyzedInstancePrimaryAlias
+				clusters[a.SuggestedClusterAlias].primaryAlias = a.AnalyzedInstanceAlias
 			}
 			durabilityPolicy := m.GetString("durability_policy")
 			if durabilityPolicy == "" {
@@ -708,6 +708,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 				analysis_timestamp = now()
 			where
 				alias = ?
+				and analysis != ?
 			`,
 			string(analysisCode), tabletAlias, string(analysisCode),
 		)
@@ -723,8 +724,8 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 	// If the last analysis has not changed, then there is a chance that this is the first insertion.
 	// We need to find that out too when we insert into the database.
 	firstInsertion := false
-	// The insert only returns more than 1 row changed if this is the first insertion.
 	if !lastAnalysisChanged {
+		// The insert only returns more than 1 row changed if this is the first insertion.
 		sqlResult, err := db.ExecOrchestrator(`
 			insert ignore into database_instance_last_analysis (
 					alias, analysis_timestamp, analysis
@@ -745,6 +746,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 		firstInsertion = rows > 0
 	}
 	recentInstantAnalysis.Set(tabletAlias, analysisCode, cache.DefaultExpiration)
+	// If the analysis has changed or if it is the first insertion, we need to make sure we write this change to the database.
 	if !lastAnalysisChanged && !firstInsertion {
 		return nil
 	}
