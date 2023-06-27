@@ -2065,7 +2065,7 @@ func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
 		select
 			cluster_name,
 			count(*) as count_instances,
-			ifnull(min(alias), cluster_name) as alias,
+			ifnull(min(cluster_alias.alias), cluster_name) as alias,
 			ifnull(min(domain_name), '') as domain_name
 		from
 			database_instance
