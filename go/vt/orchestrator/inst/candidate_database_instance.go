@@ -25,17 +25,15 @@ import (
 
 // CandidateDatabaseInstance contains information about explicit promotion rules for an instance
 type CandidateDatabaseInstance struct {
-	Hostname            string
-	Port                int
+	Alias               string
 	PromotionRule       promotionrule.CandidatePromotionRule
 	LastSuggestedString string
 	PromotionRuleExpiry string // generated when retrieved from database for consistency reasons
 }
 
-func NewCandidateDatabaseInstance(instanceKey *InstanceKey, promotionRule promotionrule.CandidatePromotionRule) *CandidateDatabaseInstance {
+func NewCandidateDatabaseInstance(tabletAlias string, promotionRule promotionrule.CandidatePromotionRule) *CandidateDatabaseInstance {
 	return &CandidateDatabaseInstance{
-		Hostname:      instanceKey.Hostname,
-		Port:          instanceKey.Port,
+		Alias:         tabletAlias,
 		PromotionRule: promotionRule,
 	}
 }
@@ -47,10 +45,5 @@ func (cdi *CandidateDatabaseInstance) WithCurrentTime() *CandidateDatabaseInstan
 
 // String returns a string representation of the CandidateDatabaseInstance struct
 func (cdi *CandidateDatabaseInstance) String() string {
-	return fmt.Sprintf("%s:%d %s", cdi.Hostname, cdi.Port, cdi.PromotionRule)
-}
-
-// Key returns an instance key representing this candidate
-func (cdi *CandidateDatabaseInstance) Key() *InstanceKey {
-	return &InstanceKey{Hostname: cdi.Hostname, Port: cdi.Port}
+	return fmt.Sprintf("%s: %s", cdi.Alias, cdi.PromotionRule)
 }

@@ -584,6 +584,9 @@ func (instance *Instance) TabulatedDescription(separator string) string {
 }
 
 func (instance *Instance) Key() *InstanceKey {
+	if instance == nil {
+		return nil
+	}
 	return &InstanceKey{
 		Hostname: instance.Hostname,
 		Port:     instance.Port,

@@ -14,7 +14,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
-	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"
 )
 
 var (
@@ -57,9 +56,9 @@ func TestMkInsertOdkuSingle(t *testing.T) {
 	instances := mkTestInstances()
 
 	sql, args, err := mkInsertOdkuForInstances(nil, true, true)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(sql, "")
-	test.S(t).ExpectEquals(len(args), 0)
+	require.NoError(t, err)
+	require.EqualValues(t, sql, "")
+	require.EqualValues(t, len(args), 0)
 
 	// one instance
 	s1 := `INSERT ignore INTO database_instance
@@ -80,9 +79,9 @@ func TestMkInsertOdkuSingle(t *testing.T) {
 	false, false, 0, 0, false, false, false, , , , , , , false, false, , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, 0, [], , , , , , 0, false, false, false, false, false, false, false, 0, 0, false, false, 0, false, , 0, , false, , , [], , 0, `
 
 	sql1, args1, err := mkInsertOdkuForInstances(instances[:1], false, true)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(normalizeQuery(sql1), normalizeQuery(s1))
-	test.S(t).ExpectEquals(stripSpaces(fmtArgs(args1)), stripSpaces(a1))
+	require.NoError(t, err)
+	require.EqualValues(t, normalizeQuery(sql1), normalizeQuery(s1))
+	require.EqualValues(t, stripSpaces(fmtArgs(args1)), stripSpaces(a1))
 }
 
 func TestMkInsertOdkuThree(t *testing.T) {
@@ -109,9 +108,9 @@ func TestMkInsertOdkuThree(t *testing.T) {
 		`
 
 	sql3, args3, err := mkInsertOdkuForInstances(instances[:3], true, true)
-	test.S(t).ExpectNil(err)
-	test.S(t).ExpectEquals(normalizeQuery(sql3), normalizeQuery(s3))
-	test.S(t).ExpectEquals(stripSpaces(fmtArgs(args3)), stripSpaces(a3))
+	require.NoError(t, err)
+	require.EqualValues(t, normalizeQuery(sql3), normalizeQuery(s3))
+	require.EqualValues(t, stripSpaces(fmtArgs(args3)), stripSpaces(a3))
 }
 
 func fmtArgs(args []any) string {

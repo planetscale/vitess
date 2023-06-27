@@ -276,7 +276,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, bufferWrites bool, laten
 	errorChan := make(chan error, 32)
 	var resolveErr error
 
-	if tabletAlias != "" {
+	if tabletAlias == "" {
 		return instance, fmt.Errorf("ReadTopologyInstance will not act on empty tablet alias")
 	}
 
@@ -704,10 +704,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, bufferWrites bool, laten
 	// We register the rule even if it hasn't changed,
 	// to bump the last_suggested time.
 	instance.PromotionRule = PromotionRule(durability, tablet)
-	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(&InstanceKey{
-		Hostname: instance.Hostname,
-		Port:     instance.Port,
-	}, instance.PromotionRule).WithCurrentTime())
+	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instance.InstanceAlias, instance.PromotionRule).WithCurrentTime())
 	logReadTopologyInstanceError(instance.InstanceAlias, "RegisterCandidateInstance", err)
 
 	// TODO(sougou): delete cluster_alias_override metadata
@@ -1121,8 +1118,8 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
     	ifnull(database_instance_downtime.end_timestamp, '') as downtime_end_timestamp
 		from
 		    vitess_tablet
-			left database_instance using (alias, hostname, port)
-			left join candidate_database_instance using (hostname, port)
+			left join database_instance using (alias, hostname, port)
+			left join candidate_database_instance using (alias)
 			left join hostname_unresolve using (hostname)
 			left join database_instance_downtime using (hostname, port)
 		where

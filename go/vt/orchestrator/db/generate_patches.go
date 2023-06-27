@@ -304,7 +304,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance_analysis_changelog
-			ADD KEY instance_timestamp_idx (hostname, port, analysis_timestamp)
+			ADD KEY instance_timestamp_idx (alias, analysis_timestamp)
 	`,
 	`
 		ALTER TABLE
@@ -476,7 +476,7 @@ var generateSQLPatches = []string{
 		DROP INDEX hostname_port_active_period_uidx_topology_failure_detection ON topology_failure_detection
 	`,
 	`
-		CREATE UNIQUE INDEX host_port_active_recoverable_uidx_topology_failure_detection ON topology_failure_detection (hostname, port, in_active_period, end_active_period_unixtime, is_actionable)
+		CREATE UNIQUE INDEX alias_active_recoverable_uidx_topology_failure_detection ON topology_failure_detection (alias, in_active_period, end_active_period_unixtime, is_actionable)
 	`,
 	`
 		ALTER TABLE raft_snapshot
