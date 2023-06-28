@@ -133,13 +133,7 @@ func (code AggregateOpcode) Type(typ *querypb.Type) (querypb.Type, bool) {
 	case AggregateUnassigned:
 		return sqltypes.Null, false
 	case AggregateGroupConcat:
-		if typ == nil {
-			return sqltypes.Text, false
-		}
-		if sqltypes.IsBinary(*typ) {
-			return sqltypes.Blob, true
-		}
-		return sqltypes.Text, true
+		return sqltypes.Text, true // TODO: REMOVE! SHOULD NOT BE USED
 	case AggregateMax, AggregateMin, AggregateAnyValue:
 		if typ == nil {
 			return sqltypes.Null, false

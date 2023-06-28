@@ -178,6 +178,11 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 func (sa *ScalarAggregate) createEmptyRow() ([]sqltypes.Value, error) {
 	out := make([]sqltypes.Value, len(sa.Aggregates))
 	for i, aggr := range sa.Aggregates {
+		if aggr.AggrLogic != nil {
+			out[i] = aggr.AggrLogic.EmptyResult()
+			continue
+		}
+
 		op := aggr.Opcode
 		if aggr.OrigOpcode != AggregateUnassigned {
 			op = aggr.OrigOpcode
