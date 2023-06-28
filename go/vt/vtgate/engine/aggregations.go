@@ -32,28 +32,48 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-// AggregateParams specify the parameters for each aggregation.
-// It contains the opcode and input column number.
-type AggregateParams struct {
-	Opcode    AggregateOpcode
-	AggrLogic *GroupConcat
+type (
+	// AggregateParams specify the parameters for each aggregation.
+	// It contains the opcode and input column number.
+	AggregateParams struct {
+		Opcode    AggregateOpcode
+		AggrLogic AggrLogic
 
-	Col int
+		Col int
 
-	// These are used only for distinct opcodes.
-	KeyCol      int
-	WCol        int
-	WAssigned   bool
-	CollationID collations.ID
+		// These are used only for distinct opcodes.
+		KeyCol      int
+		WCol        int
+		WAssigned   bool
+		CollationID collations.ID
 
-	Alias    string `json:",omitempty"`
-	Expr     sqlparser.Expr
-	Original *sqlparser.AliasedExpr
+		Alias    string `json:",omitempty"`
+		Expr     sqlparser.Expr
+		Original *sqlparser.AliasedExpr
 
-	// This is based on the function passed in the select expression and
-	// not what we use to aggregate at the engine primitive level.
-	OrigOpcode AggregateOpcode
-}
+		// This is based on the function passed in the select expression and
+		// not what we use to aggregate at the engine primitive level.
+		OrigOpcode AggregateOpcode
+	}
+
+	AggrLogic interface {
+		IsDistinct() bool
+		Type(in *sqltypes.Type) (sqltypes.Type, bool)
+		FirstValueInGroup(in sqltypes.Value, expected sqltypes.Type) sqltypes.Value
+		AddToGroup(acc, val sqltypes.Value, expected querypb.Type) (sqltypes.Value, error)
+		EmptyResult() sqltypes.Value
+	}
+
+	NullEmptyValue struct{}
+	NotDistinct    struct{}
+
+	GroupConcat struct {
+		NullEmptyValue
+		NotDistinct
+	}
+)
+
+var _ AggrLogic = GroupConcat{}
 
 func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *AggregateParams {
 	var aggrLogic *GroupConcat
@@ -69,13 +89,11 @@ func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *Aggregate
 	}
 }
 
-type GroupConcat struct{}
-
-func (c *GroupConcat) IsDistinct() bool {
+func (NotDistinct) IsDistinct() bool {
 	return false
 }
 
-func (c *GroupConcat) Type(in *sqltypes.Type) (sqltypes.Type, bool) {
+func (GroupConcat) Type(in *sqltypes.Type) (sqltypes.Type, bool) {
 	if in == nil {
 		return sqltypes.Text, false
 	}
@@ -85,26 +103,26 @@ func (c *GroupConcat) Type(in *sqltypes.Type) (sqltypes.Type, bool) {
 	return sqltypes.Text, true
 }
 
-func (c *GroupConcat) FirstValueInGroup(in sqltypes.Value, expected sqltypes.Type) sqltypes.Value {
+func (GroupConcat) FirstValueInGroup(in sqltypes.Value, expected sqltypes.Type) sqltypes.Value {
 	if in.IsNull() {
 		return in
 	}
 	return sqltypes.MakeTrusted(expected, []byte(in.ToString()))
 }
 
-func (c *GroupConcat) AddToGroup(acc, val sqltypes.Value, expected querypb.Type) (sqltypes.Value, error) {
+func (gc GroupConcat) AddToGroup(acc, val sqltypes.Value, expected querypb.Type) (sqltypes.Value, error) {
 	if val.IsNull() {
 		return acc, nil
 	}
 
 	if acc.IsNull() {
-		return c.FirstValueInGroup(val, expected), nil
+		return gc.FirstValueInGroup(val, expected), nil
 	}
 	concat := acc.ToString() + "," + val.ToString()
 	return sqltypes.MakeTrusted(expected, []byte(concat)), nil
 }
 
-func (c *GroupConcat) EmptyResult() sqltypes.Value {
+func (NullEmptyValue) EmptyResult() sqltypes.Value {
 	return sqltypes.NULL
 }
 
