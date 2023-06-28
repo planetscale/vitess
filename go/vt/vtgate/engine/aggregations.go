@@ -35,8 +35,10 @@ import (
 // AggregateParams specify the parameters for each aggregation.
 // It contains the opcode and input column number.
 type AggregateParams struct {
-	Opcode AggregateOpcode
-	Col    int
+	Opcode    AggregateOpcode
+	AggrLogic *GroupConcat
+
+	Col int
 
 	// These are used only for distinct opcodes.
 	KeyCol      int
@@ -53,17 +55,64 @@ type AggregateParams struct {
 	OrigOpcode AggregateOpcode
 }
 
-func (ap *AggregateParams) isDistinct() bool {
-	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct
+func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *AggregateParams {
+	var aggrLogic *GroupConcat
+	switch opcode {
+	case AggregateGroupConcat:
+		aggrLogic = &GroupConcat{}
+	}
+	return &AggregateParams{
+		Opcode:    opcode,
+		AggrLogic: aggrLogic,
+		Col:       col,
+		Alias:     alias,
+	}
 }
 
-func (ap *AggregateParams) preProcess() bool {
-	switch ap.Opcode {
-	case AggregateCountDistinct, AggregateSumDistinct, AggregateGtid, AggregateCount, AggregateGroupConcat:
-		return true
-	default:
-		return false
+type GroupConcat struct{}
+
+func (c *GroupConcat) IsDistinct() bool {
+	return false
+}
+
+func (c *GroupConcat) Type(in *sqltypes.Type) (sqltypes.Type, bool) {
+	if in == nil {
+		return sqltypes.Text, false
 	}
+	if sqltypes.IsBinary(*in) {
+		return sqltypes.Blob, true
+	}
+	return sqltypes.Text, true
+}
+
+func (c *GroupConcat) FirstValueInGroup(in sqltypes.Value, expected sqltypes.Type) sqltypes.Value {
+	if in.IsNull() {
+		return in
+	}
+	return sqltypes.MakeTrusted(expected, []byte(in.ToString()))
+}
+
+func (c *GroupConcat) AddToGroup(acc, val sqltypes.Value, expected querypb.Type) (sqltypes.Value, error) {
+	if val.IsNull() {
+		return acc, nil
+	}
+
+	if acc.IsNull() {
+		return c.FirstValueInGroup(val, expected), nil
+	}
+	concat := acc.ToString() + "," + val.ToString()
+	return sqltypes.MakeTrusted(expected, []byte(concat)), nil
+}
+
+func (c *GroupConcat) EmptyResult() sqltypes.Value {
+	return sqltypes.NULL
+}
+
+func (ap *AggregateParams) isDistinct() bool {
+	if ap.AggrLogic != nil {
+		return ap.AggrLogic.IsDistinct()
+	}
+	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct
 }
 
 func (ap *AggregateParams) String() string {
@@ -85,6 +134,10 @@ func (ap *AggregateParams) String() string {
 }
 
 func (ap *AggregateParams) typ(inputType querypb.Type) querypb.Type {
+	if ap.AggrLogic != nil {
+		typ, _ := ap.AggrLogic.Type(&inputType)
+		return typ
+	}
 	opCode := ap.Opcode
 	if ap.OrigOpcode != AggregateUnassigned {
 		opCode = ap.OrigOpcode
@@ -101,6 +154,10 @@ func convertRow(
 	newRow = append(newRow, row...)
 	curDistincts = make([]sqltypes.Value, len(aggregates))
 	for index, aggr := range aggregates {
+		if aggr.AggrLogic != nil {
+			row[aggr.Col] = aggr.AggrLogic.FirstValueInGroup(row[aggr.Col], fields[aggr.Col].Type)
+			continue
+		}
 		switch aggr.Opcode {
 		case AggregateCountStar:
 			newRow[aggr.Col] = countOne
@@ -145,9 +202,7 @@ func convertRow(
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			newRow[aggr.Col] = val
 		case AggregateGroupConcat:
-			if !row[aggr.Col].IsNull() {
-				newRow[aggr.Col] = sqltypes.MakeTrusted(fields[aggr.Col].Type, []byte(row[aggr.Col].ToString()))
-			}
+			panic("should not be used")
 		}
 	}
 	return newRow, curDistincts
@@ -173,6 +228,15 @@ func merge(
 				continue
 			}
 			curDistincts[index] = findComparableCurrentDistinct(row2, aggr)
+		}
+
+		if aggr.AggrLogic != nil {
+			var err error
+			result[aggr.Col], err = aggr.AggrLogic.AddToGroup(result[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
+			if err != nil {
+				return nil, nil, err
+			}
+			continue
 		}
 
 		var err error
@@ -221,16 +285,6 @@ func merge(
 			result[aggr.Col] = val
 		case AggregateAnyValue:
 			// we just grab the first value per grouping. no need to do anything more complicated here
-		case AggregateGroupConcat:
-			if row2[aggr.Col].IsNull() {
-				break
-			}
-			if result[aggr.Col].IsNull() {
-				result[aggr.Col] = sqltypes.MakeTrusted(fields[aggr.Col].Type, []byte(row2[aggr.Col].ToString()))
-				break
-			}
-			concat := row1[aggr.Col].ToString() + "," + row2[aggr.Col].ToString()
-			result[aggr.Col] = sqltypes.MakeTrusted(fields[aggr.Col].Type, []byte(concat))
 		default:
 			return nil, nil, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
 		}
