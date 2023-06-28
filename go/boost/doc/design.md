@@ -38,6 +38,17 @@ This recursive algorithm is elegant, but not efficient. Although in some particu
 
 This extremely common case, which applies to any SQL query that performs an aggregation or grouping, can also be generalized to more SQL operators. The underlying issue is that Noria, as a stand-alone database system, does not have support for _directly executing SQL queries_. All it can do is feed individual rows through the SQL operators in its dataflow to compute the final results, but in many cases these calculations require millions of rows as an input. In practical effects, this means that filling misses in Noria is often tens or hundreds of times slower than just directly calculating the query in a traditional relational database.
 
+> ![](img/1.png)
+> 
+> _Fig 1: Simplified dataflow in Noria as a standalone database system for a query that contains a nested aggregation, e.g._
+> ```
+> SELECT repository.id, repository.owner_id, repository.name, starcount.stars
+> FROM repository
+>    LEFT JOIN (SELECT star.repository_id, COUNT(star.user_id) AS stars
+>               FROM star GROUP BY star.repository_id) AS starcount
+>    ON (repository.id = starcount.repository_id) WHERE repository.id = ?;
+> ```
+
 ### The first version of Boost
 
 For the first prototype of Boost, and all the way to its first beta release, we followed Noria’s architecture very closely. Although Boost is implemented as a Go service in the Vitess codebase, we ported over a lot of the abstractions and designs in Noria’s Rust code. There were of course significant changes to be done, because after all Boost was implemented as a _cache_ on top of a Vitess cluster, while Noria was a stand-alone database.
@@ -53,11 +64,19 @@ To solve this problem, we developed an algorithm that is applied on each externa
 These two modifications are the main differentiators between Noria and Boost, and this is the design we launched as a limited beta on late November. However, after actual production testing of the system, we uncovered two glaring issues which forced us to re-architect Boost:
 
 1. The underlying performance issue in Noria’s design, caused by having to replay individual rows from the Bases, is exacerbated by replacing the Bases with an external source of data.
-2. The GTID tracker is not logically correct in all circumstances, and hence our preliminary patent filing is not particularly useful. The system is still vulnerable to seeing duplicated data in some dataflow layouts, which we will discuss later.
+2. The GTID tracker is not logically correct in all circumstances, and hence our preliminary patent filing is not particularly useful. The system is still vulnerable to seeing duplicated data in some dataflow layouts, which we will discuss later.*
+
+>  ![](img/2.png)
+>  
+> _Fig 2: Dataflow in Boost as a caching layer on top of an existing database_
 
 ### The terrible performance of misses
 
 We had suspicions that the way Noria handled misses would also affect Boost, as the design for filling misses was essentially identical, but it turned out that the problem was much worse. Replaying individual rows over the network was an order of magnitude more expensive than replaying them from local storage, mostly because of latency and (de)serialization costs. In practice, the performance when filling misses in Boost was so bad that most Boost queries that missed would simply time out.
+
+>  ![](img/3.png)
+>  
+> _Fig 3: Dataflow in Noria when filling a miss for an aggregation. All the individual rows required to fill the aggregation are always fetched from the base table `votes`_
 
 The reason why the miss-filling algorithm in Noria is recursive is because it cannot compute SQL expressions directly. Upqueries would always end up missing throughout the dataflow all the way to a Base, because when you upquery an intermediate operator in Noria and the data is missing, the only possible way to fill this data is by replaying every individual row that is required to compute the data through the operator. This is incredibly inefficient.
 
@@ -68,6 +87,10 @@ The new algorithm exploits the fact that our underlying data store, a Vitess clu
 3. To fill the miss on the target node, we perform the reverse-equivalent SQL expression for the operator in our upstream database. We use Vitess’ internal routing logic (the same logic that can be found inside a VTGate) to route the complex SQL across shards.
 4. The results of this query are **not** considered a replay, as they do not contain _individual rows_ to be forwarded through the dataflow operator. Instead, these results are specifically tagged so that they fill the state in the target node by being _inserted directly_ into its state table, not processed (note that the “processing” that would be performed on the rows of a replay has already been performed by MySQL here).
 5. If necessary, once the state has been filled, a replay is triggered to forward the new rows downstream all the way to the Reader.
+
+> ![](img/4.png)
+> 
+> _Fig 4: Dataflow in Boost when filling a miss for an aggregation. The final result of the aggregation is flows directly from the underlying database into the aggregation node, which relays it through_
 
 To highlight the importance of point 4, let us see the difference between the way Noria and Boost would fill a miss on our previous example query (`SELECT COUNT(*) FROM tbl WHERE tbl.a = ?`). In an original Noria replay, to fill the miss for value `X`, the aggregation operator node would receive a replay containing all the rows in `tbl` where `tbl.a = X`. Then, it would process each row individually, accumulate their count, and store their count `C` in its state table. The result `C` is the single-row, single-column output of the operator, which will then be forwarded through any downstream operators in the dataflow until the miss is filled in the Reader. Hence, the aggregation operator has processed an arbitrary amount of rows, $O(n)$ with the total number of rows in the underlying table.
 
@@ -115,6 +138,10 @@ Taking this correctness issue into account, we can now amend the original design
 	3. Otherwise, if the record in the change event is a record that _could possibly be returned by one of the in-flight upqueries_ (we can check this because we know the _primary key_ for the in-flight upquery, and we know the primary key for this record): we buffer the full contents of the change event in the in-flight set for the GTID tracker. The buffered events will be yielded _after_ the in-flight query is finished, as explained in section 5.4. **Since the VStream change event has been buffered, we will skip processing it right now**. It is important to note that this whole check for a VStream change event will be applied _again_ after the buffered contents are yielded, and that this second check cannot trigger buffering again, because there won’t be any in-flight misses for the data we’ve already buffered.
 7. Before we process _any record_ in any of the operators of the dataflow graph, we figure out all the Tags that belong to the operator’s node (this is, the set of all unique paths through the DAG that cross this specific node — this can be pre-computed at plan time). **If the record is tagged with any of the node’s Tags, we do not process it**.
 
+> ![](img/5.png)
+> 
+> _Fig 5: GTID tracking is implemented at every level of the dataflow and handles incoming data from the underlying database_
+
 This algorithm, which we believe to be novel, is applied on every node that contains a partial materialization, and is correct regardless of how many times this node is reused throughout the dataflow graph. It prevents any of the nodes from seeing duplicated packets between the external upqueries that are originated from each node and any VStream change events which the node observes. It does so by _tagging_ the records in VStream change events with unique identifiers for the paths in the DAG that have seen them before, and by delaying any of the VStream change events that could conflict with any existing in-flight external upqueries. This delay or buffering is pessimistic (it can delay events that won’t conflict in practice) but conservative (in practice, it delays a small subset of all the VStream change events that flow through the node).
 
 ### Partially Materialized Views for Range Queries
@@ -139,6 +166,10 @@ By introducing this restriction, we scope down the complexity of keeping track o
 
 This design was much simpler to implement compared to using interval trees throughout the dataflow, and provides very good real world performance characteristics. Even in pathological cases, such as where the equality filter in the query is for a column with very few unique values (causing the sub-tree that is being fetched to be very large), the system degrades into the equivalent of a fully materialized view. In common queries, which frequently have two or more equality operators as filter conditions, the amount of data fetched on each sub-tree is very similar to the theoretical minimum (i.e. what would be fetched if holes were being tracked by a interval tree).
 
+> ![](img/6.png)
+> 
+> _Fig 6: An example view for a point query, implemented as a Hash Table, where holes are explicitly marked as such. Below, an example view for a range query, where the B-Tree data structure tracks the individual values for the query while a separate Hash Table explicitly tracks the holes for all the prefixes._
+
 
 
 ### Arbitrary Filter Expressions
@@ -160,6 +191,20 @@ The logic of the algorithm is as follows: To construct the indexing key,
 Let us see an example: For a complex query such as `WHERE tbl.a > ? AND tbl.b = ? and tbl.a <= ? AND tbl.c IN (?) AND tbl.d LIKE ?`, our algorithm selects the sub-set of filtering expressions that can be used to create an index into the partially materialized view. In this case, that would be `tbl.a > ? and tbl.b = ? AND tbl.a <= ?`, and the resulting index would be `[b, a]`, with queries ranging from `[b, a_lower]` to `[b, a_upper]` in an ordered data store.  The remaining filter operations, `tbl.c IN (?) AND tbl.d LIKE ?`, will be applied at query time.
 
 With this approach, we split the dataflow in two phases: the traditional dataflow that we previously described, that results in a partially materialized view, and a query-time dataflow step that is performed on the sub-set of results that are returned from the partially materialized view. By creating a broader materialized view, we have a slightly less efficient cache that supports any arbitrary filtering expression by paying a performance cost of delaying part of the dataflow operators at query time.
+
+> ![](img/7.png)
+> 
+> _Fig 7: The dataflow of a query split between write-time dataflow and query-time dataflow with post-processing_
+> _The query is similar to that of Fig 1, but includes a `repository.name NOT IN (?)` filter that cannot be processed
+> as part of the dataflow. Hence, such filter is applied at query time in the post-processing filter **PF**_
+> ```
+> SELECT repository.id, repository.owner_id, repository.name, starcount.stars
+> FROM repository
+>    LEFT JOIN (SELECT star.repository_id, COUNT(star.user_id) AS stars
+>               FROM star GROUP BY star.repository_id) AS starcount
+>    ON (repository.id = starcount.repository_id) WHERE repository.id = ? AND repository.name NOT IN (?);
+> ```
+
 
 The query-time dataflow step is defined as a set of operations performed at query time based on the output of a broader partially materialized result set and the parameters the user has supplied. These operations are implemented using the same primitives as the dataflow, to ensure results are consistent, and they have two phases: **filtering** and **aggregation**.
 
