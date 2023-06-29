@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	"golang.org/x/exp/slices"
 	"strconv"
 
 	"google.golang.org/protobuf/proto"
@@ -55,31 +56,17 @@ type (
 		// not what we use to aggregate at the engine primitive level.
 		OrigOpcode AggregateOpcode
 	}
-
-	AggrLogic interface {
-		IsDistinct() bool
-		Type(in *sqltypes.Type) (sqltypes.Type, bool)
-		FirstValueInGroup(in sqltypes.Value, expected sqltypes.Type) sqltypes.Value
-		AddToGroup(acc, val sqltypes.Value, expected querypb.Type) (sqltypes.Value, error)
-		EmptyResult() sqltypes.Value
-	}
-
-	NullEmptyValue struct{}
-	NotDistinct    struct{}
-
-	GroupConcat struct {
-		NullEmptyValue
-		NotDistinct
-	}
 )
 
-var _ AggrLogic = GroupConcat{}
-
 func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *AggregateParams {
-	var aggrLogic *GroupConcat
+	var aggrLogic AggrLogic
 	switch opcode {
 	case AggregateGroupConcat:
-		aggrLogic = &GroupConcat{}
+		aggrLogic = GroupConcat{}
+	case AggregateCountStar:
+		aggrLogic = CountStar{}
+	case AggregateCount:
+		aggrLogic = Count{Distinct: false}
 	}
 	return &AggregateParams{
 		Opcode:    opcode,
@@ -87,43 +74,6 @@ func NewAggregateParam(opcode AggregateOpcode, col int, alias string) *Aggregate
 		Col:       col,
 		Alias:     alias,
 	}
-}
-
-func (NotDistinct) IsDistinct() bool {
-	return false
-}
-
-func (GroupConcat) Type(in *sqltypes.Type) (sqltypes.Type, bool) {
-	if in == nil {
-		return sqltypes.Text, false
-	}
-	if sqltypes.IsBinary(*in) {
-		return sqltypes.Blob, true
-	}
-	return sqltypes.Text, true
-}
-
-func (GroupConcat) FirstValueInGroup(in sqltypes.Value, expected sqltypes.Type) sqltypes.Value {
-	if in.IsNull() {
-		return in
-	}
-	return sqltypes.MakeTrusted(expected, []byte(in.ToString()))
-}
-
-func (gc GroupConcat) AddToGroup(acc, val sqltypes.Value, expected querypb.Type) (sqltypes.Value, error) {
-	if val.IsNull() {
-		return acc, nil
-	}
-
-	if acc.IsNull() {
-		return gc.FirstValueInGroup(val, expected), nil
-	}
-	concat := acc.ToString() + "," + val.ToString()
-	return sqltypes.MakeTrusted(expected, []byte(concat)), nil
-}
-
-func (NullEmptyValue) EmptyResult() sqltypes.Value {
-	return sqltypes.NULL
 }
 
 func (ap *AggregateParams) isDistinct() bool {
@@ -169,29 +119,21 @@ func convertRow(
 	row []sqltypes.Value,
 	aggregates []*AggregateParams,
 ) (newRow []sqltypes.Value, curDistincts []sqltypes.Value) {
-	newRow = append(newRow, row...)
+	newRow = slices.Clone(row)
 	curDistincts = make([]sqltypes.Value, len(aggregates))
 	for index, aggr := range aggregates {
 		if aggr.AggrLogic != nil {
-			row[aggr.Col] = aggr.AggrLogic.FirstValueInGroup(row[aggr.Col], fields[aggr.Col].Type)
+			newRow[aggr.Col] = aggr.AggrLogic.FirstValueInGroup(row[aggr.Col], fields[aggr.Col].Type)
 			continue
 		}
 		switch aggr.Opcode {
-		case AggregateCountStar:
-			newRow[aggr.Col] = countOne
-		case AggregateCount:
-			val := countOne
-			if row[aggr.Col].IsNull() {
-				val = countZero
-			}
-			newRow[aggr.Col] = val
 		case AggregateCountDistinct:
 			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
 			// Type is int64. Ok to call MakeTrusted.
 			if row[aggr.KeyCol].IsNull() {
-				newRow[aggr.Col] = countZero
+				newRow[aggr.Col] = intZero
 			} else {
-				newRow[aggr.Col] = countOne
+				newRow[aggr.Col] = intOne
 			}
 		case AggregateSum:
 			if row[aggr.Col].IsNull() {
@@ -200,27 +142,29 @@ func convertRow(
 			var err error
 			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], fields[aggr.Col].Type)
 			if err != nil {
-				newRow[aggr.Col] = sumZero
+				newRow[aggr.Col] = decimalZero
 			}
 		case AggregateSumDistinct:
 			curDistincts[index] = findComparableCurrentDistinct(row, aggr)
 			var err error
 			newRow[aggr.Col], err = evalengine.Cast(row[aggr.Col], fields[aggr.Col].Type)
 			if err != nil {
-				newRow[aggr.Col] = sumZero
+				newRow[aggr.Col] = decimalZero
 			}
 		case AggregateGtid:
 			vgtid := &binlogdatapb.VGtid{}
 			vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{
-				Keyspace: row[aggr.Col-1].ToString(),
-				Shard:    row[aggr.Col+1].ToString(),
-				Gtid:     row[aggr.Col].ToString(),
+				Keyspace: row[0].ToString(),
+				Gtid:     row[1].ToString(),
+				Shard:    row[2].ToString(),
 			})
 			data, _ := vgtid.MarshalVT()
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			newRow[aggr.Col] = val
-		case AggregateGroupConcat:
-			panic("should not be used")
+		case AggregateAnyValue, AggregateMin, AggregateMax:
+
+		default:
+			panic(fmt.Sprintf("%s should not be used", aggr.Opcode.String()))
 		}
 	}
 	return newRow, curDistincts
@@ -259,14 +203,6 @@ func merge(
 
 		var err error
 		switch aggr.Opcode {
-		case AggregateCountStar:
-			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], countOne, fields[aggr.Col].Type)
-		case AggregateCount:
-			val := countOne
-			if row2[aggr.Col].IsNull() {
-				val = countZero
-			}
-			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], val, fields[aggr.Col].Type)
 		case AggregateSum:
 			value := row1[aggr.Col]
 			v2 := row2[aggr.Col]
@@ -280,7 +216,7 @@ func merge(
 		case AggregateMax:
 			result[aggr.Col], err = evalengine.Max(row1[aggr.Col], row2[aggr.Col], aggr.CollationID)
 		case AggregateCountDistinct:
-			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], countOne, fields[aggr.Col].Type)
+			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], intOne, fields[aggr.Col].Type)
 		case AggregateSumDistinct:
 			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
 		case AggregateGtid:

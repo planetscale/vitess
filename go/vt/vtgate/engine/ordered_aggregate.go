@@ -30,9 +30,9 @@ import (
 
 var (
 	// Some predefined values
-	countZero = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
-	countOne  = sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))
-	sumZero   = sqltypes.MakeTrusted(sqltypes.Decimal, []byte("0"))
+	intZero     = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
+	intOne      = sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))
+	decimalZero = sqltypes.MakeTrusted(sqltypes.Decimal, []byte("0"))
 )
 
 var _ Primitive = (*OrderedAggregate)(nil)

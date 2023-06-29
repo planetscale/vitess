@@ -1175,11 +1175,9 @@ func TestGroupConcatWithAggrOnEngine(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
 			oa := &OrderedAggregate{
-				Aggregates: []*AggregateParams{{
-					Opcode: AggregateGroupConcat,
-					Col:    1,
-					Alias:  "group_concat(c2)",
-				}},
+				Aggregates: []*AggregateParams{
+					NewAggregateParam(AggregateGroupConcat, 1, "group_concat(c2)"),
+				},
 				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 				Input:       fp,
 			}
@@ -1258,10 +1256,9 @@ func TestGroupConcat(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
 			oa := &OrderedAggregate{
-				Aggregates: []*AggregateParams{{
-					Opcode: AggregateGroupConcat,
-					Col:    1,
-				}},
+				Aggregates: []*AggregateParams{
+					NewAggregateParam(AggregateGroupConcat, 1, ""),
+				},
 				GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 				Input:       fp,
 			}
