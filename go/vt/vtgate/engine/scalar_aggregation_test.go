@@ -80,14 +80,11 @@ func TestEmptyRows(outer *testing.T) {
 				)},
 			}
 
+			param := NewAggregateParam(test.opcode, 0, test.opcode.String())
+			param.OrigOpcode = test.origOpcode
 			oa := &ScalarAggregate{
-				Aggregates: []*AggregateParams{{
-					Opcode:     test.opcode,
-					Col:        0,
-					Alias:      test.opcode.String(),
-					OrigOpcode: test.origOpcode,
-				}},
-				Input: fp,
+				Aggregates: []*AggregateParams{param},
+				Input:      fp,
 			}
 
 			result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
@@ -232,12 +229,8 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
 			oa := &ScalarAggregate{
-				Aggregates: []*AggregateParams{{
-					Opcode: AggregateGroupConcat,
-					Col:    0,
-					Alias:  "group_concat(c2)",
-				}},
-				Input: fp,
+				Aggregates: []*AggregateParams{NewAggregateParam(AggregateGroupConcat, 0, "group_concat(c2)")},
+				Input:      fp,
 			}
 			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)
@@ -309,11 +302,8 @@ func TestScalarGroupConcat(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			fp := &fakePrimitive{results: []*sqltypes.Result{tcase.inputResult}}
 			oa := &ScalarAggregate{
-				Aggregates: []*AggregateParams{{
-					Opcode: AggregateGroupConcat,
-					Col:    0,
-				}},
-				Input: fp,
+				Aggregates: []*AggregateParams{NewAggregateParam(AggregateGroupConcat, 0, "")},
+				Input:      fp,
 			}
 			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)
