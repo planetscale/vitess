@@ -72,8 +72,6 @@ jobs:
 
         go mod download
 
-        sudo apt-get install percona-xtrabackup-80 lz4
-
     - name: Run cluster endtoend test
       timeout-minutes: 45
       run: |
