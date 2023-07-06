@@ -256,7 +256,7 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		"--disable_active_reparents")
+		/*"--disable_active_reparents"*/)
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -327,7 +327,7 @@ func setupShardLegacy(ctx context.Context, t *testing.T, clusterInstance *cluste
 
 //endregion
 
-//region database queries
+// region database queries
 func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	connParams := mysql.ConnParams{
 		Uname:      username,
