@@ -187,8 +187,8 @@ type ReplicationAnalysis struct {
 type AnalysisMap map[string](*ReplicationAnalysis)
 
 type ReplicationAnalysisChangelog struct {
-	AnalyzedInstanceKey InstanceKey
-	Changelog           []string
+	AnalyzedInstanceAlias string
+	Changelog             []string
 }
 
 func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
