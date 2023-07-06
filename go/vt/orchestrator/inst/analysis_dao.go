@@ -852,21 +852,20 @@ func ExpireInstanceAnalysisChangelog() error {
 func ReadReplicationAnalysisChangelog() (res [](*ReplicationAnalysisChangelog), err error) {
 	query := `
 		select
-      hostname,
-      port,
+      alias,
 			analysis_timestamp,
 			analysis
 		from
 			database_instance_analysis_changelog
 		order by
-			hostname, port, changelog_id
+			alias, changelog_id
 		`
 	analysisChangelog := &ReplicationAnalysisChangelog{}
 	err = db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
-		key := InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
+		alias := m.GetString("alias")
 
-		if !analysisChangelog.AnalyzedInstanceKey.Equals(&key) {
-			analysisChangelog = &ReplicationAnalysisChangelog{AnalyzedInstanceKey: key, Changelog: []string{}}
+		if analysisChangelog.AnalyzedInstanceAlias != alias {
+			analysisChangelog = &ReplicationAnalysisChangelog{AnalyzedInstanceAlias: alias, Changelog: []string{}}
 			res = append(res, analysisChangelog)
 		}
 		analysisEntry := fmt.Sprintf("%s;%s,", m.GetString("analysis_timestamp"), m.GetString("analysis"))

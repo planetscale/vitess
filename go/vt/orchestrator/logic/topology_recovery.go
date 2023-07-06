@@ -1109,7 +1109,7 @@ func RecoverDeadCoPrimary(topologyRecovery *TopologyRecovery, skipProcesses bool
 
 	func() error {
 		inst.BeginDowntime(inst.NewDowntime(failedInstanceKey, inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
-		acknowledgeInstanceFailureDetection(&analysisEntry.AnalyzedInstanceKey)
+		acknowledgeInstanceFailureDetection(analysisEntry.AnalyzedInstanceAlias)
 		for _, replica := range lostReplicas {
 			replica := replica
 			inst.BeginDowntime(inst.NewDowntime(replica.Key(), inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
