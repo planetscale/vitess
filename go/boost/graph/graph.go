@@ -4,8 +4,6 @@ import (
 	"math"
 
 	"go.uber.org/zap"
-
-	math2 "vitess.io/vitess/go/vt/vtorc/util"
 )
 
 type Direction int
@@ -91,7 +89,12 @@ func (g *Graph[N]) AddEdge(from, to NodeIdx) EdgeIdx {
 	}
 
 	a, b := int(from), int(to)
-	max := math2.MaxInt(a, b)
+	var max int
+	if a > b {
+		max = a
+	} else {
+		max = b
+	}
 	switch {
 	case max >= len(g.nodes):
 		panic("Graph.AddEdge: node indices out of bounds")

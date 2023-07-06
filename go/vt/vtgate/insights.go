@@ -56,7 +56,6 @@ import (
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
-	vtmath "vitess.io/vitess/go/vt/vtorc/util"
 )
 
 const (
@@ -678,13 +677,13 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *u
 		pa.ErrorCount++
 	}
 	pa.SumShardQueries += ls.ShardQueries
-	pa.MaxShardQueries = vtmath.MaxUInt64(pa.MaxShardQueries, ls.ShardQueries)
+	pa.MaxShardQueries = maxUInt64(pa.MaxShardQueries, ls.ShardQueries)
 	pa.SumRowsRead += ls.RowsRead
-	pa.MaxRowsRead = vtmath.MaxUInt64(pa.MaxRowsRead, ls.RowsRead)
+	pa.MaxRowsRead = maxUInt64(pa.MaxRowsRead, ls.RowsRead)
 	pa.SumRowsAffected += ls.RowsAffected
-	pa.MaxRowsAffected = vtmath.MaxUInt64(pa.MaxRowsAffected, ls.RowsAffected)
+	pa.MaxRowsAffected = maxUInt64(pa.MaxRowsAffected, ls.RowsAffected)
 	pa.SumRowsReturned += ls.RowsReturned
-	pa.MaxRowsReturned = vtmath.MaxUInt64(pa.MaxRowsReturned, ls.RowsReturned)
+	pa.MaxRowsReturned = maxUInt64(pa.MaxRowsReturned, ls.RowsReturned)
 	pa.SumTotalDuration += ls.TotalTime()
 	pa.MaxTotalDuration = maxDuration(pa.MaxTotalDuration, ls.TotalTime())
 	pa.SumPlanDuration += ls.PlanTime
@@ -839,7 +838,7 @@ func efficientlyTruncate(str string, maxLength int) string {
 
 	str = str[:maxLength]
 	idx := len(str) - 1
-	left := vtmath.MaxInt(maxLength-3, 0)
+	left := maxInt(maxLength-3, 0)
 
 	// rewind past any multibyte continuation
 	for idx >= left && str[idx]&0xc0 == 0x80 {
@@ -1118,4 +1117,18 @@ func durationOrNil(d time.Duration) *durationpb.Duration {
 func (ii *Insights) MockTimer() {
 	// Send a nil to the LogChan to force a flush.  Only for use in unit tests.
 	ii.LogChan <- nil
+}
+
+func maxUInt64(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func maxInt(a int, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
