@@ -19,11 +19,11 @@ package inst
 import (
 	"fmt"
 	"regexp"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/process"
@@ -44,12 +44,12 @@ var analysisChangeWriteAttemptCounter = metrics.NewCounter()
 var analysisChangeWriteCounter = metrics.NewCounter()
 
 var recentInstantAnalysis *cache.Cache
-var initilizationComplete atomic.Bool
+var initilizationComplete sync2.AtomicBool
 
 func init() {
 	metrics.Register("analysis.change.write.attempt", analysisChangeWriteAttemptCounter)
 	metrics.Register("analysis.change.write", analysisChangeWriteCounter)
-	initilizationComplete.Store(false)
+	initilizationComplete.Set(false)
 
 	go initializeAnalysisDaoPostConfiguration()
 }
@@ -58,7 +58,7 @@ func initializeAnalysisDaoPostConfiguration() {
 	config.WaitForConfigurationToBeLoaded()
 
 	recentInstantAnalysis = cache.New(time.Duration(config.RecoveryPollSeconds*2)*time.Second, time.Second)
-	initilizationComplete.Store(true)
+	initilizationComplete.Set(true)
 }
 
 type clusterAnalysis struct {
