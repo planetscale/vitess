@@ -71,6 +71,57 @@ func TestDownPrimary(t *testing.T) {
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
 }
 
+// bring down primary before VTOrc has started, let vtorc repair.
+func TestDownPrimaryBeforeVTOrc(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{}, 0, "none")
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	curPrimary := shard0.Vttablets[0]
+
+	// Promote the first tablet as the primary
+	err := clusterInfo.ClusterInstance.VtctlclientProcess.InitializeShard(keyspace.Name, shard0.Name, clusterInfo.ClusterInstance.Cell, curPrimary.TabletUID)
+	require.NoError(t, err)
+
+	// find the replica and rdonly tablets
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two replcia tablets, so the one not the primary must be the other replica
+		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	assert.NotNil(t, replica, "could not find replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
+	// check that the replication is setup correctly before we failover
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
+
+	// Make the current primary vttablet unavailable.
+	_ = curPrimary.VttabletProcess.TearDown()
+	err = curPrimary.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+
+	// Start a VTOrc instance
+	utils.StartVtorcs(t, clusterInfo, []string{"--remote_operation_timeout=10s"}, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	}, 1)
+
+	defer func() {
+		// we remove the tablet from our global list
+		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
+	}()
+
+	// check that the replica gets promoted
+	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+
+	// also check that the replication is working correctly after failover
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
+}
+
 // Failover should not be cross data centers, according to the configuration file
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestCrossDataCenterFailure(t *testing.T) {

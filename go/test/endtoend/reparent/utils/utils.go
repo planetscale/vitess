@@ -327,7 +327,7 @@ func setupShardLegacy(ctx context.Context, t *testing.T, clusterInstance *cluste
 
 //endregion
 
-//region database queries
+// region database queries
 func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	connParams := mysql.ConnParams{
 		Uname:      username,
@@ -574,6 +574,8 @@ func ResurrectTablet(ctx context.Context, t *testing.T, clusterInstance *cluster
 	require.NoError(t, err)
 
 	// As there is already a primary the new replica will come directly in SERVING state
+	// as long as we start the replication manager so that it can start the replication.
+	tab.VttabletProcess.ExtraArgs = append(tab.VttabletProcess.ExtraArgs, "--disable_active_reparents=false")
 	tab.VttabletProcess.ServingStatus = "SERVING"
 	// Start the tablet
 	err = tab.VttabletProcess.Setup()

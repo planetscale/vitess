@@ -1261,8 +1261,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatal("--reason option required (comment your ack)")
 			}
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
+			instance, _, err := inst.ReadInstanceByKey(instanceKey)
+			if err != nil {
+				log.Fatale(err)
+			}
 
-			countRecoveries, err := logic.AcknowledgeInstanceRecoveries(instanceKey, inst.GetMaintenanceOwner(), reason)
+			countRecoveries, err := logic.AcknowledgeInstanceRecoveries(instance.InstanceAlias, inst.GetMaintenanceOwner(), reason)
 			if err != nil {
 				log.Fatale(err)
 			}

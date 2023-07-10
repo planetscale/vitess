@@ -34,6 +34,7 @@ type InfoForRecoveryAnalysis struct {
 	Keyspace                                  string
 	KeyspaceType                              int
 	DurabilityPolicy                          string
+	IsInvalid                                 int
 	IsPrimary                                 int
 	IsCoPrimary                               int
 	Hostname                                  string
@@ -123,6 +124,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["is_co_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsCoPrimary), Valid: true}
 	rowMap["is_downtimed"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsDowntimed), Valid: true}
 	rowMap["is_failing_to_connect_to_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsFailingToConnectToPrimary), Valid: true}
+	rowMap["is_invalid"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsInvalid), Valid: true}
 	rowMap["is_last_check_valid"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LastCheckValid), Valid: true}
 	rowMap["is_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsPrimary), Valid: true}
 	rowMap["is_stale_binlog_coordinates"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsStaleBinlogCoordinates), Valid: true}

@@ -155,7 +155,12 @@ func (applier *CommandApplier) ackRecovery(value []byte) any {
 		_, err = AcknowledgeClusterRecoveries(ack.ClusterName, ack.Owner, ack.Comment)
 	}
 	if ack.Key.IsValid() {
-		_, err = AcknowledgeInstanceRecoveries(&ack.Key, ack.Owner, ack.Comment)
+		var instance *inst.Instance
+		instance, _, err = inst.ReadInstanceByKey(&ack.Key)
+		if err != nil {
+			return log.Errore(err)
+		}
+		_, err = AcknowledgeInstanceRecoveries(instance.InstanceAlias, ack.Owner, ack.Comment)
 	}
 	if ack.ID > 0 {
 		_, err = AcknowledgeRecovery(ack.ID, ack.Owner, ack.Comment)

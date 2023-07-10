@@ -86,6 +86,8 @@ type ClusterInfo struct {
 	HeuristicLag                            int64
 	HasAutomatedPrimaryRecovery             bool
 	HasAutomatedIntermediatePrimaryRecovery bool
+	Keyspace                                string
+	Shard                                   string
 }
 
 // ReadRecoveryInfo

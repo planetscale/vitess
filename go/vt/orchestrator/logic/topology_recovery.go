@@ -105,7 +105,7 @@ func NewInternalAcknowledgement() *RecoveryAcknowledgement {
 
 // BlockedTopologyRecovery represents an entry in the blocked_topology_recovery table
 type BlockedTopologyRecovery struct {
-	FailedInstanceKey    inst.InstanceKey
+	FailedAlias          string
 	ClusterName          string
 	Analysis             inst.AnalysisCode
 	LastBlockedTimestamp string
@@ -627,8 +627,8 @@ func replacePromotedReplicaWithCandidate(topologyRecovery *TopologyRecovery, dea
 }
 
 // recoverPrimaryHasPrimary resets the replication on the primary instance
-func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
+func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
 	if topologyRecovery == nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixPrimaryHasPrimary.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -650,7 +650,7 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry inst.Replicatio
 
 // recoverDeadPrimary checks a given analysis, decides whether to take action, and possibly takes action
 // Returns true when action was taken.
-func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	if !(forceInstanceRecovery || analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery) {
 		return false, nil, nil
 	}
@@ -661,7 +661,7 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 		log.Error("Failed to read tablet information - %v", err)
 	}
 
-	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, !forceInstanceRecovery, !forceInstanceRecovery)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, !forceInstanceRecovery, !forceInstanceRecovery)
 	if topologyRecovery == nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another RecoverDeadPrimary.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -709,7 +709,7 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 	return true, topologyRecovery, err
 }
 
-func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.ReplicationAnalysis, skipProcesses bool, promotedReplica *inst.Instance) {
+func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.ReplicationAnalysis, skipProcesses bool, promotedReplica *inst.Instance) {
 	if promotedReplica != nil {
 		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.Key())
 		AuditTopologyRecovery(topologyRecovery, message)
@@ -1109,7 +1109,7 @@ func RecoverDeadCoPrimary(topologyRecovery *TopologyRecovery, skipProcesses bool
 
 	func() error {
 		inst.BeginDowntime(inst.NewDowntime(failedInstanceKey, inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
-		acknowledgeInstanceFailureDetection(&analysisEntry.AnalyzedInstanceKey)
+		acknowledgeInstanceFailureDetection(analysisEntry.AnalyzedInstanceAlias)
 		for _, replica := range lostReplicas {
 			replica := replica
 			inst.BeginDowntime(inst.NewDowntime(replica.Key(), inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
@@ -1121,12 +1121,12 @@ func RecoverDeadCoPrimary(topologyRecovery *TopologyRecovery, skipProcesses bool
 }
 
 // checkAndRecoverGenericProblem is a general-purpose recovery function
-func checkAndRecoverLockedSemiSyncPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func checkAndRecoverLockedSemiSyncPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	return false, nil, nil
 }
 
 // checkAndRecoverGenericProblem is a general-purpose recovery function
-func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (bool, *TopologyRecovery, error) {
+func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (bool, *TopologyRecovery, error) {
 	return false, nil, nil
 }
 
@@ -1209,8 +1209,8 @@ func emergentlyRecordStaleBinlogCoordinates(tabletAlias string, binlogCoordinate
 
 // checkAndExecuteFailureDetectionProcesses tries to register for failure detection and potentially executes
 // failure-detection processes.
-func checkAndExecuteFailureDetectionProcesses(analysisEntry inst.ReplicationAnalysis, skipProcesses bool) (detectionRegistrationSuccess bool, processesExecutionAttempted bool, err error) {
-	if ok, _ := AttemptFailureDetectionRegistration(&analysisEntry); !ok {
+func checkAndExecuteFailureDetectionProcesses(analysisEntry *inst.ReplicationAnalysis, skipProcesses bool) (detectionRegistrationSuccess bool, processesExecutionAttempted bool, err error) {
+	if ok, _ := AttemptFailureDetectionRegistration(analysisEntry); !ok {
 		if util.ClearToLog("checkAndExecuteFailureDetectionProcesses", analysisEntry.AnalyzedInstanceAlias) {
 			log.Infof("checkAndExecuteFailureDetectionProcesses: could not register %+v detection on %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
 		}
@@ -1221,7 +1221,7 @@ func checkAndExecuteFailureDetectionProcesses(analysisEntry inst.ReplicationAnal
 	if skipProcesses {
 		return true, false, nil
 	}
-	err = executeProcesses(config.Config.OnFailureDetectionProcesses, "OnFailureDetectionProcesses", NewTopologyRecovery(analysisEntry), true)
+	err = executeProcesses(config.Config.OnFailureDetectionProcesses, "OnFailureDetectionProcesses", NewTopologyRecovery(*analysisEntry), true)
 	return true, true, err
 }
 
@@ -1229,7 +1229,7 @@ func checkAndExecuteFailureDetectionProcesses(analysisEntry inst.ReplicationAnal
 // It also returns a recoveryFunction which is supposed to be unique for each function that we return.
 // It is used for checking the equality of the returned function.
 func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstanceAlias string) (
-	checkAndRecoverFunction func(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error),
+	checkAndRecoverFunction func(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error),
 	recoverFunctionCode recoveryFunction,
 	isActionableRecovery bool,
 ) {
@@ -1276,7 +1276,7 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 }
 
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
-func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis inst.ReplicationAnalysis) bool {
+func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.ReplicationAnalysis) bool {
 	_, prevRecoveryFunctionCode, _ := getCheckAndRecoverFunction(prevAnalysis.Analysis, prevAnalysis.AnalyzedInstanceAlias)
 	_, newRecoveryFunctionCode, _ := getCheckAndRecoverFunction(newAnalysis.Analysis, newAnalysis.AnalyzedInstanceAlias)
 	return prevRecoveryFunctionCode == newRecoveryFunctionCode
@@ -1303,13 +1303,13 @@ func runEmergentOperations(analysisEntry *inst.ReplicationAnalysis) {
 
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
 // It executes the function synchronuously
-func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	atomic.AddInt64(&countPendingRecoveries, 1)
 	defer atomic.AddInt64(&countPendingRecoveries, -1)
 
 	checkAndRecoverFunction, _, isActionableRecovery := getCheckAndRecoverFunction(analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
-	runEmergentOperations(&analysisEntry)
+	runEmergentOperations(analysisEntry)
 
 	if checkAndRecoverFunction == nil {
 		// Unhandled problem type
@@ -1426,7 +1426,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 }
 
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not
-func checkIfAlreadyFixed(analysisEntry inst.ReplicationAnalysis) (bool, error) {
+func checkIfAlreadyFixed(analysisEntry *inst.ReplicationAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
 	// TODO (@GuptaManan100): Use specific cluster name to filter the scope of replication analysis.
 	// Can't do this now since SuggestedClusterAlias, ClusterName, ClusterAlias aren't consistent
@@ -1494,7 +1494,7 @@ func CheckAndRecover(specificInstance *inst.InstanceKey, candidateInstanceKey *i
 	return recoveryAttempted, promotedReplicaKey, err
 }
 
-func forceAnalysisEntry(clusterName string, analysisCode inst.AnalysisCode, commandHint string, failedInstanceKey *inst.InstanceKey) (analysisEntry inst.ReplicationAnalysis, err error) {
+func forceAnalysisEntry(clusterName string, analysisCode inst.AnalysisCode, commandHint string, failedInstanceKey *inst.InstanceKey) (analysisEntry *inst.ReplicationAnalysis, err error) {
 	clusterInfo, err := inst.ReadClusterInfo(clusterName)
 	if err != nil {
 		return analysisEntry, err
@@ -1521,7 +1521,7 @@ func forceAnalysisEntry(clusterName string, analysisCode inst.AnalysisCode, comm
 // ForceExecuteRecovery can be called to issue a recovery process even if analysis says there is no recovery case.
 // The caller of this function injects the type of analysis it wishes the function to assume.
 // By calling this function one takes responsibility for one's actions.
-func ForceExecuteRecovery(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func ForceExecuteRecovery(analysisEntry *inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	return executeCheckAndRecoverFunction(analysisEntry, candidateInstanceKey, true, skipProcesses)
 }
 
@@ -1614,7 +1614,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 	if err != nil {
 		return nil, err
 	}
-	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, false /*failIfClusterInActiveRecovery*/)
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, false /*failIfClusterInActiveRecovery*/)
 	if err != nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("could not register recovery on %+v. Unable to issue PlannedReparentShard. err=%v", analysisEntry.AnalyzedInstanceKey, err))
 		return topologyRecovery, err
@@ -1697,7 +1697,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 	return topologyRecovery, err
 }
 
-func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.ReplicationAnalysis, promotedReplica *inst.Instance) {
+func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.ReplicationAnalysis, promotedReplica *inst.Instance) {
 	if promotedReplica != nil {
 		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.InstanceAlias)
 		AuditTopologyRecovery(topologyRecovery, message)
@@ -1737,8 +1737,8 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 }
 
 // electNewPrimary elects a new primary while none were present before.
-func electNewPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, true /*failIfClusterInActiveRecovery*/)
+func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, true /*failIfClusterInActiveRecovery*/)
 	if topologyRecovery == nil || err != nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -1789,8 +1789,8 @@ func electNewPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis
 }
 
 // fixPrimary sets the primary as read-write.
-func fixPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
+func fixPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
 	if topologyRecovery == nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixPrimary.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
@@ -1826,8 +1826,8 @@ func fixPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 }
 
 // fixReplica sets the replica as read-only and points it at the current primary.
-func fixReplica(ctx context.Context, analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
+func fixReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry, false, true)
 	if topologyRecovery == nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixReplica.", analysisEntry.AnalyzedInstanceAlias))
 		return false, nil, err
