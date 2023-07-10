@@ -124,12 +124,11 @@ func clearAcknowledgedFailureDetections(whereClause string, args []any) error {
 // AcknowledgeInstanceFailureDetection clears a failure detection for a particular
 // instance. This is automated by recovery process: it makes sense to acknowledge
 // the detection of an instance just recovered.
-func acknowledgeInstanceFailureDetection(instanceKey *inst.InstanceKey) error {
+func acknowledgeInstanceFailureDetection(alias string) error {
 	whereClause := `
-			hostname = ?
-			and port = ?
+			alias = ?
 		`
-	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port)
+	args := sqlutils.Args(alias)
 	return clearAcknowledgedFailureDetections(whereClause, args)
 }
 
@@ -423,12 +422,11 @@ func AcknowledgeClusterRecoveries(clusterName string, owner string, comment stri
 
 // AcknowledgeInstanceRecoveries marks active recoveries for given instane as acknowledged.
 // This also implied clearing their active period, which in turn enables further recoveries on those topologies
-func AcknowledgeInstanceRecoveries(instanceKey *inst.InstanceKey, owner string, comment string) (countAcknowledgedEntries int64, err error) {
+func AcknowledgeInstanceRecoveries(alias string, owner string, comment string) (countAcknowledgedEntries int64, err error) {
 	whereClause := `
-			hostname = ?
-			and port = ?
+			alias = ?
 		`
-	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port)
+	args := sqlutils.Args(alias)
 	clearAcknowledgedFailureDetections(whereClause, args)
 	return acknowledgeRecoveries(owner, comment, false, whereClause, args)
 }
@@ -677,10 +675,9 @@ func ReadRecentRecoveries(clusterName string, clusterAlias string, unacknowledge
 func readFailureDetections(whereCondition string, limit string, args []any) ([]*TopologyRecovery, error) {
 	res := []*TopologyRecovery{}
 	query := fmt.Sprintf(`
-		select
+      select
+      alias,
       detection_id,
-      hostname,
-      port,
       in_active_period as is_active,
       start_active_period,
       end_active_period_unixtime,
@@ -708,8 +705,7 @@ func readFailureDetections(whereCondition string, limit string, args []any) ([]*
 		failureDetection.ProcessingNodeHostname = m.GetString("processing_node_hostname")
 		failureDetection.ProcessingNodeToken = m.GetString("processcing_node_token")
 
-		failureDetection.AnalysisEntry.AnalyzedInstanceKey.Hostname = m.GetString("hostname")
-		failureDetection.AnalysisEntry.AnalyzedInstanceKey.Port = m.GetInt("port")
+		failureDetection.AnalysisEntry.AnalyzedInstanceAlias = m.GetString("alias")
 		failureDetection.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		failureDetection.AnalysisEntry.ClusterDetails.ClusterName = m.GetString("cluster_name")
 		failureDetection.AnalysisEntry.ClusterDetails.ClusterAlias = m.GetString("cluster_alias")
@@ -760,8 +756,7 @@ func ReadBlockedRecoveries(clusterName string) ([]BlockedTopologyRecovery, error
 	}
 	query := fmt.Sprintf(`
 		select
-				hostname,
-				port,
+				alias,
 				cluster_name,
 				analysis,
 				last_blocked_timestamp,
@@ -774,8 +769,7 @@ func ReadBlockedRecoveries(clusterName string) ([]BlockedTopologyRecovery, error
 		`, whereClause)
 	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
 		blockedTopologyRecovery := BlockedTopologyRecovery{}
-		blockedTopologyRecovery.FailedInstanceKey.Hostname = m.GetString("hostname")
-		blockedTopologyRecovery.FailedInstanceKey.Port = m.GetInt("port")
+		blockedTopologyRecovery.FailedAlias = m.GetString("alias")
 		blockedTopologyRecovery.ClusterName = m.GetString("cluster_name")
 		blockedTopologyRecovery.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		blockedTopologyRecovery.LastBlockedTimestamp = m.GetString("last_blocked_timestamp")

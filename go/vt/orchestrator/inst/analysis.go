@@ -32,6 +32,8 @@ type StructureAnalysisCode string
 const (
 	NoProblem                              AnalysisCode = "NoProblem"
 	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
+	InvalidPrimary                         AnalysisCode = "InvalidPrimary"
+	InvalidReplica                         AnalysisCode = "InvalidReplica"
 	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
 	DeadPrimary                            AnalysisCode = "DeadPrimary"
 	DeadPrimaryAndReplicas                 AnalysisCode = "DeadPrimaryAndReplicas"
@@ -122,6 +124,7 @@ type ReplicationAnalysis struct {
 	AnalyzedInstancePrimaryAlias              string
 	TabletType                                topodatapb.TabletType
 	PrimaryTimeStamp                          time.Time
+	AnalyzedShard                             string
 	SuggestedClusterAlias                     string
 	ClusterDetails                            ClusterInfo
 	AnalyzedInstanceDataCenter                string
@@ -184,8 +187,8 @@ type ReplicationAnalysis struct {
 type AnalysisMap map[string](*ReplicationAnalysis)
 
 type ReplicationAnalysisChangelog struct {
-	AnalyzedInstanceKey InstanceKey
-	Changelog           []string
+	AnalyzedInstanceAlias string
+	Changelog             []string
 }
 
 func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {

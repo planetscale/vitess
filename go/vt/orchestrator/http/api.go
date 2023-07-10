@@ -1734,8 +1734,8 @@ func (httpAPI *API) Audit(params martini.Params, r render.Render, req *http.Requ
 		auditedInstanceKey = &instanceKey
 	}
 
-	auditedInstance, _, err := inst.ReadInstanceByKey(auditedInstanceKey)
-	if err != nil {
+	auditedInstance, found, err := inst.ReadInstanceByKey(auditedInstanceKey)
+	if !found || err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 	}
 	audits, err := inst.ReadRecentAudit(auditedInstance.InstanceAlias, page)
@@ -2393,7 +2393,7 @@ func (httpAPI *API) RegisterCandidate(params martini.Params, r render.Render, re
 	}
 	instance, _, err := inst.ReadInstanceByKey(&instanceKey)
 	if err != nil {
-		log.Fatale(err)
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 	}
 	promotionRule, err := promotionrule.Parse(params["promotionRule"])
 	if err != nil {
@@ -2616,7 +2616,12 @@ func (httpAPI *API) AcknowledgeInstanceRecoveries(params martini.Params, r rende
 		ack.Key = instanceKey
 		_, err = orcraft.PublishCommand("ack-recovery", ack)
 	} else {
-		_, err = logic.AcknowledgeInstanceRecoveries(&instanceKey, userID, comment)
+		var instance *inst.Instance
+		var found bool
+		instance, found, err = inst.ReadInstanceByKey(&instanceKey)
+		if found && err != nil {
+			_, err = logic.AcknowledgeInstanceRecoveries(instance.InstanceAlias, userID, comment)
+		}
 	}
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
