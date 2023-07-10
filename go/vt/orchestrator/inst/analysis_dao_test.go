@@ -624,6 +624,16 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 			cacheExpiration: 100 * time.Millisecond,
 		},
 	}
+	// We should wait for the initialization to complete to avoid a data race in
+	// reading and writing to recentInstantAnalysis.
+	for {
+		complete := initilizationComplete.Load()
+		if complete {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create the cache for the test to use.
