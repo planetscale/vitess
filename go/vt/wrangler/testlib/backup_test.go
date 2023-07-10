@@ -185,7 +185,8 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		"STOP SLAVE",
 		"START SLAVE",
 		// These commands come from SetReplicationSource RPC called
-		// to set the correct primary and semi-sync after Backup has concluded
+		// to set the correct primary and semi-sync after Backup has concluded.
+		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
 		"STOP SLAVE",
 		"START SLAVE",
 	}
@@ -421,7 +422,8 @@ func TestBackupRestoreLagged(t *testing.T) {
 		"STOP SLAVE",
 		"START SLAVE",
 		// These commands come from SetReplicationSource RPC called
-		// to set the correct primary and semi-sync after Backup has concluded
+		// to set the correct primary and semi-sync after Backup has concluded.
+		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
 		"STOP SLAVE",
 		"START SLAVE",
 	}
@@ -637,7 +639,8 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		"STOP SLAVE",
 		"START SLAVE",
 		// These commands come from SetReplicationSource RPC called
-		// to set the correct primary and semi-sync after Backup has concluded
+		// to set the correct primary and semi-sync after Backup has concluded.
+		// Since the primary hasn't changed, we only restart replication after fixing semi-sync.
 		"STOP SLAVE",
 		"START SLAVE",
 	}
