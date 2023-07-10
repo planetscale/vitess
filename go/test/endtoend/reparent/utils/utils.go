@@ -256,7 +256,7 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		/*"--disable_active_reparents"*/)
+		"--disable_active_reparents")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -574,6 +574,8 @@ func ResurrectTablet(ctx context.Context, t *testing.T, clusterInstance *cluster
 	require.NoError(t, err)
 
 	// As there is already a primary the new replica will come directly in SERVING state
+	// as long as we start the replication manager so that it can start the replication.
+	tab.VttabletProcess.ExtraArgs = append(tab.VttabletProcess.ExtraArgs, "--disable_active_reparents=false")
 	tab.VttabletProcess.ServingStatus = "SERVING"
 	// Start the tablet
 	err = tab.VttabletProcess.Setup()
