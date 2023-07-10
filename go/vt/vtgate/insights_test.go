@@ -94,7 +94,6 @@ func setup(t *testing.T, brokers, publicID, username, password string, options s
 		0.1,
 		1000,
 		defaultUint(options.maxRawQuerySize, 64),
-		5,
 		15*time.Second,
 		true,
 		true,
@@ -554,58 +553,62 @@ func TestInsightsExtraNormalization(t *testing.T) {
 func TestInsightsInsertColumnOrderNormalization(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
-			// filler statements that shouldn't count toward the ii.ReorderInsertColumns threshold
-			{sql: "select 1 from foo"},
-			{sql: "select 1 from foo"},
-			{sql: "select 1 from foo"},
-			{sql: "select 1 from foo"},
-			{sql: "select 1 from foo"},
-			{sql: "select 1 from foo"},
-			{sql: "select 1 from foo"},
-			{sql: "select 1 from bar"},
-
 			// INSERTs without a column list are unchanged
 			{sql: "insert into foo values (222, 333, 444, 555)", responseTime: 5 * time.Second},
 
-			// INSERT INTO table(...) VALUES (...) column lists get alphabetized, after a while
-			{sql: "insert into foo(d, c, b, a) values (111, 222, 333, 444)", responseTime: 5 * time.Second},
+			// INSERT INTO table(...) VALUES (...) column lists get alphabetized
+			{sql: "insert into foo(d, c, b, a) values (111, 222, 333, 444), (555, 666, 777, 888)", responseTime: 5 * time.Second},
 			{sql: "insert into foo(d, c, a, b) values (555, 666, 777, 888)", responseTime: 5 * time.Second},
-			{sql: "insert into foo(d, c, a, b) values (555, 666, 777, 888)", responseTime: 5 * time.Second}, // same as above, doesn't count toward reorder threshold
+			{sql: "insert into foo(d, c, a, b) values (555, 666, 777, 888)", responseTime: 5 * time.Second},
 			{sql: "insert into foo(d, b, c, a) values (999, 111, 222, 333)", responseTime: 5 * time.Second},
 			{sql: "insert into foo(d, b, a, c) values (444, 555, 666, 777)", responseTime: 5 * time.Second},
 			{sql: "insert into foo(d, a, b, c) values (888, 999, 111, 222)", responseTime: 5 * time.Second},
-			// five (distinct) patterns above, so the two below get alphabetized
 			{sql: "insert into foo(d, a, c, b) values (333, 444, 555, 666)", responseTime: 5 * time.Second},
-			{sql: "insert into foo(c, d, b, a) values (777, 888, 999, 111)", responseTime: 5 * time.Second},
+			{sql: "insert ignore into foo(c, d, b, a) values (777, 888, 999, 111)", responseTime: 5 * time.Second},
+			{sql: "insert into foo partition (bar) (c, d, b, a) values (777, 888, 999, 111)", responseTime: 5 * time.Second},
+			// sqlparser adds the missing "into"
+			{sql: "insert foo(c, d, b, a) values (777, 888, 999, 111)", responseTime: 5 * time.Second},
 
-			// Still unchanged, even after ReorderInsertColumns is enabled
-			{sql: "insert into foo values (222, 333, 444, 555)", responseTime: 5 * time.Second},
+			// an empty column list is allowed and is not modified
+			{sql: "insert foo() values ()", responseTime: 5 * time.Second},
+
+			// if there's only one column, it's already alphabetized
+			{sql: "insert into foo(bar) values (444)", responseTime: 5 * time.Second},
+
+			// INSERT ... SELECT is not changed
+			{sql: "insert into foo(d, c, a, b) select w, x, y, z from bar", responseTime: 5 * time.Second},
+
+			// INSERT ... SET maps to INSERT ... VALUES in sqlparser/sql.y
+			{sql: "insert into foo set c=2, a=3, b=4", responseTime: 5 * time.Second},
 		},
 		[]insightsKafkaExpectation{
-			expect(queryStatsBundleTopic, "select ? from foo", `statement_type:\"SELECT\"`),
-			expect(queryStatsBundleTopic, "select ? from bar", `statement_type:\"SELECT\"`),
+			// INSERT ... VALUES is unchanged because it has nothing to reorder
+			expect(queryTopic, "insert into foo values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
+			expect(queryStatsBundleTopic, "insert into foo values <values>", `statement_type:\"INSERT\"`, `query_count:1`).butNot(":v1", ":vtg1", "null", "?"),
 
-			expect(queryTopic, "insert into foo(d, c, b, a) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
-			expect(queryStatsBundleTopic, "insert into foo(d, c, b, a) values <values>", `statement_type:\"INSERT\"`).butNot(":v1", ":vtg1", "null", "?"),
+			// all these get their columns alphabetized
+			expect(queryTopic, "insert into foo(a, b, c, d) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?").count(8),
+			expect(queryStatsBundleTopic, "insert into foo(a, b, c, d) values <values>", `statement_type:\"INSERT\"`, `query_count:8`).butNot(":v1", ":vtg1", "null", "?"),
+			expect(queryTopic, "insert into foo partition (bar)(a, b, c, d) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
+			expect(queryStatsBundleTopic, "insert into foo partition (bar)(a, b, c, d) values <values>", `statement_type:\"INSERT\"`, `query_count:1`).butNot(":v1", ":vtg1", "null", "?"),
+			expect(queryTopic, "insert ignore into foo(a, b, c, d) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
+			expect(queryStatsBundleTopic, "insert ignore into foo(a, b, c, d) values <values>", `statement_type:\"INSERT\"`, `query_count:1`).butNot(":v1", ":vtg1", "null", "?"),
 
-			expect(queryTopic, "insert into foo(d, c, a, b) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?").count(2),
-			expect(queryStatsBundleTopic, "insert into foo(d, c, a, b) values <values>", `statement_type:\"INSERT\"`, `query_count:2`).butNot(":v1", ":vtg1", "null", "?"),
+			// empty column list is unchanged
+			expect(queryTopic, "insert into foo() values <values>", `statement_type:{value:\"INSERT\"}`),
+			expect(queryStatsBundleTopic, "insert into foo() values <values>", `statement_type:\"INSERT\"`, `query_count:1`),
 
-			expect(queryTopic, "insert into foo(d, b, c, a) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
-			expect(queryStatsBundleTopic, "insert into foo(d, b, c, a) values <values>", `statement_type:\"INSERT\"`).butNot(":v1", ":vtg1", "null", "?"),
+			// single-column list is unchanged
+			expect(queryTopic, "insert into foo(bar) values <values>", `statement_type:{value:\"INSERT\"}`),
+			expect(queryStatsBundleTopic, "insert into foo(bar) values <values>", `statement_type:\"INSERT\"`, `query_count:1`),
 
-			expect(queryTopic, "insert into foo(d, b, a, c) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
-			expect(queryStatsBundleTopic, "insert into foo(d, b, a, c) values <values>", `statement_type:\"INSERT\"`).butNot(":v1", ":vtg1", "null", "?"),
+			// INSERT ... SELECT is unchanged
+			expect(queryTopic, "insert into foo(d, c, a, b) select w, x, y, z from bar", `statement_type:{value:\"INSERT\"}`),
+			expect(queryStatsBundleTopic, "insert into foo(d, c, a, b) select w, x, y, z from bar", `statement_type:\"INSERT\"`, `query_count:1`),
 
-			expect(queryTopic, "insert into foo(d, a, b, c) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
-			expect(queryStatsBundleTopic, "insert into foo(d, a, b, c) values <values>", `statement_type:\"INSERT\"`).butNot(":v1", ":vtg1", "null", "?"),
-
-			// final two get alphabetized
-			expect(queryTopic, "insert into foo(a, b, c, d) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?").count(2),
-			expect(queryStatsBundleTopic, "insert into foo(a, b, c, d) values <values>", `statement_type:\"INSERT\"`, `query_count:2`).butNot(":v1", ":vtg1", "null", "?"),
-
-			expect(queryTopic, "insert into foo values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?").count(2),
-			expect(queryStatsBundleTopic, "insert into foo values <values>", `statement_type:\"INSERT\"`, `query_count:2`).butNot(":v1", ":vtg1", "null", "?"),
+			// INSERT ... SET is translated to an INSERT ... VALUES by the parser
+			expect(queryTopic, "insert into foo(a, b, c) values <values>", `statement_type:{value:\"INSERT\"}`).butNot(":v1", ":vtg1", "null", "?"),
+			expect(queryStatsBundleTopic, "insert into foo(a, b, c) values <values>", `statement_type:\"INSERT\"`, `query_count:1`).butNot(":v1", ":vtg1", "null", "?"),
 		})
 }
 
@@ -781,7 +784,7 @@ func TestNormalization(t *testing.T) {
 			stmt, err := sqlparser.Parse(tc.input)
 			assert.NoError(t, err)
 
-			out, _ := ii.normalizeSQL(stmt, true)
+			out := ii.normalizeSQL(stmt)
 			assert.Equal(t, tc.output, out)
 
 			// Most normalized queries should be legal to parse again.
@@ -791,11 +794,22 @@ func TestNormalization(t *testing.T) {
 			if !re.MatchString(tc.output) {
 				stmt, err = sqlparser.Parse(tc.input)
 				assert.NoError(t, err)
-				out, _ = ii.normalizeSQL(stmt, true)
+				out = ii.normalizeSQL(stmt)
 				assert.Equal(t, tc.output, out)
 			}
 		})
 	}
+}
+
+func TestColumnReorderingMutatesACopy(t *testing.T) {
+	ii := Insights{}
+
+	stmt, err := sqlparser.Parse("insert into foo(b, c, a) values (1, 2, 3)")
+	assert.NoError(t, err)
+
+	out := ii.normalizeSQL(stmt)
+	assert.Equal(t, "insert into foo(a, b, c) values <values>", out)
+	assert.Equal(t, "[b c a]", fmt.Sprintf("%v", stmt.(*sqlparser.Insert).Columns))
 }
 
 func TestNilAST(t *testing.T) {
