@@ -756,6 +756,7 @@ func ReadBlockedRecoveries(clusterName string) ([]BlockedTopologyRecovery, error
 	}
 	query := fmt.Sprintf(`
 		select
+				alias,
 				cluster_name,
 				analysis,
 				last_blocked_timestamp,
@@ -768,6 +769,7 @@ func ReadBlockedRecoveries(clusterName string) ([]BlockedTopologyRecovery, error
 		`, whereClause)
 	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
 		blockedTopologyRecovery := BlockedTopologyRecovery{}
+		blockedTopologyRecovery.FailedAlias = m.GetString("alias")
 		blockedTopologyRecovery.ClusterName = m.GetString("cluster_name")
 		blockedTopologyRecovery.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		blockedTopologyRecovery.LastBlockedTimestamp = m.GetString("last_blocked_timestamp")
