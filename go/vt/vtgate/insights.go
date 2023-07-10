@@ -30,6 +30,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/exp/slices"
+
 	"golang.org/x/time/rate"
 
 	"vitess.io/vitess/go/vt/vtgate/logstats"
@@ -156,7 +158,6 @@ type Insights struct {
 	KafkaText                 bool // use human-readable pb, for tests and debugging
 	SendRawQueries            bool
 	MaxRawQueryLength         uint
-	ReorderThreshold          uint // alphabetize columns if >= this many redundant patterns in 15s
 	SendTotalDurationSketches bool
 
 	// Sketches
@@ -167,16 +168,14 @@ type Insights struct {
 	TotalDurationSketchLogGamma        float64
 
 	// state
-	KafkaWriter          *kafka.Writer
-	Aggregations         map[QueryPatternKey]*QueryPatternAggregation
-	PeriodStart          time.Time
-	InFlightCounter      uint64
-	Timer                *time.Ticker
-	LogChan              chan *logstats.LogStats
-	Workers              sync.WaitGroup
-	QueriesThisInterval  uint
-	ReorderInsertColumns bool
-	ColIndependentHashes map[uint32]uint
+	KafkaWriter         *kafka.Writer
+	Aggregations        map[QueryPatternKey]*QueryPatternAggregation
+	PeriodStart         time.Time
+	InFlightCounter     uint64
+	Timer               *time.Ticker
+	LogChan             chan *logstats.LogStats
+	Workers             sync.WaitGroup
+	QueriesThisInterval uint
 
 	// log state: we limit some log messages to once per 15s because they're caused by behavior the
 	// client controls
@@ -239,9 +238,8 @@ var (
 	// insightsRawQueriesMaxLength is the longest string, in bytes, we will send as the RawSql field in a Kafka message
 	insightsRawQueriesMaxLength = flag.Uint("insights_raw_queries_max_length", 8192, "Maximum size for unnormalized SQL")
 
-	// normalize more aggressively by alphabetizing INSERT columns if there are more than this many
-	// otherwise identical patterns in a single interval
-	insightsReorderThreshold = flag.Uint("insights_reorder_threshold", 5, "Reorder INSERT columns if more than this many redundant patterns in an interval")
+	// old flag, still allowed but now ignored
+	insightsReorderThreshold = flag.Uint("insights_reorder_threshold", 5, "Deprecated")
 
 	insightsTotalDurationSketches    = flag.Bool("insights_total_duration_sketches", false, "Send quantile sketches for total query duration")
 	insightsTotalDurationSketchAlpha = flag.Float64("insights_total_duration_sketch_alpha", 0.01, "Relative accuracy for total query duration sketches")
@@ -262,7 +260,6 @@ func initInsights(logger *streamlog.StreamLogger[*logstats.LogStats]) (*Insights
 		*insightsQueriesLimiterRate,
 		*insightsQueriesLimiterBurst,
 		*insightsRawQueriesMaxLength,
-		*insightsReorderThreshold,
 		time.Duration(*insightsFlushInterval)*time.Second,
 		*insightsKafkaText,
 		*insightsRawQueries,
@@ -278,7 +275,7 @@ func initInsightsInner(logger *streamlog.StreamLogger[*logstats.LogStats],
 	maxQueriesPerInterval uint,
 	insightsQueriesLimiterRate float64,
 	insightsQueriesLimiterBurst uint,
-	maxRawQueryLength, reorderThreshold uint,
+	maxRawQueryLength uint,
 	interval time.Duration,
 	kafkaText, sendRawQueries, sendTotalDurationSketches bool,
 	totalDurationSketchAlpha float64,
@@ -323,7 +320,6 @@ func initInsightsInner(logger *streamlog.StreamLogger[*logstats.LogStats],
 		KafkaText:                          kafkaText,
 		SendRawQueries:                     sendRawQueries,
 		MaxRawQueryLength:                  maxRawQueryLength,
-		ReorderThreshold:                   reorderThreshold,
 		SendTotalDurationSketches:          sendTotalDurationSketches,
 		TotalDurationSketchAlpha:           alpha,
 		TotalDurationSketchUnits:           totalDurationSketchUnits,
@@ -375,7 +371,6 @@ func (ii *Insights) startInterval() {
 	ii.QueriesThisInterval = 0
 	ii.Aggregations = make(map[QueryPatternKey]*QueryPatternAggregation)
 	ii.PeriodStart = time.Now()
-	ii.ColIndependentHashes = make(map[uint32]uint)
 }
 
 func (ii *Insights) shouldSendToInsights(ls *logstats.LogStats) bool {
@@ -562,10 +557,9 @@ func (ii *Insights) handleMessage(record any) {
 
 	var sql string
 	var comments []string
-	var ciHash *uint32
 	if (ls.IsNormalized || ls.Error == nil) && ls.AST != nil {
 		comments = extractComments(ls.SQL)
-		sql, ciHash = ii.normalizeSQL(ls.AST, ls.StmtType == "INSERT")
+		sql = ii.normalizeSQL(ls.AST)
 	} else {
 		sql = "<error>"
 	}
@@ -573,7 +567,7 @@ func (ii *Insights) handleMessage(record any) {
 		ls.StmtType = "ERROR"
 	}
 
-	ii.addToAggregates(ls, sql, ciHash)
+	ii.addToAggregates(ls, sql)
 
 	if !ii.shouldSendToInsights(ls) {
 		return
@@ -640,7 +634,7 @@ func maxDuration(a time.Duration, b time.Duration) time.Duration {
 	return b
 }
 
-func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *uint32) bool {
+func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string) bool {
 	// no locks needed if all callers are on the same thread
 
 	var pa *QueryPatternAggregation
@@ -662,14 +656,6 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, ciHash *u
 		// In other words, we assume they don't change, so we only need to track a single value for each.
 		pa = ii.newPatternAggregation(ls.StmtType, ls.TablesUsed)
 		ii.Aggregations[key] = pa
-
-		if ciHash != nil && !ii.ReorderInsertColumns {
-			ii.ColIndependentHashes[*ciHash]++
-			if ii.ColIndependentHashes[*ciHash] >= ii.ReorderThreshold {
-				log.Info("Enabling ReorderInsertColumns")
-				ii.ReorderInsertColumns = true
-			}
-		}
 	}
 
 	pa.QueryCount++
@@ -972,36 +958,22 @@ func (ii *Insights) makeEnvelope(contents []byte, topic string) ([]byte, error) 
 	return envelope.MarshalVT()
 }
 
-func (ii *Insights) normalizeSQL(stmt sqlparser.Statement, maybeReorderColumns bool) (string, *uint32) {
-	// We normalize queries that differ only by the orders of the columns in INSERT statements, but only for
-	// customers where we detect that's a problem.  We detect it's a problem by counting the number of
-	// query patterns that differ only in column order.  To do that, we calculate what the hash would be if
-	// we ignored the column list, then count the number of distinct patterns that have that same hash.
-	// Once it exceeds ReorderColumnThreshold, we set ReorderInsertColumns=true for this vtgate for as long
-	// as it runs.
-	//
-	// skipSpans is all the substrings (left and right byte offsets) of buf.String() that constitute column lists
-	// and should be skipped by the hash function.
-	type span struct {
-		left, right int
-	}
-	var skipSpans []span
-
+func (ii *Insights) normalizeSQL(stmt sqlparser.Statement) string {
 	buf := sqlparser.NewTrackedBuffer(func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		switch node := node.(type) {
-		case sqlparser.Columns:
-			if !maybeReorderColumns || len(node) == 0 {
-				node.Format(buf)
-			} else if ii.ReorderInsertColumns {
-				sort.Slice(node, func(i, j int) bool {
-					return node[i].Lowered() < node[j].Lowered()
+		case *sqlparser.Insert:
+			// If it's an INSERT...VALUES statement, alphabetize its column list
+			// Only modify a copy, though, because the original parse tree might be shared
+			// with execution logic on another thread, and we don't want race conditions or corruption.
+			if _, ok := node.Rows.(sqlparser.Values); ok && len(node.Columns) > 1 {
+				nodeCopy := *node
+				nodeCopy.Columns = slices.Clone(node.Columns)
+				sort.Slice(nodeCopy.Columns, func(i, j int) bool {
+					return nodeCopy.Columns[i].Lowered() < nodeCopy.Columns[j].Lowered()
 				})
-				node.Format(buf)
+				nodeCopy.Format(buf)
 			} else {
-				left := buf.Len()
 				node.Format(buf)
-				right := buf.Len()
-				skipSpans = append(skipSpans, span{left, right})
 			}
 		case *sqlparser.ComparisonExpr:
 			if node.Operator == sqlparser.InOp {
@@ -1050,18 +1022,7 @@ func (ii *Insights) normalizeSQL(stmt sqlparser.Statement, maybeReorderColumns b
 		}
 	})
 
-	ret := buf.WriteNode(stmt).String()
-	if skipSpans != nil {
-		var hash uint32
-		prev := 0
-		for _, sp := range skipSpans {
-			hash = murmur3.SeedStringSum32(hash, ret[prev:sp.left])
-			prev = sp.right
-		}
-		hash = murmur3.SeedStringSum32(hash, ret[prev:])
-		return ret, &hash
-	}
-	return ret, nil
+	return buf.WriteNode(stmt).String()
 }
 
 // true for any node type that would generate a '?' placeholder
