@@ -44,12 +44,12 @@ var analysisChangeWriteAttemptCounter = metrics.NewCounter()
 var analysisChangeWriteCounter = metrics.NewCounter()
 
 var recentInstantAnalysis *cache.Cache
-var initilizationComplete sync2.AtomicBool
+var initializationComplete sync2.AtomicBool
 
 func init() {
 	metrics.Register("analysis.change.write.attempt", analysisChangeWriteAttemptCounter)
 	metrics.Register("analysis.change.write", analysisChangeWriteCounter)
-	initilizationComplete.Set(false)
+	initializationComplete.Set(false)
 
 	go initializeAnalysisDaoPostConfiguration()
 }
@@ -58,7 +58,7 @@ func initializeAnalysisDaoPostConfiguration() {
 	config.WaitForConfigurationToBeLoaded()
 
 	recentInstantAnalysis = cache.New(time.Duration(config.RecoveryPollSeconds*2)*time.Second, time.Second)
-	initilizationComplete.Set(true)
+	initializationComplete.Set(true)
 }
 
 type clusterAnalysis struct {
