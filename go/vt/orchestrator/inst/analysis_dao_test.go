@@ -627,7 +627,7 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 	// We should wait for the initialization to complete to avoid a data race in
 	// reading and writing to recentInstantAnalysis.
 	for {
-		complete := initilizationComplete.Load()
+		complete := initilizationComplete.Get()
 		if complete {
 			break
 		}
