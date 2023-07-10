@@ -105,7 +105,7 @@ func NewInternalAcknowledgement() *RecoveryAcknowledgement {
 
 // BlockedTopologyRecovery represents an entry in the blocked_topology_recovery table
 type BlockedTopologyRecovery struct {
-	FailedInstanceKey    inst.InstanceKey
+	FailedAlias          string
 	ClusterName          string
 	Analysis             inst.AnalysisCode
 	LastBlockedTimestamp string

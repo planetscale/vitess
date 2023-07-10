@@ -692,10 +692,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		return nil
 	})
 
-	for _, analysis := range result {
-		log.Errorf("Analysis - Instance - %v, Code - %v, LastCheckValid - %v, ReplStopped - %v", analysis.AnalyzedInstanceAlias, analysis.Analysis, analysis.LastCheckValid, analysis.ReplicationStopped)
-	}
-
 	result = postProcessAnalyses(result, clusters)
 
 	if err != nil {
