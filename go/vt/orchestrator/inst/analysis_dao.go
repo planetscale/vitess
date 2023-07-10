@@ -19,6 +19,7 @@ package inst
 import (
 	"fmt"
 	"regexp"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -43,10 +44,12 @@ var analysisChangeWriteAttemptCounter = metrics.NewCounter()
 var analysisChangeWriteCounter = metrics.NewCounter()
 
 var recentInstantAnalysis *cache.Cache
+var initilizationComplete atomic.Bool
 
 func init() {
 	metrics.Register("analysis.change.write.attempt", analysisChangeWriteAttemptCounter)
 	metrics.Register("analysis.change.write", analysisChangeWriteCounter)
+	initilizationComplete.Store(false)
 
 	go initializeAnalysisDaoPostConfiguration()
 }
@@ -55,6 +58,7 @@ func initializeAnalysisDaoPostConfiguration() {
 	config.WaitForConfigurationToBeLoaded()
 
 	recentInstantAnalysis = cache.New(time.Duration(config.RecoveryPollSeconds*2)*time.Second, time.Second)
+	initilizationComplete.Store(true)
 }
 
 type clusterAnalysis struct {
