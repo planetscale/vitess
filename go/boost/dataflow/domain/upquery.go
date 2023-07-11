@@ -40,7 +40,7 @@ func (d *Domain) performUpquery(ctx context.Context, queryStr string, bvars map[
 	switch d.upqueryMode {
 	case config.UpqueryMode_SELECT_GTID:
 		session.Autocommit = true
-		err := d.executor.StreamExecute(ctx, "Boost.Upquery", session, queryStr, bvars, func(result *sqltypes.Result) error {
+		err := d.executor.StreamExecute(ctx, nil, "Boost.Upquery", session, queryStr, bvars, func(result *sqltypes.Result) error {
 			records = records[:0]
 
 			for i, row := range result.Rows {
@@ -70,7 +70,7 @@ func (d *Domain) performUpquery(ctx context.Context, queryStr string, bvars map[
 			_ = d.executor.CloseSession(ctx, session)
 		}()
 
-		err := d.executor.StreamExecute(ctx, "Boost.Upquery", session, queryStr, bvars, func(result *sqltypes.Result) error {
+		err := d.executor.StreamExecute(ctx, nil, "Boost.Upquery", session, queryStr, bvars, func(result *sqltypes.Result) error {
 			records = records[:0]
 
 			if gtid == "" {
