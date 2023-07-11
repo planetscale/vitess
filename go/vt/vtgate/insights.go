@@ -19,7 +19,6 @@ package vtgate
 import (
 	"context"
 	"crypto/tls"
-	"flag"
 	"math"
 	"os"
 	"regexp"
@@ -29,6 +28,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"golang.org/x/exp/slices"
 
@@ -190,82 +193,110 @@ type Insights struct {
 }
 
 var (
+	insightsKafkaBrokers                  = ""
+	insightsKafkaUsername                 = ""
+	insightsKafkaPassword                 = ""
+	insightsKafkaBufferSize          uint = 5 * 1024 * 1024
+	insightsRTThreshold              uint = 1000
+	insightsRowsReadThreshold        uint = 10000
+	insightsQueriesLimiterRate            = 0.1
+	insightsQueriesLimiterBurst      uint = 2000
+	insightsMaxQueriesPerInterval    uint = 100
+	insightsFlushInterval            uint = 15
+	insightsPatternLimit             uint = 1000
+	databaseBranchPublicID                = ""
+	insightsKafkaText                     = false
+	insightsRawQueries                    = false
+	insightsRawQueriesMaxLength      uint = 8192
+	insightsReorderThreshold         uint = 5
+	insightsTotalDurationSketches         = false
+	insightsTotalDurationSketchAlpha      = 0.01
+	insightsTotalDurationSketchUnits      = -6
+)
+
+func registerInsightsFlags(fs *pflag.FlagSet) {
 	// insightsKafkaBrokers specifies a comma-separated list of host:port endpoints where Insights metrics are sent to Kafka.
 	// If omitted (the default), no Insights metrics are sent.
-	insightsKafkaBrokers = flag.String("insights_kafka_brokers", "", "Enable Kafka metrics to the given host:port endpoint")
+	fs.StringVar(&insightsKafkaBrokers, "insights_kafka_brokers", insightsKafkaBrokers, "Enable Kafka metrics to the given host:port endpoint")
 
 	// insightsKafkaUsername specifies the username sent to authenticate to the Kafka endpoint
-	insightsKafkaUsername = flag.String("insights_kafka_username", "", "Username for the Kafka endpoint")
+	fs.StringVar(&insightsKafkaUsername, "insights_kafka_username", insightsKafkaUsername, "Username for the Kafka endpoint")
 
 	// insightsKafkaPassword specifies the password sent to authenticate to the Kafka endpoint
-	insightsKafkaPassword = flag.String("insights_kafka_password", "", "Password for the Kafka endpoint")
+	fs.StringVar(&insightsKafkaPassword, "insights_kafka_password", insightsKafkaPassword, "Password for the Kafka endpoint")
 
 	// insightsKafkaBufferSize in a cap on the message payload bytes that can be inflight (i.e. not yet sent to Kafka) before we start dropping messages to avoid unbounded memory usage if Kafka is down/slow
-	insightsKafkaBufferSize = flag.Uint("insights_kafka_buffer", 5*1024*1024, "Maximum memory dedicated to unsent Kafka messages; above this threshold, messages will be dropped")
+	fs.UintVar(&insightsKafkaBufferSize, "insights_kafka_buffer", insightsKafkaBufferSize, "Maximum memory dedicated to unsent Kafka messages; above this threshold, messages will be dropped")
 
 	// insightsRTThreshold is the response-time threshold in milliseconds, above which individual queries are reported
-	insightsRTThreshold = flag.Uint("insights_rt_threshold", 1000, "Report individual queries that take at least this many milliseconds")
+	fs.UintVar(&insightsRTThreshold, "insights_rt_threshold", insightsRTThreshold, "Report individual queries that take at least this many milliseconds")
 
 	// insightsRowsReadThreshold is the threshold on the number of rows read (scanned) above which individual queries are reported
-	insightsRowsReadThreshold = flag.Uint("insights_rows_read_threshold", 10000, "Report individual transactions that read (scan) at least this many rows")
+	fs.UintVar(&insightsRowsReadThreshold, "insights_rows_read_threshold", insightsRowsReadThreshold, "Report individual transactions that read (scan) at least this many rows")
 
 	// insightsQueriesLimitierRate is the average rate of the token bucket limiter on individual query messages sent to insights
-	insightsQueriesLimiterRate = flag.Float64("insights_queries_limiter_rate", 0.1, "Limit on (average) queries reported per second")
+	fs.Float64Var(&insightsQueriesLimiterRate, "insights_queries_limiter_rate", insightsQueriesLimiterRate, "Limit on (average) queries reported per second")
 
 	// insightsQueriesLimitierBurst is the burst capacity of the token bucket limiter on individual query messages sent to insights
-	insightsQueriesLimiterBurst = flag.Uint("insights_queries_limiter_burst", 2000, "Burst limit on individual queries reported")
+	fs.UintVar(&insightsQueriesLimiterBurst, "insights_queries_limiter_burst", insightsQueriesLimiterBurst, "Burst limit on individual queries reported")
 
 	// insightsMaxQueriesPerInterval is the maximum number of individual queries that can be reported per interval.  Interesting queries above this threshold
 	// will simply not be reported until the next interval begins.
-	insightsMaxQueriesPerInterval = flag.Uint("insights_max_queries_per_interval", 100, "Limit on individual queries reported per flush interval")
+	fs.UintVar(&insightsMaxQueriesPerInterval, "insights_max_queries_per_interval", insightsMaxQueriesPerInterval, "Limit on individual queries reported per flush interval")
 
 	// insightsFlushInterval is how often, in seconds, to send aggregated metrics for query patterns
-	insightsFlushInterval = flag.Uint("insights_flush_interval", 15, "Send aggregated metrics for all query patterns every N seconds")
+	fs.UintVar(&insightsFlushInterval, "insights_flush_interval", insightsFlushInterval, "Send aggregated metrics for all query patterns every N seconds")
 
 	// insightsPatternLimit is the maximum number of query patterns to track between flushes.  The first N patterns are tracked, and anything beyond
 	// that is silently dropped until the next flush time.
-	insightsPatternLimit = flag.Uint("insights_pattern_limit", 1000, "Maximum number of unique patterns to track in a flush interval")
+	fs.UintVar(&insightsPatternLimit, "insights_pattern_limit", insightsPatternLimit, "Maximum number of unique patterns to track in a flush interval")
 
 	// databaseBranchPublicID is api-bb's name for the database branch this cluster hosts
-	databaseBranchPublicID = flag.String("database_branch_public_id", "", "The public ID of the database branch this cluster hosts, used for Insights")
+	fs.StringVar(&databaseBranchPublicID, "database_branch_public_id", databaseBranchPublicID, "The public ID of the database branch this cluster hosts, used for Insights")
 
 	// insightsKafkaText is true if we should send protobufs message in clear text, for unit tests and debugging
-	insightsKafkaText = flag.Bool("insights_kafka_text", false, "Send Insights messages as plain text")
+	fs.BoolVar(&insightsKafkaText, "insights_kafka_text", insightsKafkaText, "Send Insights messages as plain text")
 
 	// insightsRawQueries is true if we should send raw, unnormalized queries as part of Kafka "Query" messages
-	insightsRawQueries = flag.Bool("insights_raw_queries", false, "Send unnormalized SQL for individually reported queries")
+	fs.BoolVar(&insightsRawQueries, "insights_raw_queries", insightsRawQueries, "Send unnormalized SQL for individually reported queries")
 
 	// insightsRawQueriesMaxLength is the longest string, in bytes, we will send as the RawSql field in a Kafka message
-	insightsRawQueriesMaxLength = flag.Uint("insights_raw_queries_max_length", 8192, "Maximum size for unnormalized SQL")
+	fs.UintVar(&insightsRawQueriesMaxLength, "insights_raw_queries_max_length", insightsRawQueriesMaxLength, "Maximum size for unnormalized SQL")
 
-	// old flag, still allowed but now ignored
-	insightsReorderThreshold = flag.Uint("insights_reorder_threshold", 5, "Deprecated")
+	// normalize more aggressively by alphabetizing INSERT columns if there are more than this many
+	// otherwise identical patterns in a single interval
+	fs.UintVar(&insightsReorderThreshold, "insights_reorder_threshold", insightsReorderThreshold, "Reorder INSERT columns if more than this many redundant patterns in an interval")
+	fs.MarkDeprecated("insights_reorder_threshold", "it will be removed in a future release.")
 
-	insightsTotalDurationSketches    = flag.Bool("insights_total_duration_sketches", false, "Send quantile sketches for total query duration")
-	insightsTotalDurationSketchAlpha = flag.Float64("insights_total_duration_sketch_alpha", 0.01, "Relative accuracy for total query duration sketches")
-	insightsTotalDurationSketchUnits = flag.Int("insights_total_duration_sketch_units", -6, "Base 10 exponent for the units of the total query duration sketches, relative to seconds (0 = seconds, -3 = milliseconds, -6 = microseconds)")
-)
+	fs.BoolVar(&insightsTotalDurationSketches, "insights_total_duration_sketches", insightsTotalDurationSketches, "Send quantile sketches for total query duration")
+	fs.Float64Var(&insightsTotalDurationSketchAlpha, "insights_total_duration_sketch_alpha", insightsTotalDurationSketchAlpha, "Relative accuracy for total query duration sketches")
+	fs.IntVar(&insightsTotalDurationSketchUnits, "insights_total_duration_sketch_units", insightsTotalDurationSketchUnits, "Base 10 exponent for the units of the total query duration sketches, relative to seconds (0 = seconds, -3 = milliseconds, -6 = microseconds)")
+}
+
+func init() {
+	servenv.OnParseFor("vtgate", registerInsightsFlags)
+}
 
 func initInsights(logger *streamlog.StreamLogger[*logstats.LogStats]) (*Insights, error) {
 	return initInsightsInner(logger,
-		argOrEnv(*insightsKafkaBrokers, BrokersVar),
-		*databaseBranchPublicID,
-		argOrEnv(*insightsKafkaUsername, UsernameVar),
-		argOrEnv(*insightsKafkaPassword, PasswordVar),
-		*insightsKafkaBufferSize,
-		*insightsPatternLimit,
-		*insightsRowsReadThreshold,
-		*insightsRTThreshold,
-		*insightsMaxQueriesPerInterval,
-		*insightsQueriesLimiterRate,
-		*insightsQueriesLimiterBurst,
-		*insightsRawQueriesMaxLength,
-		time.Duration(*insightsFlushInterval)*time.Second,
-		*insightsKafkaText,
-		*insightsRawQueries,
-		*insightsTotalDurationSketches,
-		*insightsTotalDurationSketchAlpha,
-		*insightsTotalDurationSketchUnits,
+		argOrEnv(insightsKafkaBrokers, BrokersVar),
+		databaseBranchPublicID,
+		argOrEnv(insightsKafkaUsername, UsernameVar),
+		argOrEnv(insightsKafkaPassword, PasswordVar),
+		insightsKafkaBufferSize,
+		insightsPatternLimit,
+		insightsRowsReadThreshold,
+		insightsRTThreshold,
+		insightsMaxQueriesPerInterval,
+		insightsQueriesLimiterRate,
+		insightsQueriesLimiterBurst,
+		insightsRawQueriesMaxLength,
+		time.Duration(insightsFlushInterval)*time.Second,
+		insightsKafkaText,
+		insightsRawQueries,
+		insightsTotalDurationSketches,
+		insightsTotalDurationSketchAlpha,
+		insightsTotalDurationSketchUnits,
 	)
 }
 
