@@ -19,6 +19,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 func Default(t *testing.T) *Executor {
@@ -71,7 +72,7 @@ func (ex *Executor) CloseSession(ctx context.Context, safeSession *vtgate.SafeSe
 	return nil
 }
 
-func (ex *Executor) StreamExecute(ctx context.Context, method string, safeSession *vtgate.SafeSession, sql string, bvars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func (ex *Executor) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, safeSession *vtgate.SafeSession, sql string, bvars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	if cid := callerid.EffectiveCallerIDFromContext(ctx); cid == nil {
 		ex.t.Fatalf("missing: EffectiveCallerID passed on context")
 	}

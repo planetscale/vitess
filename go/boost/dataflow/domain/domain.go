@@ -27,10 +27,11 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 type Executor interface {
-	StreamExecute(ctx context.Context, method string, safeSession *vtgate.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error
+	StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, safeSession *vtgate.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error
 	CloseSession(ctx context.Context, safeSession *vtgate.SafeSession) error
 	VSchema() *vindexes.VSchema
 }
