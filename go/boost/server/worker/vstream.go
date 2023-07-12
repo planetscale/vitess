@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/boost/server/controller/config"
+
 	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/boostrpc/service"
@@ -282,6 +284,9 @@ type EventProcessor struct {
 	targets []*vstreamTarget
 
 	conflicts SchemaConflictTracker
+
+	vstreamStartTimeout time.Duration
+	vstreamStartRetries int
 }
 
 type vstreamTarget struct {
@@ -293,7 +298,7 @@ type vstreamTarget struct {
 
 type mapper func(row *querypb.Row, sign bool) sql.Record
 
-func NewEventProcessor(topo TopoUpdater, log *zap.Logger, stats *workerStats, coord *boostrpc.ChannelCoordinator, resolver Resolver) *EventProcessor {
+func NewEventProcessor(topo TopoUpdater, log *zap.Logger, stats *workerStats, coord *boostrpc.ChannelCoordinator, resolver Resolver, cfg *config.Config) *EventProcessor {
 	return &EventProcessor{
 		log:      log.With(zap.String("context", "EventProcessor")),
 		resolver: resolver,
@@ -308,6 +313,8 @@ func NewEventProcessor(topo TopoUpdater, log *zap.Logger, stats *workerStats, co
 			ch:              make(chan []string, 4),
 			update:          topo,
 		},
+		vstreamStartTimeout: cfg.VstreamStartTimeout,
+		vstreamStartRetries: cfg.VstreamStartRetries,
 	}
 }
 
@@ -358,15 +365,19 @@ func defaultMapper(schema []sql.Type) mapper {
 	}
 }
 
-func (ep *EventProcessor) AssignTables(ctx context.Context, tables []*service.ExternalTableDescriptor) error {
-	ep.log.Debug("assigning new vstream tables", zap.Int("num_tables", len(tables)))
-
+func (ep *EventProcessor) Cancel() {
 	if ep.cancel != nil {
 		ep.log.Debug("cancelling existing vstream...")
 		ep.cancel()
 		ep.wg.Wait()
 		ep.cancel = nil
 	}
+}
+
+func (ep *EventProcessor) AssignTables(ctx context.Context, tables []*service.ExternalTableDescriptor) error {
+	ep.log.Debug("assigning new vstream tables", zap.Int("num_tables", len(tables)))
+
+	ep.Cancel()
 
 	err := ep.conflicts.Clear(ctx)
 	if err != nil {
@@ -392,7 +403,28 @@ nextTable:
 		ep.tables[tname] = client
 	}
 
-	return ep.process(ctx)
+	tries := ep.vstreamStartRetries
+	for tries > 0 {
+		err = ep.process(ctx)
+		if err == nil {
+			break
+		}
+
+		ep.Cancel()
+		if errors.Is(err, errVStreamTimeout) {
+			var pending int
+			for _, t := range ep.targets {
+				if !t.started.Load() {
+					pending++
+				}
+			}
+			ep.log.Warn("vstream start timed out waiting for streams", zap.Int("streams", len(ep.targets)), zap.Int("pending", pending), zap.Error(err))
+			tries--
+			continue
+		}
+		return err
+	}
+	return err
 }
 
 func (ep *EventProcessor) process(ctx context.Context) error {
@@ -439,7 +471,7 @@ func (ep *EventProcessor) process(ctx context.Context) error {
 		}
 	}
 
-	tick := time.NewTicker(5 * time.Millisecond)
+	tick := time.NewTicker(20 * time.Millisecond)
 	defer tick.Stop()
 
 	start := time.Now()
@@ -457,14 +489,17 @@ func (ep *EventProcessor) process(ctx context.Context) error {
 				}
 			}
 			if len(pending) == 0 {
+				ep.log.Info("all vstreams started", zap.Duration("duration", now.Sub(start)))
 				return nil
 			}
-			if now.Sub(start) >= 5*time.Second {
-				return fmt.Errorf("timed out while waiting for %d streams to start", len(pending))
+			if now.Sub(start) >= ep.vstreamStartTimeout {
+				return errVStreamTimeout
 			}
 		}
 	}
 }
+
+var errVStreamTimeout = errors.New("timed out while waiting for vstreams to start")
 
 func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gateway, target *vstreamTarget, interestingTables []string) {
 	defer ep.wg.Done()

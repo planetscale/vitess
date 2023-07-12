@@ -35,7 +35,7 @@ func Default(t *testing.T) *Executor {
 type Options struct {
 	QueryLatency        time.Duration
 	VStreamRowLatency   time.Duration
-	VStreamStartLatency time.Duration
+	VStreamStartLatency func() time.Duration
 	MaxBatchSize        int
 }
 
