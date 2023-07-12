@@ -69,6 +69,13 @@ func registerFlags(fs *pflag.FlagSet) {
 	// to 30 seconds. We add some additional buffer time here to then process the (potentially huge) results as well.
 	fs.DurationVar(&cfg.WorkerReadTimeout, "worker-read-timeout", 40*time.Second, "the timeout for blocking reads on a worker")
 
+	// The default vstream start timeout value defines how long we wait for a vstream to start before we
+	// fail and retry the vstream startup process.
+	fs.DurationVar(&cfg.VstreamStartTimeout, "vstream-start-timeout", 1*time.Minute, "the timeout for waiting for vstreams to start")
+
+	// The number of timed we retry a vstream startup if it fails.
+	fs.IntVar(&cfg.VstreamStartRetries, "vstream-start-retries", 10, "number of retries for vstream startup if it fails")
+
 	fs.BoolVar(&enableSchemaChangeSignal, "schema_change_signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	fs.StringVar(&schemaChangeUser, "schema_change_signal_user", schemaChangeUser, "User to be used to send down query to vttablet to retrieve schema changes")
 

@@ -172,11 +172,10 @@ func (conv *Converter) selectToOperator(ctx *PlanContext, sel *sqlparser.Select)
 				return nil, nil, nil, err
 			}
 
-			l, err := value.Value().ToUint64()
+			k, err = value.Value().ToInt()
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			k = int(l)
 		}
 		node = conv.NewNode("topK", &TopK{
 			Order: sel.OrderBy,

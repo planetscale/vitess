@@ -10,6 +10,7 @@ import (
 )
 
 func SetupExternal(t *testing.T, options ...boosttest.Option) *boosttest.Cluster {
+	t.Helper()
 	t.Cleanup(func() {
 		boosttest.EnsureNoLeaks(t)
 	})

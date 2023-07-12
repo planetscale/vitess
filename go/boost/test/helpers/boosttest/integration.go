@@ -182,6 +182,7 @@ func WithSeed(fn func(g *Cluster)) Option {
 }
 
 func New(t testing.TB, options ...Option) *Cluster {
+	t.Helper()
 	var cluster = &Cluster{
 		t:             t,
 		cachedConns:   topowatcher.NewCachedDialer(),
@@ -299,10 +300,12 @@ func (c *Cluster) Controller() *controller.Server {
 }
 
 func (c *Cluster) TestExecute(sqlwithparams string, args ...any) *sqltypes.Result {
+	c.t.Helper()
 	return c.Executor.TestExecute(sqlwithparams, args...)
 }
 
 func (c *Cluster) checkDomainSerialization() {
+	c.t.Helper()
 	ctrl := c.Controller()
 	ctrl.Inner().BuildDomain = func(idx dataflow.DomainIdx, shard, numShards uint, nodes *flownode.Map, cfg *config.Domain) (*service.DomainBuilder, error) {
 		dom, err := domain.ToProto(idx, shard, numShards, nodes, cfg)
@@ -356,6 +359,7 @@ func (c *Cluster) ServerInstances() []*server.Server {
 }
 
 func (c *Cluster) DebugEviction(renderGraphviz bool, forceLimits map[string]int64) *materialization.EvictionPlan {
+	c.t.Helper()
 	if renderGraphviz {
 		resp, err := c.Controller().Graphviz(context.Background(),
 			&vtboost.GraphvizRequest{
@@ -372,31 +376,8 @@ func (c *Cluster) DebugEviction(renderGraphviz bool, forceLimits map[string]int6
 	return ep
 }
 
-func (c *Cluster) FindGraphNodes(check func(n *flownode.Node) bool) []*flownode.Node {
-	var found []*flownode.Node
-	for _, srv := range c.servers {
-		domains := srv.Worker.ActiveDomains()
-		domains.ForEach(func(_ dataflow.DomainAddr, dom *domain.Domain) {
-			for _, n := range dom.Nodes() {
-				if check(n) {
-					found = append(found, n)
-				}
-			}
-		})
-	}
-	if len(found) == 0 {
-		c.t.Fatalf("failed to find required graph nodes")
-	}
-	for _, n := range found {
-		shards := common.UnwrapOr(n.Sharding().TryGetShards(), 1)
-		if int(shards) != len(found) {
-			c.t.Fatalf("node has %d shards, but only %d shards found in all active domains", shards, len(found))
-		}
-	}
-	return found
-}
-
 func (c *Cluster) shutdown() {
+	c.t.Helper()
 	c.cachedConns.Close()
 	c.cancel()
 
@@ -408,6 +389,7 @@ func (c *Cluster) shutdown() {
 }
 
 func (c *Cluster) ViewGraphviz() {
+	c.t.Helper()
 	gz, err := c.Controller().Graphviz(context.Background(), &vtboost.GraphvizRequest{})
 	if err != nil {
 		c.t.Fatal(err)
@@ -580,12 +562,10 @@ func (l *Lookup) expect(check func(result *sqltypes.Result) error) *sqltypes.Res
 	var rs *sqltypes.Result
 	var err error
 	for tries := 0; tries < MaxTries; tries++ {
-		rs, err = l.try()
-		if err != nil {
-			continue
-		}
-		if err = check(rs); err == nil {
-			return rs
+		if rs, err = l.try(); err == nil {
+			if err = check(rs); err == nil {
+				return rs
+			}
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -639,6 +619,7 @@ func (c *Cluster) FindView(name string) *TestView {
 }
 
 func (c *Cluster) View(name string) *TestView {
+	c.t.Helper()
 	view := c.FindView(name)
 	if view == nil && !slices.Contains(c.ignore, name) {
 		c.t.Fatalf("missing View in cluster: %q", name)
@@ -647,12 +628,14 @@ func (c *Cluster) View(name string) *TestView {
 }
 
 func (c *Cluster) ApplyRecipe(recipe *testrecipe.Recipe) {
+	c.t.Helper()
 	if err := c.TryApplyRecipe(recipe); err != nil {
 		c.t.Fatalf("failed to PutRecipeWithOptions(): %v", err)
 	}
 }
 
 func (c *Cluster) TryApplyRecipe(recipe *testrecipe.Recipe) error {
+	c.t.Helper()
 	recipe.Update(c.t)
 
 	if c.Executor != nil && c.RecipeVersion == 0 {
@@ -676,6 +659,7 @@ func (c *Cluster) TryApplyRecipe(recipe *testrecipe.Recipe) error {
 }
 
 func (c *Cluster) AlterRecipe(recipe *testrecipe.Recipe, ddl string) {
+	c.t.Helper()
 	if c.Executor == nil {
 		c.t.Fatalf("cannot alter table without a Executor")
 	}
@@ -687,6 +671,7 @@ type Metric interface {
 }
 
 func (c *Cluster) workerStats(metric Metric) (total int) {
+	c.t.Helper()
 	workers := slices2.Map(c.ServerInstances(), func(srv *server.Server) string {
 		return srv.Worker.UUID().String()
 	})
@@ -700,6 +685,7 @@ func (c *Cluster) workerStats(metric Metric) (total int) {
 }
 
 func (c *Cluster) AssertWorkerStats(expected int, metric Metric) {
+	c.t.Helper()
 	var stats int
 	for tries := 0; tries < MaxTries; tries++ {
 		stats = c.workerStats(metric)
