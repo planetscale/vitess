@@ -1,0 +1,3 @@
+steps:
+  - label: "Empty pipeline"
+    command: echo "no tests to run!"
