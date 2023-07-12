@@ -25,9 +25,11 @@ func DefaultConfig() *Config {
 		HealthcheckEvery: 10 * time.Second,
 		Quorum:           1,
 		// TODO: enable Finkelstein by default
-		Reuse:             ReuseType_NO_REUSE,
-		EvictEvery:        5 * time.Second,
-		WorkerReadTimeout: 40 * time.Second,
+		Reuse:               ReuseType_NO_REUSE,
+		EvictEvery:          5 * time.Second,
+		WorkerReadTimeout:   40 * time.Second,
+		VstreamStartTimeout: 1 * time.Minute,
+		VstreamStartRetries: 10,
 	}
 }
 
