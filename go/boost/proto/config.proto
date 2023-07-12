@@ -34,6 +34,8 @@ message Config {
   ReuseType reuse = 9;
   google.protobuf.Duration evict_every = 10 [(gogoproto.stdduration) = true, (gogoproto.nullable) = false];
   google.protobuf.Duration worker_read_timeout = 11 [(gogoproto.stdduration) = true, (gogoproto.nullable) = false];
+  google.protobuf.Duration vstream_start_timeout = 12 [(gogoproto.stdduration) = true, (gogoproto.nullable) = false];
+  int32 vstream_start_retries = 13 [(gogoproto.casttype) = "int"];
 }
 
 enum UpqueryGenerationMode {

@@ -132,8 +132,8 @@ func (target *memTarget) execute(querySQL string, variables map[string]*querypb.
 func (target *memTarget) vstream(ctx context.Context, pos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error, options *Options) error {
 	stream := make(chan []*binlogdatapb.VEvent, 32)
 
-	if options.VStreamStartLatency > 0 {
-		time.Sleep(options.VStreamStartLatency)
+	if options.VStreamStartLatency != nil {
+		time.Sleep(options.VStreamStartLatency())
 	}
 
 	if err := target.gtid.Subscribe(pos, stream); err != nil {

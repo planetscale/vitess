@@ -84,7 +84,7 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY
 SELECT SUM(num.a) FROM num;
 `
 	executor := func(options *testexecutor.Options) {
-		options.VStreamStartLatency = 100 * time.Millisecond
+		options.VStreamStartLatency = func() time.Duration { return 100 * time.Millisecond }
 	}
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe), boosttest.WithFakeExecutorOptions(executor))
@@ -119,4 +119,30 @@ SELECT SUM(num.a) FROM num;
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe), boosttest.WithFakeExecutorOptions(executor), boosttest.WithSeed(prefill))
 	time.Sleep(500 * time.Millisecond)
 	g.View("q0").Lookup().Expect(`[[DECIMAL(10)]]`)
+}
+
+func TestSlowVStreamStart(t *testing.T) {
+	const Recipe = `
+CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a BIGINT, b BIGINT, PRIMARY KEY(pk));
+SELECT SUM(num.a) FROM num;
+`
+	executor := func(options *testexecutor.Options) {
+		first := true
+		options.VStreamStartLatency = func() time.Duration {
+			if first {
+				first = false
+				return 200 * time.Millisecond
+			}
+			return 0 * time.Millisecond
+		}
+	}
+
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe),
+		boosttest.WithFakeExecutorOptions(executor),
+		boosttest.WithCustomBoostConfig(func(cfg *config.Config) {
+			cfg.VstreamStartTimeout = 100 * time.Millisecond
+		}),
+	)
+	g.View("q0").Lookup().Expect(`[[NULL]]`)
 }
