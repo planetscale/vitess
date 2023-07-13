@@ -383,6 +383,8 @@ func (er *astRewriter) rewriteUp(cursor *Cursor) bool {
 		er.rewriteShowBasic(node)
 	case *ExistsExpr:
 		er.existsRewrite(cursor, node)
+	case DistinctableAggr:
+		er.rewriteDistinctableAggr(cursor, node)
 	}
 	return true
 }
@@ -701,6 +703,18 @@ func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 		&AliasedExpr{Expr: NewIntLiteral("1")},
 	}
 	sel.GroupBy = nil
+}
+
+// rewriteDistinctableAggr removed Distinct from Max and Min Aggregations as it does not impact the result. But, makes the plan simpler.
+func (er *astRewriter) rewriteDistinctableAggr(cursor *Cursor, node DistinctableAggr) {
+	if !node.IsDistinct() {
+		return
+	}
+	switch aggr := node.(type) {
+	case *Max, *Min:
+		aggr.SetDistinct(false)
+		er.bindVars.NoteRewrite()
+	}
 }
 
 func bindVarExpression(name string) Expr {
