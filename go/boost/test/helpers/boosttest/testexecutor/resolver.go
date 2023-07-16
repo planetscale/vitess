@@ -47,8 +47,13 @@ type fakeGateway struct {
 	executor *Executor
 }
 
+func (f *fakeGateway) GetServingKeyspaces() []string {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (f *fakeGateway) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
