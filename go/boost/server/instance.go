@@ -9,6 +9,8 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
@@ -135,6 +137,16 @@ func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, t
 	const DefaultNoScatter = false
 	const DefaultPlannerVersion = querypb.ExecuteOptions_Gen4
 	const DefaultTxMode = vtgatepb.TransactionMode_MULTI
+
+	// Create a global cache to use for lookups of the sidecar database
+	// identifier in use by each keyspace.
+	_, _ = sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+		ki, err := ts.GetKeyspace(ctx, keyspace)
+		if err != nil {
+			return "", err
+		}
+		return ki.SidecarDbName, nil
+	})
 
 	tracker := vtschema.NewTracker(gateway.HealthCheck().Subscribe(), schemaTrackingUser, false)
 	addKeyspaceToTracker(ctx, log, srvResolver, tracker, gateway)
