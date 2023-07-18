@@ -1,5 +1,5 @@
 name: Upgrade Downgrade Testing Reparent New VTTablet
-on: [push]
+on: [pull_request]
 
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Reparent New VTTablet')

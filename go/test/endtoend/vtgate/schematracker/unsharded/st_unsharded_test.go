@@ -123,7 +123,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
 	require.NoError(t, err)
 	expected := `[[VARCHAR("dual")] [VARCHAR("main")]]`
-	if vtgateVersion >= 17 {
+	if vtgateVersion >= 16 {
 		expected = `[[VARCHAR("main")]]`
 	}
 
@@ -139,7 +139,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	utils.Exec(t, conn, `create table new_table_tracked(id bigint, name varchar(100), primary key(id)) Engine=InnoDB`)
 
 	expected = `[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("new_table_tracked")]]`
-	if vtgateVersion >= 17 {
+	if vtgateVersion >= 16 {
 		expected = `[[VARCHAR("main")] [VARCHAR("new_table_tracked")]]`
 	}
 
@@ -177,7 +177,7 @@ func TestNewUnshardedTable(t *testing.T) {
 
 	// waiting for the vttablet's schema_reload interval to kick in
 	expected = `[[VARCHAR("dual")] [VARCHAR("main")]]`
-	if vtgateVersion >= 17 {
+	if vtgateVersion >= 16 {
 		expected = `[[VARCHAR("main")]]`
 	}
 	utils.AssertMatchesWithTimeout(t, conn,

@@ -190,7 +190,7 @@ func TestInitAndUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	expected := `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
-	if vtgateVersion >= 17 {
+	if vtgateVersion >= 16 {
 		expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
 	}
 	utils.AssertMatchesWithTimeout(t, conn,
@@ -203,7 +203,7 @@ func TestInitAndUpdate(t *testing.T) {
 	// Init
 	_ = utils.Exec(t, conn, "create table test_sc (id bigint primary key)")
 	expected = `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")]]`
-	if vtgateVersion >= 17 {
+	if vtgateVersion >= 16 {
 		expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")]]`
 	}
 	utils.AssertMatchesWithTimeout(t, conn,
@@ -216,7 +216,7 @@ func TestInitAndUpdate(t *testing.T) {
 	// Tables Update via health check.
 	_ = utils.Exec(t, conn, "create table test_sc1 (id bigint primary key)")
 	expected = `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`
-	if vtgateVersion >= 17 {
+	if vtgateVersion >= 16 {
 		expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`
 	}
 	utils.AssertMatchesWithTimeout(t, conn,
@@ -228,7 +228,7 @@ func TestInitAndUpdate(t *testing.T) {
 
 	_ = utils.Exec(t, conn, "drop table test_sc, test_sc1")
 	expected = `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
-	if vtgateVersion >= 17 {
+	if vtgateVersion >= 16 {
 		expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
 	}
 	utils.AssertMatchesWithTimeout(t, conn,
@@ -252,7 +252,7 @@ func TestDMLOnNewTable(t *testing.T) {
 	vtgateVersion, err := cluster.GetMajorVersion("vtgate")
 	require.NoError(t, err)
 	expected := `[[VARCHAR("dual")] [VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
-	if vtgateVersion >= 17 {
+	if vtgateVersion >= 16 {
 		expected = `[[VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
 	}
 	// wait for vttablet's schema reload interval to pass
