@@ -115,7 +115,7 @@ func TestVSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test empty vschema
-	if vtgateVersion >= 17 {
+	if vtgateVersion >= 16 {
 		utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[]`)
 	} else {
 		utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("dual")]]`)
@@ -135,7 +135,7 @@ func TestVSchema(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 
 	// Test Showing Tables
-	if vtgateVersion >= 17 {
+	if vtgateVersion >= 16 {
 		utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("main")] [VARCHAR("vt_user")]]`)
 	} else {
 		utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("vt_user")]]`)
