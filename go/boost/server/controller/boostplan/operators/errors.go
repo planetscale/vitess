@@ -38,7 +38,6 @@ const (
 	DualTable
 	ParameterLocation
 	ParameterLocationCompare
-	ParameterNotSupported
 	JoinWithoutPredicates
 	JoinPredicates
 	MultipleIn
@@ -144,8 +143,6 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "select without an explicit table is not supported")
 	case ParameterLocation:
 		fmt.Fprintf(&sb, "unsupported parameter location: %s", n.ast())
-	case ParameterNotSupported:
-		fmt.Fprintf(&sb, "parameter %s is not supported", n.ast())
 	case ParameterLocationCompare:
 		fmt.Fprintf(&sb, "parameter %s needs to be used in a comparison expression", n.ast())
 	case JoinWithoutPredicates:

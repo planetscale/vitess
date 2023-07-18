@@ -120,13 +120,17 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 type tableUsageMap map[semantics.TableSet]*TableReport
 
 func (report tableUsageMap) compute(semTable *semantics.SemTable) (err error) {
+	// First loop through the direct column references but don't
+	// immediately add them, since we loop over a map here so ordering
+	// is undefined, but we need the final report to be ordered by the
+	// table's column order, at least for expanded columns.
 	for expr, tblID := range semTable.Direct {
-		colName, ok := expr.(*sqlparser.ColName)
+		_, ok := expr.(*sqlparser.ColName)
 		if !ok {
 			continue
 		}
 
-		tr, found := report[tblID]
+		_, found := report[tblID]
 		if !found {
 			infoFor, err := semTable.TableInfoFor(tblID)
 			if err != nil {
@@ -138,7 +142,7 @@ func (report tableUsageMap) compute(semTable *semantics.SemTable) (err error) {
 				continue
 			}
 
-			tr = &TableReport{
+			tr := &TableReport{
 				Name: sqlparser.TableName{
 					Name:      sqlparser.NewIdentifierCS(vtbl.Name.String()),
 					Qualifier: sqlparser.NewIdentifierCS(vtbl.Keyspace.Name),
@@ -146,28 +150,39 @@ func (report tableUsageMap) compute(semTable *semantics.SemTable) (err error) {
 			}
 			report[tblID] = tr
 		}
+	}
+
+	// Add expanded columns first to ensure the are in the proper order.
+	for _, tr := range report {
+		expandedCols := semTable.ExpandedColumns[tr.Name]
+		for _, col := range expandedCols {
+			tr.Columns = append(tr.Columns, ColumnReport{
+				Name:     col.Name.String(),
+				Expanded: true,
+			})
+		}
+	}
+
+	for expr, tblID := range semTable.Direct {
+		col, ok := expr.(*sqlparser.ColName)
+		if !ok {
+			continue
+		}
+
+		tr, found := report[tblID]
+		if !found {
+			continue
+		}
 
 		// only add this column if it's not already there
-		if slices.ContainsFunc(tr.Columns, func(col ColumnReport) bool { return colName.Name.EqualString(col.Name) }) {
+		if slices.ContainsFunc(tr.Columns, func(cr ColumnReport) bool { return col.Name.EqualString(cr.Name) }) {
 			continue
 		}
 
 		tr.Columns = append(tr.Columns, ColumnReport{
-			Name: strings.ToLower(colName.Name.String()),
+			Name: col.Name.String(),
 		})
 	}
-
-	for _, tr := range report {
-		expandedCols := semTable.ExpandedColumns[tr.Name]
-		for _, colExp := range expandedCols {
-			for i, col := range tr.Columns {
-				if colExp.Name.EqualString(col.Name) {
-					tr.Columns[i].Expanded = true
-				}
-			}
-		}
-	}
-
 	return nil
 }
 
