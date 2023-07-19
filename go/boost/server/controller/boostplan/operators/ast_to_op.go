@@ -7,6 +7,8 @@ import (
 
 	"go.uber.org/multierr"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -172,7 +174,7 @@ func (conv *Converter) selectToOperator(ctx *PlanContext, sel *sqlparser.Select)
 				return nil, nil, nil, err
 			}
 
-			k, err = value.Value().ToInt()
+			k, err = value.Value(collations.Default()).ToInt()
 			if err != nil {
 				return nil, nil, nil, err
 			}
