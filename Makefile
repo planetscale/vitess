@@ -92,6 +92,10 @@ endif
 		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
 		    -ldflags "$(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
+ifndef NOVTADMINBUILD
+	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"
+	./web/vtadmin/build.sh
+endif
 
 	# build vtboost with CGO, because it depends on libc
 	CGO_ENABLED=1 go build \
