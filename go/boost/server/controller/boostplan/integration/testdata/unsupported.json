@@ -37,7 +37,7 @@
     {
       "Keyspace": "main",
       "SQL": "SELECT users.id FROM users LIMIT 1 OFFSET 1",
-      "Error": "query not supported by boost: query contains limit with no order by:  LIMIT 1, 1; query not supported by boost: query contains offset: 1"
+      "Error": "query not supported by boost: query contains limit with no order by:  LIMIT 1, 1; query not supported by boost: query contains non-zero offset: 1"
     },
     {
       "Keyspace": "main",
