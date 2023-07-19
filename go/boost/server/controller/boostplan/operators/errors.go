@@ -124,7 +124,7 @@ func (n *UnsupportedError) Error() string {
 	case LimitNoOrderBy:
 		fmt.Fprintf(&sb, "query contains limit with no order by: %s", n.ast())
 	case Offset:
-		fmt.Fprintf(&sb, "query contains offset: %s", n.ast())
+		fmt.Fprintf(&sb, "query contains non-zero offset: %s", n.ast())
 	case ColumnsNotExpanded:
 		fmt.Fprintf(&sb, "columns in select * are not expanded: %s", n.ast())
 	case LiteralInAggregatingQuery:
