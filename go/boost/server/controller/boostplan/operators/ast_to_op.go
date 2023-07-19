@@ -255,10 +255,13 @@ func checkForUnsupported(sel *sqlparser.Select) error {
 	}
 
 	if limited && sel.Limit.Offset != nil {
-		errors = append(errors, &UnsupportedError{
-			AST:  sel.Limit.Offset,
-			Type: Offset,
-		})
+		lit, ok := sel.Limit.Offset.(*sqlparser.Literal)
+		if !ok || lit.Type != sqlparser.IntVal || lit.Val != "0" {
+			errors = append(errors, &UnsupportedError{
+				AST:  sel.Limit.Offset,
+				Type: Offset,
+			})
+		}
 	}
 
 	if sel.Into != nil && !reflect.ValueOf(sel.Into).IsNil() {
