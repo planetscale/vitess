@@ -14,7 +14,7 @@ CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT,
 	b INT,
 	PRIMARY KEY(pk));
 
-	SELECT /*vt+ VIEW=top */ a, b FROM num WHERE a = ? ORDER BY b LIMIT 3;
+	SELECT /*vt+ VIEW=top */ a, b FROM num WHERE a = ? ORDER BY b LIMIT 3 OFFSET 0;
 	SELECT /*vt+ VIEW=top_with_bogokey */ a, b FROM num ORDER BY b LIMIT 3;
 	SELECT /*vt+ VIEW=top_without_key */ pk FROM num WHERE a = ? ORDER BY b LIMIT 3;
 	SELECT /*vt+ VIEW=top_multi */ pk FROM num WHERE a IN ::a ORDER BY b LIMIT 4;
