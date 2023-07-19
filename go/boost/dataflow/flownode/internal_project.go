@@ -331,7 +331,7 @@ func (expr *ProjectedExpr) Type(g *graph.Graph[*Node], src dataflow.IndexPair) (
 		env.Row = append(env.Row, sqltypes.MakeTrusted(tt.T, nil))
 	}
 
-	tt, err := env.TypeOf(expr.EvalExpr, nil)
+	tt, _, err := env.TypeOf(expr.EvalExpr, nil)
 	if err != nil {
 		return sql.Type{}, err
 	}
@@ -357,7 +357,7 @@ func (expr *ProjectedExpr) build(env *evalengine.ExpressionEnv, row sql.Row, out
 	if err != nil {
 		panic(err)
 	}
-	output.AddVitess(er.Value())
+	output.AddVitess(er.Value(collations.Default()))
 }
 
 func (lit *ProjectedLiteral) Type(*graph.Graph[*Node], dataflow.IndexPair) (sql.Type, error) {
