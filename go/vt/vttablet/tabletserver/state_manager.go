@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -538,6 +540,16 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	defer func() {
+		// panic handling
+		if x := recover(); x != nil {
+			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
+			// We should still fail the binary because we don't know what state we are in.
+			// This code is purely for debugging, so that we get the stack trace of the panic.
+			os.Exit(1)
+		}
+	}()
+
 	log.Infof("Started execution of unserveCommon")
 	cancel := sm.handleShutdownGracePeriod()
 	log.Infof("Finished execution of handleShutdownGracePeriod")
