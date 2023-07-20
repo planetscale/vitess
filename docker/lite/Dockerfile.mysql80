@@ -30,6 +30,11 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 
 # Build and install Vitess in a temporary output directory.
 USER vitess
+
+# PS: Setup git to use github_token
+RUN --mount=type=secret,id=github_token,mode=044 \
+    git config --global --add url."https://x-access-token:$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
+
 RUN make install PREFIX=/vt/install
 
 # Start over and build the final image.
