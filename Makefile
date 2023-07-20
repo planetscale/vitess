@@ -94,7 +94,7 @@ endif
 		    -o ${VTROOTBIN} ./go/...
 ifndef NOVTADMINBUILD
 	echo "Building VTAdmin Web, disable VTAdmin build by setting 'NOVTADMINBUILD'"
-	./web/vtadmin/build.sh
+	PREFIX="" ./web/vtadmin/build.sh
 endif
 
 	# build vtboost with CGO, because it depends on libc
