@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
@@ -62,15 +63,12 @@ func rowsToVitess(ctx *sql.Context, s sql.Schema, rows []sql.Row) (vtrows []sqlt
 func schemaToVitess(s sql.Schema) []*querypb.Field {
 	fields := make([]*querypb.Field, len(s))
 	for i, c := range s {
-		var charset uint32 = collations.CollationUtf8ID
-		if sqltypes.IsBinary(c.Type.Type()) {
-			charset = collations.CollationBinaryID
-		}
-
+		cs := collations.DefaultCollationForType(c.Type.Type())
 		fields[i] = &querypb.Field{
 			Name:    c.Name,
 			Type:    c.Type.Type(),
-			Charset: charset,
+			Charset: uint32(cs),
+			Flags:   mysql.FlagsForColumn(c.Type.Type(), cs),
 		}
 	}
 	return fields

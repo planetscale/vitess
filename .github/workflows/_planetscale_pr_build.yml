@@ -53,6 +53,13 @@ jobs:
           username: _json_key
           password: ${{ secrets.PLANETSCALE_GITHUB_PROD_SA_KEY }}
 
+      - name: Set credentials for private go deps
+        env:
+          PLANETSCALE_ACTIONS_BOT_TOKEN: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+        run: |
+          git config --global credential.helper store
+          echo "https://planetscale-actions-bot:${PLANETSCALE_ACTIONS_BOT_TOKEN}@github.com" >> ~/.git-credentials
+
       - uses: actions/github-script@v6
         id: check-pr-state
         with:
@@ -113,13 +120,6 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: 1.20.3
-
-      - name: Set credentials for private go deps
-        env:
-          PLANETSCALE_ACTIONS_BOT_TOKEN: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
-        run: |
-          git config --global credential.helper store
-          echo "https://planetscalebot:${PLANETSCALE_ACTIONS_BOT_TOKEN}@github.com" >> ~/.git-credentials
 
       - name: Cache the go modules
         uses: actions/cache@v3
