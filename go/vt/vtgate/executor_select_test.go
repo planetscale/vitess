@@ -756,8 +756,10 @@ func TestReplLag(t *testing.T) {
 	_ = createSandbox(ks1)
 	_ = createSandbox(ks2)
 	defer func() {
+		sandboxMu.Lock()
 		delete(ksToSandbox, ks1)
 		delete(ksToSandbox, ks2)
+		sandboxMu.Unlock()
 	}()
 	serv := new(sandboxTopo)
 	resolver := newTestResolver(hc, serv, cell)
