@@ -5,7 +5,7 @@ on: [push]
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (vreplication_partial_movetables_simple)
+    name: Run endtoend tests on Cluster (vreplication_partial_movetables_basic)
     runs-on: ubuntu-22.04
     timeout-minutes: 60
 
@@ -112,4 +112,5 @@ jobs:
         binlog-transaction-compression=ON
         EOF
         
-        eatmydata -- go run test.go -docker=false -follow -shard vreplication_partial_movetables_simple
+        # run the tests however you normally do, then produce a JUnit XML file
+        eatmydata -- go run test.go -docker=false -follow -shard vreplication_partial_movetables_basic 
