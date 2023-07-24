@@ -7,6 +7,9 @@ import (
 
 	"go.uber.org/multierr"
 
+	"vitess.io/vitess/go/boost/common"
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
@@ -24,7 +27,7 @@ func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStateme
 
 	if len(deps) == 0 {
 		deps = []*Dependency{
-			newDependency("bogokey", newBogoKeyColumn(), sqlparser.EqualOp),
+			newDependency("bogokey", newBogoKeyColumn(), common.PtrOf(sqlparser.EqualOp), sqltypes.Int64),
 		}
 	}
 
@@ -48,12 +51,17 @@ func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStateme
 					continue outer
 				}
 			}
-			deps = append(deps, &Dependency{
-				Name:         sqlparser.String(expr),
-				Column:       ColumnFromAST(expr),
-				Op:           nil,
-				ColumnOffset: -1,
-			})
+			typ, _, _ := ctx.SemTable.TypeForExpr(expr)
+			deps = append(deps, newDependency(sqlparser.String(expr), ColumnFromAST(expr), nil, typ))
+		}
+	}
+
+	for _, dep := range deps {
+		if !supportedType(dep.Type) {
+			return nil, &UnsupportedError{
+				AST:  sqlparser.NewColName(dep.Name),
+				Type: QueryParameterType,
+			}
 		}
 	}
 
@@ -67,6 +75,19 @@ func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStateme
 	viewNode := conv.NewNode("view", view, []*Node{node})
 
 	return viewNode, nil
+}
+
+func supportedType(typ sqltypes.Type) bool {
+	switch {
+	case typ == sqltypes.Unknown:
+		// We don't know the type at the moment, so we allow it for now since otherwise
+		// we'd not allow a bunch of queries that are actually fine.
+		return true
+	case sqltypes.IsNumber(typ), sqltypes.IsText(typ), sqltypes.IsBinary(typ), typ == sqltypes.TypeJSON:
+		return true
+	default:
+		return false
+	}
 }
 
 func needsPostFiltering(params []*Dependency) bool {
@@ -96,7 +117,7 @@ func (conv *Converter) selectStmtToOperator(ctx *PlanContext, stmt sqlparser.Sel
 	}
 }
 
-func (conv *Converter) addFilterIfNeeded(node *Node, where *sqlparser.Where, params []*Dependency) (*Node, []*Dependency, error) {
+func (conv *Converter) addFilterIfNeeded(ctx *PlanContext, node *Node, where *sqlparser.Where, params []*Dependency) (*Node, []*Dependency, error) {
 	if where == nil {
 		return node, params, nil
 	}
@@ -110,7 +131,7 @@ func (conv *Converter) addFilterIfNeeded(node *Node, where *sqlparser.Where, par
 			Type: AggregationInWhere,
 		}
 	}
-	predicates, moreParams := splitPredicates(where.Expr)
+	predicates, moreParams := splitPredicates(ctx, where.Expr)
 	if predicates != nil {
 		node = conv.buildFilterOp(node, predicates)
 	}
@@ -132,7 +153,7 @@ func (conv *Converter) selectToOperator(ctx *PlanContext, sel *sqlparser.Select)
 	if err != nil {
 		return nil, nil, Columns{}, err
 	}
-	node, params, err = conv.addFilterIfNeeded(node, sel.Where, params)
+	node, params, err = conv.addFilterIfNeeded(ctx, node, sel.Where, params)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -146,7 +167,7 @@ func (conv *Converter) selectToOperator(ctx *PlanContext, sel *sqlparser.Select)
 		return nil, nil, nil, err
 	}
 
-	node, params, err = conv.addFilterIfNeeded(node, sel.Having, params)
+	node, params, err = conv.addFilterIfNeeded(ctx, node, sel.Having, params)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -533,7 +554,7 @@ func isComparisonSupported(op sqlparser.ComparisonExprOperator) bool {
 	}
 }
 
-func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []*Dependency) {
+func splitPredicates(ctx *PlanContext, expr sqlparser.Expr) (predicates sqlparser.Expr, params []*Dependency) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		if comp, ok := e.(*sqlparser.ComparisonExpr); ok {
 			if _, ok := comp.Left.(*sqlparser.Argument); ok && sqlparser.Equals.Expr(comp.Left, comp.Right) && comp.Operator == sqlparser.EqualOp {
@@ -543,7 +564,7 @@ func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []*
 				continue
 			}
 
-			param := extractParam(comp.Left, comp.Right, comp.Operator)
+			param := extractParam(ctx, comp.Left, comp.Right, comp.Operator)
 			if param != nil {
 				params = append(params, param)
 				continue
@@ -555,13 +576,15 @@ func splitPredicates(expr sqlparser.Expr) (predicates sqlparser.Expr, params []*
 	return
 }
 
-func extractParam(lft, rgt sqlparser.Expr, op sqlparser.ComparisonExprOperator) *Dependency {
+func extractParam(ctx *PlanContext, lft, rgt sqlparser.Expr, op sqlparser.ComparisonExprOperator) *Dependency {
 	extract := func(lft, rgt sqlparser.Expr, op sqlparser.ComparisonExprOperator) *Dependency {
 		switch arg := rgt.(type) {
 		case *sqlparser.Argument:
-			return newDependency(arg.Name, ColumnFromAST(lft), op)
+			typ, _, _ := ctx.SemTable.TypeForExpr(lft)
+			return newDependency(arg.Name, ColumnFromAST(lft), &op, typ)
 		case sqlparser.ListArg:
-			return newDependency(string(arg), ColumnFromAST(lft), op)
+			typ, _, _ := ctx.SemTable.TypeForExpr(lft)
+			return newDependency(string(arg), ColumnFromAST(lft), &op, typ)
 		}
 		return nil
 	}
