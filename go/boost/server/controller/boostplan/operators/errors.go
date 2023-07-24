@@ -50,6 +50,8 @@ const (
 	RangeAndAggregation
 	PostAndAggregation
 	OffsetBindParameter
+	GroupParameterType
+	QueryParameterType
 )
 
 //enumcheck:exhaustive
@@ -170,6 +172,10 @@ func (n *UnsupportedError) Error() string {
 		fmt.Fprintf(&sb, "the explicit grouping for %s cannot be computed with the given filters", n.ast())
 	case OffsetBindParameter:
 		fmt.Fprintf(&sb, "offset bind parameter used on %s", n.ast())
+	case GroupParameterType:
+		fmt.Fprintf(&sb, "group by parameter %s has an unsupported type", n.ast())
+	case QueryParameterType:
+		fmt.Fprintf(&sb, "query parameter %s has an unsupported type", n.ast())
 	}
 
 	return sb.String()
