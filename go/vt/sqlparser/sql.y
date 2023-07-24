@@ -1893,7 +1893,7 @@ underscore_charsets:
   }
 | UNDERSCORE_UTF8
   {
-    $$ = Utf8Str
+    $$ = Utf8mb3Str
   }
 | UNDERSCORE_UTF8MB4
   {
@@ -1901,7 +1901,7 @@ underscore_charsets:
   }
 | UNDERSCORE_UTF8MB3
   {
-    $$ = Utf8Str
+    $$ = Utf8mb3Str
   }
 
 literal_or_null:
