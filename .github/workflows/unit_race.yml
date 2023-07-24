@@ -76,4 +76,5 @@ jobs:
     - name: unit_race
       timeout-minutes: 45
       run: |
+        export NOVTADMINBUILD=1
         eatmydata -- make unit_test_race

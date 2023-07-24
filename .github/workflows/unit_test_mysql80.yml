@@ -78,4 +78,5 @@ jobs:
       - name: Run test
         timeout-minutes: 45
         run: |
+          export NOVTADMINBUILD=1
           eatmydata -- make unit_test
