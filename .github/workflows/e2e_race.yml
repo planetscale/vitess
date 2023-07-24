@@ -68,4 +68,4 @@ jobs:
     - name: e2e_race
       timeout-minutes: 30
       run: |
-        make e2e_test_race
+        NOVTADMINBUILD=1 make e2e_test_race
