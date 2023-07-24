@@ -2,27 +2,31 @@
   "DDL": [
     {
       "Keyspace": "main",
-      "SQL": "CREATE TABLE friends (id INT(32), friend INT(32), PRIMARY KEY (id, friend))"
+      "SQL": "CREATE TABLE friends (id int, friend int, PRIMARY KEY (id, friend))"
     },
     {
       "Keyspace": "main",
-      "SQL": "CREATE TABLE users (id INT(32), age INT(32), name VARCHAR(40), address VARCHAR(40), metadata JSON, PRIMARY KEY(id))"
+      "SQL": "CREATE TABLE users (id int, age int, name varchar(40), address varchar(40), metadata JSON, PRIMARY KEY(id))"
     },
     {
       "Keyspace": "main",
-      "SQL": "CREATE TABLE votes (aid INT(32), uid INT(32), comment_id INT(32), sign INT(32),  PRIMARY KEY (aid, uid))"
+      "SQL": "CREATE TABLE votes (aid int, uid int, comment_id int, sign int,  PRIMARY KEY (aid, uid))"
     },
     {
       "Keyspace": "main",
-      "SQL": "CREATE TABLE articles (id INT(32), author INT(32), title VARCHAR(40), PRIMARY KEY (id))"
+      "SQL": "CREATE TABLE articles (id int, author int, title varchar(40), PRIMARY KEY (id))"
     },
     {
       "Keyspace": "main",
-      "SQL": "CREATE TABLE f2 (friend INT(32), id INT(32), PRIMARY KEY (id))"
+      "SQL": "CREATE TABLE f2 (friend int, id int, PRIMARY KEY (id))"
     },
     {
       "Keyspace": "main",
-      "SQL": "CREATE TABLE users_no_unique_key (id INT(32), age INT(32), name VARCHAR(40), address VARCHAR(40), metadata JSON)"
+      "SQL": "CREATE TABLE users_no_unique_key (id int, age int, name varchar(40), address varchar(40), metadata JSON)"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "CREATE TABLE types (id INT(32), size enum('x-small', 'small', 'medium', 'large', 'x-large'), dt datetime, d date, t time, s set('a', 'b', 'c', 'd'), PRIMARY KEY (id))"
     },
     {
       "Keyspace": "cars",
@@ -153,6 +157,56 @@
       "Keyspace": "main",
       "SQL": "select id from users where id = :0",
       "Error": "query not supported by boost: offset bind parameter used on `id` = :0"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from types where size = :p1",
+      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from types where size > :p1",
+      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from types where d = :p1",
+      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from types where d > :p1",
+      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from types where dt = :p1",
+      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from types where dt > :p1",
+      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from types where t = :p1",
+      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from types where t > :p1",
+      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from types where s = :p1",
+      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
+    },
+    {
+      "Keyspace": "main",
+      "SQL": "select id from types where s > :p1",
+      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
     }
   ]
 }

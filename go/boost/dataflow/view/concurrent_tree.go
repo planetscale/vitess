@@ -68,7 +68,10 @@ func (ct *ConcurrentTree) writerAdd(rs []sql.Record, pk []int, schema []sql.Type
 	epoch := ct.lr.writerVersion.Load() + 1
 
 	for _, r := range rs {
-		w, _ := r.Row.WeightsWithKeySchema(pk, schema, 0)
+		w, err := r.Row.WeightsWithKeySchema(pk, schema, 0)
+		if err != nil {
+			panic(err)
+		}
 		rows, ok := tbl.b.Get(w)
 
 		if r.Positive {

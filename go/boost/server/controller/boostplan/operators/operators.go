@@ -2,6 +2,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -187,6 +188,7 @@ type (
 		Op           *sqlparser.ComparisonExprOperator
 		ColumnOffset int
 		Column       *Column
+		Type         sqltypes.Type
 	}
 
 	NodeTableRef struct {
@@ -298,11 +300,12 @@ func (g *GroupBy) ScalarAggregation() bool {
 	return len(g.Grouping) == len(g.ImplicitGrouping)
 }
 
-func newDependency(name string, col *Column, op sqlparser.ComparisonExprOperator) *Dependency {
+func newDependency(name string, col *Column, op *sqlparser.ComparisonExprOperator, typ sqltypes.Type) *Dependency {
 	return &Dependency{
 		Name:         name,
-		Op:           &op,
+		Op:           op,
 		ColumnOffset: -1,
 		Column:       col,
+		Type:         typ,
 	}
 }
