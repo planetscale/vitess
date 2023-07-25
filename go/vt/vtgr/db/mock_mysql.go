@@ -20,7 +20,7 @@ import (
 	reflect "reflect"
 	"strconv"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 
 	mysql "vitess.io/vitess/go/mysql"
 	inst "vitess.io/vitess/go/vt/vtgr/inst"

@@ -36,8 +36,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgr/db"
 	"vitess.io/vitess/go/vt/vtgr/inst"
 
-	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	gomock "go.uber.org/mock/gomock"
 )
 
 const repairGroupSize = 3
