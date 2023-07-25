@@ -5,7 +5,7 @@ package controller
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	context "golang.org/x/net/context"
 
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
