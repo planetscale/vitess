@@ -597,3 +597,19 @@ func TestPostFilterWithAggregation(t *testing.T) {
 	g.View("q3").LookupBvar(0, []any{0, 420, 69}, []any{420}).Expect(`[[INT64(1) DECIMAL(2)] [INT64(1) DECIMAL(4)]]`)
 	g.View("q4").LookupBvar(1, []any{0, 420, 69}).Expect(`[[INT64(2)] [INT64(1)]]`)
 }
+
+func TestCountStarWithFunctionInWhereClause(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, b INT, a INT, txt VARCHAR(255), PRIMARY KEY(pk));
+SELECT count(*) FROM num WHERE LOWER(txt) = ?;`
+
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 1; i <= 3; i++ {
+		g.TestExecute("INSERT INTO num (a, b, txt) VALUES (%d, 100 * %d, 'hey')", i, i)
+	}
+	g.TestExecute("INSERT INTO num (a, b, txt) VALUES (null, 100, 'hey')")
+
+	g.View("q0").Lookup("hey").Expect(`[[INT64(4)]]`)
+}

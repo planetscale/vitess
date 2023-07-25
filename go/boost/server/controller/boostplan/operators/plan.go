@@ -215,6 +215,7 @@ type PlanContext struct {
 	Query     *sqlparser.Select
 	NodeCount int
 	DDL       DDLSchema
+	Grouping  bool
 }
 
 func (p *PlanContext) IncreaseNodeCount(n int) {
