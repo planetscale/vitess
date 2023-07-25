@@ -24,9 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
-var schemaChangeUser string
-var enableSchemaChangeSignal = true
-
 var (
 	hostname     string
 	drpcPort     int
@@ -38,6 +35,8 @@ var (
 
 	healthCheckRetryDelay = 2 * time.Millisecond
 	healthCheckTimeout    = time.Minute
+
+	enableSchemaChangeSignal = true
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -77,7 +76,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&cfg.VstreamStartRetries, "vstream-start-retries", 10, "number of retries for vstream startup if it fails")
 
 	fs.BoolVar(&enableSchemaChangeSignal, "schema_change_signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
-	fs.StringVar(&schemaChangeUser, "schema_change_signal_user", schemaChangeUser, "User to be used to send down query to vttablet to retrieve schema changes")
+	_ = fs.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 
 	acl.RegisterFlags(fs)
 }
@@ -133,7 +132,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	err = boost.ConfigureVitessExecutor(ctx, log, ts, cell, cellsToWatch, schemaChangeUser, healthCheckRetryDelay, healthCheckTimeout)
+	err = boost.ConfigureVitessExecutor(ctx, log, ts, cell, cellsToWatch, healthCheckRetryDelay, healthCheckTimeout)
 	if err != nil {
 		log.Fatal("failed to configure external gateway", zap.Error(err))
 	}

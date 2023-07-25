@@ -17,11 +17,10 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -31,9 +30,6 @@ const (
 	// SchemaChangeDirName is the key name in the ControllerFactory params.
 	// It specifies the schema change directory.
 	SchemaChangeDirName = "schema_change_dir"
-	// SchemaChangeUser is the key name in the ControllerFactory params.
-	// It specifies the user who submits this schema change.
-	SchemaChangeUser = "schema_change_user"
 )
 
 // ControllerFactory takes a set params and construct a Controller instance.

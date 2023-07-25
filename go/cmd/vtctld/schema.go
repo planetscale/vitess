@@ -34,7 +34,6 @@ import (
 var (
 	schemaChangeDir             string
 	schemaChangeController      string
-	schemaChangeUser            string
 	schemaChangeCheckInterval   = time.Minute
 	schemaChangeReplicasTimeout = wrangler.DefaultWaitReplicasTimeout
 )
@@ -43,7 +42,7 @@ func init() {
 	servenv.OnParse(func(fs *pflag.FlagSet) {
 		fs.StringVar(&schemaChangeDir, "schema_change_dir", schemaChangeDir, "Directory containing schema changes for all keyspaces. Each keyspace has its own directory, and schema changes are expected to live in '$KEYSPACE/input' dir. (e.g. 'test_keyspace/input/*sql'). Each sql file represents a schema change.")
 		fs.StringVar(&schemaChangeController, "schema_change_controller", schemaChangeController, "Schema change controller is responsible for finding schema changes and responding to schema change events.")
-		fs.StringVar(&schemaChangeUser, "schema_change_user", schemaChangeUser, "The user who schema changes are submitted on behalf of.")
+		_ = fs.String("schema_change_user", "", "The user who schema changes are submitted on behalf of.")
 
 		fs.DurationVar(&schemaChangeCheckInterval, "schema_change_check_interval", schemaChangeCheckInterval, "How often the schema change dir is checked for schema changes. This value must be positive; if zero or lower, the default of 1m is used.")
 		fs.DurationVar(&schemaChangeReplicasTimeout, "schema_change_replicas_timeout", schemaChangeReplicasTimeout, "How long to wait for replicas to receive a schema change.")
@@ -67,7 +66,6 @@ func initSchema() {
 		timer.Start(func() {
 			controller, err := controllerFactory(map[string]string{
 				schemamanager.SchemaChangeDirName: schemaChangeDir,
-				schemamanager.SchemaChangeUser:    schemaChangeUser,
 			})
 			if err != nil {
 				log.Errorf("failed to get controller, error: %v", err)

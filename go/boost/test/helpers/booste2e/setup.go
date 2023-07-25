@@ -189,7 +189,6 @@ func (test *Test) setupBoost() {
 				cfg.Domain.UpqueryMode = flagGtidMode
 			}),
 			boosttest.WithVitessExecutor(),
-			boosttest.WithSchemaChangeUser("root"),
 			boosttest.WithLocalCell(test.Cell),
 			boosttest.WithClusterUUID(test.ClusterUUID),
 		)
@@ -366,6 +365,6 @@ func (test *Test) configurePlanetScaleACLs() {
 		test.Fatal(err)
 	}
 
-	test.Vitess.VtGateExtraArgs = append(test.Vitess.VtGateExtraArgs, "--schema_change_signal_user", test.SchemaChangeUser, "--grpc_use_effective_callerid")
+	test.Vitess.VtGateExtraArgs = append(test.Vitess.VtGateExtraArgs, "--grpc_use_effective_callerid")
 	test.Vitess.VtTabletExtraArgs = append(test.Vitess.VtTabletExtraArgs, "--table-acl-config ", aclPath, "--enforce-tableacl-config", "--queryserver-config-strict-table-acl")
 }
