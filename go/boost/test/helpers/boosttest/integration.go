@@ -74,7 +74,6 @@ type Cluster struct {
 	externalExecutor bool
 	localCell        string
 	cellsToWatch     string
-	schemaChangeUser string
 	defaultRecipe    *testrecipe.Recipe
 	ignore           []string
 	seed             func(*Cluster)
@@ -121,12 +120,6 @@ func WithLocalCell(cell string) Option {
 func WithCellsToWatch(cells string) Option {
 	return func(c *Cluster) {
 		c.cellsToWatch = cells
-	}
-}
-
-func WithSchemaChangeUser(user string) Option {
-	return func(c *Cluster) {
-		c.schemaChangeUser = user
 	}
 }
 
@@ -239,7 +232,7 @@ func New(t testing.TB, options ...Option) *Cluster {
 			s.Worker.SetExecutor(cluster.Executor)
 			s.Worker.SetResolver(testexecutor.NewResolver(cluster.Executor))
 		case cluster.externalExecutor:
-			err := s.ConfigureVitessExecutor(ctx, logger, cluster.Topo, cluster.localCell, cluster.cellsToWatch, cluster.schemaChangeUser, 2*time.Millisecond, time.Minute)
+			err := s.ConfigureVitessExecutor(ctx, logger, cluster.Topo, cluster.localCell, cluster.cellsToWatch, 2*time.Millisecond, time.Minute)
 			if err != nil {
 				t.Fatal(err)
 			}

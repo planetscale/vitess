@@ -117,7 +117,7 @@ func resolveAndLoadKeyspace(ctx context.Context, log *zap.Logger, srvResolver *s
 	}
 }
 
-func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, ts *topo.Server, localCell string, cellsToWatch string, schemaTrackingUser string, hcRetryDelay time.Duration, hcTimeout time.Duration) error {
+func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, ts *topo.Server, localCell string, cellsToWatch string, hcRetryDelay time.Duration, hcTimeout time.Duration) error {
 	resilientServer := srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
 	log.Info("configuring external gateway for upqueries", zap.String("cell", localCell), zap.String("cells_to_watch", cellsToWatch))
 
@@ -148,7 +148,7 @@ func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, t
 		return ki.SidecarDbName, nil
 	})
 
-	tracker := vtschema.NewTracker(gateway.HealthCheck().Subscribe(), schemaTrackingUser, false)
+	tracker := vtschema.NewTracker(gateway.HealthCheck().Subscribe(), false)
 	addKeyspaceToTracker(ctx, log, srvResolver, tracker, gateway)
 
 	tc := vtgate.NewTxConn(gateway, DefaultTxMode)
