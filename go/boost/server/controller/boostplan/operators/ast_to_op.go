@@ -413,7 +413,7 @@ func (conv *Converter) buildAggregation(ctx *PlanContext, sel *sqlparser.Select,
 		Grouping: Columns{},
 		TableID:  ctx.SemTable.GetNextTableSet(),
 	}
-
+	ctx.Grouping = true
 	columns := Columns{} // these are the columns that we want the whole SELECT query to return
 
 	var ownCols []*Column // these are the columns that the aggregation works with

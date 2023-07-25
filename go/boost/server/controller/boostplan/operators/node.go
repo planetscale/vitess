@@ -37,6 +37,9 @@ type (
 
 		// Name is the column name
 		Name string
+
+		// DoNotEvaluate tells if the column must be projected with or without evaluation
+		DoNotEvaluate bool
 	}
 
 	Columns []*Column
@@ -116,7 +119,7 @@ func (node *Node) tryRewriteDerivedExpressions(st *semantics.SemTable, expr sqlp
 	n := node
 	for {
 		// columnKeepers just pass through all columns, so we can dig a
-		//little deeper in the ancestry trying to find a derived table
+		// little deeper in the ancestry trying to find a derived table
 		if !n.Op.KeepAncestorColumns() || len(n.Ancestors) > 1 {
 			break
 		}
@@ -164,6 +167,11 @@ outer:
 						oldCol.AST = append(oldCol.AST, expr)
 					}
 				}
+				// select lower(foo) from user where lower(foo) = ?
+				// if we are asking for the output of a function call as a return column, and also using the same
+				// function output for a parameter, we are going to make sure to mark the combined
+				// column as DoNotEvaluate, so it's not broken up by the Projection
+				oldCol.DoNotEvaluate = newCol.DoNotEvaluate || oldCol.DoNotEvaluate
 				continue outer
 			}
 		}
@@ -279,12 +287,27 @@ func (col *Column) SingleAST() (sqlparser.Expr, error) {
 	dbg.Assert(len(col.AST) == 1, "assumed we would get a single AST here")
 	return col.AST[0], nil
 }
+
 func (col *Column) Explain() (string, string) {
 	details := ""
 	if len(col.AST) > 0 {
 		details += sqlparser.String(sqlparser.Exprs(col.AST))
 	}
 	return col.Name, details
+}
+
+func (col *Column) ShouldEvaluate() bool {
+	if !col.DoNotEvaluate {
+		return true
+	}
+
+	_, isLiteral := col.AST[0].(*sqlparser.Literal)
+	if col.Name == "bogokey" && isLiteral {
+		// we want the bogokey to be evaluated ASAP and not pushed down
+		return true
+	}
+
+	return false
 }
 
 func (col *Column) IsLiteral() bool {

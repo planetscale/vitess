@@ -21,6 +21,9 @@ func TestOpsToAST(t *testing.T) {
 	require.NoError(t, err)
 
 	c := operators.NewConverter()
+	greatGrandParent := func(n *operators.Node) *operators.Node {
+		return n.Ancestors[0].Ancestors[0].Ancestors[0]
+	}
 	grandParent := func(n *operators.Node) *operators.Node {
 		return n.Ancestors[0].Ancestors[0]
 	}
@@ -117,6 +120,16 @@ func TestOpsToAST(t *testing.T) {
 		keys:  []int{},
 		res:   "select sum(ks_user_0.a), 0 as `literal-0` from ks.`user` as ks_user_0 group by `literal-0` union all select sum(ks_product_0.price), 0 as `literal-0` from ks.product as ks_product_0 group by `literal-0`",
 		get:   grandParent,
+	}, {
+		query: "select count(*) from user where POW(a, 2) = ?",
+		keys:  []int{},
+		res:   "select POW(ks_user_0.a, 2) from ks.`user` as ks_user_0",
+		get:   greatGrandParent,
+	}, {
+		query: "select count(*) from user where POW(a, 2) = ?",
+		keys:  []int{},
+		res:   "select count(*), POW(ks_user_0.a, 2) from ks.`user` as ks_user_0 group by POW(ks_user_0.a, 2)",
+		get:   parent,
 	}}
 
 	for i, testCase := range testCases {

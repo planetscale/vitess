@@ -128,7 +128,7 @@ func (p *Project) AddColumns(ctx *PlanContext, col Columns) (needs Columns, err 
 		}
 		p.Columns = p.Columns.Add(ctx, newCol)
 
-		if newCol.IsAggregation() {
+		if newCol.IsAggregation() || !newCol.ShouldEvaluate() {
 			needs = needs.Add(ctx, newCol)
 			continue
 		}
@@ -229,8 +229,14 @@ outer:
 		// If we get here, we are seeing a new expression being requested here.
 		// This is usually a predicate with a parameter,
 		// and these are handled by adding the expression as a grouping expression.
-		g.Grouping = g.Grouping.Add(ctx, col)
-		g.ImplicitGrouping = g.ImplicitGrouping.Add(ctx, col)
+		//
+		// We set DoNotEvaluate as false to let the ancestor-projection (or other operators)
+		// the GroupBy that they need to project this column
+		newCol := *col
+		newCol.AST = sqlparser.CloneExprs(col.AST)
+		newCol.DoNotEvaluate = false
+		g.Grouping = g.Grouping.Add(ctx, &newCol)
+		g.ImplicitGrouping = g.ImplicitGrouping.Add(ctx, &newCol)
 	}
 
 	needs := Columns{}.Add(ctx, g.Grouping...)
@@ -264,6 +270,10 @@ func (v *View) AddColumns(ctx *PlanContext, col Columns) (Columns, error) {
 	col = col.Add(ctx, v.Columns...)
 
 	for _, parameter := range v.Dependencies {
+		// if this is a grouping query, we need to handle parameters a bit differently and not
+		// evaluate expressions in the Projection which is the ancestor of the View,
+		// and instead evaluate these under the GroupBy operator
+		parameter.Column.DoNotEvaluate = ctx.Grouping
 		col = col.Add(ctx, parameter.Column)
 	}
 	for _, pf := range v.PostFilter {
@@ -361,7 +371,7 @@ outer:
 			return Columns{}, err
 		}
 		colName, ok := expr.(*sqlparser.ColName)
-		dbg.Assert(ok, "can't push non-columns to a table")
+		dbg.Assert(ok, "can't push non-columns to a table %s %T", sqlparser.String(expr), expr)
 
 		tblID := ctx.SemTable.DirectDeps(colName)
 		if tblID == n.TableID {
