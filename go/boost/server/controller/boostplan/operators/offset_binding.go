@@ -237,43 +237,57 @@ func getComparisons(expr sqlparser.Expr) (predicates []*sqlparser.ComparisonExpr
 
 func (p *Project) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) error {
 	input := node.Ancestors[0]
-
 	for _, col := range p.Columns {
+		var proj Projection
 		ast, err := col.SingleAST()
 		if err != nil {
 			return err
 		}
-		var proj Projection
 		switch expr := ast.(type) {
 		case *sqlparser.ColName, sqlparser.AggrFunc:
-			offset, err := input.ExprLookup(st, expr)
-			if err != nil {
-				return err
-			}
-			proj = Projection{Kind: ProjectionColumn, Column: offset}
+			proj, err = byOffset(input, st, expr)
 		case *sqlparser.Literal:
 			proj = Projection{Kind: ProjectionLiteral, AST: expr}
 		case *sqlparser.Offset:
 			proj = Projection{Kind: ProjectionColumn, Column: expr.V}
 		default:
-			newExpr, err := rewriteColNamesToOffsets(st, node.Ancestors[0], expr)
-			if err != nil {
-				return err
+			if col.ShouldEvaluate() {
+				proj, err = extractOffsetsAndConstructEval(node, input, st, expr)
+			} else {
+				proj, err = byOffset(input, st, expr)
 			}
-			eexpr, err := evalengine.Translate(newExpr, &evalengine.Config{
-				ResolveColumn: columnLookup(input, st),
-				ResolveType:   st.TypeForExpr,
-				Collation:     st.Collation,
-			})
-			if err != nil {
-				return &UnsupportedError{AST: expr, Type: EvalEngineNotSupported}
-			}
-			proj = Projection{Kind: ProjectionEval, AST: newExpr, Eval: eexpr}
+		}
+		if err != nil {
+			return err
 		}
 		proj.Original = ast
 		p.Projections = append(p.Projections, proj)
 	}
 	return nil
+}
+
+func byOffset(input *Node, st *semantics.SemTable, expr sqlparser.Expr) (Projection, error) {
+	offset, err := input.ExprLookup(st, expr)
+	if err != nil {
+		return Projection{}, err
+	}
+	return Projection{Kind: ProjectionColumn, Column: offset}, nil
+}
+
+func extractOffsetsAndConstructEval(node, input *Node, st *semantics.SemTable, expr sqlparser.Expr) (Projection, error) {
+	newExpr, err := rewriteColNamesToOffsets(st, node.Ancestors[0], expr)
+	if err != nil {
+		return Projection{}, err
+	}
+	eexpr, err := evalengine.Translate(newExpr, &evalengine.Config{
+		ResolveColumn: columnLookup(input, st),
+		ResolveType:   st.TypeForExpr,
+		Collation:     st.Collation,
+	})
+	if err != nil {
+		return Projection{}, err
+	}
+	return Projection{Kind: ProjectionEval, AST: newExpr, Eval: eexpr}, nil
 }
 
 func (n *NullFilter) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) error {
