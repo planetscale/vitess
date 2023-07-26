@@ -31,7 +31,7 @@ func TestGraphKeys(t *testing.T) {
 		return g, a, b
 	}
 
-	noparent := func(_ graph.NodeIdx, _ []int, _ []graph.NodeIdx) graph.NodeIdx {
+	noparent := func(_ graph.NodeIdx, _ []Column, _ []graph.NodeIdx) graph.NodeIdx {
 		return graph.InvalidNode
 	}
 
@@ -47,22 +47,22 @@ func TestGraphKeys(t *testing.T) {
 		g, a, b := bases()
 
 		assert.Equal(t,
-			[][]PathElement{{{a, []int{0}}}},
+			[][]PathElement{{{a, []Column{{Index: 0}}}}},
 			ProvenanceOf(g, a, []int{0}, noparent),
 		)
 
 		assert.Equal(t,
-			[][]PathElement{{{b, []int{0}}}},
+			[][]PathElement{{{b, []Column{{Index: 0}}}}},
 			ProvenanceOf(g, b, []int{0}, noparent),
 		)
 
 		assert.Equal(t,
-			[][]PathElement{{{a, []int{0, 1}}}},
+			[][]PathElement{{{a, []Column{{Index: 0}, {Index: 1}}}}},
 			ProvenanceOf(g, a, []int{0, 1}, noparent),
 		)
 
 		assert.Equal(t,
-			[][]PathElement{{{a, []int{1, 0}}}},
+			[][]PathElement{{{a, []Column{{Index: 1}, {Index: 0}}}}},
 			ProvenanceOf(g, a, []int{1, 0}, noparent),
 		)
 	})
@@ -73,12 +73,12 @@ func TestGraphKeys(t *testing.T) {
 		g.AddEdge(a, x)
 
 		assert.Equal(t,
-			[][]PathElement{{{x, []int{0}}, {a, []int{0}}}},
+			[][]PathElement{{{x, []Column{{Index: 0}}}, {a, []Column{{Index: 0}}}}},
 			ProvenanceOf(g, x, []int{0}, noparent),
 		)
 
 		assert.Equal(t,
-			[][]PathElement{{{x, []int{0, 1}}, {a, []int{0, 1}}}},
+			[][]PathElement{{{x, []Column{{Index: 0}, {Index: 1}}}, {a, []Column{{Index: 0}, {Index: 1}}}}},
 			ProvenanceOf(g, x, []int{0, 1}, noparent),
 		)
 	})
@@ -91,12 +91,12 @@ func TestGraphKeys(t *testing.T) {
 		g.AddEdge(a, x)
 
 		assert.Equal(t,
-			[][]PathElement{{{x, []int{0}}, {a, []int{1}}}},
+			[][]PathElement{{{x, []Column{{Index: 0}}}, {a, []Column{{Index: 1}}}}},
 			ProvenanceOf(g, x, []int{0}, noparent),
 		)
 
 		assert.Equal(t,
-			[][]PathElement{{{x, []int{0, 1}}, {a, []int{1, 0}}}},
+			[][]PathElement{{{x, []Column{{Index: 0}, {Index: 1}}}, {a, []Column{{Index: 1}, {Index: 0}}}}},
 			ProvenanceOf(g, x, []int{0, 1}, noparent),
 		)
 	})
@@ -113,15 +113,15 @@ func TestGraphKeys(t *testing.T) {
 		g.AddEdge(a, x)
 
 		assert.Equal(t,
-			[][]PathElement{{{x, []int{0}}, {a, []int{0}}}},
+			[][]PathElement{{{x, []Column{{Index: 0}}}, {a, []Column{{Index: 0}}}}},
 			ProvenanceOf(g, x, []int{0}, noparent),
 		)
 		assert.Equal(t,
-			[][]PathElement{{{x, []int{1}}, {a, []int{-1}}}},
+			[][]PathElement{{{x, []Column{{Index: 1}}}, {a, []Column{{Index: -1}}}}},
 			ProvenanceOf(g, x, []int{1}, noparent),
 		)
 		assert.Equal(t,
-			[][]PathElement{{{x, []int{0, 1}}, {a, []int{0, -1}}}},
+			[][]PathElement{{{x, []Column{{Index: 0}, {Index: 1}}}, {a, []Column{{Index: 0}, {Index: -1}}}}},
 			ProvenanceOf(g, x, []int{0, 1}, noparent),
 		)
 	})
@@ -141,8 +141,8 @@ func TestGraphKeys(t *testing.T) {
 		sortPaths(paths)
 		assert.Equal(t,
 			[][]PathElement{
-				{{x, []int{0}}, {a, []int{0}}},
-				{{x, []int{0}}, {b, []int{0}}},
+				{{x, []Column{{Index: 0}}}, {a, []Column{{Index: 0}}}},
+				{{x, []Column{{Index: 0}}}, {b, []Column{{Index: 0}}}},
 			},
 			paths,
 		)
@@ -151,8 +151,8 @@ func TestGraphKeys(t *testing.T) {
 		sortPaths(paths)
 		assert.Equal(t,
 			[][]PathElement{
-				{{x, []int{0, 1}}, {a, []int{0, 1}}},
-				{{x, []int{0, 1}}, {b, []int{0, 1}}},
+				{{x, []Column{{Index: 0}, {Index: 1}}}, {a, []Column{{Index: 0}, {Index: 1}}}},
+				{{x, []Column{{Index: 0}, {Index: 1}}}, {b, []Column{{Index: 0}, {Index: 1}}}},
 			},
 			paths,
 		)
@@ -172,8 +172,8 @@ func TestGraphKeys(t *testing.T) {
 		sortPaths(paths)
 		assert.Equal(t,
 			[][]PathElement{
-				{{x, []int{0}}, {a, []int{0}}},
-				{{x, []int{0}}, {b, []int{-1}}},
+				{{x, []Column{{Index: 0}}}, {a, []Column{{Index: 0}}}},
+				{{x, []Column{{Index: 0}}}, {b, []Column{{Index: -1}}}},
 			},
 			paths,
 		)
@@ -182,8 +182,8 @@ func TestGraphKeys(t *testing.T) {
 		sortPaths(paths)
 		assert.Equal(t,
 			[][]PathElement{
-				{{x, []int{1}}, {a, []int{1}}},
-				{{x, []int{1}}, {b, []int{0}}},
+				{{x, []Column{{Index: 1}}}, {a, []Column{{Index: 1}}}},
+				{{x, []Column{{Index: 1}}}, {b, []Column{{Index: 0}}}},
 			},
 			paths,
 		)
@@ -192,8 +192,8 @@ func TestGraphKeys(t *testing.T) {
 		sortPaths(paths)
 		assert.Equal(t,
 			[][]PathElement{
-				{{x, []int{2}}, {a, []int{-1}}},
-				{{x, []int{2}}, {b, []int{1}}},
+				{{x, []Column{{Index: 2}}}, {a, []Column{{Index: -1}}}},
+				{{x, []Column{{Index: 2}}}, {b, []Column{{Index: 1}}}},
 			},
 			paths,
 		)
@@ -202,8 +202,8 @@ func TestGraphKeys(t *testing.T) {
 		sortPaths(paths)
 		assert.Equal(t,
 			[][]PathElement{
-				{{x, []int{0, 1}}, {a, []int{0, 1}}},
-				{{x, []int{0, 1}}, {b, []int{-1, 0}}},
+				{{x, []Column{{Index: 0}, {Index: 1}}}, {a, []Column{{Index: 0}, {Index: 1}}}},
+				{{x, []Column{{Index: 0}, {Index: 1}}}, {b, []Column{{Index: -1}, {Index: 0}}}},
 			},
 			paths,
 		)
@@ -212,8 +212,8 @@ func TestGraphKeys(t *testing.T) {
 		sortPaths(paths)
 		assert.Equal(t,
 			[][]PathElement{
-				{{x, []int{1, 2}}, {a, []int{1, -1}}},
-				{{x, []int{1, 2}}, {b, []int{0, 1}}},
+				{{x, []Column{{Index: 1}, {Index: 2}}}, {a, []Column{{Index: 1}, {Index: -1}}}},
+				{{x, []Column{{Index: 1}, {Index: 2}}}, {b, []Column{{Index: 0}, {Index: 1}}}},
 			},
 			paths,
 		)

@@ -36,11 +36,11 @@ func (i *Identity) SuggestIndexes(you graph.NodeIdx) map[graph.NodeIdx][]int {
 }
 
 func (i *Identity) Resolve(col int) []NodeColumn {
-	return []NodeColumn{{i.src.AsGlobal(), col}}
+	return []NodeColumn{{Node: i.src.AsGlobal(), Column: col}}
 }
 
 func (i *Identity) ParentColumns(col int) []NodeColumn {
-	return []NodeColumn{{i.src.AsGlobal(), col}}
+	return []NodeColumn{{Node: i.src.AsGlobal(), Column: col}}
 }
 
 func (i *Identity) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {

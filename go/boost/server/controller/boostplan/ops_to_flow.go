@@ -20,7 +20,7 @@ import (
 type Migration interface {
 	AddTable(name string, fields []string, b *flownode.Table) graph.NodeIdx
 	AddIngredient(name string, fields []string, impl flownode.NodeImpl) (graph.NodeIdx, error)
-	AddView(name string, reader *flownode.Reader)
+	AddView(name string, reader *flownode.Reader) graph.NodeIdx
 	AddUpquery(idx graph.NodeIdx, statement sqlparser.SelectStatement)
 	AddTableReport(id string, report []*operators.TableReport)
 }
@@ -200,11 +200,11 @@ func makeViewOpNode(mig Migration, node *operators.Node, op *operators.View) (op
 	na := parent.FlowNodeAddr()
 
 	reader := flownode.NewReader(na, op.PublicID, op.Plan)
-	mig.AddView(node.Name, reader)
+	addr := mig.AddView(node.Name, reader)
 
 	switch parent.Flow.Age {
 	case operators.FlowNodeNew:
-		return operators.FlowNode{Age: operators.FlowNodeExisting, Address: parent.Flow.Address}, nil
+		return operators.FlowNode{Age: operators.FlowNodeExisting, Address: addr}, nil
 	case operators.FlowNodeExisting:
 		return parent.Flow, nil
 	}

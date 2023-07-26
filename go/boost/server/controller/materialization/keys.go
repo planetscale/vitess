@@ -3,19 +3,25 @@ package materialization
 import (
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/boost/common/xslice"
+
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 )
 
-type OnJoin func(graph.NodeIdx, []int, []graph.NodeIdx) graph.NodeIdx
+type OnJoin func(graph.NodeIdx, []Column, []graph.NodeIdx) graph.NodeIdx
 
-func OnJoinNone(graph.NodeIdx, []int, []graph.NodeIdx) graph.NodeIdx {
+func OnJoinNone(graph.NodeIdx, []Column, []graph.NodeIdx) graph.NodeIdx {
 	return graph.InvalidNode
 }
 
+type Column struct {
+	Index      int
+	Functional bool
+}
 type PathElement struct {
 	Node    graph.NodeIdx
-	Columns []int
+	Columns []Column
 }
 
 type Path []PathElement
@@ -28,36 +34,53 @@ func (p Path) Compare(other Path) int {
 		if a.Node > b.Node {
 			return 1
 		}
-		return slices.Compare(a.Columns, b.Columns)
+		return slices.CompareFunc(a.Columns, b.Columns, func(a, b Column) int {
+			if a.Index < b.Index {
+				return -1
+			}
+			if a.Index > b.Index {
+				return 1
+			}
+			if a.Functional != b.Functional {
+				if a.Functional {
+					return -1
+				}
+				return 1
+			}
+			return 0
+		})
 	})
 }
 
 func ProvenanceOf(g *graph.Graph[*flownode.Node], node graph.NodeIdx, columns []int, onJoin OnJoin) [][]PathElement {
-	return graphTrace(g, onJoin, []PathElement{{node, columns}})
+	cols := xslice.Map(columns, func(i int) Column {
+		return Column{Index: i}
+	})
+	return graphTrace(g, onJoin, []PathElement{{Node: node, Columns: cols}})
 }
 
-func columnsAreSome(columns []int) bool {
+func columnsAreSome(columns []Column) bool {
 	for _, col := range columns {
-		if col < 0 {
+		if col.Index < 0 {
 			return false
 		}
 	}
 	return true
 }
 
-func columnsAreNone(columns []int) bool {
+func columnsAreNone(columns []Column) bool {
 	for _, col := range columns {
-		if col >= 0 {
+		if col.Index >= 0 {
 			return false
 		}
 	}
 	return true
 }
 
-func makeEmptyColumns(count int) []int {
-	var idk = make([]int, count)
+func makeEmptyColumns(count int) []Column {
+	var idk = make([]Column, count)
 	for n := range idk {
-		idk[n] = -1
+		idk[n].Index = -1
 	}
 	return idk
 }
@@ -80,7 +103,7 @@ func graphTrace(g *graph.Graph[*flownode.Node], onJoin OnJoin, path []PathElemen
 	}
 
 	if !n.IsInternal() {
-		path = append(path, PathElement{parents[0], columns})
+		path = append(path, PathElement{Node: parents[0], Columns: columns})
 		return graphTrace(g, onJoin, path)
 	}
 
@@ -89,7 +112,7 @@ func graphTrace(g *graph.Graph[*flownode.Node], onJoin OnJoin, path []PathElemen
 			idk := makeEmptyColumns(len(columns))
 			parent := onJoin(node, idk, parents)
 			if parent != graph.InvalidNode {
-				path = append(path, PathElement{parent, idk})
+				path = append(path, PathElement{Node: parent, Columns: idk})
 				return graphTrace(g, onJoin, path)
 			}
 		}
@@ -97,25 +120,25 @@ func graphTrace(g *graph.Graph[*flownode.Node], onJoin OnJoin, path []PathElemen
 		var paths [][]PathElement
 		for _, p := range parents {
 			path := slices.Clone(path)
-			path = append(path, PathElement{p, makeEmptyColumns(len(columns))})
+			path = append(path, PathElement{Node: p, Columns: makeEmptyColumns(len(columns))})
 			paths = append(paths, graphTrace(g, onJoin, path)...)
 		}
 		return paths
 	}
 
 	// try to resolve the currently selected columns
-	var resolved = make(map[graph.NodeIdx][]int)
+	var resolved = make(map[graph.NodeIdx][]Column)
 	for coli, c := range columns {
-		if c < 0 {
+		if c.Index < 0 {
 			continue
 		}
-		for _, o := range n.ParentColumns(c) {
+		for _, o := range n.ParentColumns(c.Index) {
 			rr, ok := resolved[o.Node]
 			if !ok {
 				rr = makeEmptyColumns(len(columns))
 				resolved[o.Node] = rr
 			}
-			rr[coli] = o.Column
+			rr[coli] = Column{Index: o.Column, Functional: o.Functional}
 		}
 	}
 
@@ -141,7 +164,7 @@ func graphTrace(g *graph.Graph[*flownode.Node], onJoin OnJoin, path []PathElemen
 			}
 
 			path := slices.Clone(path)
-			path = append(path, PathElement{p, cc})
+			path = append(path, PathElement{Node: p, Columns: cc})
 			paths = append(paths, graphTrace(g, onJoin, path)...)
 		}
 		return paths
@@ -151,7 +174,7 @@ func graphTrace(g *graph.Graph[*flownode.Node], onJoin OnJoin, path []PathElemen
 	// if there is only one parent, we can step right to that
 	if len(parents) == 1 {
 		parent := parents[0]
-		path = append(path, PathElement{parent, resolved[parent]})
+		path = append(path, PathElement{Node: parent, Columns: resolved[parent]})
 		return graphTrace(g, onJoin, path)
 	}
 
@@ -167,7 +190,7 @@ func graphTrace(g *graph.Graph[*flownode.Node], onJoin OnJoin, path []PathElemen
 		var paths [][]PathElement
 		for parent, columns := range resolved {
 			path := slices.Clone(path)
-			path = append(path, PathElement{parent, columns})
+			path = append(path, PathElement{Node: parent, Columns: columns})
 			paths = append(paths, graphTrace(g, onJoin, path)...)
 		}
 		return paths
@@ -185,7 +208,7 @@ func graphTrace(g *graph.Graph[*flownode.Node], onJoin OnJoin, path []PathElemen
 				cc = makeEmptyColumns(len(columns))
 			}
 			path := slices.Clone(path)
-			path = append(path, PathElement{parent, cc})
+			path = append(path, PathElement{Node: parent, Columns: cc})
 			paths = append(paths, graphTrace(g, onJoin, path)...)
 		}
 		return paths
@@ -196,6 +219,6 @@ func graphTrace(g *graph.Graph[*flownode.Node], onJoin OnJoin, path []PathElemen
 	if !ok {
 		cc = makeEmptyColumns(len(columns))
 	}
-	path = append(path, PathElement{parent, cc})
+	path = append(path, PathElement{Node: parent, Columns: cc})
 	return graphTrace(g, onJoin, path)
 }

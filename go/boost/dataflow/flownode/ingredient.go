@@ -11,8 +11,9 @@ import (
 )
 
 type NodeColumn struct {
-	Node   graph.NodeIdx
-	Column int
+	Node       graph.NodeIdx
+	Column     int
+	Functional bool
 }
 
 type Ingredient interface {
