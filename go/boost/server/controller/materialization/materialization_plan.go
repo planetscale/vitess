@@ -5,6 +5,8 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/boost/common/xslice"
+
 	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/dataflow"
@@ -17,7 +19,7 @@ import (
 )
 
 func materializationPlanOnJoin(g *graph.Graph[*flownode.Node]) OnJoin {
-	return func(node graph.NodeIdx, cols []int, inparents []graph.NodeIdx) graph.NodeIdx {
+	return func(node graph.NodeIdx, cols []Column, inparents []graph.NodeIdx) graph.NodeIdx {
 		if len(inparents) <= 1 {
 			panic("this function should only be called when there's a choice")
 		}
@@ -41,7 +43,7 @@ func materializationPlanOnJoin(g *graph.Graph[*flownode.Node]) OnJoin {
 			first := cols[0]
 
 			var universalSrc []graph.NodeIdx
-			for _, pc := range n.ParentColumns(first) {
+			for _, pc := range n.ParentColumns(first.Index) {
 				if pc.Node == node || pc.Column < 0 {
 					continue
 				}
@@ -51,7 +53,7 @@ func materializationPlanOnJoin(g *graph.Graph[*flownode.Node]) OnJoin {
 
 				alsoToSrc := true
 				for _, c := range cols[1:] {
-					if !slices.ContainsFunc(n.ParentColumns(c), func(pc1 flownode.NodeColumn) bool { return pc1.Node == pc.Node && pc1.Column >= 0 }) {
+					if !slices.ContainsFunc(n.ParentColumns(c.Index), func(pc1 flownode.NodeColumn) bool { return pc1.Node == pc.Node && pc1.Column >= 0 }) {
 						alsoToSrc = false
 					}
 				}
@@ -117,9 +119,10 @@ type pathSuffix struct {
 }
 
 type Plan struct {
-	m       *Materialization
-	node    graph.NodeIdx
-	partial bool
+	m          *Materialization
+	node       graph.NodeIdx
+	partial    bool
+	functional bool
 
 	// output of the plan
 	tags    map[common.Columns][]domainTag
@@ -166,7 +169,7 @@ func (p *Plan) prepareFastReplayPath(mig Migration, tag dataflow.Tag, path []Pat
 	var pending *pendingReplay
 	var partial []int
 	if p.partial {
-		partial = lastPath.Columns
+		partial = xslice.Map(lastPath.Columns, func(c Column) int { return c.Index })
 	}
 
 	setup := &packet.SetupReplayPathRequest{
@@ -216,8 +219,15 @@ func (p *Plan) prepareReplayPath(mig Migration, tag dataflow.Tag, pi int, path [
 
 	// what key are we using for partial materialization (if any)?
 	var partial []int
+	// When we get here, we know that the fast replay path failed. In the slow
+	// replay path, we can't handle functional dependencies with partial materialization.
+	// So if we hit that here, we also have to fall back to full materialization.
+	if p.functional {
+		p.partial = false
+	}
+
 	if p.partial {
-		partial = path[0].Columns
+		partial = xslice.Map(path[0].Columns, func(c Column) int { return c.Index })
 	}
 
 	// if this is a partial replay path, and the target node is sharded, then we need to
@@ -244,7 +254,7 @@ func (p *Plan) prepareReplayPath(mig Migration, tag dataflow.Tag, pi int, path [
 			lastDomain = dom
 		}
 
-		var key []int
+		var key []Column
 		if p.partial {
 			key = pe.Columns
 		}
@@ -283,7 +293,7 @@ func (p *Plan) prepareReplayPath(mig Migration, tag dataflow.Tag, pi int, path [
 			locals = append(locals, &packet.ReplayPathSegment{
 				Node:       g.Value(seg.Node).LocalAddr(),
 				ForceTagTo: forceTag,
-				PartialKey: seg.Columns,
+				PartialKey: xslice.Map(seg.Columns, func(c Column) int { return c.Index }),
 			})
 		}
 
@@ -401,7 +411,7 @@ func (p *Plan) prepareSegmentPartial(mig Migration, segments []*pathSegment, i i
 		if c, _, ok := srcSharding.ByColumn(); ok {
 			lookupKey := segments[i].path[0].Columns
 			if len(lookupKey) == 1 {
-				if c == lookupKey[0] {
+				if c == lookupKey[0].Index {
 					var key0 = 0
 					lookupKeyToShard = &key0
 				}
@@ -416,7 +426,7 @@ func (p *Plan) prepareSegmentPartial(mig Migration, segments []*pathSegment, i i
 				// explicit and more obvious
 				var key int
 				for key = 0; key < len(lookupKey); key++ {
-					if lookupKey[key] == c {
+					if lookupKey[key].Index == c {
 						lookupKeyToShard = &key
 						break
 					}
@@ -783,9 +793,10 @@ func (p *Plan) findPaths(g *graph.Graph[*flownode.Node], columns []int) [][]Path
 
 func newMaterializationPlan(m *Materialization, node graph.NodeIdx) *Plan {
 	return &Plan{
-		m:       m,
-		node:    node,
-		partial: m.partial[node],
+		m:          m,
+		node:       node,
+		partial:    m.partial[node],
+		functional: m.functional[node],
 
 		tags:  make(map[common.Columns][]domainTag),
 		paths: make(map[dataflow.Tag][]*pathSegment),

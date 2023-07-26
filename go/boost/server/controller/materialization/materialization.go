@@ -34,20 +34,22 @@ type Materialization struct {
 	have  graphIndexMap
 	added graphIndexMap
 
-	plans   map[graph.NodeIdx]*Plan
-	partial map[graph.NodeIdx]bool
-	cfg     *config.Materialization
+	plans      map[graph.NodeIdx]*Plan
+	partial    map[graph.NodeIdx]bool
+	functional map[graph.NodeIdx]bool
+	cfg        *config.Materialization
 
 	tagGenerator atomic.Uint32
 }
 
 func NewMaterialization(cfg *config.Materialization) *Materialization {
 	return &Materialization{
-		have:    make(graphIndexMap),
-		added:   make(graphIndexMap),
-		plans:   make(map[graph.NodeIdx]*Plan),
-		partial: make(map[graph.NodeIdx]bool),
-		cfg:     cfg,
+		have:       make(graphIndexMap),
+		added:      make(graphIndexMap),
+		plans:      make(map[graph.NodeIdx]*Plan),
+		partial:    make(map[graph.NodeIdx]bool),
+		functional: make(map[graph.NodeIdx]bool),
+		cfg:        cfg,
 	}
 }
 
@@ -338,14 +340,31 @@ func (mat *Materialization) extend(g *graph.Graph[*flownode.Node], newnodes map[
 			paths := ProvenanceOf(g, ni, index, materializationPlanOnJoin(g))
 			for _, path := range paths {
 				for _, pe := range path[1:] {
-					if p := slices.Index(pe.Columns, -1); p >= 0 {
+					cols := pe.Columns
+					if p := slices.IndexFunc(cols, func(c Column) bool { return c.Index == -1 }); p >= 0 {
 						able = false
 						break attempt
 					}
 
+					var functional bool
+					for _, c := range cols {
+						functional = functional || c.Functional
+					}
+
+					if functional {
+						// We have to mark the current node but also everything upstream
+						// of it as a functional dependent node. This ensures that we trigger
+						// the correct replay path setup. `path` always starts with `ni` so we
+						// include ourselves here as well.
+						for _, p := range path {
+							mat.functional[p.Node] = true
+						}
+					}
+
 					if m, ok := mat.have[pe.Node]; ok {
-						if !m.contains(pe.Columns) {
-							add.insert(pe.Node, pe.Columns)
+						c := xslice.Map(cols, func(c Column) int { return c.Index })
+						if !m.contains(c) {
+							add.insert(pe.Node, c)
 						}
 						break
 					}
@@ -576,7 +595,7 @@ func (mat *Materialization) checkDuplicateColumns(g *graph.Graph[*flownode.Node]
 				}
 				cols := path[m].Columns
 				src := cols[col]
-				if src == -1 {
+				if src.Index == -1 {
 					continue
 				}
 
@@ -585,7 +604,7 @@ func (mat *Materialization) checkDuplicateColumns(g *graph.Graph[*flownode.Node]
 						return &MergeShardingByAliasedColumnError{
 							Node:         node,
 							ParentNode:   parent,
-							SourceColumn: src,
+							SourceColumn: src.Index,
 						}
 					}
 				}
@@ -607,7 +626,9 @@ func (mat *Materialization) checkPartialOverIndices(g *graph.Graph[*flownode.Nod
 			for _, path := range paths {
 				for _, pe := range path {
 					pni := pe.Node
-					columns := pe.Columns
+					columns := xslice.Map(pe.Columns, func(c Column) int {
+						return c.Index
+					})
 					if slices.Contains(columns, -1) {
 						break
 					} else if mat.partial[pni] {

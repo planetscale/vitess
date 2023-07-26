@@ -121,9 +121,9 @@ func (g *Grouped) Resolve(col int) []NodeColumn {
 
 func (g *Grouped) ParentColumns(col int) []NodeColumn {
 	if col == len(g.colfix) {
-		return []NodeColumn{{g.src.AsGlobal(), -1}}
+		return []NodeColumn{{Node: g.src.AsGlobal(), Column: -1}}
 	}
-	return []NodeColumn{{g.src.AsGlobal(), g.colfix[col]}}
+	return []NodeColumn{{Node: g.src.AsGlobal(), Column: g.colfix[col]}}
 }
 
 func (g *Grouped) ColumnType(gra *graph.Graph[*Node], col int) (sql.Type, error) {

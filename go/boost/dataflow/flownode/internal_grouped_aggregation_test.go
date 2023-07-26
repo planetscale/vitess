@@ -140,6 +140,6 @@ func TestGroupedAggregation(t *testing.T) {
 
 	t.Run("it resolves", func(t *testing.T) {
 		c := setup(t, false)
-		assert.Equal(t, []NodeColumn{{c.NarrowBaseID().AsGlobal(), 0}}, c.Node().Resolve(0))
+		assert.Equal(t, []NodeColumn{{Node: c.NarrowBaseID().AsGlobal()}}, c.Node().Resolve(0))
 	})
 }

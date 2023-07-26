@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/boost/dataflow/domain"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
 	"vitess.io/vitess/go/slices2"
@@ -304,7 +305,7 @@ func TestProjectedPostProcessing(t *testing.T) {
 	]`)
 }
 
-func TestProjectedFilters(t *testing.T) {
+func TestProjectedFiltersWithMidflow(t *testing.T) {
 	const Recipe = `
 	CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a INT, b INT, j JSON, PRIMARY KEY(pk));
 	SELECT num.a, num.b, 420 FROM num WHERE num.a > :x AND JSON_EXTRACT(num.j, '$.n') = :y;
@@ -312,6 +313,40 @@ func TestProjectedFilters(t *testing.T) {
 `
 	recipe := testrecipe.LoadSQL(t, Recipe)
 	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 1; i <= 16; i++ {
+		g.TestExecute(`INSERT INTO num (a, b, j) VALUES (%d, %d, '{"n": %d}')`, i, i%2, i%2)
+	}
+
+	g.View("q0").Lookup(4, 0).Expect(`[
+		[INT32(6) INT32(0) INT64(420)]
+		[INT32(8) INT32(0) INT64(420)]
+		[INT32(10) INT32(0) INT64(420)]
+		[INT32(12) INT32(0) INT64(420)]
+		[INT32(14) INT32(0) INT64(420)]
+		[INT32(16) INT32(0) INT64(420)]
+	]`)
+
+	g.View("q1").Lookup(4, 1).Expect(`[
+		[INT32(6) INT32(0) INT64(420)]
+		[INT32(8) INT32(0) INT64(420)]
+		[INT32(10) INT32(0) INT64(420)]
+		[INT32(12) INT32(0) INT64(420)]
+		[INT32(14) INT32(0) INT64(420)]
+		[INT32(16) INT32(0) INT64(420)]
+	]`)
+}
+
+func TestProjectedFiltersWithoutMidflow(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a INT, b INT, j JSON, PRIMARY KEY(pk));
+	SELECT num.a, num.b, 420 FROM num WHERE num.a > :x AND JSON_EXTRACT(num.j, '$.n') = :y;
+	SELECT num.a, num.b, 420 FROM num WHERE num.a > :x AND (num.b + 1) = :y;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe), boosttest.WithCustomBoostConfig(func(cfg *config.Config) {
+		cfg.Materialization.UpqueryMode = config.UpqueryGenerationMode_NO_MIDFLOW_UPQUERIES
+	}))
 
 	for i := 1; i <= 16; i++ {
 		g.TestExecute(`INSERT INTO num (a, b, j) VALUES (%d, %d, '{"n": %d}')`, i, i%2, i%2)

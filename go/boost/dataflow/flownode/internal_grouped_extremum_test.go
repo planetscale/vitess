@@ -130,6 +130,6 @@ func TestGroupedExtremum(t *testing.T) {
 
 	t.Run("it resolves", func(t *testing.T) {
 		c := setup(t, ExtremumMax, false)
-		require.Equal(t, []NodeColumn{{c.NarrowBaseID().AsGlobal(), 0}}, c.Node().Resolve(0))
+		require.Equal(t, []NodeColumn{{Node: c.NarrowBaseID().AsGlobal()}}, c.Node().Resolve(0))
 	})
 }

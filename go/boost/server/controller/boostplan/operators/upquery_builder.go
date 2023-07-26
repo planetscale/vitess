@@ -6,7 +6,6 @@ import (
 
 	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/sqlparserx"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -259,7 +258,7 @@ func (qb *queryBuilder) getTableAlias(name string) string {
 	return fmt.Sprintf("%s_%d", name, i)
 }
 
-func (qb *queryBuilder) replaceProjections(projections []Projection) error {
+func (qb *queryBuilder) replaceProjections(projection *Project) error {
 	var selects []*sqlparser.Select
 	var oldExpressions [][]sqlparser.Expr
 	queue := []sqlparser.SelectStatement{qb.sel}
@@ -280,14 +279,14 @@ func (qb *queryBuilder) replaceProjections(projections []Projection) error {
 		}
 	}
 
-	addColumn := func(col int) error {
+	addColumn := func(col int, colIdx int) error {
 		for idx, sel := range selects {
 			oldExpr := oldExpressions[idx][col]
 			expr, err := qb.rewriteColNames(oldExpr)
 			if err != nil {
 				return err
 			}
-			sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: expr})
+			sel.SelectExprs = append(sel.SelectExprs, sqlparser.NewAliasedExpr(expr, projection.Columns[colIdx].Name))
 		}
 		return nil
 	}
@@ -304,14 +303,15 @@ func (qb *queryBuilder) replaceProjections(projections []Projection) error {
 		return nil
 	}
 
-	for _, proj := range projections {
+	for i, proj := range projection.Projections {
 		switch proj.Kind {
 		case ProjectionColumn:
-			if err := addColumn(proj.Column); err != nil {
+			if err := addColumn(proj.Column, i); err != nil {
 				return err
 			}
 		case ProjectionEval:
-			if err := addExpression(&sqlparser.AliasedExpr{Expr: proj.Original}); err != nil {
+			name := projection.Columns[i].Name
+			if err := addExpression(sqlparser.NewAliasedExpr(proj.Original, name)); err != nil {
 				return err
 			}
 		case ProjectionLiteral:

@@ -41,7 +41,7 @@ func (v *View) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) err
 			return err
 		}
 
-		param.Column.AST[0] = sqlparser.Rewrite(param.Column.AST[0], func(cursor *sqlparser.Cursor) bool {
+		param.Column.AST[0] = sqlparser.Rewrite(sqlparser.CloneExpr(param.Column.AST[0]), func(cursor *sqlparser.Cursor) bool {
 			switch col := cursor.Node().(type) {
 			case *sqlparser.ColName:
 				cursor.Replace(sqlparser.NewOffset(param.ColumnOffset, col))
