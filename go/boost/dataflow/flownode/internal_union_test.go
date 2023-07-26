@@ -56,14 +56,14 @@ func TestUnion(t *testing.T) {
 
 		r0 := u.Node().Resolve(0)
 		assert.ElementsMatch(t, []NodeColumn{
-			{l.AsGlobal(), 0},
-			{r.AsGlobal(), 0},
+			{Node: l.AsGlobal()},
+			{Node: r.AsGlobal()},
 		}, r0)
 
 		r1 := u.Node().Resolve(1)
 		assert.ElementsMatch(t, []NodeColumn{
-			{l.AsGlobal(), 1},
-			{r.AsGlobal(), 2},
+			{Node: l.AsGlobal(), Column: 1},
+			{Node: r.AsGlobal(), Column: 2},
 		}, r1)
 	})
 }

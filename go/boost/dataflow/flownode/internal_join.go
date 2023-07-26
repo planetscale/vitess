@@ -98,9 +98,9 @@ func (j *Join) SuggestIndexes(you graph.NodeIdx) map[graph.NodeIdx][]int {
 func (j *Join) Resolve(col int) []NodeColumn {
 	e := j.emit[col]
 	if e.Left {
-		return []NodeColumn{{j.left.AsGlobal(), e.Col}}
+		return []NodeColumn{{Node: j.left.AsGlobal(), Column: e.Col}}
 	}
-	return []NodeColumn{{j.right.AsGlobal(), e.Col}}
+	return []NodeColumn{{Node: j.right.AsGlobal(), Column: e.Col}}
 }
 
 func (j *Join) ParentColumns(col int) []NodeColumn {
@@ -108,8 +108,8 @@ func (j *Join) ParentColumns(col int) []NodeColumn {
 	if (pcol.Left && pcol.Col == j.on[0] && pcol.MultiParent) || (!pcol.Left && pcol.Col == j.on[1] && pcol.MultiParent) {
 		// join column comes from both parents
 		return []NodeColumn{
-			{j.left.AsGlobal(), j.on[0]},
-			{j.right.AsGlobal(), j.on[1]},
+			{Node: j.left.AsGlobal(), Column: j.on[0]},
+			{Node: j.right.AsGlobal(), Column: j.on[1]},
 		}
 	}
 
@@ -119,7 +119,7 @@ func (j *Join) ParentColumns(col int) []NodeColumn {
 	} else {
 		parent = j.right
 	}
-	return []NodeColumn{{parent.AsGlobal(), pcol.Col}}
+	return []NodeColumn{{Node: parent.AsGlobal(), Column: pcol.Col}}
 }
 
 func coerceTo(v1, v2 sqltypes.Type, col1, col2 collations.ID) (sqltypes.Type, collations.ID, error) {

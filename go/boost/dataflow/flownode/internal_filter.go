@@ -84,11 +84,11 @@ func (f *Filter) SuggestIndexes(you graph.NodeIdx) map[graph.NodeIdx][]int {
 }
 
 func (f *Filter) Resolve(col int) []NodeColumn {
-	return []NodeColumn{{f.src.AsGlobal(), col}}
+	return []NodeColumn{{Node: f.src.AsGlobal(), Column: col}}
 }
 
 func (f *Filter) ParentColumns(col int) []NodeColumn {
-	return []NodeColumn{{f.src.AsGlobal(), col}}
+	return []NodeColumn{{Node: f.src.AsGlobal(), Column: col}}
 }
 
 func (f *Filter) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {

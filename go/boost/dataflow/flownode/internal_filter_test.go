@@ -121,11 +121,11 @@ func TestFilter(t *testing.T) {
 		g := setup(t, false, nil)
 
 		assert.Equal(t, g.Node().Resolve(0), []NodeColumn{{
-			g.NarrowBaseID().AsGlobal(), 0,
+			Node: g.NarrowBaseID().AsGlobal(),
 		}})
 
 		assert.Equal(t, g.Node().Resolve(1), []NodeColumn{{
-			g.NarrowBaseID().AsGlobal(), 1,
+			Node: g.NarrowBaseID().AsGlobal(), Column: 1,
 		}})
 	})
 

@@ -32,7 +32,7 @@ func (u *unionEmitAll) Description() string {
 }
 
 func (u *unionEmitAll) ParentColumns(col int) []NodeColumn {
-	return []NodeColumn{{u.from.AsGlobal(), col}}
+	return []NodeColumn{{Node: u.from.AsGlobal(), Column: col}}
 }
 
 func (u *unionEmitAll) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {

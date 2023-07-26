@@ -141,8 +141,8 @@ func TestJoin(t *testing.T) {
 	t.Run("it resolves", func(t *testing.T) {
 		g, l, r := setup(t)
 
-		assert.Equal(t, []NodeColumn{{l.AsGlobal(), 0}}, g.Node().Resolve(0))
-		assert.Equal(t, []NodeColumn{{l.AsGlobal(), 1}}, g.Node().Resolve(1))
-		assert.Equal(t, []NodeColumn{{r.AsGlobal(), 1}}, g.Node().Resolve(2))
+		assert.Equal(t, []NodeColumn{{Node: l.AsGlobal()}}, g.Node().Resolve(0))
+		assert.Equal(t, []NodeColumn{{Node: l.AsGlobal(), Column: 1}}, g.Node().Resolve(1))
+		assert.Equal(t, []NodeColumn{{Node: r.AsGlobal(), Column: 1}}, g.Node().Resolve(2))
 	})
 }
