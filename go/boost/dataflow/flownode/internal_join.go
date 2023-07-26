@@ -9,6 +9,10 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/mysql/collations"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"
 	"vitess.io/vitess/go/boost/sql"
@@ -18,7 +22,6 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/state"
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -119,6 +122,69 @@ func (j *Join) ParentColumns(col int) []NodeColumn {
 	return []NodeColumn{{parent.AsGlobal(), pcol.Col}}
 }
 
+func coerceTo(v1, v2 sqltypes.Type, col1, col2 collations.ID) (sqltypes.Type, collations.ID, error) {
+	if v1 == v2 {
+		return v1, col1, nil
+	}
+	if sqltypes.IsNull(v1) || sqltypes.IsNull(v2) {
+		return sqltypes.Null, collations.CollationBinaryID, nil
+	}
+	if (sqltypes.IsText(v1) || sqltypes.IsBinary(v1)) && (sqltypes.IsText(v2) || sqltypes.IsBinary(v2)) {
+		col := col1
+		if col1 != col2 {
+			coll, _, _, err := collations.Local().MergeCollations(collations.TypedCollation{
+				Collation:    col1,
+				Coercibility: collations.CoerceCoercible,
+				Repertoire:   collations.RepertoireUnicode,
+			}, collations.TypedCollation{
+				Collation:    col2,
+				Coercibility: collations.CoerceCoercible,
+				Repertoire:   collations.RepertoireUnicode,
+			}, collations.CoercionOptions{
+				ConvertToSuperset:   true,
+				ConvertWithCoercion: true,
+			})
+			if err != nil {
+				return sqltypes.Unknown, collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "collations are not comparable: %v vs %v", col1, col2)
+			}
+			col = coll.Collation
+		}
+		return sqltypes.VarChar, col, nil
+	}
+	if sqltypes.IsDateOrTime(v1) {
+		return v1, collations.CollationBinaryID, nil
+	}
+	if sqltypes.IsDateOrTime(v2) {
+		return v2, collations.CollationBinaryID, nil
+	}
+
+	if sqltypes.IsNumber(v1) || sqltypes.IsNumber(v2) {
+		switch {
+		case sqltypes.IsText(v1) || sqltypes.IsBinary(v1) || sqltypes.IsText(v2) || sqltypes.IsBinary(v2):
+			return sqltypes.Float64, collations.CollationBinaryID, nil
+		case sqltypes.IsFloat(v2) || v2 == sqltypes.Decimal || sqltypes.IsFloat(v1) || v1 == sqltypes.Decimal:
+			return sqltypes.Float64, collations.CollationBinaryID, nil
+		case sqltypes.IsSigned(v1):
+			switch {
+			case sqltypes.IsUnsigned(v2):
+				return sqltypes.Uint64, collations.CollationBinaryID, nil
+			case sqltypes.IsSigned(v2):
+				return sqltypes.Int64, collations.CollationBinaryID, nil
+			default:
+				return sqltypes.Unknown, collations.Unknown, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+			}
+		case sqltypes.IsUnsigned(v1):
+			switch {
+			case sqltypes.IsSigned(v2) || sqltypes.IsUnsigned(v2):
+				return sqltypes.Uint64, collations.CollationBinaryID, nil
+			default:
+				return sqltypes.Unknown, collations.Unknown, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+			}
+		}
+	}
+	return sqltypes.Unknown, collations.Unknown, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+}
+
 func (j *Join) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
 	parents := j.ParentColumns(col)
 	switch len(parents) {
@@ -135,17 +201,13 @@ func (j *Join) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
 			return sql.Type{}, err
 		}
 
-		var comparisonType = t1.T
-		if t1.T != t2.T {
-			var err error
-			comparisonType, err = evalengine.CoerceTo(t1.T, t2.T)
-			if err != nil {
-				return sql.Type{}, err
-			}
+		comparisonType, comparisonCollation, err := coerceTo(t1.T, t2.T, t1.Collation, t2.Collation)
+		if err != nil {
+			return sql.Type{}, err
 		}
 		return sql.Type{
 			T:         comparisonType,
-			Collation: t1.Collation, // TODO: We need to merge collations here instead
+			Collation: comparisonCollation,
 			Nullable:  t1.Nullable || t2.Nullable,
 		}, nil
 
