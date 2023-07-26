@@ -134,20 +134,39 @@ func (p *Project) Resolve(col int) []NodeColumn {
 }
 
 func (p *Project) ParentColumns(col int) []NodeColumn {
-	var nc = NodeColumn{
-		Node:   p.src.AsGlobal(),
-		Column: col,
+	if len(p.projections) == 0 {
+		return []NodeColumn{{
+			Node:   p.src.AsGlobal(),
+			Column: col,
+		}}
 	}
 
-	if len(p.projections) != 0 {
-		offset, ok := p.projections[col].(ProjectedCol)
-		if ok {
-			nc.Column = int(offset)
-		} else {
-			nc.Column = -1
-		}
+	var cols []NodeColumn
+	switch offset := p.projections[col].(type) {
+	case ProjectedCol:
+		cols = append(cols, NodeColumn{
+			Node:   p.src.AsGlobal(),
+			Column: int(offset),
+		})
+	case *ProjectedExpr:
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.Offset:
+				cols = append(cols, NodeColumn{
+					Node:       p.src.AsGlobal(),
+					Column:     node.V,
+					Functional: true,
+				})
+			}
+			return true, nil
+		}, offset.AST)
+	default:
+		cols = append(cols, NodeColumn{
+			Node:   p.src.AsGlobal(),
+			Column: -1,
+		})
 	}
-	return []NodeColumn{nc}
+	return cols
 }
 
 func (p *Project) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {

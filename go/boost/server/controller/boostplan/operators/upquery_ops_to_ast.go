@@ -210,7 +210,7 @@ func (g *GroupBy) addToQueryBuilder(qb *queryBuilder, n *Node) error {
 }
 
 func (p *Project) addToQueryBuilder(qb *queryBuilder, _ *Node) error {
-	err := qb.replaceProjections(p.Projections)
+	err := qb.replaceProjections(p)
 	if err != nil {
 		return err
 	}

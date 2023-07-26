@@ -132,10 +132,10 @@ func (mig *migration) AddTable(name string, fields []string, t *flownode.Table) 
 	return ni
 }
 
-func (mig *migration) AddView(name string, r *flownode.Reader) {
+func (mig *migration) AddView(name string, r *flownode.Reader) graph.NodeIdx {
 	na := r.IsFor()
-	if _, found := mig.readers[na]; found {
-		return
+	if addr, found := mig.readers[na]; found {
+		return addr
 	}
 
 	g := mig.target.graph()
@@ -152,6 +152,7 @@ func (mig *migration) AddView(name string, r *flownode.Reader) {
 	g.AddEdge(na, ri)
 	mig.added[ri] = true
 	mig.readers[na] = ri
+	return ri
 }
 
 func (mig *migration) AddTableReport(queryID string, report []*operators.TableReport) {

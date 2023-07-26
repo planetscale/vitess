@@ -70,11 +70,11 @@ func (t *TopK) SuggestIndexes(you graph.NodeIdx) map[graph.NodeIdx][]int {
 }
 
 func (t *TopK) Resolve(col int) []NodeColumn {
-	return []NodeColumn{{t.src.AsGlobal(), col}}
+	return []NodeColumn{{Node: t.src.AsGlobal(), Column: col}}
 }
 
 func (t *TopK) ParentColumns(col int) []NodeColumn {
-	return []NodeColumn{{t.src.AsGlobal(), col}}
+	return []NodeColumn{{Node: t.src.AsGlobal(), Column: col}}
 }
 
 func (t *TopK) ColumnType(g *graph.Graph[*Node], col int) (sql.Type, error) {
