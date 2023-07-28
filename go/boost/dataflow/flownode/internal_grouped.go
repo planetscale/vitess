@@ -292,8 +292,8 @@ func (g *Grouped) OnInput(you *Node, ex processing.Executor, from dataflow.Local
 			Hash:   r.Row.HashWithKey(&hasher, g.groupByKey, g.srcSchema),
 		})
 	}
-	slices.SortStableFunc(hashrs, func(a, b sql.HashedRecord) bool {
-		return bytes.Compare(a.Hash[:], b.Hash[:]) < 0
+	slices.SortStableFunc(hashrs, func(a, b sql.HashedRecord) int {
+		return bytes.Compare(a.Hash[:], b.Hash[:])
 	})
 
 	var misses []processing.Miss

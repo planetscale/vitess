@@ -240,8 +240,8 @@ func (d *Domain) handleReplay(ctx context.Context, m *packet.ReplayPiece, execut
 			return err
 		}
 
-		slices.SortFunc(output.Misses, func(a, b processing.Miss) bool {
-			return a.Compare(&b) < 0
+		slices.SortFunc(output.Misses, func(a, b processing.Miss) int {
+			return a.Compare(&b)
 		})
 		slices.CompactFunc(output.Misses, func(a, b processing.Miss) bool {
 			return a.Compare(&b) == 0

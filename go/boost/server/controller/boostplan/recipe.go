@@ -3,6 +3,7 @@ package boostplan
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"golang.org/x/exp/slices"
 
@@ -98,8 +99,8 @@ func (r *Recipe) ToProto() []*vtboostpb.CachedQuery {
 	for _, expr := range r.expressions {
 		cached = append(cached, expr.CachedQuery)
 	}
-	slices.SortFunc(cached, func(a, b *vtboostpb.CachedQuery) bool {
-		return a.PublicId < b.PublicId
+	slices.SortFunc(cached, func(a, b *vtboostpb.CachedQuery) int {
+		return strings.Compare(a.PublicId, b.PublicId)
 	})
 	return cached
 }

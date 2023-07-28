@@ -122,8 +122,8 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, _ dataflow.LocalNodeId
 			Hash:   r.Row.HashWithKey(&hasher, groupBy, t.srcSchema),
 		})
 	}
-	slices.SortStableFunc(hashrs, func(a, b sql.HashedRecord) bool {
-		return bytes.Compare(a.Hash[:], b.Hash[:]) < 0
+	slices.SortStableFunc(hashrs, func(a, b sql.HashedRecord) int {
+		return bytes.Compare(a.Hash[:], b.Hash[:])
 	})
 
 	us := you.index
@@ -150,8 +150,8 @@ func (t *TopK) OnInput(you *Node, ex processing.Executor, _ dataflow.LocalNodeId
 	)
 
 	postGroup := func(out []sql.Record, current []newrow, grpk, k int, order Order) ([]sql.Record, bool) {
-		slices.SortFunc(current, func(a, b newrow) bool {
-			return order.Cmp(a.row, b.row) < 0
+		slices.SortFunc(current, func(a, b newrow) int {
+			return order.Cmp(a.row, b.row)
 		})
 
 		if k < 0 {

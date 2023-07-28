@@ -82,8 +82,8 @@ func (t RowsTable) GoString() string {
 	}
 
 	sorted := maps.Keys(t)
-	slices.SortFunc(sorted, func(a, b vthash.Hash) bool {
-		return bytes.Compare(a[:], b[:]) < 0
+	slices.SortFunc(sorted, func(a, b vthash.Hash) int {
+		return bytes.Compare(a[:], b[:])
 	})
 
 	var w strings.Builder
