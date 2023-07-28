@@ -90,8 +90,16 @@ func (d *Domain) handleEvictAny(ctx context.Context, pkt *packet.EvictRequest, e
 			return true
 		})
 
-		slices.SortFunc(nodes, func(a, b nodesize) bool {
-			return a.size > b.size
+		slices.SortFunc(nodes, func(a, b nodesize) int {
+			// Sort in reverse order.
+			switch {
+			case a.size > b.size:
+				return -1
+			case a.size < b.size:
+				return 1
+			default:
+				return 0
+			}
 		})
 
 		// TODO: we don't want to evict from all nodes in this domain; Noria just truncates

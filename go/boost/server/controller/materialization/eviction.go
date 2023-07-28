@@ -207,8 +207,16 @@ func (ep *EvictionPlan) evictOnRoot(evictions []Eviction, root *rootUsage, evict
 			candidates = append(candidates, cand)
 		}
 	}
-	slices.SortFunc(candidates, func(a, b *nodeUsage) bool {
-		return a.memTotal > b.memTotal
+	slices.SortFunc(candidates, func(a, b *nodeUsage) int {
+		// Sort in reverse order.
+		switch {
+		case a.memTotal > b.memTotal:
+			return -1
+		case a.memTotal < b.memTotal:
+			return 1
+		default:
+			return 0
+		}
 	})
 
 	if len(candidates) > 3 {

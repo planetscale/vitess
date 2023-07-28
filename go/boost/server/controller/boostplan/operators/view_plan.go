@@ -277,8 +277,18 @@ func (vp viewPlan) ParameterKey() (parameterKey []int) {
 }
 
 func (vp viewPlan) Sort() {
-	slices.SortStableFunc(vp, func(a, b viewParameter) bool {
-		return a.rank() < b.rank()
+	slices.SortStableFunc(vp, func(a, b viewParameter) int {
+		// TODO: switch to cmp.Compare for Go 1.21+.
+		//
+		// https://pkg.go.dev/cmp@master#Compare.
+		switch {
+		case a.rank() < b.rank():
+			return -1
+		case a.rank() > b.rank():
+			return 1
+		default:
+			return 0
+		}
 	})
 }
 
