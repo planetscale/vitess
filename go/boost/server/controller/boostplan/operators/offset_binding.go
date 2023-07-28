@@ -501,8 +501,18 @@ func (conv *Converter) bindUnionSideOffset(columns Columns, node *Node, st *sema
 		return t
 	})
 
-	slices.SortFunc(newColumns, func(a, b tuple) bool {
-		return a.offset < b.offset
+	slices.SortFunc(newColumns, func(a, b tuple) int {
+		// TODO: switch to cmp.Compare for Go 1.21+.
+		//
+		// https://pkg.go.dev/cmp@master#Compare.
+		switch {
+		case a.offset < b.offset:
+			return -1
+		case a.offset > b.offset:
+			return 1
+		default:
+			return 0
+		}
 	})
 
 	for idx, col := range newColumns {

@@ -782,8 +782,8 @@ func (p *Plan) findPaths(g *graph.Graph[*flownode.Node], columns []int) [][]Path
 	// since we cut off part of each path, we *may* now have multiple paths that are the same
 	// (i.e., if there was a union above the nearest materialization). this would be bad, as it
 	// would cause a domain to request replays *twice* for a key from one view!
-	slices.SortFunc(paths, func(a, b []PathElement) bool {
-		return Path(a).Compare(b) < 0
+	slices.SortFunc(paths, func(a, b []PathElement) int {
+		return Path(a).Compare(b)
 	})
 	paths = slices.CompactFunc(paths, func(a, b []PathElement) bool {
 		return Path(a).Compare(b) == 0
