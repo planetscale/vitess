@@ -293,8 +293,8 @@ func (v *View) fixResult(rows []sql.Row) *sqltypes.Result {
 	}
 	if v.topkOrder != nil {
 		order := flownode.Order(v.topkOrder)
-		slices.SortFunc(rows, func(a, b sql.Row) bool {
-			return order.Cmp(a, b) < 0
+		slices.SortFunc(rows, func(a, b sql.Row) int {
+			return order.Cmp(a, b)
 		})
 		limit := len(rows)
 		if v.topkLimit >= 0 && v.topkLimit < len(rows) {

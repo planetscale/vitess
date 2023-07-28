@@ -69,8 +69,18 @@ func TestWeightStrings(t *testing.T) {
 				items = append(items, item{value: v, weight: string(w)})
 			}
 
-			slices.SortFunc(items, func(a, b item) bool {
-				return a.weight < b.weight
+			slices.SortFunc(items, func(a, b item) int {
+				// TODO: switch to cmp.Compare for Go 1.21+.
+				//
+				// https://pkg.go.dev/cmp@master#Compare.
+				switch {
+				case a.weight < b.weight:
+					return -1
+				case a.weight > b.weight:
+					return 1
+				default:
+					return 0
+				}
 			})
 
 			for i := 0; i < Length-1; i++ {

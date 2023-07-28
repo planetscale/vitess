@@ -43,8 +43,8 @@ func TestWeightStrings(t *testing.T) {
 		items = append(items, i)
 	}
 
-	slices.SortFunc(items, func(a, b item) bool {
-		return bytes.Compare(a.weight, b.weight) < 0
+	slices.SortFunc(items, func(a, b item) int {
+		return bytes.Compare(a.weight, b.weight)
 	})
 
 	for i := 0; i < Length-1; i++ {
