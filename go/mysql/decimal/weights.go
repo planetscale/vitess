@@ -1,7 +1,25 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package decimal
 
-// source: https://dev.mysql.com/doc/refman/8.0/en/fixed-point-types.html
-// generated empirically with a manual loop:
+// Our weight string format is normalizing the weight string to a fixed length,
+// so it becomes byte-ordered. The byte lengths are pre-computed based on
+// https://dev.mysql.com/doc/refman/8.0/en/fixed-point-types.html
+// and generated empirically with a manual loop:
 //
 //	for i := 1; i <= 65; i++ {
 //		dec, err := NewFromMySQL(bytes.Repeat([]byte("9"), i))
@@ -30,6 +48,7 @@ func (d Decimal) WeightString(dst []byte, length, precision int32) []byte {
 			buf[i] ^= 0xff
 		}
 	}
+	// Use the same trick as used for signed numbers on the first byte.
 	buf[0] ^= 0x80
 
 	dst = append(dst, buf[:]...)
