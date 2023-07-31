@@ -455,7 +455,12 @@ func escapeWeights(s []byte, start int) []byte {
 }
 
 func addWeights(dst []byte, v sqltypes.Value, t Type) ([]byte, error) {
-	out, fixed, err := WeightString(dst, v, t)
+	var length int
+	switch t.T {
+	case sqltypes.Char, sqltypes.Binary, sqltypes.Decimal:
+		length = int(t.Length)
+	}
+	out, fixed, err := evalengine.WeightString(dst, v, t.T, t.Collation, length, int(t.Precision))
 	if err != nil {
 		return nil, err
 	}
