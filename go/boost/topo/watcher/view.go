@@ -100,12 +100,6 @@ func (v *View) makerow(bvars []*querypb.BindVariable) (sql.Row, error) {
 		return "", nil
 	}
 
-	for i, k := range bvars {
-		if err := v.canCoerce(k.Type, i); err != nil {
-			return "", err
-		}
-	}
-
 	keypb := sql.NewRowBuilder(len(bvars))
 	for _, bvar := range bvars {
 		keypb.AddBindVar(bvar)
@@ -148,9 +142,6 @@ func (v *View) multiLookup(ctx context.Context, key []*querypb.BindVariable, blo
 					return nil, err
 				}
 			}
-			if err := v.canCoerce(val.Type(), i); err != nil {
-				return nil, err
-			}
 			keypb.AddVitess(val)
 		}
 
@@ -164,28 +155,7 @@ func (v *View) Lookup(ctx context.Context, key []sqltypes.Value, block bool) (*s
 	if len(key) != len(v.keySchema) {
 		return nil, fmt.Errorf("expected %d keys, got %d", len(v.keySchema), len(key))
 	}
-
-	for i, k := range key {
-		if err := v.canCoerce(k.Type(), i); err != nil {
-			return nil, err
-		}
-	}
 	return v.lookup(ctx, sql.RowFromVitess(key), block)
-}
-
-func (v *View) canCoerce(from querypb.Type, fieldPos int) error {
-	to := v.keySchema[fieldPos].Type
-
-	switch {
-	case to == sqltypes.TypeJSON:
-		// Allow this coercion always because it's very loose
-		return nil
-	case sqltypes.IsQuoted(to):
-		if !sqltypes.IsQuoted(from) {
-			return fmt.Errorf("cannot query field %q with an %s (textual fields can only be queried textually)", v.keySchema[fieldPos].Name, from.String())
-		}
-	}
-	return nil
 }
 
 func (v *View) lookup(ctx context.Context, key sql.Row, block bool) (*sqltypes.Result, error) {
