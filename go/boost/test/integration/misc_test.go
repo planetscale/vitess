@@ -131,12 +131,12 @@ func TestTypeConversions(t *testing.T) {
 
 	conv2 := g.View("q2")
 	conv2.Lookup("string-1").Expect(`[[INT64(1)]]`)
-	conv2.Lookup(1).ExpectError()
-	conv2.Lookup(1.0).ExpectError()
+	conv2.Lookup(1).Expect(`[]`)
+	conv2.Lookup(1.0).Expect(`[]`)
 
 	conv3 := g.View("q3")
 	conv3.LookupBvar([]any{"string-1", "string-2"}).ExpectLen(2)
-	conv3.LookupBvar([]any{"string-1", 1}).ExpectError()
+	conv3.LookupBvar([]any{"string-1", 1}).ExpectLen(1)
 }
 
 func TestDeletedReader(t *testing.T) {

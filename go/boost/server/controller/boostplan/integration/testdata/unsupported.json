@@ -170,36 +170,6 @@
     },
     {
       "Keyspace": "main",
-      "SQL": "select id from types where d = :p1",
-      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
-    },
-    {
-      "Keyspace": "main",
-      "SQL": "select id from types where d > :p1",
-      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
-    },
-    {
-      "Keyspace": "main",
-      "SQL": "select id from types where dt = :p1",
-      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
-    },
-    {
-      "Keyspace": "main",
-      "SQL": "select id from types where dt > :p1",
-      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
-    },
-    {
-      "Keyspace": "main",
-      "SQL": "select id from types where t = :p1",
-      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
-    },
-    {
-      "Keyspace": "main",
-      "SQL": "select id from types where t > :p1",
-      "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
-    },
-    {
-      "Keyspace": "main",
       "SQL": "select id from types where s = :p1",
       "Error": "query not supported by boost: query parameter `p1` has an unsupported type"
     },
