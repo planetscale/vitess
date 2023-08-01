@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"runtime"
 	"sync/atomic"
+	"unsafe"
 
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 	"vitess.io/vitess/go/boost/sql"
@@ -14,13 +15,23 @@ type ConcurrentMap struct {
 	lr          leftright[offheap.CRowsTable]
 	changelog   Changelog[vthash.Hash]
 	writeHasher vthash.Hasher
+	allocator   *offheap.Allocator
 
 	waker *waker
+}
+
+func (cm *ConcurrentMap) ensureNoLeaks() {
+	cm.allocator.EnsureNoLeaks()
+}
+
+func (cm *ConcurrentMap) isAllocated(node unsafe.Pointer) bool {
+	return cm.allocator.IsAllocated(node)
 }
 
 func NewConcurrentMap() *ConcurrentMap {
 	store := &ConcurrentMap{waker: newWaker()}
 	store.lr.init(runtime.GOMAXPROCS(0), make(offheap.CRowsTable), make(offheap.CRowsTable))
+	store.allocator = &offheap.Allocator{}
 	return store
 }
 
@@ -66,11 +77,11 @@ func (cm *ConcurrentMap) writerAdd(rs []sql.Record, pk []int, schema []sql.Type,
 
 		if r.Positive {
 			if !ok {
-				newrow := offheap.NewConcurrent(r.Row, memsize)
+				newrow := cm.allocator.NewConcurrent(r.Row, memsize)
 				tbl.Set(k, newrow)
 				cm.changelog.Do(changeInsert, k, newrow)
 			} else {
-				newrow, free := rows.Insert(r.Row, memsize)
+				newrow, free := cm.allocator.InsertConcurrentRows(rows, r.Row, memsize)
 				tbl.Set(k, newrow)
 				cm.changelog.Do(changeInsert, k, newrow)
 				cm.changelog.Free(free)
@@ -98,7 +109,7 @@ func (cm *ConcurrentMap) writerEvict(_ *rand.Rand, bytesToEvict int64) {
 func (cm *ConcurrentMap) writerFree(memsize *atomic.Int64) {
 	cm.writerRefresh(memsize, true)
 	cm.lr.left.ForEach(func(rows *offheap.ConcurrentRows) {
-		rows.Free(memsize)
+		cm.allocator.FreeConcurrent(rows, memsize)
 	})
 }
 
@@ -171,8 +182,12 @@ func (cm *ConcurrentMap) applyChangelog(table offheap.CRowsTable, memsize *atomi
 	}
 
 	for _, free := range freelist {
-		free.Free(memsize)
+		cm.allocator.FreeConcurrent(free, memsize)
 	}
+}
+
+func (cm *ConcurrentMap) ensoreNoLeaks() {
+	cm.allocator.EnsureNoLeaks()
 }
 
 type Rows struct {

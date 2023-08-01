@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/slices2"
@@ -48,7 +47,6 @@ func TestTreeIteration(t *testing.T) {
 
 	defer func() {
 		w.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	var records []sql.Record
@@ -85,7 +83,6 @@ func TestTreeIterationWithVariablePrefix(t *testing.T) {
 
 	defer func() {
 		w.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	records := []sql.Row{
@@ -119,7 +116,6 @@ func TestTreeIterationWithVariablePrefixConflict(t *testing.T) {
 
 	defer func() {
 		w.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	records := []sql.Row{

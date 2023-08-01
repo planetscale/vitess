@@ -337,8 +337,9 @@ func (m *Memory) remove(row sql.Row) bool {
 func (m *Memory) Free() {
 	for _, s := range m.state {
 		s.state.ForEach(func(rows *offheap.Rows) {
-			rows.Free(&m.memSize)
+			s.allocator.FreeRows(rows, &m.memSize)
 		})
+		s.allocator.EnsureNoLeaks()
 	}
 }
 

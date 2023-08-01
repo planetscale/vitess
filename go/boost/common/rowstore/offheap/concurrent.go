@@ -19,7 +19,7 @@ type ConcurrentRows struct {
 }
 
 // concurrentRowsSize is the size of the object header defined above.
-const concurrentRowsSize = unsafe.Sizeof(ConcurrentRows{})
+const concurrentRowsSize = int(unsafe.Sizeof(ConcurrentRows{}))
 
 // flagTombstone is the 30th bit in the sizemask uint32 that indicates if a record
 // is tombstoned.
@@ -28,22 +28,6 @@ const flagTombstone = 0x4000_0000
 // flagEpochPosition is the highest level bit in the sizemask uint32 that indicates
 // which of the two sides of the swapping hash table is currently used for writing.
 const flagEpochPosition = 31
-
-// NewConcurrent creates a new concurrent row with the given has and row data.
-// It allocates the row with the needed size for the row and initializes the
-// header correctly.
-func NewConcurrent(row sql.Row, memsize *atomic.Int64) *ConcurrentRows {
-	alloc := concurrentRowsSize + uintptr(len(row))
-	hdr := (*ConcurrentRows)(DefaultAllocator.alloc(alloc))
-	hdr.next = nil
-	hdr.sizemask.Store(uint32(len(row)))
-
-	ary := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(hdr), concurrentRowsSize)), len(row))
-	copy(ary, row)
-
-	memsize.Add(int64(alloc))
-	return hdr
-}
 
 // CollectInternal_ is a helper for tests to iterate over the linked
 // list to get all the elements in the hash table row.
@@ -96,53 +80,11 @@ func (cr *ConcurrentRows) readsize(epoch uint64) int {
 	return int(sz & (flagTombstone - 1))
 }
 
-// Free deallocates the given memory for the concurrent row. If the current
-// element in the linked list has the tombstone flag set, we want to only
-// delete the current element as we know we're at this point not a member
-// of either the write or read side of the hash map.
-//
-// When no tombstone is set, we delete the entire linked list. This is used
-// during cleanup.
-func (cr *ConcurrentRows) Free(memsize *atomic.Int64) {
-	if cr == nil {
-		return
-	}
-
-	if cr.sizemask.Load()&flagTombstone != 0 {
-		memsize.Add(-cr.memsize())
-		DefaultAllocator.free(unsafe.Pointer(cr))
-		return
-	}
-
-	for cr != nil {
-		next := cr.next
-		memsize.Add(-cr.memsize())
-		DefaultAllocator.free(unsafe.Pointer(cr))
-		cr = next
-	}
-}
-
 func (cr *ConcurrentRows) TotalMemorySize() (total int64) {
 	for r := cr; r != nil; r = r.next {
 		total += r.memsize()
 	}
 	return
-}
-
-// Insert adds a new row entry to the linked list. It returns
-// the new entry which will have the next item set as the current
-// element.
-// If the current value is the empty sentinel value, we return
-// the next element directly. We don't keep the sentinel entry
-// at the end of the linked list.
-func (cr *ConcurrentRows) Insert(row sql.Row, memsize *atomic.Int64) (new *ConcurrentRows, free *ConcurrentRows) {
-	next := NewConcurrent(row, memsize)
-	if cr == nil {
-		return next, cr
-	}
-
-	next.next = cr
-	return next, nil
 }
 
 // Tombstone sets the tombstone bit on the current row entry. The row argument
@@ -241,4 +183,62 @@ func (cr *ConcurrentRows) Collect(epoch uint64, rows []sql.Row) []sql.Row {
 		}
 	}
 	return rows
+}
+
+// NewConcurrent creates a new concurrent row with the given has and row data.
+// It allocates the row with the needed size for the row and initializes the
+// header correctly.
+func (a *Allocator) NewConcurrent(row sql.Row, memsize *atomic.Int64) *ConcurrentRows {
+	alloc := concurrentRowsSize + len(row)
+	hdr := (*ConcurrentRows)(a.alloc(alloc))
+	hdr.next = nil
+	hdr.sizemask.Store(uint32(len(row)))
+
+	ary := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(hdr), concurrentRowsSize)), len(row))
+	copy(ary, row)
+
+	memsize.Add(int64(alloc))
+	return hdr
+}
+
+// FreeConcurrent deallocates the given memory for the concurrent row. If the current
+// element in the linked list has the tombstone flag set, we want to only
+// delete the current element as we know we're at this point not a member
+// of either the write or read side of the hash map.
+//
+// When no tombstone is set, we delete the entire linked list. This is used
+// during cleanup.
+func (a *Allocator) FreeConcurrent(cr *ConcurrentRows, memsize *atomic.Int64) {
+	if cr == nil {
+		return
+	}
+
+	if cr.sizemask.Load()&flagTombstone != 0 {
+		memsize.Add(-cr.memsize())
+		a.free(unsafe.Pointer(cr))
+		return
+	}
+
+	for cr != nil {
+		next := cr.next
+		memsize.Add(-cr.memsize())
+		a.free(unsafe.Pointer(cr))
+		cr = next
+	}
+}
+
+// InsertConcurrentRows adds a new row entry to the linked list. It returns
+// the new entry which will have the next item set as the current
+// element.
+// If the current value is the empty sentinel value, we return
+// the next element directly. We don't keep the sentinel entry
+// at the end of the linked list.
+func (a *Allocator) InsertConcurrentRows(cr *ConcurrentRows, row sql.Row, memsize *atomic.Int64) (new *ConcurrentRows, free *ConcurrentRows) {
+	next := a.NewConcurrent(row, memsize)
+	if cr == nil {
+		return next, cr
+	}
+
+	next.next = cr
+	return next, nil
 }
