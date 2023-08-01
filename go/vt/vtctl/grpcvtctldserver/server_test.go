@@ -57,6 +57,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -11931,9 +11932,24 @@ func TestValidateShard(t *testing.T) {
 		})
 	}
 }
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())
+}
+
+func Test_errNoBoost(t *testing.T) {
+	ts := memorytopo.NewServer()
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	_, err := vtctld.BoostListClusters(context.Background(), &vtboostpb.ListClustersRequest{})
+	require.Error(t, err)
+
+	s, ok := status.FromError(err)
+	require.True(t, ok)
+	require.Equal(t, codes.FailedPrecondition, s.Code())
 }
 
 func Test_boostDo(t *testing.T) {
