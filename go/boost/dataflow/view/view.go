@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"sync/atomic"
+	"unsafe"
 
 	"golang.org/x/exp/slices"
 
@@ -43,6 +44,8 @@ type Store interface {
 	writerFree(memsize *atomic.Int64)
 	writerEmpty(key sql.Row, schema []sql.Type)
 	writerClear(key sql.Row, schema []sql.Type)
+	ensureNoLeaks()
+	isAllocated(node unsafe.Pointer) bool
 }
 
 type Reader interface {
@@ -190,6 +193,7 @@ func (w *Writer) EvictRandomKeys(rng *rand.Rand, evict int64) {
 
 func (w *Writer) Free() {
 	w.store.writerFree(&w.memsize)
+	w.store.ensureNoLeaks()
 }
 
 type InternalEntry struct {

@@ -130,6 +130,7 @@ require (
 	golang.org/x/exp v0.0.0-20230725093048-515e97ebf090
 	golang.org/x/sync v0.1.0
 	gopkg.in/src-d/go-errors.v1 v1.0.0
+	modernc.org/mathutil v1.5.0
 	modernc.org/sqlite v1.21.0
 	storj.io/drpc v0.0.33
 )
@@ -206,7 +207,6 @@ require (
 	modernc.org/cc/v3 v3.40.0 // indirect
 	modernc.org/ccgo/v3 v3.16.13 // indirect
 	modernc.org/libc v1.22.5 // indirect
-	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.5.0 // indirect
 	modernc.org/opt v0.1.3 // indirect
 	modernc.org/strutil v1.1.3 // indirect
