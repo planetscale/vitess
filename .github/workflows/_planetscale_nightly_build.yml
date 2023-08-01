@@ -23,7 +23,7 @@ on:
 
   schedule:
     # Every day at 5am UTC (9pm PST / 10pm PDT)
-    - cron: '0 5 * * *'
+    - cron: "0 5 * * *"
 
 jobs:
   id:
@@ -45,17 +45,21 @@ jobs:
           - main
           - latest-15.0
           - latest-16.0
+          - latest-17.0
         image:
           - mysql80
         include:
           # Default image is tagged as 'latest'
           - image: mysql80
             ref: latest-15.0
-            default: 'true'
+            default: "true"
             vitess-version: 15
           - image: mysql80
             ref: latest-16.0
             vitess-version: 16
+          - image: mysql80
+            ref: latest-17.0
+            vitess-version: 17
 
     steps:
       - name: Checkout planetscale/vitess-private
@@ -122,10 +126,12 @@ jobs:
 
           tags: |
             type=raw,value={{date 'YYYY-MM-DD'}}.${{ steps.determine-sha.outputs.sha }},priority=900
-            type=raw,value=head-15,enable=${{ matrix.ref == 'latest-15.0' }},priority=600
             type=raw,value=latest-15,enable=${{ matrix.ref == 'latest-15.0' }},priority=600
             type=raw,value=latest-16,enable=${{ matrix.ref == 'latest-16.0' }},priority=600
+            type=raw,value=latest-17,enable=${{ matrix.ref == 'latest-17.0' }},priority=600
+            type=raw,value=head-15,enable=${{ matrix.ref == 'latest-15.0' }},priority=600
             type=raw,value=head-16,enable=${{ matrix.ref == 'latest-16.0' }},priority=600
+            type=raw,value=head-17,enable=${{ matrix.ref == 'latest-17.0' }},priority=600
             type=raw,value=head,enable=${{ matrix.default == 'true' }},priority=600
             type=raw,value=latest,enable=${{ matrix.default == 'true' }},priority=600
 
