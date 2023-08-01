@@ -40,7 +40,7 @@ jobs:
 
     - name: Build
       run: |
-        make build
+        NOVTADMINBUILD=1 make build
 
     - name: endtoend
       timeout-minutes: 30

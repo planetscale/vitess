@@ -80,6 +80,6 @@ jobs:
         export VTDATAROOT="/tmp/"
         source build.env
 
-        set -x
+        set -exo pipefail
 
         eatmydata -- go run test.go -docker=false -follow -shard vtgate_topo_consul
