@@ -83,7 +83,7 @@ func supportedType(typ sqltypes.Type) bool {
 		// We don't know the type at the moment, so we allow it for now since otherwise
 		// we'd not allow a bunch of queries that are actually fine.
 		return true
-	case sqltypes.IsNumber(typ), sqltypes.IsText(typ), sqltypes.IsBinary(typ), typ == sqltypes.TypeJSON:
+	case sqltypes.IsNumber(typ), sqltypes.IsText(typ), sqltypes.IsBinary(typ), sqltypes.IsDateOrTime(typ), typ == sqltypes.TypeJSON:
 		return true
 	default:
 		return false
