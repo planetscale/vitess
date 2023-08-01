@@ -140,7 +140,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-other/
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
@@ -160,7 +160,7 @@ jobs:
       timeout-minutes: 10
       run: |
         source build.env
-        make build
+        NOVTADMINBUILD=1 make build
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
@@ -187,7 +187,7 @@ jobs:
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
         
-        set -x
+        set -exo pipefail
         source build.env
         eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
 
@@ -216,6 +216,6 @@ jobs:
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
         
-        set -x
+        set -exo pipefail
         source build.env
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_backups

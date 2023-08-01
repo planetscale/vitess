@@ -80,7 +80,7 @@ jobs:
         export VTDATAROOT="/tmp/"
         source build.env
 
-        set -x
+        set -exo pipefail
 
         # Increase our local ephemeral port range as we could exhaust this
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 61999"
