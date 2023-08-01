@@ -31,6 +31,7 @@ import (
 
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -4374,7 +4375,7 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
 func StartServer(s *grpc.Server, ts *topo.Server, boost *boostclient.Client) {
 	srv := NewVtctldServer(ts)
-	srv.SetBoostClient(boost)
+	srv.boost = boost
 
 	vtctlservicepb.RegisterVtctldServer(s, srv)
 }
@@ -4488,51 +4489,95 @@ func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, p
 
 // PlanetScale Vitess private RPCs.
 
-func (s *VtctldServer) SetBoostClient(boost *boostclient.Client) {
-	s.boost = boost
-}
+// errNoBoost reports a gRPC Failed Precondition error when a Boost RPC is
+// invoked while Boost integration is disabled.
+var errNoBoost = status.Error(codes.FailedPrecondition, "boost integration is not configured")
 
 func (s *VtctldServer) BoostPutRecipe(ctx context.Context, request *vtboost.PutRecipeRequest) (*vtboost.PutRecipeResponse, error) {
+	if s.boost == nil {
+		return nil, errNoBoost
+	}
+
 	return boostDo(s.boost.PutRecipe(ctx, request))
 }
 
 func (s *VtctldServer) BoostGetRecipe(ctx context.Context, request *vtboost.GetRecipeRequest) (*vtboost.GetRecipeResponse, error) {
+	if s.boost == nil {
+		return nil, errNoBoost
+	}
+
 	return boostDo(s.boost.GetRecipe(ctx, request))
 }
 
 func (s *VtctldServer) BoostDescribeRecipe(ctx context.Context, request *vtboost.DescribeRecipeRequest) (*vtboost.DescribeRecipeResponse, error) {
+	if s.boost == nil {
+		return nil, errNoBoost
+	}
+
 	return boostDo(s.boost.DescribeRecipe(ctx, request))
 }
 
 func (s *VtctldServer) BoostAddCluster(ctx context.Context, request *vtboost.AddClusterRequest) (*vtboost.ClusterChangeResponse, error) {
+	if s.boost == nil {
+		return nil, errNoBoost
+	}
+
 	return boostDo(s.boost.AddCluster(ctx, request))
 }
 
 func (s *VtctldServer) BoostRemoveCluster(ctx context.Context, request *vtboost.RemoveClusterRequest) (*vtboost.ClusterChangeResponse, error) {
+	if s.boost == nil {
+		return nil, errNoBoost
+	}
+
 	return boostDo(s.boost.RemoveCluster(ctx, request))
 }
 
 func (s *VtctldServer) BoostMakePrimaryCluster(ctx context.Context, request *vtboost.PrimaryClusterRequest) (*vtboost.PrimaryClusterResponse, error) {
+	if s.boost == nil {
+		return nil, errNoBoost
+	}
+
 	return boostDo(s.boost.MakePrimaryCluster(ctx, request))
 }
 
 func (s *VtctldServer) BoostDrainCluster(ctx context.Context, request *vtboost.DrainClusterRequest) (*vtboost.DrainClusterResponse, error) {
+	if s.boost == nil {
+		return nil, errNoBoost
+	}
+
 	return boostDo(s.boost.DrainCluster(ctx, request))
 }
 
 func (s *VtctldServer) BoostGetCluster(ctx context.Context, request *vtboost.GetClusterRequest) (*vtboost.GetClusterResponse, error) {
+	if s.boost == nil {
+		return nil, errNoBoost
+	}
+
 	return boostDo(s.boost.GetCluster(ctx, request))
 }
 
 func (s *VtctldServer) BoostListClusters(ctx context.Context, request *vtboost.ListClustersRequest) (*vtboost.ListClustersResponse, error) {
+	if s.boost == nil {
+		return nil, errNoBoost
+	}
+
 	return boostDo(s.boost.ListClusters(ctx, request))
 }
 
 func (s *VtctldServer) BoostPurge(ctx context.Context, request *vtboost.PurgeRequest) (*vtboost.PurgeResponse, error) {
+	if s.boost == nil {
+		return nil, errNoBoost
+	}
+
 	return boostDo(s.boost.Purge(ctx, request))
 }
 
 func (s *VtctldServer) BoostSetScience(ctx context.Context, request *vtboost.SetScienceRequest) (*vtboost.SetScienceResponse, error) {
+	if s.boost == nil {
+		return nil, errNoBoost
+	}
+
 	return boostDo(s.boost.SetScience(ctx, request))
 }
 
