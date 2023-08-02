@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/sqltypes"
@@ -16,7 +15,6 @@ func TestRecordProcessing(t *testing.T) {
 	state := NewMemoryState()
 	defer func() {
 		state.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	records := []sql.Record{
@@ -51,7 +49,6 @@ func TestNewIndexForOldRecords(t *testing.T) {
 	state := NewMemoryState()
 	defer func() {
 		state.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	row := sqltypes.Row{sqltypes.NewInt64(10), sqltypes.NewVarChar("Cat")}
@@ -72,7 +69,6 @@ func TestMemoryLeaks(t *testing.T) {
 	state := NewMemoryState()
 	defer func() {
 		state.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	records := []sql.Record{
@@ -106,7 +102,6 @@ func TestStress(t *testing.T) {
 	state := NewMemoryState()
 	defer func() {
 		state.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	schema := sql.TestSchema(sqltypes.Int64, sqltypes.VarChar)

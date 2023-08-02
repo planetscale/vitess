@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"runtime"
 	"sync/atomic"
+	"unsafe"
 
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 	"vitess.io/vitess/go/boost/dataflow/view/btree"
@@ -20,8 +21,17 @@ type conctree struct {
 type ConcurrentTree struct {
 	lr        leftright[conctree]
 	changelog Changelog[sql.Weights]
+	allocator *offheap.Allocator
 
 	waker *waker
+}
+
+func (ct *ConcurrentTree) ensureNoLeaks() {
+	ct.allocator.EnsureNoLeaks()
+}
+
+func (ct *ConcurrentTree) isAllocated(node unsafe.Pointer) bool {
+	return ct.allocator.IsAllocated(node)
 }
 
 func newConctree() conctree {
@@ -36,6 +46,7 @@ func NewConcurrentTree() *ConcurrentTree {
 		waker: newWaker(),
 	}
 	store.lr.init(runtime.GOMAXPROCS(0), newConctree(), newConctree())
+	store.allocator = &offheap.Allocator{}
 	return store
 }
 
@@ -76,11 +87,11 @@ func (ct *ConcurrentTree) writerAdd(rs []sql.Record, pk []int, schema []sql.Type
 
 		if r.Positive {
 			if !ok {
-				newrow := offheap.NewConcurrent(r.Row, memsize)
+				newrow := ct.allocator.NewConcurrent(r.Row, memsize)
 				tbl.b.Set(w, newrow)
 				ct.changelog.Do(changeInsert, w, newrow)
 			} else {
-				newrow, free := rows.Insert(r.Row, memsize)
+				newrow, free := ct.allocator.InsertConcurrentRows(rows, r.Row, memsize)
 				tbl.b.Set(w, newrow)
 				ct.changelog.Do(changeInsert, w, newrow)
 				ct.changelog.Free(free)
@@ -101,7 +112,7 @@ func (ct *ConcurrentTree) writerEvict(_ *rand.Rand, bytesToEvict int64) {
 func (ct *ConcurrentTree) writerFree(memsize *atomic.Int64) {
 	ct.writerRefresh(memsize, true)
 	ct.lr.left.b.Scan(func(_ sql.Weights, rows *offheap.ConcurrentRows) bool {
-		rows.Free(memsize)
+		ct.allocator.FreeConcurrent(rows, memsize)
 		return true
 	})
 }
@@ -180,6 +191,6 @@ func (ct *ConcurrentTree) applyChangelog(ctree conctree, memsize *atomic.Int64) 
 	}
 
 	for _, free := range freelist {
-		free.Free(memsize)
+		ct.allocator.FreeConcurrent(free, memsize)
 	}
 }
