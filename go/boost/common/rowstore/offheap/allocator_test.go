@@ -1,5 +1,3 @@
-//go:build cgo
-
 package offheap
 
 import (
@@ -14,24 +12,24 @@ func Test_cmallocPanics(t *testing.T) {
 
 	tests := []struct {
 		name string
-		op   func(m *cmalloc)
+		op   func(m *Allocator)
 	}{
 		{
 			name: "leak",
-			op: func(m *cmalloc) {
+			op: func(m *Allocator) {
 				m.alloc(8)
 			},
 		},
 		{
 			name: "free unallocated",
-			op: func(m *cmalloc) {
+			op: func(m *Allocator) {
 				var i int
 				m.free(unsafe.Pointer(&i))
 			},
 		},
 		{
 			name: "double free",
-			op: func(m *cmalloc) {
+			op: func(m *Allocator) {
 				p := m.alloc(8)
 				m.free(p)
 				m.free(p)
@@ -50,7 +48,7 @@ func Test_cmallocPanics(t *testing.T) {
 				t.Logf("panic: %v", r)
 			}()
 
-			var m cmalloc
+			var m Allocator
 			tt.op(&m)
 			m.EnsureNoLeaks()
 		})

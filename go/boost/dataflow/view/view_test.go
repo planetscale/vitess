@@ -21,7 +21,6 @@ func TestStoreWorks(t *testing.T) {
 
 	defer func() {
 		w.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	hit := r.Lookup(&hasher, a.Slice(0, 1), func(r Rows) {
@@ -51,7 +50,6 @@ func TestMinimalQuery(t *testing.T) {
 
 	defer func() {
 		w.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	w.Add(a.AsRecords())
@@ -81,7 +79,6 @@ func TestBusy(t *testing.T) {
 
 	defer func() {
 		w.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	wg.Add(1)
@@ -129,7 +126,6 @@ func TestConcurrentRows(t *testing.T) {
 
 	defer func() {
 		w.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	w.Add([]sql.Record{
@@ -164,7 +160,6 @@ func TestConcurrentRowsInternal(t *testing.T) {
 
 	defer func() {
 		w.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	w.Add([]sql.Record{
@@ -205,7 +200,7 @@ func TestConcurrentRowsInternal(t *testing.T) {
 	w.Swap()
 
 	if offheap.LeakCheck {
-		require.True(t, offheap.DefaultAllocator.IsAllocated(removedNode), "pointer for linked list node was freed too early")
+		require.True(t, w.store.isAllocated(removedNode), "pointer for linked list node was freed too early")
 
 		internal = memrow.CollectInternal_(nil)
 		require.Len(t, internal, 3)
@@ -216,7 +211,7 @@ func TestConcurrentRowsInternal(t *testing.T) {
 
 		w.Swap()
 
-		require.False(t, offheap.DefaultAllocator.IsAllocated(removedNode), "pointer for linked list should have been freed")
+		require.False(t, w.store.isAllocated(removedNode), "pointer for linked list should have been freed")
 	}
 }
 
@@ -230,7 +225,6 @@ func TestUpdateRows(t *testing.T) {
 
 	defer func() {
 		w.Free()
-		offheap.DefaultAllocator.EnsureNoLeaks()
 	}()
 
 	row := sql.TestRow(1, 1)

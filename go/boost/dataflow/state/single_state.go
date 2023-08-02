@@ -31,6 +31,7 @@ type singleState struct {
 	rows      int
 	partial   bool
 	primary   bool
+	allocator *offheap.Allocator
 
 	related []relatedState
 }
@@ -48,6 +49,7 @@ func newSingleState(columns []int, schema []sql.Type, partial, primary bool) *si
 		partial:   partial,
 		primary:   primary,
 		rows:      0,
+		allocator: &offheap.Allocator{},
 	}
 }
 
@@ -55,12 +57,12 @@ func (ss *singleState) insertRowByPrimaryKey(r sql.Row, memsize *atomic.Int64) {
 	key := r.HashWithKeySchema(&ss.hasher, ss.key, ss.keyschema)
 
 	if rows, ok := ss.state.Get(key); ok {
-		rows.Free(memsize)
+		ss.allocator.FreeRows(rows, memsize)
 	} else {
 		ss.rows++
 	}
 
-	row := offheap.New(r, memsize)
+	row := ss.allocator.New(r, memsize)
 	ss.state.Set(key, row)
 }
 
@@ -75,7 +77,7 @@ func (ss *singleState) insertRow(r sql.Row, force bool, memsize *atomic.Int64) b
 
 	rows, ok := ss.state.Get(key)
 	if ok {
-		row := rows.Insert(r, memsize)
+		row := ss.allocator.Insert(rows, r, memsize)
 		ss.state.Set(key, row)
 		ss.rows++
 		return true
@@ -83,7 +85,7 @@ func (ss *singleState) insertRow(r sql.Row, force bool, memsize *atomic.Int64) b
 		return false
 	}
 
-	row := offheap.New(r, memsize)
+	row := ss.allocator.New(r, memsize)
 	ss.state.Set(key, row)
 	ss.rows++
 	return true
@@ -96,7 +98,7 @@ func (ss *singleState) removeRow(r sql.Row, memsize *atomic.Int64) bool {
 		return false
 	}
 
-	repl, found := rows.Remove(r, memsize)
+	repl, found := ss.allocator.RemoveRows(rows, r, memsize)
 	ss.state.Set(key, repl)
 	if found {
 		ss.rows--
@@ -123,14 +125,14 @@ func (ss *singleState) markHole(r sql.Row, memsize *atomic.Int64) {
 		panic("tried to mark hole on missing entry")
 	}
 
-	old.Free(memsize)
+	ss.allocator.FreeRows(old, memsize)
 	ss.state.Remove(key)
 }
 
 func (ss *singleState) markFilled(r sql.Row, memsize *atomic.Int64) {
 	key := r.Hash(&ss.hasher, ss.keyschema)
 	if rows, ok := ss.state.Get(key); ok {
-		rows.Free(memsize)
+		ss.allocator.FreeRows(rows, memsize)
 	}
 	ss.state.Set(key, nil)
 }
@@ -138,7 +140,7 @@ func (ss *singleState) markFilled(r sql.Row, memsize *atomic.Int64) {
 func (ss *singleState) evict(k sql.Row, memsize *atomic.Int64) {
 	key := k.Hash(&ss.hasher, ss.keyschema)
 	if old, ok := ss.state.Get(key); ok {
-		old.Free(memsize)
+		ss.allocator.FreeRows(old, memsize)
 		ss.state.Remove(key)
 	}
 }
@@ -154,7 +156,7 @@ func (ss *singleState) evictRandomKeys(_ *rand.Rand, target int64, memsize *atom
 		rows.ForEach(func(r sql.Row) {
 			evicted = append(evicted, r.Extract(ss.key))
 		})
-		rows.Free(memsize)
+		ss.allocator.FreeRows(rows, memsize)
 
 		// if the current memory size is above our target, keep evicting
 		return memsize.Load() > target
@@ -171,7 +173,7 @@ func (ss *singleState) replace(data []sql.Record, memsize *atomic.Int64) {
 		panic("unsupported: Replacement on partial state")
 	}
 	ss.state.Evict(func(_ vthash.Hash, rows *offheap.Rows) bool {
-		rows.Free(memsize)
+		ss.allocator.FreeRows(rows, memsize)
 		return true
 	})
 	for _, r := range data {
@@ -188,7 +190,7 @@ func (ss *singleState) replaceAndLog(data []sql.Record, memsize *atomic.Int64) (
 		rows.ForEach(func(r sql.Row) {
 			removed[r] = struct{}{}
 		})
-		rows.Free(memsize)
+		ss.allocator.FreeRows(rows, memsize)
 		return true
 	})
 

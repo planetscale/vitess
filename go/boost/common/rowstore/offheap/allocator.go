@@ -1,26 +1,21 @@
-//go:build cgo
-
 package offheap
 
-/*
-#include <stdlib.h>
-*/
-import "C"
 import (
 	"fmt"
 	"runtime"
 	"sync"
 	"unsafe"
-)
 
-var DefaultAllocator cmalloc
+	"vitess.io/vitess/go/boost/common/rowstore/offheap/memory"
+)
 
 const LeakCheck = false
 
-// cmalloc tracks each individual allocation for the
+// Allocator tracks each individual allocation for the
 // leak checker.
 // The lock is used to prevent concurrent access.
-type cmalloc struct {
+type Allocator struct {
+	allocator memory.Allocator
 	lock      sync.Mutex
 	allocated map[uintptr]*allocation
 }
@@ -28,8 +23,11 @@ type cmalloc struct {
 // alloc allocates a new piece of memory of the given size.
 // If the leak checker is active, we store the backtrace
 // of our caller.
-func (m *cmalloc) alloc(size uintptr) unsafe.Pointer {
-	ptr := unsafe.Pointer(C.malloc(C.size_t(size)))
+func (m *Allocator) alloc(size int) unsafe.Pointer {
+	ptr, err := m.allocator.UnsafeMalloc(int(size))
+	if err != nil {
+		panic(err)
+	}
 	if LeakCheck {
 		m.lock.Lock()
 		defer m.lock.Unlock()
@@ -51,7 +49,7 @@ func (m *cmalloc) alloc(size uintptr) unsafe.Pointer {
 // free frees a given piece of memory. If the leak checker
 // is active, it validates that the pointer was also allocated
 // and that we're not doing a double free.
-func (m *cmalloc) free(ptr unsafe.Pointer) {
+func (m *Allocator) free(ptr unsafe.Pointer) {
 	if ptr == nil {
 		return
 	}
@@ -71,26 +69,31 @@ func (m *cmalloc) free(ptr unsafe.Pointer) {
 		var stacklen = runtime.Callers(1, stack[:])
 		alloc.free = stack[:stacklen]
 	}
-	C.free(ptr)
+	err := m.allocator.UnsafeFree(ptr)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // EnsureNoLeaks can be used in tests to validate no
 // memory has leaked. It depends on the leak checker
 // being enabled.
-func (m *cmalloc) EnsureNoLeaks() {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+func (m *Allocator) EnsureNoLeaks() {
+	if LeakCheck {
+		m.lock.Lock()
+		defer m.lock.Unlock()
 
-	for ptr, alloc := range m.allocated {
-		if alloc.free == nil {
-			panic(fmt.Errorf("did not free pointer %#x\nALLOC: %s", ptr, alloc.AllocStack()))
+		for ptr, alloc := range m.allocated {
+			if alloc.free == nil {
+				panic(fmt.Errorf("did not free pointer %#x\nALLOC: %s", ptr, alloc.AllocStack()))
+			}
 		}
 	}
 }
 
 // IsAllocated checks if a pointer is allocated. Only
 // works if the leak checker is enabled.
-func (m *cmalloc) IsAllocated(ptr unsafe.Pointer) bool {
+func (m *Allocator) IsAllocated(ptr unsafe.Pointer) bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
