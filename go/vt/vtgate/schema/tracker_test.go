@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 
 	"github.com/stretchr/testify/assert"
@@ -290,9 +291,9 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 	}
 
 	require.False(t, waitTimeout(&wg, 5*time.Second), "schema was updated but received no signal")
-	require.Equal(t, []string{sqlparser.BuildParsedQuery(mysql.FetchTables, sidecardb.DefaultName).Query,
-		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, sidecardb.DefaultName).Query,
-		sqlparser.BuildParsedQuery(mysql.FetchTables, sidecardb.DefaultName).Query}, sbc.StringQueries())
+	require.Equal(t, []string{sqlparser.BuildParsedQuery(mysql.FetchTables, sidecar.DefaultName).Query,
+		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, sidecar.DefaultName).Query,
+		sqlparser.BuildParsedQuery(mysql.FetchTables, sidecar.DefaultName).Query}, sbc.StringQueries())
 }
 
 func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
