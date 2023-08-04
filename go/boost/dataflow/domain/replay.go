@@ -21,7 +21,7 @@ import (
 	"vitess.io/vitess/go/boost/dataflow/processing"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/upquery"
 	"vitess.io/vitess/go/boost/sql"
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -1160,13 +1160,13 @@ func (d *Domain) handleReplayFromExternal(ctx context.Context, up *upquery.Upque
 
 	query, bvars := up.For(nil)
 
-	var mergedGtid mysql.Mysql56GTIDSet
+	var mergedGtid replication.Mysql56GTIDSet
 	err := d.performUpquery(ctx, query, bvars, func(gtid string, records []sql.Record) error {
-		gtidSet, err := mysql.ParseMysql56GTIDSet(gtid)
+		gtidSet, err := replication.ParseMysql56GTIDSet(gtid)
 		if err != nil {
 			return err
 		}
-		mergedGtid = mergedGtid.Union(gtidSet).(mysql.Mysql56GTIDSet)
+		mergedGtid = mergedGtid.Union(gtidSet).(replication.Mysql56GTIDSet)
 
 		if len(records) == 0 {
 			return nil
@@ -1298,7 +1298,7 @@ func (d *Domain) handleFinishReplay(ctx context.Context, finishReplay *packet.Fi
 			handle /= 2
 		}
 
-		gtid, err := mysql.ParseMysql56GTIDSet(finishReplay.Gtid)
+		gtid, err := replication.ParseMysql56GTIDSet(finishReplay.Gtid)
 		if err != nil {
 			return err
 		}
@@ -1308,7 +1308,7 @@ func (d *Domain) handleFinishReplay(ctx context.Context, finishReplay *packet.Fi
 
 			switch m := m.Inner.(type) {
 			case *packet.Message:
-				g, err := mysql.ParseMysql56GTIDSet(m.Gtid)
+				g, err := replication.ParseMysql56GTIDSet(m.Gtid)
 				if err != nil {
 					return err
 				}

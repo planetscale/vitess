@@ -13,7 +13,7 @@ import (
 	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/hack"
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -39,7 +39,7 @@ type gtidPath struct {
 	parentKey    []int
 	parentSchema []sql.Type
 
-	recents     map[vthash.Hash]mysql.Mysql56GTIDSet
+	recents     map[vthash.Hash]replication.Mysql56GTIDSet
 	recentQueue gtidQueue
 }
 
@@ -65,7 +65,7 @@ func (gt *GtidTracker) AddTag(self *Node, tag dataflow.Tag, key []int) error {
 
 	var path = &gtidPath{
 		nodeKey: key,
-		recents: make(map[vthash.Hash]mysql.Mysql56GTIDSet),
+		recents: make(map[vthash.Hash]replication.Mysql56GTIDSet),
 	}
 
 	path.nodeSchema = make([]sql.Type, 0, len(path.nodeKey))
@@ -100,7 +100,7 @@ func (gt *GtidTracker) AddTag(self *Node, tag dataflow.Tag, key []int) error {
 func (gt *GtidTracker) tagRecords(pkt *packet.Message) bool {
 	var hasher vthash.Hasher
 
-	position, err := mysql.ParseMysql56GTIDSet(pkt.Gtid)
+	position, err := replication.ParseMysql56GTIDSet(pkt.Gtid)
 	if err != nil {
 		// this should never happen because GTIDs are parsed at the vstream level before they get here;
 		// for safety, ignore these records anyway
@@ -185,7 +185,7 @@ func (gt *GtidTracker) FinishUpquery(ctx context.Context, m *packet.ReplayPiece)
 			panic("replay from Table without GTID")
 		}
 
-		position, err := mysql.ParseMysql56GTIDSet(ext.Gtid)
+		position, err := replication.ParseMysql56GTIDSet(ext.Gtid)
 		if err != nil {
 			log.Error("failed to parse gtid", zap.String("gtid", ext.Gtid), zap.Error(err))
 			return nil

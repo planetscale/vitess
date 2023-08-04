@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/workflow/vexec"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -336,7 +335,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		span.Annotate("workflow", workflow.Name)
 		span.Annotate("tablet_alias", tablet.AliasString())
 
-		id, err := evalengine.ToInt64(row["id"])
+		id, err := row["id"].ToCastInt64()
 		if err != nil {
 			return err
 		}
@@ -355,12 +354,12 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		state := row["state"].ToString()
 		dbName := row["db_name"].ToString()
 
-		timeUpdatedSeconds, err := evalengine.ToInt64(row["time_updated"])
+		timeUpdatedSeconds, err := row["time_updated"].ToCastInt64()
 		if err != nil {
 			return err
 		}
 
-		transactionTimeSeconds, err := evalengine.ToInt64(row["transaction_timestamp"])
+		transactionTimeSeconds, err := row["transaction_timestamp"].ToCastInt64()
 		if err != nil {
 			return err
 		}
@@ -579,13 +578,13 @@ ORDER BY
 			}
 
 			for _, row := range qr.Rows {
-				id, err := evalengine.ToInt64(row[0])
+				id, err := row[0].ToCastInt64()
 				if err != nil {
 					markErrors(err)
 					continue
 				}
 
-				streamID, err := evalengine.ToInt64(row[1])
+				streamID, err := row[1].ToCastInt64()
 				if err != nil {
 					markErrors(err)
 					continue
@@ -607,7 +606,7 @@ ORDER BY
 					continue
 				}
 
-				count, err := evalengine.ToInt64(row[7])
+				count, err := row[7].ToCastInt64()
 				if err != nil {
 					markErrors(err)
 					continue

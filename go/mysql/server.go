@@ -25,20 +25,20 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pires/go-proxyproto"
+
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/servenv"
-
-	"vitess.io/vitess/go/sqlescape"
-
-	proxyproto "github.com/pires/go-proxyproto"
-
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -122,7 +122,7 @@ type Handler interface {
 	ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error
 
 	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
-	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error
+	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error
 
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.
@@ -457,12 +457,12 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 
 		if negotiatedAuthMethod == nil {
-			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "No authentication methods available for authentication.")
+			c.writeErrorPacket(sqlerror.CRServerHandshakeErr, sqlerror.SSUnknownSQLState, "No authentication methods available for authentication.")
 			return
 		}
 
 		if !l.AllowClearTextWithoutTLS.Load() && !c.TLSEnabled() && !negotiatedAuthMethod.AllowClearTextWithoutTLS() {
-			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
+			c.writeErrorPacket(sqlerror.CRServerHandshakeErr, sqlerror.SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
 			return
 		}
 

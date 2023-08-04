@@ -19,8 +19,7 @@ import (
 	"strings"
 
 	"gopkg.in/src-d/go-errors.v1"
-
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 )
 
 var (
@@ -658,15 +657,15 @@ var (
 // specified error object. Using this method enables Vitess to return an error code, instead of just "unknown error".
 // Many tools (e.g. ORMs, SQL workbenches) rely on this error metadata to work correctly. If the specified error is nil,
 // nil will be returned. If the error is already of type *mysql.SQLError, the error will be returned as is.
-func CastSQLError(err error) *mysql.SQLError {
+func CastSQLError(err error) *sqlerror.SQLError {
 	if err == nil {
 		return nil
 	}
-	if mysqlErr, ok := err.(*mysql.SQLError); ok {
+	if mysqlErr, ok := err.(*sqlerror.SQLError); ok {
 		return mysqlErr
 	}
 
-	var code mysql.ErrorCode
+	var code sqlerror.ErrorCode
 	var sqlState string = ""
 
 	if w, ok := err.(WrappedInsertError); ok {
@@ -679,43 +678,43 @@ func CastSQLError(err error) *mysql.SQLError {
 
 	switch {
 	case ErrTableNotFound.Is(err):
-		code = mysql.ERNoSuchTable
+		code = sqlerror.ERNoSuchTable
 	case ErrDatabaseExists.Is(err):
-		code = mysql.ERDbCreateExists
+		code = sqlerror.ERDbCreateExists
 	case ErrExpectedSingleRow.Is(err):
-		code = mysql.ERSubqueryNo1Row
+		code = sqlerror.ERSubqueryNo1Row
 	case ErrInvalidOperandColumns.Is(err):
-		code = mysql.EROperandColumns
+		code = sqlerror.EROperandColumns
 	case ErrInsertIntoNonNullableProvidedNull.Is(err):
-		code = mysql.ERBadNullError
+		code = sqlerror.ERBadNullError
 	case ErrPrimaryKeyViolation.Is(err):
-		code = mysql.ERDupEntry
+		code = sqlerror.ERDupEntry
 	case ErrUniqueKeyViolation.Is(err):
-		code = mysql.ERDupEntry
+		code = sqlerror.ERDupEntry
 	case ErrPartitionNotFound.Is(err):
 		code = 1526 // TODO: Needs to be added to vitess
 	case ErrForeignKeyChildViolation.Is(err):
-		code = mysql.ErNoReferencedRow2 // test with mysql returns 1452 vs 1216
+		code = sqlerror.ErNoReferencedRow2 // test with mysql returns 1452 vs 1216
 	case ErrForeignKeyParentViolation.Is(err):
-		code = mysql.ERRowIsReferenced2 // test with mysql returns 1451 vs 1215
+		code = sqlerror.ERRowIsReferenced2 // test with mysql returns 1451 vs 1215
 	case ErrDuplicateEntry.Is(err):
-		code = mysql.ERDupEntry
+		code = sqlerror.ERDupEntry
 	case ErrInvalidJSONText.Is(err):
 		code = 3141 // TODO: Needs to be added to vitess
 	case ErrMultiplePrimaryKeysDefined.Is(err):
-		code = mysql.ERMultiplePriKey
+		code = sqlerror.ERMultiplePriKey
 	case ErrWrongAutoKey.Is(err):
-		code = mysql.ERWrongAutoKey
+		code = sqlerror.ERWrongAutoKey
 	case ErrKeyColumnDoesNotExist.Is(err):
-		code = mysql.ERKeyColumnDoesNotExist
+		code = sqlerror.ERKeyColumnDoesNotExist
 	case ErrCantDropFieldOrKey.Is(err):
-		code = mysql.ERCantDropFieldOrKey
+		code = sqlerror.ERCantDropFieldOrKey
 	case ErrReadOnlyTransaction.Is(err):
 		code = 1792 // TODO: Needs to be added to vitess
 	case ErrCantDropIndex.Is(err):
 		code = 1553 // TODO: Needs to be added to vitess
 	case ErrInvalidValue.Is(err):
-		code = mysql.ERTruncatedWrongValueForField
+		code = sqlerror.ERTruncatedWrongValueForField
 	case ErrLockDeadlock.Is(err):
 		// ER_LOCK_DEADLOCK signals that the transaction was rolled back
 		// due to a deadlock between concurrent transactions.
@@ -723,14 +722,14 @@ func CastSQLError(err error) *mysql.SQLError {
 		// has the more general meaning of "serialization failure".
 		// 	https://mariadb.com/kb/en/mariadb-error-codes/
 		// 	https://en.wikipedia.org/wiki/SQLSTATE
-		code = mysql.ERLockDeadlock
-		sqlState = mysql.SSLockDeadlock
+		code = sqlerror.ERLockDeadlock
+		sqlState = sqlerror.SSLockDeadlock
 	default:
-		code = mysql.ERUnknownError
+		code = sqlerror.ERUnknownError
 	}
 
 	// This uses the given error as a format string, so we have to escape any percentage signs else they'll show up as "%!(MISSING)"
-	return mysql.NewSQLError(code, sqlState, strings.Replace(err.Error(), `%`, `%%`, -1))
+	return sqlerror.NewSQLError(code, sqlState, strings.Replace(err.Error(), `%`, `%%`, -1))
 }
 
 // UnwrapError removes any wrapping errors (e.g. WrappedInsertError) around the specified error and

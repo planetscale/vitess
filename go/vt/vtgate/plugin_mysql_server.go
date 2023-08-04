@@ -32,6 +32,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
@@ -238,14 +241,14 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		session, err := vh.vtg.StreamExecute(ctx, session, query, make(map[string]*querypb.BindVariable), callback)
 		if err != nil {
-			return mysql.NewSQLErrorFromError(err)
+			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
 		return nil
 	}
 	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
 
-	if err := mysql.NewSQLErrorFromError(err); err != nil {
+	if err := sqlerror.NewSQLErrorFromError(err); err != nil {
 		return err
 	}
 	fillInTxStatusFlags(c, session)
@@ -301,7 +304,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, bindVars map[st
 	}()
 
 	session, fld, err := vh.vtg.Prepare(ctx, session, query, bindVars)
-	err = mysql.NewSQLErrorFromError(err)
+	err = sqlerror.NewSQLErrorFromError(err)
 	if err != nil {
 		return nil, err
 	}
@@ -345,14 +348,14 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		_, err := vh.vtg.StreamExecute(ctx, session, prepare.PrepareStmt, prepare.BindVars, callback)
 		if err != nil {
-			return mysql.NewSQLErrorFromError(err)
+			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
 		return nil
 	}
 	_, qr, err := vh.vtg.Execute(ctx, session, prepare.PrepareStmt, prepare.BindVars)
 	if err != nil {
-		return mysql.NewSQLErrorFromError(err)
+		return sqlerror.NewSQLErrorFromError(err)
 	}
 	fillInTxStatusFlags(c, session)
 
@@ -374,7 +377,7 @@ func (vh *vtgateHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos 
 }
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet mysql.GTIDSet) error {
+func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
 	return vterrors.VT12001("ComBinlogDumpGTID for the VTGate handler")
 }
 
