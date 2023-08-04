@@ -31,6 +31,8 @@ import (
 
 	"vitess.io/vitess/go/trace"
 
+	"vitess.io/vitess/go/mysql/replication"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -71,7 +73,7 @@ func (th *testHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos ui
 	return nil
 }
 
-func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet mysql.GTIDSet) error {
+func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
 	return nil
 }
 

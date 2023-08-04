@@ -23,12 +23,12 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -149,7 +149,7 @@ type migrationSource struct {
 	*shardStreamer
 
 	vrID     int32
-	position mysql.Position
+	position replication.Position
 }
 
 func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffState, err error) error {

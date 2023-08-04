@@ -27,8 +27,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/src-d/go-errors.v1"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/go-mysql-server/internal/sqlparser"
 
 	"vitess.io/vitess/go/test/go-mysql-server/sql"
@@ -1072,7 +1072,7 @@ func convertDBDDL(ctx *sql.Context, c *sqlparser.DBDDL) (sql.Node, error) {
 			} else {
 				ctx.Session.Warn(&sql.Warning{
 					Level:   "Warning",
-					Code:    mysql.ERNotSupportedYet,
+					Code:    sqlerror.ERNotSupportedYet,
 					Message: fmt.Sprintf("Setting CHARACTER SET, COLLATION and ENCRYPTION are not supported yet"),
 				})
 			}

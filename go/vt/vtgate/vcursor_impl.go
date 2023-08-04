@@ -31,7 +31,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -993,7 +994,7 @@ func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat st
 func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...any) {
 	if vc.warnShardedOnly {
 		vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-			Code:    uint32(mysql.ERNotSupportedYet),
+			Code:    uint32(sqlerror.ERNotSupportedYet),
 			Message: fmt.Sprintf(format, params...),
 		})
 	}
@@ -1005,7 +1006,7 @@ func (vc *vcursorImpl) PlannerWarning(message string) {
 		return
 	}
 	vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-		Code:    uint32(mysql.ERNotSupportedYet),
+		Code:    uint32(sqlerror.ERNotSupportedYet),
 		Message: message,
 	})
 }

@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"gopkg.in/src-d/go-errors.v1"
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/test/go-mysql-server/sql"
 )
@@ -257,7 +257,7 @@ func (p *AlterIndex) Execute(ctx *sql.Context) error {
 	case IndexAction_DisableEnableKeys:
 		ctx.Session.Warn(&sql.Warning{
 			Level:   "Warning",
-			Code:    mysql.ERNotSupportedYet,
+			Code:    sqlerror.ERNotSupportedYet,
 			Message: fmt.Sprintf("'disable/enable keys' feature is not supported yet"),
 		})
 		return nil
