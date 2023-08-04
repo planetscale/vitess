@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -33,7 +34,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -73,7 +73,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 		mysqld.Close()
 		db.Close()
 	}()
-	parsed := sqlparser.BuildParsedQuery(sqlSelectVRWorkflowConfig, sidecardb.DefaultName, ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVRWorkflowConfig, sidecar.DefaultName, ":wf")
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(workflow),
 	}
@@ -179,9 +179,9 @@ func TestUpdateVRWorkflow(t *testing.T) {
 			require.NotEqual(t, "", tt.query, "No expected query provided")
 
 			// These are the same for each RPC call.
-			dbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
+			dbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
 			dbClient.ExpectRequest(selectQuery, selectRes, nil)
-			dbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
+			dbClient.ExpectRequest(fmt.Sprintf("use %s", sidecar.DefaultName), &sqltypes.Result{}, nil)
 			dbClient.ExpectRequest(idQuery, idRes, nil)
 
 			// This is our expected query, which will also short circuit

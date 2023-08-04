@@ -22,6 +22,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 
@@ -42,7 +43,7 @@ const (
 // VReplicationExec executes a vreplication command.
 func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
 	// Replace any provided sidecar databsae qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
