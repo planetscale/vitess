@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/test/go-mysql-server/sql"
 )
@@ -344,7 +345,7 @@ func (db *MySQLDb) AuthMethod(user, addr string) (string, error) {
 
 	u := db.GetUser(user, host, false)
 	if u == nil {
-		return "", mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "User not found '%v'", user)
+		return "", sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "User not found '%v'", user)
 	}
 	if _, ok := db.plugins[u.Plugin]; ok {
 		return "mysql_clear_password", nil
@@ -371,15 +372,15 @@ func (db *MySQLDb) ValidateHash(salt []byte, user string, authResponse []byte, a
 
 	userEntry := db.GetUser(user, host, false)
 	if userEntry == nil || userEntry.Locked {
-		return nil, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return nil, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 	if len(userEntry.Password) > 0 {
 		if !validateMysqlNativePassword(authResponse, salt, userEntry.Password) {
-			return nil, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
+			return nil, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 		}
 	} else if len(authResponse) > 0 { // password is nil or empty, therefore no password is set
 		// a password was given and the account has no password set, therefore access is denied
-		return nil, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return nil, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	return MysqlConnectionUser{User: userEntry.User, Host: userEntry.Host}, nil

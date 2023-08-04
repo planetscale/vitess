@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/test/go-mysql-server/sql"
 )
@@ -170,8 +170,8 @@ func (s *Signal) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 		//TODO: implement warnings
 		return nil, fmt.Errorf("warnings not yet implemented")
 	} else {
-		return nil, mysql.NewSQLError(
-			mysql.ErrorCode(s.Info[SignalConditionItemName_MysqlErrno].IntValue),
+		return nil, sqlerror.NewSQLError(
+			sqlerror.ErrorCode(s.Info[SignalConditionItemName_MysqlErrno].IntValue),
 			s.SqlStateValue,
 			s.Info[SignalConditionItemName_MessageText].StrValue,
 		)

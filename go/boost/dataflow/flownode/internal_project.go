@@ -397,7 +397,7 @@ func (lit *ProjectedLiteral) build(env *evalengine.ExpressionEnv, row sql.Row, o
 }
 
 func ProjectedLiteralFromAST(expr *sqlparser.Literal) (*ProjectedLiteral, error) {
-	lit, err := evalengine.LiteralToValue(expr)
+	lit, err := sqlparser.LiteralToValue(expr)
 	if err != nil {
 		return nil, err
 	}

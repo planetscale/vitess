@@ -12,15 +12,14 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/boost/server/controller/config"
-
 	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/boost/common"
 	"vitess.io/vitess/go/boost/dataflow"
+	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/sql"
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -529,7 +528,7 @@ func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gat
 	if target.position == "" {
 		request.Position = "current"
 	} else {
-		request.Position = mysql.Mysql56FlavorID + "/" + target.position
+		request.Position = replication.Mysql56FlavorID + "/" + target.position
 	}
 
 	for _, tableClient := range ep.tables {
@@ -583,7 +582,7 @@ func (ep *EventProcessor) processTarget(ctx context.Context, gateway srvtopo.Gat
 				case binlogdatapb.VEventType_GTID:
 					var flavor string
 					flavor, target.position, _ = strings.Cut(ev.Gtid, "/")
-					if flavor != mysql.Mysql56FlavorID {
+					if flavor != replication.Mysql56FlavorID {
 						return fmt.Errorf("unexpected GTID flavor in VStream: %q (Boost only supports MySQL 5.6 GTIDs)", flavor)
 					}
 				}

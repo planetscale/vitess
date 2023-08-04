@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/go-mysql-server/sql"
@@ -33,13 +33,13 @@ func init() {
 }
 
 type GTIDTracker struct {
-	sid      mysql.SID
+	sid      replication.SID
 	sequence int64
 	shard    string
 
 	mu     sync.Mutex
 	txlog  []*binlogdatapb.VEvent
-	seqlog []mysql.Mysql56GTID
+	seqlog []replication.Mysql56GTID
 	subs   []*subscription
 }
 
@@ -120,7 +120,7 @@ func (gt *GTIDTracker) Log(ctx *sql.Context, log *sql.TransactionLog) error {
 	events = append(events, &binlogdatapb.VEvent{
 		Type:      binlogdatapb.VEventType_GTID,
 		Timestamp: ts.Unix(),
-		Gtid:      mysql.Mysql56FlavorID + "/" + gt.current(),
+		Gtid:      replication.Mysql56FlavorID + "/" + gt.current(),
 		Keyspace:  log.Database,
 		Shard:     gt.shard,
 	})
@@ -148,7 +148,7 @@ func (gt *GTIDTracker) Log(ctx *sql.Context, log *sql.TransactionLog) error {
 
 func (gt *GTIDTracker) nextGTID() {
 	gt.sequence++
-	gtid := mysql.Mysql56GTID{Server: gt.sid, Sequence: gt.sequence}
+	gtid := replication.Mysql56GTID{Server: gt.sid, Sequence: gt.sequence}
 	gt.seqlog = append(gt.seqlog, gtid, gtid)
 }
 
@@ -159,12 +159,12 @@ func (gt *GTIDTracker) Subscribe(startpos string, ch chan []*binlogdatapb.VEvent
 	switch startpos {
 	case "", "current":
 	default:
-		position, err := mysql.DecodePosition(startpos)
+		position, err := replication.DecodePosition(startpos)
 		if err != nil {
 			return err
 		}
 
-		gtidSet := position.GTIDSet.(mysql.Mysql56GTIDSet)
+		gtidSet := position.GTIDSet.(replication.Mysql56GTIDSet)
 		for pos, seq := range gt.seqlog {
 			if !gtidSet.ContainsGTID(seq) {
 				ch <- gt.txlog[pos:]
