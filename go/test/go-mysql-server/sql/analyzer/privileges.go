@@ -15,7 +15,7 @@
 package analyzer
 
 import (
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"vitess.io/vitess/go/test/go-mysql-server/sql/transform"
 
@@ -40,7 +40,7 @@ func validatePrivileges(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope,
 	client := ctx.Session.Client()
 	user := mysqlDb.GetUser(client.User, client.Address, false)
 	if user == nil {
-		return nil, transform.SameTree, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", ctx.Session.Client().User)
+		return nil, transform.SameTree, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", ctx.Session.Client().User)
 	}
 	if plan.IsDualTable(getTable(n)) {
 		return n, transform.SameTree, nil

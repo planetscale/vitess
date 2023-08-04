@@ -17,7 +17,8 @@ package function
 import (
 	"testing"
 	"time"
-	"vitess.io/vitess/go/mysql"
+
+	"vitess.io/vitess/go/mysql/sqlerror"
 
 	"github.com/stretchr/testify/require"
 
@@ -160,7 +161,7 @@ func TestUnixTimestamp(t *testing.T) {
 	require.Equal(0, result)
 	require.Equal(uint16(1), ctx.WarningCount())
 	require.Equal("Incorrect datetime value: 1577995200", ctx.Warnings()[0].Message)
-	require.Equal(mysql.ErrorCode(1292), ctx.Warnings()[0].Code)
+	require.Equal(sqlerror.ErrorCode(1292), ctx.Warnings()[0].Code)
 
 	// When MySQL can't convert the expression to a date, it always returns 0 and sets a warning
 	ctx.ClearWarnings()
@@ -174,7 +175,7 @@ func TestUnixTimestamp(t *testing.T) {
 	require.Equal(0, result)
 	require.Equal(uint16(1), ctx.WarningCount())
 	require.Equal("Incorrect datetime value: 'd0lthub'", ctx.Warnings()[0].Message)
-	require.Equal(mysql.ErrorCode(1292), ctx.Warnings()[0].Code)
+	require.Equal(sqlerror.ErrorCode(1292), ctx.Warnings()[0].Code)
 }
 
 func TestFromUnixtime(t *testing.T) {

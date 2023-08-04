@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/go-mysql-server/internal/sqlparser"
 
 	"vitess.io/vitess/go/test/go-mysql-server/sql"
@@ -60,7 +60,7 @@ func (c *CreateDB) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 		if c.IfNotExists {
 			ctx.Session.Warn(&sql.Warning{
 				Level:   "Note",
-				Code:    mysql.ERDbCreateExists,
+				Code:    sqlerror.ERDbCreateExists,
 				Message: fmt.Sprintf("Can't create database %s; database exists ", c.dbName),
 			})
 
@@ -138,7 +138,7 @@ func (d *DropDB) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 		if d.IfExists {
 			ctx.Session.Warn(&sql.Warning{
 				Level:   "Note",
-				Code:    mysql.ERDbDropExists,
+				Code:    sqlerror.ERDbDropExists,
 				Message: fmt.Sprintf("Can't drop database %s; database doesn't exist ", d.dbName),
 			})
 

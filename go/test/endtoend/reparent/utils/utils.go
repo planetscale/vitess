@@ -442,7 +442,7 @@ func CheckInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vtta
 			}
 		}
 		if conn != nil {
-			// We'll get a mysql.ERNoSuchTable (1146) error if the CREATE TABLE has not replicated yet and
+			// We'll get a sqlerror.ERNoSuchTable (1146) error if the CREATE TABLE has not replicated yet and
 			// it's possible that we get other ephemeral errors too, so we make the tests more robust by
 			// retrying with the timeout.
 			qr, err := conn.ExecuteFetch(query, 1, true)
