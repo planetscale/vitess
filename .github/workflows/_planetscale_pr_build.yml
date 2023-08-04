@@ -108,7 +108,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          file: docker/lite/Dockerfile.mysql80
+          file: docker/lite/Dockerfile.private
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           push: true

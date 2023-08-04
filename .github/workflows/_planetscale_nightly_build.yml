@@ -46,19 +46,14 @@ jobs:
           - latest-15.0
           - latest-16.0
           - latest-17.0
-        image:
-          - mysql80
         include:
           # Default image is tagged as 'latest'
-          - image: mysql80
-            ref: latest-15.0
+          - ref: latest-15.0
             default: "true"
             vitess-version: 15
-          - image: mysql80
-            ref: latest-16.0
+          - ref: latest-16.0
             vitess-version: 16
-          - image: mysql80
-            ref: latest-17.0
+          - ref: latest-17.0
             vitess-version: 17
 
     steps:
@@ -117,7 +112,7 @@ jobs:
             997601596833.dkr.ecr.us-east-1.amazonaws.com/main/vitess
 
           flavor: |
-            prefix=${{ matrix.image }}-,onlatest=true
+            prefix=mysql80-,onlatest=true
           # head tag is so we have 2 well-known tags to a vitess image for CI
           labels: |
             planetscale.vitess-private.image.vitess-version=${{ matrix.vitess-version }}
@@ -160,7 +155,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          file: docker/lite/Dockerfile.${{ matrix.image }}
+          file: docker/lite/Dockerfile.private
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           push: true
