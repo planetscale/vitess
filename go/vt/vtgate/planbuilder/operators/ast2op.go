@@ -603,29 +603,14 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		qg.Tables = append(qg.Tables, qt)
 		return qg, nil
 	case *sqlparser.DerivedTable:
-		inner, err := translateQueryToOp(ctx, tbl.Select)
+		source, err := translateQueryToOp(ctx, tbl.Select)
 		if err != nil {
 			return nil, err
 		}
-		if horizon, ok := inner.(*Horizon); ok {
-			inner = horizon.Source
-		}
-
-		if onlyTable && tbl.Select.GetLimit() == nil {
-			tbl.Select.SetOrderBy(nil)
-		}
-		qp, err := CreateQPFromSelectStatement(ctx, tbl.Select)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Horizon{
-			TableId:       &tableID,
-			Alias:         tableExpr.As.String(),
-			Source:        inner,
-			Query:         tbl.Select,
-			ColumnAliases: tableExpr.Columns,
-			QP:            qp,
+		return &DerivedTable{
+			Source:  source,
+			TableID: tableID,
+			Alias:   tableExpr.As.String(),
 		}, nil
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl))
