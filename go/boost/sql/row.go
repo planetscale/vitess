@@ -410,6 +410,10 @@ func (w Weights) GoString() string {
 	return string(dst)
 }
 
+func (w Weights) HasPrefix(prefix Weights) bool {
+	return len(w) >= len(prefix) && w[0:len(prefix)] == prefix
+}
+
 func (r Row) Weights(schema []Type) (Weights, error) {
 	var w []byte
 	var col int

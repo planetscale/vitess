@@ -18,6 +18,19 @@ type conctree struct {
 	filled map[sql.Weights]struct{}
 }
 
+func (c conctree) Evict(evict func(w sql.Weights, rows []*offheap.ConcurrentRows) bool) {
+	for prefix := range c.filled {
+		var rowsList []*offheap.ConcurrentRows
+		c.b.DeletePrefix(prefix, func(k sql.Weights, v *offheap.ConcurrentRows) {
+			rowsList = append(rowsList, v)
+		})
+		delete(c.filled, prefix)
+		if !evict(prefix, rowsList) {
+			return
+		}
+	}
+}
+
 type ConcurrentTree struct {
 	lr        leftright[conctree]
 	changelog Changelog[sql.Weights]
@@ -63,7 +76,7 @@ func (ct *ConcurrentTree) writerEmpty(key sql.Row, schema []sql.Type) {
 	w, _ := key.Weights(schema)
 
 	delete(tbl.filled, w)
-	panic("TODO: prefix removal")
+	tbl.b.DeletePrefix(w, nil)
 }
 
 func (ct *ConcurrentTree) readerContains(key sql.Row, schema []sql.Type) (found bool) {
@@ -106,7 +119,15 @@ func (ct *ConcurrentTree) writerAdd(rs []sql.Record, pk []int, schema []sql.Type
 }
 
 func (ct *ConcurrentTree) writerEvict(_ *rand.Rand, bytesToEvict int64) {
-	panic("should never evict from ConcurrentTree")
+	tbl := ct.lr.Writer()
+	tbl.Evict(func(w sql.Weights, rowsList []*offheap.ConcurrentRows) bool {
+		ct.changelog.Do(changeRemove, w, nil)
+		for _, rows := range rowsList {
+			ct.changelog.Free(rows)
+			bytesToEvict -= rows.TotalMemorySize()
+		}
+		return bytesToEvict > 0
+	})
 }
 
 func (ct *ConcurrentTree) writerFree(memsize *atomic.Int64) {
@@ -169,7 +190,7 @@ func (ct *ConcurrentTree) applyChangelog(ctree conctree, memsize *atomic.Int64) 
 			}
 		case changeRemove:
 			delete(ctree.filled, d.key)
-			panic("TODO: prefix removal for d.key")
+			ctree.b.DeletePrefix(d.key, nil)
 		}
 	}
 

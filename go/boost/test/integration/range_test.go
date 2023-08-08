@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/boost/dataflow/domain"
 	"vitess.io/vitess/go/boost/server/controller/config"
@@ -401,4 +402,49 @@ func TestProjectedIn(t *testing.T) {
 		[INT32(14) INT32(0) INT64(420)]
 		[INT32(16) INT32(0) INT64(420)]
 	]`)
+}
+
+func TestPartialRangeEjection(t *testing.T) {
+	const Recipe = `
+	CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a INT, b INT, PRIMARY KEY(pk));
+	SELECT num.a, num.b, 420 FROM num WHERE num.b = ? AND num.a > :x;
+`
+	recipe := testrecipe.LoadSQL(t, Recipe)
+	g := SetupExternal(t, boosttest.WithTestRecipe(recipe))
+
+	for i := 1; i <= 16; i++ {
+		g.TestExecute(`INSERT INTO num (a, b) VALUES (%d, %d)`, i, i%2)
+	}
+
+	g.View("q0").LookupBvar(1, 4).Expect(`[
+		[INT32(5) INT32(1) INT64(420)]
+		[INT32(7) INT32(1) INT64(420)]
+		[INT32(9) INT32(1) INT64(420)]
+		[INT32(11) INT32(1) INT64(420)]
+		[INT32(13) INT32(1) INT64(420)]
+		[INT32(15) INT32(1) INT64(420)]
+	]`)
+	g.AssertWorkerStats(1, domain.StatUpquery)
+	g.View("q0").LookupBvar(1, 4).Expect(`[
+		[INT32(5) INT32(1) INT64(420)]
+		[INT32(7) INT32(1) INT64(420)]
+		[INT32(9) INT32(1) INT64(420)]
+		[INT32(11) INT32(1) INT64(420)]
+		[INT32(13) INT32(1) INT64(420)]
+		[INT32(15) INT32(1) INT64(420)]
+	]`)
+	g.AssertWorkerStats(1, domain.StatUpquery)
+
+	_ = g.DebugEviction(false, map[string]int64{"q0": 1})
+	time.Sleep(100 * time.Millisecond)
+
+	g.View("q0").LookupBvar(1, 4).Expect(`[
+		[INT32(5) INT32(1) INT64(420)]
+		[INT32(7) INT32(1) INT64(420)]
+		[INT32(9) INT32(1) INT64(420)]
+		[INT32(11) INT32(1) INT64(420)]
+		[INT32(13) INT32(1) INT64(420)]
+		[INT32(15) INT32(1) INT64(420)]
+	]`)
+	g.AssertWorkerStats(2, domain.StatUpquery)
 }
