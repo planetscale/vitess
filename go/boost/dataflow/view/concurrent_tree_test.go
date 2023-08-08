@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/sql"
@@ -129,4 +130,69 @@ func TestTreeIterationWithVariablePrefixConflict(t *testing.T) {
 	found := lookupRange(r, Bounds{Lower: inclusive([]byte("aaaa"), []byte("bbbb")), Upper: inclusive([]byte("aaaa"), []byte("cccc"))})
 	assert.Len(t, found, 1)
 	t.Logf("found: %v", found)
+}
+
+func TestTreeDeletePrefixSingleRange(t *testing.T) {
+	schema := sql.TestSchema(sqltypes.Int64, sqltypes.VarChar)
+	plan := &viewplan.Plan{
+		InternalStateKey: []int{0},
+		ExternalStateKey: []int{0, 1},
+	}
+
+	_, w := newTreeView(plan, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
+
+	defer func() {
+		w.Free()
+	}()
+
+	var records []sql.Record
+	for i := 0; i < 100; i++ {
+		records = append(records, sql.TestRow(i%10, fmt.Sprintf("record-%d", i)).ToRecord(true))
+	}
+
+	w.Add(records)
+	w.Swap()
+
+	require.Equal(t, 100, w.store.writerLen())
+	w.store.writerEmpty(sql.TestRow(4), schema)
+
+	require.Equal(t, 90, w.store.writerLen())
+	w.store.writerEmpty(sql.TestRow(4), schema)
+	require.Equal(t, 90, w.store.writerLen())
+
+	left := 90
+	for _, i := range []int{5, 7, 3, 0, 1, 2, 6, 8, 9} {
+		left = left - 10
+		w.store.writerEmpty(sql.TestRow(i), schema)
+		require.Equalf(t, left, w.store.writerLen(), "expected %d left, got %d for deletion of %d", left, w.store.writerLen(), i)
+	}
+}
+
+func TestTreeDeletePrefixMultiRange(t *testing.T) {
+	schema := sql.TestSchema(sqltypes.Int64, sqltypes.VarChar)
+	plan := &viewplan.Plan{
+		InternalStateKey: []int{0},
+		ExternalStateKey: []int{0, 1},
+	}
+
+	_, w := newTreeView(plan, sql.TestSchema(sqltypes.Int64, sqltypes.VarChar), nil)
+
+	defer func() {
+		w.Free()
+	}()
+
+	var records []sql.Record
+	for i := 0; i < 100; i++ {
+		records = append(records, sql.TestRow(1, fmt.Sprintf("record-%d", i)).ToRecord(true))
+	}
+	records = append(records, sql.TestRow(2, "record-100").ToRecord(true))
+
+	w.Add(records)
+	w.Swap()
+
+	require.Equal(t, 101, w.store.writerLen())
+	w.store.writerEmpty(sql.TestRow(4), schema)
+	require.Equal(t, 101, w.store.writerLen())
+	w.store.writerEmpty(sql.TestRow(1), schema)
+	require.Equal(t, 1, w.store.writerLen())
 }

@@ -3,10 +3,18 @@
 // license that can be found in the LICENSE file.
 package btree
 
+import (
+	"golang.org/x/exp/slices"
+)
+
 type ordered interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 |
 		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
 		~float32 | ~float64 | ~string
+}
+
+type prefixable[T ordered] interface {
+	HasPrefix(s T) bool
 }
 
 func degreeToMinMax(deg int) (min, max int) {
@@ -300,10 +308,128 @@ func (tr *Map[K, V]) delete(n *mapNode[K, V], max bool, key K) (mapPair[K, V], b
 	return prev, true
 }
 
+// DeletePrefix all values for a given key prefix. The iter function is called
+// for each deleted entry. The key passed to the iter function is the full key
+// of the deleted entry. The iterator is optional and can be nil.
+// Returns the number of entries that have been deleted.
+func (tr *Map[K, V]) DeletePrefix(key K, iter func(w K, v V)) int {
+	if tr.root == nil {
+		return 0
+	}
+	cnt := tr.deletePrefix(tr.root, key, iter)
+	if cnt == 0 {
+		return 0
+	}
+	if len(tr.root.items) == 0 && !tr.root.leaf() {
+		tr.root = (*tr.root.children)[0]
+	}
+	tr.count -= cnt
+	if tr.count == 0 {
+		tr.root = nil
+	}
+	return cnt
+}
+
+func (tr *Map[K, V]) deletePrefix(n *mapNode[K, V], key K, iter func(w K, v V)) int {
+	i, _ := tr.search(n, key)
+	if i > len(n.items) {
+		return 0
+	}
+	if n.leaf() {
+		// If we're in a leaf, we can slice out all matching
+		// items in one operation.
+		end := i
+		for end < len(n.items) && hasPrefix(n.items[end].key, key) {
+			if iter != nil {
+				iter(n.items[end].key, n.items[end].value)
+			}
+			end++
+		}
+		if end == i {
+			// We haven't found anything, avoid calling slices.Delete
+			// at all as an optimization since we have nothing to delete.
+			return 0
+		}
+		n.items = slices.Delete(n.items, i, end)
+		n.count -= end - i
+		return end - i
+	}
+
+	deleted := tr.deletePrefix((*n.children)[i], key, iter)
+	if deleted == 0 {
+		// We deleted nothing with the prefix in this child,
+		// which means there can't be any further matching
+		// items in the tree.
+		return 0
+	}
+
+	for ; i < len(n.items); i++ {
+		if !hasPrefix(n.items[i].key, key) {
+			// We have deleted items in the previous child. The only
+			// reason we might need to delete items in the next child
+			// is if the prefix continues into the next child. That means
+			// that the non-leaf node also must be matching the prefix.
+			// If the non-leaf node is not matching the prefix, then we
+			// know the prefix is not in the tree anymore and the previous
+			// child deletion deleted everything with the prefix.
+			break
+		}
+
+		// Increase this since we're going to delete the current non-leaf
+		// node as it's matching the prefix (or we would have bailed in the
+		// previous check above).
+		deleted++
+
+		if (*n.children)[i].count == 0 {
+			// We have deleted all items from this child, which means
+			// we need to remove it entirely from the tree. The non-leaf
+			// node can also be deleted as well.
+			if iter != nil {
+				iter(n.items[i].key, n.items[i].value)
+			}
+			n.items = slices.Delete(n.items, i, i+1)
+			*n.children = slices.Delete(*n.children, i, i+1)
+
+			// Delete from the next list to prepare for the next loop.
+			deleted += tr.deletePrefix((*n.children)[i], key, iter)
+			// Decrease iterator since we have sliced out the current child,
+			// so we need to continue with the same i in the next loop.
+			i--
+			continue
+		}
+
+		// Find the maximum item from the current child which will be the new
+		// non-leaf value for the current node.
+		maxItem, _ := tr.delete((*n.children)[i], true, tr.empty.key)
+		n.items[i] = maxItem
+
+		// Now delete from the right side of the tree. If there's nothing
+		// to delete there, we know we're done.
+		del := tr.deletePrefix((*n.children)[i+1], key, iter)
+		if del == 0 {
+			break
+		}
+		deleted += del
+	}
+
+	if deleted == 0 {
+		return 0
+	}
+	n.count -= deleted
+	if len((*n.children)[i].items) < tr.min {
+		tr.nodeRebalance(n, i)
+	}
+	return deleted
+}
+
 // nodeRebalance rebalances the child nodes following a delete operation.
 // Provide the index of the child node with the number of items that fell
 // below minItems.
 func (tr *Map[K, V]) nodeRebalance(n *mapNode[K, V], i int) {
+	if len(n.items) == 0 {
+		n = nil
+		return
+	}
 	if i == len(n.items) {
 		i--
 	}
@@ -724,4 +850,11 @@ func (tr *Map[K, V]) nodeKeyValues(cn **mapNode[K, V], keys []K, values []V) ([]
 func (tr *Map[K, V]) Clear() {
 	tr.count = 0
 	tr.root = nil
+}
+
+func hasPrefix[K ordered](key, prefix K) bool {
+	if k, ok := any(key).(prefixable[K]); ok {
+		return k.HasPrefix(prefix)
+	}
+	return key == prefix
 }
