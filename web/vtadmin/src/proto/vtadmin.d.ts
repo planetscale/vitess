@@ -43823,6 +43823,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest upgrade_safe */
         upgrade_safe?: (boolean|null);
+
+        /** BackupShardRequest incremental_from_pos */
+        incremental_from_pos?: (string|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -43848,6 +43851,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest upgrade_safe. */
         public upgrade_safe: boolean;
+
+        /** BackupShardRequest incremental_from_pos. */
+        public incremental_from_pos: string;
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.
