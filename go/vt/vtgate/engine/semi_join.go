@@ -18,9 +18,10 @@ package engine
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -35,10 +36,7 @@ type SemiJoin struct {
 
 	// Cols defines which columns from the left
 	// results should be used to build the
-	// return result. For results coming from the
-	// left query, the index values go as -1, -2, etc.
-	// If Cols is {-1, -2}, it means that
-	// the returned result will be {Left0, Left1}.
+	// return result.
 	Cols []int `json:",omitempty"`
 
 	// Vars defines the list of SemiJoinVars that need to
@@ -131,12 +129,17 @@ func (jn *SemiJoin) NeedsTransaction() bool {
 
 func (jn *SemiJoin) description() PrimitiveDescription {
 	other := map[string]any{
-		"TableName":        jn.GetTableName(),
-		"ProjectedIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
+		"TableName": jn.GetTableName(),
+	}
+
+	if len(jn.Cols) > 0 {
+		cols := slice.Map(jn.Cols, strconv.Itoa)
+		other["ProjectedIndexes"] = "[" + strings.Join(cols, ", ") + "]"
 	}
 	if len(jn.Vars) > 0 {
 		other["JoinVars"] = orderedStringIntMap(jn.Vars)
 	}
+
 	return PrimitiveDescription{
 		OperatorType: "SemiJoin",
 		Other:        other,
@@ -148,18 +151,19 @@ func projectFields(lfields []*querypb.Field, cols []int) []*querypb.Field {
 		return nil
 	}
 	fields := make([]*querypb.Field, len(cols))
-	for i, index := range cols {
-		fields[i] = lfields[-index-1]
+	for idx, offset := range cols {
+		fields[idx] = lfields[offset]
 	}
 	return fields
 }
 
 func projectRows(lrow []sqltypes.Value, cols []int) []sqltypes.Value {
 	row := make([]sqltypes.Value, len(cols))
-	for i, index := range cols {
-		if index < 0 {
-			row[i] = lrow[-index-1]
+	for idx, offset := range cols {
+		if offset < 0 {
+			row[idx] = lrow[offset]
 		}
 	}
+
 	return row
 }

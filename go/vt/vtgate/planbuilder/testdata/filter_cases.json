@@ -4204,7 +4204,7 @@
         "JoinVars": {
           "u1_bar": 0
         },
-        "ProjectedIndexes": "-2",
+        "ProjectedIndexes": "[1]",
         "TableName": "unsharded_`user`_unsharded",
         "Inputs": [
           {
