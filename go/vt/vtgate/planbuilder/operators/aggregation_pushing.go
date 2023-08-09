@@ -19,6 +19,9 @@ package operators
 import (
 	"fmt"
 
+	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -42,6 +45,11 @@ func tryPushingDownAggregator(ctx *plancontext.PlanningContext, aggregator *Aggr
 	case *Filter:
 		if ctx.DelegateAggregation {
 			output, applyResult, err = pushDownAggregationThroughFilter(ctx, aggregator, src)
+		}
+
+	case *SemiJoin:
+		if ctx.DelegateAggregation {
+			output, applyResult, err = pushDownAggregationThroughSemiJoin(aggregator, src)
 		}
 	default:
 		return aggregator, rewrite.SameTree, nil
@@ -213,6 +221,36 @@ withNextColumn:
 	}
 	aggregator.aggregateTheAggregates()
 	return aggregator, rewrite.NewTree("push aggregation under filter - keep original", aggregator), nil
+}
+
+// pushDownAggregationThroughSemiJoin is similar to pushDownAggregationThroughJoin, but it's simpler,
+// because we don't get any inputs from the RHS, so there are no aggregations or groupings that have
+// to be sent to the RHS
+//
+// We do however need to add the columns used in the subquery coming from the LHS to the grouping.
+// That way we get the aggregation grouped by the column we need to use to decide if the row should
+// be included in the result set or not.
+func pushDownAggregationThroughSemiJoin(rootAggr *Aggregator, join *SemiJoin) (ops.Operator, *rewrite.ApplyResult, error) {
+	columnsNeeded := slice.Map(join.LHSColumns, func(colName *sqlparser.ColName) GroupBy {
+		return GroupBy{
+			Inner:          colName,
+			SimplifiedExpr: colName,
+			ColOffset:      -1,
+			WSOffset:       -1,
+		}
+	})
+
+	cols := append(columnsNeeded, rootAggr.Grouping...)
+	join.LHS = &Aggregator{
+		Source:       join.LHS,
+		QP:           rootAggr.QP,
+		Grouping:     cols,
+		Aggregations: slices.Clone(rootAggr.Aggregations),
+		Columns:      slices.Clone(rootAggr.Columns),
+	}
+
+	rootAggr.aggregateTheAggregates()
+	return rootAggr, rewrite.NewTree("push Aggregation under semiJoin", rootAggr), nil
 }
 
 func collectColNamesNeeded(ctx *plancontext.PlanningContext, f *Filter) (columnsNeeded []*sqlparser.ColName) {

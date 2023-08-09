@@ -169,7 +169,7 @@ func (s *UncorrelatedSubQuery) SetInputs(ops []ops.Operator) {
 }
 
 func (s *UncorrelatedSubQuery) ShortDescription() string {
-	return ""
+	return s.Extracted.OpCode.String()
 }
 
 func (s *UncorrelatedSubQuery) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {

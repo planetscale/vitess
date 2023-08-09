@@ -3200,9 +3200,11 @@
       "QueryType": "SELECT",
       "Original": "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')",
       "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "GroupBy": "(0|2), 1",
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:2)",
+          "1"
+        ],
         "ResultColumns": 2,
         "Inputs": [
           {

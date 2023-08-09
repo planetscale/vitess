@@ -188,6 +188,12 @@ func tryPushingDownProjection(
 			return p, rewrite.SameTree, nil
 		}
 		return pushDownProjectionInApplyJoin(ctx, p, src)
+	case *UncorrelatedSubQuery:
+		src.LHS, p.Source = p, src.LHS
+		return src, rewrite.NewTree("pushed projection into uncorrelated subQuery", p), nil
+	case *SemiJoin:
+		src.LHS, p.Source = p, src.LHS
+		return src, rewrite.NewTree("pushed projection into semiJoin", p), nil
 	case *Vindex:
 		return pushDownProjectionInVindex(ctx, p, src)
 	default:
