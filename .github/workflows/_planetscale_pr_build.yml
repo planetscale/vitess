@@ -26,12 +26,14 @@ jobs:
           # Build HEAD of PR branch not branch merged into master
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v2
         with:
-          # Vitess build context causes tar header problem with containerd
-          driver: docker
+          platforms: linux/amd64,linux/arm64
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -108,6 +110,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           file: docker/lite/Dockerfile.private
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

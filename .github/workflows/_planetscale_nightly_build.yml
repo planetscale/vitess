@@ -51,10 +51,13 @@ jobs:
           - ref: latest-15.0
             default: "true"
             vitess-version: 15
+            platforms: linux/amd64
           - ref: latest-16.0
             vitess-version: 16
+            platforms: linux/amd64
           - ref: latest-17.0
             vitess-version: 17
+            platforms: linux/amd64,linux/arm64
 
     steps:
       - name: Checkout planetscale/vitess-private
@@ -66,8 +69,7 @@ jobs:
         id: buildx
         uses: docker/setup-buildx-action@v2
         with:
-          # Vitess build context causes tar header problem with containerd
-          driver: docker
+          platforms: ${{ matrix.platforms }}
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -155,6 +157,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
+          platforms: ${{ matrix.platforms }}
           file: docker/lite/Dockerfile.private
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
