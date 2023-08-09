@@ -107,15 +107,14 @@ func pushProjectionIntoSemiJoin(
 	if err != nil {
 		return 0, false, err
 	}
-	column := -(offset + 1)
 	if reuseCol && !added {
 		for idx, col := range node.cols {
-			if column == col {
+			if offset == col {
 				return idx, false, nil
 			}
 		}
 	}
-	node.cols = append(node.cols, column)
+	node.cols = append(node.cols, offset)
 	return len(node.cols) - 1, true, nil
 }
 

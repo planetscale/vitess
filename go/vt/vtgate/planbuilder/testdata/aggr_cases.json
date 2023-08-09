@@ -1687,7 +1687,7 @@
         "JoinVars": {
           "user_id": 0
         },
-        "ProjectedIndexes": "-2,-1",
+        "ProjectedIndexes": "[1, 0]",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {

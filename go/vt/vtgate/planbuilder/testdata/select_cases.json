@@ -2239,7 +2239,7 @@
         "JoinVars": {
           "user_id": 0
         },
-        "ProjectedIndexes": "-2",
+        "ProjectedIndexes": "[1]",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2287,7 +2287,7 @@
         "JoinVars": {
           "user_id": 0
         },
-        "ProjectedIndexes": "-2",
+        "ProjectedIndexes": "[1]",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2337,7 +2337,7 @@
           "u1_col": 0,
           "u2_col": 1
         },
-        "ProjectedIndexes": "-3",
+        "ProjectedIndexes": "[2]",
         "TableName": "`user`_`user`_user_extra",
         "Inputs": [
           {
@@ -2400,7 +2400,7 @@
         "JoinVars": {
           "u_col": 0
         },
-        "ProjectedIndexes": "-2",
+        "ProjectedIndexes": "[1]",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
