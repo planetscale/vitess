@@ -49,7 +49,7 @@ jobs:
           sudo rm -rf /etc/mysql
 
           # install necessary tools
-          sudo apt-get install -y make unzip g++ curl git wget awscli ant openjdk-8-jdk
+          sudo apt-get install -y make unzip g++ curl git wget awscli ant openjdk-8-jdk eatmydata xz-utils
 
           # Get latest version of mysql from s3 bucket
           LATEST_BUILD=$(aws s3api list-objects-v2 --bucket "planetscale-mysql-server-private-ci-artifacts" --prefix mysql/main/dist --query 'reverse(sort_by(Contents[?contains(Key, `jammy`)], &LastModified))[:1].Key' --output=text)
@@ -58,9 +58,6 @@ jobs:
           LAST_BUILD="mysql/main/dist/mysql-8.0.33.20230522-ps-f6946d512d2-jammy-linux-x86_64.tar.gz"
           aws s3 cp "s3://planetscale-mysql-server-private-ci-artifacts/${LAST_BUILD}" .
           sudo tar xf $(basename $LAST_BUILD) -v -C /usr --strip-components=1
-
-          # Install everything else we need, and configure
-          sudo apt-get install -y eatmydata xz-utils
 
           mkdir -p dist bin
           curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
