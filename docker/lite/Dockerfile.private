@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/go@sha256:7fe1a9b7eac134afdb0447b7e801dd1e80bdac37103fad89e85c374d1a5f82f2 AS builder
+FROM --platform=$BUILDPLATFORM us-docker.pkg.dev/planetscale-registry/wolfi-public/go:1.20.7 AS builder
 ARG TARGETOS TARGETARCH
 RUN addgroup -g 999 vitess && adduser -S -u 999 -g vitess -G vitess -s /bin/false -D -H -h /vt vitess
 RUN mkdir -p /vt && chown -R vitess:vitess /vt
@@ -25,7 +25,7 @@ RUN cd /vt/src/vitess.io/vitess && NOVTADMINBUILD=1 GOOS=$TARGETOS GOARCH=$TARGE
 
 # Build final runtime image. We need also busybox for the shell
 # as we run scripts for initialization etc.
-FROM cgr.dev/chainguard/busybox:latest-glibc
+FROM us-docker.pkg.dev/planetscale-registry/wolfi-prod/base:latest
 
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
