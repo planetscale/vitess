@@ -10,7 +10,7 @@ import (
 	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 )
 
 func TestProjectedRange(t *testing.T) {
@@ -255,7 +255,7 @@ func TestRangeWithEqualityDifferentTypes(t *testing.T) {
 
 	for _, tc := range tCases {
 		perm(tc.comparisons, func(a []comparison) {
-			sql := strings.Join(slices2.Map(a, func(c comparison) string { return c.sql }), " AND ")
+			sql := strings.Join(slice.Map(a, func(c comparison) string { return c.sql }), " AND ")
 			t.Run(sql, func(t *testing.T) {
 				var buf strings.Builder
 				buf.WriteString("CREATE TABLE num (pk BIGINT NOT NULL AUTO_INCREMENT, a varchar(255), b int, c bigint, PRIMARY KEY(pk));\n")
@@ -269,7 +269,7 @@ func TestRangeWithEqualityDifferentTypes(t *testing.T) {
 				}
 
 				g.AssertWorkerStats(0, domain.StatUpquery)
-				args := slices2.Map(a, func(c comparison) any { return c.arg })
+				args := slice.Map(a, func(c comparison) any { return c.arg })
 				g.View("q0").Lookup(args...).Expect(tc.expected)
 				g.AssertWorkerStats(1, domain.StatUpquery)
 			})

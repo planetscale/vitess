@@ -9,7 +9,7 @@ import (
 
 	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/sql"
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -100,7 +100,7 @@ func TestTreeIterationWithVariablePrefix(t *testing.T) {
 		sql.TestRow("aaabbb", 0),
 	}
 
-	w.Add(slices2.Map(records, func(r sql.Row) sql.Record { return r.AsRecord() }))
+	w.Add(slice.Map(records, func(r sql.Row) sql.Record { return r.AsRecord() }))
 	w.Swap()
 
 	found := lookupRange(r, Bounds{Lower: inclusive("aaaa", 1), Upper: inclusive("aaaa", 4)})
@@ -124,7 +124,7 @@ func TestTreeIterationWithVariablePrefixConflict(t *testing.T) {
 		sql.TestRow([]byte("aaaab"), []byte("bbb")),
 	}
 
-	w.Add(slices2.Map(records, func(r sql.Row) sql.Record { return r.AsRecord() }))
+	w.Add(slice.Map(records, func(r sql.Row) sql.Record { return r.AsRecord() }))
 	w.Swap()
 
 	found := lookupRange(r, Bounds{Lower: inclusive([]byte("aaaa"), []byte("bbbb")), Upper: inclusive([]byte("aaaa"), []byte("cccc"))})

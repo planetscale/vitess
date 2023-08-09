@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/slice"
 
 	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/boost/graph"
@@ -108,7 +108,7 @@ func (node *Node) ExprLookup(st *semantics.SemTable, expr sqlparser.Expr) (int, 
 
 func (node *Node) tryRewriteDerivedExpressions(st *semantics.SemTable, expr sqlparser.Expr) (sqlparser.Expr, error) {
 	fail := func() error {
-		exprs := slices2.Map(node.Columns, func(from *Column) string {
+		exprs := slice.Map(node.Columns, func(from *Column) string {
 			return sqlparser.String(from.AST[0])
 		})
 
