@@ -66,7 +66,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 		}
 
 		if inner.ExtractedSubquery.OpCode == popcode.PulloutExists {
-			correlatedTree, err := createSemiJoin(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
+			correlatedTree, err := createSemiJoin(ctx, outer, innerOp, preds, inner.ExtractedSubquery)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -328,63 +328,23 @@ func rewriteColumnsInSubqueryOpForJoin(
 
 func createSemiJoin(
 	ctx *plancontext.PlanningContext,
-	innerOp, outerOp ops.Operator,
+	lhsOp, rhsOp ops.Operator,
 	preds []sqlparser.Expr,
 	extractedSubquery *sqlparser.ExtractedSubquery,
 ) (*SemiJoin, error) {
-	newOuter, err := RemovePredicate(ctx, extractedSubquery, outerOp)
+	newOuter, err := RemovePredicate(ctx, extractedSubquery, lhsOp)
 	if err != nil {
 		return nil, vterrors.VT12001("EXISTS sub-queries are only supported with AND clause")
 	}
 
-	vars := map[string]int{}
-	bindVars := map[*sqlparser.ColName]string{}
-	var lhsCols []*sqlparser.ColName
+	extractor := getExtractor(ctx, newOuter)
 	for _, pred := range preds {
-		var rewriteError error
-		sqlparser.SafeRewrite(pred, nil, func(cursor *sqlparser.Cursor) bool {
-			node, ok := cursor.Node().(*sqlparser.ColName)
-			if !ok {
-				return true
-			}
-
-			nodeDeps := ctx.SemTable.RecursiveDeps(node)
-			if !nodeDeps.IsSolvedBy(TableID(newOuter)) {
-				return true
-			}
-
-			// check whether the bindVariable already exists in the map
-			// we do so by checking that the column names are the same and their recursive dependencies are the same
-			// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
-			for colName, bindVar := range bindVars {
-				if ctx.SemTable.EqualsExprWithDeps(node, colName) {
-					cursor.Replace(sqlparser.NewArgument(bindVar))
-					return true
-				}
-			}
-
-			// get the bindVariable for that column name and replace it in the predicate
-			typ, _, _ := ctx.SemTable.TypeForExpr(node)
-			bindVar := ctx.ReservedVars.ReserveColName(node)
-			cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
-			// store it in the map for future comparisons
-			bindVars[node] = bindVar
-
-			// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-			offsets, err := newOuter.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(node)})
-			if err != nil {
-				rewriteError = err
-				return true
-			}
-			lhsCols = append(lhsCols, node)
-			vars[bindVar] = offsets[0]
-			return true
-		})
-		if rewriteError != nil {
-			return nil, rewriteError
+		sqlparser.SafeRewrite(pred, nil, extractor.visitExpr)
+		if extractor.err != nil {
+			return nil, extractor.err
 		}
 		var err error
-		innerOp, err = innerOp.AddPredicate(ctx, pred)
+		rhsOp, err = rhsOp.AddPredicate(ctx, pred)
 		if err != nil {
 			return nil, err
 		}
@@ -392,7 +352,7 @@ func createSemiJoin(
 
 	// We just a single row from the RHS
 	limitInner := &Limit{
-		Source: innerOp,
+		Source: rhsOp,
 		AST:    &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")},
 		Pushed: false,
 	}
@@ -401,9 +361,68 @@ func createSemiJoin(
 		LHS:        newOuter,
 		RHS:        limitInner,
 		Extracted:  extractedSubquery,
-		Vars:       vars,
-		LHSColumns: lhsCols,
+		Vars:       extractor.vars,
+		LHSColumns: extractor.lhsCols,
 	}, nil
+}
+
+func getExtractor(ctx *plancontext.PlanningContext, outer ops.Operator) *varsExtractor {
+	return &varsExtractor{
+		ctx:      ctx,
+		vars:     map[string]int{},
+		bindVars: map[*sqlparser.ColName]string{},
+		outer:    outer,
+		rhs:      TableID(outer),
+	}
+}
+
+type varsExtractor struct {
+	ctx      *plancontext.PlanningContext
+	vars     map[string]int
+	bindVars map[*sqlparser.ColName]string
+	lhsCols  []*sqlparser.ColName
+	rhs      semantics.TableSet
+	err      error
+	outer    ops.Operator
+}
+
+func (ve *varsExtractor) visitExpr(cursor *sqlparser.Cursor) bool {
+	node, ok := cursor.Node().(*sqlparser.ColName)
+	if !ok {
+		return true
+	}
+
+	nodeDeps := ve.ctx.SemTable.RecursiveDeps(node)
+	if !nodeDeps.IsSolvedBy(ve.rhs) {
+		return true
+	}
+
+	// check whether the bindVariable already exists in the map
+	// we do so by checking that the column names are the same and their recursive dependencies are the same
+	// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
+	for colName, bindVar := range ve.bindVars {
+		if ve.ctx.SemTable.EqualsExprWithDeps(node, colName) {
+			cursor.Replace(sqlparser.NewArgument(bindVar))
+			return true
+		}
+	}
+
+	// get the bindVariable for that column name and replace it in the predicate
+	typ, _, _ := ve.ctx.SemTable.TypeForExpr(node)
+	bindVar := ve.ctx.ReservedVars.ReserveColName(node)
+	cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
+	// store it in the map for future comparisons
+	ve.bindVars[node] = bindVar
+
+	// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
+	offsets, err := ve.outer.AddColumns(ve.ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(node)})
+	if err != nil {
+		ve.err = err
+		return true
+	}
+	ve.lhsCols = append(ve.lhsCols, node)
+	ve.vars[bindVar] = offsets[0]
+	return true
 }
 
 // canMergeSubqueryOnColumnSelection will return true if the predicate used allows us to merge the two subqueries
