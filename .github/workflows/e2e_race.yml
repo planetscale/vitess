@@ -45,7 +45,7 @@ jobs:
         sudo rm -rf /etc/mysql
 
         # install necessary tools
-        sudo apt-get install -y make unzip g++ etcd curl git wget awscli
+        sudo apt-get install -y make unzip g++ etcd curl git wget awscli eatmydata
         sudo service etcd stop
 
         # Get latest version of mysql from s3 bucket
@@ -57,8 +57,6 @@ jobs:
         aws s3 cp "s3://planetscale-mysql-server-private-ci-artifacts/${LAST_BUILD}" .
         sudo tar xf $(basename $LAST_BUILD) -v -C /usr --strip-components=1
 
-        # Install everything else we need, and configure
-        sudo apt-get install -y eatmydata
         go mod download
 
     - name: Run make minimaltools
