@@ -40,43 +40,7 @@ type (
 
 		noPredicates
 	}
-
-	SubQueryOp struct {
-		Outer, Inner ops.Operator
-		Extracted    *sqlparser.ExtractedSubquery
-
-		noColumns
-		noPredicates
-	}
 )
-
-// Clone implements the Operator interface
-func (s *SubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
-	result := &SubQueryOp{
-		Outer:     inputs[0],
-		Inner:     inputs[1],
-		Extracted: s.Extracted,
-	}
-	return result
-}
-
-func (s *SubQueryOp) GetOrdering() ([]ops.OrderBy, error) {
-	return s.Outer.GetOrdering()
-}
-
-// Inputs implements the Operator interface
-func (s *SubQueryOp) Inputs() []ops.Operator {
-	return []ops.Operator{s.Outer, s.Inner}
-}
-
-// SetInputs implements the Operator interface
-func (s *SubQueryOp) SetInputs(ops []ops.Operator) {
-	s.Outer, s.Inner = ops[0], ops[1]
-}
-
-func (s *SubQueryOp) ShortDescription() string {
-	return ""
-}
 
 // Clone implements the Operator interface
 func (c *SemiJoin) Clone(inputs []ops.Operator) ops.Operator {

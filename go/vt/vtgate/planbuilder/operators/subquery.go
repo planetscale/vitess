@@ -45,6 +45,15 @@ type (
 		noColumns
 		noPredicates
 	}
+
+	// UncorrelatedSubQuery is a subquery that does not have any correlation with the outer query
+	// This means that the subquery can be executed once for the entire outer query, instead of once per row
+	UncorrelatedSubQuery struct {
+		LHS, RHS  ops.Operator
+		Extracted *sqlparser.ExtractedSubquery
+
+		noPredicates
+	}
 )
 
 var _ ops.Operator = (*SubQuery)(nil)
@@ -133,4 +142,48 @@ func (s *SubQuery) ShortDescription() string {
 
 func (s *SubQueryInner) ShortDescription() string {
 	return ""
+}
+
+// Clone implements the Operator interface
+func (s *UncorrelatedSubQuery) Clone(inputs []ops.Operator) ops.Operator {
+	result := &UncorrelatedSubQuery{
+		LHS:       inputs[0],
+		RHS:       inputs[1],
+		Extracted: s.Extracted,
+	}
+	return result
+}
+
+func (s *UncorrelatedSubQuery) GetOrdering() ([]ops.OrderBy, error) {
+	return s.LHS.GetOrdering()
+}
+
+// Inputs implements the Operator interface
+func (s *UncorrelatedSubQuery) Inputs() []ops.Operator {
+	return []ops.Operator{s.LHS, s.RHS}
+}
+
+// SetInputs implements the Operator interface
+func (s *UncorrelatedSubQuery) SetInputs(ops []ops.Operator) {
+	s.LHS, s.RHS = ops[0], ops[1]
+}
+
+func (s *UncorrelatedSubQuery) ShortDescription() string {
+	return ""
+}
+
+func (s *UncorrelatedSubQuery) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	return s.LHS.AddColumns(ctx, reuseExisting, addToGroupBy, exprs)
+}
+
+func (s *UncorrelatedSubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	return s.LHS.FindCol(ctx, expr, underRoute)
+}
+
+func (s *UncorrelatedSubQuery) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return s.LHS.GetColumns(ctx)
+}
+
+func (s *UncorrelatedSubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return s.LHS.GetSelectExprs(ctx)
 }

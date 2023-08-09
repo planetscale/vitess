@@ -24,8 +24,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.SubQueryOp) (logicalPlan, error) {
-	innerPlan, err := transformToLogicalPlan(ctx, op.Inner, false)
+func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.UncorrelatedSubQuery) (logicalPlan, error) {
+	innerPlan, err := transformToLogicalPlan(ctx, op.RHS, false)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.SubQu
 
 	argName := op.Extracted.GetArgName()
 	hasValuesArg := op.Extracted.GetHasValuesArg()
-	outerPlan, err := transformToLogicalPlan(ctx, op.Outer, false)
+	outerPlan, err := transformToLogicalPlan(ctx, op.LHS, false)
 
 	merged := mergeSubQueryOpPlan(ctx, innerPlan, outerPlan, op)
 	if merged != nil {
@@ -62,7 +62,7 @@ func transformSemiJoin(ctx *plancontext.PlanningContext, op *operators.SemiJoin)
 	return newSemiJoin(lhs, rhs, op.Vars, op.LHSColumns), nil
 }
 
-func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalPlan, n *operators.SubQueryOp) logicalPlan {
+func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalPlan, n *operators.UncorrelatedSubQuery) logicalPlan {
 	iroute, ok := inner.(*route)
 	if !ok {
 		return nil
