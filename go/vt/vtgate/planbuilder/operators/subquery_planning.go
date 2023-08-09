@@ -65,7 +65,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 			continue
 		}
 
-		if inner.ExtractedSubquery.OpCode == int(popcode.PulloutExists) {
+		if inner.ExtractedSubquery.OpCode == popcode.PulloutExists {
 			correlatedTree, err := createSemiJoin(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
 			if err != nil {
 				return nil, nil, err
@@ -389,9 +389,17 @@ func createSemiJoin(
 			return nil, err
 		}
 	}
+
+	// We just a single row from the RHS
+	limitInner := &Limit{
+		Source: innerOp,
+		AST:    &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")},
+		Pushed: false,
+	}
+
 	return &SemiJoin{
 		LHS:        newOuter,
-		RHS:        innerOp,
+		RHS:        limitInner,
 		Extracted:  extractedSubquery,
 		Vars:       vars,
 		LHSColumns: lhsCols,
@@ -404,7 +412,7 @@ func createSemiJoin(
 func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate *sqlparser.ExtractedSubquery) bool {
 	left := predicate.OtherSide
 	opCode := predicate.OpCode
-	if opCode != int(popcode.PulloutValue) && opCode != int(popcode.PulloutIn) {
+	if opCode != popcode.PulloutValue && opCode != popcode.PulloutIn {
 		return false
 	}
 
