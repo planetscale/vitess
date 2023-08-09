@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/slice"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -36,7 +38,6 @@ import (
 	"vitess.io/vitess/go/boost/topo/client"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	topowatcher "vitess.io/vitess/go/boost/topo/watcher"
-	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtboost"
@@ -665,7 +666,7 @@ type Metric interface {
 
 func (c *Cluster) workerStats(metric Metric) (total int) {
 	c.t.Helper()
-	workers := slices2.Map(c.ServerInstances(), func(srv *server.Server) string {
+	workers := slice.Map(c.ServerInstances(), func(srv *server.Server) string {
 		return srv.Worker.UUID().String()
 	})
 
