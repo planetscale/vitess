@@ -50,16 +50,16 @@ func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.SubQu
 	return plan, err
 }
 
-func transformCorrelatedSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.CorrelatedSubQueryOp) (logicalPlan, error) {
-	outer, err := transformToLogicalPlan(ctx, op.Outer, false)
+func transformSemiJoin(ctx *plancontext.PlanningContext, op *operators.SemiJoin) (logicalPlan, error) {
+	lhs, err := transformToLogicalPlan(ctx, op.LHS, false)
 	if err != nil {
 		return nil, err
 	}
-	inner, err := transformToLogicalPlan(ctx, op.Inner, false)
+	rhs, err := transformToLogicalPlan(ctx, op.RHS, false)
 	if err != nil {
 		return nil, err
 	}
-	return newSemiJoin(outer, inner, op.Vars, op.LHSColumns), nil
+	return newSemiJoin(lhs, rhs, op.Vars, op.LHSColumns), nil
 }
 
 func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalPlan, n *operators.SubQueryOp) logicalPlan {

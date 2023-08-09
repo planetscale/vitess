@@ -29,6 +29,7 @@ import (
 
 func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semantics.TableSet) (ops.Operator, *rewrite.ApplyResult, error) {
 	var unmerged []*SubQueryOp
+	var result *rewrite.ApplyResult
 
 	// first loop over the subqueries and try to merge them into the outer plan
 	outer := op.Outer
@@ -49,6 +50,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 
 		if merged != nil {
 			outer = merged
+			result = result.Merge(rewrite.NewTree("merge subqueries", outer))
 			continue
 		}
 
@@ -63,11 +65,12 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 		}
 
 		if inner.ExtractedSubquery.OpCode == int(popcode.PulloutExists) {
-			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
+			correlatedTree, err := createSemiJoin(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
 			if err != nil {
 				return nil, nil, err
 			}
 			outer = correlatedTree
+			result = result.Merge(rewrite.NewTree("created semi join", outer))
 			continue
 		}
 
@@ -78,7 +81,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 		tree.Outer = outer
 		outer = tree
 	}
-	return outer, rewrite.NewTree("merged subqueries", outer), nil
+	return outer, result, nil
 }
 
 func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]sqlparser.Expr, ops.Operator) {
@@ -322,12 +325,12 @@ func rewriteColumnsInSubqueryOpForJoin(
 	return innerOp, rewriteError
 }
 
-func createCorrelatedSubqueryOp(
+func createSemiJoin(
 	ctx *plancontext.PlanningContext,
 	innerOp, outerOp ops.Operator,
 	preds []sqlparser.Expr,
 	extractedSubquery *sqlparser.ExtractedSubquery,
-) (*CorrelatedSubQueryOp, error) {
+) (*SemiJoin, error) {
 	newOuter, err := RemovePredicate(ctx, extractedSubquery, outerOp)
 	if err != nil {
 		return nil, vterrors.VT12001("EXISTS sub-queries are only supported with AND clause")
@@ -385,9 +388,9 @@ func createCorrelatedSubqueryOp(
 			return nil, err
 		}
 	}
-	return &CorrelatedSubQueryOp{
-		Outer:      newOuter,
-		Inner:      innerOp,
+	return &SemiJoin{
+		LHS:        newOuter,
+		RHS:        innerOp,
 		Extracted:  extractedSubquery,
 		Vars:       vars,
 		LHSColumns: lhsCols,

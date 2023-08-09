@@ -60,7 +60,8 @@ type (
 		CanPushDownSorting bool
 	}
 
-	// GroupBy contains the expression to used in group by and also if grouping is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
+	// GroupBy contains the expression to used in group by and also if grouping is needed at VTGate level
+	// then what the weight_string function expression to be sent down for evaluation.
 	GroupBy struct {
 		Inner sqlparser.Expr
 
