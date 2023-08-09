@@ -360,7 +360,6 @@ func createSemiJoin(
 	return &SemiJoin{
 		LHS:        newOuter,
 		RHS:        limitInner,
-		Extracted:  extractedSubquery,
 		Vars:       extractor.vars,
 		LHSColumns: extractor.lhsCols,
 	}, nil

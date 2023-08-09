@@ -28,8 +28,7 @@ type (
 	// for each row in the LHS. If at least one row is returned from the RHS, the LHS row is passed through
 	// otherwise it is filtered out.
 	SemiJoin struct {
-		LHS, RHS  ops.Operator
-		Extracted *sqlparser.ExtractedSubquery
+		LHS, RHS ops.Operator
 
 		// JoinCols are the columns from the LHS used for the join.
 		// These are the same columns pushed on the LHS that are now used in the Vars field
@@ -54,7 +53,6 @@ func (c *SemiJoin) Clone(inputs []ops.Operator) ops.Operator {
 	result := &SemiJoin{
 		LHS:        inputs[0],
 		RHS:        inputs[1],
-		Extracted:  c.Extracted,
 		LHSColumns: columns,
 		Vars:       vars,
 	}
