@@ -87,7 +87,7 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 		return nil
 	}
 
-	visitor := getVisitor(ctx, in.FindCol, found, notFound)
+	visitor, errCheck := getVisitor(ctx, in.FindCol, found, notFound)
 
 	// The cursor replace is not available while walking `down`, so `up` is used to do the replacement.
 	up := func(cursor *sqlparser.CopyOnWriteCursor) {
@@ -98,6 +98,11 @@ func useOffsets(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op ops.Op
 	}
 
 	rewritten := sqlparser.CopyOnRewrite(expr, visitor, up, ctx.SemTable.CopyDependenciesOnSQLNodes)
+
+	err := errCheck()
+	if err != nil {
+		return nil, err
+	}
 
 	return rewritten.(sqlparser.Expr), nil
 }
@@ -124,10 +129,14 @@ func addColumnsToInput(ctx *plancontext.PlanningContext, root ops.Operator) (ops
 			addedColumns = true
 			return nil
 		}
-		visitor := getVisitor(ctx, proj.FindCol, found, notFound)
+		visitor, errCheck := getVisitor(ctx, proj.FindCol, found, notFound)
 
 		for _, expr := range filter.Predicates {
 			_ = sqlparser.CopyOnRewrite(expr, visitor, nil, ctx.SemTable.CopyDependenciesOnSQLNodes)
+			err := errCheck()
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		if addedColumns {
 			return in, rewrite.NewTree("added columns because filter needs it", in), nil
@@ -165,9 +174,9 @@ func getVisitor(
 	findCol func(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error),
 	found func(sqlparser.Expr, int),
 	notFound func(sqlparser.Expr) error,
-) func(node, parent sqlparser.SQLNode) bool {
+) (func(node, parent sqlparser.SQLNode) bool, func() error) {
 	var err error
-	return func(node, parent sqlparser.SQLNode) bool {
+	f := func(node, parent sqlparser.SQLNode) bool {
 		if err != nil {
 			return false
 		}
@@ -192,4 +201,6 @@ func getVisitor(
 
 		return true
 	}
+	errCheck := func() error { return err }
+	return f, errCheck
 }

@@ -105,28 +105,30 @@ func (noInputs) SetInputs(ops []ops.Operator) {
 }
 
 // AddColumn implements the Operator interface
+var errNoColumns = vterrors.VT13001("noColumns operators have no column")
+
 func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool, bool) (ops.Operator, int, error) {
-	return nil, 0, vterrors.VT13001("noColumns operators have no column")
+	return nil, 0, errNoColumns
 }
 
 func (noColumns) AddColumns(*plancontext.PlanningContext, bool, []bool, []*sqlparser.AliasedExpr) ([]int, error) {
-	return nil, vterrors.VT13001("noColumns operators have no column")
+	return nil, errNoColumns
 }
 
 func (noColumns) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	return nil, vterrors.VT13001("noColumns operators have no column")
+	return nil, errNoColumns
 }
 func (noColumns) FindCol(*plancontext.PlanningContext, sqlparser.Expr, bool) (int, error) {
-	return 0, vterrors.VT13001("noColumns operators have no column")
+	return 0, errNoColumns
 }
 
 func (noColumns) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
-	return nil, vterrors.VT13001("noColumns operators have no column")
+	return nil, errNoColumns
 }
 
 // AddPredicate implements the Operator interface
 func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
-	return nil, vterrors.VT13001("the noColumns operator cannot accept predicates")
+	return nil, vterrors.VT13001("the noPredicates operator cannot accept predicates")
 }
 
 // tryTruncateColumnsAt will see if we can truncate the columns by just asking the operator to do it for us
