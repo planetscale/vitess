@@ -19,12 +19,17 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
-	CorrelatedSubQueryOp struct {
-		Outer, Inner ops.Operator
-		Extracted    *sqlparser.ExtractedSubquery
+	// SemiJoin is a special operator that is used to represent a semi-join. A semi-join is a join that is used to
+	// filter the LHS based on the RHS. The RHS is a subquery that is correlated to the LHS. The RHS is executed
+	// for each row in the LHS. If at least one row is returned from the RHS, the LHS row is passed through
+	// otherwise it is filtered out.
+	SemiJoin struct {
+		LHS, RHS  ops.Operator
+		Extracted *sqlparser.ExtractedSubquery
 
 		// JoinCols are the columns from the LHS used for the join.
 		// These are the same columns pushed on the LHS that are now used in the Vars field
@@ -33,7 +38,6 @@ type (
 		// arguments that need to be copied from the outer to inner
 		Vars map[string]int
 
-		noColumns
 		noPredicates
 	}
 
@@ -75,7 +79,7 @@ func (s *SubQueryOp) ShortDescription() string {
 }
 
 // Clone implements the Operator interface
-func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
+func (c *SemiJoin) Clone(inputs []ops.Operator) ops.Operator {
 	columns := make([]*sqlparser.ColName, len(c.LHSColumns))
 	copy(columns, c.LHSColumns)
 	vars := make(map[string]int, len(c.Vars))
@@ -83,9 +87,9 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 		vars[k] = v
 	}
 
-	result := &CorrelatedSubQueryOp{
-		Outer:      inputs[0],
-		Inner:      inputs[1],
+	result := &SemiJoin{
+		LHS:        inputs[0],
+		RHS:        inputs[1],
 		Extracted:  c.Extracted,
 		LHSColumns: columns,
 		Vars:       vars,
@@ -93,20 +97,36 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 	return result
 }
 
-func (c *CorrelatedSubQueryOp) GetOrdering() ([]ops.OrderBy, error) {
-	return c.Outer.GetOrdering()
+func (c *SemiJoin) GetOrdering() ([]ops.OrderBy, error) {
+	return c.LHS.GetOrdering()
 }
 
 // Inputs implements the Operator interface
-func (c *CorrelatedSubQueryOp) Inputs() []ops.Operator {
-	return []ops.Operator{c.Outer, c.Inner}
+func (c *SemiJoin) Inputs() []ops.Operator {
+	return []ops.Operator{c.LHS, c.RHS}
 }
 
 // SetInputs implements the Operator interface
-func (c *CorrelatedSubQueryOp) SetInputs(ops []ops.Operator) {
-	c.Outer, c.Inner = ops[0], ops[1]
+func (c *SemiJoin) SetInputs(ops []ops.Operator) {
+	c.LHS, c.RHS = ops[0], ops[1]
 }
 
-func (c *CorrelatedSubQueryOp) ShortDescription() string {
+func (c *SemiJoin) ShortDescription() string {
 	return ""
+}
+
+func (c *SemiJoin) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	return c.LHS.AddColumns(ctx, reuseExisting, addToGroupBy, exprs)
+}
+
+func (c *SemiJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	return c.LHS.FindCol(ctx, expr, underRoute)
+}
+
+func (c *SemiJoin) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return c.LHS.GetColumns(ctx)
+}
+
+func (c *SemiJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return c.LHS.GetSelectExprs(ctx)
 }

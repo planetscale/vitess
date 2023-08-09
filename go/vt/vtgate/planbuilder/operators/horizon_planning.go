@@ -60,13 +60,6 @@ func tryHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ou
 		}
 	}()
 
-	_, ok := root.(*Horizon)
-
-	if !ok || len(ctx.SemTable.SubqueryMap) > 0 || len(ctx.SemTable.SubqueryRef) > 0 {
-		// we are not ready to deal with subqueries yet
-		return root, errHorizonNotPlanned()
-	}
-
 	output, err = planHorizons(ctx, root)
 	if err != nil {
 		return nil, err

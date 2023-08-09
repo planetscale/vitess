@@ -329,7 +329,7 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 		tableID: TableID(join.RHS),
 	}
 
-	joinColumns, output, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, lhs, rhs)
+	joinColumns, lhsOp, err := splitAggrColumnsToLeftAndRight(ctx, rootAggr, join, lhs, rhs)
 	if err != nil {
 		// if we get this error, we just abort the splitting and fall back on simpler ways of solving the same query
 		if err == errAbortAggrPushing {
@@ -357,11 +357,11 @@ func pushDownAggregationThroughJoin(ctx *plancontext.PlanningContext, rootAggr *
 	if !rootAggr.Original {
 		// we only keep the root aggregation, if this aggregator was created
 		// by splitting one and pushing under a join, we can get rid of this one
-		return output, rewrite.NewTree("push Aggregation under join - keep original", rootAggr), nil
+		return lhsOp, rewrite.NewTree("push Aggregation under join - keep original", rootAggr), nil
 	}
 
 	rootAggr.aggregateTheAggregates()
-	rootAggr.Source = output
+	rootAggr.Source = lhsOp
 	return rootAggr, rewrite.NewTree("push Aggregation under join", rootAggr), nil
 }
 
