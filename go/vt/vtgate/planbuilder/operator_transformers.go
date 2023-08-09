@@ -689,9 +689,8 @@ func transformDerivedPlan(ctx *plancontext.PlanningContext, op *operators.Horizo
 	innerSelect := rb.Select
 	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
 	tblExpr := &sqlparser.AliasedTableExpr{
-		Expr:    derivedTable,
-		As:      sqlparser.NewIdentifierCS(op.Alias),
-		Columns: op.ColumnAliases,
+		Expr: derivedTable,
+		As:   sqlparser.NewIdentifierCS(op.Alias),
 	}
 	selectExprs := sqlparser.SelectExprs{}
 	for _, colName := range op.Columns {

@@ -150,10 +150,6 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 }
 
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
-	if len(in.ColumnAliases) > 0 {
-		return nil, nil, errHorizonNotPlanned()
-	}
-
 	rb, isRoute := in.src().(*Route)
 	if isRoute && rb.IsSingleShard() {
 		return rewrite.Swap(in, rb, "push horizon into route")

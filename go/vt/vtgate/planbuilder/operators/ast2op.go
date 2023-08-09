@@ -619,13 +619,16 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			return nil, err
 		}
 
+		if len(tableExpr.Columns) > 0 {
+			return nil, vterrors.VT13001("unsupported: column alias in derived table")
+		}
+
 		return &Horizon{
-			TableId:       &tableID,
-			Alias:         tableExpr.As.String(),
-			Source:        inner,
-			Query:         tbl.Select,
-			ColumnAliases: tableExpr.Columns,
-			QP:            qp,
+			TableId: &tableID,
+			Alias:   tableExpr.As.String(),
+			Source:  inner,
+			Query:   tbl.Select,
+			QP:      qp,
 		}, nil
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("unable to use: %T", tbl))

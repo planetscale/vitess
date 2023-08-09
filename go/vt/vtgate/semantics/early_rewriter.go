@@ -56,6 +56,9 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		return handleCollateExpr(r, node)
 	case *sqlparser.ComparisonExpr:
 		return handleComparisonExpr(cursor, node)
+	case *sqlparser.AliasedTableExpr:
+		handleAliasedTableExpr(node)
+		return nil
 	}
 	return nil
 }
@@ -609,4 +612,33 @@ func (e *expanderState) createAliasedExpr(
 		alias = sqlparser.NewIdentifierCI(col.Name)
 	}
 	return &sqlparser.AliasedExpr{Expr: colName, As: alias}
+}
+
+func handleAliasedTableExpr(node *sqlparser.AliasedTableExpr) {
+	dt, ok := node.Expr.(*sqlparser.DerivedTable)
+	if !ok || len(node.Columns) == 0 {
+		return
+	}
+	// if we have a derive table defined with a column list, like this:
+	// FROM (SELECT 1,2,3) AS t(a, b, c)
+	// we need to rewrite the select inside the derived table to match the column list, like so:
+	// FROM (SELECT 1 AS a, 2 AS b, 3 AS c) AS t
+	sel := sqlparser.GetFirstSelect(dt.Select)
+	if len(sel.SelectExprs) != len(node.Columns) {
+		// if the expressions and column aliases don't match, we give up
+		return
+	}
+	newExpressions := sqlparser.CloneSelectExprs(sel.SelectExprs)
+	for i, se := range newExpressions {
+		ae, ok := se.(*sqlparser.AliasedExpr)
+		if !ok {
+			// if there are `*` in the select list, that have not been expanded yet, we give up
+			return
+		}
+		ae.As = sqlparser.NewIdentifierCI(node.Columns[i].String())
+	}
+
+	// we were successful, so we can remove the column aliases from the derived table
+	node.Columns = nil
+	sel.SelectExprs = newExpressions
 }
