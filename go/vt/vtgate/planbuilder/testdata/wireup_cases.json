@@ -903,8 +903,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
-            "Query": "select u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
+            "FieldQuery": "select u.a from (select id as a, `name` as n from `user` where 1 != 1) as u where 1 != 1",
+            "Query": "select u.a from (select id as a, `name` as n from `user` where `name` = 1) as u",
             "Table": "`user`"
           }
         ]

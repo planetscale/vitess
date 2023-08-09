@@ -43,8 +43,7 @@ type Horizon struct {
 	// QP contains the QueryProjection for this op
 	QP *QueryProjection
 
-	Query         sqlparser.SelectStatement
-	ColumnAliases sqlparser.Columns
+	Query sqlparser.SelectStatement
 
 	// Columns needed to feed other plans
 	Columns       []*sqlparser.ColName
@@ -57,7 +56,6 @@ func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
 		Source:        inputs[0],
 		Query:         h.Query,
 		Alias:         h.Alias,
-		ColumnAliases: sqlparser.CloneColumns(h.ColumnAliases),
 		Columns:       slices.Clone(h.Columns),
 		ColumnsOffset: slices.Clone(h.ColumnsOffset),
 		TableId:       h.TableId,

@@ -615,9 +615,8 @@ func buildDerivedUnion(op *Horizon, qb *queryBuilder, union *sqlparser.Union) er
 	union.OrderBy = opQuery.OrderBy
 	union.Distinct = opQuery.Distinct
 
-	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
-		Select: union,
-	}, nil, op.ColumnAliases)
+	dt := &sqlparser.DerivedTable{Select: union}
+	qb.addTableExpr(op.Alias, op.Alias, TableID(op), dt, nil, nil)
 
 	return nil
 }
@@ -632,9 +631,7 @@ func buildDerivedSelect(op *Horizon, qb *queryBuilder, sel *sqlparser.Select) er
 	sel.GroupBy = opQuery.GroupBy
 	sel.Having = mergeHaving(sel.Having, opQuery.Having)
 	sel.SelectExprs = opQuery.SelectExprs
-	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
-		Select: sel,
-	}, nil, op.ColumnAliases)
+	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{Select: sel}, nil, nil)
 	for _, col := range op.Columns {
 		err := qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
 		if err != nil {
