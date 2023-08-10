@@ -539,6 +539,13 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 		return ast.translateCaseExpr(node)
 	case *sqlparser.BetweenExpr:
 		return ast.translateBetweenExpr(node)
+	case *sqlparser.ExtractedSubquery:
+		expr, err := node.GetAlternative()
+		if err != nil {
+			return nil, err
+		}
+
+		return ast.translateExpr(expr)
 	default:
 		return nil, translateExprNotSupported(e)
 	}
