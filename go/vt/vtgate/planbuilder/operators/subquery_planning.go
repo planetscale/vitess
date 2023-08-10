@@ -340,9 +340,6 @@ func createSemiJoin(
 	extractor := getExtractor(ctx, newOuter)
 	for _, pred := range preds {
 		sqlparser.SafeRewrite(pred, nil, extractor.visitExpr)
-		if extractor.err != nil {
-			return nil, extractor.err
-		}
 		var err error
 		rhsOp, err = rhsOp.AddPredicate(ctx, pred)
 		if err != nil {
@@ -358,10 +355,9 @@ func createSemiJoin(
 	}
 
 	return &SemiJoin{
-		LHS:        newOuter,
-		RHS:        limitInner,
-		Vars:       extractor.vars,
-		LHSColumns: extractor.lhsCols,
+		LHS:  newOuter,
+		RHS:  limitInner,
+		Vars: extractor.vars,
 	}, nil
 }
 
@@ -379,9 +375,7 @@ type varsExtractor struct {
 	ctx      *plancontext.PlanningContext
 	vars     map[string]int
 	bindVars map[*sqlparser.ColName]string
-	lhsCols  []*sqlparser.ColName
 	rhs      semantics.TableSet
-	err      error
 	outer    ops.Operator
 }
 
@@ -412,15 +406,6 @@ func (ve *varsExtractor) visitExpr(cursor *sqlparser.Cursor) bool {
 	cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
 	// store it in the map for future comparisons
 	ve.bindVars[node] = bindVar
-
-	// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-	offsets, err := ve.outer.AddColumns(ve.ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(node)})
-	if err != nil {
-		ve.err = err
-		return true
-	}
-	ve.lhsCols = append(ve.lhsCols, node)
-	ve.vars[bindVar] = offsets[0]
 	return true
 }
 

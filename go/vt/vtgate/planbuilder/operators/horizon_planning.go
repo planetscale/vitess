@@ -471,7 +471,9 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 		}
 
 		return pushOrderingUnderAggr(ctx, in, src)
-
+	case *SemiJoin:
+		src.LHS, in.Source = in, src.LHS
+		return src, rewrite.NewTree("push ordering under semi join", src), nil
 	}
 	return in, rewrite.SameTree, nil
 }
