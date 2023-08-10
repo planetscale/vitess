@@ -19,6 +19,8 @@ package operators
 import (
 	"fmt"
 
+	"golang.org/x/exp/maps"
+
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/slice"
@@ -231,7 +233,10 @@ withNextColumn:
 // That way we get the aggregation grouped by the column we need to use to decide if the row should
 // be included in the result set or not.
 func pushDownAggregationThroughSemiJoin(rootAggr *Aggregator, join *SemiJoin) (ops.Operator, *rewrite.ApplyResult, error) {
-	columnsNeeded := slice.Map(join.LHSColumns, func(colName *sqlparser.ColName) GroupBy {
+	// the columns we are feeding from the LHS to the RHS need to be added to the grouping,
+	// so they are available for filtering we do above the aggregation
+	var keys = maps.Values(join.bindVars)
+	columnsNeeded := slice.Map(keys, func(colName *sqlparser.ColName) GroupBy {
 		return GroupBy{
 			Inner:          colName,
 			SimplifiedExpr: colName,

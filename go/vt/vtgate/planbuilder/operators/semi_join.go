@@ -17,46 +17,36 @@ limitations under the License.
 package operators
 
 import (
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-type (
-	// SemiJoin is a special operator that is used to represent a semi-join. A semi-join is a join that is used to
-	// filter the LHS based on the RHS. The RHS is a subquery that is correlated to the LHS. The RHS is executed
-	// for each row in the LHS. If at least one row is returned from the RHS, the LHS row is passed through
-	// otherwise it is filtered out.
-	SemiJoin struct {
-		LHS, RHS ops.Operator
+// SemiJoin is an operator that is used to represent a semi-join. A semi-join is a join that is used to
+// filter the LHS based on the RHS. The RHS is a subquery that is correlated to the LHS. The RHS is executed
+// for each row in the LHS. If at least one row is returned from the RHS, the LHS row is passed through
+// otherwise it is filtered out.
+type SemiJoin struct {
+	LHS, RHS ops.Operator
 
-		// JoinCols are the columns from the LHS used for the join.
-		// These are the same columns pushed on the LHS that are now used in the Vars field
-		LHSColumns []*sqlparser.ColName
+	// these are the bindvars we will need, before offset planning
+	bindVars map[string]*sqlparser.ColName
 
-		// arguments that need to be copied from the outer to inner
-		Vars map[string]int
+	// these are the same vars as the bindVars, but after offset planning
+	Vars map[string]int
 
-		noPredicates
-	}
-)
+	noPredicates
+}
 
 // Clone implements the Operator interface
 func (c *SemiJoin) Clone(inputs []ops.Operator) ops.Operator {
-	columns := make([]*sqlparser.ColName, len(c.LHSColumns))
-	copy(columns, c.LHSColumns)
-	vars := make(map[string]int, len(c.Vars))
-	for k, v := range c.Vars {
-		vars[k] = v
+	return &SemiJoin{
+		LHS:  inputs[0],
+		RHS:  inputs[1],
+		Vars: maps.Clone(c.Vars),
 	}
-
-	result := &SemiJoin{
-		LHS:        inputs[0],
-		RHS:        inputs[1],
-		LHSColumns: columns,
-		Vars:       vars,
-	}
-	return result
 }
 
 func (c *SemiJoin) GetOrdering() ([]ops.OrderBy, error) {
