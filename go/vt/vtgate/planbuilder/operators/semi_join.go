@@ -19,6 +19,8 @@ package operators
 import (
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -43,9 +45,10 @@ type SemiJoin struct {
 // Clone implements the Operator interface
 func (c *SemiJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &SemiJoin{
-		LHS:  inputs[0],
-		RHS:  inputs[1],
-		Vars: maps.Clone(c.Vars),
+		LHS:      inputs[0],
+		RHS:      inputs[1],
+		Vars:     maps.Clone(c.Vars),
+		bindVars: maps.Clone(c.bindVars),
 	}
 }
 
@@ -81,4 +84,19 @@ func (c *SemiJoin) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.Al
 
 func (c *SemiJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
 	return c.LHS.GetSelectExprs(ctx)
+}
+
+func (c *SemiJoin) planOffsets(ctx *plancontext.PlanningContext) error {
+	c.Vars = make(map[string]int, len(c.bindVars))
+	for bvname, col := range c.bindVars {
+		coloffset, err := c.LHS.AddColumns(ctx, true, []bool{false}, []*sqlparser.AliasedExpr{aeWrap(col)})
+		if err != nil {
+			return err
+		}
+		if len(coloffset) != 1 {
+			return vterrors.VT13001("should have only one column offset")
+		}
+		c.Vars[bvname] = coloffset[0]
+	}
+	return nil
 }

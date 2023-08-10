@@ -3234,8 +3234,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
-                "OrderBy": "(0|2) ASC, 1 ASC",
-                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1 order by `user`.id asc, `user`.col asc",
+                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
                 "Table": "`user`"
               }
             ]
@@ -4202,19 +4201,48 @@
       "QueryType": "SELECT",
       "Original": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
       "Instructions": {
-        "OperatorType": "SemiJoin",
-        "JoinVars": {
-          "u1_bar": 0
-        },
-        "ProjectedIndexes": "[1]",
-        "TableName": "unsharded_`user`_unsharded",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "R:0,L:0",
-            "TableName": "unsharded_`user`",
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u1_bar": 1
+            },
+            "TableName": "unsharded_`user`_unsharded",
             "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0",
+                "TableName": "unsharded_`user`",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 1 from unsharded where 1 != 1",
+                    "Query": "select 1 from unsharded",
+                    "Table": "unsharded"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u1.bar from `user` as u1 where 1 != 1",
+                    "Query": "select u1.bar from `user` as u1",
+                    "Table": "`user`"
+                  }
+                ]
+              },
               {
                 "OperatorType": "Route",
                 "Variant": "Unsharded",
@@ -4222,33 +4250,11 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 from unsharded where 1 != 1",
-                "Query": "select 1 from unsharded",
+                "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
+                "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar limit 1",
                 "Table": "unsharded"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u1.bar from `user` as u1 where 1 != 1",
-                "Query": "select u1.bar from `user` as u1",
-                "Table": "`user`"
               }
             ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
-            "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar",
-            "Table": "unsharded"
           }
         ]
       },
