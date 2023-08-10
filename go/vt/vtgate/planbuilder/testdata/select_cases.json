@@ -2092,64 +2092,56 @@
       "QueryType": "SELECT",
       "Original": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          0
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
         ],
         "Inputs": [
           {
-            "OperatorType": "Subquery",
-            "Variant": "PulloutValue",
-            "PulloutVars": [
-              "__sq1"
-            ],
+            "OperatorType": "Limit",
+            "Count": "INT64(1)",
             "Inputs": [
               {
-                "OperatorType": "Limit",
-                "Count": "INT64(1)",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select col from `user` where 1 != 1",
-                    "Query": "select col from `user` limit :__upper_limit",
-                    "Table": "`user`"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user` limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t.a from (select :__sq1 as a from `user` where 1 != 1) as t where 1 != 1",
+                "Query": "select t.a from (select :__sq1 as a from `user`) as t",
+                "Table": "`user`"
               },
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "L:0",
-                "TableName": "`user`_user_extra",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select :__sq1 as a from `user` where 1 != 1",
-                    "Query": "select :__sq1 as a from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1",
-                    "Query": "select 1 from user_extra",
-                    "Table": "user_extra"
-                  }
-                ]
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
               }
             ]
           }
@@ -2235,38 +2227,45 @@
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
       "Instructions": {
-        "OperatorType": "SemiJoin",
-        "JoinVars": {
-          "user_id": 0
-        },
-        "ProjectedIndexes": "[1]",
-        "TableName": "`user`_user_extra",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "user_id": 1
             },
-            "FieldQuery": "select `user`.id, col from `user` where 1 != 1",
-            "Query": "select `user`.id, col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
-            "Table": "user_extra",
-            "Values": [
-              "INT64(3)"
-            ],
-            "Vindex": "user_index"
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, `user`.id from `user` where 1 != 1",
+                "Query": "select col, `user`.id from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id limit 1",
+                "Table": "user_extra",
+                "Values": [
+                  "INT64(3)"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
           }
         ]
       },
@@ -2283,39 +2282,46 @@
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
       "Instructions": {
-        "OperatorType": "SemiJoin",
-        "JoinVars": {
-          "user_id": 0
-        },
-        "ProjectedIndexes": "[1]",
-        "TableName": "`user`_user_extra",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "user_id": 1
             },
-            "FieldQuery": "select `user`.id, col from `user` where 1 != 1",
-            "OrderBy": "1 ASC",
-            "Query": "select `user`.id, col from `user` order by col asc",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
-            "Table": "user_extra",
-            "Values": [
-              "INT64(3)"
-            ],
-            "Vindex": "user_index"
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, `user`.id from `user` where 1 != 1",
+                "OrderBy": "0 ASC",
+                "Query": "select col, `user`.id from `user` order by col asc",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id limit 1",
+                "Table": "user_extra",
+                "Values": [
+                  "INT64(3)"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
           }
         ]
       },
@@ -2332,54 +2338,67 @@
       "QueryType": "SELECT",
       "Original": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
       "Instructions": {
-        "OperatorType": "SemiJoin",
-        "JoinVars": {
-          "u1_col": 0,
-          "u2_col": 1
-        },
-        "ProjectedIndexes": "[2]",
-        "TableName": "`user`_`user`_user_extra",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0,L:1",
-            "TableName": "`user`_`user`",
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u1_col": 1,
+              "u2_col": 2
+            },
+            "TableName": "`user`_`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u1.col, 1 from `user` as u1 where 1 != 1",
-                "Query": "select u1.col, 1 from `user` as u1",
-                "Table": "`user`"
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,L:1,R:0",
+                "TableName": "`user`_`user`",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, u1.col from `user` as u1 where 1 != 1",
+                    "Query": "select 1, u1.col from `user` as u1",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u2.col from `user` as u2 where 1 != 1",
+                    "Query": "select u2.col from `user` as u2",
+                    "Table": "`user`"
+                  }
+                ]
               },
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u2.col from `user` as u2 where 1 != 1",
-                "Query": "select u2.col from `user` as u2",
-                "Table": "`user`"
+                "OperatorType": "Limit",
+                "Count": "INT64(1)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u1_col /* INT16 */ and ue.col = :u2_col /* INT16 */ limit :__upper_limit",
+                    "Table": "user_extra"
+                  }
+                ]
               }
             ]
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-            "Query": "select 1 from user_extra as ue where ue.col = :u1_col /* INT16 */ and ue.col = :u2_col /* INT16 */",
-            "Table": "user_extra"
           }
         ]
       },
@@ -2396,34 +2415,47 @@
       "QueryType": "SELECT",
       "Original": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
       "Instructions": {
-        "OperatorType": "SemiJoin",
-        "JoinVars": {
-          "u_col": 0
-        },
-        "ProjectedIndexes": "[1]",
-        "TableName": "`user`_user_extra",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u_col": 1
             },
-            "FieldQuery": "select u.col, 1 from `user` as u where 1 != 1",
-            "Query": "select u.col, 1 from `user` as u",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-            "Query": "select 1 from user_extra as ue where ue.col = :u_col /* INT16 */ and ue.col2 = :u_col",
-            "Table": "user_extra"
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1, u.col from `user` as u where 1 != 1",
+                "Query": "select 1, u.col from `user` as u",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(1)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u_col /* INT16 */ and ue.col2 = :u_col limit :__upper_limit",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
           }
         ]
       },

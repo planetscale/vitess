@@ -338,43 +338,42 @@ func createSemiJoin(
 	}
 
 	extractor := getExtractor(ctx, newOuter)
+	f := &Filter{
+		Source: rhsOp,
+	}
+
 	for _, pred := range preds {
 		sqlparser.SafeRewrite(pred, nil, extractor.visitExpr)
-		var err error
-		rhsOp, err = rhsOp.AddPredicate(ctx, pred)
-		if err != nil {
-			return nil, err
-		}
+		f.Predicates = append(f.Predicates, pred)
 	}
 
 	// We just a single row from the RHS
 	limitInner := &Limit{
-		Source: rhsOp,
+		Source: f,
 		AST:    &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")},
 		Pushed: false,
 	}
 
 	return &SemiJoin{
-		LHS:  newOuter,
-		RHS:  limitInner,
-		Vars: extractor.vars,
+		LHS:      newOuter,
+		RHS:      limitInner,
+		bindVars: extractor.bindVars,
 	}, nil
 }
 
 func getExtractor(ctx *plancontext.PlanningContext, outer ops.Operator) *varsExtractor {
 	return &varsExtractor{
 		ctx:      ctx,
-		vars:     map[string]int{},
-		bindVars: map[*sqlparser.ColName]string{},
+		bindVars: map[string]*sqlparser.ColName{},
 		outer:    outer,
 		rhs:      TableID(outer),
 	}
 }
 
+// select id from user where exists (select 1 from music where user.id = foo)
 type varsExtractor struct {
 	ctx      *plancontext.PlanningContext
-	vars     map[string]int
-	bindVars map[*sqlparser.ColName]string
+	bindVars map[string]*sqlparser.ColName
 	rhs      semantics.TableSet
 	outer    ops.Operator
 }
@@ -393,7 +392,7 @@ func (ve *varsExtractor) visitExpr(cursor *sqlparser.Cursor) bool {
 	// check whether the bindVariable already exists in the map
 	// we do so by checking that the column names are the same and their recursive dependencies are the same
 	// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
-	for colName, bindVar := range ve.bindVars {
+	for bindVar, colName := range ve.bindVars {
 		if ve.ctx.SemTable.EqualsExprWithDeps(node, colName) {
 			cursor.Replace(sqlparser.NewArgument(bindVar))
 			return true
@@ -405,7 +404,7 @@ func (ve *varsExtractor) visitExpr(cursor *sqlparser.Cursor) bool {
 	bindVar := ve.ctx.ReservedVars.ReserveColName(node)
 	cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
 	// store it in the map for future comparisons
-	ve.bindVars[node] = bindVar
+	ve.bindVars[bindVar] = node
 	return true
 }
 
