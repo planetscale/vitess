@@ -2052,7 +2052,7 @@ func formatAddress(address string) string {
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-		switch node.(type) {
+		switch node := node.(type) {
 		case *Offset:
 			// offsets here indicate that a possible aggregation has already been handled by an input
 			// so we don't need to worry about aggregation in the original
@@ -2060,6 +2060,8 @@ func ContainsAggregation(e SQLNode) bool {
 		case AggrFunc:
 			hasAggregates = true
 			return false, io.EOF
+		case *ExtractedSubquery:
+			return node.Merged, nil
 		}
 
 		return true, nil
@@ -2112,7 +2114,6 @@ func (es *ExtractedSubquery) GetArgName() string {
 // GetHasValuesArg returns has values argument.
 func (es *ExtractedSubquery) GetHasValuesArg() string {
 	return es.hasValuesArg
-
 }
 
 func (es *ExtractedSubquery) updateAlternative() {
@@ -2145,6 +2146,13 @@ func (es *ExtractedSubquery) updateAlternative() {
 	}
 }
 
+func (es *ExtractedSubquery) GetAlternative() (Expr, error) {
+	if es.Merged {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot get alternative for merged subquery")
+	}
+	return es.alternative, nil
+}
+
 // ColumnName returns the alias if one was provided, otherwise prints the AST
 func (ae *AliasedExpr) ColumnName() string {
 	if !ae.As.IsEmpty() {
@@ -2166,19 +2174,6 @@ func (s SelectExprs) AllAggregation() bool {
 		}
 	}
 	return true
-}
-
-func isExprLiteral(expr Expr) bool {
-	switch expr := expr.(type) {
-	case *Literal:
-		return true
-	case BoolVal:
-		return true
-	case *UnaryExpr:
-		return isExprLiteral(expr.Expr)
-	default:
-		return false
-	}
 }
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree

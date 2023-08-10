@@ -17,9 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -29,20 +26,12 @@ func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *operators.Uncor
 	if err != nil {
 		return nil, err
 	}
-	innerPlan, err = planHorizon(ctx, innerPlan, op.Extracted.Subquery.Select, true)
-	if err != nil {
-		return nil, err
-	}
 
 	argName := op.Extracted.GetArgName()
 	hasValuesArg := op.Extracted.GetHasValuesArg()
 	outerPlan, err := transformToLogicalPlan(ctx, op.LHS, false)
 
-	merged := mergeSubQueryOpPlan(ctx, innerPlan, outerPlan, op)
-	if merged != nil {
-		return merged, nil
-	}
-	plan := newPulloutSubquery(opcode.PulloutOpcode(op.Extracted.OpCode), argName, hasValuesArg, innerPlan)
+	plan := newPulloutSubquery(op.Extracted.OpCode, argName, hasValuesArg, innerPlan)
 	if err != nil {
 		return nil, err
 	}
@@ -60,59 +49,4 @@ func transformSemiJoin(ctx *plancontext.PlanningContext, op *operators.SemiJoin)
 		return nil, err
 	}
 	return newSemiJoin(lhs, rhs, op.Vars, nil), nil
-}
-
-func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalPlan, n *operators.UncorrelatedSubQuery) logicalPlan {
-	iroute, ok := inner.(*route)
-	if !ok {
-		return nil
-	}
-	oroute, ok := outer.(*route)
-	if !ok {
-		return nil
-	}
-
-	if canMergeSubqueryPlans(ctx, iroute, oroute) {
-		// n.extracted is an expression that lives in oroute.Select.
-		// Instead of looking for it in the AST, we have a copy in the subquery tree that we can update
-		n.Extracted.Merged = true
-		replaceSubQuery(ctx, oroute.Select)
-		return mergeSystemTableInformation(oroute, iroute)
-	}
-	return nil
-}
-
-// mergeSystemTableInformation copies over information from the second route to the first and appends to it
-func mergeSystemTableInformation(a *route, b *route) logicalPlan {
-	// safe to append system table schema and system table names, since either the routing will match or either side would be throwing an error
-	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
-	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
-	a.eroute.SysTableTableSchema = append(a.eroute.SysTableTableSchema, b.eroute.SysTableTableSchema...)
-	for k, v := range b.eroute.SysTableTableName {
-		a.eroute.SysTableTableName[k] = v
-	}
-	return a
-}
-
-func canMergeSubqueryPlans(ctx *plancontext.PlanningContext, a, b *route) bool {
-	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
-	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
-		return false
-	}
-	switch a.eroute.Opcode {
-	case engine.Unsharded, engine.Reference:
-		return a.eroute.Opcode == b.eroute.Opcode
-	case engine.DBA:
-		return canSelectDBAMerge(a, b)
-	case engine.EqualUnique:
-		// Check if they target the same shard.
-		if b.eroute.Opcode == engine.EqualUnique &&
-			a.eroute.Vindex == b.eroute.Vindex &&
-			a.condition != nil &&
-			b.condition != nil &&
-			gen4ValuesEqual(ctx, []sqlparser.Expr{a.condition}, []sqlparser.Expr{b.condition}) {
-			return true
-		}
-	}
-	return false
 }
