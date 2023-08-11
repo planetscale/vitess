@@ -53,10 +53,7 @@ func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, unio
 	}
 
 	if union.Limit != nil {
-		op = &Limit{
-			Source: op,
-			AST:    union.Limit,
-		}
+		op = newLimit(op, union.Limit)
 	}
 
 	if horizon.TableId != nil {
@@ -109,10 +106,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 	}
 
 	if sel.Limit != nil {
-		op = &Limit{
-			Source: op,
-			AST:    sel.Limit,
-		}
+		op = newLimit(op, sel.Limit)
 	}
 
 	return op, rewrite.NewTree("expand SELECT horizon into smaller components", op), nil

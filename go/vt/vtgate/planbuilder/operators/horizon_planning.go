@@ -423,11 +423,7 @@ func setUpperLimit(in *Limit) (ops.Operator, *rewrite.ApplyResult, error) {
 			// we can't push limits down on either side
 			return rewrite.SkipChildren
 		case *Route:
-			newSrc := &Limit{
-				Source: op.Source,
-				AST:    &sqlparser.Limit{Rowcount: sqlparser.NewArgument("__upper_limit")},
-				Pushed: false,
-			}
+			newSrc := newLimit(op.Source, &sqlparser.Limit{Rowcount: sqlparser.NewArgument("__upper_limit")})
 			op.Source = newSrc
 			return rewrite.SkipChildren
 		default:
