@@ -55,9 +55,9 @@ func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Stat
 }
 
 func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (ops.Operator, error) {
-	subq, err := createSubqueryFromStatement(ctx, sel)
-	if err != nil {
-		return nil, err
+	//subq, err := createSubqueryFromStatement(ctx, sel)
+	//if err != nil {
+	//	return nil, err
 	}
 	op, err := crossJoin(ctx, sel.From)
 	if err != nil {
@@ -76,7 +76,7 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	}
 
 	if subq != nil {
-		subq.Outer = op
+		subq.SetOuter(op)
 		op = subq
 	}
 
@@ -167,7 +167,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 	if subq == nil {
 		return r, nil
 	}
-	subq.Outer = r
+	subq.SetOuter(r)
 	return subq, nil
 }
 
@@ -234,7 +234,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 	if subq == nil {
 		return route, nil
 	}
-	subq.Outer = route
+	subq.SetOuter(route)
 	return subq, nil
 }
 

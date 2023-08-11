@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semantics.TableSet) (ops.Operator, *rewrite.ApplyResult, error) {
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *LogicalSubQuery, ts semantics.TableSet) (ops.Operator, *rewrite.ApplyResult, error) {
 	var unmerged []*UncorrelatedSubQuery
 	var result *rewrite.ApplyResult
 
@@ -349,7 +349,7 @@ func createSemiJoin(
 	}
 
 	for _, pred := range preds {
-		sqlparser.SafeRewrite(pred, nil, extractor.visitExpr)
+		pred = sqlparser.CopyOnRewrite(pred, nil, extractor.visitExpr, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
 		f.Predicates = append(f.Predicates, pred)
 	}
 
@@ -359,9 +359,10 @@ func createSemiJoin(
 	}
 
 	return &SemiJoin{
-		LHS:      newOuter,
-		RHS:      rhs,
-		bindVars: extractor.bindVars,
+		LHS:               newOuter,
+		RHS:               rhs,
+		bindVars:          extractor.bindVars,
+		extractedSubquery: extractedSubquery,
 	}, nil
 }
 
@@ -382,15 +383,15 @@ type varsExtractor struct {
 	outer    ops.Operator
 }
 
-func (ve *varsExtractor) visitExpr(cursor *sqlparser.Cursor) bool {
+func (ve *varsExtractor) visitExpr(cursor *sqlparser.CopyOnWriteCursor) {
 	node, ok := cursor.Node().(*sqlparser.ColName)
 	if !ok {
-		return true
+		return
 	}
 
 	nodeDeps := ve.ctx.SemTable.RecursiveDeps(node)
 	if !nodeDeps.IsSolvedBy(ve.rhs) {
-		return true
+		return
 	}
 
 	// check whether the bindVariable already exists in the map
@@ -399,7 +400,7 @@ func (ve *varsExtractor) visitExpr(cursor *sqlparser.Cursor) bool {
 	for bindVar, colName := range ve.bindVars {
 		if ve.ctx.SemTable.EqualsExprWithDeps(node, colName) {
 			cursor.Replace(sqlparser.NewArgument(bindVar))
-			return true
+			return
 		}
 	}
 
@@ -409,7 +410,7 @@ func (ve *varsExtractor) visitExpr(cursor *sqlparser.Cursor) bool {
 	cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
 	// store it in the map for future comparisons
 	ve.bindVars[bindVar] = node
-	return true
+	return
 }
 
 // canMergeSubqueryOnColumnSelection will return true if the predicate used allows us to merge the two subqueries

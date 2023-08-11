@@ -18,6 +18,7 @@ package operators
 
 import (
 	"golang.org/x/exp/maps"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -31,7 +32,8 @@ import (
 // for each row in the LHS. If at least one row is returned from the RHS, the LHS row is passed through
 // otherwise it is filtered out.
 type SemiJoin struct {
-	LHS, RHS ops.Operator
+	LHS, RHS          ops.Operator
+	extractedSubquery *sqlparser.ExtractedSubquery
 
 	// these are the bindvars we will need, before offset planning
 	bindVars map[string]*sqlparser.ColName
@@ -45,10 +47,11 @@ type SemiJoin struct {
 // Clone implements the Operator interface
 func (c *SemiJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &SemiJoin{
-		LHS:      inputs[0],
-		RHS:      inputs[1],
-		Vars:     maps.Clone(c.Vars),
-		bindVars: maps.Clone(c.bindVars),
+		LHS:               inputs[0],
+		RHS:               inputs[1],
+		Vars:              maps.Clone(c.Vars),
+		bindVars:          maps.Clone(c.bindVars),
+		extractedSubquery: c.extractedSubquery,
 	}
 }
 
@@ -99,4 +102,14 @@ func (c *SemiJoin) planOffsets(ctx *plancontext.PlanningContext) error {
 		c.Vars[bvname] = coloffset[0]
 	}
 	return nil
+}
+
+func (c *SemiJoin) predicatesSolvedBy(ctx *plancontext.PlanningContext, id semantics.TableSet) bool {
+	for _, col := range c.bindVars {
+		deps := ctx.SemTable.RecursiveDeps(col)
+		if !deps.IsSolvedBy(id) {
+			return false
+		}
+	}
+	return true
 }

@@ -653,7 +653,7 @@ func (cached *Projection) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *PulloutSubquery) CachedSize(alloc bool) int64 {
+func (cached *UncorrelatedSubQuery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
