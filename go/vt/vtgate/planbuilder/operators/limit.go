@@ -32,10 +32,18 @@ type Limit struct {
 	Pushed bool
 }
 
+func newLimit(src ops.Operator, limit *sqlparser.Limit) *Limit {
+	return &Limit{
+		Source: src,
+		AST:    limit,
+	}
+}
+
 func (l *Limit) Clone(inputs []ops.Operator) ops.Operator {
 	return &Limit{
 		Source: inputs[0],
 		AST:    sqlparser.CloneRefOfLimit(l.AST),
+		Pushed: l.Pushed,
 	}
 }
 

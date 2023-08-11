@@ -66,11 +66,11 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 		}
 
 		if inner.ExtractedSubquery.OpCode == popcode.PulloutExists {
-			correlatedTree, err := createSemiJoin(ctx, outer, innerOp, preds, inner.ExtractedSubquery)
+			semiJoin, err := createSemiJoin(ctx, outer, innerOp, preds, inner.ExtractedSubquery)
 			if err != nil {
 				return nil, nil, err
 			}
-			outer = correlatedTree
+			outer = semiJoin
 			result = result.Merge(rewrite.NewTree("created semi join", outer))
 			continue
 		}
@@ -337,6 +337,12 @@ func createSemiJoin(
 		return nil, vterrors.VT12001("EXISTS sub-queries are only supported with AND clause")
 	}
 
+	var oldHorizon *Horizon
+	if hor, ok := rhsOp.(*Horizon); ok {
+		oldHorizon = hor
+		rhsOp = hor.Source
+	}
+
 	extractor := getExtractor(ctx, newOuter)
 	f := &Filter{
 		Source: rhsOp,
@@ -347,16 +353,14 @@ func createSemiJoin(
 		f.Predicates = append(f.Predicates, pred)
 	}
 
-	// We just a single row from the RHS
-	limitInner := &Limit{
-		Source: f,
-		AST:    &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")},
-		Pushed: false,
+	var rhs ops.Operator = f
+	if oldHorizon != nil {
+		oldHorizon.Source, rhs = rhs, oldHorizon
 	}
 
 	return &SemiJoin{
 		LHS:      newOuter,
-		RHS:      limitInner,
+		RHS:      rhs,
 		bindVars: extractor.bindVars,
 	}, nil
 }
