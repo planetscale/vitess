@@ -17,18 +17,32 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type (
-	// SubQuery stores the information about subquery
-	SubQuery struct {
+	// While building the initial operator tree, we use the LogicalSubQuery operator for all
+	// types of sub queries. Later, during the operator rewriting phase, we convert the
+	// LogicalSubQuery to the appropriate type of subquery based on the type of the subquery -
+	// SemiJoin, UncorrelatedSubQuery, or as CorrelatedSubQuery
+	LogicalSubQuery struct {
 		Outer ops.Operator
 		Inner []*SubQueryInner
 
 		noColumns
+		noPredicates
+	}
+
+	// CorrelatedSubQuery is a subquery (inner/RHS) with a correlation with the outer query (LHS)
+	// This means that the subquery needs to be executed once per row of the outer query
+	CorrelatedSubQuery struct {
+		LHS, RHS ops.Operator
+
 		noPredicates
 	}
 
@@ -54,9 +68,67 @@ type (
 
 		noPredicates
 	}
+
+	SubQuery interface {
+		ops.Operator
+		SetOuter(outer ops.Operator)
+	}
 )
 
-var _ ops.Operator = (*SubQuery)(nil)
+func (l *LogicalSubQuery) Clone(inputs []ops.Operator) ops.Operator {
+	inners, err := slice.MapWithError(inputs[1:], func(i ops.Operator) (*SubQueryInner, error) {
+		sqi, ok := i.(*SubQueryInner)
+		if !ok {
+			return nil, vterrors.VT13001(fmt.Sprintf("unexpected operator type %T", i))
+		}
+		return sqi, nil
+	})
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return &LogicalSubQuery{
+		Outer: inputs[0],
+		Inner: inners,
+	}
+}
+
+func (l *LogicalSubQuery) Inputs() []ops.Operator {
+	operators := []ops.Operator{l.Outer}
+	for _, inner := range l.Inner {
+		operators = append(operators, inner)
+	}
+	return operators
+}
+
+func (l *LogicalSubQuery) SetInputs(operators []ops.Operator) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l *LogicalSubQuery) ShortDescription() string {
+	return ""
+}
+
+func (l *LogicalSubQuery) GetOrdering() ([]ops.OrderBy, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l *LogicalSubQuery) SetOuter(outer ops.Operator) {
+	l.Outer = outer
+}
+
+func (s *UncorrelatedSubQuery) SetOuter(outer ops.Operator) {
+	s.LHS = outer
+}
+
+func (s *CorrelatedSubQuery) SetOuter(outer ops.Operator) {
+	s.LHS = outer
+}
+
+var _ ops.Operator = (*CorrelatedSubQuery)(nil)
+var _ ops.Operator = (*LogicalSubQuery)(nil)
 var _ ops.Operator = (*SubQueryInner)(nil)
 
 // Clone implements the Operator interface
@@ -82,43 +154,33 @@ func (s *SubQueryInner) SetInputs(ops []ops.Operator) {
 }
 
 // Clone implements the Operator interface
-func (s *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
-	result := &SubQuery{
-		Outer: inputs[0],
-	}
-	for idx := range s.Inner {
-		inner, ok := inputs[idx+1].(*SubQueryInner)
-		if !ok {
-			panic("got bad input")
-		}
-		result.Inner = append(result.Inner, inner)
+func (s *CorrelatedSubQuery) Clone(inputs []ops.Operator) ops.Operator {
+	result := &CorrelatedSubQuery{
+		LHS: inputs[0],
+		RHS: inputs[1],
 	}
 	return result
 }
 
-func (s *SubQuery) GetOrdering() ([]ops.OrderBy, error) {
-	return s.Outer.GetOrdering()
+func (s *CorrelatedSubQuery) GetOrdering() ([]ops.OrderBy, error) {
+	return s.LHS.GetOrdering()
 }
 
 // Inputs implements the Operator interface
-func (s *SubQuery) Inputs() []ops.Operator {
-	operators := []ops.Operator{s.Outer}
-	for _, inner := range s.Inner {
-		operators = append(operators, inner)
-	}
-	return operators
+func (s *CorrelatedSubQuery) Inputs() []ops.Operator {
+	return []ops.Operator{s.LHS, s.RHS}
 }
 
 // SetInputs implements the Operator interface
-func (s *SubQuery) SetInputs(ops []ops.Operator) {
-	s.Outer = ops[0]
+func (s *CorrelatedSubQuery) SetInputs(ops []ops.Operator) {
+	s.LHS = ops[0]
 }
 
-func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {
+func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (SubQuery, error) {
 	if len(ctx.SemTable.SubqueryMap[stmt]) == 0 {
 		return nil, nil
 	}
-	subq := &SubQuery{}
+	subq := &LogicalSubQuery{}
 	for _, sq := range ctx.SemTable.SubqueryMap[stmt] {
 		opInner, err := translateQueryToOp(ctx, sq.Subquery.Select)
 		if err != nil {
@@ -133,7 +195,7 @@ func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 	return subq, nil
 }
 
-func (s *SubQuery) ShortDescription() string {
+func (s *CorrelatedSubQuery) ShortDescription() string {
 	return ""
 }
 
@@ -183,4 +245,24 @@ func (s *UncorrelatedSubQuery) GetColumns(ctx *plancontext.PlanningContext) ([]*
 
 func (s *UncorrelatedSubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
 	return s.LHS.GetSelectExprs(ctx)
+}
+
+func (s *CorrelatedSubQuery) AddColumns(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *CorrelatedSubQuery) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *CorrelatedSubQuery) GetColumns(ctx *plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *CorrelatedSubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	//TODO implement me
+	panic("implement me")
 }

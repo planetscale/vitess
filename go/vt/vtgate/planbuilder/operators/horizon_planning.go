@@ -19,6 +19,8 @@ package operators
 import (
 	"fmt"
 	"io"
+	"vitess.io/vitess/go/test/dbg"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -134,12 +136,70 @@ func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator
 			return tryPushingDownDistinct(in)
 		case *Union:
 			return tryPushDownUnion(ctx, in)
+		case *SemiJoin:
+			return tryMergingSemiJoin(ctx, in)
 		default:
 			return in, rewrite.SameTree, nil
 		}
 	}
 
 	return rewrite.FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func tryMergingSemiJoin(ctx *plancontext.PlanningContext, in *SemiJoin) (ops.Operator, *rewrite.ApplyResult, error) {
+	switch lhs := in.LHS.(type) {
+	case *ApplyJoin:
+		if in.predicatesSolvedBy(ctx, TableID(lhs.LHS)) {
+			// we can push the semi join down the left hand side of the join
+			lhs.LHS, in.LHS = in, lhs.LHS
+			return lhs, rewrite.NewTree("pushed semi join down left hand side of apply join", lhs), nil
+		}
+		//if in.predicatesSolvedBy(ctx, TableID(lhs.RHS)) {
+		//	we can push the semi join down the right hand side of the join
+		//}
+
+	case *Route:
+		rhs, ok := in.RHS.(*Route)
+		if !ok {
+			return in, rewrite.SameTree, nil
+		}
+		return canMergeSubqueryPlans(ctx, in, lhs, rhs)
+	}
+
+	return in, rewrite.SameTree, nil
+}
+
+func canMergeSubqueryPlans(ctx *plancontext.PlanningContext, in *SemiJoin, lhs, rhs *Route) (ops.Operator, *rewrite.ApplyResult, error) {
+	if lhs.Routing.Keyspace().Name != rhs.Routing.Keyspace().Name {
+		return in, rewrite.SameTree, nil
+	}
+	switch lhs.Routing.OpCode() {
+	case engine.Unsharded, engine.Reference:
+		if lhs.Routing.OpCode() == rhs.Routing.OpCode() {
+			// strip out the routes under the semi join
+			in.LHS, in.RHS = lhs.Source, rhs.Source
+
+			// add the semi join to the lhs route
+			lhs.Source = in
+			original := in.extractedSubquery.Original
+			dbg.P(original)
+			ctx.SkipPredicates[original] = true
+			return lhs, rewrite.NewTree("merged semi join into single route", lhs), nil
+
+		}
+		//case engine.DBA:
+		//	return canSelectDBAMerge(a, b)
+		//case engine.EqualUnique:
+		//	Check if they target the same shard.
+		//if b.eroute.Opcode == engine.EqualUnique &&
+		//	a.eroute.Vindex == b.eroute.Vindex &&
+		//	a.condition != nil &&
+		//	b.condition != nil &&
+		//	gen4ValuesEqual(ctx, []sqlparser.Expr{a.condition}, []sqlparser.Expr{b.condition}) {
+		//	return true
+		//}
+	}
+	return in, rewrite.SameTree, nil
 }
 
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {

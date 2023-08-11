@@ -56,7 +56,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 			if op.TableId != nil {
 				return pushDownDerived(ctx, op)
 			}
-		case *SubQuery:
+		case *LogicalSubQuery:
 			return optimizeSubQuery(ctx, op, ts)
 		case *Filter:
 			return pushDownFilter(op)
@@ -107,12 +107,12 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 		result, err = greedySolve(ctx, op)
 	}
 
-	unresolved := op.UnsolvedPredicates(ctx.SemTable)
-	if len(unresolved) > 0 {
-		// if we have any predicates that none of the joins or tables took care of,
-		// we add a single filter on top, so we don't lose it. This is used for sub-query planning
-		result = newFilter(result, ctx.SemTable.AndExpressions(unresolved...))
-	}
+	//unresolved := op.UnsolvedPredicates(ctx.SemTable)
+	//if len(unresolved) > 0 {
+	//	// if we have any predicates that none of the joins or tables took care of,
+	//	// we add a single filter on top, so we don't lose it. This is used for sub-query planning
+	//	result = newFilter(result, ctx.SemTable.AndExpressions(unresolved...))
+	//}
 
 	changed = rewrite.NewTree("solved query graph", result)
 	return

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"vitess.io/vitess/go/test/dbg"
 
 	"golang.org/x/exp/slices"
 
@@ -81,6 +82,7 @@ func (qb *queryBuilder) addTableExpr(
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
+	dbg.P(expr)
 	if _, toBeSkipped := qb.ctx.SkipPredicates[expr]; toBeSkipped {
 		// This is a predicate that was added to the RHS of an ApplyJoin.
 		// The original predicate will be added, so we don't have to add this here
@@ -209,6 +211,11 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 	}
 
 	qb.addPredicate(onCondition)
+}
+
+func (qb *queryBuilder) semiJoinWith(filter *sqlparser.ExtractedSubquery) {
+	filter.Merged = true
+	qb.addPredicate(filter.Original)
 }
 
 func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser.Expr) {
@@ -413,6 +420,9 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		}
 		qb.sel.MakeDistinct()
 		return nil
+	case *SemiJoin:
+		return buildSemiJoin(op, qb)
+
 	default:
 		return vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op))
 	}
@@ -549,6 +559,30 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) error {
 	} else {
 		qb.joinInnerWith(qbR, op.Predicate)
 	}
+	return nil
+}
+
+func buildSemiJoin(op *SemiJoin, qb *queryBuilder) error {
+	err := buildQuery(op.LHS, qb)
+	if err != nil {
+		return err
+	}
+	//// If we are going to add the predicate used in join here
+	//// We should not add the predicate's copy of when it was split into
+	//// two parts. To avoid this, we use the SkipPredicates map.
+	//for _, expr := range qb.ctx.JoinPredicates[op.Predicate] {
+	//	qb.ctx.SkipPredicates[expr] = nil
+	//}
+	//qbR := &queryBuilder{ctx: qb.ctx}
+	//err = buildQuery(op.RHS, qbR)
+	//if err != nil {
+	//	return err
+	//}
+	//if op.LeftJoin {
+	//	qb.joinOuterWith(qbR, op.Predicate)
+	//} else {
+	qb.semiJoinWith(op.extractedSubquery)
+	//}
 	return nil
 }
 

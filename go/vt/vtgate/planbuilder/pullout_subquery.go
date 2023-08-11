@@ -27,21 +27,21 @@ import (
 
 var _ logicalPlan = (*pulloutSubquery)(nil)
 
-// pulloutSubquery is the logicalPlan for engine.PulloutSubquery.
+// pulloutSubquery is the logicalPlan for engine.UncorrelatedSubQuery.
 // This gets built if a subquery is not correlated and can
 // therefore can be pulled out and executed upfront.
 type pulloutSubquery struct {
 	order      int
 	subquery   logicalPlan
 	underlying logicalPlan
-	eSubquery  *engine.PulloutSubquery
+	eSubquery  *engine.UncorrelatedSubQuery
 }
 
 // newPulloutSubquery builds a new pulloutSubquery.
 func newPulloutSubquery(opcode popcode.PulloutOpcode, sqName, hasValues string, subquery logicalPlan) *pulloutSubquery {
 	return &pulloutSubquery{
 		subquery: subquery,
-		eSubquery: &engine.PulloutSubquery{
+		eSubquery: &engine.UncorrelatedSubQuery{
 			Opcode:         opcode,
 			SubqueryResult: sqName,
 			HasValues:      hasValues,

@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "select id, exists(select 1 from unsharded_b ue where ue.id = u.id) as foo from unsharded_a u join user_extra",
     "plan": {
 
     }
