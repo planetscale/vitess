@@ -793,6 +793,12 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		switchWrites(t, workflowType, ksWorkflow, false)
 		checkThatVDiffFails(t, targetKs, workflow)
 
+		// The original unsharded customer data included an insert with the
+		// vindex column (cid) of 999999, so the backing sequence table should
+		// now have a next_id of 1000000 after SwitchTraffic.
+		res := execVtgateQuery(t, vtgateConn, sourceKs, "select next_id from customer_seq where id = 0")
+		require.Equal(t, "1000000", res.Rows[0][0].ToString())
+
 		if withOpenTx && commit != nil {
 			commit(t)
 		}
@@ -1471,9 +1477,9 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	}
 	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--tablet_types=primary",
-		"--timeout="+SwitchWritesTimeout, command, ksWorkflow)
+		"--timeout="+SwitchWritesTimeout, "--initialize-target-sequences", command, ksWorkflow)
 	if output != "" {
-		fmt.Printf("Output of switching writes for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
+		fmt.Printf("Output of switching writes with vtctlclient for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}
 	// printSwitchWritesExtraDebug is useful when debugging failures in Switch writes due to corner cases/races
 	_ = printSwitchWritesExtraDebug

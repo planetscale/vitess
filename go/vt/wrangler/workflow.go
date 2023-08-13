@@ -12,6 +12,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -54,10 +55,11 @@ type VReplicationWorkflowParams struct {
 	OnDDL                             string
 
 	// MoveTables/Migrate specific
-	SourceKeyspace, Tables  string
-	AllTables, RenameTables bool
-	SourceTimeZone          string
-	DropForeignKeys         bool
+	SourceKeyspace, Tables    string
+	AllTables, RenameTables   bool
+	SourceTimeZone            string
+	DropForeignKeys           bool
+	InitializeTargetSequences bool
 
 	// Reshard specific
 	SourceShards, TargetShards []string
@@ -265,7 +267,7 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 			if st.Pos == "" {
 				continue
 			}
-			if st.State == "Running" || st.State == "Copying" {
+			if st.State == binlogdatapb.VReplicationWorkflowState_Running.String() || st.State == binlogdatapb.VReplicationWorkflowState_Copying.String() {
 				started++
 			}
 		}
@@ -475,7 +477,8 @@ func (vrw *VReplicationWorkflow) switchWrites() (*[]string, error) {
 		log.Infof("In VReplicationWorkflow.switchWrites(reverse) for %+v", vrw)
 	}
 	journalID, dryRunResults, err = vrw.wr.SwitchWrites(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.Timeout,
-		false, vrw.params.Direction == workflow.DirectionBackward, vrw.params.EnableReverseReplication, vrw.params.DryRun)
+		false, vrw.params.Direction == workflow.DirectionBackward, vrw.params.EnableReverseReplication, vrw.params.DryRun,
+		vrw.params.InitializeTargetSequences)
 	if err != nil {
 		return nil, err
 	}
@@ -523,9 +526,9 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 		statuses := result.ShardStatuses[ksShard].PrimaryReplicationStatuses
 		for _, st := range statuses {
 			switch st.State {
-			case "Copying":
+			case binlogdatapb.VReplicationWorkflowState_Copying.String():
 				return cannotSwitchCopyIncomplete, nil
-			case "Error":
+			case binlogdatapb.VReplicationWorkflowState_Error.String():
 				return cannotSwitchError, nil
 			}
 		}
