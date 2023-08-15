@@ -23,9 +23,9 @@ RUN cd /vt/src/vitess.io/vitess && NOVTADMINBUILD=1 GOOS=$TARGETOS GOARCH=$TARGE
 # RUN echo "github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk=" >> ~/.ssh/known_hosts
 # RUN --mount=type=ssh,mode=666 cd /vt/src/vitess.io/vitess && NOVTADMINBUILD=1 GOOS=$TARGETOS GOARCH=$TARGETARCH VT_EXTRA_BUILD_LDFLAGS="-s -w" make install PREFIX=/vt/install
 
-# Build final runtime image. We need also busybox for the shell
+# Build final runtime image. We need also busybox and curl for the shell
 # as we run scripts for initialization etc.
-FROM us-docker.pkg.dev/planetscale-registry/wolfi-prod/base:latest
+FROM us-docker.pkg.dev/planetscale-registry/wolfi-prod/curl:latest
 
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
