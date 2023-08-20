@@ -1,6 +1,6 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vreplication_partial_movetables_simple)
+name: Cluster (vreplication_partial_movetables_basic)
 on: [push]
 
 jobs:
@@ -109,5 +109,4 @@ jobs:
         binlog-transaction-compression=ON
         EOF
         
-        # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard vreplication_partial_movetables_basic 
+        eatmydata -- go run test.go -docker=false -follow -shard vreplication_partial_movetables_basic

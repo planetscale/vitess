@@ -73,5 +73,8 @@ jobs:
       - name: Run test
         timeout-minutes: 30
         run: |
+          # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
+          # which musn't be more than 107 characters long.
+          export VTDATAROOT="/tmp/"
           export NOVTADMINBUILD=1
           eatmydata -- make unit_test
