@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqlescape"
@@ -253,7 +252,7 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	// We could have used select *, but being explicit is more predictable.
-	buf.Myprintf("select ")
+	buf.Myprintf("select %s", GetVReplicationMaxExecutionTimeQueryHintIfSet())
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
@@ -461,4 +460,11 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	}
 
 	return nil
+}
+
+func GetVReplicationMaxExecutionTimeQueryHintIfSet() string {
+	if vreplicationMaxExecutionTime != vreplicationMaxExecutionTimeUnset {
+		return fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%v) */ ", vreplicationMaxExecutionTime.Milliseconds())
+	}
+	return ""
 }
