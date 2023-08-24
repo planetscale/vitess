@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 )
@@ -35,7 +36,7 @@ var (
 	schemaChangeDir             string
 	schemaChangeController      string
 	schemaChangeCheckInterval   = time.Minute
-	schemaChangeReplicasTimeout = wrangler.DefaultWaitReplicasTimeout
+	schemaChangeReplicasTimeout = grpcvtctldserver.DefaultWaitReplicasTimeout
 )
 
 func init() {
