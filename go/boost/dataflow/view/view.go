@@ -3,10 +3,9 @@ package view
 import (
 	"context"
 	"math/rand"
+	"slices"
 	"sync/atomic"
 	"unsafe"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"

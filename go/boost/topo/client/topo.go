@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
-	"golang.org/x/exp/slices"
 	"google.golang.org/grpc/codes"
 
 	"vitess.io/vitess/go/boost/boostrpc"

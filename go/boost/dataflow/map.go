@@ -1,8 +1,6 @@
 package dataflow
 
-import (
-	"golang.org/x/exp/slices"
-)
+import "slices"
 
 type Map[T any] struct {
 	n     int

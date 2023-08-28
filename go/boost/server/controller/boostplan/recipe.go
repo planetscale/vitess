@@ -3,9 +3,8 @@ package boostplan
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/hack"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"

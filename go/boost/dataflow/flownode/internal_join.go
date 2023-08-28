@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"

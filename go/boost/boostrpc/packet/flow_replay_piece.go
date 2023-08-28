@@ -1,7 +1,7 @@
 package packet
 
 import (
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/sql"

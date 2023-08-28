@@ -2,17 +2,14 @@ package flownode
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
-	"vitess.io/vitess/go/mysql/format"
-
-	"golang.org/x/exp/slices"
-
+	"vitess.io/vitess/go/boost/sql"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
-
-	"vitess.io/vitess/go/boost/sql"
+	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/sqltypes"
 )
 

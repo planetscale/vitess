@@ -2,8 +2,7 @@ package boostplan
 
 import (
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/boost/common/dbg"
 	"vitess.io/vitess/go/boost/dataflow"

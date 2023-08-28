@@ -1,9 +1,10 @@
 package materialization
 
 import (
+	"slices"
+
 	"github.com/tidwall/btree"
 	"go.uber.org/zap"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/common/xslice"
 

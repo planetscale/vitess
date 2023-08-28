@@ -3,8 +3,7 @@ package flownode
 import (
 	"context"
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/common"

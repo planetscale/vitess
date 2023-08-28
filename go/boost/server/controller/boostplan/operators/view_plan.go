@@ -2,13 +2,11 @@ package operators
 
 import (
 	"fmt"
-
-	"vitess.io/vitess/go/slice"
-
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/sql"
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 

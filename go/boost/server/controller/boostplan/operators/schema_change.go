@@ -1,10 +1,9 @@
 package operators
 
 import (
+	"slices"
 	"strconv"
 	"strings"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )

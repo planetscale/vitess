@@ -2,9 +2,8 @@ package flownode
 
 import (
 	"fmt"
+	"slices"
 	"strings"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"

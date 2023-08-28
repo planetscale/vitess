@@ -3,12 +3,11 @@ package offheap
 import (
 	"bytes"
 	"fmt"
+	"slices"
 	"strings"
 	"unsafe"
 
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
-
+	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -81,7 +80,7 @@ func (t RowsTable) GoString() string {
 		return "RowsTable{}"
 	}
 
-	sorted := maps.Keys(t)
+	sorted := maps2.Keys(t)
 	slices.SortFunc(sorted, func(a, b vthash.Hash) int {
 		return bytes.Compare(a[:], b[:])
 	})
