@@ -519,6 +519,37 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 	}
 }
 
+// CancelSchemaMigration is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) CancelSchemaMigration(ctx context.Context, req *vtctldatapb.CancelSchemaMigrationRequest) (resp *vtctldatapb.CancelSchemaMigrationResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.CancelSchemaMigration")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("uuid", req.Uuid)
+
+	query, err := alterSchemaMigrationQuery("Cancel", req.Uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info("Calling ApplySchema to cancel migration")
+	qr, err := s.ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
+		Keyspace:            req.Keyspace,
+		Sql:                 []string{query},
+		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp = &vtctldatapb.CancelSchemaMigrationResponse{
+		RowsAffectedByShard: qr.RowsAffectedByShard,
+	}
+	return resp, nil
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (resp *vtctldatapb.ChangeTabletTypeResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ChangeTabletType")
@@ -627,7 +658,7 @@ func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldat
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("uuid", req.Uuid)
 
-	query, err := alterSingleSchemaMigrationQuery("cleanup", req.Uuid)
+	query, err := alterSchemaMigrationQuery("cleanup", req.Uuid)
 	if err != nil {
 		return nil, err
 	}
@@ -636,7 +667,6 @@ func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldat
 	qr, err := s.ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
-		SkipPreflight:       true,
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
 	})
 	if err != nil {
@@ -3004,7 +3034,7 @@ func (s *VtctldServer) RetrySchemaMigration(ctx context.Context, req *vtctldatap
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("uuid", req.Uuid)
 
-	query, err := alterSingleSchemaMigrationQuery("retry", req.Uuid)
+	query, err := alterSchemaMigrationQuery("retry", req.Uuid)
 	if err != nil {
 		return nil, err
 	}
@@ -3013,7 +3043,6 @@ func (s *VtctldServer) RetrySchemaMigration(ctx context.Context, req *vtctldatap
 	qr, err := s.ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
-		SkipPreflight:       true,
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
 	})
 	if err != nil {
