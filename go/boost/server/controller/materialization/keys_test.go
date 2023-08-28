@@ -1,11 +1,11 @@
 package materialization
 
 import (
+	"slices"
 	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/sql"

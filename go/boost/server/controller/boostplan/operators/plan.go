@@ -2,11 +2,10 @@ package operators
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
-
+	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -197,7 +196,7 @@ func (report tableUsageMap) resolve(node *Node) []*TableReport {
 			report.resolve(n)
 		}
 	}
-	return maps.Values(report)
+	return maps2.Values(report)
 }
 
 func (conv *Converter) semanticAnalyze(stmt sqlparser.Statement, keyspace string, si semantics.SchemaInformation) (*semantics.SemTable, error) {

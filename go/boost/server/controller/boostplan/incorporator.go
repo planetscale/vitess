@@ -2,8 +2,7 @@ package boostplan
 
 import (
 	"fmt"
-
-	"golang.org/x/exp/maps"
+	"maps"
 
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"

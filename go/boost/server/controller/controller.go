@@ -4,16 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
-
-	"vitess.io/vitess/go/slice"
 
 	"github.com/google/uuid"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/boost/boostrpc"
@@ -31,6 +28,8 @@ import (
 	"vitess.io/vitess/go/boost/server/controller/materialization"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	topowatcher "vitess.io/vitess/go/boost/topo/watcher"
+	"vitess.io/vitess/go/maps2"
+	"vitess.io/vitess/go/slice"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
 )
@@ -175,7 +174,7 @@ func (ctrl *Controller) domainPlace(ctx context.Context, idx dataflow.DomainIdx,
 		shards       = common.UnwrapOr(maybeShardNumber, 1)
 		domainshards = make([]domainrpc.ShardHandle, shards)
 		announce     = make([]*service.DomainDescriptor, shards)
-		workers      = maps.Values(ctrl.workers)
+		workers      = maps2.Values(ctrl.workers)
 		wg           errgroup.Group
 	)
 

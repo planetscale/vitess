@@ -1,10 +1,9 @@
 package materialization
 
 import (
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/boost/common/xslice"
-
 	"vitess.io/vitess/go/boost/dataflow/flownode"
 	"vitess.io/vitess/go/boost/graph"
 )

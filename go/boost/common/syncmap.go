@@ -1,9 +1,8 @@
 package common
 
 import (
+	"maps"
 	"sync"
-
-	"golang.org/x/exp/maps"
 )
 
 type SyncMap[K comparable, V any] struct {

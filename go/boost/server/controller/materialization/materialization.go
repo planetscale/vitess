@@ -3,11 +3,11 @@ package materialization
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"sync/atomic"
 
 	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/common/graphviz"

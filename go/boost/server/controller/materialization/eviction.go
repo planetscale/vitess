@@ -3,8 +3,7 @@ package materialization
 import (
 	"encoding/json"
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/boost/common/graphviz"
@@ -262,20 +261,20 @@ func (ep *EvictionPlan) Evictions() []Eviction {
 	var evictions []Eviction
 
 	for _, root := range ep.roots {
-		max, ok := ep.limits[root.view.PublicId]
+		maxMemory, ok := ep.limits[root.view.PublicId]
 		if !ok {
-			max = root.view.MaxMemoryUsage
+			maxMemory = root.view.MaxMemoryUsage
 		}
-		if max == 0 {
+		if maxMemory == 0 {
 			continue
 		}
 
 		usage := root.memTotal()
-		if usage < max {
+		if usage < maxMemory {
 			continue
 		}
 
-		evictions = ep.evictOnRoot(evictions, root, usage-max)
+		evictions = ep.evictOnRoot(evictions, root, usage-maxMemory)
 	}
 	return evictions
 }

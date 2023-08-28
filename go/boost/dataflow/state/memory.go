@@ -3,16 +3,16 @@ package state
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 	"strings"
 	"sync/atomic"
 
 	"github.com/kr/text"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/boost/dataflow"
+	"vitess.io/vitess/go/maps2"
 
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
+	"vitess.io/vitess/go/boost/dataflow"
 	"vitess.io/vitess/go/boost/sql"
 )
 
@@ -29,7 +29,7 @@ func (m *Memory) GoString() string {
 		return "&Memory{}"
 	}
 
-	sorted := maps.Keys(m.byTag)
+	sorted := maps2.Keys(m.byTag)
 	slices.Sort(sorted)
 
 	var w strings.Builder

@@ -2,8 +2,7 @@ package flownode
 
 import (
 	"fmt"
-
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/boost/common/rowstore/offheap"
 	"vitess.io/vitess/go/boost/dataflow"

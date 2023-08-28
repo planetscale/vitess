@@ -3,12 +3,14 @@ package domain
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/maps2"
 
 	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/boost/boostrpc/packet"
@@ -946,7 +948,7 @@ func (d *Domain) seedAll(ctx context.Context, tag dataflow.Tag, requestingShard 
 	var misses = make(map[sql.Row]bool)
 
 	if log := d.log.Check(zapcore.DebugLevel, "looking up in memory"); log != nil {
-		log.Write(zap.Uint32("source", uint32(repl.Source)), sql.ZapRows("keys", maps.Keys(keys)))
+		log.Write(zap.Uint32("source", uint32(repl.Source)), sql.ZapRows("keys", maps2.Keys(keys)))
 	}
 
 	for key := range keys {

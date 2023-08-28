@@ -2,9 +2,9 @@ package domain
 
 import (
 	"context"
+	"slices"
 
 	"go.uber.org/zap"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/dataflow"

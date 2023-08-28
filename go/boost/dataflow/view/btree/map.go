@@ -4,7 +4,7 @@
 package btree
 
 import (
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 type ordered interface {

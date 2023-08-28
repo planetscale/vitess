@@ -3,10 +3,10 @@ package watcher
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
-	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/boost/boostrpc/service"

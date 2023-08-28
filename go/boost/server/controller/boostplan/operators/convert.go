@@ -2,14 +2,12 @@ package operators
 
 import (
 	"fmt"
-
-	"golang.org/x/exp/maps"
+	"maps"
 
 	"vitess.io/vitess/go/boost/common/dbg"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"vitess.io/vitess/go/boost/graph"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (

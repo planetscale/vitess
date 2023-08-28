@@ -3,9 +3,8 @@ package flownode
 import (
 	"context"
 	"math/rand"
+	"slices"
 	"sync/atomic"
-
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/dataflow/flownode/flownodepb"

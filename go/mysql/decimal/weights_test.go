@@ -3,10 +3,9 @@ package decimal
 import (
 	"bytes"
 	"math/rand"
+	"slices"
 	"strconv"
 	"testing"
-
-	"golang.org/x/exp/slices"
 )
 
 func TestWeightStrings(t *testing.T) {

@@ -2,10 +2,11 @@ package domain
 
 import (
 	"context"
+	"slices"
 
 	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/maps2"
 
 	"vitess.io/vitess/go/boost/boostrpc/packet"
 	"vitess.io/vitess/go/boost/dataflow"
@@ -197,7 +198,7 @@ func (d *Domain) dispatch(ctx context.Context, m packet.ActiveFlowPacket, execut
 
 	for tag, keys := range evictions {
 		var pkt = &packet.EvictKeysRequest{
-			Keys: maps.Keys(keys),
+			Keys: maps2.Keys(keys),
 			Link: &packet.Link{Src: src, Dst: me},
 			Tag:  tag,
 		}

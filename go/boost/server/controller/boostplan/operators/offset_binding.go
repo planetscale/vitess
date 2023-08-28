@@ -1,7 +1,7 @@
 package operators
 
 import (
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"vitess.io/vitess/go/slice"
 

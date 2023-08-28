@@ -3,14 +3,16 @@ package controller
 import (
 	"context"
 	"fmt"
+	"maps"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
+
+	"vitess.io/vitess/go/maps2"
 
 	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/boost/dataflow"
@@ -229,7 +231,7 @@ func (mig *migration) Commit() error {
 	}
 
 	swapped := swapped0
-	sortedNew := maps.Keys(newNodes)
+	sortedNew := maps2.Keys(newNodes)
 	sort.Slice(sortedNew, func(i, j int) bool {
 		return sortedNew[i] < sortedNew[j]
 	})
@@ -420,7 +422,7 @@ func (mig *migration) describeExternalTable(node graph.NodeIdx, dep *TableDepend
 
 	for column, dependendQueries := range dep.Columns {
 		desc.DependentColumns[column] = &service.ExternalTableDescriptor_Dependency{
-			DependentQueries: maps.Keys(dependendQueries),
+			DependentQueries: maps2.Keys(dependendQueries),
 		}
 	}
 

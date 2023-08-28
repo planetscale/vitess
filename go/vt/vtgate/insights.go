@@ -19,9 +19,12 @@ package vtgate
 import (
 	"context"
 	"crypto/tls"
+	"errors"
+	"fmt"
 	"math"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,38 +32,25 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/vt/servenv"
-
-	"golang.org/x/exp/slices"
-
-	"golang.org/x/time/rate"
-
-	"vitess.io/vitess/go/vt/vtgate/logstats"
-
-	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
-
-	"github.com/segmentio/kafka-go"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"google.golang.org/protobuf/encoding/prototext"
-
-	"github.com/twmb/murmur3"
-
-	"github.com/pkg/errors"
-
 	"github.com/google/uuid"
 	pbenvelope "github.com/planetscale/psevents/go/v1"
 	pbvtgate "github.com/planetscale/psevents/go/vtgate/v1"
+	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl/scram"
+	"github.com/spf13/pflag"
+	"github.com/twmb/murmur3"
+	"golang.org/x/time/rate"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
 )
 
 const (
@@ -418,7 +408,7 @@ func (ii *Insights) logToKafka(logger *streamlog.StreamLogger[*logstats.LogStats
 
 		mechanism, err := scram.Mechanism(scram.SHA512, ii.Username, ii.Password)
 		if err != nil {
-			return errors.Wrap(err, "kafka scram configuration failed")
+			return fmt.Errorf("kafka scram configuration failed: %w", err)
 		}
 
 		t.SASL = mechanism
@@ -501,7 +491,7 @@ func (ii *Insights) makeSchemaChangeMessage(ls *logstats.LogStats) ([]byte, erro
 
 	ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 	if !ok {
-		return nil, errors.Errorf("Expected a DDLStatement but got a %T", stmt)
+		return nil, fmt.Errorf("expected a DDLStatement but got a %T", stmt)
 	}
 
 	operation := pbvtgate.SchemaChange_UNKNOWN
@@ -658,13 +648,6 @@ func (ii *Insights) sendToKafka(buf []byte, topic, key string) error {
 		})
 }
 
-func maxDuration(a time.Duration, b time.Duration) time.Duration {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string) bool {
 	// no locks needed if all callers are on the same thread
 
@@ -694,21 +677,21 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string) bool {
 		pa.ErrorCount++
 	}
 	pa.SumShardQueries += ls.ShardQueries
-	pa.MaxShardQueries = maxUInt64(pa.MaxShardQueries, ls.ShardQueries)
+	pa.MaxShardQueries = max(pa.MaxShardQueries, ls.ShardQueries)
 	pa.SumRowsRead += ls.RowsRead
-	pa.MaxRowsRead = maxUInt64(pa.MaxRowsRead, ls.RowsRead)
+	pa.MaxRowsRead = max(pa.MaxRowsRead, ls.RowsRead)
 	pa.SumRowsAffected += ls.RowsAffected
-	pa.MaxRowsAffected = maxUInt64(pa.MaxRowsAffected, ls.RowsAffected)
+	pa.MaxRowsAffected = max(pa.MaxRowsAffected, ls.RowsAffected)
 	pa.SumRowsReturned += ls.RowsReturned
-	pa.MaxRowsReturned = maxUInt64(pa.MaxRowsReturned, ls.RowsReturned)
+	pa.MaxRowsReturned = max(pa.MaxRowsReturned, ls.RowsReturned)
 	pa.SumTotalDuration += ls.TotalTime()
-	pa.MaxTotalDuration = maxDuration(pa.MaxTotalDuration, ls.TotalTime())
+	pa.MaxTotalDuration = max(pa.MaxTotalDuration, ls.TotalTime())
 	pa.SumPlanDuration += ls.PlanTime
-	pa.MaxPlanDuration = maxDuration(pa.MaxPlanDuration, ls.PlanTime)
+	pa.MaxPlanDuration = max(pa.MaxPlanDuration, ls.PlanTime)
 	pa.SumExecuteDuration += ls.ExecuteTime
-	pa.MaxExecuteDuration = maxDuration(pa.MaxExecuteDuration, ls.ExecuteTime)
+	pa.MaxExecuteDuration = max(pa.MaxExecuteDuration, ls.ExecuteTime)
 	pa.SumCommitDuration += ls.CommitTime
-	pa.MaxCommitDuration = maxDuration(pa.MaxCommitDuration, ls.CommitTime)
+	pa.MaxCommitDuration = max(pa.MaxCommitDuration, ls.CommitTime)
 
 	if ii.SendTotalDurationSketches {
 		unitDuration := float64(ls.TotalTime()) * ii.TotalDurationSketchUnitsMultiplier
@@ -855,7 +838,7 @@ func efficientlyTruncate(str string, maxLength int) string {
 
 	str = str[:maxLength]
 	idx := len(str) - 1
-	left := maxInt(maxLength-3, 0)
+	left := max(maxLength-3, 0)
 
 	// rewind past any multibyte continuation
 	for idx >= left && str[idx]&0xc0 == 0x80 {
@@ -1109,18 +1092,4 @@ func durationOrNil(d time.Duration) *durationpb.Duration {
 func (ii *Insights) MockTimer() {
 	// Send a nil to the LogChan to force a flush.  Only for use in unit tests.
 	ii.LogChan <- nil
-}
-
-func maxUInt64(a, b uint64) uint64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func maxInt(a int, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
