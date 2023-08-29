@@ -180,8 +180,6 @@ func getTxMode() vtgatepb.TransactionMode {
 }
 
 var (
-	rpcVTGate *VTGate
-
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.
 	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
@@ -195,6 +193,21 @@ var (
 		"Number of events that had to wait because the skew across shards was too high")
 
 	vindexUnknownParams = stats.NewGauge("VindexUnknownParameters", "Number of parameterss unrecognized by Vindexes")
+
+	timings = stats.NewMultiTimings(
+		"VtgateApi",
+		"VtgateApi timings",
+		[]string{"Operation", "Keyspace", "DbType"})
+
+	rowsReturned = stats.NewCountersWithMultiLabels(
+		"VtgateApiRowsReturned",
+		"Rows returned through the VTgate API",
+		[]string{"Operation", "Keyspace", "DbType"})
+
+	rowsAffected = stats.NewCountersWithMultiLabels(
+		"VtgateApiRowsAffected",
+		"Rows affected by a write (DML) operation through the VTgate API",
+		[]string{"Operation", "Keyspace", "DbType"})
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -236,10 +249,6 @@ func Init(
 	tabletTypesToWait []topodatapb.TabletType,
 	pv plancontext.PlannerVersion,
 ) *VTGate {
-	if rpcVTGate != nil {
-		log.Fatalf("VTGate already initialized")
-	}
-
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
@@ -303,6 +312,12 @@ func Init(
 		LFU:            queryPlanCacheLFU,
 	}
 
+	plans := cache.NewDefaultCacheImpl(cacheCfg)
+	queryLogger, err := initQueryLogger(plans)
+	if err != nil {
+		log.Fatalf("error initializing query logger: %v", err)
+	}
+
 	executor := NewExecutor(
 		ctx,
 		serv,
@@ -311,10 +326,11 @@ func Init(
 		normalizeQueries,
 		warnShardedOnly,
 		streamBufferSize,
-		cacheCfg,
+		plans,
 		si,
 		noScatter,
 		pv,
+		queryLogger,
 	)
 
 	// connect the schema tracker with the vschema manager
@@ -331,33 +347,10 @@ func Init(
 
 	// TODO: call serv.WatchSrvVSchema here
 
-	rpcVTGate = &VTGate{
-		executor: executor,
-		resolver: resolver,
-		vsm:      vsm,
-		txConn:   tc,
-		gw:       gw,
-		timings: stats.NewMultiTimings(
-			"VtgateApi",
-			"VtgateApi timings",
-			[]string{"Operation", "Keyspace", "DbType"}),
-		rowsReturned: stats.NewCountersWithMultiLabels(
-			"VtgateApiRowsReturned",
-			"Rows returned through the VTgate API",
-			[]string{"Operation", "Keyspace", "DbType"}),
-		rowsAffected: stats.NewCountersWithMultiLabels(
-			"VtgateApiRowsAffected",
-			"Rows affected by a write (DML) operation through the VTgate API",
-			[]string{"Operation", "Keyspace", "DbType"}),
-
-		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
-		logPrepare:       logutil.NewThrottledLogger("Prepare", 5*time.Second),
-		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
-	}
-
-	_ = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
-	_ = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
-	_ = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15*60/5, 5*time.Second)
+	vtgateInst := newVTGate(executor, resolver, vsm, tc, gw)
+	_ = stats.NewRates("QPSByOperation", stats.CounterForDimension(vtgateInst.timings, "Operation"), 15, 1*time.Minute)
+	_ = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(vtgateInst.timings, "Keyspace"), 15, 1*time.Minute)
+	_ = stats.NewRates("QPSByDbType", stats.CounterForDimension(vtgateInst.timings, "DbType"), 15*60/5, 5*time.Second)
 
 	_ = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(errorCounts, "Operation"), 15, 1*time.Minute)
 	_ = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
@@ -366,11 +359,15 @@ func Init(
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
-			f(rpcVTGate)
+			f(vtgateInst)
 		}
 		if st != nil && enableSchemaChangeSignal {
 			st.Start()
 		}
+		srv := initMySQLProtocol(vtgateInst)
+		servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
+		servenv.OnClose(srv.rollbackAtShutdown)
+
 		if boost != nil {
 			err := boost.Start()
 			if err != nil {
@@ -386,20 +383,16 @@ func Init(
 			boost.Stop()
 		}
 	})
-	rpcVTGate.registerDebugHealthHandler()
-	rpcVTGate.registerDebugEnvHandler()
-	err = initQueryLogger(rpcVTGate)
-	if err != nil {
-		log.Fatalf("error initializing query logger: %v", err)
-	}
+	vtgateInst.registerDebugHealthHandler()
+	vtgateInst.registerDebugEnvHandler()
 
-	_, err = initInsights(QueryLogger)
+	_, err = initInsights(queryLogger)
 	if err != nil {
 		log.Fatalf("error initializing query insights: %v", err)
 	}
 
 	initAPI(gw.hc)
-	return rpcVTGate
+	return vtgateInst
 }
 
 func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
@@ -694,5 +687,22 @@ func (vtg *VTGate) HandlePanic(err *error) {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
 		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())
 		errorCounts.Add([]string{"Panic", "Unknown", "Unknown", vtrpcpb.Code_INTERNAL.String()}, 1)
+	}
+}
+
+func newVTGate(executor *Executor, resolver *Resolver, vsm *vstreamManager, tc *TxConn, gw *TabletGateway) *VTGate {
+	return &VTGate{
+		executor:     executor,
+		resolver:     resolver,
+		vsm:          vsm,
+		txConn:       tc,
+		gw:           gw,
+		timings:      timings,
+		rowsReturned: rowsReturned,
+		rowsAffected: rowsAffected,
+
+		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
+		logPrepare:       logutil.NewThrottledLogger("Prepare", 5*time.Second),
+		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 	}
 }

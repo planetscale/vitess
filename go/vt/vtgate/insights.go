@@ -177,9 +177,11 @@ type Insights struct {
 	LogMaxQueriesExceeded uint
 
 	// hooks
-	Sender func([]byte, string, string) error
+	Sender func(context.Context, []byte, string, string) error
 
 	LogQueriesLimiter limiter
+
+	cancel context.CancelFunc
 }
 
 var (
@@ -367,6 +369,16 @@ func (ii *Insights) Drain() bool {
 	return ii.LogChan == nil
 }
 
+func (ii *Insights) Close() error {
+	ii.Drain()
+	if transport, ok := ii.KafkaWriter.Transport.(*kafka.Transport); ok {
+		transport.CloseIdleConnections()
+	}
+	err := ii.KafkaWriter.Close()
+	ii.cancel()
+	return err
+}
+
 func argOrEnv(argVal, envKey string) string {
 	if argVal != "" {
 		return argVal
@@ -454,11 +466,14 @@ func (ii *Insights) logToKafka(logger *streamlog.StreamLogger[*logstats.LogStats
 	ii.Workers.Add(1)
 	ii.Timer = time.NewTicker(ii.Interval)
 	go func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		ii.cancel = cancel
 		defer func() {
 			logger.Unsubscribe(ii.LogChan)
 			ii.LogChan = nil
 			ii.Timer.Stop()
 			ii.Workers.Done()
+			cancel()
 		}()
 		for {
 			select {
@@ -469,12 +484,14 @@ func (ii *Insights) logToKafka(logger *streamlog.StreamLogger[*logstats.LogStats
 				}
 				if record == nil {
 					// unit tests send a nil record to emulate a 15s heartbeat
-					ii.sendAggregates()
+					ii.sendAggregates(ctx)
 				} else {
-					ii.handleMessage(record)
+					ii.handleMessage(ctx, record)
 				}
 			case <-ii.Timer.C:
-				ii.sendAggregates()
+				ii.sendAggregates(ctx)
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()
@@ -547,7 +564,7 @@ func (ii *Insights) makeSchemaChangeMessage(ls *logstats.LogStats) ([]byte, erro
 	return ii.makeEnvelope(out, schemaChangeTopic)
 }
 
-func (ii *Insights) handleMessage(record any) {
+func (ii *Insights) handleMessage(ctx context.Context, record any) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorf("PANIC while processing Insights message: %v", r)
@@ -571,7 +588,7 @@ func (ii *Insights) handleMessage(record any) {
 			log.Warningf("Could not send schema change event: %v", err)
 		} else {
 			if buf != nil {
-				ii.reserveAndSend(buf, schemaChangeTopic, ii.DatabaseBranchPublicID)
+				ii.reserveAndSend(ctx, buf, schemaChangeTopic, ii.DatabaseBranchPublicID)
 			}
 		}
 	}
@@ -609,7 +626,7 @@ func (ii *Insights) handleMessage(record any) {
 		} else {
 			kafkaKey = ii.makeKafkaKey(sql)
 		}
-		if ii.reserveAndSend(buf, queryTopic, kafkaKey) {
+		if ii.reserveAndSend(ctx, buf, queryTopic, kafkaKey) {
 			ii.QueriesThisInterval++
 		}
 	}
@@ -620,7 +637,7 @@ func (ii *Insights) makeKafkaKey(sql string) string {
 	return ii.DatabaseBranchPublicID + "/" + strconv.FormatUint(uint64(h), 16)
 }
 
-func (ii *Insights) reserveAndSend(buf []byte, topic, key string) bool {
+func (ii *Insights) reserveAndSend(ctx context.Context, buf []byte, topic, key string) bool {
 	reserve := uint64(len(buf))
 
 	if atomic.LoadUint64(&ii.InFlightCounter)+reserve >= uint64(ii.MaxInFlight) {
@@ -629,7 +646,7 @@ func (ii *Insights) reserveAndSend(buf []byte, topic, key string) bool {
 		return false
 	}
 
-	err := ii.Sender(buf, topic, key)
+	err := ii.Sender(ctx, buf, topic, key)
 	if err != nil {
 		log.Warningf("Error sending to Kafka: %v", err)
 		return false
@@ -639,8 +656,8 @@ func (ii *Insights) reserveAndSend(buf []byte, topic, key string) bool {
 	return true
 }
 
-func (ii *Insights) sendToKafka(buf []byte, topic, key string) error {
-	return ii.KafkaWriter.WriteMessages(context.Background(),
+func (ii *Insights) sendToKafka(ctx context.Context, buf []byte, topic, key string) error {
+	return ii.KafkaWriter.WriteMessages(ctx,
 		kafka.Message{
 			Topic: topic,
 			Key:   []byte(key),
@@ -708,7 +725,7 @@ func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string) bool {
 	return true
 }
 
-func (ii *Insights) sendAggregates() {
+func (ii *Insights) sendAggregates(ctx context.Context) {
 	// no locks needed if all callers are on the same thread
 
 	if ii.LogPatternsExceeded > 0 {
@@ -725,7 +742,7 @@ func (ii *Insights) sendAggregates() {
 		if err != nil {
 			log.Warningf("Could not serialize %s message: %v", queryStatsBundleTopic, err)
 		} else {
-			ii.reserveAndSend(buf, queryStatsBundleTopic, ii.makeKafkaKey(k.SQL))
+			ii.reserveAndSend(ctx, buf, queryStatsBundleTopic, ii.makeKafkaKey(k.SQL))
 		}
 	}
 

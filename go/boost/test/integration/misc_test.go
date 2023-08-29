@@ -6,16 +6,15 @@ import (
 	"vitess.io/vitess/go/boost/test/helpers/boosttest"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testexecutor"
 	"vitess.io/vitess/go/boost/test/helpers/boosttest/testrecipe"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
 func SetupExternal(t *testing.T, options ...boosttest.Option) *boosttest.Cluster {
 	t.Helper()
-	t.Cleanup(func() {
-		boosttest.EnsureNoLeaks(t)
-	})
+	ctx := utils.LeakCheckContext(t)
 
-	ts := memorytopo.NewServer(boosttest.DefaultLocalCell)
+	ts := memorytopo.NewServer(ctx, boosttest.DefaultLocalCell)
 	executor := testexecutor.Default(t)
 	executor.TestUpdateTopoServer(ts, boosttest.DefaultLocalCell)
 

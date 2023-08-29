@@ -9,10 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
+
 	boosttopo "vitess.io/vitess/go/boost/topo/internal/topo"
 	"vitess.io/vitess/go/vt/topo"
 
-	"vitess.io/vitess/go/boost/test/helpers/boosttest"
 	"vitess.io/vitess/go/boost/topo/client"
 	"vitess.io/vitess/go/boost/topo/watcher"
 	"vitess.io/vitess/go/vt/proto/vtboost"
@@ -286,10 +287,8 @@ func TestClientPurge(t *testing.T) {
 
 func setup(t *testing.T) (*client.Client, *watcher.Watcher, *topo.Server) {
 	t.Helper()
-
-	t.Cleanup(func() { boosttest.EnsureNoLeaks(t) })
-
-	ts := memorytopo.NewServer()
+	ctx := utils.LeakCheckContext(t)
+	ts := memorytopo.NewServer(ctx)
 	t.Cleanup(ts.Close)
 
 	var (
