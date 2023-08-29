@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -131,7 +132,7 @@ func coerceTo(v1, v2 sqltypes.Type, col1, col2 collations.ID) (sqltypes.Type, co
 	if (sqltypes.IsText(v1) || sqltypes.IsBinary(v1)) && (sqltypes.IsText(v2) || sqltypes.IsBinary(v2)) {
 		col := col1
 		if col1 != col2 {
-			coll, _, _, err := collations.Local().MergeCollations(collations.TypedCollation{
+			coll, _, _, err := colldata.Merge(collations.Local(), collations.TypedCollation{
 				Collation:    col1,
 				Coercibility: collations.CoerceCoercible,
 				Repertoire:   collations.RepertoireUnicode,
@@ -139,7 +140,7 @@ func coerceTo(v1, v2 sqltypes.Type, col1, col2 collations.ID) (sqltypes.Type, co
 				Collation:    col2,
 				Coercibility: collations.CoerceCoercible,
 				Repertoire:   collations.RepertoireUnicode,
-			}, collations.CoercionOptions{
+			}, colldata.CoercionOptions{
 				ConvertToSuperset:   true,
 				ConvertWithCoercion: true,
 			})
