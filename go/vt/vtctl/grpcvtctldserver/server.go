@@ -4684,7 +4684,7 @@ func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.Work
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
 func StartServer(s *grpc.Server, ts *topo.Server, boost *boostclient.Client) {
 	srv := NewVtctldServer(ts)
-	srv.boost = boost
+	srv.SetBoostClient(boost)
 
 	vtctlservicepb.RegisterVtctldServer(s, srv)
 }
@@ -4797,6 +4797,12 @@ func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, p
 }
 
 // PlanetScale Vitess private RPCs.
+
+// SetBoostClient optionally enables boost integration for a VtctldServer. This
+// call is public API for other PlanetScale-internal repositories.
+func (s *VtctldServer) SetBoostClient(boost *boostclient.Client) {
+	s.boost = boost
+}
 
 // errNoBoost reports a gRPC Failed Precondition error when a Boost RPC is
 // invoked while Boost integration is disabled.
