@@ -29,6 +29,7 @@ import (
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/replication"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -12018,17 +12019,42 @@ func TestMain(m *testing.M) {
 }
 
 func Test_errNoBoost(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	ts := memorytopo.NewServer()
-	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
+
+	t.Run("unset", func(t *testing.T) {
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(ts)
+		})
+
+		// Boost integration disabled, always returns failed precondition.
+		_, err := vtctld.BoostListClusters(context.Background(), &vtboostpb.ListClustersRequest{})
+		require.Error(t, err)
+
+		s, ok := status.FromError(err)
+		require.True(t, ok)
+		require.Equal(t, codes.FailedPrecondition, s.Code())
 	})
 
-	_, err := vtctld.BoostListClusters(context.Background(), &vtboostpb.ListClustersRequest{})
-	require.Error(t, err)
+	t.Run("set", func(t *testing.T) {
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			s := NewVtctldServer(ts)
 
-	s, ok := status.FromError(err)
-	require.True(t, ok)
-	require.Equal(t, codes.FailedPrecondition, s.Code())
+			// With boost integration enabled, create and list 1 cluster to
+			// verify we no longer see failed precondition.
+			bc := boostclient.NewClient(ts)
+			_, err := bc.AddCluster(ctx, &vtboostpb.AddClusterRequest{Uuid: uuid.NewString()})
+			require.NoError(t, err)
+
+			s.SetBoostClient(bc)
+			return s
+		})
+
+		res, err := vtctld.BoostListClusters(context.Background(), &vtboostpb.ListClustersRequest{})
+		require.NoError(t, err)
+		require.Len(t, res.Clusters, 1)
+	})
 }
 
 func Test_boostDo(t *testing.T) {
