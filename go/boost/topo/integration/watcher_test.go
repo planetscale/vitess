@@ -25,7 +25,7 @@ func WaitUntil(t testing.TB, until func() bool) {
 	t.Helper()
 
 	start := time.Now()
-	tick := time.NewTicker(1 * time.Millisecond)
+	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()
 	for now := range tick.C {
 		if now.Sub(start) >= 5*time.Second {
@@ -44,8 +44,12 @@ func TestBasicWatcherBehavior(t *testing.T) {
 	addCluster(t, client, "cluster2")
 
 	WaitUntil(t, func() bool { return watch.Version() != "" })
-	currentVersion := watch.Version()
+	WaitUntil(t, func() bool {
+		state := watch.DebugState()
+		return len(state) == 2
+	})
 
+	currentVersion := watch.Version()
 	state := watch.DebugState()
 	assert.Len(t, state, 2)
 	assert.Contains(t, state, "cluster1")
@@ -134,6 +138,10 @@ func TestClientDrainClusterTwice(t *testing.T) {
 	addCluster(t, c, "cluster2")
 
 	WaitUntil(t, func() bool { return watch.Version() != "" })
+	WaitUntil(t, func() bool {
+		state := watch.DebugState()
+		return len(state) == 2
+	})
 
 	_, err := c.MakePrimaryCluster(context.Background(), &vtboost.PrimaryClusterRequest{
 		Uuid: "cluster1",
@@ -164,6 +172,10 @@ func TestClientRemoveClusterTwice(t *testing.T) {
 	addCluster(t, c, "cluster2")
 
 	WaitUntil(t, func() bool { return watch.Version() != "" })
+	WaitUntil(t, func() bool {
+		state := watch.DebugState()
+		return len(state) == 2
+	})
 
 	_, err := c.MakePrimaryCluster(context.Background(), &vtboost.PrimaryClusterRequest{
 		Uuid: "cluster1",
@@ -194,6 +206,10 @@ func TestClientRemoveClusters(t *testing.T) {
 	addCluster(t, c, "cluster3")
 
 	WaitUntil(t, func() bool { return watch.Version() != "" })
+	WaitUntil(t, func() bool {
+		state := watch.DebugState()
+		return len(state) == 3
+	})
 
 	_, err := c.RemoveCluster(context.Background(), &vtboost.RemoveClusterRequest{
 		Uuids: []string{"cluster1", "cluster2"},
@@ -232,6 +248,11 @@ func TestClientPurge(t *testing.T) {
 	//  - a simulated worker registration
 	addCluster(t, c, "cluster1")
 	addCluster(t, c, "cluster2")
+	WaitUntil(t, func() bool {
+		state := watch.DebugState()
+		return len(state) == 2
+	})
+
 	_, err = c.PutRecipe(ctx, &vtboost.PutRecipeRequest{
 		Recipe: &vtboost.Recipe{
 			Queries: []*vtboost.CachedQuery{{
