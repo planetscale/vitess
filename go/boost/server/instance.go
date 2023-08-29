@@ -9,12 +9,12 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"vitess.io/vitess/go/vt/sidecardb"
-
-	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
+	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/boost/boostrpc/service"
 	"vitess.io/vitess/go/vt/discovery"
 
@@ -66,8 +66,6 @@ func NewBoostInstance(log *zap.Logger, ts *topo.Server, tmc toposerver.TabletMan
 		cfg = config.DefaultConfig()
 	}
 
-	vtgate.QueryLogger = streamlog.New[*logstats.LogStats]("vtboost", 10)
-
 	tp := toposerver.NewTopoServer(log, ts, tmc, clusterID)
 	instanceID := uuid.New()
 
@@ -118,7 +116,7 @@ func resolveAndLoadKeyspace(ctx context.Context, log *zap.Logger, srvResolver *s
 }
 
 func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, ts *topo.Server, localCell string, cellsToWatch string, hcRetryDelay time.Duration, hcTimeout time.Duration) error {
-	resilientServer := srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
+	resilientServer := srvtopo.NewResilientServer(ctx, ts, "ResilientSrvTopoServer")
 	log.Info("configuring external gateway for upqueries", zap.String("cell", localCell), zap.String("cells_to_watch", cellsToWatch))
 
 	hc := discovery.NewHealthCheck(ctx, hcRetryDelay, hcTimeout, ts, localCell, cellsToWatch)
@@ -154,6 +152,9 @@ func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, t
 	tc := vtgate.NewTxConn(gateway, DefaultTxMode)
 	sc := vtgate.NewScatterConn("", tc, gateway)
 	resolver := vtgate.NewResolver(srvResolver, resilientServer, localCell, sc)
+	queryLogBufferSize := 10
+	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
 
 	executor := vtgate.NewExecutor(ctx,
 		resilientServer,
@@ -162,10 +163,11 @@ func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, t
 		DefaultNormalizeQueries,
 		DefaultWarnSharedOnly,
 		DefaultStreamBufferSize,
-		cache.DefaultConfig,
+		plans,
 		tracker,
 		DefaultNoScatter,
 		DefaultPlannerVersion,
+		queryLogger,
 	)
 
 	s.Worker.SetExecutor(executor)
