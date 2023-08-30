@@ -13478,7 +13478,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:2827
 		{
-			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), String: (yyDollar[3].identifierCI.String() + yyDollar[4].str)}
+			yyLOCAL = &TableOption{Name: string(yyDollar[1].str), String: (yyDollar[3].identifierCI.String() + yyDollar[4].str), CaseSensitive: true}
 		}
 		yyVAL.union = yyLOCAL
 	case 494:
