@@ -43,7 +43,7 @@ type myTestCase struct {
 	udv                                                                     int
 	autocommit, clientFoundRows, skipQueryPlanCache, socket, queryTimeout   bool
 	sqlSelectLimit, transactionMode, workload, version, versionComment      bool
-	txIsolation, replLag                                                    bool
+	replLag                                                                 bool
 }
 
 func TestRewrites(in *testing.T) {
