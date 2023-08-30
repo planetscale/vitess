@@ -219,6 +219,10 @@ func (vre *Engine) Open(ctx context.Context) {
 		vre.cancelRetry = cancel
 		go vre.retry(ctx, err)
 	}
+	if vre.throttlerClient != nil {
+		vre.throttlerClient.Open()
+	}
+
 	log.Infof("VReplication engine opened successfully")
 }
 

@@ -19,6 +19,7 @@ package throttle
 import (
 	"context"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -26,11 +27,14 @@ import (
 )
 
 const (
-	throttleCheckDuration = 250 * time.Millisecond
+	throttlerClientCheckInterval = 250 * time.Millisecond
 )
 
 // Client construct is used by apps who wish to consult with a throttler. It encapsulates the check/throttling/backoff logic
 type Client struct {
+	isOpen atomic.Bool
+	mu     sync.Mutex
+
 	throttler *Throttler
 	appName   throttlerapp.Name
 	checkType ThrottleCheckType
@@ -44,7 +48,6 @@ type Client struct {
 // NewBackgroundClient creates a client suitable for background jobs, which have low priority over production traffic,
 // e.g. migration, table pruning, vreplication
 func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, checkType ThrottleCheckType) *Client {
-	ctx, cancel := context.WithCancel(context.Background())
 
 	client := &Client{
 		throttler: throttler,
@@ -53,21 +56,7 @@ func NewBackgroundClient(throttler *Throttler, appName throttlerapp.Name, checkT
 		flags: CheckFlags{
 			LowPriority: true,
 		},
-		cancel: cancel,
 	}
-
-	go func() {
-		tick := time.NewTicker(throttleCheckDuration)
-		defer tick.Stop()
-		for {
-			select {
-			case <-tick.C:
-				client.ticks.Add(1)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
 
 	return client
 }
@@ -84,6 +73,10 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 	}
 	if c.throttler == nil {
 		// no throttler
+		return true
+	}
+	if !c.isOpen.Load() {
+		// Closed. We fail open here
 		return true
 	}
 	if c.lastSuccessfulThrottle >= c.ticks.Load() {
@@ -111,7 +104,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName throttlera
 func (c *Client) ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) bool {
 	ok := c.ThrottleCheckOK(ctx, appName)
 	if !ok {
-		time.Sleep(throttleCheckDuration)
+		time.Sleep(throttlerClientCheckInterval)
 	}
 	return ok
 }
@@ -137,9 +130,47 @@ func (c *Client) Throttle(ctx context.Context) {
 	}
 }
 
-func (c *Client) Close() {
-	if c.throttler != nil {
-		c.throttler.Close()
+func (c *Client) Open() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.isOpen.Load() {
+		// already open
+		return
 	}
-	c.cancel()
+	c.isOpen.Store(true)
+
+	if c.cancel != nil {
+		c.cancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	c.cancel = cancel
+
+	go func() {
+		tick := time.NewTicker(throttlerClientCheckInterval)
+		defer tick.Stop()
+		for {
+			select {
+			case <-tick.C:
+				c.ticks.Add(1)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+func (c *Client) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.isOpen.Load() {
+		// already closed
+		return
+	}
+	c.isOpen.Store(false)
+
+	if c.cancel != nil {
+		c.cancel()
+	}
 }

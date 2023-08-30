@@ -156,6 +156,9 @@ func (vse *Engine) Open() {
 	log.Info("VStreamer: opening")
 	// If it's not already open, then open it now.
 	vse.isOpen.Store(true)
+	if vse.throttlerClient != nil {
+		vse.throttlerClient.Open()
+	}
 }
 
 // IsOpen checks if the engine is opened
@@ -172,7 +175,9 @@ func (vse *Engine) Close() {
 		if !isOpen {
 			return
 		}
-		vse.throttlerClient.Close()
+		if vse.throttlerClient != nil {
+			vse.throttlerClient.Close()
+		}
 		// cancels are non-blocking.
 		for _, s := range vse.streamers {
 			s.Cancel()
