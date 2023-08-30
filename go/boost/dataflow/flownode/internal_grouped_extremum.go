@@ -5,14 +5,13 @@ import (
 	"strconv"
 	"time"
 
-	"vitess.io/vitess/go/mysql/format"
-
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/boost/sql"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
-
-	"vitess.io/vitess/go/boost/sql"
+	"vitess.io/vitess/go/mysql/format"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -262,7 +261,7 @@ func createExtremumState(tt sql.Type, max bool, over int) (agstate, error) {
 			over: over,
 		}, nil
 	case sqltypes.IsQuoted(tt.T):
-		col := tt.Collation.Get()
+		col := colldata.Lookup(tt.Collation)
 		return &agstateExtremum[[]byte]{
 			cmp: func(a, b []byte) int {
 				return col.Collate(a, b, false)

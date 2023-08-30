@@ -79,7 +79,7 @@ func (ap *AggregateParams) String() string {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
 	if sqltypes.IsText(ap.Type) && ap.CollationID != collations.Unknown {
-		keyCol += " COLLATE " + ap.CollationID.Get().Name()
+		keyCol += " COLLATE " + collations.Local().LookupName(ap.CollationID)
 	}
 	dispOrigOp := ""
 	if ap.OrigOpcode != AggregateUnassigned && ap.OrigOpcode != ap.Opcode {

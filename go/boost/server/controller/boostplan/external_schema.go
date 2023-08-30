@@ -180,6 +180,7 @@ func (d *ddlWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table
 	// Ensure we update the resolved keyspace if a globally routed table was found.
 	tbl.Keyspace.Name = destKeyspace
 
+	env := collations.Local()
 	columns := make([]vindexes.Column, len(spec.Columns))
 	for idx, col := range spec.Columns {
 		collationID, err := collationForColumn(spec, col)
@@ -189,7 +190,7 @@ func (d *ddlWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table
 		columns[idx] = vindexes.Column{
 			Name:          col.Name,
 			Type:          col.Type.SQLType(),
-			CollationName: collationID.Get().Name(),
+			CollationName: env.LookupName(collationID),
 		}
 	}
 	// We use this to keep being able to use a hack in Singularity to get
