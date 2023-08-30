@@ -178,6 +178,10 @@ func (collector *TableGC) Open() (err error) {
 	collector.pool.Open(collector.env.Config().DB.AllPrivsWithDB(), collector.env.Config().DB.DbaWithDB(), collector.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&collector.isOpen, 1)
 
+	if collector.throttlerClient != nil {
+		collector.throttlerClient.Open()
+	}
+
 	conn, err := dbconnpool.NewDBConnection(context.Background(), collector.env.Config().DB.AllPrivsWithDB())
 	if err != nil {
 		return err
@@ -210,7 +214,9 @@ func (collector *TableGC) Close() {
 	collector.stateMutex.Lock()
 	defer collector.stateMutex.Unlock()
 	log.Infof("TableGC - acquired lock")
-	collector.throttlerClient.Close()
+	if collector.throttlerClient != nil {
+		collector.throttlerClient.Close()
+	}
 
 	if collector.isOpen == 0 {
 		log.Infof("TableGC - no collector is open")
