@@ -383,6 +383,8 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		return nil, err
 	}
 
+	stats := binlogplayer.NewStats()
+	defer stats.Stop()
 	switch plan.opcode {
 	case insertQuery:
 		qr, err := dbClient.ExecuteFetch(plan.query, 1)
@@ -397,7 +399,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return nil, fmt.Errorf("insert id %v out of range", qr.InsertID)
 		}
 
-		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
+		vdbc := newVDBClient(dbClient, stats)
 
 		// If we are creating multiple streams, for example in a
 		// merge workflow going from 2 shards to 1 shard, we
@@ -456,7 +458,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
+		vdbc := newVDBClient(dbClient, stats)
 		for _, id := range ids {
 			params, err := readRow(dbClient, id)
 			if err != nil {
@@ -483,7 +485,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return &sqltypes.Result{}, nil
 		}
 		// Stop and delete the current controllers.
-		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
+		vdbc := newVDBClient(dbClient, stats)
 		for _, id := range ids {
 			if ct := vre.controllers[id]; ct != nil {
 				ct.Stop()

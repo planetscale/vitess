@@ -103,6 +103,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if state == binlogplayer.BlpStopped || state == binlogplayer.BlpError {
 		ct.cancel = func() {}
 		close(ct.done)
+		blpStats.Stop()
 		return ct, nil
 	}
 
@@ -312,5 +313,6 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 
 func (ct *controller) Stop() {
 	ct.cancel()
+	ct.blpStats.Stop()
 	<-ct.done
 }
