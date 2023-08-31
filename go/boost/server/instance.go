@@ -125,7 +125,7 @@ func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, t
 	tabletTypesToWait := []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}
 	srvResolver := srvtopo.NewResolver(resilientServer, gateway, localCell)
 
-	if err := gateway.WaitForTablets(tabletTypesToWait); err != nil {
+	if err := gateway.WaitForTablets(ctx, tabletTypesToWait); err != nil {
 		return err
 	}
 
