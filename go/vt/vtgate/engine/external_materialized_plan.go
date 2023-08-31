@@ -61,8 +61,8 @@ func (e *externalPlanPrimitive) TryStreamExecute(ctx context.Context, vcursor VC
 	return callback(res)
 }
 
-func (e *externalPlanPrimitive) Inputs() []Primitive {
-	return nil
+func (e *externalPlanPrimitive) Inputs() ([]Primitive, []map[string]any) {
+	return nil, nil
 }
 
 func (e *externalPlanPrimitive) description() PrimitiveDescription {
