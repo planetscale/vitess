@@ -19,6 +19,7 @@ package operators
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"slices"
 	"sort"
 	"strings"
@@ -290,7 +291,7 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 			col := SelectExpr{
 				Col: selExp,
 			}
-			if sqlparser.ContainsAggregation(selExp.Expr) {
+			if containsAggr(selExp.Expr) {
 				col.Aggr = true
 				qp.HasAggr = true
 			}
@@ -307,6 +308,19 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 		}
 	}
 	return nil
+}
+
+func containsAggr(e sqlparser.Expr) (containsAggr bool) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, isAggr := node.(sqlparser.AggrFunc); isAggr {
+			containsAggr = true
+			return false, io.EOF
+		}
+
+		_, isSubquery := node.(*sqlparser.Subquery)
+		return !isSubquery, nil
+	}, e)
+	return
 }
 
 // createQPFromUnion creates the QueryProjection for the input *sqlparser.Union

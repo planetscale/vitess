@@ -582,17 +582,30 @@ type selectExpressions interface {
 	isDerived() bool
 }
 
+func (r *Route) findClosestSelectExpressions() selectExpressions {
+	op := r.Source
+	for {
+		switch this := op.(type) {
+		case *Distinct:
+			op = this.Source
+		case *Limit:
+			op = this.Source
+		case *Ordering:
+			op = this.Source
+		case selectExpressions:
+			return this
+		case *Union:
+			panic("french union soup")
+		default:
+			return nil
+		}
+	}
+}
+
 // addColumnToInput adds a column to an operator without pushing it down.
-// It will return a bool indicating whether the addition was succesful or not, and an offset to where the column can be found
+// It will return a bool indicating whether the addition was successful or not, and an offset to where the column can be found
 func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Operator, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) (ops.Operator, bool, []int) {
 	switch op := operator.(type) {
-	//case *SubQuery:
-	//	src, added, offset := addMultipleColumnsToInput(ctx, op.LHS, reuse, addToGroupBy, exprs)
-	//	if added {
-	//		op.LHS = src
-	//	}
-	//	return op, added, offset
-
 	case *Distinct:
 		src, added, offset := addMultipleColumnsToInput(ctx, op.Source, reuse, addToGroupBy, exprs)
 		if added {

@@ -32,7 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-const foriegnKeyContraintValues = "fkc_vals"
+const foreignKeyConstraintValues = "fkc_vals"
 
 // translateQueryToOp creates an operator tree that represents the input SELECT or UNION query
 func translateQueryToOp(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (op ops.Operator, err error) {
@@ -85,7 +85,7 @@ func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, o
 		if err != nil {
 			return nil, err
 		}
-		if isSubq {
+		if isSubq != nil {
 			continue
 		}
 		op, err = op.AddPredicate(ctx, expr)
@@ -101,19 +101,19 @@ func (sq *SubQueryContainer) handleSubquery(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
-) (bool, error) {
+) (*SubQuery, error) {
 	subq := getSubQuery(expr)
 	if subq == nil {
-		return false, nil
+		return nil, nil
 	}
 
 	sqInner, err := createSubquery(ctx, expr, subq, outerID)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	sq.Inner = append(sq.Inner, sqInner)
 
-	return true, nil
+	return sqInner, nil
 }
 
 func (sq *SubQueryContainer) getRootOperator(op ops.Operator) ops.Operator {
@@ -209,7 +209,7 @@ func createSubqueryFilter(
 			if err != nil {
 				return nil, err
 			}
-			if isSubq {
+			if isSubq != nil {
 				continue
 			}
 			jpc.inspectPredicate(ctx, predicate)

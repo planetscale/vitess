@@ -117,6 +117,8 @@ func planHorizons(ctx *plancontext.PlanningContext, root ops.Operator) (op ops.O
 func optimizeHorizonPlanning(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
 	visitor := func(in ops.Operator, _ semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
 		switch in := in.(type) {
+		case *QueryGraph:
+			return optimizeQueryGraph(ctx, in)
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
 		case *Projection:
@@ -208,6 +210,7 @@ func tryMergeSubqueriesRecursively(
 	merger := &subqueryRouteMerger{
 		outer:    outer,
 		original: subQuery.Original,
+		subq:     subQuery,
 	}
 	op, err := mergeJoinInputs(ctx, inner.Outer, outer, exprs, merger)
 	if err != nil {
@@ -243,6 +246,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	merger := &subqueryRouteMerger{
 		outer:    outer,
 		original: subQuery.Original,
+		subq:     subQuery,
 	}
 	op, err := mergeJoinInputs(ctx, inner, outer, exprs, merger)
 	if err != nil {
@@ -251,8 +255,8 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if op == nil {
 		return outer, rewrite.SameTree, nil
 	}
-	op.Source = &Filter{Source: outer.Source, Predicates: []sqlparser.Expr{subQuery.Original}}
-	return op, rewrite.NewTree("merged subquery with outer", subQuery), nil
+
+	return op, rewrite.NewTree("merged subquery projection with outer", subQuery), nil
 }
 
 func removeFilterUnderRoute(op *Route, subq *SubQuery) {
@@ -264,32 +268,6 @@ func removeFilterUnderRoute(op *Route, subq *SubQuery) {
 		}
 	}
 }
-
-type subqueryRouteMerger struct {
-	outer    *Route
-	original sqlparser.Expr
-}
-
-func (s *subqueryRouteMerger) mergeShardedRouting(r1, r2 *ShardedRouting, old1, old2 *Route) (*Route, error) {
-	return s.merge(old1, old2, mergeShardedRouting(r1, r2))
-}
-
-func (s *subqueryRouteMerger) merge(old1, old2 *Route, r Routing) (*Route, error) {
-	mergedWith := append(old1.MergedWith, old1, old2)
-	mergedWith = append(mergedWith, old2.MergedWith...)
-	return &Route{
-		Source: &Filter{
-			Source:     s.outer.Source,
-			Predicates: []sqlparser.Expr{s.original},
-		},
-		MergedWith:    mergedWith,
-		Routing:       r,
-		Ordering:      s.outer.Ordering,
-		ResultColumns: s.outer.ResultColumns,
-	}, nil
-}
-
-var _ merger = (*subqueryRouteMerger)(nil)
 
 // tryPushDownSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
 func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery, outer *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
@@ -442,6 +420,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	sqm := &subqueryRouteMerger{
 		outer:    outerRoute,
 		original: newExpr,
+		subq:     inner,
 	}
 	newOp, err := mergeJoinInputs(ctx, innerRoute, outerRoute, inner.GetMergePredicates(), sqm)
 	if err != nil || newOp == nil {
@@ -483,6 +462,10 @@ func addSubQuery(in ops.Operator, inner *SubQuery) ops.Operator {
 func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, *rewrite.ApplyResult, error) {
 	if len(in.ColumnAliases) > 0 {
 		return nil, nil, errHorizonNotPlanned()
+	}
+
+	if ctx.SemTable.QuerySignature.SubQueries {
+		return expandHorizon(ctx, in)
 	}
 
 	rb, isRoute := in.src().(*Route)
@@ -537,11 +520,27 @@ func tryPushProjection(
 
 func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, src *SubQueryContainer) (ops.Operator, *rewrite.ApplyResult, error) {
 	outer := TableID(src.Outer)
-	for _, proj := range p.Projections {
+	for idx, proj := range p.Projections {
 		if _, isOffset := proj.(*Offset); isOffset {
 			continue
 		}
 		expr := proj.GetExpr()
+		for _, subq := range src.Inner {
+			if expr == subq.ArgumentedExpr {
+				// we are pushing down the projection into the outer side. We need to rewrite the expression,
+				// so that it makes sense on the outer side
+				aliasedExpr := p.Columns[idx]
+				alias := aliasedExpr.As
+				if alias.IsEmpty() {
+					alias = sqlparser.NewIdentifierCI(sqlparser.String(aliasedExpr.Expr))
+				}
+				p.Columns[idx] = &sqlparser.AliasedExpr{
+					Expr: expr,
+					As:   alias,
+				}
+			}
+		}
+
 		if !ctx.SemTable.RecursiveDeps(expr).IsSolvedBy(outer) {
 			return p, rewrite.SameTree, nil
 		}
@@ -927,10 +926,19 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (ops.Operator, 
 		}
 		return rewrite.Swap(in, src, "push filter into Route")
 	case *SubQuery:
-		outerTableID := TableID(src.Outer)
+		var outerID semantics.TableSet
+		if src.isCorrelated() {
+			// correlated queries run after the outer side,
+			// so if the predicates depend on the subquery,
+			// we can't push it down to the outer side
+			outerID = TableID(src.Outer)
+		} else {
+			outerID = TableID(src)
+		}
+
 		for _, pred := range in.Predicates {
 			deps := ctx.SemTable.RecursiveDeps(pred)
-			if !deps.IsSolvedBy(outerTableID) {
+			if !deps.IsSolvedBy(outerID) {
 				return in, rewrite.SameTree, nil
 			}
 		}

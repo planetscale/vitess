@@ -102,7 +102,7 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, deleteStmt *sqlparse
 	for _, predicate := range qt.Predicates {
 		if isSubQ, err := sqL.handleSubquery(ctx, predicate, outerID); err != nil {
 			return nil, err
-		} else if isSubQ {
+		} else if isSubQ != nil {
 			continue
 		}
 		route.Routing, err = UpdateRoutingLogic(ctx, predicate, route.Routing)
@@ -152,7 +152,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp ops.O
 }
 
 func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, cols []int) (*FkChild, error) {
-	bvName := ctx.ReservedVars.ReserveVariable(foriegnKeyContraintValues)
+	bvName := ctx.ReservedVars.ReserveVariable(foreignKeyConstraintValues)
 
 	var childStmt sqlparser.Statement
 	switch fk.OnDelete {

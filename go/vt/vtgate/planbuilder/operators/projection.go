@@ -74,9 +74,23 @@ type (
 	UnexploredExpression struct {
 		E sqlparser.Expr
 	}
+
+	// SubqueryProjection is used in Subqueries part of the Select Expressions. In this case, we want to
+	// keep track of the original expression and also the expression after it has been changed to have an argument.
+	// We also keep a back pointer to the Subquery struct that introduced this expression.
+	SubqueryProjection struct {
+		OriginalExpr   *sqlparser.AliasedExpr
+		ArgumentedExpr sqlparser.Expr
+		Subquery       *SubQuery
+	}
 )
 
 var _ selectExpressions = (*Projection)(nil)
+
+// GetExpr implements the ProjExpr Interface.
+func (sp SubqueryProjection) GetExpr() sqlparser.Expr {
+	return sp.ArgumentedExpr
+}
 
 // createSimpleProjection returns a projection where all columns are offsets.
 // used to change the name and order of the columns in the final output
@@ -104,6 +118,16 @@ func createSimpleProjection(ctx *plancontext.PlanningContext, qp *QueryProjectio
 func (p *Projection) addUnexploredExpr(ae *sqlparser.AliasedExpr, e sqlparser.Expr) int {
 	p.Projections = append(p.Projections, UnexploredExpression{E: e})
 	p.Columns = append(p.Columns, ae)
+	return len(p.Projections) - 1
+}
+
+func (p *Projection) addSubqueryProjectionExpr(column, original *sqlparser.AliasedExpr, argumented sqlparser.Expr, subq *SubQuery) int {
+	p.Projections = append(p.Projections, SubqueryProjection{
+		OriginalExpr:   original,
+		ArgumentedExpr: argumented,
+		Subquery:       subq,
+	})
+	p.Columns = append(p.Columns, column)
 	return len(p.Projections) - 1
 }
 
