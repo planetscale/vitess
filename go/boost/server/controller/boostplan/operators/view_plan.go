@@ -3,11 +3,12 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/slice"
+
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/boost/server/controller/boostplan/viewplan"
 	"vitess.io/vitess/go/boost/sql"
-	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -90,7 +91,7 @@ func (vp viewPlan) PlanMultiLookups() {
 	// We assume that any function that contains an IN + only equalities is most performantly
 	// served as a multi-lookup. More complex functions (e.g. INs with other non-equality operators or
 	// post-operators) cannot be served via Multi-lookup.
-	if vp[0].op() == sqlparser.InOp && slices2.All(vp[1:], func(p viewParameter) bool { return p.Param.Kind == viewplan.Param_EQUALITY }) {
+	if vp[0].op() == sqlparser.InOp && slice.All(vp[1:], func(p viewParameter) bool { return p.Param.Kind == viewplan.Param_EQUALITY }) {
 		vp[0].Param.Kind = viewplan.Param_MULTI_EQUALITY
 	}
 }

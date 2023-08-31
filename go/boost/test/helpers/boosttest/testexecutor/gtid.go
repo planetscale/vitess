@@ -5,8 +5,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/slice"
+
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/go-mysql-server/sql"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -188,7 +189,7 @@ func (gt *GTIDTracker) Unsubscribe(ch chan []*binlogdatapb.VEvent) {
 	gt.mu.Lock()
 	defer gt.mu.Unlock()
 
-	slices2.DeleteFunc(gt.subs, func(sub *subscription) bool {
+	slice.DeleteFunc(gt.subs, func(sub *subscription) bool {
 		return sub.ch == ch
 	})
 }

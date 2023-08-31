@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/slice"
+
 	"github.com/google/uuid"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
-
-	"vitess.io/vitess/go/slices2"
 
 	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/boost/boostrpc/packet"
@@ -149,7 +149,7 @@ func (ctrl *Controller) updateWorker(ctx context.Context, req *vtboostpb.TopoWor
 	}
 	if len(removed) > 0 {
 		_, err := ctrl.ModifyRecipe(ctx, nil, func(recipe *vtboostpb.Recipe) error {
-			recipe.Queries = slices2.DeleteFunc(recipe.Queries, func(q *vtboostpb.CachedQuery) bool {
+			recipe.Queries = slice.DeleteFunc(recipe.Queries, func(q *vtboostpb.CachedQuery) bool {
 				return slices.Contains(removed, q.PublicId)
 			})
 			return nil
