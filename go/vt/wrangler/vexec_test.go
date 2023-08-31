@@ -35,11 +35,12 @@ import (
 )
 
 func TestVExec(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	query := "update _vt.vreplication set state = 'Running'"
-	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, time.Now().Unix())
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, time.Now().Unix())
 	defer env.close()
 	var logger = logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
@@ -180,10 +181,11 @@ func TestWorkflowStatusUpdate(t *testing.T) {
 }
 
 func TestWorkflowListStreams(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	workflow := "wrWorkflow"
 	keyspace := "target"
-	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
@@ -355,10 +357,11 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 }
 
 func TestWorkflowListAll(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	keyspace := "target"
 	workflow := "wrWorkflow"
-	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
@@ -374,11 +377,12 @@ func TestWorkflowListAll(t *testing.T) {
 }
 
 func TestVExecValidations(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	workflow := "wf"
 	keyspace := "ks"
 	query := ""
-	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 0)
 	defer env.close()
 
 	wr := New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
@@ -460,10 +464,11 @@ func TestVExecValidations(t *testing.T) {
 // tabletmanager and the behavior is tested
 // there.
 func TestWorkflowUpdate(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	workflow := "wrWorkflow"
 	keyspace := "target"
-	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
+	env := newWranglerTestEnv(t, ctx, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)

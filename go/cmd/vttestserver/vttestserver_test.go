@@ -108,7 +108,10 @@ func TestPersistentMode(t *testing.T) {
 	// reboot the persistent cluster
 	cluster.TearDown()
 	cluster, err = startPersistentCluster(dir)
-	defer cluster.TearDown()
+	defer func() {
+		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
+		cluster.TearDown()
+	}()
 	assert.NoError(t, err)
 
 	// rerun our sanity checks to make sure vschema migrations are run during every startup

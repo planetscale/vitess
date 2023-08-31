@@ -194,9 +194,9 @@ func (gw *TabletGateway) HealthCheck() discovery.HealthCheck {
 }
 
 // WaitForTablets is part of the Gateway interface.
-func (gw *TabletGateway) WaitForTablets(tabletTypesToWait []topodatapb.TabletType) (err error) {
+func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) (err error) {
 	log.Infof("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait)
-	ctx, cancel := context.WithTimeout(context.Background(), initialTabletTimeout)
+	ctx, cancel := context.WithTimeout(ctx, initialTabletTimeout)
 	defer cancel()
 
 	defer func() {
@@ -309,11 +309,11 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			// if we have a keyspace event watcher, check if the reason why our primary is not available is that it's currently being resharded
 			// or if a reparent operation is in progress.
 			if kev := gw.kev; kev != nil {
-				if kev.TargetIsBeingResharded(target) {
+				if kev.TargetIsBeingResharded(ctx, target) {
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "current keyspace is being resharded")
 					continue
 				}
-				primary, notServing := kev.PrimaryIsNotServing(target)
+				primary, notServing := kev.PrimaryIsNotServing(ctx, target)
 				if notServing {
 					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "primary is not serving, there may be a reparent operation in progress")
 					continue

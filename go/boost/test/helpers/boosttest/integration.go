@@ -95,9 +95,9 @@ func WithTopoServer(ts *topo.Server) Option {
 	}
 }
 
-func WithMemoryTopo() Option {
+func WithMemoryTopo(ctx context.Context) Option {
 	return func(c *Cluster) {
-		c.Topo = memorytopo.NewServer()
+		c.Topo = memorytopo.NewServer(ctx)
 	}
 }
 
@@ -386,7 +386,6 @@ func (c *Cluster) shutdown() {
 	if err != nil && err != context.Canceled {
 		c.t.Errorf("error when shutting down: %v", err)
 	}
-	c.Topo.Close()
 }
 
 func (c *Cluster) ViewGraphviz() {
@@ -555,7 +554,7 @@ func (l *Lookup) ExpectLen(expected int) *sqltypes.Result {
 	})
 }
 
-const MaxTries = 10
+const MaxTries = 20
 
 func (l *Lookup) expect(check func(result *sqltypes.Result) error) *sqltypes.Result {
 	l.t.Helper()
