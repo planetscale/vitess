@@ -1233,6 +1233,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -1244,6 +1245,7 @@
             "Table": "`user`"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Unsharded",
             "Keyspace": {
@@ -1269,15 +1271,37 @@
       "QueryType": "SELECT",
       "Original": "select a, 1+(select col from user) from unsharded",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select a, 1 + (select col from `user` where 1 != 1) from unsharded where 1 != 1",
-        "Query": "select a, 1 + (select col from `user`) from unsharded",
-        "Table": "unsharded"
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user`",
+            "Table": "`user`"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select a, 1 + :__sq1 from unsharded where 1 != 1",
+            "Query": "select a, 1 + :__sq1 from unsharded",
+            "Table": "unsharded"
+          }
+        ]
       },
       "TablesUsed": [
         "main.unsharded"
@@ -2167,7 +2191,8 @@
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Route",
+                "InputName": "Outer",
+            "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2178,6 +2203,7 @@
                 "Table": "`user`"
               },
               {
+            "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "EqualUnique",
                 "Keyspace": {
@@ -2222,7 +2248,8 @@
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Route",
+                "InputName": "Outer",
+            "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2234,6 +2261,7 @@
                 "Table": "`user`"
               },
               {
+            "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "EqualUnique",
                 "Keyspace": {
@@ -2303,7 +2331,8 @@
                 "Table": "`user`"
               },
               {
-                "OperatorType": "Route",
+                "InputName": "SubQuery",
+            "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2343,7 +2372,8 @@
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
-                "OperatorType": "Route",
+                "InputName": "Outer",
+            "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2354,6 +2384,7 @@
                 "Table": "`user`"
               },
               {
+            "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -2616,6 +2647,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Limit",
             "Count": "INT64(1)",
             "Inputs": [
@@ -2634,6 +2666,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "Scatter",
             "Keyspace": {
@@ -3400,6 +3433,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "any_value(0) AS id",
@@ -3420,6 +3454,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3456,6 +3491,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Limit",
             "Count": "INT64(10)",
             "Inputs": [
@@ -3473,6 +3509,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3560,6 +3597,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
             "Aggregates": "max(0|1) AS max(music.id)",
@@ -3582,6 +3620,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3618,6 +3657,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -3633,6 +3673,7 @@
             "Vindex": "user_index"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3669,6 +3710,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -3684,6 +3726,7 @@
             "Vindex": "user_index"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3793,6 +3836,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3846,6 +3890,7 @@
             ]
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
