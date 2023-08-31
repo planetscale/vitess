@@ -11,7 +11,7 @@ jobs:
   get_previous_release:
     if: always()
     name: Get Previous Release - Backups - Manual
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-shr
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
@@ -39,7 +39,7 @@ jobs:
     timeout-minutes: 40
     if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test - Backups - Manual
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-shr
     needs:
       - get_previous_release
 
