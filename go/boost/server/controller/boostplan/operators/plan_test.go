@@ -3,11 +3,12 @@ package operators_test
 import (
 	"testing"
 
+	"vitess.io/vitess/go/slice"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/boost/server/controller/boostplan"
 	"vitess.io/vitess/go/boost/server/controller/boostplan/operators"
-	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -49,7 +50,7 @@ func TestComputeColumnUsage(t *testing.T) {
 			_, tr, err := conv.Plan(schema, si, stmt, "main", "toto")
 			require.NoError(t, err)
 
-			got := slices2.Map(tr, func(from *operators.TableReport) string { return from.String() })
+			got := slice.Map(tr, func(from *operators.TableReport) string { return from.String() })
 			require.ElementsMatch(t, tc.expected, got)
 		})
 	}

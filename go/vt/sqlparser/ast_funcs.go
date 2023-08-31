@@ -1072,6 +1072,11 @@ func (node *Select) MakeDistinct() {
 	node.Distinct = true
 }
 
+// IsDistinct implements the SelectStatement interface
+func (node *Select) IsDistinct() bool {
+	return node.Distinct
+}
+
 // GetColumnCount return SelectExprs count.
 func (node *Select) GetColumnCount() int {
 	return len(node.SelectExprs)
@@ -1195,6 +1200,11 @@ func (node *Union) SetWith(with *With) {
 // MakeDistinct implements the SelectStatement interface
 func (node *Union) MakeDistinct() {
 	node.Distinct = true
+}
+
+// IsDistinct implements the SelectStatement interface
+func (node *Union) IsDistinct() bool {
+	return node.Distinct
 }
 
 // GetColumnCount implements the SelectStatement interface
@@ -2466,4 +2476,29 @@ func IsDistinct(f AggrFunc) bool {
 		return false
 	}
 	return da.IsDistinct()
+}
+
+func VisitAllSelects(in SelectStatement, f func(p *Select, idx int) error) error {
+	v := visitor{}
+	return v.visitAllSelects(in, f)
+}
+
+type visitor struct {
+	idx int
+}
+
+func (v *visitor) visitAllSelects(in SelectStatement, f func(p *Select, idx int) error) error {
+	switch sel := in.(type) {
+	case *Select:
+		err := f(sel, v.idx)
+		v.idx++
+		return err
+	case *Union:
+		err := v.visitAllSelects(sel.Left, f)
+		if err != nil {
+			return err
+		}
+		return v.visitAllSelects(sel.Right, f)
+	}
+	panic("switch should be exhaustive")
 }

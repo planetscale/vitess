@@ -3,8 +3,9 @@ package operators
 import (
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/slice"
+
 	"vitess.io/vitess/go/boost/common/dbg"
-	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -493,7 +494,7 @@ func (conv *Converter) bindUnionSideOffset(columns Columns, node *Node, st *sema
 		oldIdx, offset int
 	}
 
-	newColumns := slices2.MapIdx(offsets, func(idx, from int) tuple {
+	newColumns := slice.MapIdx(offsets, func(idx, from int) tuple {
 		t := tuple{
 			oldIdx: idx,
 			offset: from,

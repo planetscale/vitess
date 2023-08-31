@@ -100,10 +100,11 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 		return nil, err
 	}
 
-	union := &Union{
-		Distinct: node.Distinct,
-		Sources:  []ops.Operator{opLHS, opRHS},
-	}
+	lexprs := ctx.SemTable.SelectExprs(node.Left)
+	rexprs := ctx.SemTable.SelectExprs(node.Right)
+
+	unionCols := ctx.SemTable.SelectExprs(node)
+	union := newUnion([]ops.Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
 	return &Horizon{Source: union, Query: node}, nil
 }
 
@@ -597,11 +598,10 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			inner = horizon.Source
 		}
 
-		stmt := sqlparser.CloneSelectStatement(tbl.Select)
-		if onlyTable && stmt.GetLimit() == nil {
-			stmt.SetOrderBy(nil)
+		if onlyTable && tbl.Select.GetLimit() == nil {
+			tbl.Select.SetOrderBy(nil)
 		}
-		qp, err := CreateQPFromSelectStatement(ctx, stmt)
+		qp, err := CreateQPFromSelectStatement(ctx, tbl.Select)
 		if err != nil {
 			return nil, err
 		}
@@ -610,7 +610,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			TableId:       &tableID,
 			Alias:         tableExpr.As.String(),
 			Source:        inner,
-			Query:         stmt,
+			Query:         tbl.Select,
 			ColumnAliases: tableExpr.Columns,
 			QP:            qp,
 		}, nil
