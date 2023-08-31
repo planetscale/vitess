@@ -159,10 +159,8 @@ func createSubquery(
 		return createExistsSubquery(ctx, expr, subq, outerID, opcode.PulloutExists)
 	case *sqlparser.ComparisonExpr:
 		return createComparisonSubQuery(ctx, expr, subq, outerID)
-	case *sqlparser.Subquery:
-		return createValueSubquery(ctx, expr, subq, outerID)
 	default:
-		return nil, vterrors.VT12001("subquery: " + sqlparser.String(expr))
+		return createValueSubquery(ctx, expr, subq, outerID)
 	}
 }
 
