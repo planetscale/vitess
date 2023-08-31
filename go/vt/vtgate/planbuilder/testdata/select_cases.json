@@ -1271,7 +1271,7 @@
       "QueryType": "SELECT",
       "Original": "select a, 1+(select col from user) from unsharded",
       "Instructions": {
-        "OperatorType": "Subquery",
+        "OperatorType": "UncorrelatedSubquery",
         "Variant": "PulloutValue",
         "PulloutVars": [
           "__sq1"
@@ -1297,14 +1297,15 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select a, 1 + :__sq1 from unsharded where 1 != 1",
-            "Query": "select a, 1 + :__sq1 from unsharded",
+            "FieldQuery": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, 1 + :__sq1 as `1 + (select col from ``user``)` from unsharded",
             "Table": "unsharded"
           }
         ]
       },
       "TablesUsed": [
-        "main.unsharded"
+        "main.unsharded",
+        "user.user"
       ]
     }
   },
@@ -2028,7 +2029,7 @@
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
+        "JoinColumnIndexes": "R:0",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -2050,8 +2051,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
+            "FieldQuery": "select :__sq1 as a from user_extra where 1 != 1",
+            "Query": "select :__sq1 as a from user_extra",
             "Table": "user_extra"
           }
         ]
@@ -2192,7 +2193,7 @@
             "Inputs": [
               {
                 "InputName": "Outer",
-            "OperatorType": "Route",
+                "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2203,7 +2204,7 @@
                 "Table": "`user`"
               },
               {
-            "InputName": "SubQuery",
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "EqualUnique",
                 "Keyspace": {
@@ -2249,7 +2250,7 @@
             "Inputs": [
               {
                 "InputName": "Outer",
-            "OperatorType": "Route",
+                "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2261,7 +2262,7 @@
                 "Table": "`user`"
               },
               {
-            "InputName": "SubQuery",
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "EqualUnique",
                 "Keyspace": {
@@ -2320,6 +2321,7 @@
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
+                "InputName": "Outer",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -2332,7 +2334,7 @@
               },
               {
                 "InputName": "SubQuery",
-            "OperatorType": "Route",
+                "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2373,7 +2375,7 @@
             "Inputs": [
               {
                 "InputName": "Outer",
-            "OperatorType": "Route",
+                "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2384,7 +2386,7 @@
                 "Table": "`user`"
               },
               {
-            "InputName": "SubQuery",
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -3372,7 +3374,24 @@
   {
     "comment": "`IN` comparison on Vindex with `None` subquery, as non-routing predicate",
     "query": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5",
-    "plan": "VT12001: unsupported: subquery: music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
   },
   {
     "comment": "Mergeable scatter subquery",
@@ -3546,6 +3565,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3561,6 +3581,7 @@
             "Vindex": "user_index"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "IN",
             "Keyspace": {
@@ -3815,6 +3836,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Limit",
             "Count": "INT64(10)",
             "Inputs": [
@@ -3873,6 +3895,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Limit",
             "Count": "INT64(10)",
             "Inputs": [
@@ -3959,7 +3982,24 @@
   {
     "comment": "`None` subquery nested inside `OR` expression - outer query keeps routing information",
     "query": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
-    "plan": "VT12001: unsupported: subquery: music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5"
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.id in (select music.id from music where music.user_id in (null)) or music.user_id = 5",
+        "Table": "music"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
   },
   {
     "comment": "Joining with a subquery that uses an aggregate column and an `EqualUnique` route can be merged together",
@@ -4298,6 +4338,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -4313,6 +4354,7 @@
             "Vindex": "user_index"
           },
           {
+            "InputName": "Outer",
             "OperatorType": "Route",
             "Variant": "EqualUnique",
             "Keyspace": {
@@ -4332,7 +4374,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }  },
+    }
+  },
   {
     "comment": "allow last_insert_id with argument",
     "query": "select last_insert_id(id) from user",

@@ -2554,7 +2554,7 @@
             "Inputs": [
               {
                 "InputName": "Outer",
-                    "OperatorType": "Route",
+                "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
@@ -2565,7 +2565,7 @@
                 "Table": "`user`"
               },
               {
-                    "InputName": "SubQuery",
+                "InputName": "SubQuery",
                 "OperatorType": "Route",
                 "Variant": "Scatter",
                 "Keyspace": {
@@ -3256,6 +3256,7 @@
         ],
         "Inputs": [
           {
+            "InputName": "SubQuery",
             "OperatorType": "Filter",
             "Predicate": "count(ue.col) > 10",
             "Inputs": [
