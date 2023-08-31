@@ -132,7 +132,7 @@ func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horiz
 	}
 
 	if !qp.NeedsAggregation() {
-		projX, err := createProjectionWithoutAggr(qp, horizon.src())
+		projX, err := createProjectionWithoutAggr(ctx, qp, horizon.src())
 		if err != nil {
 			return nil, err
 		}
@@ -224,11 +224,10 @@ func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) (
 	return p, nil
 }
 
-func createProjectionWithoutAggr(qp *QueryProjection, src ops.Operator) (*Projection, error) {
-	proj := &Projection{
-		Source: src,
-	}
-
+func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator) (*Projection, error) {
+	proj := &Projection{}
+	sqc := &SubQueryContainer{}
+	outerID := TableID(src)
 	for _, e := range qp.SelectExprs {
 		if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
 			return nil, errHorizonNotPlanned()
@@ -239,19 +238,31 @@ func createProjectionWithoutAggr(qp *QueryProjection, src ops.Operator) (*Projec
 			return nil, err
 		}
 		expr := ae.Expr
-		if sqlparser.ContainsAggregation(expr) {
-			aggr, ok := expr.(sqlparser.AggrFunc)
-			if !ok {
-				// need to add logic to extract aggregations and pushed them to the top level
-				return nil, vterrors.VT12001(fmt.Sprintf("unsupported aggregation expression: %s", sqlparser.String(expr)))
-			}
-			expr = aggr.GetArg()
-			if expr == nil {
-				expr = sqlparser.NewIntLiteral("1")
-			}
+		subq, err := sqc.handleSubquery(ctx, expr, outerID)
+		if err != nil {
+			return nil, err
 		}
 
-		proj.addUnexploredExpr(ae, expr)
+		if subq != nil {
+			argumentedExpr, err := subq.settleSubquery(ctx, src)
+			if err != nil {
+				return nil, err
+			}
+			subq.isProjection = true
+
+			columnExpr := aeWrap(argumentedExpr)
+			if !ae.As.IsEmpty() {
+				columnExpr.As = ae.As
+			} else {
+				columnExpr.As = sqlparser.NewIdentifierCI(sqlparser.String(ae.Expr))
+			}
+			proj.addSubqueryProjectionExpr(columnExpr, ae, argumentedExpr, subq)
+		} else {
+			proj.addUnexploredExpr(ae, expr)
+		}
+
 	}
+
+	proj.Source = sqc.getRootOperator(src)
 	return proj, nil
 }

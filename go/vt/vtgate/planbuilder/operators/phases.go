@@ -54,7 +54,7 @@ func getPhases(ctx *plancontext.PlanningContext) []Phase {
 		{
 			// Split aggregation that has not been pushed under the routes into between work on mysql and vtgate.
 			Name:   "split aggregation between vtgate and mysql",
-			action: enableDelegateAggregatiion,
+			action: enableDelegateAggregation,
 			apply:  func(s semantics.QuerySignature) bool { return s.Aggregation },
 		},
 		{
@@ -93,7 +93,7 @@ func removePerformanceDistinctAboveRoute(_ *plancontext.PlanningContext, op ops.
 	}, stopAtRoute)
 }
 
-func enableDelegateAggregatiion(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
+func enableDelegateAggregation(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 	ctx.DelegateAggregation = true
 	return addColumnsToInput(ctx, op)
 }
@@ -121,30 +121,30 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Op
 // At this point, we know that the subqueries will not be pushed under a Route, so we need to
 // plan for how to run them on the vtgate
 func settleSubquery(ctx *plancontext.PlanningContext, outer ops.Operator, subq *SubQuery) (ops.Operator, error) {
-	// TODO: here we have the chance of using a different subquery for how we actually run the query. Here is an example:
-	// select * from user where id = 5 and foo in (select bar from music where baz = 13)
-	// this query is equivalent to
-	// select * from user where id = 5 and exists(select 1 from music where baz = 13 and user.id = bar)
-	// Long term, we should have a cost based optimizer that can make this decision for us.
+	if subq.isProjection {
+		subq.Outer = outer
+		return subq, nil
+	}
+	if len(subq.Predicates) > 0 {
+		if subq.FilterType != opcode.PulloutExists {
+			return nil, vterrors.VT12001("correlated subquery is only supported for EXISTS")
+		}
+		return settleExistSubquery(ctx, subq, outer)
+	}
 
-	newOuter, err := settleSubqueryFilter(ctx, subq, outer)
+	predicate, err := subq.settleSubquery(ctx, outer)
 	if err != nil {
 		return nil, err
 	}
-
-	subq.Outer = newOuter
+	subq.Outer = &Filter{
+		Source:     outer,
+		Predicates: sqlparser.SplitAndExpression(nil, predicate),
+	}
 
 	return subq, nil
 }
 
-func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQuery, outer ops.Operator) (ops.Operator, error) {
-	if len(sj.Predicates) > 0 {
-		if sj.FilterType != opcode.PulloutExists {
-			return nil, vterrors.VT12001("correlated subquery is only supported for EXISTS")
-		}
-		return settleExistSubquery(ctx, sj, outer)
-	}
-
+func (sj *SubQuery) settleSubquery(ctx *plancontext.PlanningContext, outer ops.Operator) (sqlparser.Expr, error) {
 	resultArg, hasValuesArg := ctx.ReservedVars.ReserveSubQueryWithHasValues()
 	dontEnterSubqueries := func(node, _ sqlparser.SQLNode) bool {
 		if _, ok := node.(*sqlparser.Subquery); ok {
@@ -168,7 +168,7 @@ func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQuery, outer 
 	}
 	rhsPred := sqlparser.CopyOnRewrite(sj.Original, dontEnterSubqueries, post, ctx.SemTable.CopyDependenciesOnSQLNodes).(sqlparser.Expr)
 
-	var predicates []sqlparser.Expr
+	var predicates sqlparser.Exprs
 	switch sj.FilterType {
 	case opcode.PulloutExists:
 		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg))
@@ -189,10 +189,16 @@ func settleSubqueryFilter(ctx *plancontext.PlanningContext, sj *SubQuery, outer 
 		predicates = append(predicates, rhsPred)
 		sj.SubqueryValueName = resultArg
 	}
-	return &Filter{
-		Source:     outer,
-		Predicates: predicates,
-	}, nil
+
+	// we need to remember that we need both sides to evaluate this subquery
+	deps := TableID(outer)
+	for _, predicate := range predicates {
+		ctx.SemTable.Recursive[predicate] = deps
+	}
+
+	expressions := sqlparser.AndExpressions(predicates...)
+	sj.ArgumentedExpr = expressions
+	return expressions, nil
 }
 
 func settleExistSubquery(ctx *plancontext.PlanningContext, sj *SubQuery, outer ops.Operator) (ops.Operator, error) {
@@ -205,10 +211,9 @@ func settleExistSubquery(ctx *plancontext.PlanningContext, sj *SubQuery, outer o
 		Source:     sj.Subquery,
 		Predicates: slice.Map(jcs, func(col JoinColumn) sqlparser.Expr { return col.RHSExpr }),
 	}
+	sj.Outer = outer
 
-	// the columns needed by the RHS expression are handled during offset planning time
-
-	return outer, nil
+	return sj, nil
 }
 
 func addOrderBysForAggregations(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {

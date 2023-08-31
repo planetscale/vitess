@@ -1226,18 +1226,39 @@
       "QueryType": "SELECT",
       "Original": "select a, (select col from user) from unsharded",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select a, (select col from `user` where 1 != 1) from unsharded where 1 != 1",
-        "Query": "select a, (select col from `user`) from unsharded",
-        "Table": "unsharded"
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select a, :__sq1 as `(select col from ``user``)` from unsharded where 1 != 1",
+            "Query": "select a, :__sq1 as `(select col from ``user``)` from unsharded",
+            "Table": "unsharded"
+          }
+        ]
       },
       "TablesUsed": [
-        "main.unsharded"
+        "main.unsharded",
+        "user.user"
       ]
     }
   },
@@ -2248,7 +2269,7 @@
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "u1_col1": 1
+          "u1_col": 1
         },
         "TableName": "`user`_`user`_user_extra",
         "Inputs": [
@@ -2289,7 +2310,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-                "Query": "select 1 from user_extra as ue where ue.col = :u1_col1 and ue.col = :u2_col",
+                "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col",
                 "Table": "user_extra"
               }
             ]
@@ -2588,17 +2609,45 @@
       "QueryType": "SELECT",
       "Original": "select (select id from user order by id limit 1) from user_extra",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select (select id from `user` where 1 != 1) from user_extra where 1 != 1",
-        "Query": "select (select id from `user` order by id asc limit 1) from user_extra",
-        "Table": "user_extra"
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "INT64(1)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select :__sq1 as `(select id from ``user`` order by id asc limit 1)` from user_extra where 1 != 1",
+            "Query": "select :__sq1 as `(select id from ``user`` order by id asc limit 1)` from user_extra",
+            "Table": "user_extra"
+          }
+        ]
       },
       "TablesUsed": [
+        "user.user",
         "user.user_extra"
       ]
     }
@@ -2625,6 +2674,7 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
+        "main.dual",
         "user.user"
       ]
     }
@@ -2813,17 +2863,22 @@
       "Original": "select exists(select id from user where id = 4)",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Reference",
+        "Variant": "EqualUnique",
         "Keyspace": {
-          "Name": "main",
-          "Sharded": false
+          "Name": "user",
+          "Sharded": true
         },
         "FieldQuery": "select exists (select 1 from `user` where 1 != 1) from dual where 1 != 1",
         "Query": "select exists (select 1 from `user` where id = 4) from dual",
-        "Table": "dual"
+        "Table": "dual",
+        "Values": [
+          "INT64(4)"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual"
+        "main.dual",
+        "user.user"
       ]
     }
   },
@@ -2835,17 +2890,18 @@
       "Original": "select exists(select * from user)",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Reference",
+        "Variant": "Scatter",
         "Keyspace": {
-          "Name": "main",
-          "Sharded": false
+          "Name": "user",
+          "Sharded": true
         },
         "FieldQuery": "select exists (select 1 from `user` where 1 != 1) from dual where 1 != 1",
         "Query": "select exists (select 1 from `user`) from dual",
         "Table": "dual"
       },
       "TablesUsed": [
-        "main.dual"
+        "main.dual",
+        "user.user"
       ]
     }
   },
@@ -4190,25 +4246,48 @@
       "QueryType": "SELECT",
       "Original": "select (select 1 from user u1 join user u2 on u1.id = u2.id and u1.id = u3.id) subquery from user u3 where u3.id = 1",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select (select 1 from `user` as u1 join `user` as u2 on u1.id = u2.id and u1.id = u3.id where 1 != 1) as subquery from `user` as u3 where 1 != 1",
-        "Query": "select (select 1 from `user` as u1 join `user` as u2 on u1.id = u2.id and u1.id = u3.id) as subquery from `user` as u3 where u3.id = 1",
-        "Table": "`user`",
-        "Values": [
-          "INT64(1)"
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
         ],
-        "Vindex": "user_index"
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as u1, `user` as u2 where 1 != 1",
+            "Query": "select 1 from `user` as u1, `user` as u2 where u1.id = u2.id and u1.id = u3.id",
+            "Table": "`user`",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select :__sq1 as subquery from `user` as u3 where 1 != 1",
+            "Query": "select :__sq1 as subquery from `user` as u3 where u3.id = 1",
+            "Table": "`user`",
+            "Values": [
+              "INT64(1)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
       },
       "TablesUsed": [
         "user.user"
       ]
-    }
-  },
+    }  },
   {
     "comment": "allow last_insert_id with argument",
     "query": "select last_insert_id(id) from user",

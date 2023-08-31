@@ -124,7 +124,7 @@ func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.Join
 		if err != nil {
 			return nil, err
 		}
-		if isSubq {
+		if isSubq != nil {
 			continue
 		}
 		op, err = op.AddPredicate(ctx, pred)
