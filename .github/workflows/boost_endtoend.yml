@@ -4,7 +4,7 @@ jobs:
 
   build:
     name: End-to-End Test
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-shr
     steps:
     - name: Configure git private repo access
       env:

@@ -7,7 +7,7 @@ jobs:
 
   build:
     name: Unit Test (Race)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-shr
     steps:
     - name: Configure git private repo access
       env:

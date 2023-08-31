@@ -6,7 +6,7 @@ on: [push]
 jobs:
   build:
     name: Run endtoend tests on Cluster (vtgate_topo_etcd)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-shr
     timeout-minutes: 60
 
     steps:

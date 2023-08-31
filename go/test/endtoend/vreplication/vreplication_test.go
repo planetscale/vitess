@@ -782,6 +782,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		}
 
 		vdiff1(t, ksWorkflow, "")
+		catchup(t, customerTab1, workflow, workflowType)
+		catchup(t, customerTab2, workflow, workflowType)
 		switchReadsDryRun(t, workflowType, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
@@ -808,6 +810,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		catchup(t, productTab, workflow, "MoveTables")
 
 		vdiff1(t, "product.p2c_reverse", "")
+		catchup(t, productTab, workflow, "MoveTables")
 		if withOpenTx {
 			execVtgateQuery(t, vtgateConn, "", deleteOpenTxQuery)
 		}
@@ -1040,6 +1043,15 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			}
 		}
 		vdiff1(t, ksWorkflow, "")
+		for _, tab := range tablets {
+			if strings.Contains(targetShards, ","+tab.Shard+",") {
+				log.Infof("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard)
+				catchup(t, tab, workflow, "Reshard")
+			} else {
+				log.Infof("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard)
+				continue
+			}
+		}
 		if dryRunResultSwitchReads != nil {
 			switchReadsDryRun(t, workflowType, allCellNames, ksWorkflow, dryRunResultSwitchReads)
 		}
@@ -1127,6 +1139,8 @@ func shardMerchant(t *testing.T) {
 		catchup(t, merchantTab2, workflow, workflowType)
 
 		vdiff1(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
+		catchup(t, merchantTab1, workflow, workflowType)
+		catchup(t, merchantTab2, workflow, workflowType)
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		printRoutingRules(t, vc, "After merchant movetables")
