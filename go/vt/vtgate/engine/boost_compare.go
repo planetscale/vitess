@@ -160,8 +160,8 @@ func (b *BoostCompare) executeAndCompareStreamWithGen4(ctx context.Context, vcur
 	return boostResult, nil
 }
 
-func (b *BoostCompare) Inputs() []Primitive {
-	return []Primitive{b.Gen4, b.Boost}
+func (b *BoostCompare) Inputs() ([]Primitive, []map[string]any) {
+	return []Primitive{b.Gen4, b.Boost}, nil
 }
 
 func (b *BoostCompare) description() PrimitiveDescription {
