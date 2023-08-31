@@ -37,7 +37,7 @@ jobs:
   build-tag-push-lite:
     name: vitess/lite
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-shr
 
     strategy:
       matrix:

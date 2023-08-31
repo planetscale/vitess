@@ -8,7 +8,7 @@ permissions: read-all
 jobs:
   build:
     name: Static Code Checks Etc
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-shr
 
     steps:
       - name: Configure git private repo access

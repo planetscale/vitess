@@ -14,7 +14,7 @@ jobs:
   get_next_release:
     if: always()
     name: Get Latest Release - Reparent New VTTablet
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-shr
     outputs:
       next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
 
@@ -40,7 +40,7 @@ jobs:
   upgrade_downgrade_test:
     if: always() && (needs.get_next_release.result == 'success')
     name: Run Upgrade Downgrade Test - Reparent New VTTablet
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-shr
     needs:
       - get_next_release
 
