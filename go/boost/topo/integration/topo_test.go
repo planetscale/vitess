@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -13,7 +14,8 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/boost/test/helpers/boosttest"
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/boost/topo/client"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
 	"vitess.io/vitess/go/boost/topo/watcher"
@@ -144,19 +146,19 @@ func (ins *FakeBoostInstance) GetMaterializations() (*vtboost.MaterializationsRe
 }
 
 func TestRecipeApplications(t *testing.T) {
-	defer boosttest.EnsureNoLeaks(t)
+	ctx := utils.LeakCheckContext(t)
 
 	var wg errgroup.Group
 
 	log, err := zap.NewDevelopment()
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	ts := memorytopo.NewServer()
+	ctx, cancel := context.WithCancel(ctx)
+	ts := memorytopo.NewServer(ctx)
 
 	defer func() {
 		cancel()
-		if err := wg.Wait(); err != nil {
+		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 			t.Errorf("unclean shutdown: %v", err)
 		}
 		ts.Close()

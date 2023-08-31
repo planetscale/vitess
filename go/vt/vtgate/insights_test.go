@@ -27,6 +27,8 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/vt/callerid"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
@@ -253,17 +255,21 @@ func TestInsightsTotalDurationSketchUnitsValidation(t *testing.T) {
 
 func TestInsightsConnectionRefused(t *testing.T) {
 	// send to a real Kafka endpoint, will fail
+	_ = utils.LeakCheckContext(t)
 	insights, err := setup(t, "localhost:1", "mumblefoo", "", "", setupOptions{})
 	require.NoError(t, err)
+	defer insights.Close()
 	logger.Send(realize(t, lsSlowQuery))
 	require.True(t, insights.Drain(), "did not drain")
 }
 
 func TestInsightsSlowQuery(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
 	insights, err := setup(t, "localhost:1234", "mumblefoo", "", "", setupOptions{})
 	require.NoError(t, err)
+	defer insights.Close()
 	messages := 0
-	insights.Sender = func(buf []byte, topic, key string) error {
+	insights.Sender = func(ctx context.Context, buf []byte, topic, key string) error {
 		messages++
 		assert.Contains(t, string(buf), "select sleep(?)")
 		assert.Contains(t, string(buf), "planetscale-reader")
@@ -628,6 +634,7 @@ func TestInsightsPreparesExcluded(t *testing.T) {
 func TestMakeKafkaKeyIsDeterministic(t *testing.T) {
 	insights, err := setup(t, "localhost:1234", "mumblefoo", "", "", setupOptions{})
 	require.NoError(t, err)
+	defer insights.Close()
 
 	sql := `this isn't even real sql`
 	key := insights.makeKafkaKey(sql)
@@ -1158,12 +1165,14 @@ func (ike insightsKafkaExpectation) count(n int) insightsKafkaExpectation {
 
 func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, queries []insightsQuery, expect []insightsKafkaExpectation) {
 	t.Helper()
+	_ = utils.LeakCheckContext(t)
 	insights, err := setup(t, "localhost:1234", "mumblefoo", "", "", options)
 	require.NoError(t, err)
+	defer insights.Close()
 	if options.maxRawQuerySize != nil {
 		insights.MaxRawQueryLength = *options.maxRawQuerySize
 	}
-	insights.Sender = func(buf []byte, topic, key string) error {
+	insights.Sender = func(ctx context.Context, buf []byte, topic, key string) error {
 		assert.Contains(t, string(buf), "mumblefoo", "database branch public ID not present in message body")
 		assert.True(t, strings.HasPrefix(key, "mumblefoo"), "key has unexpected form %q", key)
 		assert.Contains(t, string(buf), queryURLBase+"/"+topic, "expected key not present in message body")

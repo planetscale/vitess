@@ -41,7 +41,9 @@ import (
 )
 
 func TestUpdateVRWorkflow(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	cells := []string{"zone1"}
 	tabletTypes := []string{"replica"}
 	workflow := "testwf"
@@ -50,7 +52,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 	shortCircuitErr := fmt.Errorf("short circuiting test")
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
-	ts := memorytopo.NewServer(cells[0])
+	ts := memorytopo.NewServer(ctx, cells[0])
 	mysqld := mysqlctl.NewFakeMysqlDaemon(db)
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }

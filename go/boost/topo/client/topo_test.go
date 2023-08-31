@@ -13,11 +13,10 @@ import (
 )
 
 func TestClientNilRequest(t *testing.T) {
-	ts := memorytopo.NewServer()
-	t.Cleanup(ts.Close)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	ts := memorytopo.NewServer(ctx)
+	t.Cleanup(ts.Close)
 
 	c := NewClient(ts)
 
@@ -79,11 +78,11 @@ func TestClientRemoveCluster(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ts := memorytopo.NewServer()
-			t.Cleanup(ts.Close)
-
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
+
+			ts := memorytopo.NewServer(ctx)
+			t.Cleanup(ts.Close)
 
 			c := NewClient(ts)
 

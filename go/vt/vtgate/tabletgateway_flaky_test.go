@@ -17,11 +17,12 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/mysql/collations"
 
@@ -35,7 +36,9 @@ import (
 // TestGatewayBufferingWhenPrimarySwitchesServingState is used to test that the buffering mechanism buffers the queries when a primary goes to a non serving state and
 // stops buffering when the primary is healthy again
 func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	bufferImplementation = "keyspace_events"
+
 	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
 		buffer.SetBufferingModeInTestingEnv(false)
@@ -57,7 +60,8 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
-	tg := NewTabletGateway(context.Background(), hc, ts, "cell")
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	defer tg.Close(ctx)
 
 	// add a primary tabelt which is serving
 	sbc := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
@@ -77,7 +81,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	sbc.SetResults([]*sqltypes.Result{sqlResult1})
 
 	// run a query that we indeed get the result added to the sandbox connection back
-	res, err := tg.Execute(context.Background(), target, "query", nil, 0, 0, nil)
+	res, err := tg.Execute(ctx, target, "query", nil, 0, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, res, sqlResult1)
 
@@ -95,7 +99,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	// execute the query in a go routine since it should be buffered, and check that it eventually succeed
 	queryChan := make(chan struct{})
 	go func() {
-		res, err = tg.Execute(context.Background(), target, "query", nil, 0, 0, nil)
+		res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
 		queryChan <- struct{}{}
 	}()
 
@@ -119,6 +123,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 // TestGatewayBufferingWhileReparenting is used to test that the buffering mechanism buffers the queries when a PRS happens
 // the healthchecks that happen during a PRS are simulated in this test
 func TestGatewayBufferingWhileReparenting(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	bufferImplementation = "keyspace_events"
 	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
@@ -143,7 +148,8 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
-	tg := NewTabletGateway(context.Background(), hc, ts, "cell")
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	defer tg.Close(ctx)
 
 	// add a primary tabelt which is serving
 	sbc := hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
@@ -166,7 +172,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 
 	// run a query that we indeed get the result added to the sandbox connection back
 	// this also checks that the query reaches the primary tablet and not the replica
-	res, err := tg.Execute(context.Background(), target, "query", nil, 0, 0, nil)
+	res, err := tg.Execute(ctx, target, "query", nil, 0, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, res, sqlResult1)
 
@@ -195,7 +201,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	hc.Broadcast(primaryTablet)
 
 	require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
-	_, isNotServing := tg.kev.PrimaryIsNotServing(target)
+	_, isNotServing := tg.kev.PrimaryIsNotServing(ctx, target)
 	require.True(t, isNotServing)
 
 	// add a result to the sandbox connection of the new primary
@@ -204,7 +210,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	// execute the query in a go routine since it should be buffered, and check that it eventually succeed
 	queryChan := make(chan struct{})
 	go func() {
-		res, err = tg.Execute(context.Background(), target, "query", nil, 0, 0, nil)
+		res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
 		queryChan <- struct{}{}
 	}()
 
@@ -226,7 +232,7 @@ outer:
 		case <-timeout:
 			require.Fail(t, "timed out - could not verify the new primary")
 		case <-time.After(10 * time.Millisecond):
-			newPrimary, notServing := tg.kev.PrimaryIsNotServing(target)
+			newPrimary, notServing := tg.kev.PrimaryIsNotServing(ctx, target)
 			if newPrimary != nil && newPrimary.Uid == 1 && !notServing {
 				break outer
 			}
@@ -249,6 +255,7 @@ outer:
 // This is inconsistent and we want to fail properly. This scenario used to panic since no error and no results were
 // returned.
 func TestInconsistentStateDetectedBuffering(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
 	bufferImplementation = "keyspace_events"
 	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
@@ -271,7 +278,8 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 	// create a new fake health check. We want to check the buffering code which uses Subscribe, so we must also pass a channel
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 	// create a new tablet gateway
-	tg := NewTabletGateway(context.Background(), hc, ts, "cell")
+	tg := NewTabletGateway(ctx, hc, ts, "cell")
+	defer tg.Close(ctx)
 
 	tg.retryCount = 0
 
@@ -310,7 +318,7 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 	var err error
 	queryChan := make(chan struct{})
 	go func() {
-		res, err = tg.Execute(context.Background(), target, "query", nil, 0, 0, nil)
+		res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
 		queryChan <- struct{}{}
 	}()
 

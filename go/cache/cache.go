@@ -39,6 +39,7 @@ type Cache interface {
 	MaxCapacity() int64
 	SetCapacity(int64)
 
+	// Close shuts down this cache and stops any background goroutines.
 	Close()
 }
 

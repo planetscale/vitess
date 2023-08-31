@@ -22,6 +22,7 @@ package txthrottler
 //go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -57,11 +58,13 @@ func TestDisabledThrottler(t *testing.T) {
 }
 
 func TestEnabledThrottler(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
 	defer resetTxThrottlerFactories()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 
 	mockHealthCheck := NewMockHealthCheck(mockCtrl)
 	hcCall1 := mockHealthCheck.EXPECT().Subscribe()

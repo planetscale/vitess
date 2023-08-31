@@ -170,6 +170,10 @@ func (t *Tracker) Start() {
 		for {
 			select {
 			case th := <-t.ch:
+				if th == nil {
+					// channel closed
+					return
+				}
 				ksUpdater := t.getKeyspaceUpdateController(th)
 				ksUpdater.add(th)
 			case <-ctx.Done():

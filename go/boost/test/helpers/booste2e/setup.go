@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	testutils "vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/proto/vtboost"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -112,7 +113,7 @@ func Setup(t testing.TB, options ...Option) *Test {
 	}
 
 	t.Cleanup(func() {
-		boosttest.EnsureNoLeaks(t)
+		testutils.EnsureNoLeaks(t)
 	})
 
 	test := &Test{
