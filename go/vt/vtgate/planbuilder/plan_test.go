@@ -28,23 +28,25 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/test/vschemawrapper"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	oprewriters "vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -59,10 +61,11 @@ func makeTestOutput(t *testing.T) string {
 }
 
 func TestPlan(t *testing.T) {
-	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "vschemas/schema.json", true),
-		tabletType:    topodatapb.TabletType_PRIMARY,
-		sysVarEnabled: true,
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(t, "vschemas/schema.json", true),
+		TabletType_:   topodatapb.TabletType_PRIMARY,
+		SysVarEnabled: true,
+		TestBuilder:   TestBuilder,
 	}
 	testOutputTempDir := makeTestOutput(t)
 
@@ -107,24 +110,24 @@ func TestSystemTables57(t *testing.T) {
 	defer func() {
 		servenv.SetMySQLServerVersionForTest(oldVer)
 	}()
-	vschemaWrapper := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true)}
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "info_schema57_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
-	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "vschemas/schema.json", true),
-		sysVarEnabled: false,
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(t, "vschemas/schema.json", true),
+		SysVarEnabled: false,
 	}
 
 	testFile(t, "set_sysvar_disabled_cases.json", makeTestOutput(t), vschemaWrapper, false)
 }
 
 func TestViews(t *testing.T) {
-	vschemaWrapper := &vschemaWrapper{
-		v:           loadSchema(t, "vschemas/schema.json", true),
-		enableViews: true,
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:           loadSchema(t, "vschemas/schema.json", true),
+		EnableViews: true,
 	}
 
 	testFile(t, "view_cases.json", makeTestOutput(t), vschemaWrapper, false)
@@ -134,25 +137,25 @@ func TestOne(t *testing.T) {
 	reset := oprewriters.EnableDebugPrinting()
 	defer reset()
 
-	vschema := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/schema.json", true),
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: loadSchema(t, "vschemas/schema.json", true),
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
 func TestOneTPCC(t *testing.T) {
-	vschema := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/tpcc_schema.json", true),
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: loadSchema(t, "vschemas/tpcc_schema.json", true),
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
 func TestOneWithMainAsDefault(t *testing.T) {
-	vschema := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/schema.json", true),
-		keyspace: &vindexes.Keyspace{
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: loadSchema(t, "vschemas/schema.json", true),
+		Keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
 		},
@@ -162,9 +165,9 @@ func TestOneWithMainAsDefault(t *testing.T) {
 }
 
 func TestOneWithSecondUserAsDefault(t *testing.T) {
-	vschema := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/schema.json", true),
-		keyspace: &vindexes.Keyspace{
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: loadSchema(t, "vschemas/schema.json", true),
+		Keyspace: &vindexes.Keyspace{
 			Name:    "second_user",
 			Sharded: true,
 		},
@@ -174,9 +177,9 @@ func TestOneWithSecondUserAsDefault(t *testing.T) {
 }
 
 func TestOneWithUserAsDefault(t *testing.T) {
-	vschema := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/schema.json", true),
-		keyspace: &vindexes.Keyspace{
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: loadSchema(t, "vschemas/schema.json", true),
+		Keyspace: &vindexes.Keyspace{
 			Name:    "user",
 			Sharded: true,
 		},
@@ -186,9 +189,9 @@ func TestOneWithUserAsDefault(t *testing.T) {
 }
 
 func TestOneWithTPCHVSchema(t *testing.T) {
-	vschema := &vschemaWrapper{
-		v:             loadSchema(t, "vschemas/tpch_schema.json", true),
-		sysVarEnabled: true,
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(t, "vschemas/tpch_schema.json", true),
+		SysVarEnabled: true,
 	}
 
 	testFile(t, "onecase.json", "", vschema, false)
@@ -201,42 +204,42 @@ func TestOneWith57Version(t *testing.T) {
 	defer func() {
 		servenv.SetMySQLServerVersionForTest(oldVer)
 	}()
-	vschema := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
+	vschema := &vschemawrapper.VSchemaWrapper{V: loadSchema(t, "vschemas/schema.json", true)}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
 func TestRubyOnRailsQueries(t *testing.T) {
-	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "vschemas/rails_schema.json", true),
-		sysVarEnabled: true,
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(t, "vschemas/rails_schema.json", true),
+		SysVarEnabled: true,
 	}
 
 	testFile(t, "rails_cases.json", makeTestOutput(t), vschemaWrapper, false)
 }
 
 func TestOLTP(t *testing.T) {
-	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "vschemas/oltp_schema.json", true),
-		sysVarEnabled: true,
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(t, "vschemas/oltp_schema.json", true),
+		SysVarEnabled: true,
 	}
 
 	testFile(t, "oltp_cases.json", makeTestOutput(t), vschemaWrapper, false)
 }
 
 func TestTPCC(t *testing.T) {
-	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "vschemas/tpcc_schema.json", true),
-		sysVarEnabled: true,
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(t, "vschemas/tpcc_schema.json", true),
+		SysVarEnabled: true,
 	}
 
 	testFile(t, "tpcc_cases.json", makeTestOutput(t), vschemaWrapper, false)
 }
 
 func TestTPCH(t *testing.T) {
-	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "vschemas/tpch_schema.json", true),
-		sysVarEnabled: true,
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(t, "vschemas/tpch_schema.json", true),
+		SysVarEnabled: true,
 	}
 
 	testFile(t, "tpch_cases.json", makeTestOutput(t), vschemaWrapper, false)
@@ -255,9 +258,9 @@ func BenchmarkTPCH(b *testing.B) {
 }
 
 func benchmarkWorkload(b *testing.B, name string) {
-	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(b, "vschemas/"+name+"_schema.json", true),
-		sysVarEnabled: true,
+	vschemaWrapper := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(b, "vschemas/"+name+"_schema.json", true),
+		SysVarEnabled: true,
 	}
 
 	testCases := readJSONTests(name + "_cases.json")
@@ -270,14 +273,14 @@ func benchmarkWorkload(b *testing.B, name string) {
 }
 
 func TestBypassPlanningShardTargetFromFile(t *testing.T) {
-	vschema := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/schema.json", true),
-		keyspace: &vindexes.Keyspace{
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: loadSchema(t, "vschemas/schema.json", true),
+		Keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_PRIMARY,
-		dest:       key.DestinationShard("-80")}
+		TabletType_: topodatapb.TabletType_PRIMARY,
+		Dest:        key.DestinationShard("-80")}
 
 	testFile(t, "bypass_shard_cases.json", makeTestOutput(t), vschema, false)
 }
@@ -285,14 +288,14 @@ func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 	keyRange, _ := key.ParseShardingSpec("-")
 
-	vschema := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/schema.json", true),
-		keyspace: &vindexes.Keyspace{
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: loadSchema(t, "vschemas/schema.json", true),
+		Keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_PRIMARY,
-		dest:       key.DestinationExactKeyRange{KeyRange: keyRange[0]},
+		TabletType_: topodatapb.TabletType_PRIMARY,
+		Dest:        key.DestinationExactKeyRange{KeyRange: keyRange[0]},
 	}
 
 	testFile(t, "bypass_keyrange_cases.json", makeTestOutput(t), vschema, false)
@@ -300,13 +303,13 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 
 func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
-	vschema := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/schema.json", true),
-		keyspace: &vindexes.Keyspace{
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: loadSchema(t, "vschemas/schema.json", true),
+		Keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_PRIMARY,
+		TabletType_: topodatapb.TabletType_PRIMARY,
 	}
 	ts := memorytopo.NewServer("cell1")
 	ts.CreateKeyspace(context.Background(), "main", &topodatapb.Keyspace{})
@@ -333,13 +336,13 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 
 func TestWithDefaultKeyspaceFromFileSharded(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
-	vschema := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/schema.json", true),
-		keyspace: &vindexes.Keyspace{
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: loadSchema(t, "vschemas/schema.json", true),
+		Keyspace: &vindexes.Keyspace{
 			Name:    "second_user",
 			Sharded: true,
 		},
-		tabletType: topodatapb.TabletType_PRIMARY,
+		TabletType_: topodatapb.TabletType_PRIMARY,
 	}
 
 	testOutputTempDir := makeTestOutput(t)
@@ -348,13 +351,13 @@ func TestWithDefaultKeyspaceFromFileSharded(t *testing.T) {
 
 func TestWithUserDefaultKeyspaceFromFileSharded(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
-	vschema := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/schema.json", true),
-		keyspace: &vindexes.Keyspace{
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: loadSchema(t, "vschemas/schema.json", true),
+		Keyspace: &vindexes.Keyspace{
 			Name:    "user",
 			Sharded: true,
 		},
-		tabletType: topodatapb.TabletType_PRIMARY,
+		TabletType_: topodatapb.TabletType_PRIMARY,
 	}
 
 	testOutputTempDir := makeTestOutput(t)
@@ -363,10 +366,10 @@ func TestWithUserDefaultKeyspaceFromFileSharded(t *testing.T) {
 
 func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
-	vschema := &vschemaWrapper{
-		v:          loadSchema(t, "vschemas/schema.json", true),
-		keyspace:   &vindexes.Keyspace{Name: "information_schema"},
-		tabletType: topodatapb.TabletType_PRIMARY,
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V:           loadSchema(t, "vschemas/schema.json", true),
+		Keyspace:    &vindexes.Keyspace{Name: "information_schema"},
+		TabletType_: topodatapb.TabletType_PRIMARY,
 	}
 
 	testFile(t, "sysschema_default.json", makeTestOutput(t), vschema, false)
@@ -374,13 +377,13 @@ func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 
 func TestOtherPlanningFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
-	vschema := &vschemaWrapper{
-		v: loadSchema(t, "vschemas/schema.json", true),
-		keyspace: &vindexes.Keyspace{
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V: loadSchema(t, "vschemas/schema.json", true),
+		Keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
 		},
-		tabletType: topodatapb.TabletType_PRIMARY,
+		TabletType_: topodatapb.TabletType_PRIMARY,
 	}
 
 	testOutputTempDir := makeTestOutput(t)
@@ -713,7 +716,7 @@ type (
 	}
 )
 
-func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, render bool) {
+func testFile(t *testing.T, filename, tempDir string, vschema *vschemawrapper.VSchemaWrapper, render bool) {
 	opts := jsondiff.DefaultConsoleOptions()
 
 	t.Run(filename, func(t *testing.T) {
@@ -730,7 +733,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, r
 				Comment: testName,
 				Query:   tcase.Query,
 			}
-			vschema.version = Gen4
+			vschema.Version = Gen4
 			out := getPlanOutput(tcase, vschema, render)
 
 			// our expectation for the planner on the query is one of three
@@ -776,13 +779,13 @@ func readJSONTests(filename string) []planTest {
 	return output
 }
 
-func getPlanOutput(tcase planTest, vschema *vschemaWrapper, render bool) (out string) {
+func getPlanOutput(tcase planTest, vschema *vschemawrapper.VSchemaWrapper, render bool) (out string) {
 	defer func() {
 		if r := recover(); r != nil {
 			out = fmt.Sprintf("panicked: %v\n%s", r, string(debug.Stack()))
 		}
 	}()
-	plan, err := TestBuilder(tcase.Query, vschema, vschema.currentDb())
+	plan, err := TestBuilder(tcase.Query, vschema, vschema.CurrentDb())
 	if render && plan != nil {
 		viz, err := engine.GraphViz(plan.Instructions)
 		if err == nil {
@@ -814,9 +817,9 @@ func locateFile(name string) string {
 var benchMarkFiles = []string{"from_cases.json", "filter_cases.json", "large_cases.json", "aggr_cases.json", "select_cases.json", "union_cases.json"}
 
 func BenchmarkPlanner(b *testing.B) {
-	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "vschemas/schema.json", true),
-		sysVarEnabled: true,
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(b, "vschemas/schema.json", true),
+		SysVarEnabled: true,
 	}
 	for _, filename := range benchMarkFiles {
 		testCases := readJSONTests(filename)
@@ -830,15 +833,15 @@ func BenchmarkPlanner(b *testing.B) {
 }
 
 func BenchmarkSemAnalysis(b *testing.B) {
-	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "vschemas/schema.json", true),
-		sysVarEnabled: true,
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(b, "vschemas/schema.json", true),
+		SysVarEnabled: true,
 	}
 
 	for i := 0; i < b.N; i++ {
 		for _, filename := range benchMarkFiles {
 			for _, tc := range readJSONTests(filename) {
-				exerciseAnalyzer(tc.Query, vschema.currentDb(), vschema)
+				exerciseAnalyzer(tc.Query, vschema.CurrentDb(), vschema)
 			}
 		}
 	}
@@ -863,10 +866,10 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 }
 
 func BenchmarkSelectVsDML(b *testing.B) {
-	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "vschemas/schema.json", true),
-		sysVarEnabled: true,
-		version:       Gen4,
+	vschema := &vschemawrapper.VSchemaWrapper{
+		V:             loadSchema(b, "vschemas/schema.json", true),
+		SysVarEnabled: true,
+		Version:       Gen4,
 	}
 
 	dmlCases := readJSONTests("dml_cases.json")
@@ -889,13 +892,13 @@ func BenchmarkSelectVsDML(b *testing.B) {
 	})
 }
 
-func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCases []planTest, vschema *vschemaWrapper) {
+func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCases []planTest, vschema *vschemawrapper.VSchemaWrapper) {
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		for _, tcase := range testCases {
 			if len(tcase.Plan) > 0 {
-				vschema.version = version
-				_, _ = TestBuilder(tcase.Query, vschema, vschema.currentDb())
+				vschema.Version = version
+				_, _ = TestBuilder(tcase.Query, vschema, vschema.CurrentDb())
 			}
 		}
 	}
