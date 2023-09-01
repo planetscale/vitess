@@ -14,7 +14,6 @@ import (
 	boosttopo "vitess.io/vitess/go/boost/topo/internal/topo"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	vtboostpb "vitess.io/vitess/go/vt/proto/vtboost"
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -202,7 +201,7 @@ func (c *Client) DrainCluster(ctx context.Context, req *vtboostpb.DrainClusterRe
 				return &Error{
 					ErrClusterAlreadyDraining,
 					fmt.Errorf("cluster with UUID %q is already draining, deadline: %s",
-						req.GetUuid(), logutil.ProtoToTime(cluster.DrainedAt),
+						req.GetUuid(), protoutil.TimeFromProto(cluster.DrainedAt),
 					),
 				}
 			}

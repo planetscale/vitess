@@ -43,7 +43,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	hk "vitess.io/vitess/go/vt/hook"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -6535,7 +6534,7 @@ func TestGetTablets(t *testing.T) {
 					Keyspace:             "ks2",
 					Shard:                "-",
 					Type:                 topodatapb.TabletType_PRIMARY,
-					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6546,7 +6545,7 @@ func TestGetTablets(t *testing.T) {
 					Shard:                "-",
 					Hostname:             "stale.primary",
 					Type:                 topodatapb.TabletType_PRIMARY,
-					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 			},
 			req: &vtctldatapb.GetTabletsRequest{
@@ -6562,7 +6561,7 @@ func TestGetTablets(t *testing.T) {
 					Keyspace:             "ks2",
 					Shard:                "-",
 					Type:                 topodatapb.TabletType_PRIMARY,
-					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6573,7 +6572,7 @@ func TestGetTablets(t *testing.T) {
 					Shard:                "-",
 					Hostname:             "stale.primary",
 					Type:                 topodatapb.TabletType_UNKNOWN,
-					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 			},
 			shouldErr: false,
@@ -6591,7 +6590,7 @@ func TestGetTablets(t *testing.T) {
 					Shard:                "-",
 					Hostname:             "slightly less stale",
 					Type:                 topodatapb.TabletType_PRIMARY,
-					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6602,7 +6601,7 @@ func TestGetTablets(t *testing.T) {
 					Keyspace:             "ks1",
 					Shard:                "-",
 					Type:                 topodatapb.TabletType_PRIMARY,
-					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6613,7 +6612,7 @@ func TestGetTablets(t *testing.T) {
 					Keyspace:             "ks1",
 					Shard:                "-",
 					Type:                 topodatapb.TabletType_PRIMARY,
-					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
 				},
 			},
 			req: &vtctldatapb.GetTabletsRequest{},
@@ -6627,7 +6626,7 @@ func TestGetTablets(t *testing.T) {
 					Shard:                "-",
 					Hostname:             "slightly less stale",
 					Type:                 topodatapb.TabletType_UNKNOWN,
-					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6638,7 +6637,7 @@ func TestGetTablets(t *testing.T) {
 					Keyspace:             "ks1",
 					Shard:                "-",
 					Type:                 topodatapb.TabletType_UNKNOWN,
-					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -6649,7 +6648,7 @@ func TestGetTablets(t *testing.T) {
 					Keyspace:             "ks1",
 					Shard:                "-",
 					Type:                 topodatapb.TabletType_PRIMARY,
-					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
 				},
 			},
 			shouldErr: false,
