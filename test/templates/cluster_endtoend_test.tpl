@@ -59,8 +59,8 @@ jobs:
         # Get latest version of mysql from s3 bucket
         LATEST_BUILD=$(aws s3api list-objects-v2 --bucket "planetscale-mysql-server-private-ci-artifacts" --prefix mysql/main/dist --query 'reverse(sort_by(Contents[?contains(Key, `jammy`)], &LastModified))[:1].Key' --output=text)
         echo "latest build is $LATEST_BUILD"
-        # Pin this to 8.0.33
-        LAST_BUILD="mysql/main/dist/mysql-8.0.33.20230522-ps-f6946d512d2-jammy-linux-x86_64.tar.gz"
+        # Pin this to 8.0.34
+        LAST_BUILD="mysql/main/dist/mysql-8.0.34.20230901-ps-4dc8f581f5f-jammy-linux-x86_64.tar.gz"
         echo "installing psdb mysql $LAST_BUILD"
         aws s3 cp "s3://planetscale-mysql-server-private-ci-artifacts/${LAST_BUILD}" .
         sudo tar xf $(basename $LAST_BUILD) -v -C /usr --strip-components=1
