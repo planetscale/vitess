@@ -256,7 +256,10 @@ func (agg *aggregationMin) Add(col int, row sql.Row) {
 	if agg.min.IsNull() {
 		agg.min = v
 	} else {
-		agg.min, _ = evalengine.Min(agg.min, v, agg.collation)
+		cmp, _ := evalengine.NullsafeCompare(agg.min, v, agg.collation)
+		if cmp > 0 {
+			agg.min = v
+		}
 	}
 }
 
@@ -274,7 +277,10 @@ func (agg *aggregationMax) Add(col int, row sql.Row) {
 	if agg.max.IsNull() {
 		agg.max = v
 	} else {
-		agg.max, _ = evalengine.Max(agg.max, v, agg.collation)
+		cmp, _ := evalengine.NullsafeCompare(agg.max, v, agg.collation)
+		if cmp < 0 {
+			agg.max = v
+		}
 	}
 }
 
