@@ -220,6 +220,7 @@ func createMergedUnion(
 }
 
 func compactUnion(u *Union) *rewrite.ApplyResult {
+	var res *rewrite.ApplyResult
 	if u.distinct {
 		// first we remove unnecessary DISTINCTs
 		for idx, source := range u.Sources {
@@ -227,6 +228,7 @@ func compactUnion(u *Union) *rewrite.ApplyResult {
 			if !ok || !d.Required {
 				continue
 			}
+			res = res.Merge(rewrite.NewTree("removed unnecessary DISTINCT", d))
 			u.Sources[idx] = d.Source
 		}
 	}
@@ -255,5 +257,5 @@ func compactUnion(u *Union) *rewrite.ApplyResult {
 
 	u.Sources = newSources
 	u.Selects = newSelects
-	return rewrite.NewTree("merged UNIONs", u)
+	return res.Merge(rewrite.NewTree("merged UNIONs", u))
 }

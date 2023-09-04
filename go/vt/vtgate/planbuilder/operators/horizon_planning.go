@@ -1057,15 +1057,16 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (ops.Operator, *r
 	}
 
 	if len(sources) == 1 {
-		result := sources[0].(*Route)
-		if result.IsSingleShard() || !op.distinct {
-			return result, rewrite.NewTree("push union under route", op), nil
+		result := sources[0]
+		rb, isRoute := sources[0].(*Route)
+		if op.distinct && !(isRoute && rb.IsSingleShard()) {
+			// we need to distinct the result since it's a multi-shard query
+			result = &Distinct{
+				Source:   result,
+				Required: true,
+			}
 		}
-
-		return &Distinct{
-			Source:   result,
-			Required: true,
-		}, rewrite.NewTree("push union under route", op), nil
+		return result, rewrite.NewTree("push union under route", op), nil
 	}
 
 	if len(sources) == len(op.Sources) {
