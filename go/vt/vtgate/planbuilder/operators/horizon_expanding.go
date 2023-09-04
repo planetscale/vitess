@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 	"strings"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -99,9 +100,8 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 
 	if sel.Having != nil {
 		op = &Filter{
-			Source:               op,
-			Predicates:           sqlparser.SplitAndExpression(nil, sel.Having.Expr),
-			PredicateWithOffsets: nil,
+			Source:     op,
+			Predicates: sqlparser.SplitAndExpression(nil, sel.Having.Expr),
 		}
 		extracted = append(extracted, "Filter")
 	}
@@ -243,26 +243,48 @@ func createProjectionWithoutAggr(ctx *plancontext.PlanningContext, qp *QueryProj
 			return nil, err
 		}
 
-		if subq != nil {
-			argumentedExpr, err := subq.settleSubquery(ctx, src)
+		if subq == nil {
+			proj.addUnexploredExpr(ae, expr)
+			continue
+		} else {
+			err = planSubqueryProjection(ctx, subq, src, ae, proj)
 			if err != nil {
 				return nil, err
 			}
-			subq.isProjection = true
-
-			columnExpr := aeWrap(argumentedExpr)
-			if !ae.As.IsEmpty() {
-				columnExpr.As = ae.As
-			} else {
-				columnExpr.As = sqlparser.NewIdentifierCI(sqlparser.String(ae.Expr))
-			}
-			proj.addSubqueryProjectionExpr(columnExpr, ae, argumentedExpr, subq)
-		} else {
-			proj.addUnexploredExpr(ae, expr)
 		}
-
 	}
 
 	proj.Source = sqc.getRootOperator(src)
 	return proj, nil
+}
+
+func planSubqueryProjection(ctx *plancontext.PlanningContext, subq *SubQuery, src ops.Operator, ae *sqlparser.AliasedExpr, proj *Projection) error {
+	subq.Subquery = expandAllHorizons(ctx, subq.Subquery)
+
+	argumentedExpr, err := subq.settleSubquery(ctx, src)
+	if err != nil {
+		return err
+	}
+	subq.isProjection = true
+
+	columnExpr := aeWrap(argumentedExpr)
+	if !ae.As.IsEmpty() {
+		columnExpr.As = ae.As
+	} else {
+		columnExpr.As = sqlparser.NewIdentifierCI(sqlparser.String(ae.Expr))
+	}
+	proj.addSubqueryProjectionExpr(columnExpr, ae, argumentedExpr, subq)
+	return nil
+}
+
+func expandAllHorizons(ctx *plancontext.PlanningContext, op ops.Operator) ops.Operator {
+	visit := func(op ops.Operator, lhsTables semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
+		hz, ok := op.(*Horizon)
+		if !ok {
+			return op, rewrite.SameTree, nil
+		}
+		return expandHorizon(ctx, hz)
+	}
+	op, _ = rewrite.BottomUp(op, TableID, visit, stopAtRoute)
+	return op
 }

@@ -100,21 +100,35 @@ func enableDelegateAggregation(ctx *plancontext.PlanningContext, op ops.Operator
 
 func settleSubqueries(ctx *plancontext.PlanningContext, op ops.Operator) (ops.Operator, error) {
 	visit := func(op ops.Operator, lhsTables semantics.TableSet, isRoot bool) (ops.Operator, *rewrite.ApplyResult, error) {
-		sqc, ok := op.(*SubQueryContainer)
-		if !ok {
-			return op, rewrite.SameTree, nil
-		}
-		outer := sqc.Outer
-		for _, subq := range sqc.Inner {
-			newOuter, err := settleSubquery(ctx, outer, subq)
-			if err != nil {
-				return nil, nil, err
+		switch op := op.(type) {
+		case *SubQueryContainer:
+			outer := op.Outer
+			for _, subq := range op.Inner {
+				newOuter, err := settleSubquery(ctx, outer, subq)
+				if err != nil {
+					return nil, nil, err
+				}
+				outer = newOuter
 			}
-			outer = newOuter
+			return outer, rewrite.NewTree("extracted subqueries from subquery container", outer), nil
+		case *Projection:
+			for idx, p := range op.Projections {
+				sp, ok := p.(SubqueryProjection)
+				if !ok {
+					continue
+				}
+				for _, subquery := range ctx.MergedSubqueries {
+					if subquery != sp.ArgumentedExpr {
+						continue
+					}
+					op.Projections[idx] = UnexploredExpression{E: sp.OriginalExpr.Expr}
+					op.Columns[idx] = sp.OriginalExpr
+				}
+			}
 		}
-		return outer, rewrite.NewTree("extracted subqueries from subquery container", outer), nil
+		return op, rewrite.SameTree, nil
 	}
-	return rewrite.BottomUp(op, TableID, visit, stopAtRoute)
+	return rewrite.BottomUp(op, TableID, visit, nil)
 }
 
 // settleSubquery is run when the subqueries have been pushed as far down as they can go.

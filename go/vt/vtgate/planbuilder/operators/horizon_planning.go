@@ -208,6 +208,7 @@ func tryMergeSubqueriesRecursively(
 ) (ops.Operator, *rewrite.ApplyResult, error) {
 	exprs := subQuery.GetMergePredicates()
 	merger := &subqueryRouteMerger{
+		ctx:      ctx,
 		outer:    outer,
 		original: subQuery.Original,
 		subq:     subQuery,
@@ -244,6 +245,7 @@ func tryMergeSubqueriesRecursively(
 func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQuery, outer *Route, inner ops.Operator) (ops.Operator, *rewrite.ApplyResult, error) {
 	exprs := subQuery.GetMergePredicates()
 	merger := &subqueryRouteMerger{
+		ctx:      ctx,
 		outer:    outer,
 		original: subQuery.Original,
 		subq:     subQuery,
@@ -256,7 +258,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		return outer, rewrite.SameTree, nil
 	}
 
-	return op, rewrite.NewTree("merged subquery projection with outer", subQuery), nil
+	return op, rewrite.NewTree("merge subquery with outer", subQuery), nil
 }
 
 func removeFilterUnderRoute(op *Route, subq *SubQuery) {
@@ -271,27 +273,6 @@ func removeFilterUnderRoute(op *Route, subq *SubQuery) {
 
 // tryPushDownSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
 func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery, outer *ApplyJoin) (ops.Operator, *rewrite.ApplyResult, error) {
-	lhs := TableID(outer.LHS)
-	rhs := TableID(outer.RHS)
-	joinID := TableID(outer)
-	innerID := TableID(inner.Subquery)
-
-	deps := semantics.EmptyTableSet()
-	for _, predicate := range inner.GetMergePredicates() {
-		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))
-	}
-	deps = deps.Remove(innerID)
-
-	if deps.IsSolvedBy(lhs) {
-		// we can safely push down the subquery on the LHS
-		outer.LHS = addSubQuery(outer.LHS, inner)
-		return outer, rewrite.NewTree("push subquery into LHS of join", inner), nil
-	}
-
-	if outer.LeftJoin {
-		return nil, rewrite.SameTree, nil
-	}
-
 	// in general, we don't want to push down uncorrelated subqueries into the RHS of a join,
 	// since this side is executed once per row from the LHS, so we would unnecessarily execute
 	// the subquery multiple times. The exception is if we can merge the subquery with the RHS of the join.
@@ -301,6 +282,22 @@ func tryPushDownSubQueryInJoin(ctx *plancontext.PlanningContext, inner *SubQuery
 	}
 	if merged != nil {
 		return merged, result, nil
+	}
+
+	lhs := TableID(outer.LHS)
+	rhs := TableID(outer.RHS)
+	joinID := TableID(outer)
+	innerID := TableID(inner.Subquery)
+
+	deps := ctx.SemTable.RecursiveDeps(inner._sq).Remove(innerID)
+	if deps.IsSolvedBy(lhs) {
+		// we can safely push down the subquery on the LHS
+		outer.LHS = addSubQuery(outer.LHS, inner)
+		return outer, rewrite.NewTree("push subquery into LHS of join", inner), nil
+	}
+
+	if outer.LeftJoin {
+		return nil, rewrite.SameTree, nil
 	}
 
 	if len(inner.Predicates) == 0 {
@@ -417,9 +414,12 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	if err != nil {
 		return nil, nil, err
 	}
+	expr := newExpr
+
 	sqm := &subqueryRouteMerger{
+		ctx:      ctx,
 		outer:    outerRoute,
-		original: newExpr,
+		original: expr,
 		subq:     inner,
 	}
 	newOp, err := mergeJoinInputs(ctx, innerRoute, outerRoute, inner.GetMergePredicates(), sqm)
@@ -614,46 +614,6 @@ func pushDownProjectionInApplyJoin(
 	}
 
 	return src, rewrite.NewTree("split projection to either side of join", src), nil
-}
-
-// splitProjectionAcrossJoin creates JoinPredicates for all projections,
-// and pushes down columns as needed between the LHS and RHS of a join
-func splitProjectionAcrossJoin(
-	ctx *plancontext.PlanningContext,
-	join *ApplyJoin,
-	lhs, rhs *projector,
-	in ProjExpr,
-	colName *sqlparser.AliasedExpr,
-) error {
-	expr := in.GetExpr()
-
-	// Check if the current expression can reuse an existing column in the ApplyJoin.
-	if _, found := canReuseColumn(ctx, join.JoinColumns, expr, joinColumnToExpr); found {
-		return nil
-	}
-
-	// Get a JoinColumn for the current expression.
-	col, err := join.getJoinColumnFor(ctx, colName, false)
-	if err != nil {
-		return err
-	}
-
-	// Update the left and right child columns and names based on the JoinColumn type.
-	switch {
-	case col.IsPureLeft():
-		lhs.add(in, colName)
-	case col.IsPureRight():
-		rhs.add(in, colName)
-	case col.IsMixedLeftAndRight():
-		for _, lhsExpr := range col.LHSExprs {
-			lhs.add(&UnexploredExpression{E: lhsExpr}, aeWrap(lhsExpr))
-		}
-		rhs.add(&UnexploredExpression{E: col.RHSExpr}, &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: colName.As})
-	}
-
-	// Add the new JoinColumn to the ApplyJoin's JoinPredicates.
-	join.JoinColumns = append(join.JoinColumns, col)
-	return nil
 }
 
 // exposeColumnsThroughDerivedTable rewrites expressions within a join that is inside a derived table

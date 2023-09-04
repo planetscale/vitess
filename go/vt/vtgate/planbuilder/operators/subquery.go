@@ -42,7 +42,7 @@ type SubQuery struct {
 	OuterPredicate sqlparser.Expr       // This is the predicate that is using the subquery expression
 
 	// Fields filled in at the subquery settling phase:
-	JoinColumns       []JoinColumn         // Broken up join predicates.
+	JoinColumns       []JoinColumn         // Broken up join predicates or projections
 	LHSColumns        []*sqlparser.ColName // Left hand side columns of join predicates.
 	SubqueryValueName string               // Value name returned by the subquery (uncorrelated queries).
 	HasValuesName     string               // Argument name passed to the subquery (uncorrelated queries).
@@ -154,7 +154,15 @@ func (sj *SubQuery) SetInputs(inputs []ops.Operator) {
 }
 
 func (sj *SubQuery) ShortDescription() string {
-	return sj.FilterType.String() + " WHERE " + sqlparser.String(sj.Predicates)
+	typ := "filter"
+	if sj.isProjection {
+		typ = "projection"
+	}
+	s := sqlparser.String(sj.Predicates)
+	if s != "" {
+		return typ + " " + sj.FilterType.String() + " WHERE " + s
+	}
+	return typ + " " + sj.FilterType.String()
 }
 
 func (sj *SubQuery) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
@@ -198,6 +206,7 @@ type subqueryRouteMerger struct {
 	outer    *Route
 	original sqlparser.Expr
 	subq     *SubQuery
+	ctx      *plancontext.PlanningContext
 }
 
 func (s *subqueryRouteMerger) mergeShardedRouting(r1, r2 *ShardedRouting, old1, old2 *Route) (*Route, error) {
@@ -210,25 +219,10 @@ func (s *subqueryRouteMerger) merge(old1, old2 *Route, r Routing) (*Route, error
 
 	outerRoute := s.outer
 	source := outerRoute.Source
-	if !s.subq.isProjection {
-		source = &Filter{Source: source, Predicates: []sqlparser.Expr{s.original}}
+	if s.subq.isProjection {
+		s.ctx.MergedSubqueries = append(s.ctx.MergedSubqueries, s.subq.ArgumentedExpr)
 	} else {
-		se := outerRoute.findClosestSelectExpressions()
-		if se == nil {
-			return nil, vterrors.VT13001("couldn't find closest select projection")
-		}
-		proj, ok := se.(*Projection)
-		if !ok {
-			return nil, vterrors.VT13001("implement me")
-		}
-		for idx, p := range proj.Projections {
-			sp, ok := p.(SubqueryProjection)
-			if !ok || sp.Subquery.ArgumentedExpr != sp.ArgumentedExpr {
-				continue
-			}
-			proj.Projections[idx] = UnexploredExpression{E: sp.OriginalExpr.Expr}
-			proj.Columns[idx] = sp.OriginalExpr
-		}
+		source = &Filter{Source: source, Predicates: []sqlparser.Expr{s.original}}
 	}
 
 	return &Route{
