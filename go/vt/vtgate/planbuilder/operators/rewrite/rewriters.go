@@ -219,7 +219,7 @@ func bottomUp(
 	shouldVisit ShouldVisit,
 	isRoot bool,
 ) (ops.Operator, *ApplyResult, error) {
-	if !shouldVisit(root) {
+	if shouldVisit != nil && !shouldVisit(root) {
 		return root, SameTree, nil
 	}
 
@@ -250,7 +250,7 @@ func bottomUp(
 	}
 
 	if anythingChanged.Changed() {
-		root = root.Clone(newInputs)
+		root.SetInputs(newInputs)
 	}
 
 	newOp, treeIdentity, err := rewriter(root, rootID, isRoot)
