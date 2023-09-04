@@ -43,11 +43,13 @@ type PlanningContext struct {
 	// DelegateAggregation tells us when we are allowed to split an aggregation across vtgate and mysql
 	// We aggregate within a shard, and then at the vtgate level we aggregate the incoming shard aggregates
 	DelegateAggregation bool
+
+	// These subqueries have been merged into the outer side of the query, and so don't need to be argumented
+	MergedSubqueries []sqlparser.Expr
 }
 
 func CreatePlanningContext(stmt sqlparser.Statement,
 	reservedVars *sqlparser.ReservedVars,
-
 	vschema VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
 ) (*PlanningContext, error) {

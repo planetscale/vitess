@@ -152,16 +152,13 @@ func createSubquery(
 			cmp := *inner
 			cmp.Operator = sqlparser.Inverse(cmp.Operator)
 			return createComparisonSubQuery(ctx, &cmp, subq, outerID)
-		default:
-			return createValueSubquery(ctx, expr, subq, outerID)
 		}
 	case *sqlparser.ExistsExpr:
 		return createExistsSubquery(ctx, expr, subq, outerID, opcode.PulloutExists)
 	case *sqlparser.ComparisonExpr:
 		return createComparisonSubQuery(ctx, expr, subq, outerID)
-	default:
-		return createValueSubquery(ctx, expr, subq, outerID)
 	}
+	return createValueSubquery(ctx, expr, subq, outerID)
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
@@ -176,7 +173,7 @@ func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, 
 	}, ctx.SemTable.CopyDependenciesOnSQLNodes).(T)
 }
 
-func createSubqueryFilter(
+func newSubquery(
 	ctx *plancontext.PlanningContext,
 	original sqlparser.Expr,
 	subq *sqlparser.Subquery,
@@ -233,6 +230,7 @@ func createSubqueryFilter(
 		Predicates:     jpc.predicates,
 		OuterPredicate: predicate,
 		Original:       original,
+		_sq:            subq,
 	}, nil
 
 }
@@ -269,7 +267,7 @@ func createComparisonSubQuery(
 		filterType = opcode.PulloutNotIn
 	}
 
-	return createSubqueryFilter(ctx, original, subq, outerID, predicate, filterType)
+	return newSubquery(ctx, original, subq, outerID, predicate, filterType)
 }
 
 func createExistsSubquery(
@@ -280,7 +278,7 @@ func createExistsSubquery(
 	filterType opcode.PulloutOpcode,
 ) (*SubQuery, error) {
 	org = cloneASTAndSemState(ctx, org)
-	return createSubqueryFilter(ctx, org, sq, outerID, nil, filterType)
+	return newSubquery(ctx, org, sq, outerID, nil, filterType)
 }
 
 func createValueSubquery(
@@ -290,8 +288,7 @@ func createValueSubquery(
 	outerID semantics.TableSet,
 ) (*SubQuery, error) {
 	org = cloneASTAndSemState(ctx, org)
-
-	return createSubqueryFilter(ctx, org, sq, outerID, nil, opcode.PulloutValue)
+	return newSubquery(ctx, org, sq, outerID, nil, opcode.PulloutValue)
 }
 
 type joinPredicateCollector struct {

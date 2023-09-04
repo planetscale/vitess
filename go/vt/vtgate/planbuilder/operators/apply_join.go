@@ -89,103 +89,103 @@ func NewApplyJoin(lhs, rhs ops.Operator, predicate sqlparser.Expr, leftOuterJoin
 }
 
 // Clone implements the Operator interface
-func (a *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
+func (aj *ApplyJoin) Clone(inputs []ops.Operator) ops.Operator {
 	return &ApplyJoin{
 		LHS:            inputs[0],
 		RHS:            inputs[1],
-		Columns:        slices.Clone(a.Columns),
-		JoinColumns:    slices.Clone(a.JoinColumns),
-		JoinPredicates: slices.Clone(a.JoinPredicates),
-		Vars:           maps.Clone(a.Vars),
-		LeftJoin:       a.LeftJoin,
-		Predicate:      sqlparser.CloneExpr(a.Predicate),
-		LHSColumns:     slices.Clone(a.LHSColumns),
+		Columns:        slices.Clone(aj.Columns),
+		JoinColumns:    slices.Clone(aj.JoinColumns),
+		JoinPredicates: slices.Clone(aj.JoinPredicates),
+		Vars:           maps.Clone(aj.Vars),
+		LeftJoin:       aj.LeftJoin,
+		Predicate:      sqlparser.CloneExpr(aj.Predicate),
+		LHSColumns:     slices.Clone(aj.LHSColumns),
 	}
 }
 
-func (a *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
-	return AddPredicate(ctx, a, expr, false, newFilter)
+func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
+	return AddPredicate(ctx, aj, expr, false, newFilter)
 }
 
 // Inputs implements the Operator interface
-func (a *ApplyJoin) Inputs() []ops.Operator {
-	return []ops.Operator{a.LHS, a.RHS}
+func (aj *ApplyJoin) Inputs() []ops.Operator {
+	return []ops.Operator{aj.LHS, aj.RHS}
 }
 
 // SetInputs implements the Operator interface
-func (a *ApplyJoin) SetInputs(inputs []ops.Operator) {
-	a.LHS, a.RHS = inputs[0], inputs[1]
+func (aj *ApplyJoin) SetInputs(inputs []ops.Operator) {
+	aj.LHS, aj.RHS = inputs[0], inputs[1]
 }
 
 var _ JoinOp = (*ApplyJoin)(nil)
 
-func (a *ApplyJoin) GetLHS() ops.Operator {
-	return a.LHS
+func (aj *ApplyJoin) GetLHS() ops.Operator {
+	return aj.LHS
 }
 
-func (a *ApplyJoin) GetRHS() ops.Operator {
-	return a.RHS
+func (aj *ApplyJoin) GetRHS() ops.Operator {
+	return aj.RHS
 }
 
-func (a *ApplyJoin) SetLHS(operator ops.Operator) {
-	a.LHS = operator
+func (aj *ApplyJoin) SetLHS(operator ops.Operator) {
+	aj.LHS = operator
 }
 
-func (a *ApplyJoin) SetRHS(operator ops.Operator) {
-	a.RHS = operator
+func (aj *ApplyJoin) SetRHS(operator ops.Operator) {
+	aj.RHS = operator
 }
 
-func (a *ApplyJoin) MakeInner() {
-	a.LeftJoin = false
+func (aj *ApplyJoin) MakeInner() {
+	aj.LeftJoin = false
 }
 
-func (a *ApplyJoin) IsInner() bool {
-	return !a.LeftJoin
+func (aj *ApplyJoin) IsInner() bool {
+	return !aj.LeftJoin
 }
 
-func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
-	a.Predicate = ctx.SemTable.AndExpressions(expr, a.Predicate)
+func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+	aj.Predicate = ctx.SemTable.AndExpressions(expr, aj.Predicate)
 
-	col, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
+	col, err := BreakExpressionInLHSandRHS(ctx, expr, TableID(aj.LHS))
 	if err != nil {
 		return err
 	}
-	a.JoinPredicates = append(a.JoinPredicates, col)
-	rhs, err := a.RHS.AddPredicate(ctx, col.RHSExpr)
+	aj.JoinPredicates = append(aj.JoinPredicates, col)
+	rhs, err := aj.RHS.AddPredicate(ctx, col.RHSExpr)
 	if err != nil {
 		return err
 	}
-	a.RHS = rhs
+	aj.RHS = rhs
 
 	return nil
 }
 
-func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	offset, err := a.LHS.AddColumn(ctx, true, addToGroupBy, e)
+func (aj *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
+	offset, err := aj.LHS.AddColumn(ctx, true, addToGroupBy, e)
 	if err != nil {
 		return 0, err
 	}
 	return offset, nil
 }
 
-func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
-	offset, err := a.RHS.AddColumn(ctx, true, addToGroupBy, e)
+func (aj *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (int, error) {
+	offset, err := aj.RHS.AddColumn(ctx, true, addToGroupBy, e)
 	if err != nil {
 		return 0, err
 	}
 	return offset, nil
 }
 
-func (a *ApplyJoin) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
-	return slice.Map(a.JoinColumns, joinColumnToAliasedExpr), nil
+func (aj *ApplyJoin) GetColumns(*plancontext.PlanningContext) ([]*sqlparser.AliasedExpr, error) {
+	return slice.Map(aj.JoinColumns, joinColumnToAliasedExpr), nil
 }
 
-func (a *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
-	return transformColumnsToSelectExprs(ctx, a)
+func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.SelectExprs, error) {
+	return transformColumnsToSelectExprs(ctx, aj)
 }
 
-func (a *ApplyJoin) GetOrdering() ([]ops.OrderBy, error) {
-	return a.LHS.GetOrdering()
+func (aj *ApplyJoin) GetOrdering() ([]ops.OrderBy, error) {
+	return aj.LHS.GetOrdering()
 }
 
 func joinColumnToAliasedExpr(c JoinColumn) *sqlparser.AliasedExpr {
@@ -196,12 +196,12 @@ func joinColumnToExpr(column JoinColumn) sqlparser.Expr {
 	return column.Original.Expr
 }
 
-func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (col JoinColumn, err error) {
+func (aj *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr, addToGroupBy bool) (col JoinColumn, err error) {
 	defer func() {
 		col.Original = e
 	}()
-	lhs := TableID(a.LHS)
-	rhs := TableID(a.RHS)
+	lhs := TableID(aj.LHS)
+	rhs := TableID(aj.RHS)
 	both := lhs.Merge(rhs)
 	expr := e.Expr
 	deps := ctx.SemTable.RecursiveDeps(expr)
@@ -213,7 +213,7 @@ func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlpar
 	case deps.IsSolvedBy(rhs):
 		col.RHSExpr = expr
 	case deps.IsSolvedBy(both):
-		col, err = BreakExpressionInLHSandRHS(ctx, expr, TableID(a.LHS))
+		col, err = BreakExpressionInLHSandRHS(ctx, expr, TableID(aj.LHS))
 		if err != nil {
 			return JoinColumn{}, err
 		}
@@ -224,22 +224,22 @@ func (a *ApplyJoin) getJoinColumnFor(ctx *plancontext.PlanningContext, e *sqlpar
 	return
 }
 
-func (a *ApplyJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {
-	offset, found := canReuseColumn(ctx, a.JoinColumns, expr, joinColumnToExpr)
+func (aj *ApplyJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {
+	offset, found := canReuseColumn(ctx, aj.JoinColumns, expr, joinColumnToExpr)
 	if !found {
 		return -1, nil
 	}
 	return offset, nil
 }
 
-func (a *ApplyJoin) AddColumn(
+func (aj *ApplyJoin) AddColumn(
 	ctx *plancontext.PlanningContext,
 	reuse bool,
 	groupBy bool,
 	expr *sqlparser.AliasedExpr,
 ) (int, error) {
 	if reuse {
-		offset, err := a.FindCol(ctx, expr.Expr, false)
+		offset, err := aj.FindCol(ctx, expr.Expr, false)
 		if err != nil {
 			return 0, err
 		}
@@ -247,46 +247,46 @@ func (a *ApplyJoin) AddColumn(
 			return offset, nil
 		}
 	}
-	col, err := a.getJoinColumnFor(ctx, expr, groupBy)
+	col, err := aj.getJoinColumnFor(ctx, expr, groupBy)
 	if err != nil {
 		return 0, err
 	}
-	offset := len(a.JoinColumns)
-	a.JoinColumns = append(a.JoinColumns, col)
+	offset := len(aj.JoinColumns)
+	aj.JoinColumns = append(aj.JoinColumns, col)
 	return offset, nil
 }
 
-func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
-	for _, col := range a.JoinColumns {
+func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
+	for _, col := range aj.JoinColumns {
 		// Read the type description for JoinColumn to understand the following code
 		for i, lhsExpr := range col.LHSExprs {
-			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr), col.GroupBy)
+			offset, err := aj.pushColLeft(ctx, aeWrap(lhsExpr), col.GroupBy)
 			if err != nil {
 				return err
 			}
 			if col.RHSExpr == nil {
 				// if we don't have an RHS expr, it means that this is a pure LHS expression
-				a.addOffset(-offset - 1)
+				aj.addOffset(-offset - 1)
 			} else {
-				a.Vars[col.BvNames[i]] = offset
+				aj.Vars[col.BvNames[i]] = offset
 			}
 		}
 		if col.RHSExpr != nil {
-			offset, err := a.pushColRight(ctx, aeWrap(col.RHSExpr), col.GroupBy)
+			offset, err := aj.pushColRight(ctx, aeWrap(col.RHSExpr), col.GroupBy)
 			if err != nil {
 				return err
 			}
-			a.addOffset(offset + 1)
+			aj.addOffset(offset + 1)
 		}
 	}
 
-	for _, col := range a.JoinPredicates {
+	for _, col := range aj.JoinPredicates {
 		for i, lhsExpr := range col.LHSExprs {
-			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr), false)
+			offset, err := aj.pushColLeft(ctx, aeWrap(lhsExpr), false)
 			if err != nil {
 				return err
 			}
-			a.Vars[col.BvNames[i]] = offset
+			aj.Vars[col.BvNames[i]] = offset
 		}
 		lhsColumns := slice.Map(col.LHSExprs, func(from sqlparser.Expr) *sqlparser.ColName {
 			col, ok := from.(*sqlparser.ColName)
@@ -299,18 +299,18 @@ func (a *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) (err error) {
 		if err != nil {
 			return err
 		}
-		a.LHSColumns = append(a.LHSColumns, lhsColumns...)
+		aj.LHSColumns = append(aj.LHSColumns, lhsColumns...)
 	}
 	return nil
 }
 
-func (a *ApplyJoin) addOffset(offset int) {
-	a.Columns = append(a.Columns, offset)
+func (aj *ApplyJoin) addOffset(offset int) {
+	aj.Columns = append(aj.Columns, offset)
 }
 
-func (a *ApplyJoin) ShortDescription() string {
-	pred := sqlparser.String(a.Predicate)
-	columns := slice.Map(a.JoinColumns, func(from JoinColumn) string {
+func (aj *ApplyJoin) ShortDescription() string {
+	pred := sqlparser.String(aj.Predicate)
+	columns := slice.Map(aj.JoinColumns, func(from JoinColumn) string {
 		return sqlparser.String(from.Original)
 	})
 	return fmt.Sprintf("on %s columns: %s", pred, strings.Join(columns, ", "))
@@ -326,4 +326,43 @@ func (jc JoinColumn) IsPureRight() bool {
 
 func (jc JoinColumn) IsMixedLeftAndRight() bool {
 	return len(jc.LHSExprs) > 0 && jc.RHSExpr != nil
+}
+
+// splitProjection creates JoinPredicates for all projections,
+// and pushes down columns as needed between the LHS and RHS of a join
+func (aj *ApplyJoin) splitProjection(
+	ctx *plancontext.PlanningContext,
+	lhs, rhs *projector,
+	in ProjExpr,
+	colName *sqlparser.AliasedExpr,
+) error {
+	expr := in.GetExpr()
+
+	// Check if the current expression can reuse an existing column in the ApplyJoin.
+	if _, found := canReuseColumn(ctx, aj.JoinColumns, expr, joinColumnToExpr); found {
+		return nil
+	}
+
+	// Get a JoinColumn for the current expression.
+	col, err := aj.getJoinColumnFor(ctx, colName, false)
+	if err != nil {
+		return err
+	}
+
+	// Update the left and right child columns and names based on the JoinColumn type.
+	switch {
+	case col.IsPureLeft():
+		lhs.add(in, colName)
+	case col.IsPureRight():
+		rhs.add(in, colName)
+	case col.IsMixedLeftAndRight():
+		for _, lhsExpr := range col.LHSExprs {
+			lhs.add(&UnexploredExpression{E: lhsExpr}, aeWrap(lhsExpr))
+		}
+		rhs.add(&UnexploredExpression{E: col.RHSExpr}, &sqlparser.AliasedExpr{Expr: col.RHSExpr, As: colName.As})
+	}
+
+	// Add the new JoinColumn to the ApplyJoin's JoinPredicates.
+	aj.JoinColumns = append(aj.JoinColumns, col)
+	return nil
 }
