@@ -142,7 +142,7 @@ func buildVindexTableForDML(
 	var err error
 	tblName, ok := table.Alias.Expr.(sqlparser.TableName)
 	if !ok {
-		return nil, nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
+		return nil, nil, vterrors.VT13001("unexpected table type: " + sqlparser.String(table.Alias))
 	}
 
 	_, _, _, typ, dest, err = ctx.VSchema.FindTableOrVindex(tblName)
