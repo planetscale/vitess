@@ -51,8 +51,9 @@ func insertJSONValues(t *testing.T) {
 	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id) values(1)")
 	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1) values(2, \"{}\")")
 	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j2) values(3, \"{}\")")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into json_tbl(id, j1, j2) values(4, NULL, 'null')")
 
-	id := 4
+	id := 100
 	q := "insert into json_tbl(id, j1, j2) values(%d, '%s', '%s')"
 	numJsonValues := len(jsonValues)
 	for id <= NumJSONRows {
