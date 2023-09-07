@@ -17,8 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"strconv"
-	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -34,6 +34,14 @@ type earlyRewriter struct {
 	clause          string
 	warning         string
 	expandedColumns map[sqlparser.TableName][]*sqlparser.ColName
+}
+
+func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.JoinTableExpr:
+		handleRewriteOfJoinTableExpr(r, node)
+	}
+	return nil
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -84,6 +92,13 @@ func handleJoinTableExpr(r *earlyRewriter, node *sqlparser.JoinTableExpr) {
 	}
 	node.Join = sqlparser.NormalJoinType
 	r.warning = "straight join is converted to normal join"
+}
+
+func handleRewriteOfJoinTableExpr(r *earlyRewriter, node *sqlparser.JoinTableExpr) {
+	err := rewriteJoinUsing(r, node)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // handleOrderBy processes the ORDER BY clause.
@@ -344,23 +359,25 @@ func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {
 //
 // This function returns an error if it encounters a non-authoritative table or
 // if it cannot find a SELECT statement to add the WHERE predicate to.
-func rewriteJoinUsing(current *scope, cond *sqlparser.JoinCondition, org originable) error {
-	predicates, err := buildJoinPredicates(current, cond.Using, org)
+func rewriteJoinUsing(r *earlyRewriter, join *sqlparser.JoinTableExpr) error {
+	predicates, err := buildJoinPredicates(r, join)
 	if err != nil {
 		return err
 	}
-	cond.On = sqlparser.AndExpressions(predicates...)
+	if len(predicates) > 0 {
+		join.Condition.On = sqlparser.AndExpressions(predicates...)
+		join.Condition.Using = nil
+	}
 	return nil
 }
 
 // buildJoinPredicates constructs the join predicates for a given set of USING columns.
 // It returns a slice of sqlparser.Expr, each representing a join predicate for the given columns.
-func buildJoinPredicates(current *scope, using sqlparser.Columns, org originable) ([]sqlparser.Expr, error) {
-	joinUsing := current.prepareUsingMap()
+func buildJoinPredicates(r *earlyRewriter, join *sqlparser.JoinTableExpr) ([]sqlparser.Expr, error) {
 	var predicates []sqlparser.Expr
 
-	for _, column := range using {
-		foundTables, err := findTablesWithColumn(current, joinUsing, org, column)
+	for _, column := range join.Condition.Using {
+		foundTables, err := findTablesWithColumn(r, join, column)
 		if err != nil {
 			return nil, err
 		}
@@ -371,42 +388,77 @@ func buildJoinPredicates(current *scope, using sqlparser.Columns, org originable
 	return predicates, nil
 }
 
-// findTablesWithColumn finds the tables with the specified column in the current scope.
-func findTablesWithColumn(current *scope, joinUsing map[TableSet]map[string]TableSet, org originable, column sqlparser.IdentifierCI) ([]sqlparser.TableName, error) {
-	var foundTables []sqlparser.TableName
-
-	for _, tbl := range current.tables {
-		if !tbl.authoritative() {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't handle JOIN USING without authoritative tables")
+func findOnlyOneTableInfoThatHasColumn(r *earlyRewriter, tbl sqlparser.TableExpr, column sqlparser.IdentifierCI) (TableInfo, error) {
+	switch tbl := tbl.(type) {
+	case *sqlparser.AliasedTableExpr:
+		ts := r.binder.tc.tableSetFor(tbl)
+		tblInfo := r.binder.tc.Tables[ts.TableOffset()]
+		for _, info := range tblInfo.getColumns() {
+			if column.EqualString(info.Name) {
+				return tblInfo, nil
+			}
 		}
-
-		currTable := tbl.getTableSet(org)
-		usingCols := joinUsing[currTable]
-		if usingCols == nil {
-			usingCols = map[string]TableSet{}
+		return nil, nil
+	case *sqlparser.JoinTableExpr:
+		tblInfoR, err := findOnlyOneTableInfoThatHasColumn(r, tbl.RightExpr, column)
+		if err != nil {
+			return nil, err
 		}
-
-		if hasColumnInTable(tbl, usingCols) {
-			tblName, err := tbl.Name()
+		tblInfoL, err := findOnlyOneTableInfoThatHasColumn(r, tbl.LeftExpr, column)
+		if err != nil {
+			return nil, err
+		}
+		if tblInfoL != nil && tblInfoR != nil {
+			return nil, vterrors.VT03021(column.String())
+		}
+		if tblInfoR != nil {
+			return tblInfoR, nil
+		}
+		return tblInfoL, nil
+	case *sqlparser.ParenTableExpr:
+		var tblInfo TableInfo
+		for _, parenTable := range tbl.Exprs {
+			newTblInfo, err := findOnlyOneTableInfoThatHasColumn(r, parenTable, column)
 			if err != nil {
 				return nil, err
 			}
-			foundTables = append(foundTables, tblName)
+			if tblInfo != nil && newTblInfo != nil {
+				return nil, vterrors.VT03021(column.String())
+			}
+			if newTblInfo != nil {
+				tblInfo = newTblInfo
+			}
 		}
+		return tblInfo, nil
+	default:
+		panic(fmt.Sprintf("unsupported TableExpr type in JOIN: %T", tbl))
 	}
-
-	return foundTables, nil
 }
 
-// hasColumnInTable checks if the specified table has the given column.
-func hasColumnInTable(tbl TableInfo, usingCols map[string]TableSet) bool {
-	for _, col := range tbl.getColumns() {
-		_, found := usingCols[strings.ToLower(col.Name)]
-		if found {
-			return true
-		}
+// findTablesWithColumn finds the tables with the specified column in the current scope.
+func findTablesWithColumn(r *earlyRewriter, join *sqlparser.JoinTableExpr, column sqlparser.IdentifierCI) ([]sqlparser.TableName, error) {
+	leftTableInfo, err := findOnlyOneTableInfoThatHasColumn(r, join.LeftExpr, column)
+	if err != nil {
+		return nil, err
 	}
-	return false
+
+	rightTableInfo, err := findOnlyOneTableInfoThatHasColumn(r, join.RightExpr, column)
+	if err != nil {
+		return nil, err
+	}
+
+	if leftTableInfo == nil || rightTableInfo == nil {
+		return nil, vterrors.VT03019(column.String())
+	}
+	leftTableName, err := leftTableInfo.Name()
+	if err != nil {
+		return nil, err
+	}
+	rightTableName, err := rightTableInfo.Name()
+	if err != nil {
+		return nil, err
+	}
+	return []sqlparser.TableName{leftTableName, rightTableName}, nil
 }
 
 // createComparisonPredicates creates a list of comparison predicates between the given column and foundTables.

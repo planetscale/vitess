@@ -191,6 +191,10 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		a.setError(err)
 		return false
 	}
+	if err := a.rewriter.up(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
 
 	a.leaveProjection(cursor)
 	return a.shouldContinue()
