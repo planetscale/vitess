@@ -587,13 +587,13 @@ func (r *Route) AddColumns(ctx *plancontext.PlanningContext, reuse bool, addToGr
 	}
 	r.Source = src
 
-	return src.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs), nil
+	return src.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
 }
 
 type selectExpressions interface {
 	ops.Operator
-	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) int
-	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) []int
+	addColumnWithoutPushing(expr *sqlparser.AliasedExpr, addToGroupBy bool) (int, error)
+	addColumnsWithoutPushing(ctx *plancontext.PlanningContext, reuse bool, addToGroupBy []bool, exprs []*sqlparser.AliasedExpr) ([]int, error)
 	isDerived() bool
 }
 
@@ -635,7 +635,11 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 			// we have to add a new projection and can't build on this one
 			return op, false, nil
 		}
-		offset := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
+		offset, err := op.addColumnsWithoutPushing(ctx, reuse, addToGroupBy, exprs)
+		if err != nil {
+			// This will happen if we have a star in the projection
+			return op, false, nil
+		}
 		return op, true, offset
 	case *Union:
 		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
@@ -646,7 +650,7 @@ func addMultipleColumnsToInput(ctx *plancontext.PlanningContext, operator ops.Op
 		}
 		proj := &Projection{
 			Source:      op,
-			Columns:     unionColumns,
+			Columns:     AliasedProjections(unionColumns),
 			Projections: nil,
 			TableID:     &tableID,
 			Alias:       "dt",
