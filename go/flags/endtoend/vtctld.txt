@@ -1,4 +1,9 @@
-Usage of vtctld:
+The Vitess cluster management daemon.
+
+Usage:
+  vtctld [flags]
+
+Flags:
       --action_timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
       --alsologtostderr                                                  log to standard error as well as files
       --azblob_backup_account_key_file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
@@ -59,7 +64,7 @@ Usage of vtctld:
       --grpc_server_initial_window_size int                              gRPC server initial window size
       --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
       --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
-  -h, --help                                                             display usage and exit
+  -h, --help                                                             help for vtctld
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
@@ -68,9 +73,7 @@ Usage of vtctld:
       --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
       --log_dir string                                                   If non-empty, write log files in this directory
       --log_err_stacks                                                   log stack traces for errors
-      --log_link string                                                  If non-empty, add symbolic links in this directory to the log files
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --logbuflevel int                                                  Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
       --logtostderr                                                      log to standard error instead of files
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
@@ -80,17 +83,8 @@ Usage of vtctld:
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --proxy_tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
-      --psdb.backup_arn string                                           ARN for the S3 bucket
-      --psdb.backup_bucket string                                        S3 bucket for backups
-      --psdb.backup_region string                                        The region for the backups
-      --psdb.backup_sse_kms_key_id string                                KMS Key ID to use for S3-SSE
-      --psdb.gcs_backup.bucket string                                    GCS bucket to use for backups.
-      --psdb.gcs_backup.creds_path string                                Credentials JSON for service account to use.
-      --psdb.gcs_backup.key_uri string                                   GCP KMS Keyring URI to use.
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
-      --s2a_enable_appengine_dialer                                      If true, opportunistically use AppEngine-specific dialer to call S2A.
-      --s2a_timeout duration                                             Timeout enforced on the connection to the S2A service for handshake. (default 3s)
       --s3_backup_aws_endpoint string                                    endpoint of the S3 backend (region must be provided).
       --s3_backup_aws_region string                                      AWS region to use. (default "us-east-1")
       --s3_backup_aws_retries int                                        AWS request retries. (default -1)

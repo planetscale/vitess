@@ -14,17 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
 import (
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
+	_ "vitess.io/vitess/go/vt/mysqlctl/gcsbackupstorage"
 )
-
-func init() {
-	servenv.OnRun(func() {
-		if servenv.GRPCCheckServiceMap("vtctld") {
-			grpcvtctldserver.StartServer(servenv.GRPCServer, ts, boost)
-		}
-	})
-}
