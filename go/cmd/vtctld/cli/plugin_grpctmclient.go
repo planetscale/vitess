@@ -14,17 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
+
+// Imports and register the gRPC tabletmanager client
 
 import (
-	"vitess.io/vitess/go/trace"
-
-	"vitess.io/vitess/go/vt/servenv"
+	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
-
-func init() {
-	servenv.OnInit(func() {
-		closer := trace.StartTracing("vtctld")
-		servenv.OnClose(trace.LogErrorsWhenClosing(closer))
-	})
-}

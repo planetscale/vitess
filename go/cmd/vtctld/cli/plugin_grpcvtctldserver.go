@@ -14,10 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
-
-// Imports and register the gRPC tabletmanager client
+package cli
 
 import (
-	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 )
+
+func init() {
+	servenv.OnRun(func() {
+		if servenv.GRPCCheckServiceMap("vtctld") {
+			grpcvtctldserver.StartServer(servenv.GRPCServer, ts, boost)
+		}
+	})
+}
