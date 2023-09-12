@@ -59,6 +59,7 @@ var discoveryRecentCountGauge = metrics.NewGauge()
 var isElectedGauge = metrics.NewGauge()
 var isHealthyGauge = metrics.NewGauge()
 var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
+var deadPrimaryCounter = metrics.NewCounter()
 
 var isElectedNode int64
 
@@ -74,6 +75,7 @@ func init() {
 	_ = metrics.Register("discoveries.recent_count", discoveryRecentCountGauge)
 	_ = metrics.Register("elect.is_elected", isElectedGauge)
 	_ = metrics.Register("health.is_healthy", isHealthyGauge)
+	_ = metrics.Register("health.dead_primary", deadPrimaryCounter)
 
 	ometrics.OnMetricsTick(func() {
 		discoveryQueueLengthGauge.Update(int64(discoveryQueue.QueueLen()))
