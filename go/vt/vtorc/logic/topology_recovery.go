@@ -578,6 +578,13 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	countPendingRecoveries.Add(1)
 	defer countPendingRecoveries.Add(-1)
 
+	// Regardless of whether we have a actionable recovery we bump a metric
+	// for dead primaries.
+	switch analysisEntry.Analysis {
+	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas:
+		deadPrimaryCounter.Inc(1)
+	}
+
 	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
