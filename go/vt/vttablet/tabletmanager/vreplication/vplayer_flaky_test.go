@@ -1697,6 +1697,7 @@ func TestPlayerDDL(t *testing.T) {
 		"/update.*'Running'",
 		// Second update is from vreplicator.
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update.*'Running'",
 		"begin",
 		fmt.Sprintf("/update.*'%s'", pos2),
@@ -1863,6 +1864,7 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update.*'Running'",
 		// Second update is from vreplicator.
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update.*'Running'",
 		"begin",
 		"insert into yes(id,val) values (1,'aaa')",
@@ -1888,6 +1890,7 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update.*'Running'",
 		// Second update is from vreplicator.
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update.*'Running'",
 		"begin",
 		// Since 'no' generates empty transactions that are skipped by
@@ -1906,6 +1909,7 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update.*'Running'",
 		// Second update is from vreplicator.
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update.*'Running'",
 		"/update.*'Stopped'.*already reached",
 	))
@@ -2527,6 +2531,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 	})
 	expectDBClientQueries(t, qh.Expect(
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update _vt.vreplication set state='Running'",
 		"begin",
 		"insert into t1(id,val) values (2,'aaa')",
@@ -3099,6 +3104,7 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 	expectDBClientQueries(t, qh.Expect(
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/SELECT rows_copied FROM _vt.vreplication WHERE id=.+",
 		"/update _vt.vreplication set state='Running'",
 	))
 	var once sync.Once
