@@ -68,7 +68,21 @@ type vplayer struct {
 	phase string
 
 	throttlerAppName string
+
+	// See updateFKCheck for more details on how the two fields below are used.
+
+	// foreignKeyChecksEnabled is the current state of the foreign key checks for the current session.
+	// It reflects what we have set the @@session.foreign_key_checks session variable to.
+	foreignKeyChecksEnabled bool
+
+	// foreignKeyChecksStateInitialized is set to true once we have initialized the foreignKeyChecksEnabled.
+	// The initialization is done on the first row event that this vplayer sees.
+	foreignKeyChecksStateInitialized bool
 }
+
+// NoForeignKeyCheckFlagBitmask is the bitmask for the 2nd bit (least significant) of the flags in a binlog row event.
+// This bit is set if foreign key checks are disabled.
+const NoForeignKeyCheckFlagBitmask uint32 = 1 << 1
 
 // newVPlayer creates a new vplayer. Parameters:
 // vreplicator: the outer replicator. It's used for common functions like setState.
@@ -131,6 +145,34 @@ func (vp *vplayer) play(ctx context.Context) error {
 	}
 
 	return vp.fetchAndApply(ctx)
+}
+
+// updateFKCheck updates the @@session.foreign_key_checks variable based on the binlog row event flags.
+// The function only does it if it has changed to avoid redundant updates, using the cached vplayer.foreignKeyChecksEnabled
+// The foreign_key_checks value for a transaction is determined by the 2nd bit (least significant) of the flags:
+// - If set (1), foreign key checks are disabled.
+// - If unset (0), foreign key checks are enabled.
+// updateFKCheck also updates the state for the first row event that this vplayer and hence the connection sees.
+func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
+	dbForeignKeyChecksEnabled := true
+	if flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask {
+		dbForeignKeyChecksEnabled = false
+	}
+
+	if vp.foreignKeyChecksStateInitialized /* already set earlier */ &&
+		dbForeignKeyChecksEnabled == vp.foreignKeyChecksEnabled /* no change in the state, no need to update */ {
+		return nil
+	}
+	log.Infof("Setting this session's foreign_key_checks to %s", strconv.FormatBool(dbForeignKeyChecksEnabled))
+	if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, "set @@session.foreign_key_checks="+strconv.FormatBool(dbForeignKeyChecksEnabled)); err != nil {
+		return fmt.Errorf("failed to set session foreign_key_checks: %w", err)
+	}
+	vp.foreignKeyChecksEnabled = dbForeignKeyChecksEnabled
+	if !vp.foreignKeyChecksStateInitialized {
+		log.Infof("First foreign_key_checks update to: %s", strconv.FormatBool(dbForeignKeyChecksEnabled))
+		vp.foreignKeyChecksStateInitialized = true
+	}
+	return nil
 }
 
 // fetchAndApply performs the fetching and application of the binlogs.
