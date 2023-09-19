@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -15,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/spf13/pflag"
 
 	"github.com/planetscale/common-libs/files"
 
@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -34,13 +35,25 @@ const (
 )
 
 var (
-	backupRegion      = flag.String("psdb.backup_region", "", "The region for the backups")
-	backupBucket      = flag.String("psdb.backup_bucket", "", "S3 bucket for backups")
-	backupARN         = flag.String("psdb.backup_arn", "", "ARN for the S3 bucket")
-	backupSSEKMSKeyID = flag.String("psdb.backup_sse_kms_key_id", "", "KMS Key ID to use for S3-SSE")
+	backupRegion      string
+	backupBucket      string
+	backupARN         string
+	backupSSEKMSKeyID string
 )
 
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&backupRegion, "psdb.backup_region", "", "The region for the backups")
+	fs.StringVar(&backupBucket, "psdb.backup_bucket", "", "S3 bucket for backups")
+	fs.StringVar(&backupARN, "psdb.backup_arn", "", "ARN for the S3 bucket")
+	fs.StringVar(&backupSSEKMSKeyID, "psdb.backup_sse_kms_key_id", "", "KMS Key ID to use for S3-SSE")
+}
+
 func init() {
+	servenv.OnParseFor("vtbackup", registerFlags)
+	servenv.OnParseFor("vtctl", registerFlags)
+	servenv.OnParseFor("vtctld", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+
 	backupstorage.BackupStorageMap["kmsbackup"] = &FilesBackupStorage{}
 }
 
@@ -143,17 +156,17 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 	}
 
 	// flags are parsed later, hence we need to assign them here
-	if *backupRegion != "" {
-		f.region = *backupRegion
+	if backupRegion != "" {
+		f.region = backupRegion
 	}
-	if *backupBucket != "" {
-		f.bucket = *backupBucket
+	if backupBucket != "" {
+		f.bucket = backupBucket
 	}
-	if *backupARN != "" {
-		f.arn = *backupARN
+	if backupARN != "" {
+		f.arn = backupARN
 	}
-	if *backupSSEKMSKeyID != "" {
-		f.kmsKeyID = *backupSSEKMSKeyID
+	if backupSSEKMSKeyID != "" {
+		f.kmsKeyID = backupSSEKMSKeyID
 	}
 
 	if f.region == "" {
