@@ -259,6 +259,9 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 }
 
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
+	if err := vp.updateFKCheck(ctx, rowEvent.Flags); err != nil {
+		return err
+	}
 	tplan := vp.tablePlans[rowEvent.TableName]
 	if tplan == nil {
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
@@ -545,6 +548,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
+			log.Infof("Error applying row event: %s", err.Error())
 			return err
 		}
 		//Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed time for the Row event
