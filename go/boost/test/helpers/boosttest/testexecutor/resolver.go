@@ -137,6 +137,10 @@ func (f *fakeGateway) VStreamResults(ctx context.Context, target *querypb.Target
 	panic("implement me")
 }
 
+func (f *fakeGateway) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	panic("implement me")
+}
+
 func (f *fakeGateway) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	panic("implement me")
 }
