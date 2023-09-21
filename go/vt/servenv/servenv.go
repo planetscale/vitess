@@ -369,21 +369,37 @@ func ParseFlagsForTests(cmd string) {
 // the given cobra command, then copies over the glog flags that otherwise
 // require manual transferring.
 func MoveFlagsToCobraCommand(cmd *cobra.Command) {
-	cmd.Flags().AddFlagSet(GetFlagSetFor(cmd.Use))
+	moveFlags(cmd.Use, cmd.Flags())
+}
+
+// MovePersistentFlagsToCobraCommand functions exactly like MoveFlagsToCobraCommand,
+// but moves the servenv-registered flags to the persistent flagset of
+// the given cobra command, then copies over the glog flags that otherwise
+// require manual transferring.
+//
+// Useful for transferring flags to a parent command whose subcommands should
+// inherit the servenv-registered flags.
+func MovePersistentFlagsToCobraCommand(cmd *cobra.Command) {
+	moveFlags(cmd.Use, cmd.PersistentFlags())
+}
+
+func moveFlags(name string, fs *pflag.FlagSet) {
+	fs.AddFlagSet(GetFlagSetFor(name))
+
 	// glog flags, no better way to do this
-	_flag.PreventGlogVFlagFromClobberingVersionFlagShorthand(cmd.Flags())
-	cmd.Flags().AddGoFlag(flag.Lookup("logtostderr"))
-	cmd.Flags().AddGoFlag(flag.Lookup("log_backtrace_at"))
-	cmd.Flags().AddGoFlag(flag.Lookup("alsologtostderr"))
-	cmd.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
-	cmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
-	cmd.Flags().AddGoFlag(flag.Lookup("vmodule"))
+	_flag.PreventGlogVFlagFromClobberingVersionFlagShorthand(fs)
+	fs.AddGoFlag(flag.Lookup("logtostderr"))
+	fs.AddGoFlag(flag.Lookup("log_backtrace_at"))
+	fs.AddGoFlag(flag.Lookup("alsologtostderr"))
+	fs.AddGoFlag(flag.Lookup("stderrthreshold"))
+	fs.AddGoFlag(flag.Lookup("log_dir"))
+	fs.AddGoFlag(flag.Lookup("vmodule"))
 
 	// private-only flags
-	cmd.Flags().AddGoFlag(flag.Lookup("log_link"))
-	cmd.Flags().AddGoFlag(flag.Lookup("logbuflevel"))
+	fs.AddGoFlag(flag.Lookup("log_link"))
+	fs.AddGoFlag(flag.Lookup("logbuflevel"))
 
-	pflag.CommandLine = cmd.Flags()
+	pflag.CommandLine = fs
 }
 
 // CobraPreRunE returns the common function that commands will need to load
