@@ -161,6 +161,8 @@ ssl_key={{.ServerKey}}
 	} else {
 		tmpProcess.Args = append(tmpProcess.Args, "start")
 	}
+	tmpProcess.Env = append(tmpProcess.Env, os.Environ()...)
+	tmpProcess.Env = append(tmpProcess.Env, DefaultVttestEnv)
 	log.Infof("Starting mysqlctl with command: %v", tmpProcess.Args)
 	return tmpProcess, tmpProcess.Start()
 }

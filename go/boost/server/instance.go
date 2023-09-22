@@ -21,7 +21,6 @@ import (
 	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/server/worker"
 	toposerver "vitess.io/vitess/go/boost/topo/server"
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -150,9 +149,7 @@ func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, t
 	tc := vtgate.NewTxConn(gateway, DefaultTxMode)
 	sc := vtgate.NewScatterConn("", tc, gateway)
 	resolver := vtgate.NewResolver(srvResolver, resilientServer, localCell, sc)
-	queryLogBufferSize := 10
-	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
-	plans := cache.NewDefaultCacheImpl(cache.DefaultConfig)
+	plans := vtgate.DefaultPlanCache()
 
 	executor := vtgate.NewExecutor(ctx,
 		resilientServer,
@@ -165,8 +162,11 @@ func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, t
 		tracker,
 		DefaultNoScatter,
 		DefaultPlannerVersion,
-		queryLogger,
 	)
+
+	queryLogBufferSize := 10
+	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
+	executor.SetQueryLogger(queryLogger)
 
 	s.Worker.SetExecutor(executor)
 	s.Worker.SetResolver(srvResolver)

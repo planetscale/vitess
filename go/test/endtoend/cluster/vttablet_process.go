@@ -135,6 +135,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	vttablet.ErrorLog = errFile.Name()
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
+	vttablet.proc.Env = append(vttablet.proc.Env, DefaultVttestEnv)
 
 	log.Infof("Running vttablet with command: %v", strings.Join(vttablet.proc.Args, " "))
 
