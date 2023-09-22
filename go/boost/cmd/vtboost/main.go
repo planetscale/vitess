@@ -19,25 +19,19 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
+	_ "vitess.io/vitess/go/vt/vtgate"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
-var schemaChangeUser string
-var enableSchemaChangeSignal = true
-
 var (
-	hostname     string
-	drpcPort     int
-	clusterUUID  string
-	cell         string
-	cellsToWatch string
-	memoryLimit  int
-	cfg          = config.DefaultConfig()
-
-	healthCheckRetryDelay = 2 * time.Millisecond
-	healthCheckTimeout    = time.Minute
+	hostname    string
+	drpcPort    int
+	clusterUUID string
+	cell        string
+	memoryLimit int
+	cfg         = config.DefaultConfig()
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -53,11 +47,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&drpcPort, "drpc-port", 0, "default listen address for DRPC")
 	fs.StringVar(&clusterUUID, "boost-cluster-uuid", "", "UUID of the boost cluster, this value is used to find the cluster in the topology.")
 	fs.StringVar(&cell, "cell", "", "cell on which the Boost cluster is deployed")
-	fs.StringVar(&cellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
 	fs.IntVar(&memoryLimit, "memory-limit", 0, "the memory limit in bytes this process is allowed to allocate: used to detect memory pressure")
-
-	fs.DurationVar(&healthCheckRetryDelay, "healthcheck_retry_delay", healthCheckRetryDelay, "health check retry delay")
-	fs.DurationVar(&healthCheckTimeout, "healthcheck_timeout", healthCheckTimeout, "the health check timeout period")
 
 	// gtid-mode configures how GTID tracking is performed by upqueries; setting this to 'TRACK_GTID' requires a forked
 	// version of MySQL for now; the default value is 'SELECT_GTID', which works with any MySQL version even though we've
@@ -75,9 +65,6 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	// The number of timed we retry a vstream startup if it fails.
 	fs.IntVar(&cfg.VstreamStartRetries, "vstream-start-retries", 10, "number of retries for vstream startup if it fails")
-
-	fs.BoolVar(&enableSchemaChangeSignal, "schema_change_signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
-	fs.StringVar(&schemaChangeUser, "schema_change_signal_user", schemaChangeUser, "User to be used to send down query to vttablet to retrieve schema changes")
 
 	acl.RegisterFlags(fs)
 }
@@ -127,13 +114,9 @@ func main() {
 
 	boost := server.NewBoostInstance(log, ts, tmclient.NewTabletManagerClient(), cfg, clusterUUID)
 
-	if !enableSchemaChangeSignal {
-		log.Fatal("Schema tracking must be enabled.")
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
-	err = boost.ConfigureVitessExecutor(ctx, log, ts, cell, cellsToWatch, schemaChangeUser, healthCheckRetryDelay, healthCheckTimeout)
+	err = boost.ConfigureVitessExecutor(ctx, log, ts, cell, nil)
 	if err != nil {
 		log.Fatal("failed to configure external gateway", zap.Error(err))
 	}

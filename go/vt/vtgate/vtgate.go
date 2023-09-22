@@ -155,6 +155,11 @@ func registerFlags(fs *pflag.FlagSet) {
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)
 	servenv.OnParseFor("vtcombo", registerFlags)
+	servenv.OnParseFor("vtboost", registerFlags)
+}
+
+func SchemaChangeUser() string {
+	return schemaChangeUser
 }
 
 func getTxMode() vtgatepb.TransactionMode {
