@@ -55,12 +55,15 @@ var (
 )
 
 func init() {
-	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
+	register := func(fs *pflag.FlagSet) {
 		fs.StringVar(&CellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
 		fs.StringVar(&bufferImplementation, "buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
 		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
-	})
+	}
+
+	servenv.OnParseFor("vtgate", register)
+	servenv.OnParseFor("vtboost", register)
 }
 
 // TabletGateway implements the Gateway interface.

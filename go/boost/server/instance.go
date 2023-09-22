@@ -10,14 +10,13 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/boost/boostrpc"
 	"vitess.io/vitess/go/boost/boostrpc/service"
-	"vitess.io/vitess/go/vt/discovery"
-
 	"vitess.io/vitess/go/boost/server/controller"
 	"vitess.io/vitess/go/boost/server/controller/config"
 	"vitess.io/vitess/go/boost/server/worker"
@@ -115,11 +114,10 @@ func resolveAndLoadKeyspace(ctx context.Context, log *zap.Logger, srvResolver *s
 	}
 }
 
-func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, ts *topo.Server, localCell string, cellsToWatch string, schemaTrackingUser string, hcRetryDelay time.Duration, hcTimeout time.Duration) error {
+func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, ts *topo.Server, localCell string, hc discovery.HealthCheck) error {
 	resilientServer := srvtopo.NewResilientServer(ctx, ts, "ResilientSrvTopoServer")
-	log.Info("configuring external gateway for upqueries", zap.String("cell", localCell), zap.String("cells_to_watch", cellsToWatch))
+	log.Info("configuring external gateway for upqueries", zap.String("cell", localCell))
 
-	hc := discovery.NewHealthCheck(ctx, hcRetryDelay, hcTimeout, ts, localCell, cellsToWatch)
 	gateway := vtgate.NewTabletGateway(ctx, hc, resilientServer, localCell)
 
 	tabletTypesToWait := []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}
@@ -146,7 +144,7 @@ func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, t
 		return ki.SidecarDbName, nil
 	})
 
-	tracker := vtschema.NewTracker(gateway.HealthCheck().Subscribe(), schemaTrackingUser, false)
+	tracker := vtschema.NewTracker(gateway.HealthCheck().Subscribe(), vtgate.SchemaChangeUser(), false)
 	addKeyspaceToTracker(ctx, log, srvResolver, tracker, gateway)
 
 	tc := vtgate.NewTxConn(gateway, DefaultTxMode)

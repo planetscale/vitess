@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/slice"
+	"vitess.io/vitess/go/vt/discovery"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
@@ -240,7 +241,8 @@ func New(t testing.TB, options ...Option) *Cluster {
 			s.Worker.SetExecutor(cluster.Executor)
 			s.Worker.SetResolver(testexecutor.NewResolver(cluster.Executor))
 		case cluster.externalExecutor:
-			err := s.ConfigureVitessExecutor(ctx, logger, cluster.Topo, cluster.localCell, cluster.cellsToWatch, cluster.schemaChangeUser, 2*time.Millisecond, time.Minute)
+			hc := discovery.NewHealthCheck(ctx, 2*time.Millisecond, time.Minute, cluster.Topo, cluster.localCell, cluster.cellsToWatch)
+			err := s.ConfigureVitessExecutor(ctx, logger, cluster.Topo, cluster.localCell, hc)
 			if err != nil {
 				t.Fatal(err)
 			}
