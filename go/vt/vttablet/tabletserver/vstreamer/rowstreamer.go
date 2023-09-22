@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqlescape"
