@@ -644,7 +644,6 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, keyspace, 2)
 	})
-
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
 }
 
@@ -789,10 +788,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		query := "select cid from customer"
 		assertQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query)
-
-		insertQuery1 := "insert into customer(cid, name, meta) values(1001, 'tempCustomer1', '{\"a\": 1629849600, \"b\": 930701976723823}')"
-		matchInsertQuery0 := "insert into customer(cid, `name`) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */)"
-		matchInsertQuery1 := "insert into customer(cid, `name`, meta) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */, :vtg3 /* VARCHAR */)"
+		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
+		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */)"
 		assertQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1)
 
 		// FIXME for some reason, these inserts fails on mac, need to investigate, some
@@ -809,9 +806,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 				execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("update `%s` set name='xyz'", tbl))
 			}
 		}
-		vdiff1(t, ksWorkflow, "")
-		catchup(t, customerTab1, workflow, workflowType)
-		catchup(t, customerTab2, workflow, workflowType)
+		vdiffSideBySide(t, ksWorkflow, "")
 		switchReadsDryRun(t, workflowType, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		assertQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query)
@@ -837,8 +832,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		catchup(t, productTab, workflow, "MoveTables")
 
-		vdiff1(t, "product.p2c_reverse", "")
-		catchup(t, productTab, workflow, "MoveTables")
+		vdiffSideBySide(t, "product.p2c_reverse", "")
 		if withOpenTx {
 			execVtgateQuery(t, vtgateConn, "", deleteOpenTxQuery)
 		}
@@ -868,12 +862,12 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.Contains(t, output, "'customer.bmd5'")
 
 			insertQuery1 = "insert into customer(cid, name) values(1002, 'tempCustomer5')"
-			assertQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery0)
+			assertQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1)
 			// both inserts go into 80-, this tests the edge-case where a stream (-80) has no relevant new events after the previous switch
 			insertQuery1 = "insert into customer(cid, name) values(1003, 'tempCustomer6')"
-			assertQueryDoesNotExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery1, matchInsertQuery0)
+			assertQueryDoesNotExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery1, matchInsertQuery1)
 			insertQuery1 = "insert into customer(cid, name) values(1004, 'tempCustomer7')"
-			assertQueryDoesNotExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery0)
+			assertQueryDoesNotExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery1)
 
 			waitForNoWorkflowLag(t, vc, targetKs, workflow)
 
@@ -1067,16 +1061,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				continue
 			}
 		}
-		vdiff1(t, ksWorkflow, "")
-		for _, tab := range tablets {
-			if strings.Contains(targetShards, ","+tab.Shard+",") {
-				log.Infof("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard)
-				catchup(t, tab, workflow, "Reshard")
-			} else {
-				log.Infof("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard)
-				continue
-			}
-		}
+		vdiffSideBySide(t, ksWorkflow, "")
 		if dryRunResultSwitchReads != nil {
 			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", allCellNames, "rdonly,replica", "--dry-run")
 		}
@@ -1112,7 +1097,7 @@ func shardOrders(t *testing.T) {
 		workflowType := "MoveTables"
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
-		vdiff1(t, ksWorkflow, "")
+		vdiffSideBySide(t, ksWorkflow, "")
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		moveTablesAction(t, "Complete", cell, workflow, sourceKs, targetKs, tables)
@@ -1124,7 +1109,7 @@ func shardOrders(t *testing.T) {
 
 func checkThatVDiffFails(t *testing.T, keyspace, workflow string) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
-	t.Run("check that vdiff1 won't run", func(t2 *testing.T) {
+	t.Run("check that vdiffSideBySide won't run", func(t2 *testing.T) {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", ksWorkflow)
 		require.Error(t, err)
 		require.Contains(t, output, "invalid VDiff run")
@@ -1160,9 +1145,7 @@ func shardMerchant(t *testing.T) {
 		catchup(t, merchantTab1, workflow, workflowType)
 		catchup(t, merchantTab2, workflow, workflowType)
 
-		vdiff1(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
-		catchup(t, merchantTab1, workflow, workflowType)
-		catchup(t, merchantTab2, workflow, workflowType)
+		vdiffSideBySide(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
 		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		switchWrites(t, workflowType, ksWorkflow, false)
 		printRoutingRules(t, vc, "After merchant movetables")
