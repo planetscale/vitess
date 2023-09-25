@@ -1,0 +1,107 @@
+Usage:
+  vtboost [flags]
+
+Flags:
+      --allow-kill-statement                                             Allows the execution of kill statement
+      --alsologtostderr                                                  log to standard error as well as files
+      --boost-cluster-uuid string                                        UUID of the boost cluster, this value is used to find the cluster in the topology.
+      --boost-hostname string                                            hostname for identifying this Boost instance
+      --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
+      --cell string                                                      cell on which the Boost cluster is deployed
+      --cells_to_watch string                                            comma-separated list of cells for watching tablets
+      --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
+      --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
+      --config-name string                                               Name of the config file (without extension) to search for. (default "vtconfig")
+      --config-path strings                                              Paths to search for config files in. (default [{{ .Workdir }}])
+      --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
+      --config-type string                                               Config file type (omit to infer config type from file extension).
+      --dbddl_plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
+      --ddl_strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
+      --default_tablet_type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
+      --drpc-port int                                                    default listen address for DRPC
+      --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
+      --enable-views                                                     Enable views support in vtgate.
+      --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)
+      --enable_online_ddl                                                Allow users to submit, review and control Online DDL (default true)
+      --enable_set_var                                                   This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
+      --enable_system_settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
+      --foreign_key_mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
+      --gate_query_cache_lfu                                             gate server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries (default true)
+      --gate_query_cache_memory int                                      gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
+      --gate_query_cache_size int                                        gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache. (default 5000)
+      --gateway_initial_tablet_timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)
+      --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
+      --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
+      --grpc_auth_static_password_file string                            JSON File to read the users/passwords from.
+      --grpc_ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
+      --grpc_cert string                                                 server certificate to use for gRPC connections, requires grpc_key, enables TLS
+      --grpc_crl string                                                  path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake
+      --grpc_enable_optional_tls                                         enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port
+      --grpc_key string                                                  server private key to use for gRPC connections, requires grpc_cert, enables TLS
+      --grpc_max_connection_age duration                                 Maximum age of a client connection before GoAway is sent. (default 2562047h47m16.854775807s)
+      --grpc_max_connection_age_grace duration                           Additional grace period after grpc_max_connection_age, after which connections are forcibly closed. (default 2562047h47m16.854775807s)
+      --grpc_port int                                                    Port to listen on for gRPC calls. If zero, do not listen.
+      --grpc_server_ca string                                            path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
+      --grpc_server_initial_conn_window_size int                         gRPC server initial connection window size
+      --grpc_server_initial_window_size int                              gRPC server initial window size
+      --grpc_server_keepalive_enforcement_policy_min_time duration       gRPC server minimum keepalive time (default 10s)
+      --grpc_server_keepalive_enforcement_policy_permit_without_stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
+      --gtid-mode SELECT_GTID                                            GTID tracking mode for upqueries (options are 'SELECT_GTID', 'TRACK_GTID') (default SELECT_GTID)
+      --healthcheck_retry_delay duration                                 health check retry delay (default 2ms)
+      --healthcheck_timeout duration                                     the health check timeout period (default 1m0s)
+  -h, --help                                                             help for vtboost
+      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
+      --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
+      --lock-timeout duration                                            Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
+      --lock_heartbeat_time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
+      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
+      --log_dir string                                                   If non-empty, write log files in this directory
+      --log_err_stacks                                                   log stack traces for errors
+      --log_link string                                                  If non-empty, add symbolic links in this directory to the log files
+      --log_queries_to_file string                                       Enable query logging to the specified file
+      --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logbuflevel int                                                  Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
+      --logtostderr                                                      log to standard error instead of files
+      --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
+      --max_memory_rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
+      --max_payload_size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
+      --memory-limit int                                                 the memory limit in bytes this process is allowed to allocate: used to detect memory pressure
+      --message_stream_grace_period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
+      --no_scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
+      --normalize_queries                                                Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
+      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
+      --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
+      --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
+      --port int                                                         port for the server
+      --pprof strings                                                    enable profiling
+      --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
+      --query-timeout int                                                Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)
+      --querylog-buffer-size int                                         Maximum number of buffered query logs before throttling log output (default 10)
+      --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
+      --retry-count int                                                  retry count (default 2)
+      --schema_change_signal                                             Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
+      --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
+      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
+      --stream_buffer_size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
+      --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
+      --topo_etcd_lease_ttl int                                          Lease TTL for locks and leader election. The client will use KeepAlive to keep the lease going. (default 30)
+      --topo_etcd_tls_ca string                                          path to the ca to use to validate the server cert when connecting to the etcd topo server
+      --topo_etcd_tls_cert string                                        path to the client cert to use to connect to the etcd topo server, requires topo_etcd_tls_key, enables TLS
+      --topo_etcd_tls_key string                                         path to the client key to use to connect to the etcd topo server, enables TLS
+      --topo_global_root string                                          the path of the global topology data in the global topology server
+      --topo_global_server_address string                                the address of the global topology server
+      --topo_implementation string                                       the topology implementation to use
+      --transaction_mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
+      --truncate-error-len int                                           truncate errors sent to client if they are longer than this value (0 means do not truncate)
+      --v Level                                                          log level for V logs
+  -v, --version                                                          print binary version
+      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
+      --vstream-start-retries int                                        number of retries for vstream startup if it fails (default 10)
+      --vstream-start-timeout duration                                   the timeout for waiting for vstreams to start (default 1m0s)
+      --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
+      --warn_memory_rows int                                             Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented. (default 30000)
+      --warn_payload_size int                                            The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.
+      --warn_sharded_only                                                If any features that are only available in unsharded mode are used, query execution warnings will be added to the session
+      --worker-read-timeout duration                                     the timeout for blocking reads on a worker (default 40s)
