@@ -23,6 +23,7 @@
   - **[New stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
     - [VTBackup stat `PhaseStatus`](#vtbackup-stat-phase-status)
+    - [Backup and restore metrics for AWS S3](#backup-restore-metrics-aws-s3)
   - **[VTTablet](#vttablet)**
     - [VTTablet: New ResetSequences RPC](#vttablet-new-rpc-reset-sequences)
   - **[Docker](#docker)**
@@ -152,6 +153,17 @@ The VTGate stat `VindexUnknownParameters` gauges unknown Vindex parameters found
  * `CatchUpReplication` phase has statuses `Stalled` and `Stopped`.
     * `Stalled` is set to `1` when replication stops advancing.
     * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
+
+#### <a id="backup-restore-metrics-aws-s3"/>Backup and restore metrics for AWS S3
+
+Requests to AWS S3 are instrumented in backup and restore metrics. For example:
+
+```
+vtbackup_backup_count{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 823
+vtbackup_backup_duration_nanoseconds{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 1.33632421437e+11
+vtbackup_restore_count{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 165
+vtbackup_restore_count{component="BackupStorage",implementation="S3",operation="AWS:Request:Send"} 165
+```
 
 ### <a id="vttablet"/>VTTablet
 
