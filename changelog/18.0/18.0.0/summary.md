@@ -23,6 +23,7 @@
     - [Deprecated VDiff v1](#deprecated-vdiff-v1)
   - **[New Stats](#new-stats)**
     - [VTGate Vindex unknown parameters](#vtgate-vindex-unknown-parameters)
+    - [VTBackup stat `Phase`](#vtbackup-stat-phase)
     - [VTBackup stat `PhaseStatus`](#vtbackup-stat-phase-status)
     - [Backup and restore metrics for AWS S3](#backup-restore-metrics-aws-s3)
     - [VTCtld and VTOrc reparenting stats](#vtctld-and-vtorc-reparenting-stats)
@@ -157,11 +158,27 @@ VTBackup stat `DurationByPhase` is deprecated. Use the binary-valued `Phase` sta
 
 The VTGate stat `VindexUnknownParameters` gauges unknown Vindex parameters found in the latest VSchema pulled from the topology.
 
+#### <a id="vtbackup-stat-phase"/>VTBackup `Phase` stat
+
+In v17, the `vtbackup` stat `DurationByPhase` stat was added measuring the time spent by `vtbackup` in each phase. This stat turned out to be awkward to use in production, and has been replaced in v18 by a binary-valued `Phase` stat.
+
+`Phase` reports a 1 (active) or a 0 (inactive) for each of the following phases:
+
+ * `CatchupReplication`
+ * `InitialBackup`
+ * `RestoreLastBackup`
+ * `TakeNewBackup`
+
+To calculate how long `vtbackup` has spent in a given phase, sum the 1-valued data points over time and multiply by the data collection or reporting interval. For example, in Prometheus:
+
+```
+sum_over_time(vtbackup_phase{phase="TakeNewBackup"}) * <interval>
+```
 #### <a id="vtbackup-stat-phase-status"/>VTBackup `PhaseStatus` stat
 
 `PhaseStatus` reports a 1 (active) or a 0 (inactive) for each of the following phases and statuses:
 
- * `CatchUpReplication` phase has statuses `Stalled` and `Stopped`.
+ * `CatchupReplication` phase has statuses `Stalled` and `Stopped`.
     * `Stalled` is set to `1` when replication stops advancing.
     * `Stopped` is set to `1` when replication stops before `vtbackup` catches up with the primary.
 

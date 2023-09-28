@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,18 +14,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
-
-// This plugin imports Prometheus to allow for instrumentation
-// with the Prometheus client library
+package opentsdb
 
 import (
-	"vitess.io/vitess/go/stats/prometheusbackend"
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/servenv"
 )
 
+var (
+	openTSDBURI string
+)
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&openTSDBURI, "opentsdb_uri", openTSDBURI, "URI of opentsdb /api/put method")
+}
+
 func init() {
-	servenv.OnRun(func() {
-		prometheusbackend.Init("vtbackup")
-	})
+	servenv.OnParseFor("vtbackup", registerFlags)
+	servenv.OnParseFor("vtctld", registerFlags)
+	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
 }
