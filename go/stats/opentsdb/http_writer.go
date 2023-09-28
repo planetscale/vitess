@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,18 +14,38 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package opentsdb
 
 import (
-	"vitess.io/vitess/go/cmd/vtbench/cli"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/log"
+	"bytes"
+	"encoding/json"
+	"net/http"
 )
 
-func main() {
-	defer exit.Recover()
+type httpWriter struct {
+	client *http.Client
+	uri    string
+}
 
-	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
+func newHTTPWriter(client *http.Client, uri string) *httpWriter {
+	return &httpWriter{
+		client: client,
+		uri:    uri,
 	}
+}
+
+func (hw *httpWriter) Write(data []*DataPoint) error {
+	jsonb, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	resp, err := hw.client.Post(hw.uri, "application/json", bytes.NewReader(jsonb))
+	if err != nil {
+		return err
+	}
+
+	resp.Body.Close()
+
+	return nil
 }

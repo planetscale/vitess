@@ -14,18 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
 import (
-	"vitess.io/vitess/go/cmd/vtbench/cli"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
-func main() {
-	defer exit.Recover()
-
-	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
-	}
+func init() {
+	servenv.OnRun(func() {
+		closer := trace.StartTracing("vtclient")
+		servenv.OnClose(trace.LogErrorsWhenClosing(closer))
+	})
 }
