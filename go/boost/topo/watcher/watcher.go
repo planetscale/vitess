@@ -125,7 +125,7 @@ func (nw *Watcher) DebugState() map[string]*DebugClusterState {
 
 		cluster.client.mats.Load().ForEach(func(materialization *cachedMaterialization) {
 			cs.Materializations = append(cs.Materializations, &DebugMaterialization{
-				SQL:  materialization.original,
+				SQL:  materialization.proto.NormalizedSql,
 				Rate: materialization.view.metrics.hitrate.Rate(),
 			})
 		})
@@ -385,6 +385,7 @@ type MaterializedQuery struct {
 	View       *View
 	Normalized string
 	Key        []*querypb.BindVariable
+	TablesUsed []string
 	hash       vthash.Hash
 }
 
@@ -415,20 +416,21 @@ func (nw *Watcher) GetCachedQuery(keyspace string, query sqlparser.Statement, bv
 	}
 
 	for cached, _ := activeCluster.mats.Load().Get(res.hash); cached != nil; cached = cached.next {
-		if cached.keyspace != keyspace && cached.keyspace != "" {
+		if cached.keyspace() != keyspace && cached.keyspace() != "" {
 			continue
 		}
 
 		var key []*querypb.BindVariable
-		if cached.fullyMaterialized {
+		if cached.proto.FullyMaterialized {
 			key = defaultBogokey
 		} else {
 			key = make([]*querypb.BindVariable, len(cached.view.keySchema))
 		}
 
-		if matchParametrizedQuery(key, query, bvars, cached.bounds) {
+		if matchParametrizedQuery(key, query, bvars, cached.proto.Binds) {
 			res.Key = key
 			res.View = cached.view
+			res.TablesUsed = cached.proto.TablesUsed
 			return res, true
 		}
 	}
@@ -494,12 +496,13 @@ func (set *cachedMaterializationSet) ForEach(f func(materialization *cachedMater
 }
 
 type cachedMaterialization struct {
-	view              *View
-	keyspace          string
-	bounds            []*vtboostpb.Materialization_Bind
-	fullyMaterialized bool
-	original          string
-	next              *cachedMaterialization
+	view  *View
+	proto *vtboostpb.Materialization
+	next  *cachedMaterialization
+}
+
+func (mat *cachedMaterialization) keyspace() string {
+	return mat.proto.Query.Keyspace
 }
 
 type cachedDialer struct {
@@ -665,12 +668,9 @@ func (ac *clusterClient) loadMaterializations(ctx context.Context, resp *vtboost
 		view.CollectMetrics(ac.hitrate)
 		hashedQuery := hashMaterializedQuery(m.NormalizedSql)
 		mats.mats[hashedQuery] = &cachedMaterialization{
-			view:              view,
-			keyspace:          m.Query.Keyspace,
-			bounds:            m.Binds,
-			original:          m.NormalizedSql,
-			fullyMaterialized: m.FullyMaterialized,
-			next:              mats.mats[hashedQuery],
+			view:  view,
+			proto: m,
+			next:  mats.mats[hashedQuery],
 		}
 	}
 	old := ac.mats.Swap(mats)
