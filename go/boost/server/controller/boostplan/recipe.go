@@ -124,7 +124,8 @@ func newRecipe() *Recipe {
 
 type CachedQuery struct {
 	*vtboostpb.CachedQuery
-	Statement sqlparser.Statement
+	Statement  sqlparser.Statement
+	TablesUsed []string
 }
 
 func (c *CachedQuery) hash() QueryHash {

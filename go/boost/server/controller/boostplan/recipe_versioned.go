@@ -87,6 +87,13 @@ func (r *VersionedRecipe) Activate(mig Migration, schema *SchemaInformation) (*A
 			errs = append(errs, fmt.Errorf("query with public id %q already exists", q.PublicId))
 			continue
 		}
+
+		report := qfp.GetTableReport()
+		q.TablesUsed = make([]string, 0, len(report))
+		for _, t := range report {
+			q.TablesUsed = append(q.TablesUsed, sqlparser.CanonicalString(t.Name))
+		}
+
 		activation.NodesAdded[q.PublicId] = qfp.Leaf()
 		activation.QueriesAdded = append(activation.QueriesAdded, q)
 	}

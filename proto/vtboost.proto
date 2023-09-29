@@ -26,6 +26,7 @@ message Materialization {
   ViewDescriptor view = 4;
   bool fully_materialized = 5;
   repeated Bind binds = 6;
+  repeated string tables_used = 7;
 
   message Bind {
     string name = 1;

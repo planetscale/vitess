@@ -105,6 +105,7 @@ func (mat *MaterializationClient) GetPlan(vcursor VCursor, query sqlparser.State
 			keyspace: keyspace,
 		},
 		BindVarNeeds: &sqlparser.BindVarNeeds{},
+		TablesUsed:   cached.TablesUsed,
 	}
 
 	if xp := mat.watcher.GetScience(); xp.CompareQuery() {
