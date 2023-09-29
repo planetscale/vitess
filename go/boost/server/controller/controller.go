@@ -348,6 +348,7 @@ func (ctrl *Controller) GetMaterializations() ([]*vtboostpb.Materialization, err
 				Binds:             binds,
 				FullyMaterialized: fullyMaterialized,
 				View:              ctrl.viewDescriptor(n),
+				TablesUsed:        view.TablesUsed,
 			})
 		}
 		return true
