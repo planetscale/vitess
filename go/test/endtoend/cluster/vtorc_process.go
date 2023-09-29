@@ -119,6 +119,13 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--topo-information-refresh-duration", "3s",
 		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
+
+	if v, err := GetMajorVersion("vtorc"); err != nil {
+		return err
+	} else if v >= 18 {
+		orc.proc.Args = append(orc.proc.Args, "--bind-address", "127.0.0.1")
+	}
+
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))
 	}
