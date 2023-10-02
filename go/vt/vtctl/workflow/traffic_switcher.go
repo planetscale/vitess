@@ -186,7 +186,7 @@ func (target *MigrationTarget) GetPrimary() *topo.TabletInfo {
 
 // BuildTargets collects MigrationTargets and other metadata (see TargetInfo)
 // from a workflow in the target keyspace.
-//
+
 // It returns ErrNoStreams if there are no targets found for the workflow.
 func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
 	targetShards, err := ts.GetShardNames(ctx, targetKeyspace)
