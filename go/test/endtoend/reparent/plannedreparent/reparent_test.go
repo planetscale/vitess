@@ -277,6 +277,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
 	out, err := utils.Prs(t, clusterInstance, tablets[1])
 	require.Error(t, err)
+	// Assert that PRS failed
 	assert.Contains(t, out, fmt.Sprintf("TabletManager.PrimaryStatus on %s error", tablets[2].Alias))
 	// insert data into the old primary, check the connected replica works. The primary tablet shouldn't have changed.
 	insertVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})
@@ -429,14 +430,7 @@ func TestFullStatus(t *testing.T) {
 	assert.Contains(t, primaryStatus.PrimaryStatus.String(), "vt-0000000101-bin")
 	assert.Equal(t, primaryStatus.GtidPurged, "MySQL56/")
 	assert.False(t, primaryStatus.ReadOnly)
-	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
-	require.NoError(t, err)
-	vtcltlVersion, err := cluster.GetMajorVersion("vtctl")
-	require.NoError(t, err)
-	// For all version at or above v17.0.0, each replica will start in super_read_only mode.
-	if vtTabletVersion >= 17 && vtcltlVersion >= 17 {
-		assert.False(t, primaryStatus.SuperReadOnly)
-	}
+	assert.False(t, primaryStatus.SuperReadOnly)
 	assert.True(t, primaryStatus.SemiSyncPrimaryEnabled)
 	assert.True(t, primaryStatus.SemiSyncReplicaEnabled)
 	assert.True(t, primaryStatus.SemiSyncPrimaryStatus)
@@ -490,6 +484,10 @@ func TestFullStatus(t *testing.T) {
 	assert.Contains(t, replicaStatus.PrimaryStatus.String(), "vt-0000000102-bin")
 	assert.Equal(t, replicaStatus.GtidPurged, "MySQL56/")
 	assert.True(t, replicaStatus.ReadOnly)
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+	vtcltlVersion, err := cluster.GetMajorVersion("vtctl")
+	require.NoError(t, err)
 	// For all version at or above v17.0.0, each replica will start in super_read_only mode.
 	if vtTabletVersion >= 17 && vtcltlVersion >= 17 {
 		assert.True(t, replicaStatus.SuperReadOnly)
