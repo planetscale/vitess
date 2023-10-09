@@ -38,6 +38,7 @@ func Any[T any](s []T, fn func(T) bool) bool {
 	return false
 }
 
+// Map applies a function to each element of a slice and returns a new slice
 func Map[From, To any](in []From, f func(From) To) []To {
 	if in == nil {
 		return nil
@@ -111,6 +112,7 @@ func FilterIndexed[T any](s []T, fn func(int, T) bool) []T {
 	return ret
 }
 
+// MapWithError applies a function to each element of a slice and returns a new slice, or an error
 func MapWithError[From, To any](in []From, f func(From) (To, error)) (result []To, err error) {
 	if in == nil {
 		return nil, nil
