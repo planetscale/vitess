@@ -66,4 +66,5 @@ jobs:
     - name: e2e_race
       timeout-minutes: 30
       run: |
+        export VTDATAROOT="/tmp/"
         NOVTADMINBUILD=1 make e2e_test_race
