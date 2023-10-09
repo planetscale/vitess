@@ -17,7 +17,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: 1.21.1
+        go-version: 1.21.2
 
     - name: Set up python
       uses: actions/setup-python@v4
