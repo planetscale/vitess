@@ -15,6 +15,7 @@
     - [Updated to node v18.16.0](#update-node)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Flags](#deprecated-flags)
+    - [Deleted Flags](#deleted-flags)
     - [Deprecated Stats](#deprecated-stats)
     - [Deleted `V3` planner](#deleted-v3)
     - [Deleted `k8stopo`](#deleted-k8stopo)
@@ -138,6 +139,38 @@ VTGate flag:
 
 - `--schema_change_signal_user` is deprecated and will be removed in `v19.0`
 - `--foreign_key_mode` is deprecated and will be removed in `v19.0`. For more detail read the [foreign keys](#foreign-keys) section.
+
+#### <a id="deleted-flags"/>Deleted Command Line Flags
+
+Flags in `vtcombo`:
+- `--vtctld_addr`
+
+Flags in `vtctldclient ApplySchema`:
+- `--skip-preflight`
+
+Flags in `vtctl ApplySchema`:
+- `--skip_preflight`
+
+Flags in `vtgate`:
+- `--vtctld_addr`
+
+Flags in `vttablet`:
+- `--vtctld_addr`
+- `--use_super_read_only`
+- `--disable-replication-manager`
+- `--init_populate_metadata`
+- `--queryserver-config-pool-prefill-parallelism`
+- `--queryserver-config-stream-pool-prefill-parallelism`
+- `--queryserver-config-transaction-pool-prefill-parallelism`
+- `--queryserver-config-schema-change-signal-interval`
+
+Flags in `vtctld`:
+- `--vtctld_show_topology_crud`
+- `--durability_policy`
+
+Flags in `vtorc`:
+- `--lock-shard-timeout`
+- `--orc_web_dir`
 
 #### <a id="deprecated-stats"/>Deprecated Stats
 
