@@ -236,7 +236,7 @@ func (test *Test) setupCluster() {
 		VSchema:   test.VSchema,
 	}
 	test.Vitess.VtGateExtraArgs = []string{"--enable-boost", "--schema_change_signal"}
-	test.Vitess.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
+	test.Vitess.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
 	err = test.Vitess.StartKeyspace(*keyspace, test.Shards, 0, false)
 	if err != nil {
 		test.Fatalf("failed to StartKeyspace(): %v", err)
