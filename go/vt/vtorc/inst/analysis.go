@@ -25,7 +25,6 @@ import (
 )
 
 type AnalysisCode string
-type StructureAnalysisCode string
 
 const (
 	NoProblem                              AnalysisCode = "NoProblem"
@@ -59,6 +58,8 @@ const (
 	BinlogServerFailingToConnectToPrimary  AnalysisCode = "BinlogServerFailingToConnectToPrimary"
 	GraceFulPrimaryTakeover                AnalysisCode = "GracefulPrimaryTakeover"
 )
+
+type StructureAnalysisCode string
 
 const (
 	StatementAndMixedLoggingReplicasStructureWarning     StructureAnalysisCode = "StatementAndMixedLoggingReplicasStructureWarning"
