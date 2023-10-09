@@ -212,6 +212,10 @@ type Listener struct {
 	// handled further by the MySQL handler. An non-nil error will stop
 	// processing the connection by the MySQL handler.
 	PreHandleFunc func(context.Context, net.Conn, uint32) (net.Conn, error)
+
+	// NextConnectionID is called on each new connection with the previous
+	// connection ID. Default behavior is to just increment.
+	NextConnectionID func(uint32) uint32
 }
 
 // NewFromListener creates a new mysql listener from an existing net.Listener
@@ -294,7 +298,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		handler:             cfg.Handler,
 		listener:            l,
 		ServerVersion:       servenv.AppVersion.MySQLVersion(),
-		connectionID:        1,
+		connectionID:        0,
 		connReadTimeout:     cfg.ConnReadTimeout,
 		connWriteTimeout:    cfg.ConnWriteTimeout,
 		connReadBufferSize:  cfg.ConnReadBufferSize,
@@ -322,8 +326,15 @@ func (l *Listener) Accept() {
 
 		acceptTime := time.Now()
 
+		// if we specify a NextConnectionID callback,
+		// use it to generate the next ID.
+		if l.NextConnectionID != nil {
+			l.connectionID = l.NextConnectionID(l.connectionID)
+		} else {
+			l.connectionID++
+		}
+
 		connectionID := l.connectionID
-		l.connectionID++
 
 		connCount.Add(1)
 		connAccept.Add(1)
@@ -841,7 +852,6 @@ func parseConnAttrs(data []byte, pos int) (map[string]string, int, error) {
 	}
 
 	return attrs, pos, nil
-
 }
 
 // writeAuthSwitchRequest writes an auth switch request packet.
