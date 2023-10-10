@@ -22,9 +22,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -36,6 +39,17 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+var logWhileWaitForPos bool
+
+func registerReplicationFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&logWhileWaitForPos, "log-wait-for-pos", logWhileWaitForPos, "Log the MySQL position every second in the WaitForPosition RPC")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerReplicationFlags)
+	servenv.OnParseFor("vttablet", registerReplicationFlags)
+}
 
 // ReplicationStatus returns the replication status
 func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error) {
@@ -185,11 +199,32 @@ func (tm *TabletManager) PrimaryPosition(ctx context.Context) (string, error) {
 // WaitForPosition waits until replication reaches the desired position
 func (tm *TabletManager) WaitForPosition(ctx context.Context, pos string) error {
 	log.Infof("WaitForPosition: %v", pos)
+	if logWhileWaitForPos {
+		printCtx, printCancel := context.WithCancel(ctx)
+		defer printCancel()
+		go tm.printCurrentPositionUntilCancel(printCtx)
+	}
 	mpos, err := replication.DecodePosition(pos)
 	if err != nil {
 		return err
 	}
 	return tm.MysqlDaemon.WaitSourcePos(ctx, mpos)
+}
+
+// printCurrentPositionUntilCancel prints the current position until the context is cancelled.
+func (tm *TabletManager) printCurrentPositionUntilCancel(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		position, err := tm.MysqlDaemon.PrimaryPosition()
+		if err == nil {
+			log.Infof("Current MySQL Position: %v", position)
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
 
 // StopReplication will stop the mysql. Works both when Vitess manages
