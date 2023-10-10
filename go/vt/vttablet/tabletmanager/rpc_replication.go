@@ -41,12 +41,14 @@ import (
 )
 
 var disableReplicationManager bool
+var logWhileWaitForPos bool
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
 	fs.MarkDeprecated("use_super_read_only", "From v17 onwards MySQL server will always try to start with super_read_only=ON")
 	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
 	fs.MarkDeprecated("disable-replication-manager", "Replication manager is deleted")
+	fs.BoolVar(&logWhileWaitForPos, "log-wait-for-pos", logWhileWaitForPos, "Log the MySQL position every second in the WaitForPosition RPC")
 }
 
 func init() {
@@ -202,11 +204,32 @@ func (tm *TabletManager) PrimaryPosition(ctx context.Context) (string, error) {
 // WaitForPosition waits until replication reaches the desired position
 func (tm *TabletManager) WaitForPosition(ctx context.Context, pos string) error {
 	log.Infof("WaitForPosition: %v", pos)
+	if logWhileWaitForPos {
+		printCtx, printCancel := context.WithCancel(ctx)
+		defer printCancel()
+		go tm.printCurrentPositionUntilCancel(printCtx)
+	}
 	mpos, err := replication.DecodePosition(pos)
 	if err != nil {
 		return err
 	}
 	return tm.MysqlDaemon.WaitSourcePos(ctx, mpos)
+}
+
+// printCurrentPositionUntilCancel prints the current position until the context is cancelled.
+func (tm *TabletManager) printCurrentPositionUntilCancel(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		position, err := tm.MysqlDaemon.PrimaryPosition()
+		if err == nil {
+			log.Infof("Current MySQL Position: %v", position)
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
 
 // StopReplication will stop the mysql. Works both when Vitess manages
