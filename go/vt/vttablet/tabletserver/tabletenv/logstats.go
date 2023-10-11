@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 

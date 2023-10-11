@@ -27,11 +27,10 @@ import (
 	"testing"
 	"time"
 
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttest"
-
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
 var (

@@ -20,10 +20,9 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/trace"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
-
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // AnnotateSpan adds the cluster_id and cluster_name to a span.

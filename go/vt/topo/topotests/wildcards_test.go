@@ -20,10 +20,9 @@ import (
 	"context"
 	"testing"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 type topoLayout struct {

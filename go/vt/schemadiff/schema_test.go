@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/errors"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 

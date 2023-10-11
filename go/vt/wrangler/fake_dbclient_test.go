@@ -25,9 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 )
 
 func verifyQueries(t *testing.T, dcs []*fakeDBClient) {

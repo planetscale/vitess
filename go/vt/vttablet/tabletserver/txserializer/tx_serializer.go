@@ -19,23 +19,21 @@ limitations under the License.
 package txserializer
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
-	"context"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/logutil"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // TxSerializer serializes incoming transactions which target the same row range

@@ -24,7 +24,6 @@ import (
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayertest"
 	"vitess.io/vitess/go/vt/binlog/grpcbinlogstreamer"
-
 	binlogservicepb "vitess.io/vitess/go/vt/proto/binlogservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

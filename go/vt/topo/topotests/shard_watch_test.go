@@ -24,10 +24,9 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // waitForInitialShard waits for the initial Shard to appear.

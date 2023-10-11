@@ -17,13 +17,11 @@ limitations under the License.
 package fakes
 
 import (
+	"context"
 	"fmt"
 
-	"context"
-
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 // ErrorQueryService is an object that returns an error for all methods.

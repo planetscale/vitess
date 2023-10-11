@@ -30,6 +30,10 @@ import (
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/test/utils"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vitessdriver"
@@ -38,11 +42,6 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
-
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type vtctldProxy struct {

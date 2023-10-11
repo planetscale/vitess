@@ -26,9 +26,8 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // GenerateInitialBinlogEntry is used to create a binlog entry when

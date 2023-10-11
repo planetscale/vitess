@@ -64,8 +64,6 @@ import (
 	"sync"
 	"time"
 
-	// "vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 

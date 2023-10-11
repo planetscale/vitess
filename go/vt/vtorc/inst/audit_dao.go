@@ -22,10 +22,9 @@ import (
 	"os"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/rcrowley/go-metrics"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )

@@ -20,9 +20,8 @@ package events
 
 import (
 	base "vitess.io/vitess/go/vt/events"
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // Reparent is an event that describes a single step in the reparent process.

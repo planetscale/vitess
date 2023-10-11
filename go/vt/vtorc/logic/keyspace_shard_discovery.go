@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )

@@ -25,9 +25,8 @@ import (
 	"context"
 	"testing"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // LocalCellName is the cell name used by this test suite.

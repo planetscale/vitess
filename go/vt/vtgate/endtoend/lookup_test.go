@@ -22,12 +22,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 )
 

@@ -20,16 +20,14 @@ limitations under the License.
 package throttlerclient
 
 import (
+	"context"
 	"fmt"
 	"log"
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/servenv"
-
-	"context"
-
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 // protocol specifics which RPC client implementation should be used.

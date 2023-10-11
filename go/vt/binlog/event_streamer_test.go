@@ -19,11 +19,10 @@ package binlog
 import (
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/test/utils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )

@@ -28,9 +28,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
-
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 )
 
 func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {

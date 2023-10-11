@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )

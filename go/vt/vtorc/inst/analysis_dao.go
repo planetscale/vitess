@@ -20,22 +20,20 @@ import (
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
+	"github.com/patrickmn/go-cache"
+	"github.com/rcrowley/go-metrics"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vtorc/util"
-
-	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 )
 
 var analysisChangeWriteCounter = metrics.NewCounter()

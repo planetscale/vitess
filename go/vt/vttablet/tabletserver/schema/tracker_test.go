@@ -17,11 +17,10 @@ limitations under the License.
 package schema
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"

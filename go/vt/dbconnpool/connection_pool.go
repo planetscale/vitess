@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/netutil"
-
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"

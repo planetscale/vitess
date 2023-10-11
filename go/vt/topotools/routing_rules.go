@@ -22,9 +22,8 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo"
-
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 //region routing rules

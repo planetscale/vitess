@@ -21,9 +21,8 @@ import (
 	"testing"
 
 	base "vitess.io/vitess/go/vt/events"
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 func TestReparentSyslog(t *testing.T) {

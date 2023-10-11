@@ -25,12 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/faketopo"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/faketopo"
 )
 
 func TestSrvKeyspaceWithNilNewKeyspace(t *testing.T) {

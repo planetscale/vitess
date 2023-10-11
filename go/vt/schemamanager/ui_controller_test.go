@@ -17,12 +17,11 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"fmt"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"context"
 )
 
 func TestUIController(t *testing.T) {

@@ -41,9 +41,8 @@ import (
 
 	"github.com/spf13/pflag"
 	"go.etcd.io/etcd/client/pkg/v3/tlsutil"
-	"google.golang.org/grpc"
-
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"

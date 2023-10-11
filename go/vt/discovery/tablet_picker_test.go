@@ -23,12 +23,10 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/utils"
-
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
 func TestPickPrimary(t *testing.T) {

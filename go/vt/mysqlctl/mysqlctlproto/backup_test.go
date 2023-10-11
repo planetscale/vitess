@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

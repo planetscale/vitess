@@ -20,15 +20,13 @@ import (
 	"context"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
 // TxExecutor is used for executing a transactional request.

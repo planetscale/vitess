@@ -25,9 +25,8 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/vtadmin/rbac"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	"vitess.io/vitess/go/vt/vtadmin/rbac"
 )
 
 type Config struct {

@@ -34,6 +34,14 @@ import (
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/test/utils"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -47,15 +55,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
-	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func TestMain(m *testing.M) {

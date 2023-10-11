@@ -21,13 +21,11 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 )
 
 func TestDistinct(t *testing.T) {

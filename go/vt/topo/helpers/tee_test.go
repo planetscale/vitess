@@ -17,12 +17,11 @@ limitations under the License.
 package helpers
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

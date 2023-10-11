@@ -24,16 +24,14 @@ import (
 	"strconv"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/vthash"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-
+	"vitess.io/vitess/go/test/utils"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 var (

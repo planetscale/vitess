@@ -28,19 +28,17 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/protoutil"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/events"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (

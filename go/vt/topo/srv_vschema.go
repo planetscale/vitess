@@ -22,9 +22,8 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file contains the utility methods to manage SrvVSchema objects.

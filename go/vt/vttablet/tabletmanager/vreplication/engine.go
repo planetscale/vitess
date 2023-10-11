@@ -28,9 +28,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
-
 	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"

@@ -18,20 +18,18 @@ limitations under the License.
 package grpcvtctlclient
 
 import (
-	"time"
-
 	"context"
+	"time"
 
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
-	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
-
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
+	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
+	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 )
 
 type gRPCVtctlClient struct {

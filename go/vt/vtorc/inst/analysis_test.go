@@ -19,9 +19,9 @@ package inst
 import (
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtorc/config"
-
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
 func init() {

@@ -20,10 +20,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNewParsedQuery(t *testing.T) {

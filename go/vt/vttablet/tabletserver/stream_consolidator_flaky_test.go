@@ -24,13 +24,11 @@ import (
 	"testing"
 	"time"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 type consolidationResult struct {

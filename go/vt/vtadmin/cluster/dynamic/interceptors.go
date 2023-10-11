@@ -9,9 +9,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vtadmin/cluster"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	"vitess.io/vitess/go/vt/vtadmin/cluster"
 )
 
 // StreamServerInterceptor returns a StreamServerInterceptor that redirects a

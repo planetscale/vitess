@@ -17,16 +17,14 @@ limitations under the License.
 package srvtopo
 
 import (
-	"sync"
-
 	"context"
+	"sync"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // FindAllTargets goes through all serving shards in the topology

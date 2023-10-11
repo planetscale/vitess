@@ -20,9 +20,8 @@ import (
 	"container/heap"
 	"sync"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 )
 
 //_______________________________________________

@@ -23,16 +23,14 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"vitess.io/vitess/go/vt/vttablet"
-
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	schema2 "vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vttablet"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
 /*

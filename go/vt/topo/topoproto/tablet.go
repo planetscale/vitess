@@ -30,9 +30,8 @@ import (
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sets"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file contains the topodata.Tablet utility functions.

@@ -26,16 +26,13 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	"vitess.io/vitess/go/vt/key"
-
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
-
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 const (

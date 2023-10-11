@@ -17,10 +17,9 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"fmt"
 	"testing"
-
-	"context"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"

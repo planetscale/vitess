@@ -35,7 +35,6 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 

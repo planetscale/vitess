@@ -17,18 +17,16 @@ limitations under the License.
 package binlogplayertest
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

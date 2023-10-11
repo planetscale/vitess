@@ -4,10 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"

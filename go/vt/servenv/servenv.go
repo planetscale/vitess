@@ -44,6 +44,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/event"
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
@@ -53,9 +54,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (

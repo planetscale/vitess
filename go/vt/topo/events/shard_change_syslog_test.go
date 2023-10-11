@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/hack"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 

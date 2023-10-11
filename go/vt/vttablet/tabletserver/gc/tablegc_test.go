@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/schema"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/schema"
 )
 
 func TestNextTableToPurge(t *testing.T) {

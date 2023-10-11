@@ -37,6 +37,9 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
@@ -46,10 +49,6 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // Cluster is the self-contained unit of services required for vtadmin to talk

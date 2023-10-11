@@ -17,10 +17,9 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"fmt"
 	"testing"
-
-	"context"
 )
 
 func TestPlainController(t *testing.T) {

@@ -27,10 +27,9 @@ import (
 	"google.golang.org/grpc/connectivity"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
-
-	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 var (

@@ -24,11 +24,9 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqlescape"
-
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/schema"
-
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/schema"
 )
 
 // This file contains helper methods to deal with Schema information.

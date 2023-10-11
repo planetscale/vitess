@@ -23,12 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
-	"vitess.io/vitess/go/vt/callerid"
-
-	"vitess.io/vitess/go/streamlog"
 )
 
 func testNotRedacted(t *testing.T, r *httptest.ResponseRecorder) {

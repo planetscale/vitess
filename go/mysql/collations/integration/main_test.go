@@ -28,9 +28,8 @@ import (
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vttest"
-
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
+	"vitess.io/vitess/go/vt/vttest"
 )
 
 var (

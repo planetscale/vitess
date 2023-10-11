@@ -23,12 +23,11 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/credentials"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
-
-	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
 // Config represents the options that modify the behavior of a Proxy.

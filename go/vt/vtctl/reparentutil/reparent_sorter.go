@@ -20,10 +20,9 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // reparentSorter sorts tablets by GTID positions and Promotion rules aimed at finding the best

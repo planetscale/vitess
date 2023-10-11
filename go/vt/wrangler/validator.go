@@ -21,7 +21,6 @@ import (
 	"errors"
 
 	"vitess.io/vitess/go/vt/logutil"
-
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 

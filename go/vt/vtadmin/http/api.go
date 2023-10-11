@@ -23,10 +23,9 @@ import (
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
-
-	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
 // Options defines the set of configurations for an HTTP API server.

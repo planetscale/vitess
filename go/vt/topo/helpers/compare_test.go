@@ -17,9 +17,8 @@ limitations under the License.
 package helpers
 
 import (
-	"testing"
-
 	"context"
+	"testing"
 )
 
 func TestBasicCompare(t *testing.T) {

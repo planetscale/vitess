@@ -23,9 +23,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // SaveVSchema saves a Vschema. A valid Vschema should be passed in. It does not verify its correctness.

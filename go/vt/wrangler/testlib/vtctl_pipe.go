@@ -33,12 +33,9 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
-
-	// we need to import the grpcvtctlclient library so the gRPC
-	// vtctl client is registered and can be used.
-	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
 )
 
 var servenvInitialized sync.Once

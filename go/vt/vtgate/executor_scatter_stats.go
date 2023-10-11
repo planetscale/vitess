@@ -25,7 +25,6 @@ import (
 	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/vt/logz"
-
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
