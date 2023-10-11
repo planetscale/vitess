@@ -25,12 +25,11 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var shardSyncRetryDelay = 30 * time.Second

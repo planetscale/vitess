@@ -24,10 +24,9 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // RefreshTabletsByShard calls RefreshState on all the tablets in a given shard.

@@ -19,9 +19,9 @@ package schematools
 import (
 	"testing"
 
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-
 	"github.com/stretchr/testify/assert"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 func TestSchemaMigrationStrategyName(t *testing.T) {

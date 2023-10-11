@@ -20,10 +20,9 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // shard related methods for Wrangler

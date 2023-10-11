@@ -17,11 +17,10 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"context"
 )
 
 func TestLiveQueryzHandlerJSON(t *testing.T) {

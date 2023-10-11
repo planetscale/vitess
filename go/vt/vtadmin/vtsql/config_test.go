@@ -29,9 +29,8 @@ import (
 	"google.golang.org/grpc/backoff"
 
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 )
 
 func TestConfigParse(t *testing.T) {

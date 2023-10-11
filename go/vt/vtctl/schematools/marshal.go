@@ -19,10 +19,9 @@ package schematools
 import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 type tSchemaMigration struct {

@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"testing"
 
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-
 	"github.com/stretchr/testify/require"
+
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 func TestDDLFlags(t *testing.T) {

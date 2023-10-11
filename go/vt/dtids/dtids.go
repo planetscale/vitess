@@ -22,12 +22,11 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // New generates a dtid based on Session_ShardSession.

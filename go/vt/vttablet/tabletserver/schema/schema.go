@@ -21,10 +21,8 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // Table types

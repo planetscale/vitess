@@ -22,10 +22,9 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sets"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file provides the utility methods to save / retrieve CellInfo

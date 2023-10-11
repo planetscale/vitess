@@ -31,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
-
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
 

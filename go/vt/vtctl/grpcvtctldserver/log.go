@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/logutil"
-
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 

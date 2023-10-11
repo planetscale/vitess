@@ -20,7 +20,6 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/vt/key"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 

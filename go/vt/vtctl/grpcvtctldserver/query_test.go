@@ -25,12 +25,10 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtctl/schematools"
-
 	"vitess.io/vitess/go/test/utils"
-
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 )
 
 var now = time.Now()

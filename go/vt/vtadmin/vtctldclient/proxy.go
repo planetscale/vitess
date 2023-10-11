@@ -21,22 +21,20 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/credentials/insecure"
-
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
-
-	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
-	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 // Proxy defines the connection interface of a proxied vtctldclient used by

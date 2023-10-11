@@ -24,13 +24,12 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/vtadmin/cache"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Key is the cache key for vtadmin's schema caches.

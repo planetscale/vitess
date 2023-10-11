@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/mysql/replication"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

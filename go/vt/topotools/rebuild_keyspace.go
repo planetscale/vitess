@@ -23,10 +23,9 @@ import (
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // RebuildKeyspace rebuilds the serving graph data while locking out other changes.

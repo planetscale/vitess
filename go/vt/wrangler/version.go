@@ -17,15 +17,13 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 
-	"context"
-
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // GetVersion returns the version string from a tablet

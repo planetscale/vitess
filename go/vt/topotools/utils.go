@@ -17,14 +17,12 @@ limitations under the License.
 package topotools
 
 import (
+	"context"
 	"reflect"
 	"sync"
 
-	"context"
-
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // FindTabletByHostAndPort searches within a tablet map for tablets.

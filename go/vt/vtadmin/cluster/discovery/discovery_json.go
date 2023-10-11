@@ -23,7 +23,6 @@ import (
 	"math/rand"
 
 	"vitess.io/vitess/go/trace"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 

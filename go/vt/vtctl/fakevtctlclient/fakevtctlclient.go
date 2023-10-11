@@ -18,9 +18,8 @@ limitations under the License.
 package fakevtctlclient
 
 import (
-	"time"
-
 	"context"
+	"time"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"

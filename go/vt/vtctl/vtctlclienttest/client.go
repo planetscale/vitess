@@ -33,15 +33,12 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
-	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
-
-	// import the gRPC client implementation for tablet manager
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 )
 
 func init() {

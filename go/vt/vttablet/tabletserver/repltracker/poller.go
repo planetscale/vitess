@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
-
 	"vitess.io/vitess/go/vt/mysqlctl"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"

@@ -22,11 +22,9 @@ import (
 	"io"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var _ Primitive = (*Limit)(nil)

@@ -21,15 +21,12 @@ import (
 	"fmt"
 	"sort"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 var _ Primitive = (*Update)(nil)

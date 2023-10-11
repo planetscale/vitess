@@ -17,17 +17,15 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"path"
 	"strings"
 	"sync"
 
-	"context"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/fileutil"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // ResolveKeyspaceWildcard will resolve keyspace wildcards.

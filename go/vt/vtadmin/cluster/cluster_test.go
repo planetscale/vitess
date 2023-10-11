@@ -32,19 +32,18 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vtadmin/cluster"
-	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
-	"vitess.io/vitess/go/vt/vtadmin/testutil"
-	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
-	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
-
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtadmin/cluster"
+	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
+	"vitess.io/vitess/go/vt/vtadmin/testutil"
+	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
+	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 )
 
 func TestCreateKeyspace(t *testing.T) {

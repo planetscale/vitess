@@ -20,9 +20,8 @@ import (
 	"context"
 	"path"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/events"
 )
 

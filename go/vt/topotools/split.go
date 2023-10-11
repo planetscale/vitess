@@ -17,11 +17,10 @@ limitations under the License.
 package topotools
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

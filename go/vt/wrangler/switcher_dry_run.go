@@ -26,10 +26,9 @@ import (
 
 	"vitess.io/vitess/go/maps2"
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/vtctl/workflow"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 )
 
 var _ iswitcher = (*switcherDryRun)(nil)

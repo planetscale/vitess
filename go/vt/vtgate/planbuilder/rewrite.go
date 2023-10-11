@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 

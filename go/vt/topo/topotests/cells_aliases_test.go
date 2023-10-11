@@ -22,9 +22,8 @@ import (
 	"sort"
 	"testing"
 
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
 // This file tests the CellsAliases part of the topo.Server API.

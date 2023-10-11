@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 

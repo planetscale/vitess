@@ -21,12 +21,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
+	"github.com/patrickmn/go-cache"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/util"
-
-	"github.com/patrickmn/go-cache"
 )
 
 var lastHealthCheckUnixNano int64

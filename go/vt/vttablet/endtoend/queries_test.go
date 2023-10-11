@@ -25,9 +25,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
 var frameworkErrors = `fail failed:

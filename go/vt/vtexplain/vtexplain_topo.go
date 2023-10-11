@@ -21,10 +21,9 @@ import (
 	"fmt"
 	"sync"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // ExplainTopo satisfies the srvtopo.Server interface.

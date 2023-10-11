@@ -17,16 +17,14 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"fmt"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file contains the RPC method helpers for the tablet manager.

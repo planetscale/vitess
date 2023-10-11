@@ -30,9 +30,8 @@ import (
 	"google.golang.org/grpc/backoff"
 
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 )
 
 func withTempFile(t *testing.T, tmpdir string, name string, f func(*testing.T, *os.File)) {

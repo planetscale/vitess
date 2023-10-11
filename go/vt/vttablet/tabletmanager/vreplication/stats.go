@@ -23,12 +23,10 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/servenv"
-
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (

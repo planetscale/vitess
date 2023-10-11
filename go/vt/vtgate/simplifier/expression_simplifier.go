@@ -21,7 +21,6 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 

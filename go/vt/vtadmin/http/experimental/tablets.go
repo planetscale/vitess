@@ -24,9 +24,8 @@ import (
 	"net/http"
 	"text/template"
 
-	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 )
 
 // TabletDebugVarsPassthrough makes a passthrough request to a tablet's

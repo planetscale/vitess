@@ -20,7 +20,6 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
 

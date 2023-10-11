@@ -18,18 +18,16 @@ limitations under the License.
 package grpcthrottlerclient
 
 import (
-	"flag"
-
 	"context"
+	"flag"
 
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/throttler/throttlerclient"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 	throttlerservicepb "vitess.io/vitess/go/vt/proto/throttlerservice"
+	"vitess.io/vitess/go/vt/throttler/throttlerclient"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (

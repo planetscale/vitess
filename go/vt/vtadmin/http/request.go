@@ -23,10 +23,9 @@ import (
 
 	"github.com/gorilla/mux"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // Request wraps an *http.Request to provide some convenience functions for

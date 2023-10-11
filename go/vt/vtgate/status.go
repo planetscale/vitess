@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 

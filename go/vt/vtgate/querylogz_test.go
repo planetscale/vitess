@@ -26,10 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/logstats"
-
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
 )
 
 func TestQuerylogzHandlerFormatting(t *testing.T) {

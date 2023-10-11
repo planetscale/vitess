@@ -37,21 +37,15 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/constants/sidecar"
-
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/logutil"
-	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
-
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
-
-	// we need to import the grpcvtctlclient library so the gRPC
-	// vtctl client is registered and can be used.
+	"vitess.io/vitess/go/vt/sidecardb"
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
+	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 )
 
 // Config are the settings used to configure the self-contained Vitess cluster.

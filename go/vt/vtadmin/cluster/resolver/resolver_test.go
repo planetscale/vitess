@@ -28,9 +28,8 @@ import (
 	"github.com/stretchr/testify/require"
 	grpcresolver "google.golang.org/grpc/resolver"
 
-	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 )
 
 type mockClientConn struct {

@@ -22,14 +22,14 @@ import (
 	"sync"
 	"testing"
 
+	fuzz "github.com/AdaLogics/go-fuzz-headers"
+
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-
-	fuzz "github.com/AdaLogics/go-fuzz-headers"
 )
 
 var initter sync.Once

@@ -27,12 +27,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 )
 
 type fakeVtctld struct {

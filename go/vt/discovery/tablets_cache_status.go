@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/safehtml"
 	"github.com/google/safehtml/template"
-
 	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"

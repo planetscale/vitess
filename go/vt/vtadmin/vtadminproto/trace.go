@@ -18,7 +18,6 @@ package vtadminproto
 
 import (
 	"vitess.io/vitess/go/trace"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 

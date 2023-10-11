@@ -17,6 +17,7 @@ limitations under the License.
 package txserializer
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -25,13 +26,10 @@ import (
 	"testing"
 	"time"
 
-	"context"
-
 	"vitess.io/vitess/go/streamlog"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func resetVariables(txs *TxSerializer) {

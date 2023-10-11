@@ -24,15 +24,13 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/stats"
-
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // TestInitErrors validates that the schema init error stats are being correctly set

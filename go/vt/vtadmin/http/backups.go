@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/vt/concurrency"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )

@@ -23,17 +23,15 @@ import (
 	"io"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 // FakeQueryService implements a programmable fake for the query service

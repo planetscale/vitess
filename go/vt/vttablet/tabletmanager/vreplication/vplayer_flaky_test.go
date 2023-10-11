@@ -27,20 +27,17 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
-
-	"vitess.io/vitess/go/vt/vttablet"
-
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/vttablet"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 )
 
 // TestPlayerGeneratedInvisiblePrimaryKey confirms that the gipk column is replicated by vplayer, both for target

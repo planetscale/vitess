@@ -21,11 +21,10 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 

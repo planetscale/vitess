@@ -20,10 +20,9 @@ package grpcbinlogstreamer
 
 import (
 	"vitess.io/vitess/go/vt/binlog"
-	"vitess.io/vitess/go/vt/servenv"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	binlogservicepb "vitess.io/vitess/go/vt/proto/binlogservice"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 // UpdateStream is the gRPC UpdateStream server

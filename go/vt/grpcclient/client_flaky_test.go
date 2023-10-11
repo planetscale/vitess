@@ -22,9 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/credentials/insecure"
-
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtgateservicepb "vitess.io/vitess/go/vt/proto/vtgateservice"

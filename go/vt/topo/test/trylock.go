@@ -24,9 +24,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // checkTryLock checks if we can lock / unlock as expected. It's using a keyspace

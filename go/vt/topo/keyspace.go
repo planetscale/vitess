@@ -21,14 +21,12 @@ import (
 	"path"
 
 	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/events"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo/events"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file contains keyspace utility functions

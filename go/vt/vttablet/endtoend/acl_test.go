@@ -24,10 +24,9 @@ import (
 	"gotest.tools/assert"
 
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestTableACL(t *testing.T) {

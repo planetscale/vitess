@@ -22,10 +22,9 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 // VStreamer defines  the functions of VStreamer

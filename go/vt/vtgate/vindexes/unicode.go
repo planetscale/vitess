@@ -22,10 +22,10 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
+
+	"vitess.io/vitess/go/sqltypes"
 )
 
 // Shared functions for Unicode string normalization

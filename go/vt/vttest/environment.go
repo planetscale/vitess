@@ -24,8 +24,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/proto/vttest"
-
-	// we use gRPC everywhere, so import the vtgate client.
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 

@@ -28,7 +28,6 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/replication"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"

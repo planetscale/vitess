@@ -20,10 +20,9 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func notExistsError(name string) error {

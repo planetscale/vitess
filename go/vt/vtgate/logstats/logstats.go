@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 

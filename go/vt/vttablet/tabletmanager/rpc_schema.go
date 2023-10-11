@@ -17,16 +17,14 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"context"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // GetSchema returns the schema.

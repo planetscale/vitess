@@ -29,19 +29,15 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/history"
-	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/mysql/fakesqldb"
-
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/stats"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/schemadiff"
 )
 
 const (

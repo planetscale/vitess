@@ -23,7 +23,6 @@ import (
 	"text/template"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/go/vt/vterrors"
 )
 

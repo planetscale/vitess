@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/replication"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 

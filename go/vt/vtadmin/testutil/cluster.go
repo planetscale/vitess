@@ -28,6 +28,8 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vitessdriver"
@@ -41,9 +43,6 @@ import (
 	grpcvtctldtestutil "vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
-
-	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
-	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 // Dbcfg is a test utility for controlling the behavior of the cluster's DB

@@ -20,7 +20,6 @@ import (
 	"io"
 
 	"github.com/golang/snappy"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
 )

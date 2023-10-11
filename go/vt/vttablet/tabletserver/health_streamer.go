@@ -28,24 +28,20 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/constants/sidecar"
-
-	vtschema "vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"vitess.io/vitess/go/vt/dbconfigs"
-
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vtschema "vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 

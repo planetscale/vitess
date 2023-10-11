@@ -22,9 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // timeUntilLockIsTaken is the time to wait until a lock is taken.

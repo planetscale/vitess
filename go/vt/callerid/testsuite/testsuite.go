@@ -17,14 +17,12 @@ limitations under the License.
 package testsuite
 
 import (
-	"testing"
-
 	"context"
+	"testing"
 
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/callerid"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )

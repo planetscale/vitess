@@ -25,10 +25,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
-
-	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
 var (

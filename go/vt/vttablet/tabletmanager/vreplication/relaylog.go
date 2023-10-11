@@ -17,11 +17,10 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"io"
 	"sync"
 	"time"
-
-	"context"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )

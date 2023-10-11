@@ -26,18 +26,16 @@ package throttlerclienttest
 // (e.g.  zookeeper) won't be drawn into production binaries as well.
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
 
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
+	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/throttler/throttlerclient"
-
-	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 
 // TestSuite runs the test suite on the given throttlerclient and throttlerserver.

@@ -23,12 +23,11 @@ import (
 	"text/template"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/logstats"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
 )
 
 var (

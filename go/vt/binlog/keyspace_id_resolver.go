@@ -17,10 +17,9 @@ limitations under the License.
 package binlog
 
 import (
+	"context"
 	"fmt"
 	"strings"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"

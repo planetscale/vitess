@@ -17,12 +17,11 @@ limitations under the License.
 package vtctlclient
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"time"
-
-	"context"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )

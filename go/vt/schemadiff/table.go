@@ -25,9 +25,8 @@ import (
 
 	golcs "github.com/yudai/golcs"
 
-	"vitess.io/vitess/go/mysql/collations/colldata"
-
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 

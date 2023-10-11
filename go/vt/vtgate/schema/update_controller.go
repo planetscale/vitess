@@ -21,10 +21,8 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"vitess.io/vitess/go/vt/discovery"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 type (

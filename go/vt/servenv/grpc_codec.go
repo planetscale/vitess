@@ -19,10 +19,7 @@ package servenv
 import (
 	"fmt"
 
-	// use the original golang/protobuf package we can continue serializing
-	// messages from our dependencies, particularly from etcd
 	"github.com/golang/protobuf/proto" //nolint
-
 	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/proto" // nolint:revive
 )

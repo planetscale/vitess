@@ -20,9 +20,8 @@ import (
 	"context"
 	"testing"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // checkKeyspace tests the keyspace part of the API

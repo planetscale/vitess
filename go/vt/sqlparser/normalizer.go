@@ -23,10 +23,9 @@ import (
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/hex"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // BindVars is a set of reserved bind variables from a SQL statement

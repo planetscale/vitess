@@ -22,12 +22,11 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 var _ VSchemaOperator = (*VSchemaManager)(nil)

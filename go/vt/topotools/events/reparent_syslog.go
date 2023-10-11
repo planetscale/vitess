@@ -20,9 +20,8 @@ import (
 	"fmt"
 	"log/syslog"
 
-	"vitess.io/vitess/go/vt/proto/topodata"
-
 	"vitess.io/vitess/go/event/syslogger"
+	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 

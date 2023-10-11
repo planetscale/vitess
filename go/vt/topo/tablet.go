@@ -24,19 +24,17 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/protoutil"
-	"vitess.io/vitess/go/vt/key"
-
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/events"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // IsTrivialTypeChange returns if this db type be trivially reassigned

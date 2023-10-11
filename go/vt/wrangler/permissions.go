@@ -17,19 +17,17 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
 
-	"context"
-
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // GetPermissions returns the permissions set on a remote tablet
