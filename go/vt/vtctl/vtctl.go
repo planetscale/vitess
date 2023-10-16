@@ -2141,7 +2141,17 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	if _, ok := binlogdatapb.OnDDLAction_value[onDDL]; !ok {
 		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
 	}
-
+	deadline, ok := ctx.Deadline()
+	deadlineString := ""
+	if !ok {
+		deadlineString = "none"
+	} else {
+		deadlineString = time.Until(deadline).String()
+	}
+	wr.Logger().Infof(">>>> Context timeout is %v, timeout is %v", deadlineString, *timeout)
+	if time.Until(deadline) < *timeout {
+		return fmt.Errorf("timeout (%v) cannot be greater than context timeout (%v)", *timeout, deadlineString)
+	}
 	action := subFlags.Arg(0)
 	ksWorkflow := subFlags.Arg(1)
 	target, workflowName, err := splitKeyspaceWorkflow(ksWorkflow)
