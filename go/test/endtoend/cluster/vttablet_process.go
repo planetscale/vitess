@@ -462,6 +462,10 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	return executeQuery(conn, query)
 }
 
+func (vttablet *VttabletProcess) GetConnection(dbName string) (*mysql.Conn, error) {
+	return vttablet.defaultConn(dbName)
+}
+
 func (vttablet *VttabletProcess) defaultConn(dbname string) (*mysql.Conn, error) {
 	dbParams := mysql.ConnParams{
 		Uname:      "vt_dba",
@@ -487,6 +491,9 @@ func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) 
 	}
 	defer conn.Close()
 	return executeQuery(conn, query)
+}
+func ExecuteQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
+	return executeQuery(dbConn, query)
 }
 
 // executeQuery will retry the query up to 10 times with a small sleep in between each try.
