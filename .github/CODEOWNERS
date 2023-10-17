@@ -16,8 +16,9 @@ bootstrap.sh @deepthi
 /go/cache @vmg
 /go/cmd @ajm188
 /go/cmd/vtadmin @ajm188 @notfelineit
-/go/cmd/vtctldclient @ajm188 @notfelineit
-/go/internal/flag @ajm188
+/go/cmd/vtctldclient @ajm188 @mattlord
+/go/cmd/vtctldclient/command/vreplication @mattlord @rohit-nayak-ps
+/go/internal/flag @ajm188 @rohit-nayak-ps
 /go/mysql @harshit-gangal @systay @mattlord
 /go/pools @harshit-gangal
 /go/protoutil @ajm188
