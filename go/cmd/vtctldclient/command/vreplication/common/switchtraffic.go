@@ -51,6 +51,12 @@ func GetSwitchTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 			return nil
 		},
 		RunE: commandSwitchTraffic,
+		PostRunE: func(cmd *cobra.Command, args []string) error {
+			if err := ValidateTrafficSwitchingTimeouts(cmd); err != nil {
+				return err
+			}
+			return nil
+		},
 	}
 	return cmd
 }
@@ -64,6 +70,9 @@ func GetReverseTrafficCommand(opts *SubCommandsOpts) *cobra.Command {
 		Aliases:               []string{"ReverseTraffic"},
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if err := ValidateTrafficSwitchingTimeouts(cmd); err != nil {
+				return err
+			}
 			SwitchTrafficOptions.Direction = workflow.DirectionBackward
 			if !cmd.Flags().Lookup("tablet-types").Changed {
 				// We switch traffic for all tablet types if none are provided.

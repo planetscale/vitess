@@ -2301,6 +2301,9 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		vrwp.Cells = *cells
 		vrwp.TabletTypes = *tabletTypesStr
 	case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic:
+		if err := workflow.ValidateTrafficSwitchingTimeouts(ctx, *timeout); err != nil {
+			return err
+		}
 		vrwp.Cells = *cells
 		if subFlags.Changed("tablet_types") {
 			vrwp.TabletTypes = *tabletTypesStr

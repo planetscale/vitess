@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -765,4 +766,19 @@ func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.Table
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
 	}, nil
+}
+
+// ValidateTrafficSwitchingTimeouts ensures that the timeout is less than the context expiry.
+const migrationCancellationGracePeriod = 30 * time.Second
+
+func ValidateTrafficSwitchingTimeouts(ctx context.Context, timeout time.Duration) error {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		// context never expires
+		return nil
+	}
+	if time.Until(deadline)-timeout < migrationCancellationGracePeriod {
+		return fmt.Errorf("timeout %v is too close to context expiry %v", timeout, time.Until(deadline))
+	}
+	return nil
 }
