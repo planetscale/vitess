@@ -8,6 +8,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -150,6 +151,10 @@ type ddlWrapper struct {
 	ddl             *DDLSchema
 	skipColumns     bool
 	defaultKeyspace string
+}
+
+func (d *ddlWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
+	return vschemapb.Keyspace_FK_DEFAULT, nil
 }
 
 var _ semantics.SchemaInformation = (*ddlWrapper)(nil)
