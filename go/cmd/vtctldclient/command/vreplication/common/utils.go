@@ -213,3 +213,14 @@ func AddCommonSwitchTrafficFlags(cmd *cobra.Command, initializeTargetSequences b
 		cmd.Flags().BoolVar(&SwitchTrafficOptions.InitializeTargetSequences, "initialize-target-sequences", false, "When moving tables from an unsharded keyspace to a sharded keyspace, initialize any sequences that are being used on the target when switching writes.")
 	}
 }
+
+func ValidateTrafficSwitchingTimeouts(cmd *cobra.Command) error {
+	timeout, err := cmd.Flags().GetDuration("timeout")
+	if err != nil {
+		return err
+	}
+	if err = workflow.ValidateTrafficSwitchingTimeouts(GetCommandCtx(), timeout); err != nil {
+		return err
+	}
+	return nil
+}
