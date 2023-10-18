@@ -120,6 +120,12 @@ func (rs *rowStreamer) Stream() error {
 	if _, err := conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
 		return err
 	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_read_timeout = %v", vttablet.VReplicationNetReadTimeout), 1, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", vttablet.VReplicationNetWriteTimeout), 1, false); err != nil {
+		return err
+	}
 	return rs.streamQuery(conn, rs.send)
 }
 
