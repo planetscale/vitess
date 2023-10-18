@@ -181,9 +181,12 @@ func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.Select
 	return sqlparser.GetFirstSelect(h.Query).SelectExprs, nil
 }
 
-func (h *Horizon) GetOrdering() ([]ops.OrderBy, error) {
+func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) ([]ops.OrderBy, error) {
 	if h.QP == nil {
-		return nil, vterrors.VT13001("QP should already be here")
+		_, err := h.getQP(ctx)
+		if err != nil {
+			panic(err)
+		}
 	}
 	return h.QP.OrderExprs, nil
 }

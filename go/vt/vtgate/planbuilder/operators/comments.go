@@ -80,6 +80,6 @@ func (l *LockAndComment) ShortDescription() string {
 	return strings.Join(s, " ")
 }
 
-func (l *LockAndComment) GetOrdering() ([]ops.OrderBy, error) {
-	return l.Source.GetOrdering()
+func (l *LockAndComment) GetOrdering(ctx *plancontext.PlanningContext) ([]ops.OrderBy, error) {
+	return l.Source.GetOrdering(ctx)
 }

@@ -189,8 +189,8 @@ func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser
 	return transformColumnsToSelectExprs(ctx, aj)
 }
 
-func (aj *ApplyJoin) GetOrdering() ([]ops.OrderBy, error) {
-	return aj.LHS.GetOrdering()
+func (aj *ApplyJoin) GetOrdering(ctx *plancontext.PlanningContext) ([]ops.OrderBy, error) {
+	return aj.LHS.GetOrdering(ctx)
 }
 
 func joinColumnToAliasedExpr(c JoinColumn) *sqlparser.AliasedExpr {

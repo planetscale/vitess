@@ -104,7 +104,7 @@ func (v *Vindex) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.Sel
 	return transformColumnsToSelectExprs(ctx, v)
 }
 
-func (v *Vindex) GetOrdering() ([]ops.OrderBy, error) {
+func (v *Vindex) GetOrdering(*plancontext.PlanningContext) ([]ops.OrderBy, error) {
 	return nil, nil
 }
 
