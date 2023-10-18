@@ -1,9 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
-    "plan": {
-
-    }
+    "query": "WITH user_user AS (SELECT id FROM user) SELECT * FROM user_user u JOIN user_extra ue on u.id = ue.id",
+    "plan": {}
   }
 ]
