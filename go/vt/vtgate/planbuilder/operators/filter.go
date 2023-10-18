@@ -105,8 +105,8 @@ func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) (sqlparser.Sel
 	return f.Source.GetSelectExprs(ctx)
 }
 
-func (f *Filter) GetOrdering() ([]ops.OrderBy, error) {
-	return f.Source.GetOrdering()
+func (f *Filter) GetOrdering(ctx *plancontext.PlanningContext) ([]ops.OrderBy, error) {
+	return f.Source.GetOrdering(ctx)
 }
 
 func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, *rewrite.ApplyResult, error) {

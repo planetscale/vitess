@@ -420,8 +420,8 @@ func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) (sqlparser.Sel
 	}
 }
 
-func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
-	return p.Source.GetOrdering()
+func (p *Projection) GetOrdering(ctx *plancontext.PlanningContext) ([]ops.OrderBy, error) {
+	return p.Source.GetOrdering(ctx)
 }
 
 // AllOffsets returns a slice of integer offsets for all columns in the Projection

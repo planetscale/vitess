@@ -125,8 +125,8 @@ func (d *Distinct) ShortDescription() string {
 	return "Performance"
 }
 
-func (d *Distinct) GetOrdering() ([]ops.OrderBy, error) {
-	return d.Source.GetOrdering()
+func (d *Distinct) GetOrdering(ctx *plancontext.PlanningContext) ([]ops.OrderBy, error) {
+	return d.Source.GetOrdering(ctx)
 }
 
 func (d *Distinct) setTruncateColumnCount(offset int) {
