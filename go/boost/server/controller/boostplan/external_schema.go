@@ -154,7 +154,7 @@ type ddlWrapper struct {
 }
 
 func (d *ddlWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
-	return vschemapb.Keyspace_FK_DEFAULT, nil
+	return vschemapb.Keyspace_unspecified, nil
 }
 
 var _ semantics.SchemaInformation = (*ddlWrapper)(nil)
