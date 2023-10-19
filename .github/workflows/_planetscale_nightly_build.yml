@@ -42,21 +42,10 @@ jobs:
     strategy:
       matrix:
         ref:
-          - main
-          - latest-15.0
-          - latest-16.0
-          - latest-17.0
+          - latest-18.0
         include:
-          # Default image is tagged as 'latest'
-          - ref: latest-15.0
-            default: "true"
-            vitess-version: 15
-            platforms: linux/amd64
-          - ref: latest-16.0
-            vitess-version: 16
-            platforms: linux/amd64
-          - ref: latest-17.0
-            vitess-version: 17
+          - ref: latest-18.0
+            vitess-version: 18
             platforms: linux/amd64,linux/arm64
 
     steps:
@@ -119,18 +108,11 @@ jobs:
           labels: |
             planetscale.vitess-private.image.vitess-version=${{ matrix.vitess-version }}
             planetscale.vitess-private.branch.ref=${{ matrix.ref }}
-            planetscale.vitess-private.branch.default=${{ matrix.default == 'true' }}
 
           tags: |
             type=raw,value={{date 'YYYY-MM-DD'}}.${{ steps.determine-sha.outputs.sha }},priority=900
-            type=raw,value=latest-15,enable=${{ matrix.ref == 'latest-15.0' }},priority=600
-            type=raw,value=latest-16,enable=${{ matrix.ref == 'latest-16.0' }},priority=600
-            type=raw,value=latest-17,enable=${{ matrix.ref == 'latest-17.0' }},priority=600
-            type=raw,value=head-15,enable=${{ matrix.ref == 'latest-15.0' }},priority=600
-            type=raw,value=head-16,enable=${{ matrix.ref == 'latest-16.0' }},priority=600
-            type=raw,value=head-17,enable=${{ matrix.ref == 'latest-17.0' }},priority=600
-            type=raw,value=head,enable=${{ matrix.default == 'true' }},priority=600
-            type=raw,value=latest,enable=${{ matrix.default == 'true' }},priority=600
+            type=raw,value=latest-18,enable=${{ matrix.ref == 'latest-18.0' }},priority=600
+            type=raw,value=head-18,enable=${{ matrix.ref == 'latest-18.0' }},priority=600
 
         # This is a hack to let us retrieve the new image version being built
         # by this job, which is necessary because the GitHub Actions API
