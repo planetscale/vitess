@@ -162,7 +162,7 @@ func TestGetRedactedProcessList(t *testing.T) {
 			conn, err := cp.Connect(context.Background())
 			require.NoError(t, err)
 			pooledConn := &PooledDBConnection{
-				DBConnection: &DBConnection{
+				Conn: &DBConnection{
 					Conn: conn,
 				},
 			}

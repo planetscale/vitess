@@ -35,7 +35,7 @@ func LogRedactedProcessList(conn *PooledDBConnection, user string) {
 
 // getRedactedProcessList gets the redacted process list for the query being run by the given user.
 func getRedactedProcessList(conn *PooledDBConnection, user string) string {
-	processLists, err := conn.ExecuteFetch(fmt.Sprintf(showProcessListQuery, user), 10000, true)
+	processLists, err := conn.Conn.ExecuteFetch(fmt.Sprintf(showProcessListQuery, user), 10000, true)
 	if err != nil {
 		log.Errorf("error while reading process list: %v", err)
 		return ""
