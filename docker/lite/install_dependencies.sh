@@ -133,7 +133,7 @@ percona80)
     PACKAGES=(
         libperconaserverclient21
         percona-server-rocksdb
-        percona-server-server
+        percona-server-server=8.0.34-26
         percona-xtrabackup-80
     )
     ;;
