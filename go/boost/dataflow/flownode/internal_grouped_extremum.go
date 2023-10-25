@@ -236,7 +236,7 @@ func createExtremumState(tt sql.Type, max bool, over int) (agstate, error) {
 					if !ok {
 						err = fmt.Errorf("invalid datetime: %v", str)
 					}
-					return dt.ToStdTime(time.Local), err
+					return dt.ToStdTime(time.Now()), err
 				}
 				return time.Time{}, fmt.Errorf("invalid type %v", tt)
 			},
