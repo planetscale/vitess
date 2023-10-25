@@ -94,12 +94,12 @@ func (e *evalTemporal) toJSON() *evalJSON {
 	}
 }
 
-func (e *evalTemporal) toDateTime(l int) *evalTemporal {
+func (e *evalTemporal) toDateTime(l int, now time.Time) *evalTemporal {
 	switch e.SQLType() {
 	case sqltypes.Datetime, sqltypes.Date:
 		return &evalTemporal{t: sqltypes.Datetime, dt: e.dt.Round(l), prec: uint8(l)}
 	case sqltypes.Time:
-		return &evalTemporal{t: sqltypes.Datetime, dt: e.dt.Time.Round(l).ToDateTime(), prec: uint8(l)}
+		return &evalTemporal{t: sqltypes.Datetime, dt: e.dt.Time.Round(l).ToDateTime(now), prec: uint8(l)}
 	default:
 		panic("unreachable")
 	}
@@ -120,7 +120,7 @@ func (e *evalTemporal) toTime(l int) *evalTemporal {
 	}
 }
 
-func (e *evalTemporal) toDate() *evalTemporal {
+func (e *evalTemporal) toDate(now time.Time) *evalTemporal {
 	switch e.SQLType() {
 	case sqltypes.Datetime:
 		dt := datetime.DateTime{Date: e.dt.Date}
@@ -128,7 +128,7 @@ func (e *evalTemporal) toDate() *evalTemporal {
 	case sqltypes.Date:
 		return e
 	case sqltypes.Time:
-		dt := e.dt.Time.ToDateTime()
+		dt := e.dt.Time.ToDateTime(now)
 		dt.Time = datetime.Time{}
 		return &evalTemporal{t: sqltypes.Date, dt: dt}
 	default:
@@ -140,11 +140,7 @@ func (e *evalTemporal) isZero() bool {
 	return e.dt.IsZero()
 }
 
-func (e *evalTemporal) toStdTime(loc *time.Location) time.Time {
-	return e.dt.ToStdTime(loc)
-}
-
-func (e *evalTemporal) addInterval(interval *datetime.Interval, strcoll collations.TypedCollation) eval {
+func (e *evalTemporal) addInterval(interval *datetime.Interval, strcoll collations.TypedCollation, now time.Time) eval {
 	var tmp *evalTemporal
 	var ok bool
 
@@ -156,7 +152,7 @@ func (e *evalTemporal) addInterval(interval *datetime.Interval, strcoll collatio
 		tmp = &evalTemporal{t: e.t}
 		tmp.dt.Time, tmp.prec, ok = e.dt.Time.AddInterval(interval, strcoll.Valid())
 	case tt == sqltypes.Datetime || tt == sqltypes.Timestamp || (tt == sqltypes.Date && interval.Unit().HasTimeParts()) || (tt == sqltypes.Time && interval.Unit().HasDateParts()):
-		tmp = e.toDateTime(int(e.prec))
+		tmp = e.toDateTime(int(e.prec), now)
 		tmp.dt, tmp.prec, ok = e.dt.AddInterval(interval, strcoll.Valid())
 	}
 	if !ok {
@@ -330,10 +326,10 @@ func evalToTime(e eval, l int) *evalTemporal {
 	return nil
 }
 
-func evalToDateTime(e eval, l int) *evalTemporal {
+func evalToDateTime(e eval, l int, now time.Time) *evalTemporal {
 	switch e := e.(type) {
 	case *evalTemporal:
-		return e.toDateTime(precision(l, int(e.prec)))
+		return e.toDateTime(precision(l, int(e.prec)), now)
 	case *evalBytes:
 		if t, l, _ := datetime.ParseDateTime(e.string(), l); !t.IsZero() {
 			return newEvalDateTime(t, l)
@@ -377,10 +373,10 @@ func evalToDateTime(e eval, l int) *evalTemporal {
 	return nil
 }
 
-func evalToDate(e eval) *evalTemporal {
+func evalToDate(e eval, now time.Time) *evalTemporal {
 	switch e := e.(type) {
 	case *evalTemporal:
-		return e.toDate()
+		return e.toDate(now)
 	case *evalBytes:
 		if t, _ := datetime.ParseDate(e.string()); !t.IsZero() {
 			return newEvalDate(t)
