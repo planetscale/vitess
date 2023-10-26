@@ -12,17 +12,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"client_test": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"test/client_test.sh"
-			],
-			"Manual": false,
-			"Shard": "25",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"e2e": {
 			"File": "",
 			"Args": [],
@@ -984,15 +973,6 @@
 			"Manual": false,
 			"Shard": "vtgate_vindex_heavy",
 			"RetryMax": 2,
-			"Tags": []
-		},
-		"vttest_sample": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtcombo"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "25",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"xb_recovery": {
