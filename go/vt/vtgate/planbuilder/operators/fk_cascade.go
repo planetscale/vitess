@@ -97,8 +97,8 @@ func (fkc *FkCascade) Clone(inputs []ops.Operator) ops.Operator {
 }
 
 // GetOrdering implements the Operator interface
-func (fkc *FkCascade) GetOrdering(*plancontext.PlanningContext) ([]ops.OrderBy, error) {
-	return nil, nil
+func (fkc *FkCascade) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+	return nil
 }
 
 // ShortDescription implements the Operator interface

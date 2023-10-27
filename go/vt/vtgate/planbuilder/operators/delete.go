@@ -61,8 +61,8 @@ func (d *Delete) TablesUsed() []string {
 	return nil
 }
 
-func (d *Delete) GetOrdering(*plancontext.PlanningContext) ([]ops.OrderBy, error) {
-	return nil, nil
+func (d *Delete) GetOrdering(*plancontext.PlanningContext) []ops.OrderBy {
+	return nil
 }
 
 func (d *Delete) ShortDescription() string {
