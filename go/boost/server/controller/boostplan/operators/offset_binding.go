@@ -69,8 +69,8 @@ func (g *GroupBy) PlanOffsets(node *Node, st *semantics.SemTable, _ *Converter) 
 			return err
 		}
 		if !g.ScalarAggregation() {
-			typ, _, _ := st.TypeForExpr(ast)
-			if !supportedType(typ) {
+			typ, _ := st.TypeForExpr(ast)
+			if !supportedType(typ.Type) {
 				return &UnsupportedError{
 					AST:  ast,
 					Type: GroupParameterType,
