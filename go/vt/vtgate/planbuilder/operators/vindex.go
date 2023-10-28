@@ -49,7 +49,7 @@ type (
 	}
 )
 
-const VindexUnsupported = "WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...)"
+const wrongWhereCond = "WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
 // Introduces implements the Operator interface
 func (v *Vindex) introducesTableID() semantics.TableSet {
@@ -115,7 +115,7 @@ func (v *Vindex) AddCol(col *sqlparser.ColName) {
 
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
-		return vterrors.VT12001(VindexUnsupported + " (where clause missing)")
+		return vterrors.VT09018(wrongWhereCond + " (where clause missing)")
 	}
 
 	return nil
@@ -125,27 +125,27 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := ctx.SemTable.RecursiveDeps(e)
 		if deps.NumberOfTables() > 1 {
-			panic(vterrors.VT12001(VindexUnsupported + " (multiple tables involved)"))
+			panic(vterrors.VT09018(wrongWhereCond + " (multiple tables involved)"))
 		}
 		// check if we already have a predicate
 		if v.OpCode != engine.VindexNone {
-			panic(vterrors.VT12001(VindexUnsupported + " (multiple filters)"))
+			panic(vterrors.VT09018(wrongWhereCond + " (multiple filters)"))
 		}
 
 		// check LHS
 		comparison, ok := e.(*sqlparser.ComparisonExpr)
 		if !ok {
-			panic(vterrors.VT12001(VindexUnsupported + " (not a comparison)"))
+			panic(vterrors.VT09018(wrongWhereCond + " (not a comparison)"))
 		}
 		if comparison.Operator != sqlparser.EqualOp && comparison.Operator != sqlparser.InOp {
-			panic(vterrors.VT12001(VindexUnsupported + " (not equality)"))
+			panic(vterrors.VT09018(wrongWhereCond + " (not equality)"))
 		}
 		colname, ok := comparison.Left.(*sqlparser.ColName)
 		if !ok {
-			panic(vterrors.VT12001(VindexUnsupported + " (lhs is not a column)"))
+			panic(vterrors.VT09018(wrongWhereCond + " (lhs is not a column)"))
 		}
 		if !colname.Name.EqualString("id") {
-			panic(vterrors.VT12001(VindexUnsupported + " (lhs is not id)"))
+			panic(vterrors.VT09018(wrongWhereCond + " (lhs is not id)"))
 		}
 
 		// check RHS
@@ -153,10 +153,10 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 		if sqlparser.IsValue(comparison.Right) || sqlparser.IsSimpleTuple(comparison.Right) {
 			v.Value = comparison.Right
 		} else {
-			panic(vterrors.VT12001(VindexUnsupported + " (rhs is not a value)"))
+			panic(vterrors.VT09018(wrongWhereCond + " (rhs is not a value)"))
 		}
 		if err != nil {
-			panic(vterrors.VT12001(VindexUnsupported+": %v", err))
+			panic(vterrors.VT09018(wrongWhereCond+": %v", err))
 		}
 		v.OpCode = engine.VindexMap
 		v.Table.Predicates = append(v.Table.Predicates, e)
