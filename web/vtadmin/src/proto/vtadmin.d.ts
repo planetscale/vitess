@@ -41589,6 +41589,9 @@ export namespace vschema {
 
         /** Column type */
         type?: (query.Type|null);
+
+        /** Column invisible */
+        invisible?: (boolean|null);
     }
 
     /** Represents a Column. */
@@ -41605,6 +41608,9 @@ export namespace vschema {
 
         /** Column type. */
         public type: query.Type;
+
+        /** Column invisible. */
+        public invisible: boolean;
 
         /**
          * Creates a new Column instance using the specified properties.
