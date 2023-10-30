@@ -18,9 +18,12 @@ package vindexes
 
 import (
 	"bytes"
+	"crypto/md5"
 	"fmt"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/cespare/xxhash/v2"
 
 	"vitess.io/vitess/go/mysql/collations/vindex/collate"
 	"vitess.io/vitess/go/sqltypes"
@@ -29,36 +32,33 @@ import (
 // Shared functions for Unicode string normalization
 // for Vindexes.
 
-func unicodeHash(hashFunc func([]byte) []byte, key sqltypes.Value) ([]byte, error) {
-	collator := collatorPool.Get().(*collate.Collator)
-	defer collatorPool.Put(collator)
+func unicodeHash(pool *sync.Pool, key sqltypes.Value) ([]byte, error) {
+	collator := pool.Get().(*collate.Hasher)
+	defer pool.Put(collator)
 
 	keyBytes, err := key.ToBytes()
 	if err != nil {
 		return nil, err
 	}
-	norm, err := normalize(collator, keyBytes)
-	if err != nil {
-		return nil, err
-	}
-	return hashFunc(norm), nil
-}
 
-func normalize(col *collate.Collator, in []byte) ([]byte, error) {
 	// We cannot pass invalid UTF-8 to the collator.
-	if !utf8.Valid(in) {
-		return nil, fmt.Errorf("cannot normalize string containing invalid UTF-8: %q", string(in))
+	if !utf8.Valid(keyBytes) {
+		return nil, fmt.Errorf("cannot normalize string containing invalid UTF-8: %q", keyBytes)
 	}
 
 	// Ref: http://dev.mysql.com/doc/refman/5.6/en/char.html.
 	// Trailing spaces are ignored by MySQL.
-	in = bytes.TrimRight(in, " ")
+	keyBytes = bytes.TrimRight(keyBytes, " ")
 
 	// We use the collation key which can be used to
 	// perform lexical comparisons.
-	return col.Key(nil, in), nil
+	return collator.Hash(keyBytes), nil
 }
 
-var collatorPool = sync.Pool{New: func() any {
-	return collate.New()
+var collateMD5 = sync.Pool{New: func() any {
+	return collate.New(md5.New())
+}}
+
+var collateXX = sync.Pool{New: func() any {
+	return collate.New(xxhash.New())
 }}

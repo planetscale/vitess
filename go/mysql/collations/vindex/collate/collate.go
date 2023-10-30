@@ -11,59 +11,56 @@
 package collate // import "vitess.io/vitess/go/mysql/collations/vindex/collate"
 
 import (
+	"hash"
+
 	"vitess.io/vitess/go/mysql/collations/vindex/internal/colltab"
 )
 
-// Collator provides functionality for comparing strings for a given
-// collation order.
-type Collator struct {
+type Hasher struct {
 	iter colltab.Iter
+	hash hash.Hash
 }
 
-// New returns a new Collator initialized for the given locale.
-func New() *Collator {
-	c := &Collator{}
+// New returns a new Hasher initialized for the given hash function
+func New(h hash.Hash) *Hasher {
+	c := &Hasher{}
 	c.iter.Weighter = getTable(tableIndex{0x15, 0x0})
+	c.hash = h
 	return c
 }
 
-// Key returns the collation key for str.
-// Passing the buffer buf may avoid memory allocations.
-// The returned slice will point to an allocation in Buffer and will remain
-// valid until the next call to buf.Reset().
-func (c *Collator) Key(buf []byte, str []byte) []byte {
-	// See https://www.unicode.org/reports/tr10/#Main_Algorithm for more details.
-	return c.key(buf, c.getColElems(str))
-}
-
-func (c *Collator) key(buf []byte, w []colltab.Elem) []byte {
-	return c.keyFromElems(buf, w)
-}
-
-func (c *Collator) getColElems(str []byte) []colltab.Elem {
+func (c *Hasher) Hash(str []byte) []byte {
+	c.hash.Reset()
 	c.iter.SetInput(str)
+
+	var scratch [64]byte
+	var pos int
+
 	for c.iter.Next() {
-	}
-	return c.iter.Elems
-}
-
-func appendPrimary(key []byte, p int) []byte {
-	// Convert to variable length encoding; supports up to 23 bits.
-	if p <= 0x7FFF {
-		key = append(key, uint8(p>>8), uint8(p))
-	} else {
-		key = append(key, uint8(p>>16)|0x80, uint8(p>>8), uint8(p))
-	}
-	return key
-}
-
-// keyFromElems converts the weights ws to a compact sequence of bytes.
-// The result will be appended to the byte buffer in buf.
-func (c *Collator) keyFromElems(buf []byte, ws []colltab.Elem) []byte {
-	for _, v := range ws {
-		if w := v.Primary(); w > 0 {
-			buf = appendPrimary(buf, w)
+		for n := 0; n < c.iter.N; n++ {
+			if w := c.iter.Elems[n].Primary(); w > 0 {
+				if w <= 0x7FFF {
+					if len(scratch)-pos < 2 {
+						c.hash.Write(scratch[:pos])
+						pos = 0
+					}
+					scratch[pos+0] = uint8(w >> 8)
+					scratch[pos+1] = uint8(w)
+					pos += 2
+				} else {
+					if len(scratch)-pos < 3 {
+						c.hash.Write(scratch[:pos])
+						pos = 0
+					}
+					scratch[pos+0] = uint8(w>>16) | 0x80
+					scratch[pos+1] = uint8(w >> 8)
+					scratch[pos+2] = uint8(w)
+					pos += 3
+				}
+			}
 		}
+		c.iter.Discard()
 	}
-	return buf
+	c.hash.Write(scratch[:pos])
+	return c.hash.Sum(nil)
 }
