@@ -17,14 +17,16 @@ import (
 )
 
 type Hasher struct {
-	iter colltab.Iter
-	hash hash.Hash
+	iter    colltab.Iter
+	hash    hash.Hash
+	scratch [32]colltab.Elem
 }
 
 // New returns a new Hasher initialized for the given hash function
 func New(h hash.Hash) *Hasher {
 	c := &Hasher{}
 	c.iter.Weighter = getTable(tableIndex{0x15, 0x0})
+	c.iter.Elems = c.scratch[:0]
 	c.hash = h
 	return c
 }

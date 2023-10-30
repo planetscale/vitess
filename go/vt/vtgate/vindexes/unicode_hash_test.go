@@ -2,7 +2,9 @@ package vindexes
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,10 +26,10 @@ func GenerateGoldenCases(t *testing.T, inputs [][]byte, outfile string) {
 	for _, input := range inputs {
 		v := sqltypes.NewVarChar(string(input))
 
-		hash1, err := unicodeHash(vXXHash, v)
+		hash1, err := unicodeHash(&collateXX, v)
 		require.NoError(t, err)
 
-		hash2, err := unicodeHash(vMD5Hash, v)
+		hash2, err := unicodeHash(&collateMD5, v)
 		require.NoError(t, err)
 
 		goldenHash = append(goldenHash, GoldenUnicodeHash{
@@ -66,7 +68,7 @@ func TestUnicodeHashGenerate(t *testing.T) {
 	GenerateGoldenCases(t, inputs, "testdata/unicode_hash_golden.json")
 }
 
-func TestUnicodeHash(t *testing.T) {
+func loadGoldenUnicodeHash(t testing.TB) []GoldenUnicodeHash {
 	var golden []GoldenUnicodeHash
 
 	f, err := os.Open("testdata/unicode_hash_golden.json")
@@ -75,15 +77,47 @@ func TestUnicodeHash(t *testing.T) {
 	err = json.NewDecoder(f).Decode(&golden)
 	require.NoError(t, err)
 
-	for _, tc := range golden {
+	return golden
+}
+
+func TestUnicodeHash(t *testing.T) {
+	for _, tc := range loadGoldenUnicodeHash(t) {
 		v := sqltypes.NewVarChar(string(tc.Input))
 
-		hash1, err := unicodeHash(vXXHash, v)
+		hash1, err := unicodeHash(&collateXX, v)
 		require.NoError(t, err)
 		assert.Equal(t, tc.XXHash, hash1)
 
-		hash2, err := unicodeHash(vMD5Hash, v)
+		hash2, err := unicodeHash(&collateMD5, v)
 		require.NoError(t, err)
 		assert.Equal(t, tc.MD5, hash2)
+	}
+}
+
+func BenchmarkUnicodeTest(b *testing.B) {
+	for _, repeat := range []int{1} {
+		var values []sqltypes.Value
+		for _, g := range loadGoldenUnicodeHash(b) {
+			vv := strings.Repeat(string(g.Input), repeat)
+			values = append(values, sqltypes.NewVarChar(vv))
+		}
+
+		b.Run(fmt.Sprintf("repeat=%d", repeat), func(b *testing.B) {
+			b.Run("MD5", func(b *testing.B) {
+				b.ReportAllocs()
+				b.ResetTimer()
+				for n := 0; n < b.N; n++ {
+					_, _ = unicodeHash(&collateMD5, values[n%len(values)])
+				}
+			})
+
+			b.Run("xxHash", func(b *testing.B) {
+				b.ReportAllocs()
+				b.ResetTimer()
+				for n := 0; n < b.N; n++ {
+					_, _ = unicodeHash(&collateXX, values[n%len(values)])
+				}
+			})
+		})
 	}
 }
