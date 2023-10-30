@@ -707,6 +707,9 @@ type (
 		Type          KillType
 		ProcesslistID uint64
 	}
+
+	// IndexType is the type of index in a DDL statement
+	IndexType int8
 )
 
 func (*Union) iStatement()               {}
@@ -1886,13 +1889,18 @@ type IndexDefinition struct {
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Type           string
+	Type           IndexType
 	Name           IdentifierCI
 	ConstraintName IdentifierCI
-	Primary        bool
-	Spatial        bool
-	Fulltext       bool
-	Unique         bool
+}
+
+func (ii *IndexInfo) IsUnique() bool {
+	switch ii.Type {
+	case IndexTypePrimary, IndexTypeUnique:
+		return true
+	default:
+		return false
+	}
 }
 
 // VindexSpec defines a vindex for a CREATE VINDEX or DROP VINDEX statement
