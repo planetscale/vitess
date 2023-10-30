@@ -15,7 +15,6 @@ type Iter struct {
 	N int
 
 	bytes []byte
-	str   string
 	// Because the Elems buffer may contain collation elements that are needed
 	// for look-ahead, we need two positions in the text (bytes or str): one for
 	// the end position in the text for the current iteration and one for the
@@ -35,10 +34,7 @@ func (i *Iter) Reset(p int) {
 
 // Len returns the length of the input text.
 func (i *Iter) Len() int {
-	if i.bytes != nil {
-		return len(i.bytes)
-	}
-	return len(i.str)
+	return len(i.bytes)
 }
 
 // Discard removes the collation elements up to N.
@@ -58,19 +54,11 @@ func (i *Iter) End() int {
 // SetInput resets i to input s.
 func (i *Iter) SetInput(s []byte) {
 	i.bytes = s
-	i.str = ""
-	i.Reset(0)
-}
-
-// SetInputString resets i to input s.
-func (i *Iter) SetInputString(s string) {
-	i.str = s
-	i.bytes = nil
 	i.Reset(0)
 }
 
 func (i *Iter) done() bool {
-	return i.pNext >= len(i.str) && i.pNext >= len(i.bytes)
+	return i.pNext >= len(i.bytes)
 }
 
 func (i *Iter) appendNext() bool {
@@ -78,11 +66,7 @@ func (i *Iter) appendNext() bool {
 		return false
 	}
 	var sz int
-	if i.bytes == nil {
-		i.Elems, sz = i.Weighter.AppendNextString(i.Elems, i.str[i.pNext:])
-	} else {
-		i.Elems, sz = i.Weighter.AppendNext(i.Elems, i.bytes[i.pNext:])
-	}
+	i.Elems, sz = i.Weighter.AppendNext(i.Elems, i.bytes[i.pNext:])
 	if sz == 0 {
 		sz = 1
 	}
