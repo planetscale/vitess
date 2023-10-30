@@ -255,45 +255,6 @@ func (f Form) FirstBoundaryInString(s string) int {
 	return f.firstBoundary(inputString(s), len(s))
 }
 
-func lastBoundary(fd *formInfo, b []byte) int {
-	i := len(b)
-	info, p := lastRuneStart(fd, b)
-	if p == -1 {
-		return -1
-	}
-	if info.size == 0 { // ends with incomplete rune
-		if p == 0 { // starts with incomplete rune
-			return -1
-		}
-		i = p
-		info, p = lastRuneStart(fd, b[:i])
-		if p == -1 { // incomplete UTF-8 encoding or non-starter bytes without a starter
-			return i
-		}
-	}
-	if p+int(info.size) != i { // trailing non-starter bytes: illegal UTF-8
-		return i
-	}
-	if info.BoundaryAfter() {
-		return i
-	}
-	ss := streamSafe(0)
-	v := ss.backwards(info)
-	for i = p; i >= 0 && v != ssStarter; i = p {
-		info, p = lastRuneStart(fd, b[:i])
-		if v = ss.backwards(info); v == ssOverflow {
-			break
-		}
-		if p+int(info.size) != i {
-			if p == -1 { // no boundary found
-				return -1
-			}
-			return i // boundary after an illegal UTF-8 encoding
-		}
-	}
-	return i
-}
-
 // decomposeSegment scans the first segment in src into rb. It inserts 0x034f
 // (Grapheme Joiner) when it encounters a sequence of more than 30 non-starters
 // and returns the number of bytes consumed from src or iShortDst or iShortSrc.
