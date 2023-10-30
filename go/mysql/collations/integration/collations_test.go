@@ -29,7 +29,8 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/text/encoding/unicode/utf32"
+
+	"vitess.io/vitess/go/mysql/collations/vindex/encoding/unicode/utf32"
 
 	"vitess.io/vitess/go/mysql/collations/colldata"
 
