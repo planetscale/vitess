@@ -21,13 +21,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations/vindex/transform"
 )
 
-// All lists a configuration for each IANA-defined UTF-32 variant.
-var All = []encoding.Encoding{
-	UTF32(BigEndian, UseBOM),
-	UTF32(BigEndian, IgnoreBOM),
-	UTF32(LittleEndian, IgnoreBOM),
-}
-
 // ErrMissingBOM means that decoding UTF-32 input with ExpectBOM did not
 // find a starting byte order mark.
 var ErrMissingBOM = errors.New("encoding: missing byte order mark")
@@ -71,12 +64,12 @@ func UTF32(e Endianness, b BOMPolicy) encoding.Encoding {
 // Note that some configurations map to the same MIB identifier.
 var mibValue = map[Endianness][numBOMValues]identifier.MIB{
 	BigEndian: {
-		IgnoreBOM: identifier.UTF32BE,
-		UseBOM:    identifier.UTF32,
+		IgnoreBOM: 1018,
+		UseBOM:    1017,
 	},
 	LittleEndian: {
-		IgnoreBOM: identifier.UTF32LE,
-		UseBOM:    identifier.UTF32,
+		IgnoreBOM: 1019,
+		UseBOM:    1017,
 	},
 	// ExpectBOM is not widely used and has no valid MIB identifier.
 }
