@@ -63,19 +63,3 @@ type Interface interface {
 //
 // See http://www.iana.org/assignments/ianacharset-mib.
 type MIB uint16
-
-// These additional MIB types are not defined in IANA. They are added because
-// they are common and defined within the text repo.
-const (
-	// Unofficial marks the start of encodings not registered by IANA.
-	Unofficial MIB = 10000 + iota
-
-	// Replacement is the WhatWG replacement encoding.
-	Replacement
-
-	// XUserDefined is the code for x-user-defined.
-	XUserDefined
-
-	// MacintoshCyrillic is the code for x-mac-cyrillic.
-	MacintoshCyrillic
-)

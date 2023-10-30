@@ -11,8 +11,6 @@ package norm // import "vitess.io/vitess/go/mysql/collations/vindex/unicode/norm
 
 import (
 	"unicode/utf8"
-
-	"vitess.io/vitess/go/mysql/collations/vindex/transform"
 )
 
 // A Form denotes a canonical representation of Unicode code points.
@@ -40,108 +38,6 @@ const (
 	NFKC
 	NFKD
 )
-
-// Bytes returns f(b). May return b if f(b) = b.
-func (f Form) Bytes(b []byte) []byte {
-	src := inputBytes(b)
-	ft := formTable[f]
-	n, ok := ft.quickSpan(src, 0, len(b), true)
-	if ok {
-		return b
-	}
-	out := make([]byte, n, len(b))
-	copy(out, b[0:n])
-	rb := reorderBuffer{f: *ft, src: src, nsrc: len(b), out: out, flushF: appendFlush}
-	return doAppendInner(&rb, n)
-}
-
-// String returns f(s).
-func (f Form) String(s string) string {
-	src := inputString(s)
-	ft := formTable[f]
-	n, ok := ft.quickSpan(src, 0, len(s), true)
-	if ok {
-		return s
-	}
-	out := make([]byte, n, len(s))
-	copy(out, s[0:n])
-	rb := reorderBuffer{f: *ft, src: src, nsrc: len(s), out: out, flushF: appendFlush}
-	return string(doAppendInner(&rb, n))
-}
-
-// IsNormal returns true if b == f(b).
-func (f Form) IsNormal(b []byte) bool {
-	src := inputBytes(b)
-	ft := formTable[f]
-	bp, ok := ft.quickSpan(src, 0, len(b), true)
-	if ok {
-		return true
-	}
-	rb := reorderBuffer{f: *ft, src: src, nsrc: len(b)}
-	rb.setFlusher(nil, cmpNormalBytes)
-	for bp < len(b) {
-		rb.out = b[bp:]
-		if bp = decomposeSegment(&rb, bp, true); bp < 0 {
-			return false
-		}
-		bp, _ = rb.f.quickSpan(rb.src, bp, len(b), true)
-	}
-	return true
-}
-
-func cmpNormalBytes(rb *reorderBuffer) bool {
-	b := rb.out
-	for i := 0; i < rb.nrune; i++ {
-		info := rb.rune[i]
-		if int(info.size) > len(b) {
-			return false
-		}
-		p := info.pos
-		pe := p + info.size
-		for ; p < pe; p++ {
-			if b[0] != rb.byte[p] {
-				return false
-			}
-			b = b[1:]
-		}
-	}
-	return true
-}
-
-// IsNormalString returns true if s == f(s).
-func (f Form) IsNormalString(s string) bool {
-	src := inputString(s)
-	ft := formTable[f]
-	bp, ok := ft.quickSpan(src, 0, len(s), true)
-	if ok {
-		return true
-	}
-	rb := reorderBuffer{f: *ft, src: src, nsrc: len(s)}
-	rb.setFlusher(nil, func(rb *reorderBuffer) bool {
-		for i := 0; i < rb.nrune; i++ {
-			info := rb.rune[i]
-			if bp+int(info.size) > len(s) {
-				return false
-			}
-			p := info.pos
-			pe := p + info.size
-			for ; p < pe; p++ {
-				if s[bp] != rb.byte[p] {
-					return false
-				}
-				bp++
-			}
-		}
-		return true
-	})
-	for bp < len(s) {
-		if bp = decomposeSegment(&rb, bp, true); bp < 0 {
-			return false
-		}
-		bp, _ = rb.f.quickSpan(rb.src, bp, len(s), true)
-	}
-	return true
-}
 
 // patchTail fixes a case where a rune may be incorrectly normalized
 // if it is followed by illegal continuation bytes. It returns the
@@ -262,41 +158,6 @@ func (f Form) AppendString(out []byte, src string) []byte {
 	return f.doAppend(out, inputString(src), len(src))
 }
 
-// QuickSpan returns a boundary n such that b[0:n] == f(b[0:n]).
-// It is not guaranteed to return the largest such n.
-func (f Form) QuickSpan(b []byte) int {
-	n, _ := formTable[f].quickSpan(inputBytes(b), 0, len(b), true)
-	return n
-}
-
-// Span implements transform.SpanningTransformer. It returns a boundary n such
-// that b[0:n] == f(b[0:n]). It is not guaranteed to return the largest such n.
-func (f Form) Span(b []byte, atEOF bool) (n int, err error) {
-	n, ok := formTable[f].quickSpan(inputBytes(b), 0, len(b), atEOF)
-	if n < len(b) {
-		if !ok {
-			err = transform.ErrEndOfSpan
-		} else {
-			err = transform.ErrShortSrc
-		}
-	}
-	return n, err
-}
-
-// SpanString returns a boundary n such that s[0:n] == f(s[0:n]).
-// It is not guaranteed to return the largest such n.
-func (f Form) SpanString(s string, atEOF bool) (n int, err error) {
-	n, ok := formTable[f].quickSpan(inputString(s), 0, len(s), atEOF)
-	if n < len(s) {
-		if !ok {
-			err = transform.ErrEndOfSpan
-		} else {
-			err = transform.ErrShortSrc
-		}
-	}
-	return n, err
-}
-
 // quickSpan returns a boundary n such that src[0:n] == f(src[0:n]) and
 // whether any non-normalized parts were found. If atEOF is false, n will
 // not point past the last segment if this segment might be become
@@ -354,13 +215,6 @@ func (f *formInfo) quickSpan(src input, i, end int, atEOF bool) (n int, ok bool)
 	return lastSegStart, false
 }
 
-// QuickSpanString returns a boundary n such that s[0:n] == f(s[0:n]).
-// It is not guaranteed to return the largest such n.
-func (f Form) QuickSpanString(s string) int {
-	n, _ := formTable[f].quickSpan(inputString(s), 0, len(s), true)
-	return n
-}
-
 // FirstBoundary returns the position i of the first boundary in b
 // or -1 if b contains no boundary.
 func (f Form) FirstBoundary(b []byte) int {
@@ -399,64 +253,6 @@ func (f Form) firstBoundary(src input, nsrc int) int {
 // or -1 if s contains no boundary.
 func (f Form) FirstBoundaryInString(s string) int {
 	return f.firstBoundary(inputString(s), len(s))
-}
-
-// NextBoundary reports the index of the boundary between the first and next
-// segment in b or -1 if atEOF is false and there are not enough bytes to
-// determine this boundary.
-func (f Form) NextBoundary(b []byte, atEOF bool) int {
-	return f.nextBoundary(inputBytes(b), len(b), atEOF)
-}
-
-// NextBoundaryInString reports the index of the boundary between the first and
-// next segment in b or -1 if atEOF is false and there are not enough bytes to
-// determine this boundary.
-func (f Form) NextBoundaryInString(s string, atEOF bool) int {
-	return f.nextBoundary(inputString(s), len(s), atEOF)
-}
-
-func (f Form) nextBoundary(src input, nsrc int, atEOF bool) int {
-	if nsrc == 0 {
-		if atEOF {
-			return 0
-		}
-		return -1
-	}
-	fd := formTable[f]
-	info := fd.info(src, 0)
-	if info.size == 0 {
-		if atEOF {
-			return 1
-		}
-		return -1
-	}
-	ss := streamSafe(0)
-	ss.first(info)
-
-	for i := int(info.size); i < nsrc; i += int(info.size) {
-		info = fd.info(src, i)
-		if info.size == 0 {
-			if atEOF {
-				return i
-			}
-			return -1
-		}
-		// TODO: Using streamSafe to determine the boundary isn't the same as
-		// using BoundaryBefore. Determine which should be used.
-		if s := ss.next(info); s != ssSuccess {
-			return i
-		}
-	}
-	if !atEOF && !info.BoundaryAfter() && !ss.isMax() {
-		return -1
-	}
-	return nsrc
-}
-
-// LastBoundary returns the position i of the last boundary in b
-// or -1 if b contains no boundary.
-func (f Form) LastBoundary(b []byte) int {
-	return lastBoundary(formTable[f], b)
 }
 
 func lastBoundary(fd *formInfo, b []byte) int {
