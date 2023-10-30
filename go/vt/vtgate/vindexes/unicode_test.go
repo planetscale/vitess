@@ -21,15 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/text/collate"
-	"golang.org/x/text/language"
+	"vitess.io/vitess/go/mysql/collations/vindex/collate"
 )
-
-func TestX(t *testing.T) {
-	col := collate.New(language.English, collate.Loose)
-	buf := new(collate.Buffer)
-	_ = col.Key(buf, []byte("hello world"))
-}
 
 func TestNormalization(t *testing.T) {
 	tcases := []struct {
@@ -65,9 +58,9 @@ func TestNormalization(t *testing.T) {
 		in:  "T",
 		out: "\x18\x16",
 	}}
-	collator := newPooledCollator().(*pooledCollator)
+	col := collate.New()
 	for _, tcase := range tcases {
-		norm, err := normalize(collator.col, collator.buf, []byte(tcase.in))
+		norm, err := normalize(col, []byte(tcase.in))
 		if err != nil {
 			t.Errorf("normalize(%#v) error: %v", tcase.in, err)
 		}
@@ -86,7 +79,7 @@ func TestInvalidUnicodeNormalization(t *testing.T) {
 		"\x8a[\xdf,\u007fĄE\x92\xd2W+\xcd\x06h\xd2",
 	}
 	wantErr := "invalid UTF-8"
-	collator := newPooledCollator().(*pooledCollator)
+	collator := collate.New()
 
 	for _, in := range inputs {
 		// We've observed that infinite looping is a possible failure mode for the
@@ -94,7 +87,7 @@ func TestInvalidUnicodeNormalization(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			_, err := normalize(collator.col, collator.buf, []byte(in))
+			_, err := normalize(collator, []byte(in))
 			if err == nil {
 				t.Errorf("normalize(%q) error = nil, expected error", in)
 			}
@@ -118,8 +111,8 @@ func BenchmarkNormalizeSafe(b *testing.B) {
 	input := []byte("testing")
 
 	for i := 0; i < b.N; i++ {
-		collator := newPooledCollator().(*pooledCollator)
-		normalize(collator.col, collator.buf, input)
+		collator := collate.New()
+		normalize(collator, input)
 	}
 }
 
@@ -127,10 +120,10 @@ func BenchmarkNormalizeSafe(b *testing.B) {
 // are shared between iterations, assuming no concurrency.
 func BenchmarkNormalizeShared(b *testing.B) {
 	input := []byte("testing")
-	collator := newPooledCollator().(*pooledCollator)
+	collator := collate.New()
 
 	for i := 0; i < b.N; i++ {
-		normalize(collator.col, collator.buf, input)
+		normalize(collator, input)
 	}
 }
 
@@ -140,8 +133,8 @@ func BenchmarkNormalizePooled(b *testing.B) {
 	input := []byte("testing")
 
 	for i := 0; i < b.N; i++ {
-		collator := collatorPool.Get().(*pooledCollator)
-		normalize(collator.col, collator.buf, input)
+		collator := collate.New()
+		normalize(collator, input)
 		collatorPool.Put(collator)
 	}
 }

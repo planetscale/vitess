@@ -20,12 +20,10 @@ type Collator struct {
 	iter colltab.Iter
 }
 
-const VIndexLocale = 21
-
 // New returns a new Collator initialized for the given locale.
 func New() *Collator {
 	c := &Collator{}
-	c.iter.Weighter = getTable(locales[VIndexLocale])
+	c.iter.Weighter = getTable(tableIndex{0x15, 0x0})
 	return c
 }
 
