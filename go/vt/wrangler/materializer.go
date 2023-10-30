@@ -1233,7 +1233,29 @@ func stripTableConstraints(ddl string) (string, error) {
 func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.ShardInfo) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, "{{.dbname}}")
 
+	sourceShards := make([]*topo.ShardInfo, 0, len(mz.sourceShards))
 	for _, sourceShard := range mz.sourceShards {
+		// Don't create streams from sources which won't contain data for the target shard.
+		// We only do it for MoveTables for now since this doesn't hold for materialize flows
+		// where the target's sharding key might differ from that of the source
+		if mz.ms.MaterializationIntent == vtctldatapb.MaterializationIntent_MOVETABLES &&
+			!key.KeyRangeIntersect(sourceShard.KeyRange, targetShard.KeyRange) {
+			continue
+		}
+		sourceShards = append(sourceShards, sourceShard)
+	}
+	// keyRangesEqual allows us to optimize the stream for the cases
+	// where while the target keyspace may be sharded, the target shard has
+	// a single source shard to stream data from and the target and source
+	// shard have equal key ranges. This can be done, for example, when doing
+	// shard by shard migrations -- migrating a single shard at a time between
+	// sharded source and sharded target keyspaces.
+	keyRangesEqual := false
+	if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, targetShard.KeyRange) {
+		keyRangesEqual = true
+	}
+
+	for _, sourceShard := range sourceShards {
 		// Don't create streams from sources which won't contain data for the target shard.
 		// We only do it for MoveTables for now since this doesn't hold for materialize flows
 		// where the target's sharding key might differ from that of the source
@@ -1271,7 +1293,8 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 				return "", fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
 			}
 			filter := ts.SourceExpression
-			if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
+
+			if !keyRangesEqual && mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
 				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 				if err != nil {
 					return "", err
