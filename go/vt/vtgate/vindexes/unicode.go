@@ -60,5 +60,24 @@ var collateMD5 = sync.Pool{New: func() any {
 }}
 
 var collateXX = sync.Pool{New: func() any {
-	return collate.New(xxhash.New())
+	return collate.New(XXHashBigEndian{Digest: xxhash.New()})
 }}
+
+type XXHashBigEndian struct {
+	*xxhash.Digest
+}
+
+func (d XXHashBigEndian) Sum(b []byte) []byte {
+	s := d.Sum64()
+	return append(
+		b,
+		byte(s),
+		byte(s>>8),
+		byte(s>>16),
+		byte(s>>24),
+		byte(s>>32),
+		byte(s>>40),
+		byte(s>>48),
+		byte(s>>56),
+	)
+}
