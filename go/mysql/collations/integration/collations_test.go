@@ -20,17 +20,17 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/mysql/collations/vindex/encoding/unicode/utf32"
 
 	"vitess.io/vitess/go/mysql/collations/colldata"
 
@@ -96,7 +96,32 @@ type uca900CollationTest struct {
 	collation string
 }
 
-var defaultUtf32 = utf32.UTF32(utf32.BigEndian, utf32.IgnoreBOM)
+func decodeUtf32(dst, src []byte) (nDst, nSrc int, err error) {
+	if len(src) == 0 {
+		return 0, 0, nil
+	}
+
+	var r rune
+	var dSize, sSize int
+	for nSrc < len(src) {
+		if nSrc+3 < len(src) {
+			x := uint32(src[nSrc+0])<<24 | uint32(src[nSrc+1])<<16 |
+				uint32(src[nSrc+2])<<8 | uint32(src[nSrc+3])
+			r, sSize = rune(x), 4
+			if dSize = utf8.RuneLen(r); dSize < 0 {
+				r, dSize = utf8.RuneError, 3
+			}
+		} else {
+			return nDst, nSrc, errors.New("short src")
+		}
+		if nDst+dSize > len(dst) {
+			return nDst, nSrc, errors.New("short dst")
+		}
+		nDst += utf8.EncodeRune(dst[nDst:], r)
+		nSrc += sSize
+	}
+	return nDst, nSrc, err
+}
 
 func parseUtf32cp(b []byte) []byte {
 	var hexbuf [16]byte
@@ -104,8 +129,12 @@ func parseUtf32cp(b []byte) []byte {
 	if err != nil {
 		return nil
 	}
-	utf8, _ := defaultUtf32.NewDecoder().Bytes(hexbuf[:c])
-	return utf8
+	var dst []byte
+	_, _, err = decodeUtf32(dst, hexbuf[:c])
+	if err != nil {
+		panic("failed to decode utf32")
+	}
+	return dst
 }
 
 func parseWeightString(b []byte) []byte {
