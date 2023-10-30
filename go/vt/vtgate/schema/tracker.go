@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -309,15 +310,18 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 	return true
 }
 
+const InvisibleColumn = "INVISIBLE"
+
 func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 	for _, row := range res.Rows {
 		tbl := row[0].ToString()
 		colName := row[1].ToString()
 		colType := row[2].ToString()
 		collation := row[3].ToString()
+		invisible := strings.Contains(row[4].ToString(), InvisibleColumn)
 
 		cType := sqlparser.ColumnType{Type: colType}
-		col := vindexes.Column{Name: sqlparser.NewIdentifierCI(colName), Type: cType.SQLType(), CollationName: collation}
+		col := vindexes.Column{Name: sqlparser.NewIdentifierCI(colName), Type: cType.SQLType(), CollationName: collation, Invisible: invisible}
 		cols := t.tables.get(keyspace, tbl)
 
 		t.tables.set(keyspace, tbl, append(cols, col))

@@ -84,8 +84,8 @@ func TestTracking(t *testing.T) {
 		Type:     target.TabletType,
 	}
 	fields := sqltypes.MakeTestFields(
-		"table_name|col_name|col_type|collation_name",
-		"varchar|varchar|varchar|varchar",
+		"table_name|col_name|col_type|collation_name|extra",
+		"varchar|varchar|varchar|varchar|varchar",
 	)
 
 	type delta struct {
@@ -96,17 +96,16 @@ func TestTracking(t *testing.T) {
 		d0 = delta{
 			result: sqltypes.MakeTestResult(
 				fields,
-				"prior|id|int|",
+				"prior|id|int||",
 			),
 			updTbl: []string{"prior"},
 		}
-
 		d1 = delta{
 			result: sqltypes.MakeTestResult(
 				fields,
-				"t1|id|int|",
-				"t1|name|varchar|utf8_bin",
-				"t2|id|varchar|utf8_bin",
+				"t1|id|int||",
+				"t1|name|varchar|utf8_bin|",
+				"t2|id|varchar|utf8_bin|",
 			),
 			updTbl: []string{"t1", "t2"},
 		}
@@ -114,9 +113,9 @@ func TestTracking(t *testing.T) {
 		d2 = delta{
 			result: sqltypes.MakeTestResult(
 				fields,
-				"t2|id|varchar|utf8_bin",
-				"t2|name|varchar|utf8_bin",
-				"t3|id|datetime|",
+				"t2|id|varchar|utf8_bin|",
+				"t2|name|varchar|utf8_bin|",
+				"t3|id|datetime||",
 			),
 			updTbl: []string{"prior", "t1", "t2", "t3"},
 		}
@@ -124,7 +123,7 @@ func TestTracking(t *testing.T) {
 		d3 = delta{
 			result: sqltypes.MakeTestResult(
 				fields,
-				"t4|name|varchar|utf8_bin",
+				"t4|name|varchar|utf8_bin|",
 			),
 			updTbl: []string{"t4"},
 		}

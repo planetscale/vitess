@@ -160,6 +160,9 @@ type Column struct {
 	Name          sqlparser.IdentifierCI `json:"name"`
 	Type          querypb.Type           `json:"type"`
 	CollationName string                 `json:"collation_name"`
+
+	// Invisible marks this as a column that will not be automatically included in `*` projections
+	Invisible bool `json:"invisible"`
 }
 
 // MarshalJSON returns a JSON representation of Column.
