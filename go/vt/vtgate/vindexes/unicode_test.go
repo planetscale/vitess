@@ -20,7 +20,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 )
+
+func TestX(t *testing.T) {
+	col := collate.New(language.English, collate.Loose)
+	buf := new(collate.Buffer)
+	_ = col.Key(buf, []byte("hello world"))
+}
 
 func TestNormalization(t *testing.T) {
 	tcases := []struct {
