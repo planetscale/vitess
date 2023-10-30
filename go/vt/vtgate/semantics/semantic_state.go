@@ -60,8 +60,9 @@ type (
 
 	// ColumnInfo contains information about columns
 	ColumnInfo struct {
-		Name string
-		Type Type
+		Name      string
+		Type      Type
+		Invisible bool
 	}
 
 	// ExprDependencies stores the tables that an expression depends on as a map

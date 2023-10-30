@@ -24,5 +24,6 @@ CREATE TABLE IF NOT EXISTS schemacopy
     `collation_name`     varchar(32) DEFAULT NULL,
     `data_type`          varchar(64)     NOT NULL,
     `column_key`         varchar(3)      NOT NULL,
+    `extra`              varchar(1024)   NULL,
     PRIMARY KEY (`table_schema`, `table_name`, `ordinal_position`)
 ) ENGINE = InnoDB

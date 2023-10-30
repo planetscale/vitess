@@ -423,6 +423,9 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 		if setCollation {
 			for _, table := range ks.Tables {
 				for i, col := range table.Columns {
+					if table.Name.String() == "samecolvin" && col.Name.EqualString("secret") {
+						table.Columns[i].Invisible = true
+					}
 					if sqltypes.IsText(col.Type) {
 						table.Columns[i].CollationName = "latin1_swedish_ci"
 					}

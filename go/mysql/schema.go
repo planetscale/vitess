@@ -76,12 +76,12 @@ HAVING COUNT(*) = 1
 
 	// InsertIntoSchemaCopy query copies over the schema information from information_schema.columns table.
 	InsertIntoSchemaCopy = `insert %s.schemacopy
-select table_schema, table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+select table_schema, table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key, extra
 from information_schema.columns
 where table_schema = database()`
 
 	// fetchColumns are the columns we fetch
-	fetchColumns = "table_name, column_name, data_type, collation_name"
+	fetchColumns = "table_name, column_name, data_type, collation_name, extra"
 
 	// FetchUpdatedTables queries fetches all information about updated tables
 	FetchUpdatedTables = `select  ` + fetchColumns + `
