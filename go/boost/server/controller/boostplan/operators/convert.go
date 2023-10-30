@@ -99,7 +99,7 @@ func (conv *Converter) makeTableNode(keyspace, name string, spec *sqlparser.Tabl
 	var primaryKey *sqlparser.IndexDefinition
 
 	for _, idx := range spec.Indexes {
-		if idx.Info.Primary {
+		if idx.Info.Type == sqlparser.IndexTypePrimary {
 			primaryKey = idx
 			break
 		}
@@ -120,7 +120,7 @@ func (conv *Converter) makeTableNode(keyspace, name string, spec *sqlparser.Tabl
 						Length: col.Type.Length,
 					}},
 					Info: &sqlparser.IndexInfo{
-						Primary: true,
+						Type: sqlparser.IndexTypePrimary,
 					},
 				}
 			}
@@ -133,7 +133,7 @@ func (conv *Converter) makeTableNode(keyspace, name string, spec *sqlparser.Tabl
 	// branch under normal circumstances.
 	if primaryKey == nil {
 		for _, idx := range spec.Indexes {
-			if idx.Info.Unique && !indexContainsNullableColumn(idx, spec) {
+			if idx.Info.IsUnique() && !indexContainsNullableColumn(idx, spec) {
 				primaryKey = idx
 				break
 			}

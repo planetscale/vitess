@@ -1130,14 +1130,30 @@ func (ii *IndexInfo) FormatFast(buf *TrackedBuffer) {
 		ii.ConstraintName.FormatFast(buf)
 		buf.WriteByte(' ')
 	}
-	if ii.Primary {
-		buf.WriteString(ii.Type)
-	} else {
-		buf.WriteString(ii.Type)
-		if !ii.Name.IsEmpty() {
-			buf.WriteByte(' ')
-			ii.Name.FormatFast(buf)
-		}
+	switch ii.Type {
+	case IndexTypePrimary:
+		buf.WriteString(keywordStrings[PRIMARY])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[KEY])
+		return
+	case IndexTypeDefault:
+		buf.WriteString(keywordStrings[INDEX])
+	case IndexTypeUnique:
+		buf.WriteString(keywordStrings[UNIQUE])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[INDEX])
+	case IndexTypeSpatial:
+		buf.WriteString(keywordStrings[SPATIAL])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[INDEX])
+	case IndexTypeFullText:
+		buf.WriteString(keywordStrings[FULLTEXT])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[INDEX])
+	}
+	if !ii.Name.IsEmpty() {
+		buf.WriteByte(' ')
+		ii.Name.FormatFast(buf)
 	}
 }
 
