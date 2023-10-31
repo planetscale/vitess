@@ -349,14 +349,11 @@ func (expr *ProjectedExpr) Type(g *graph.Graph[*Node], src dataflow.IndexPair) (
 		env.Row = append(env.Row, sqltypes.MakeTrusted(tt.T, nil))
 	}
 
-	tt, _, err := env.TypeOf(expr.EvalExpr, nil)
+	tt, err := env.TypeOf(expr.EvalExpr)
 	if err != nil {
 		return sql.Type{}, err
 	}
-	// FIXME: there are some expressions for which the evalengine can resolve
-	// a non-default collation (e.g. an explicitly COLLATE('str'), but we have
-	// no way of accessing this data right now
-	return sql.Type{T: tt, Collation: defaultCollationForType(tt)}, nil
+	return sql.Type{T: tt.Type, Collation: tt.Coll}, nil
 }
 
 func (expr *ProjectedExpr) describe() string {

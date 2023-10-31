@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -176,7 +177,7 @@ func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
 	}{
 		Type: "UserDefinedVariable",
 		Name: u.Name,
-		Expr: evalengine.FormatExpr(u.Expr),
+		Expr: sqlparser.String(u.Expr),
 	})
 
 }
@@ -424,7 +425,7 @@ func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
 	}{
 		Type: "SysVarAware",
 		Name: svss.Name,
-		Expr: evalengine.FormatExpr(svss.Expr),
+		Expr: sqlparser.String(svss.Expr),
 	})
 }
 

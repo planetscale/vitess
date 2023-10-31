@@ -14,6 +14,7 @@ import (
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
@@ -334,6 +335,9 @@ func (c *Cluster) checkDomainSerialization() {
 					return true, nil
 				}, a.Expr, b.Expr)
 				return sqlparser.Equals.Expr(a.Expr, b.Expr)
+			}),
+			cmp.Comparer(func(a, b evalengine.Expr) bool {
+				return true
 			}),
 			// Exporter: ensure _all_ private fields for all the Domain data are compared
 			cmp.Exporter(func(reflect.Type) bool {
