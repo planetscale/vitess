@@ -28,6 +28,8 @@ import (
 	"github.com/dave/jennifer/jen"
 	"golang.org/x/tools/go/packages"
 
+	"vitess.io/vitess/go/textutil"
+
 	"vitess.io/vitess/go/tools/codegen"
 )
 
@@ -304,7 +306,7 @@ func printableTypeName(t types.Type) string {
 	case *types.Named:
 		return t.Obj().Name()
 	case *types.Basic:
-		return strings.Title(t.Name()) // nolint
+		return textutil.Title(t.Name())
 	case *types.Interface:
 		return t.String()
 	default:
