@@ -45,6 +45,10 @@ func NewMySQLCompare(t *testing.T, vtParams, mysqlParams mysql.ConnParams) (MySQ
 	if err != nil {
 		return MySQLCompare{}, err
 	}
+	_, err = mysqlConn.ExecuteFetch("set global general_log = 1", 1, false)
+	if err != nil {
+		return MySQLCompare{}, err
+	}
 
 	return MySQLCompare{
 		t:         t,
