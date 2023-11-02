@@ -153,6 +153,10 @@ type ddlWrapper struct {
 	defaultKeyspace string
 }
 
+func (d *ddlWrapper) KeyspaceError(keyspace string) error {
+	return nil
+}
+
 func (d *ddlWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error) {
 	return vschemapb.Keyspace_unspecified, nil
 }
