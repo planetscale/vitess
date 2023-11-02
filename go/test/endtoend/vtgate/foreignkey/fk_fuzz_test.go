@@ -530,6 +530,7 @@ func (fz *fuzzer) generateParameterizedDeleteQuery() (query string, params []any
 	Self referenced foreign key from col2 to col in fk_t20
 */
 func TestFkFuzzTest(t *testing.T) {
+	clusterInstance.EnableGeneralLog()
 	// Wait for schema-tracking to be complete.
 	waitForSchemaTrackingForFkTables(t)
 	// Remove all the foreign key constraints for all the replicas.

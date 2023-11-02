@@ -142,7 +142,7 @@ func TestMain(m *testing.M) {
 		}
 		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
 
-		connParams, closer, err := utils.NewMySQL(clusterInstance, shardedKs, shardedSchemaSQL)
+		connParams, closer, err := utils.NewMySQL(clusterInstance, shardedKs, unshardedSchemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1
