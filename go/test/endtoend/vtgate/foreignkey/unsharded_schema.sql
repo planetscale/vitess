@@ -72,7 +72,7 @@ create table fk_t3
     id bigint,
     col varchar(10),
     primary key (id),
-    index(col),
+    unique index(col),
     foreign key (col) references fk_t2(col) on delete set null on update set null
 ) Engine = InnoDB;
 
@@ -134,7 +134,7 @@ create table fk_t10
     id bigint,
     col varchar(10),
     primary key (id),
-    index(col)
+    unique index(col)
 ) Engine = InnoDB;
 
 create table fk_t11
@@ -193,7 +193,7 @@ create table fk_t15
     id bigint,
     col varchar(10),
     primary key (id),
-    index(col)
+    unique index(col)
 ) Engine = InnoDB;
 
 create table fk_t16
@@ -201,7 +201,7 @@ create table fk_t16
     id bigint,
     col varchar(10),
     primary key (id),
-    index(col),
+    unique index(col),
     foreign key (col) references fk_t15(col) on delete cascade on update cascade
 ) Engine = InnoDB;
 
@@ -279,16 +279,17 @@ create table fk_multicol_t1
     colb varchar(10),
     cola varchar(10),
     primary key (id),
-    index(cola, colb)
+    index(cola, colb),
+    unique index(colb)
 ) Engine = InnoDB;
 
 create table fk_multicol_t2
 (
     id bigint,
-    colb varchar(10),
+    colb varchar(10) default 'xyz',
     cola varchar(10),
     primary key (id),
-    index(cola, colb),
+    unique index(cola, colb),
     foreign key (cola, colb) references fk_multicol_t1(cola, colb) on delete restrict on update restrict
 ) Engine = InnoDB;
 
@@ -306,9 +307,10 @@ create table fk_multicol_t4
 (
     id bigint,
     colb varchar(10),
-    cola varchar(10),
+    cola varchar(10) default 'abcd',
     primary key (id),
     index(cola, colb),
+    unique index(cola),
     foreign key (cola, colb) references fk_multicol_t3(cola, colb) on delete set null on update set null
 ) Engine = InnoDB;
 
