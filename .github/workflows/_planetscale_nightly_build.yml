@@ -28,7 +28,7 @@ on:
 jobs:
   id:
     name: user-supplied-workflow-id
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest, self-hosted]
     steps:
       - name: ${{github.event.inputs.user_supplied_id}}
         run: |
