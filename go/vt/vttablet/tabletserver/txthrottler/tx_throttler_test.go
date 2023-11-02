@@ -19,7 +19,6 @@ package txthrottler
 // Commands to generate the mocks for this test.
 //go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler -mock_names "HealthCheck=MockHealthCheck" vitess.io/vitess/go/vt/discovery HealthCheck
 //go:generate mockgen -destination mock_throttler_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler ThrottlerInterface
-//go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 
 import (
 	"context"
@@ -73,16 +72,6 @@ func TestEnabledThrottler(t *testing.T) {
 	hcCall2.After(hcCall1)
 	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
 		return mockHealthCheck
-	}
-
-	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
-		assert.Equal(t, ts, topoServer)
-		assert.Contains(t, []string{"cell1", "cell2"}, cell)
-		assert.Equal(t, "keyspace", keyspace)
-		assert.Equal(t, "shard", shard)
-		result := NewMockTopologyWatcherInterface(mockCtrl)
-		result.EXPECT().Stop()
-		return result
 	}
 
 	mockThrottler := NewMockThrottlerInterface(mockCtrl)
