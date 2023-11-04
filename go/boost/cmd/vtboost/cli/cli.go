@@ -59,7 +59,6 @@ var (
 		RunE: run,
 		PostRun: func(cmd *cobra.Command, args []string) {
 			ts.Close()
-			servenv.Close()
 		},
 	}
 )
