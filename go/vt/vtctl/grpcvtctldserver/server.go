@@ -1951,6 +1951,9 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	defer panicHandler(&err)
 
 	span.Annotate("cells", strings.Join(req.Cells, ","))
+	if req.Keyspace != "" {
+		span.Annotate("keyspace", req.Keyspace)
+	}
 	if req.TabletType != topodatapb.TabletType_UNKNOWN {
 		span.Annotate("tablet_type", topodatapb.TabletType_name[int32(req.TabletType)])
 	}
@@ -1984,7 +1987,6 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			err = fmt.Errorf("GetTabletMap(%v) failed: %w", req.TabletAliases, err)
 		}
 	case req.Keyspace != "" && req.Shard != "":
-		span.Annotate("keyspace", req.Keyspace)
 		span.Annotate("shard", req.Shard)
 
 		tabletMap, err = s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
@@ -2022,6 +2024,9 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
 		for _, ti := range tabletMap {
+			if req.TabletType != 0 && ti.Type != req.TabletType {
+				continue
+			}
 			adjustTypeForStalePrimary(ti, truePrimaryTimestamp)
 			tablets = append(tablets, ti.Tablet)
 		}
