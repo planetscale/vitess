@@ -155,6 +155,7 @@ func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error
 
 	topo.proc = exec.Command(
 		topo.Binary,
+		"--zk.myid", "1",
 		"--log_dir", topo.LogDirectory,
 		"--zk.cfg", fmt.Sprintf("1@%v:%s", host, topo.ZKPorts),
 		"init",
