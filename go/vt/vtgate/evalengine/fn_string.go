@@ -647,7 +647,7 @@ func (call builtinLeftRight) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck2(str, l)
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(sqltypes.VarChar, c.cfg.Collation)
 	switch {
 	case str.isTextual():
 		col = str.Col
@@ -758,7 +758,7 @@ func (call builtinPad) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck3(str, l, pad)
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(sqltypes.VarChar, c.cfg.Collation)
 	switch {
 	case str.isTextual():
 		col = str.Col
@@ -957,7 +957,7 @@ func (call builtinTrim) compile(c *compiler) (ctype, error) {
 
 	skip1 := c.compileNullCheck1(str)
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(sqltypes.VarChar, c.cfg.Collation)
 	switch {
 	case str.isTextual():
 		col = str.Col
@@ -1066,7 +1066,7 @@ func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
 	// If we only had numbers, we instead fall back to the default
 	// collation instead of using the numeric collation.
 	if tc.Coercibility == collations.CoerceNumeric {
-		tc = defaultCoercionCollation(call.collate)
+		tc = typedCoercionCollation(tt, call.collate)
 	}
 
 	var buf []byte
@@ -1129,7 +1129,7 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 	// If we only had numbers, we instead fall back to the default
 	// collation instead of using the numeric collation.
 	if tc.Coercibility == collations.CoerceNumeric {
-		tc = defaultCoercionCollation(call.collate)
+		tc = typedCoercionCollation(tt, call.collate)
 	}
 
 	for i, arg := range args {
@@ -1191,7 +1191,7 @@ func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
 	// If we only had numbers, we instead fall back to the default
 	// collation instead of using the numeric collation.
 	if tc.Coercibility == collations.CoerceNumeric {
-		tc = defaultCoercionCollation(call.collate)
+		tc = typedCoercionCollation(tt, call.collate)
 	}
 
 	var sep []byte
@@ -1272,7 +1272,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 	// If we only had numbers, we instead fall back to the default
 	// collation instead of using the numeric collation.
 	if tc.Coercibility == collations.CoerceNumeric {
-		tc = defaultCoercionCollation(call.collate)
+		tc = typedCoercionCollation(tt, call.collate)
 	}
 
 	for i, arg := range args {

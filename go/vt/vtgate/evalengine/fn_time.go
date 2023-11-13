@@ -295,7 +295,7 @@ func (b *builtinDateFormat) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newEvalText(d, defaultCoercionCollation(b.collate)), nil
+	return newEvalText(d, typedCoercionCollation(sqltypes.VarChar, b.collate)), nil
 }
 
 func (b *builtinDateFormat) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -329,7 +329,7 @@ func (call *builtinDateFormat) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
 	}
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(sqltypes.VarChar, c.cfg.Collation)
 	c.asm.Fn_DATE_FORMAT(col)
 	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
@@ -668,7 +668,7 @@ func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newEvalText(d, defaultCoercionCollation(b.collate)), nil
+	return newEvalText(d, typedCoercionCollation(sqltypes.VarChar, b.collate)), nil
 }
 
 func (b *builtinFromUnixtime) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -729,7 +729,7 @@ func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xb(1, sqltypes.VarBinary, 0, false)
 	}
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(sqltypes.VarChar, c.cfg.Collation)
 	c.asm.Fn_DATE_FORMAT(col)
 	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
@@ -1224,7 +1224,7 @@ func (b *builtinMonthName) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	return newEvalText(hack.StringBytes(time.Month(d.dt.Date.Month()).String()), defaultCoercionCollation(b.collate)), nil
+	return newEvalText(hack.StringBytes(time.Month(d.dt.Date.Month()).String()), typedCoercionCollation(sqltypes.VarChar, b.collate)), nil
 }
 
 func (b *builtinMonthName) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -1244,7 +1244,7 @@ func (call *builtinMonthName) compile(c *compiler) (ctype, error) {
 	default:
 		c.asm.Convert_xD(1)
 	}
-	col := defaultCoercionCollation(call.collate)
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	c.asm.Fn_MONTHNAME(col)
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
@@ -1722,11 +1722,11 @@ func (call *builtinDateMath) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	if tmp, ok := date.(*evalTemporal); ok {
-		return tmp.addInterval(interval, collations.TypedCollation{}, env.now), nil
+		return tmp.addInterval(interval, collations.Unknown, env.now), nil
 	}
 
 	if tmp := evalToTemporal(date); tmp != nil {
-		return tmp.addInterval(interval, defaultCoercionCollation(call.collate), env.now), nil
+		return tmp.addInterval(interval, call.collate, env.now), nil
 	}
 
 	return nil, nil
@@ -1775,8 +1775,8 @@ func (call *builtinDateMath) compile(c *compiler) (ctype, error) {
 		c.asm.Fn_DATEADD_D(call.unit, call.sub)
 	default:
 		ret.Type = sqltypes.VarChar
-		ret.Col = defaultCoercionCollation(c.cfg.Collation)
-		c.asm.Fn_DATEADD_s(call.unit, call.sub, ret.Col)
+		ret.Col = typedCoercionCollation(sqltypes.VarChar, c.cfg.Collation)
+		c.asm.Fn_DATEADD_s(call.unit, call.sub, ret.Col.Collation)
 	}
 	return ret, nil
 }

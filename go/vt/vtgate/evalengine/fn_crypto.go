@@ -49,7 +49,7 @@ func (call *builtinMD5) eval(env *ExpressionEnv) (eval, error) {
 	sum := md5.Sum(b.bytes)
 	buf := make([]byte, hex.EncodedLen(len(sum)))
 	hex.Encode(buf, sum[:])
-	return newEvalText(buf, defaultCoercionCollation(call.collate)), nil
+	return newEvalText(buf, typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinMD5) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -71,7 +71,7 @@ func (call *builtinMD5) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
 	}
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	c.asm.Fn_MD5(col)
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
@@ -97,7 +97,7 @@ func (call *builtinSHA1) eval(env *ExpressionEnv) (eval, error) {
 	sum := sha1.Sum(b.bytes)
 	buf := make([]byte, hex.EncodedLen(len(sum)))
 	hex.Encode(buf, sum[:])
-	return newEvalText(buf, defaultCoercionCollation(call.collate)), nil
+	return newEvalText(buf, typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinSHA1) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -118,7 +118,7 @@ func (call *builtinSHA1) compile(c *compiler) (ctype, error) {
 	default:
 		c.asm.Convert_xb(1, sqltypes.Binary, 0, false)
 	}
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	c.asm.Fn_SHA1(col)
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag}, nil
@@ -164,7 +164,7 @@ func (call *builtinSHA2) eval(env *ExpressionEnv) (eval, error) {
 
 	buf := make([]byte, hex.EncodedLen(len(sum)))
 	hex.Encode(buf, sum[:])
-	return newEvalText(buf, defaultCoercionCollation(call.collate)), nil
+	return newEvalText(buf, typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinSHA2) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -202,7 +202,7 @@ func (call *builtinSHA2) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xi(1)
 	}
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	c.asm.Fn_SHA2(col)
 	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: str.Flag | flagNullable}, nil
