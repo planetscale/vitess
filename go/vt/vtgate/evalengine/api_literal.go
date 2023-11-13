@@ -198,7 +198,7 @@ func NewBindVar(key string, typ sqltypes.Type, col collations.ID) *BindVariable 
 	return &BindVariable{
 		Key:       key,
 		Type:      typ,
-		Collation: defaultCoercionCollation(col),
+		Collation: typedCoercionCollation(typ, col),
 	}
 }
 
@@ -207,7 +207,7 @@ func NewBindVarTuple(key string, col collations.ID) *BindVariable {
 	return &BindVariable{
 		Key:       key,
 		Type:      sqltypes.Tuple,
-		Collation: defaultCoercionCollation(col),
+		Collation: typedCoercionCollation(sqltypes.Tuple, col),
 	}
 }
 
@@ -216,7 +216,7 @@ func NewColumn(offset int, typ sqltypes.Type, col collations.ID) *Column {
 	return &Column{
 		Offset:    offset,
 		Type:      typ,
-		Collation: defaultCoercionCollation(col),
+		Collation: typedCoercionCollation(typ, col),
 	}
 }
 

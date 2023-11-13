@@ -197,6 +197,7 @@ func TestCompilerSingle(t *testing.T) {
 		expression string
 		values     []sqltypes.Value
 		result     string
+		collation  collations.ID
 	}{
 		{
 			expression: "1 + column0",
@@ -468,6 +469,12 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `WEIGHT_STRING('foobar' as char(3))`,
 			result:     `VARBINARY("\x1c\xe5\x1d\xdd\x1d\xdd")`,
 		},
+		{
+			expression: `case column0 when 1 then column1 else column2 end`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(42), sqltypes.NewVarChar("sole"), sqltypes.NewInt64(0)},
+			result:     `VARCHAR("0")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -503,6 +510,9 @@ func TestCompilerSingle(t *testing.T) {
 			if expected.String() != tc.result {
 				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
 			}
+			if tc.collation != collations.Unknown && tc.collation != expected.Collation() {
+				t.Fatalf("bad collation evaluation from eval engine: got %d, want %d", expected.Collation(), tc.collation)
+			}
 
 			if cfg.CompilerErr != nil {
 				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
@@ -517,6 +527,9 @@ func TestCompilerSingle(t *testing.T) {
 
 				if res.String() != tc.result {
 					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+				}
+				if tc.collation != collations.Unknown && tc.collation != res.Collation() {
+					t.Fatalf("bad collation evaluation from compiler: got %d, want %d", res.Collation(), tc.collation)
 				}
 			}
 		})

@@ -16,12 +16,24 @@ limitations under the License.
 
 package evalengine
 
-import "vitess.io/vitess/go/mysql/collations"
+import (
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+)
 
-func defaultCoercionCollation(id collations.ID) collations.TypedCollation {
-	return collations.TypedCollation{
-		Collation:    id,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireUnicode,
+func typedCoercionCollation(typ sqltypes.Type, id collations.ID) collations.TypedCollation {
+	switch {
+	case sqltypes.IsNull(typ):
+		return collationNull
+	case sqltypes.IsNumber(typ) || sqltypes.IsDateOrTime(typ):
+		return collationNumeric
+	case typ == sqltypes.TypeJSON:
+		return collationJSON
+	default:
+		return collations.TypedCollation{
+			Collation:    id,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireUnicode,
+		}
 	}
 }

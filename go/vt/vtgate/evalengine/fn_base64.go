@@ -83,9 +83,9 @@ func (call *builtinToBase64) eval(env *ExpressionEnv) (eval, error) {
 	encoded := mysqlBase64Encode(b.bytes)
 
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, defaultCoercionCollation(call.collate)), nil
+		return newEvalRaw(sqltypes.Text, encoded, typedCoercionCollation(sqltypes.Text, call.collate)), nil
 	}
-	return newEvalText(encoded, defaultCoercionCollation(call.collate)), nil
+	return newEvalText(encoded, typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
 }
 
 func (call *builtinToBase64) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -115,7 +115,7 @@ func (call *builtinToBase64) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xb(1, t, 0, false)
 	}
 
-	col := defaultCoercionCollation(c.cfg.Collation)
+	col := typedCoercionCollation(t, c.cfg.Collation)
 	c.asm.Fn_TO_BASE64(t, col)
 	c.asm.jumpDestination(skip)
 
