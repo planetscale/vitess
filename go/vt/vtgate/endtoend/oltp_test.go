@@ -36,10 +36,54 @@ func sysbenchRandom(rng *rand.Rand, template string) []byte {
 
 var oltpInitOnce sync.Once
 
-func BenchmarkOLTP(b *testing.B) {
-	const MaxRows = 10000
-	const RangeSize = 100
+const OLTPMaxRows = 10000
+const OLTPRangeSize = 100
 
+func oltpSimpleRanges(b *testing.B, rng *rand.Rand, query *bytes.Buffer, conn *mysql.Conn) {
+	query.Reset()
+
+	id := rng.Intn(OLTPMaxRows)
+	_, _ = fmt.Fprintf(query, "SELECT c FROM oltp_test WHERE id BETWEEN %d AND %d", id, id+rng.Intn(OLTPRangeSize)-1)
+	_, err := conn.ExecuteFetch(query.String(), 1000, false)
+	if err != nil {
+		b.Fatal(err)
+	}
+}
+
+func oltpDistinctRanges(b *testing.B, rng *rand.Rand, query *bytes.Buffer, conn *mysql.Conn) {
+	query.Reset()
+
+	id := rng.Intn(OLTPMaxRows)
+	_, _ = fmt.Fprintf(query, "SELECT DISTINCT c FROM oltp_test WHERE id BETWEEN %d AND %d ORDER BY c", id, id+rng.Intn(OLTPRangeSize)-1)
+	_, err := conn.ExecuteFetch(query.String(), 1000, false)
+	if err != nil {
+		b.Error(err)
+	}
+}
+
+func oltpOrderRanges(b *testing.B, rng *rand.Rand, query *bytes.Buffer, conn *mysql.Conn) {
+	query.Reset()
+
+	id := rng.Intn(OLTPMaxRows)
+	_, _ = fmt.Fprintf(query, "SELECT c FROM oltp_test WHERE id BETWEEN %d AND %d ORDER BY c", id, id+rng.Intn(OLTPRangeSize)-1)
+	_, err := conn.ExecuteFetch(query.String(), 1000, false)
+	if err != nil {
+		b.Fatal(err)
+	}
+}
+
+func oltpSumRanges(b *testing.B, rng *rand.Rand, query *bytes.Buffer, conn *mysql.Conn) {
+	query.Reset()
+
+	id := rng.Intn(OLTPMaxRows)
+	_, _ = fmt.Fprintf(query, "SELECT SUM(k) FROM oltp_test WHERE id BETWEEN %d AND %d", id, id+rng.Intn(OLTPRangeSize)-1)
+	_, err := conn.ExecuteFetch(query.String(), 1000, false)
+	if err != nil {
+		b.Fatal(err)
+	}
+}
+
+func BenchmarkOLTP(b *testing.B) {
 	rng := rand.New(rand.NewSource(1234))
 
 	ctx := context.Background()
@@ -55,7 +99,7 @@ func BenchmarkOLTP(b *testing.B) {
 		b.Logf("seeding database for benchmark...")
 
 		var rows int = 1
-		for i := 0; i < MaxRows/10; i++ {
+		for i := 0; i < OLTPMaxRows/10; i++ {
 			query.Reset()
 			query.WriteString("insert into oltp_test(id, k, c, pad) values ")
 			for j := 0; j < 10; j++ {
@@ -77,56 +121,39 @@ func BenchmarkOLTP(b *testing.B) {
 	b.Run("SimpleRanges", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			id := rng.Intn(MaxRows)
-
-			query.Reset()
-			_, _ = fmt.Fprintf(&query, "SELECT c FROM oltp_test WHERE id BETWEEN %d AND %d", id, id+rng.Intn(RangeSize)-1)
-			_, err := conn.ExecuteFetch(query.String(), 1000, false)
-			if err != nil {
-				b.Error(err)
-			}
+			oltpSimpleRanges(b, rng, &query, conn)
 		}
 	})
 
 	b.Run("SumRanges", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			id := rng.Intn(MaxRows)
-
-			query.Reset()
-			_, _ = fmt.Fprintf(&query, "SELECT SUM(k) FROM oltp_test WHERE id BETWEEN %d AND %d", id, id+rng.Intn(RangeSize)-1)
-			_, err := conn.ExecuteFetch(query.String(), 1000, false)
-			if err != nil {
-				b.Error(err)
-			}
+			oltpSumRanges(b, rng, &query, conn)
 		}
 	})
 
 	b.Run("OrderRanges", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			id := rng.Intn(MaxRows)
-
-			query.Reset()
-			_, _ = fmt.Fprintf(&query, "SELECT c FROM oltp_test WHERE id BETWEEN %d AND %d ORDER BY c", id, id+rng.Intn(RangeSize)-1)
-			_, err := conn.ExecuteFetch(query.String(), 1000, false)
-			if err != nil {
-				b.Error(err)
-			}
+			oltpOrderRanges(b, rng, &query, conn)
 		}
 	})
 
 	b.Run("DistinctRanges", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			id := rng.Intn(MaxRows)
+			oltpDistinctRanges(b, rng, &query, conn)
+		}
+	})
 
-			query.Reset()
-			_, _ = fmt.Fprintf(&query, "SELECT DISTINCT c FROM oltp_test WHERE id BETWEEN %d AND %d ORDER BY c", id, id+rng.Intn(RangeSize)-1)
-			_, err := conn.ExecuteFetch(query.String(), 1000, false)
-			if err != nil {
-				b.Error(err)
-			}
+	b.Run("Random", func(b *testing.B) {
+		perform := []func(b *testing.B, rng *rand.Rand, query *bytes.Buffer, conn *mysql.Conn){
+			oltpSimpleRanges, oltpSumRanges, oltpOrderRanges, oltpDistinctRanges,
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			perform[rand.Intn(len(perform))](b, rng, &query, conn)
 		}
 	})
 }
