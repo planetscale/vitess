@@ -124,8 +124,11 @@ func (a *Aggregator) isDerived() bool {
 	return a.TableID != nil
 }
 
-func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) (int, error) {
+func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) (int, error) {
 	if a.isDerived() {
+		if underRoute {
+			return -1, nil
+		}
 		derivedTBL, err := ctx.SemTable.TableInfoFor(*a.TableID)
 		if err != nil {
 			return 0, err
