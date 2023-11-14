@@ -1930,6 +1930,8 @@ func (ty ShowCommandType) ToString() string {
 		return VitessVariablesStr
 	case VschemaTables:
 		return VschemaTablesStr
+	case VschemaKeyspaces:
+		return VschemaKeyspacesStr
 	case VschemaVindexes:
 		return VschemaVindexesStr
 	case Warnings:
