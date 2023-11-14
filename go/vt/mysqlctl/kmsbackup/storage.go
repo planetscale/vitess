@@ -125,6 +125,9 @@ func (f *FilesBackupStorage) ListBackups(ctx context.Context, dir string) ([]bac
 		return nil, err
 	}
 
+	log.Infof("Assigning Vitess-compliant backup name %s to last PSDB backup with id = %s, bucket = %s, kmsKeyID = %s, root = %s.",
+		name, lastBackupID, f.bucket, f.kmsKeyID, dir)
+
 	return []backupstorage.BackupHandle{fbh}, nil
 }
 
@@ -144,8 +147,8 @@ func (f *FilesBackupStorage) StartBackup(ctx context.Context, dir string, name s
 		return nil, err
 	}
 
-	log.Infof("Starting backup with id = %s, bucket = %s, kmsKeyID = %s, root = %s, name = %s.",
-		backupID, f.bucket, f.kmsKeyID, dir, name)
+	log.Infof("Starting backup with id = %s, bucket = %s, kmsKeyID = %s, root = %s.",
+		backupID, f.bucket, f.kmsKeyID, dir)
 
 	return handle, nil
 }
