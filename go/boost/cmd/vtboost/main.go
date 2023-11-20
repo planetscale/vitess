@@ -116,7 +116,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	err = boost.ConfigureVitessExecutor(ctx, log, ts, cell, nil)
+	err = boost.ConfigureVitessExecutor(ctx, log, ts, cell, nil, "ResilientSrvTopoServer")
 	if err != nil {
 		log.Fatal("failed to configure external gateway", zap.Error(err))
 	}
