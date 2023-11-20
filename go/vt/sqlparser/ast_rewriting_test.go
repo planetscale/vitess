@@ -37,13 +37,13 @@ type testCaseSysVar struct {
 }
 
 type myTestCase struct {
-	in, expected                                                            string
-	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID       bool
-	ddlStrategy, migrationContext, sessionUUID, sessionEnableSystemSettings bool
-	udv                                                                     int
-	autocommit, clientFoundRows, skipQueryPlanCache, socket, queryTimeout   bool
-	sqlSelectLimit, transactionMode, workload, version, versionComment      bool
-	replLag                                                                 bool
+	in, expected                                                                            string
+	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID                       bool
+	ddlStrategy, migrationContext, sessionUUID, sessionEnableSystemSettings                 bool
+	udv                                                                                     int
+	autocommit, foreignKeyChecks, clientFoundRows, skipQueryPlanCache, socket, queryTimeout bool
+	sqlSelectLimit, transactionMode, workload, version, versionComment                      bool
+	replLag                                                                                 bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -297,6 +297,7 @@ func TestRewrites(in *testing.T) {
 		in:                          "SHOW VARIABLES",
 		expected:                    "SHOW VARIABLES",
 		autocommit:                  true,
+		foreignKeyChecks:            true,
 		clientFoundRows:             true,
 		skipQueryPlanCache:          true,
 		sqlSelectLimit:              true,
@@ -317,6 +318,7 @@ func TestRewrites(in *testing.T) {
 		in:                          "SHOW GLOBAL VARIABLES",
 		expected:                    "SHOW GLOBAL VARIABLES",
 		autocommit:                  true,
+		foreignKeyChecks:            true,
 		clientFoundRows:             true,
 		skipQueryPlanCache:          true,
 		sqlSelectLimit:              true,
@@ -351,6 +353,7 @@ func TestRewrites(in *testing.T) {
 				SQLSelectLimitUnset,
 				"",
 				nil,
+				nil,
 				&fakeViews{},
 			)
 			require.NoError(err)
@@ -368,6 +371,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.replLag, result.NeedsFuncResult(MaxReplLag), "should need max repl lag")
 			assert.Equal(tc.udv, len(result.NeedUserDefinedVariables), "count of user defined variables")
 			assert.Equal(tc.autocommit, result.NeedsSysVar(sysvars.Autocommit.Name), "should need :__vtautocommit")
+			assert.Equal(tc.foreignKeyChecks, result.NeedsSysVar(sysvars.ForeignKeyChecks.Name), "should need :__vtforeignKeyChecks")
 			assert.Equal(tc.clientFoundRows, result.NeedsSysVar(sysvars.ClientFoundRows.Name), "should need :__vtclientFoundRows")
 			assert.Equal(tc.skipQueryPlanCache, result.NeedsSysVar(sysvars.SkipQueryPlanCache.Name), "should need :__vtskipQueryPlanCache")
 			assert.Equal(tc.sqlSelectLimit, result.NeedsSysVar(sysvars.SQLSelectLimit.Name), "should need :__vtsqlSelectLimit")
@@ -442,7 +446,7 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil, &fakeViews{})
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil, nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -490,7 +494,7 @@ func TestRewritesSysVar(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar, &fakeViews{})
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar, nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -540,7 +544,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil, &fakeViews{})
+			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil, nil, &fakeViews{})
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)

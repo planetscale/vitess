@@ -153,6 +153,10 @@ type ddlWrapper struct {
 	defaultKeyspace string
 }
 
+func (d *ddlWrapper) GetForeignKeyChecksState() *bool {
+	return nil
+}
+
 func (d *ddlWrapper) KeyspaceError(keyspace string) error {
 	return nil
 }
