@@ -353,7 +353,7 @@ func (expr *ProjectedExpr) Type(g *graph.Graph[*Node], src dataflow.IndexPair) (
 	if err != nil {
 		return sql.Type{}, err
 	}
-	return sql.Type{T: tt.Type, Collation: tt.Coll}, nil
+	return sql.Type{T: tt.Type(), Collation: tt.Collation()}, nil
 }
 
 func (expr *ProjectedExpr) describe() string {

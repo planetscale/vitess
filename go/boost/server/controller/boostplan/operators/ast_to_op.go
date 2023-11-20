@@ -52,7 +52,7 @@ func (conv *Converter) toOperator(ctx *PlanContext, stmt sqlparser.SelectStateme
 				}
 			}
 			typ, _ := ctx.SemTable.TypeForExpr(expr)
-			deps = append(deps, newDependency(sqlparser.String(expr), ColumnFromAST(expr), nil, typ.Type))
+			deps = append(deps, newDependency(sqlparser.String(expr), ColumnFromAST(expr), nil, typ.Type()))
 		}
 	}
 
@@ -581,10 +581,10 @@ func extractParam(ctx *PlanContext, lft, rgt sqlparser.Expr, op sqlparser.Compar
 		switch arg := rgt.(type) {
 		case *sqlparser.Argument:
 			typ, _ := ctx.SemTable.TypeForExpr(lft)
-			return newDependency(arg.Name, ColumnFromAST(lft), &op, typ.Type)
+			return newDependency(arg.Name, ColumnFromAST(lft), &op, typ.Type())
 		case sqlparser.ListArg:
 			typ, _ := ctx.SemTable.TypeForExpr(lft)
-			return newDependency(string(arg), ColumnFromAST(lft), &op, typ.Type)
+			return newDependency(string(arg), ColumnFromAST(lft), &op, typ.Type())
 		}
 		return nil
 	}
