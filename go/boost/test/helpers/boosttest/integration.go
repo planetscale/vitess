@@ -236,7 +236,7 @@ func New(t testing.TB, options ...Option) *Cluster {
 			s.Worker.SetResolver(testexecutor.NewResolver(cluster.Executor))
 		case cluster.externalExecutor:
 			hc := discovery.NewHealthCheck(ctx, 2*time.Millisecond, time.Minute, cluster.Topo, cluster.localCell, cluster.cellsToWatch)
-			err := s.ConfigureVitessExecutor(ctx, logger, cluster.Topo, cluster.localCell, hc)
+			err := s.ConfigureVitessExecutor(ctx, logger, cluster.Topo, cluster.localCell, hc, "")
 			if err != nil {
 				t.Fatal(err)
 			}

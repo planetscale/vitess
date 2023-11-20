@@ -328,6 +328,9 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 				if update == nil {
 					return
 				}
+				if update.Value == nil {
+					return
+				}
 				newHash := GetSrvVSchemaHash(update.Value)
 				if newHash == currentHash {
 					// sometimes we get the same update multiple times. This results in the plan cache to be cleared

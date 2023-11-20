@@ -113,8 +113,8 @@ func resolveAndLoadKeyspace(ctx context.Context, log *zap.Logger, srvResolver *s
 	}
 }
 
-func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, ts *topo.Server, localCell string, hc discovery.HealthCheck) error {
-	resilientServer := srvtopo.NewResilientServer(ctx, ts, "ResilientSrvTopoServer")
+func (s *Server) ConfigureVitessExecutor(ctx context.Context, log *zap.Logger, ts *topo.Server, localCell string, hc discovery.HealthCheck, counterPrefix string) error {
+	resilientServer := srvtopo.NewResilientServer(ctx, ts, counterPrefix)
 	log.Info("configuring external gateway for upqueries", zap.String("cell", localCell))
 
 	gateway := vtgate.NewTabletGateway(ctx, hc, resilientServer, localCell)
