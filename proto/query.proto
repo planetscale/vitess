@@ -103,6 +103,7 @@ enum Flag {
   ISQUOTED = 2048;
   ISTEXT = 4096;
   ISBINARY = 8192;
+  ISUNKNOWN = 16384;
 }
 
 // Type defines the various supported data types in bind vars
@@ -215,6 +216,9 @@ enum Type {
   // BITNUM specifies a base 2 binary type (unquoted varbinary).
   // Properties: 34, IsText.
   BITNUM = 4130;
+  // UNKNOWN_TYPE specifies an unknown type.
+  // Properties: IsUnknown.
+  UNKNOWN_TYPE = 16384;
 }
 
 // Value represents a typed value.
