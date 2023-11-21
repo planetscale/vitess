@@ -109,6 +109,7 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		comparers: extractSlices(ms.OrderBy),
 		reverse:   true,
 	}
+	// var shMu sync.Mutex
 	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
@@ -116,12 +117,17 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 			}
 		}
 		for _, row := range qr.Rows {
-			heap.Push(sh, row)
-			// Remove the highest element from the heap if the size is more than the count
-			// This optimization means that the maximum size of the heap is going to be (count + 1)
-			for len(sh.rows) > count {
-				_ = heap.Pop(sh)
+			hp := func() {
+				// shMu.Lock()
+				// defer shMu.Unlock()
+				heap.Push(sh, row)
+				// Remove the highest element from the heap if the size is more than the count
+				// This optimization means that the maximum size of the heap is going to be (count + 1)
+				for len(sh.rows) > count {
+					_ = heap.Pop(sh)
+				}
 			}
+			hp()
 		}
 		if vcursor.ExceedsMaxMemoryRows(len(sh.rows)) {
 			return fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())

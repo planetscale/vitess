@@ -1,0 +1,278 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "xxhash": {
+      "type": "xxhash"
+    }
+  },
+  "tables": {
+    "food_confirmations": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.food_confirmations_seq"
+      }
+    },
+    "food_images": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.food_images_seq"
+      }
+    },
+    "food_notes": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.food_notes_seq"
+      }
+    },
+    "food_permissions": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "food_tags": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.food_tags_seq"
+      }
+    },
+    "foods": {
+      "columnVindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "image_service_food_images": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.image_service_food_images_seq"
+      }
+    },
+    "menu_item_foods": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.menu_item_foods_seq"
+      }
+    },
+    "normalized_ingredients": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.normalized_ingredients_seq"
+      }
+    },
+    "nutritional_contents": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.nutritional_contents_seq"
+      }
+    },
+    "orig_food_des_learned_foods": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.orig_food_des_learned_foods_seq"
+      }
+    },
+    "orig_food_des_learned_foods_next": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.orig_food_des_learned_foods_next_seq"
+      }
+    },
+    "recipe_ingredients": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.recipe_ingredients_seq"
+      }
+    },
+    "recipe_parser_misses": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.recipe_parser_misses_seq"
+      }
+    },
+    "recipe_parser_weight_mods": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.recipe_parser_misses_seq"
+      }
+    },
+    "recipes": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.recipes_seq"
+      }
+    },
+    "restaurant_normalized_ingredients": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.restaurant_normalized_ingredients_seq"
+      }
+    },
+    "restaurant_recipe_ingredients": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.restaurant_recipe_ingredients_seq"
+      }
+    },
+    "restaurant_recipes": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.restaurant_recipes_seq"
+      }
+    },
+    "restaurant_selected_normalized_ingredients": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.restaurant_selected_normalized_ingredients_seq"
+      }
+    },
+    "selected_normalized_ingredients": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.selected_normalized_ingredients_seq"
+      }
+    },
+    "sodexo_imported_foods": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.sodexo_imported_foods_seq"
+      }
+    },
+    "weights": {
+      "columnVindexes": [
+        {
+          "column": "food_id",
+          "name": "xxhash"
+        }
+      ],
+      "autoIncrement": {
+        "column": "id",
+        "sequence": "food.weights_seq"
+      }
+    }
+  }
+}
