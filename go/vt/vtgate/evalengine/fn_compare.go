@@ -59,8 +59,12 @@ func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 
 func (b *builtinCoalesce) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var ta typeAggregation
+	f := flagNullable
 	for _, arg := range b.Arguments {
-		tt, f := arg.typeof(env, fields)
+		tt, fl := arg.typeof(env, fields)
+		if !fl.Nullable() {
+			f = 0
+		}
 		ta.add(tt, f)
 	}
 	return ta.result(), flagNullable
@@ -327,7 +331,9 @@ func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype) (ctype,
 	env := collations.Local()
 
 	var ca collationAggregation
+	var f typeFlag
 	for _, arg := range args {
+		f |= nullableFlags(arg.Flag)
 		if err := ca.add(env, arg.Col); err != nil {
 			return ctype{}, err
 		}
@@ -335,15 +341,17 @@ func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype) (ctype,
 
 	tc := ca.result()
 	c.asm.Fn_MULTICMP_c(len(args), call.cmp < 0, tc)
-	return ctype{Type: sqltypes.VarChar, Col: tc}, nil
+	return ctype{Type: sqltypes.VarChar, Flag: f, Col: tc}, nil
 }
 
 func (call *builtinMultiComparison) compile_d(c *compiler, args []ctype) (ctype, error) {
+	var f typeFlag
 	for i, tt := range args {
+		f |= nullableFlags(tt.Flag)
 		c.compileToDecimal(tt, len(args)-i)
 	}
 	c.asm.Fn_MULTICMP_d(len(args), call.cmp < 0)
-	return ctype{Type: sqltypes.Decimal, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Decimal, Flag: f, Col: collationNumeric}, nil
 }
 
 func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
@@ -355,6 +363,7 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 		text     int
 		binary   int
 		args     []ctype
+		nullable bool
 	)
 
 	/*
@@ -374,6 +383,7 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 
 		args = append(args, tt)
 
+		nullable = nullable || tt.nullable()
 		switch tt.Type {
 		case sqltypes.Int64:
 			signed++
@@ -387,19 +397,25 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 			text++
 		case sqltypes.Blob, sqltypes.Binary, sqltypes.VarBinary:
 			binary++
+		case sqltypes.Null:
+			nullable = true
 		default:
 			return ctype{}, c.unsupported(call)
 		}
 	}
 
+	var f typeFlag
+	if nullable {
+		f |= flagNullable
+	}
 	if signed+unsigned == len(args) {
 		if signed == len(args) {
 			c.asm.Fn_MULTICMP_i(len(args), call.cmp < 0)
-			return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+			return ctype{Type: sqltypes.Int64, Flag: f, Col: collationNumeric}, nil
 		}
 		if unsigned == len(args) {
 			c.asm.Fn_MULTICMP_u(len(args), call.cmp < 0)
-			return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+			return ctype{Type: sqltypes.Uint64, Flag: f, Col: collationNumeric}, nil
 		}
 		return call.compile_d(c, args)
 	}
@@ -408,14 +424,14 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 			return call.compile_c(c, args)
 		}
 		c.asm.Fn_MULTICMP_b(len(args), call.cmp < 0)
-		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: f, Col: collationBinary}, nil
 	} else {
 		if floats > 0 {
 			for i, tt := range args {
 				c.compileToFloat(tt, len(args)-i)
 			}
 			c.asm.Fn_MULTICMP_f(len(args), call.cmp < 0)
-			return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+			return ctype{Type: sqltypes.Float64, Flag: f, Col: collationNumeric}, nil
 		}
 		if decimals > 0 {
 			return call.compile_d(c, args)
@@ -448,9 +464,14 @@ type typeAggregation struct {
 	geometry uint16
 	blob     uint16
 	total    uint16
+
+	nullable bool
 }
 
 func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag) {
+	if f.Nullable() {
+		ta.nullable = true
+	}
 	switch tt {
 	case sqltypes.Float32, sqltypes.Float64:
 		ta.double++
