@@ -447,6 +447,8 @@ func tryPushingDownOrdering(ctx *plancontext.PlanningContext, in *Ordering) (ops
 	switch src := in.Source.(type) {
 	case *Route:
 		return rewrite.Swap(in, src, "push ordering under route")
+	case *Filter:
+		return rewrite.Swap(in, src, "push ordering under filter")
 	case *ApplyJoin:
 		if canPushLeft(ctx, src, in.Order) {
 			// ApplyJoin is stable in regard to the columns coming from the LHS,
