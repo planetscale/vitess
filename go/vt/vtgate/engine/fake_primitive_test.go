@@ -141,10 +141,7 @@ func (f *fakePrimitive) asyncCall(callback func(*sqltypes.Result) error) error {
 			if qr == nil {
 				return f.sendErr
 			}
-			if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
-				return err
-			}
-			result := &sqltypes.Result{}
+			result := &sqltypes.Result{Fields: fields}
 			for i := 0; i < len(qr.Rows); i++ {
 				result.Rows = append(result.Rows, qr.Rows[i])
 				// Send only two rows at a time.
@@ -155,7 +152,7 @@ func (f *fakePrimitive) asyncCall(callback func(*sqltypes.Result) error) error {
 					result = &sqltypes.Result{}
 				}
 			}
-			if len(result.Rows) != 0 {
+			if len(result.Rows) != 0 || len(result.Fields) != 0 {
 				if err := callback(result); err != nil {
 					return err
 				}
