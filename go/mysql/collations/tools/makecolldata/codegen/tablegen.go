@@ -161,7 +161,7 @@ func (p *page) weights900Fast(level int) (w []uint32) {
 			weight = uint32(bits.ReverseBytes16(entry.weights[level]))
 		}
 		if weight != 0 {
-			weight |= 0x20000
+			weight |= 0x8000_0000
 		}
 		w = append(w, weight)
 	}

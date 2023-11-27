@@ -18,9 +18,12 @@ package uca
 
 import (
 	"math/bits"
+	"time"
 	"unicode/utf8"
 	"unsafe"
 )
+
+//go:generate go run asm/generate.go -out iter_fast_900.s -stubs iter_fast_900_stub.go
 
 type FastIterator900 struct {
 	iterator900
@@ -159,6 +162,8 @@ func (it *FastIterator900) NextWeightBlock64(dstbytes []byte) int {
 	// If the underlying slow iterator is in the middle of processing the
 	// weights for a codepoint, we cannot go through the fast path.
 	if it.codepoint.ce == 0 && len(p) >= 8 {
+		now := time.Now()
+
 		// Read 8 bytes from the input string. This would ideally be implemented
 		// as a `binary.LittleEndian.Uint64` read, but the compiler doesn't seem to be
 		// optimizing it properly, and it generates the individual byte shifts :(
@@ -177,124 +182,60 @@ func (it *FastIterator900) NextWeightBlock64(dstbytes []byte) int {
 			// cannot be larger than 255).
 			table := it.fastTable
 
-			// All ASCII codepoints (0 >= cp >= 127) have either 0 or 1 weights to yield.
-			// This is a problem for our fast path, because 0-weights must NOT appear in the
-			// resulting weight string. The codepoints with 0 weights are, however, exceedingly
-			// rare (they're mostly non-print codepoints), so based on this we can choose to
-			// perform either an optimistic or pessimistic optimization, which is toggled at
-			// compile time with this flag. For now, we're going with optimistic because it
-			// provides better results in realistic benchmarks.
-			const optimisticFastWrites = true
+			// For the optimistic optimization, we're going to assume that none of the
+			// ASCII codepoints in this chunk have zero weights, and check only once at
+			// the end of the chunk if that was the case. If we found a zero-weight (a
+			// rare occurrence), we discard the whole chunk and fall back to the slow
+			// iterator, which handles zero weights just fine.
+			// To perform the check for zero weights efficiently, we've designed fast tables
+			// where every entry is 32 bits, even though the actual weights are in the
+			// bottom 16 bits. The upper 16 bits contain either 0x2, if this is a valid weight
+			// or are zeroed out for 0-weights.
+			// Because of this, we can lookup from the fast table and insert directly the lowest
+			// 16 bits as the weight, and then we `and` the whole weight against a 32-bit mask
+			// that starts as 0x20000. For any weights that are valid, that will leave the mask
+			// with the same value, because only the higher bits will match, while any 0-weight
+			// will fully clear the mask.
+			// At the end of this block, we check if the mask has been cleared by any of the
+			// writes, and if it has, we scrap this work (boo) and fall back to the slow iterator.
+			var mask uint32 = 0x80000000
+			weight := table[p[0]]
+			mask &= weight
+			dst[0] = uint16(weight)
 
-			if optimisticFastWrites {
-				// For the optimistic optimization, we're going to assume that none of the
-				// ASCII codepoints in this chunk have zero weights, and check only once at
-				// the end of the chunk if that was the case. If we found a zero-weight (a
-				// rare occurrence), we discard the whole chunk and fall back to the slow
-				// iterator, which handles zero weights just fine.
-				// To perform the check for zero weights efficiently, we've designed fast tables
-				// where every entry is 32 bits, even though the actual weights are in the
-				// bottom 16 bits. The upper 16 bits contain either 0x2, if this is a valid weight
-				// or are zeroed out for 0-weights.
-				// Because of this, we can lookup from the fast table and insert directly the lowest
-				// 16 bits as the weight, and then we `and` the whole weight against a 32-bit mask
-				// that starts as 0x20000. For any weights that are valid, that will leave the mask
-				// with the same value, because only the higher bits will match, while any 0-weight
-				// will fully clear the mask.
-				// At the end of this block, we check if the mask has been cleared by any of the
-				// writes, and if it has, we scrap this work (boo) and fall back to the slow iterator.
-				var mask uint32 = 0x20000
-				weight := table[p[0]]
-				mask &= weight
-				dst[0] = uint16(weight)
+			weight = table[p[1]]
+			mask &= weight
+			dst[1] = uint16(weight)
 
-				weight = table[p[1]]
-				mask &= weight
-				dst[1] = uint16(weight)
+			weight = table[p[2]]
+			mask &= weight
+			dst[2] = uint16(weight)
 
-				weight = table[p[2]]
-				mask &= weight
-				dst[2] = uint16(weight)
+			weight = table[p[3]]
+			mask &= weight
+			dst[3] = uint16(weight)
 
-				weight = table[p[3]]
-				mask &= weight
-				dst[3] = uint16(weight)
+			weight = table[p[4]]
+			mask &= weight
+			dst[4] = uint16(weight)
 
-				weight = table[p[4]]
-				mask &= weight
-				dst[4] = uint16(weight)
+			weight = table[p[5]]
+			mask &= weight
+			dst[5] = uint16(weight)
 
-				weight = table[p[5]]
-				mask &= weight
-				dst[5] = uint16(weight)
+			weight = table[p[6]]
+			mask &= weight
+			dst[6] = uint16(weight)
 
-				weight = table[p[6]]
-				mask &= weight
-				dst[6] = uint16(weight)
+			weight = table[p[7]]
+			mask &= weight
+			dst[7] = uint16(weight)
 
-				weight = table[p[7]]
-				mask &= weight
-				dst[7] = uint16(weight)
-
-				if mask != 0 {
-					it.input = it.input[8:]
-					return 16
-				}
-			} else {
-				// For the pessimistic optimization, we're going to assume that any 8-byte chunk
-				// can contain 0-weights (something rather rare in practice). We're writing
-				// the lower 16 bits of the weight into the target buffer (just like in the optimistic
-				// optimization), but then we're increasing our target buffer pointer by
-				// the high 16 bits of the weight (weight >> 16). For valid weights, the high
-				// bits will equal 0x2, which is exactly the offset we want to move our target
-				// pointer so we can write the next weight afterwards, and for 0-weights, the
-				// high bits will be 0x0, so the pointer will not advance and the next weight
-				// we write will replace the 0-weight we've just written. This ensures that the
-				// resulting byte output doesn't have any 0-weights in it, but it also causes
-				// small stalls in the CPU because the writes are not necessarily linear and they
-				// have an ordering dependency with the value we've loaded from the fast table.
-				// Regardless of the stalls, this algorithm is obviously branch-less and very
-				// efficient, it just happens that in real world scenarios, the optimistic
-				// approach is even faster because 0-weights are very rare in practice.
-				// For now, this algorithm is disabled.
-				dstptr := (*uint16)(unsafe.Pointer(&dstbytes[0]))
-				weight := table[p[0]]
-				*dstptr = uint16(weight)
-				dstptr = (*uint16)(unsafe.Add(unsafe.Pointer(dstptr), weight>>16))
-
-				weight = table[p[1]]
-				*dstptr = uint16(weight)
-				dstptr = (*uint16)(unsafe.Add(unsafe.Pointer(dstptr), weight>>16))
-
-				weight = table[p[2]]
-				*dstptr = uint16(weight)
-				dstptr = (*uint16)(unsafe.Add(unsafe.Pointer(dstptr), weight>>16))
-
-				weight = table[p[3]]
-				*dstptr = uint16(weight)
-				dstptr = (*uint16)(unsafe.Add(unsafe.Pointer(dstptr), weight>>16))
-
-				weight = table[p[4]]
-				*dstptr = uint16(weight)
-				dstptr = (*uint16)(unsafe.Add(unsafe.Pointer(dstptr), weight>>16))
-
-				weight = table[p[5]]
-				*dstptr = uint16(weight)
-				dstptr = (*uint16)(unsafe.Add(unsafe.Pointer(dstptr), weight>>16))
-
-				weight = table[p[6]]
-				*dstptr = uint16(weight)
-				dstptr = (*uint16)(unsafe.Add(unsafe.Pointer(dstptr), weight>>16))
-
-				weight = table[p[7]]
-				*dstptr = uint16(weight)
-				dstptr = (*uint16)(unsafe.Add(unsafe.Pointer(dstptr), weight>>16))
-
-				written := uintptr(unsafe.Pointer(dstptr)) - uintptr(unsafe.Pointer(&dstbytes[0]))
-				if written != 0 {
-					it.input = it.input[written>>1:]
-					return int(written)
-				}
+			if mask != 0 {
+				Elapsed += time.Since(now)
+				Iters++
+				it.input = it.input[8:]
+				return 16
 			}
 		}
 	}

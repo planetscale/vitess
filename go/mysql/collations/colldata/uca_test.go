@@ -25,12 +25,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/internal/uca"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -1032,6 +1034,40 @@ func TestCaseChangeEqualities(t *testing.T) {
 				_ = collation.Collate(trans2, trans3, false)
 			}
 		})
+	}
+}
+
+func BenchmarkUCA900Weights(b *testing.B) {
+	var Collations = []Collation{
+		testcollation(b, "utf8mb4_0900_as_cs"),
+		testcollation(b, "utf8mb4_0900_as_ci"),
+		testcollation(b, "utf8mb4_0900_ai_ci"),
+	}
+
+	var BenchStrings = []struct {
+		Name, Content string
+	}{
+		// {"Long", ExampleStringLong},
+		// {"Spanish", SpanishString},
+		{"English", EnglishString},
+		// {"Japanese", JapaneseString2},
+	}
+
+	for _, teststr := range BenchStrings {
+		for _, length := range []int{1} {
+			content := strings.Repeat(teststr.Content, length)
+			str1 := []byte(content)
+			for _, collation := range Collations {
+				b.Run(fmt.Sprintf("%s/%d/%s", teststr.Name, length, collation.Name()), func(b *testing.B) {
+					var w []byte = make([]byte, 0, 16*len(str1))
+					for i := 0; i < b.N; i++ {
+						_ = collation.WeightString(w, str1, 0)
+					}
+
+					b.Logf("average lookup: %v", uca.Elapsed/time.Duration(uca.Iters))
+				})
+			}
+		}
 	}
 }
 

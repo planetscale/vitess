@@ -154,6 +154,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	github.com/mmcloughlin/avo v0.5.0 // indirect
 	github.com/onsi/gomega v1.23.0 // indirect
 	github.com/outcaste-io/ristretto v0.2.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.7 // indirect
