@@ -284,7 +284,7 @@ func (b *builtinDateFormat) eval(env *ExpressionEnv) (eval, error) {
 	case *evalTemporal:
 		t = e.toDateTime(datetime.DefaultPrecision, env.now)
 	default:
-		t = evalToDateTime(date, datetime.DefaultPrecision, env.now)
+		t = evalToDateTime(date, datetime.DefaultPrecision, env.now, env.sqlmode.AllowZeroDate())
 		if t == nil || t.isZero() {
 			return nil, nil
 		}
@@ -313,7 +313,7 @@ func (call *builtinDateFormat) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Datetime, sqltypes.Date:
 	default:
-		c.asm.Convert_xDT_nz(1, datetime.DefaultPrecision)
+		c.asm.Convert_xDT(1, datetime.DefaultPrecision, false)
 	}
 
 	format, err := call.Arguments[1].compile(c)
@@ -381,7 +381,7 @@ func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	dt := evalToDateTime(n, -1, env.now)
+	dt := evalToDateTime(n, -1, env.now, env.sqlmode.AllowZeroDate())
 	if dt == nil || dt.isZero() {
 		return nil, nil
 	}
@@ -390,7 +390,7 @@ func (call *builtinConvertTz) eval(env *ExpressionEnv) (eval, error) {
 	if !ok {
 		return nil, nil
 	}
-	return newEvalDateTime(out, int(dt.prec)), nil
+	return newEvalDateTime(out, int(dt.prec), env.sqlmode.AllowZeroDate()), nil
 }
 
 func (call *builtinConvertTz) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -429,7 +429,7 @@ func (call *builtinConvertTz) compile(c *compiler) (ctype, error) {
 	switch n.Type {
 	case sqltypes.Datetime, sqltypes.Date:
 	default:
-		c.asm.Convert_xDT_nz(3, -1)
+		c.asm.Convert_xDT(3, -1, false)
 	}
 
 	c.asm.Fn_CONVERT_TZ()
@@ -445,7 +445,7 @@ func (b *builtinDate) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
 	if d == nil {
 		return nil, nil
 	}
@@ -467,7 +467,7 @@ func (call *builtinDate) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date:
 	default:
-		c.asm.Convert_xD(1)
+		c.asm.Convert_xD(1, c.sqlmode.AllowZeroDate())
 	}
 
 	c.asm.jumpDestination(skip)
@@ -482,7 +482,7 @@ func (b *builtinDayOfMonth) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, true)
 	if d == nil {
 		return nil, nil
 	}
@@ -504,7 +504,7 @@ func (call *builtinDayOfMonth) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD(1)
+		c.asm.Convert_xD(1, true)
 	}
 	c.asm.Fn_DAYOFMONTH()
 	c.asm.jumpDestination(skip)
@@ -519,7 +519,7 @@ func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -541,7 +541,7 @@ func (call *builtinDayOfWeek) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD_nz(1)
+		c.asm.Convert_xD(1, false)
 	}
 	c.asm.Fn_DAYOFWEEK()
 	c.asm.jumpDestination(skip)
@@ -556,7 +556,7 @@ func (b *builtinDayOfYear) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -578,7 +578,7 @@ func (call *builtinDayOfYear) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD_nz(1)
+		c.asm.Convert_xD(1, false)
 	}
 	c.asm.Fn_DAYOFYEAR()
 	c.asm.jumpDestination(skip)
@@ -653,7 +653,7 @@ func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
 		t = t.In(tz)
 	}
 
-	dt := newEvalDateTime(datetime.NewDateTimeFromStd(t), prec)
+	dt := newEvalDateTime(datetime.NewDateTimeFromStd(t), prec, env.sqlmode.AllowZeroDate())
 
 	if len(b.Arguments) == 1 {
 		return dt, nil
@@ -816,7 +816,7 @@ func (b *builtinMakedate) eval(env *ExpressionEnv) (eval, error) {
 	if t.IsZero() {
 		return nil, nil
 	}
-	return newEvalDate(datetime.NewDateTimeFromStd(t).Date), nil
+	return newEvalDate(datetime.NewDateTimeFromStd(t).Date, env.sqlmode.AllowZeroDate()), nil
 }
 
 func (b *builtinMakedate) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -1178,7 +1178,7 @@ func (b *builtinMonth) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, true)
 	if d == nil {
 		return nil, nil
 	}
@@ -1200,7 +1200,7 @@ func (call *builtinMonth) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD(1)
+		c.asm.Convert_xD(1, true)
 	}
 	c.asm.Fn_MONTH()
 	c.asm.jumpDestination(skip)
@@ -1215,7 +1215,7 @@ func (b *builtinMonthName) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
 	if d == nil {
 		return nil, nil
 	}
@@ -1242,7 +1242,7 @@ func (call *builtinMonthName) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD(1)
+		c.asm.Convert_xD(1, c.sqlmode.AllowZeroDate())
 	}
 	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	c.asm.Fn_MONTHNAME(col)
@@ -1258,7 +1258,7 @@ func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, true)
 	if d == nil {
 		return nil, nil
 	}
@@ -1280,7 +1280,7 @@ func (call *builtinQuarter) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD(1)
+		c.asm.Convert_xD(1, true)
 	}
 	c.asm.Fn_QUARTER()
 	c.asm.jumpDestination(skip)
@@ -1366,7 +1366,7 @@ func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
 	case *evalTemporal:
 		dt = e.toDateTime(int(e.prec), env.now)
 	default:
-		dt = evalToDateTime(date, -1, env.now)
+		dt = evalToDateTime(date, -1, env.now, env.sqlmode.AllowZeroDate())
 		if dt == nil || dt.isZero() {
 			var prec int32
 			switch d := date.(type) {
@@ -1454,7 +1454,7 @@ func (b *builtinWeek) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -1491,7 +1491,7 @@ func (call *builtinWeek) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD_nz(1)
+		c.asm.Convert_xD(1, false)
 	}
 
 	if len(call.Arguments) == 1 {
@@ -1518,7 +1518,7 @@ func (b *builtinWeekDay) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -1540,7 +1540,7 @@ func (call *builtinWeekDay) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD_nz(1)
+		c.asm.Convert_xD(1, false)
 	}
 
 	c.asm.Fn_WEEKDAY()
@@ -1556,7 +1556,7 @@ func (b *builtinWeekOfYear) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -1580,7 +1580,7 @@ func (call *builtinWeekOfYear) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD_nz(1)
+		c.asm.Convert_xD(1, false)
 	}
 
 	c.asm.Fn_WEEKOFYEAR()
@@ -1596,7 +1596,7 @@ func (b *builtinYear) eval(env *ExpressionEnv) (eval, error) {
 	if date == nil {
 		return nil, nil
 	}
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, true)
 	if d == nil {
 		return nil, nil
 	}
@@ -1619,7 +1619,7 @@ func (call *builtinYear) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD(1)
+		c.asm.Convert_xD(1, true)
 	}
 
 	c.asm.Fn_YEAR()
@@ -1636,7 +1636,7 @@ func (b *builtinYearWeek) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	d := evalToDate(date, env.now)
+	d := evalToDate(date, env.now, env.sqlmode.AllowZeroDate())
 	if d == nil || d.isZero() {
 		return nil, nil
 	}
@@ -1673,7 +1673,7 @@ func (call *builtinYearWeek) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Date, sqltypes.Datetime:
 	default:
-		c.asm.Convert_xD_nz(1)
+		c.asm.Convert_xD(1, false)
 	}
 
 	if len(call.Arguments) == 1 {
@@ -1725,7 +1725,7 @@ func (call *builtinDateMath) eval(env *ExpressionEnv) (eval, error) {
 		return tmp.addInterval(interval, collations.Unknown, env.now), nil
 	}
 
-	if tmp := evalToTemporal(date); tmp != nil {
+	if tmp := evalToTemporal(date, env.sqlmode.AllowZeroDate()); tmp != nil {
 		return tmp.addInterval(interval, call.collate, env.now), nil
 	}
 

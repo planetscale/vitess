@@ -29,8 +29,9 @@ import (
 type frame func(env *ExpressionEnv) int
 
 type compiler struct {
-	cfg *Config
-	asm assembler
+	cfg     *Config
+	asm     assembler
+	sqlmode SQLMode
 }
 
 type CompilerLog interface {
@@ -188,7 +189,7 @@ func (c *compiler) compileToDate(doct ctype, offset int) ctype {
 	case sqltypes.Date:
 		return doct
 	default:
-		c.asm.Convert_xD(offset)
+		c.asm.Convert_xD(offset, c.sqlmode.AllowZeroDate())
 	}
 	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: flagNullable}
 }
@@ -199,7 +200,7 @@ func (c *compiler) compileToDateTime(doct ctype, offset, prec int) ctype {
 		c.asm.Convert_tp(offset, prec)
 		return doct
 	default:
-		c.asm.Convert_xDT(offset, prec)
+		c.asm.Convert_xDT(offset, prec, c.sqlmode.AllowZeroDate())
 	}
 	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: flagNullable}
 }
