@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
@@ -118,6 +119,10 @@ func (t *noopVCursor) ConnCollation() collations.ID {
 
 func (t *noopVCursor) TimeZone() *time.Location {
 	return nil
+}
+
+func (t *noopVCursor) SQLMode() string {
+	return config.DefaultSQLMode
 }
 
 func (t *noopVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
