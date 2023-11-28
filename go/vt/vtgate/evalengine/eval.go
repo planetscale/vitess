@@ -168,7 +168,7 @@ func evalIsTruthy(e eval) boolean {
 	}
 }
 
-func evalCoerce(e eval, typ sqltypes.Type, col collations.ID, now time.Time) (eval, error) {
+func evalCoerce(e eval, typ sqltypes.Type, col collations.ID, now time.Time, allowZero bool) (eval, error) {
 	if e == nil {
 		return nil, nil
 	}
@@ -200,9 +200,9 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID, now time.Time) (ev
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 		return evalToInt64(e).toUint64(), nil
 	case sqltypes.Date:
-		return evalToDate(e, now), nil
+		return evalToDate(e, now, allowZero), nil
 	case sqltypes.Datetime, sqltypes.Timestamp:
-		return evalToDateTime(e, -1, now), nil
+		return evalToDateTime(e, -1, now, allowZero), nil
 	case sqltypes.Time:
 		return evalToTime(e, -1), nil
 	default:
@@ -210,7 +210,7 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID, now time.Time) (ev
 	}
 }
 
-func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.ID) (eval, error) {
+func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.ID, sqlmode SQLMode) (eval, error) {
 	switch {
 	case typ == sqltypes.Null:
 		return nil, nil
@@ -330,7 +330,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			return nil, err
 		}
 		// Separate return here to avoid nil wrapped in interface type
-		d := evalToDate(e, time.Now())
+		d := evalToDate(e, time.Now(), sqlmode.AllowZeroDate())
 		if d == nil {
 			return nil, nil
 		}
@@ -341,7 +341,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			return nil, err
 		}
 		// Separate return here to avoid nil wrapped in interface type
-		dt := evalToDateTime(e, -1, time.Now())
+		dt := evalToDateTime(e, -1, time.Now(), sqlmode.AllowZeroDate())
 		if dt == nil {
 			return nil, nil
 		}

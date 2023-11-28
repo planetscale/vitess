@@ -61,6 +61,8 @@ type HashJoin struct {
 	// collation and type are used to hash the incoming values correctly
 	Collation      collations.ID
 	ComparisonType querypb.Type
+
+	SQLMode evalengine.SQLMode
 }
 
 // TryExecute implements the Primitive interface
@@ -90,7 +92,7 @@ func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		if joinVal.IsNull() {
 			continue
 		}
-		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
+		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType, hj.SQLMode)
 		if err != nil {
 			return nil, err
 		}
@@ -120,7 +122,7 @@ func (hj *HashJoin) buildProbeTable(lresult *sqltypes.Result) (map[evalengine.Ha
 		if joinVal.IsNull() {
 			continue
 		}
-		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
+		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType, hj.SQLMode)
 		if err != nil {
 			return nil, err
 		}
@@ -143,7 +145,7 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 			if joinVal.IsNull() {
 				continue
 			}
-			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
+			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType, hj.SQLMode)
 			if err != nil {
 				return err
 			}
@@ -168,7 +170,7 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 			if joinVal.IsNull() {
 				continue
 			}
-			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
+			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType, hj.SQLMode)
 			if err != nil {
 				return err
 			}

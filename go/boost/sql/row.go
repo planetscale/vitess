@@ -352,7 +352,7 @@ func (r Row) HashExact(h *vthash.Hasher, schema []Type) (vthash.Hash, bool) {
 
 		tt := sqltypes.Type(getUint16s(string(r)[last:]))
 		vv := []byte(r[last+2 : pos])
-		if evalengine.NullsafeHashcode128(h, sqltypes.MakeTrusted(tt, vv), schema[col].Collation, schema[col].T) != nil {
+		if evalengine.NullsafeHashcode128(h, sqltypes.MakeTrusted(tt, vv), schema[col].Collation, schema[col].T, 0) != nil {
 			return vthash.Hash{}, false
 		}
 
@@ -365,7 +365,7 @@ func (r Row) HashExact(h *vthash.Hasher, schema []Type) (vthash.Hash, bool) {
 func (r Row) HashValue(h *vthash.Hasher, valpos int, valtype Type) vthash.Hash {
 	h.Reset()
 	vv := r.ValueAt(valpos).ToVitessUnsafe()
-	if err := evalengine.NullsafeHashcode128(h, vv, valtype.Collation, valtype.T); err != nil {
+	if err := evalengine.NullsafeHashcode128(h, vv, valtype.Collation, valtype.T, 0); err != nil {
 		panic(err)
 	}
 	return h.Sum128()
@@ -376,7 +376,7 @@ func (r Row) HashWithKey(h *vthash.Hasher, key []int, schema []Type) vthash.Hash
 	for _, col := range key {
 		vv := r.ValueAt(col).ToVitessUnsafe()
 		ss := &schema[col]
-		if err := evalengine.NullsafeHashcode128(h, vv, ss.Collation, ss.T); err != nil {
+		if err := evalengine.NullsafeHashcode128(h, vv, ss.Collation, ss.T, 0); err != nil {
 			panic(err)
 		}
 	}
@@ -387,7 +387,7 @@ func (r Row) HashWithKeySchema(h *vthash.Hasher, key []int, schema []Type) vthas
 	h.Reset()
 	for i, col := range key {
 		vv := r.ValueAt(col).ToVitessUnsafe()
-		if err := evalengine.NullsafeHashcode128(h, vv, schema[i].Collation, schema[i].T); err != nil {
+		if err := evalengine.NullsafeHashcode128(h, vv, schema[i].Collation, schema[i].T, 0); err != nil {
 			panic(err)
 		}
 	}
@@ -464,7 +464,7 @@ func addWeights(dst []byte, v sqltypes.Value, t Type) ([]byte, error) {
 	case sqltypes.Char, sqltypes.Binary, sqltypes.Decimal:
 		length = int(t.Length)
 	}
-	out, fixed, err := evalengine.WeightString(dst, v, t.T, t.Collation, length, int(t.Precision))
+	out, fixed, err := evalengine.WeightString(dst, v, t.T, t.Collation, length, int(t.Precision), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +494,7 @@ func (r Row) WeightsWithKeySchema(key []int, schema []Type, pad int) (Weights, e
 func (r Row) ShardValue(h *vthash.Hasher, valpos int, valtype Type, shards uint) uint {
 	h.Reset()
 	vv := r.ValueAt(valpos).ToVitessUnsafe()
-	if err := evalengine.NullsafeHashcode128(h, vv, valtype.Collation, valtype.T); err != nil {
+	if err := evalengine.NullsafeHashcode128(h, vv, valtype.Collation, valtype.T, 0); err != nil {
 		panic(err)
 	}
 	return uint(h.Sum64()) % shards

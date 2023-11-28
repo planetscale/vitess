@@ -570,6 +570,7 @@ type Config struct {
 	Collation    collations.ID
 	Optimization OptimizationLevel
 	CompilerErr  error
+	SQLMode      SQLMode
 }
 
 func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {

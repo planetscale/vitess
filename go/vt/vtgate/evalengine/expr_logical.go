@@ -520,7 +520,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 	t, _ := c.typeof(env, nil)
-	return evalCoerce(result, t, ca.result().Collation, env.now)
+	return evalCoerce(result, t, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
 }
 
 func (c *CaseExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -634,7 +634,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		f |= flagNullable
 	}
 	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result()}
-	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Col)
+	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
 }
 
