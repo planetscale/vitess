@@ -57,7 +57,11 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 	wsNeeded := make([]bool, len(columns))
 	for idx, col := range columns {
 		addToGroupBy = append(addToGroupBy, false)
-		e := d.QP.GetSimplifiedExpr(col.Expr)
+		e, err := d.QP.GetSimplifiedExpr(ctx, col.Expr)
+		if err != nil {
+			// ambiguous columns are not a problem for DISTINCT
+			e = col.Expr
+		}
 		if ctx.SemTable.NeedsWeightString(e) {
 			wsExprs = append(wsExprs, aeWrap(weightStringFor(e)))
 			addToGroupBy = append(addToGroupBy, false)
@@ -83,7 +87,11 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) error {
 			wsCol = &offsets[n+wsOffset]
 			wsOffset++
 		}
-		e := d.QP.GetSimplifiedExpr(col.Expr)
+		e, err := d.QP.GetSimplifiedExpr(ctx, col.Expr)
+		if err != nil {
+			// ambiguous columns are not a problem for DISTINCT
+			e = col.Expr
+		}
 		typ, coll, _ := ctx.SemTable.TypeForExpr(e)
 		d.Columns = append(d.Columns, engine.CheckCol{
 			Col:       i,

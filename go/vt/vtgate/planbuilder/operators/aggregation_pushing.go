@@ -370,7 +370,10 @@ var errAbortAggrPushing = fmt.Errorf("abort aggregation pushing")
 func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, rootAggr *Aggregator, join *ApplyJoin, lhs *joinPusher) error {
 	for _, pred := range join.JoinPredicates {
 		for _, expr := range pred.LHSExprs {
-			wexpr := rootAggr.QP.GetSimplifiedExpr(expr)
+			wexpr, err := rootAggr.QP.GetSimplifiedExpr(ctx, expr)
+			if err != nil {
+				return err
+			}
 			idx, found := canReuseColumn(ctx, lhs.pushed.Columns, expr, extractExpr)
 			if !found {
 				idx = len(lhs.pushed.Columns)
