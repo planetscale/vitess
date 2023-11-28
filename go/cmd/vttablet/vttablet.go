@@ -47,6 +47,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+const (
+	dbaGrantWaitTime = 10 * time.Second
+)
+
 var (
 	enforceTableACLConfig        bool
 	tableACLConfig               string
@@ -210,6 +214,11 @@ func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts 
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 	} else if enforceTableACLConfig {
 		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
+	}
+
+	err := tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
+	if err != nil {
+		log.Exitf("failed to wait for DBA grants: %v", err)
 	}
 	// creates and registers the query service
 	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias)
