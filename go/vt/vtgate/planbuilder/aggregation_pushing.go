@@ -258,7 +258,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 
 	// We need to group by the columns used in the join condition.
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
-	lhsCols, err := hp.createGroupingsForColumns(join.LHSColumns)
+	lhsCols, err := hp.createGroupingsForColumns(ctx, join.LHSColumns)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -358,7 +358,7 @@ func (hp *horizonPlanning) pushAggrOnSemiJoin(
 ) ([]offsets, [][]offsets, bool, error) {
 	// We need to group by the columns used in the join condition.
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
-	lhsCols, err := hp.createGroupingsForColumns(join.LHSColumns)
+	lhsCols, err := hp.createGroupingsForColumns(ctx, join.LHSColumns)
 	if err != nil {
 		return nil, nil, false, err
 	}
