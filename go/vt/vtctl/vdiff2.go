@@ -59,6 +59,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	onlyPks := subFlags.Bool("only_pks", false, "When reporting missing rows, only show primary keys in the report.")
 	var format string
 	subFlags.StringVar(&format, "format", "text", "Format of report") // "json" or "text"
+	maxReportSampleRows := subFlags.Uint32("max_report_sample_rows", 10, "Maximum number of row differences to report (0 for all differences). NOTE: when increasing this value it is highly recommended to also specify --only_pks")
 	maxExtraRowsToCompare := subFlags.Int64("max_extra_rows_to_compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 
 	autoRetry := subFlags.Bool("auto-retry", true, "Should this vdiff automatically retry and continue in case of recoverable errors")
@@ -121,9 +122,10 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 			UpdateTableStats:      *updateTableStats,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			OnlyPks:    *onlyPks,
-			DebugQuery: *debugQuery,
-			Format:     format,
+			OnlyPks:       *onlyPks,
+			DebugQuery:    *debugQuery,
+			Format:        format,
+			MaxSampleRows: int64(*maxReportSampleRows),
 		},
 	}
 
