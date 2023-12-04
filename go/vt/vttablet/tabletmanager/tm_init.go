@@ -87,6 +87,7 @@ var (
 
 	initPopulateMetadata bool
 	initTimeout          = 1 * time.Minute
+	mysqlShutdownTimeout = 5 * time.Minute
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
@@ -100,6 +101,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&initPopulateMetadata, "init_populate_metadata", initPopulateMetadata, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
 	fs.MarkDeprecated("init_populate_metadata", "this flag is no longer being used and will be removed in future versions")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
+	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "timeout to use when MySQL is being shut down.")
 }
 
 var (
@@ -799,7 +801,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 			}
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, mysqlShutdownTimeout); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 		}()
