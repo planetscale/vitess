@@ -45,8 +45,9 @@ var (
 	mysqlSocket string
 
 	// mysqlctl init flags
-	waitTime      = 5 * time.Minute
-	initDBSQLFile string
+	waitTime         = 5 * time.Minute
+	shutdownWaitTime = 5 * time.Minute
+	initDBSQLFile    string
 )
 
 func init() {
@@ -62,8 +63,9 @@ func init() {
 		fs.IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port")
 		fs.Uint32Var(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
 		fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
-		fs.DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup or shutdown")
+		fs.DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup")
 		fs.StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "Path to .sql file to run after mysqld initialization")
+		fs.DurationVar(&shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "How long to wait for mysqld shutdown")
 
 		acl.RegisterFlags(fs)
 	})
@@ -137,8 +139,9 @@ func main() {
 	// Take mysqld down with us on SIGTERM before entering lame duck.
 	servenv.OnTermSync(func() {
 		log.Infof("mysqlctl received SIGTERM, shutting down mysqld first")
-		ctx := context.Background()
-		if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownWaitTime+10*time.Second)
+		defer cancel()
+		if err := mysqld.Shutdown(ctx, cnf, true, shutdownWaitTime); err != nil {
 			log.Errorf("failed to shutdown mysqld: %v", err)
 		}
 	})

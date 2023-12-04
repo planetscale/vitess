@@ -121,9 +121,9 @@ func shutdownCmd(subFlags *pflag.FlagSet, args []string) error {
 	}
 	defer mysqld.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+	ctx, cancel := context.WithTimeout(context.Background(), *waitTime+10*time.Second)
 	defer cancel()
-	if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
+	if err := mysqld.Shutdown(ctx, cnf, true, *waitTime); err != nil {
 		return fmt.Errorf("failed shutdown mysql: %v", err)
 	}
 	return nil
@@ -162,9 +162,9 @@ func teardownCmd(subFlags *pflag.FlagSet, args []string) error {
 	}
 	defer mysqld.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+	ctx, cancel := context.WithTimeout(context.Background(), *waitTime+10*time.Second)
 	defer cancel()
-	if err := mysqld.Teardown(ctx, cnf, *force); err != nil {
+	if err := mysqld.Teardown(ctx, cnf, *force, *waitTime); err != nil {
 		return fmt.Errorf("failed teardown mysql (forced? %v): %v", *force, err)
 	}
 	return nil

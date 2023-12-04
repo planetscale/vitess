@@ -118,6 +118,8 @@ func startMysqld(uid uint32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf) {
 	return mysqld, cnf
 }
 
+const mysqlShutdownTimeout = 5 * time.Minute
+
 func main() {
 	defer exit.Recover()
 	// flag parsing
@@ -197,7 +199,9 @@ func main() {
 	if *startMysql {
 		mysqld.Mysqld, cnf = startMysqld(1)
 		servenv.OnClose(func() {
-			mysqld.Shutdown(context.TODO(), cnf, true)
+			ctx, cancel := context.WithTimeout(context.Background(), mysqlShutdownTimeout+10*time.Second)
+			defer cancel()
+			mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout)
 		})
 		// We want to ensure we can write to this database
 		mysqld.SetReadOnly(false)
@@ -220,7 +224,9 @@ func main() {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		// ensure we start mysql in the event we fail here
 		if *startMysql {
-			mysqld.Shutdown(context.TODO(), cnf, true)
+			ctx, cancel := context.WithTimeout(context.Background(), mysqlShutdownTimeout+10*time.Second)
+			defer cancel()
+			mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout)
 		}
 		exit.Return(1)
 	}
@@ -266,7 +272,9 @@ func main() {
 		err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, ks.GetName(), tpb.Cells, false)
 		if err != nil {
 			if *startMysql {
-				mysqld.Shutdown(context.TODO(), cnf, true)
+				ctx, cancel := context.WithTimeout(context.Background(), mysqlShutdownTimeout+10*time.Second)
+				defer cancel()
+				mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout)
 			}
 			log.Fatalf("Couldn't build srv keyspace for (%v: %v). Got error: %v", ks, tpb.Cells, err)
 		}
