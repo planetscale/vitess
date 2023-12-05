@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -361,6 +363,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		Insert:                  tpb.generateInsertStatement(),
 		Update:                  tpb.generateUpdateStatement(),
 		Delete:                  tpb.generateDeleteStatement(),
+		MultiDelete:             tpb.generateMultiDeleteStatement(),
 		PKReferences:            pkrefs,
 		PKIndices:               tpb.pkIndices,
 		Stats:                   tpb.stats,
@@ -868,6 +871,18 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 		return nil
 	}
 	return buf.ParsedQuery()
+}
+
+func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQuery {
+	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
+		(len(tpb.pkCols)+len(tpb.extraSourcePkCols)) != 1 {
+		return nil
+	}
+	return sqlparser.BuildParsedQuery("delete from %s where %s in %a",
+		sqlparser.String(tpb.name),
+		sqlparser.String(tpb.pkCols[0].colName),
+		"::bulk_pks",
+	)
 }
 
 func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {

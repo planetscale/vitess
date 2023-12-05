@@ -97,6 +97,7 @@ type Stats struct {
 	PhaseTimings   *stats.Timings
 	QueryTimings   *stats.Timings
 	QueryCount     *stats.CountersWithSingleLabel
+	BulkQueryCount *stats.CountersWithSingleLabel
 	CopyRowCount   *stats.Counter
 	CopyLoopCount  *stats.Counter
 	ErrorCounts    *stats.CountersWithMultiLabels
@@ -167,6 +168,7 @@ func NewStats() *Stats {
 	bps.PhaseTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
+	bps.BulkQueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
 	bps.CopyRowCount = stats.NewCounter("", "")
 	bps.CopyLoopCount = stats.NewCounter("", "")
 	bps.ErrorCounts = stats.NewCountersWithMultiLabels("", "", []string{"type"})

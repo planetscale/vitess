@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet"
+
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 
@@ -221,18 +223,32 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	if tplan == nil {
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
-	for _, change := range rowEvent.RowChanges {
-		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
-			stats := NewVrLogStats("ROWCHANGE")
-			start := time.Now()
-			qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
-			vp.vr.stats.QueryCount.Add(vp.phase, 1)
-			vp.vr.stats.QueryTimings.Record(vp.phase, start)
-			stats.Send(sql)
-			return qr, err
-		})
-		if err != nil {
+	applyFunc := func(sql string) (*sqltypes.Result, error) {
+		stats := NewVrLogStats("ROWCHANGE")
+		start := time.Now()
+		qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+		vp.vr.stats.QueryCount.Add(vp.phase, 1)
+		vp.vr.stats.QueryTimings.Record(vp.phase, start)
+		stats.Send(sql)
+		return qr, err
+	}
+	// If we have a delete row event for multiple rows in a table with a single PK column then we
+	// can perform a simple bulk delete using an IN clause.
+	// TODO: we should ensure that the total size of the statement does not
+	// exceed mysqld's max allowed packet size.
+	if vttablet.VReplicationExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 &&
+		len(rowEvent.RowChanges) > 1 && (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
+		tplan.MultiDelete != nil {
+		if _, err := tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc); err != nil {
+
 			return err
+		}
+		vp.vr.stats.BulkQueryCount.Add(vp.phase, 1)
+	} else {
+		for _, change := range rowEvent.RowChanges {
+			if _, err := tplan.applyChange(change, applyFunc); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

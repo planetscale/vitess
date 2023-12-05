@@ -198,6 +198,7 @@ type TablePlan struct {
 	Insert           *sqlparser.ParsedQuery
 	Update           *sqlparser.ParsedQuery
 	Delete           *sqlparser.ParsedQuery
+	MultiDelete      *sqlparser.ParsedQuery
 	Fields           []*querypb.Field
 	EnumValuesMap    map[string](map[string]string)
 	ConvertIntToEnum map[string]bool
@@ -445,6 +446,41 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	}
 	// Unreachable.
 	return nil, nil
+}
+
+// applyBulkDeleteChanges applies a bulk delete statement from the row changes
+// to the target table using an IN clause with the primary key values of the
+// rows to be deleted. At the moment, this only supports tables with single column primary keys.
+func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	if (len(tp.TablePlanBuilder.pkCols) + len(tp.TablePlanBuilder.extraSourcePkCols)) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bulk delete is only supported for tables with a single primary key column")
+	}
+	if tp.MultiDelete == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk delete query")
+	}
+	pkIndex := -1
+	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
+	for _, rowDelete := range rowDeletes {
+		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
+		if pkIndex == -1 {
+			for i := range vals {
+				if tp.TablePlanBuilder.pkIndices[i] {
+					pkIndex = i
+					break
+				}
+			}
+		}
+		pkVals = append(pkVals, vals[pkIndex])
+	}
+	pksBV, err := sqltypes.BuildBindVariable(pkVals)
+	if err != nil {
+		return nil, err
+	}
+	query, err := tp.MultiDelete.GenerateQuery(map[string]*querypb.BindVariable{"bulk_pks": pksBV}, nil)
+	if err != nil {
+		return nil, err
+	}
+	return executor(query)
 }
 
 func getQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable) (string, error) {

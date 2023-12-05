@@ -26,27 +26,27 @@ import (
 	"testing"
 	"time"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-
+	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
-
-	"github.com/buger/jsonparser"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
 var (
@@ -582,8 +582,16 @@ func testVStreamCellFlag(t *testing.T) {
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	mainClusterConfig.vreplicationCompressGTID = true
+
+	// Enable the bulk delete vplayer optimization in this test, which is disabled by default, to confirm that we
+	// don't have a regression due to the bulk delete functionality  of this functionality.
+	oldVTTabletExtraArgs := extraVTTabletArgs
+	extraVTTabletArgs = append(extraVTTabletArgs, fmt.Sprintf("--vreplication_experimental_flags=%d",
+		vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagVPlayerBatching))
+
 	defer func() {
 		mainClusterConfig.vreplicationCompressGTID = false
+		extraVTTabletArgs = oldVTTabletExtraArgs
 	}()
 	vc = NewVitessCluster(t, "TestCellAliasVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
@@ -770,6 +778,12 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		matchInsertQuery0 := "insert into customer(cid, `name`) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */)"
 		matchInsertQuery1 := "insert into customer(cid, `name`, meta) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */, :vtg3 /* VARCHAR */)"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
+
+		// insert multiple rows into reftable and immediately delete them to confirm that bulk delete
+		// works the same way with the vplayer optimization enabled and disabled. Currently, this optimization
+		// is disabled by default, but enabled in TestCellAliasVreplicationWorkflow.
+		execVtgateQuery(t, vtgateConn, sourceKs, "insert into reftable(id, val1) values(10001, 'temp'), (10002, 'temp2'), (10003, 'temp3'), (10004, 'temp4')")
+		execVtgateQuery(t, vtgateConn, sourceKs, "delete from reftable where id > 10000")
 
 		// confirm that the backticking of table names in the routing rules works
 		tbls := []string{"Lead", "Lead-1"}
