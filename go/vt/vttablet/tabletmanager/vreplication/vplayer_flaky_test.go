@@ -3051,6 +3051,151 @@ func TestPlayerNoBlob(t *testing.T) {
 	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
 }
 
+func TestPlayerBulkDelete(t *testing.T) {
+	oldVreplicationExperimentalFlags := vttablet.VReplicationExperimentalFlags
+	vttablet.VReplicationExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	defer func() {
+		vttablet.VReplicationExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table t1(id int, val1 varchar(20), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val1 varchar(20), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, vrId := startVReplication(t, bls, "")
+	_ = vrId
+	defer cancel()
+
+	testcases := []struct {
+		id     int
+		input  string
+		output string
+		table  string
+		data   [][]string
+	}{{
+		id:     1,
+		input:  "insert into t1(id, val1) values (1, 'aaa')",
+		output: "insert into t1(id,val1) values (1,'aaa')",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa"},
+		},
+	}, {
+		id:     2,
+		input:  "insert into t1(id, val1) values (2, 'bbb')",
+		output: "insert into t1(id,val1) values (2,'bbb')",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa"},
+			{"2", "bbb"},
+		},
+	}, {
+		id:     3,
+		input:  "insert into t1(id, val1) values (3, 'ccc')",
+		output: "insert into t1(id,val1) values (3,'ccc')",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa"},
+			{"2", "bbb"},
+			{"3", "ccc"},
+		},
+	}, {
+		id:     4,
+		input:  "insert into t1(id, val1) values (4, 'ddd')",
+		output: "insert into t1(id,val1) values (4,'ddd')",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa"},
+			{"2", "bbb"},
+			{"3", "ccc"},
+			{"4", "ddd"},
+		},
+	}, {
+		id:     5,
+		input:  "insert into t1(id, val1) values (5, 'eee')",
+		output: "insert into t1(id,val1) values (5,'eee')",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa"},
+			{"2", "bbb"},
+			{"3", "ccc"},
+			{"4", "ddd"},
+			{"5", "eee"},
+		},
+	}, {
+		id:     6,
+		input:  "delete from t1 where id = 1",
+		output: "delete from t1 where id=1",
+		table:  "t1",
+		data: [][]string{
+			{"2", "bbb"},
+			{"3", "ccc"},
+			{"4", "ddd"},
+			{"5", "eee"},
+		},
+	}, {
+		id:     7,
+		input:  "delete from t1 where id > 3",
+		output: "delete from t1 where id in (4, 5)",
+		table:  "t1",
+		data: [][]string{
+			{"2", "bbb"},
+			{"3", "ccc"},
+		},
+	}, {
+		id:     8,
+		input:  "delete from t1",
+		output: "delete from t1 where id in (2, 3)",
+		table:  "t1",
+	}}
+	getQueryCounts := func() (int, int) {
+		bulkQueryCount := 0
+		queryCount := 0
+		for _, ct := range globalStats.controllers {
+			for _, count := range ct.blpStats.BulkQueryCount.Counts() {
+				bulkQueryCount += int(count)
+			}
+			for _, count := range ct.blpStats.QueryCount.Counts() {
+				queryCount += int(count)
+			}
+		}
+		return bulkQueryCount, queryCount
+	}
+
+	beforeBulkQueryCount, beforeQueryCount := getQueryCounts()
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := qh.Expect(tcases.output)
+		expectNontxQueries(t, output)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
+	afterBulkQueryCount, afterQueryCount := getQueryCounts()
+	// Test cases #7 and #8 should be batched into one bulk query.
+	require.Equal(t, 2, afterBulkQueryCount-beforeBulkQueryCount)
+	require.Equal(t, len(testcases), afterQueryCount-beforeQueryCount)
+}
+
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
 	t.Helper()
 

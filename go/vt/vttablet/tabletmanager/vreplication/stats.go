@@ -255,6 +255,39 @@ func (st *vrStats) register() {
 		})
 
 	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationBulkQueryCount",
+		"vreplication bulk query counts per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "phase"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for label, count := range ct.blpStats.BulkQueryCount.Counts() {
+					if label == "" {
+						continue
+					}
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+label] = count
+				}
+			}
+			return result
+		})
+	stats.NewCounterFunc(
+		"VReplicationBulkQueryCountTotal",
+		"vreplication bulk query counts aggregated across all streams",
+		func() int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := int64(0)
+			for _, ct := range st.controllers {
+				for _, count := range ct.blpStats.BulkQueryCount.Counts() {
+					result += count
+				}
+			}
+			return result
+		})
+
+	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationNoopQueryCount",
 		"vreplication noop query counts per stream",
 		[]string{"source_keyspace", "source_shard", "workflow", "counts", "phase"},
@@ -476,6 +509,7 @@ func (st *vrStats) status() *EngineStatus {
 			SourceTablet:          ct.sourceTablet.Load().(*topodatapb.TabletAlias),
 			Messages:              ct.blpStats.MessageHistory(),
 			QueryCounts:           ct.blpStats.QueryCount.Counts(),
+			BulkQueryCounts:       ct.blpStats.BulkQueryCount.Counts(),
 			PhaseTimings:          ct.blpStats.PhaseTimings.Counts(),
 			CopyRowCount:          ct.blpStats.CopyRowCount.Get(),
 			CopyLoopCount:         ct.blpStats.CopyLoopCount.Get(),
@@ -514,6 +548,7 @@ type ControllerStatus struct {
 	SourceTablet          *topodatapb.TabletAlias
 	Messages              []string
 	QueryCounts           map[string]int64
+	BulkQueryCounts       map[string]int64
 	PhaseTimings          map[string]int64
 	CopyRowCount          int64
 	CopyLoopCount         int64
