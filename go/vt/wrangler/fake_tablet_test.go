@@ -196,7 +196,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 	}
-	if err := ft.TM.Start(ft.Tablet, 0); err != nil {
+	if err := ft.TM.Start(ft.Tablet, nil); err != nil {
 		t.Fatal(err)
 	}
 	ft.Tablet = ft.TM.Tablet()

@@ -128,7 +128,7 @@ func main() {
 		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
 		VDiffEngine:         vdiff.NewEngine(config, ts, tablet),
 	}
-	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {
+	if err := tm.Start(tablet, config); err != nil {
 		log.Exitf("failed to parse --tablet-path or initialize DB credentials: %v", err)
 	}
 	servenv.OnClose(func() {
@@ -216,10 +216,6 @@ func createTabletServer(ctx context.Context, config *tabletenv.TabletConfig, ts 
 		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
 
-	err := tabletserver.WaitForDBAGrants(config, dbaGrantWaitTime)
-	if err != nil {
-		log.Exitf("failed to wait for DBA grants: %v", err)
-	}
 	// creates and registers the query service
 	qsc := tabletserver.NewTabletServer(ctx, "", config, ts, tabletAlias)
 	servenv.OnRun(func() {
