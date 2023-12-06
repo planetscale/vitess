@@ -58,6 +58,8 @@ type (
 		// map of keyspace currently tracked
 		tracked      map[keyspaceStr]*updateController
 		consumeDelay time.Duration
+
+		fetchUpdatedQuery string
 	}
 )
 
@@ -116,12 +118,22 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 		return vterrors.VT14005(target.Keyspace)
 	}
 
-	ftRes, err := conn.Execute(t.ctx, target,
-		sqlparser.BuildParsedQuery(mysql.FetchTables, sidecarDBID).Query,
+	ftRes, err := conn.Execute(t.ctx, target, sqlparser.BuildParsedQuery(mysql.FetchTables, sidecarDBID).Query,
 		nil, 0, 0, nil)
 	if err != nil {
-		return err
+		if !strings.Contains(err.Error(), "extra") {
+			return err
+		}
+		ftRes, err = conn.Execute(t.ctx, target, sqlparser.BuildParsedQuery(mysql.FetchTablesNoExtra, sidecarDBID).Query,
+			nil, 0, 0, nil)
+		if err != nil {
+			return err
+		}
+		t.fetchUpdatedQuery = mysql.FetchUpdatedTablesNoExtra
+	} else {
+		t.fetchUpdatedQuery = mysql.FetchUpdatedTables
 	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -285,7 +297,7 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 
 	bv := map[string]*querypb.BindVariable{"tableNames": tables}
 	res, err := th.Conn.Execute(t.ctx, th.Target,
-		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, sidecarDBID).Query,
+		sqlparser.BuildParsedQuery(t.fetchUpdatedQuery, sidecarDBID).Query,
 		bv, 0, 0, nil)
 	if err != nil {
 		t.tracked[th.Target.Keyspace].setLoaded(false)
@@ -318,7 +330,10 @@ func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 		colName := row[1].ToString()
 		colType := row[2].ToString()
 		collation := row[3].ToString()
-		invisible := strings.Contains(row[4].ToString(), InvisibleColumn)
+		invisible := false
+		if t.fetchUpdatedQuery == mysql.FetchUpdatedTables {
+			invisible = strings.Contains(row[4].ToString(), InvisibleColumn)
+		}
 
 		cType := sqlparser.ColumnType{Type: colType}
 		col := vindexes.Column{Name: sqlparser.NewIdentifierCI(colName), Type: cType.SQLType(), CollationName: collation, Invisible: invisible}

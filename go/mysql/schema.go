@@ -83,6 +83,10 @@ where table_schema = database()`
 	// fetchColumns are the columns we fetch
 	fetchColumns = "table_name, column_name, data_type, collation_name, extra"
 
+	// fetchColumnsNoExtra are the columns we fetch without the
+	// 'extra' column to ensure backward/forward compatibility
+	fetchColumnsNoExtra = "table_name, column_name, data_type, collation_name"
+
 	// FetchUpdatedTables queries fetches all information about updated tables
 	FetchUpdatedTables = `select  ` + fetchColumns + `
 from %s.schemacopy
@@ -90,8 +94,22 @@ where table_schema = database() and
 	table_name in ::tableNames
 order by table_name, ordinal_position`
 
+	// FetchUpdatedTablesNoExtra queries fetches all information besides the extra column
+	// about updated tables
+	FetchUpdatedTablesNoExtra = `select  ` + fetchColumnsNoExtra + `
+from %s.schemacopy
+where table_schema = database() and
+	table_name in ::tableNames
+order by table_name, ordinal_position`
+
 	// FetchTables queries fetches all information about tables
 	FetchTables = `select ` + fetchColumns + `
+from %s.schemacopy
+where table_schema = database()
+order by table_name, ordinal_position`
+
+	// FetchTablesNoExtra queries fetches all information besides the extra column about tables
+	FetchTablesNoExtra = `select ` + fetchColumnsNoExtra + `
 from %s.schemacopy
 where table_schema = database()
 order by table_name, ordinal_position`
