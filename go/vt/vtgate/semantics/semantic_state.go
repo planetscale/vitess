@@ -72,10 +72,11 @@ type (
 
 	// QuerySignature is used to identify shortcuts in the planning process
 	QuerySignature struct {
-		Union       bool
-		Aggregation bool
-		Distinct    bool
-		SubQueries  bool
+		Union,
+		Aggregation,
+		Distinct,
+		SubQueries,
+		HashJoin bool
 	}
 
 	// SemTable contains semantic analysis information about the query.
@@ -496,6 +497,7 @@ func EmptySemTable() *SemTable {
 		Direct:           map[sqlparser.Expr]TableSet{},
 		ColumnEqualities: map[columnName][]sqlparser.Expr{},
 		columns:          map[*sqlparser.Union]sqlparser.SelectExprs{},
+		ExprTypes:        make(map[sqlparser.Expr]evalengine.Type),
 	}
 }
 
