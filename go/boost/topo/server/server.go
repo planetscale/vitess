@@ -270,7 +270,12 @@ func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 }
 
 func (ts *Server) GetSchema(ctx context.Context, keyspace string) (*tabletmanagerdata.SchemaDefinition, error) {
-	shards, err := ts.srv.FindAllShardsInKeyspace(ctx, keyspace)
+	shards, err := ts.srv.FindAllShardsInKeyspace(ctx, keyspace, &topo.FindAllShardsInKeyspaceOptions{
+		// Fetch shard records concurrently to speed up fetching schema. There
+		// are comparatively few vtboost instances per Vitess cluster compared
+		// to other components, so there is little risk of a thundering herd.
+		Concurrency: 8,
+	})
 	if err != nil {
 		return nil, err
 	}
