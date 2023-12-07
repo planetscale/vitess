@@ -194,17 +194,13 @@ func createSubquery(
 		return nil, err
 	}
 
-	stmt := rewriteRemainingColumns(ctx, subq.Select, subqID)
-
-	// TODO: this should not be needed. We are using CopyOnRewrite above, but somehow this is not getting copied
-	ctx.SemTable.CopySemanticInfo(subq.Select, stmt)
-
-	opInner, err := translateQueryToOp(ctx, stmt)
+	opInner, err := translateQueryToOp(ctx, subq.Select)
 	if err != nil {
 		return nil, err
 	}
 
 	opInner = sqc.getRootOperator(opInner, nil)
+	correlated := checkForCorrelatedSubqueries(ctx, subq.Select, subqID)
 	return &SubQuery{
 		FilterType:       filterType,
 		Subquery:         opInner,
@@ -215,6 +211,7 @@ func createSubquery(
 		IsProjection:     isProjection,
 		TopLevel:         topLevel,
 		JoinColumns:      joinCols,
+		correlated:       correlated,
 	}, nil
 }
 
