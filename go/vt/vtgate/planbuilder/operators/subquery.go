@@ -57,7 +57,7 @@ type SubQuery struct {
 	IsProjection bool
 }
 
-func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) {
+func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
 	sq.Vars = make(map[string]int)
 	columns, err := sq.GetJoinColumns(ctx, sq.Outer)
 	if err != nil {
@@ -69,6 +69,7 @@ func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) {
 			sq.Vars[lhsExpr.Name] = offset
 		}
 	}
+	return nil
 }
 
 func (sq *SubQuery) OuterExpressionsNeeded(ctx *plancontext.PlanningContext, outer ops.Operator) (result []*sqlparser.ColName, err error) {
@@ -100,7 +101,7 @@ func (sq *SubQuery) GetJoinColumns(ctx *plancontext.PlanningContext, outer ops.O
 	}
 	sq.outerID = outerID
 	mapper := func(in sqlparser.Expr) (JoinColumn, error) {
-		return BreakExpressionInLHSandRHS(ctx, in, outerID)
+		return breakExpressionInLHSandRHSForApplyJoin(ctx, in, outerID)
 	}
 	joinPredicates, err := slice.MapWithError(sq.Predicates, mapper)
 	if err != nil {

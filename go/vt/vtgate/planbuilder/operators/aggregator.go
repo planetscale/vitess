@@ -258,16 +258,16 @@ func (a *Aggregator) GetOrdering(ctx *plancontext.PlanningContext) []ops.OrderBy
 	return a.Source.GetOrdering(ctx)
 }
 
-func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) {
+func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) ops.Operator {
 	if a.offsetPlanned {
-		return
+		return nil
 	}
 	defer func() {
 		a.offsetPlanned = true
 	}()
 	if !a.Pushed {
 		a.planOffsetsNotPushed(ctx)
-		return
+		return nil
 	}
 
 	for idx, gb := range a.Grouping {
@@ -290,6 +290,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) {
 		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(aggr.Func.GetArg())), true)
 		a.Aggregations[idx].WSOffset = offset
 	}
+	return nil
 }
 
 func (aggr Aggr) getPushColumn() sqlparser.Expr {
