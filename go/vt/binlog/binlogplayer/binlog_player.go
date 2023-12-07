@@ -59,8 +59,12 @@ var (
 
 	// BlplQuery is the key for the stats map.
 	BlplQuery = "Query"
+	// BlplMultiQuery is the key for the stats map.
+	BlplMultiQuery = "MultiQuery"
 	// BlplTransaction is the key for the stats map.
 	BlplTransaction = "Transaction"
+	// BlplBatchTransaction is the key for the stats map.
+	BlplBatchTransaction = "BatchTransaction"
 
 	// VReplicationInit is for the Init state.
 	VReplicationInit = "Init"
@@ -94,14 +98,15 @@ type Stats struct {
 
 	State atomic.Value
 
-	PhaseTimings   *stats.Timings
-	QueryTimings   *stats.Timings
-	QueryCount     *stats.CountersWithSingleLabel
-	BulkQueryCount *stats.CountersWithSingleLabel
-	CopyRowCount   *stats.Counter
-	CopyLoopCount  *stats.Counter
-	ErrorCounts    *stats.CountersWithMultiLabels
-	NoopQueryCount *stats.CountersWithSingleLabel
+	PhaseTimings       *stats.Timings
+	QueryTimings       *stats.Timings
+	QueryCount         *stats.CountersWithSingleLabel
+	BulkQueryCount     *stats.CountersWithSingleLabel
+	TrxQueryBatchCount *stats.CountersWithSingleLabel
+	CopyRowCount       *stats.Counter
+	CopyLoopCount      *stats.Counter
+	ErrorCounts        *stats.CountersWithMultiLabels
+	NoopQueryCount     *stats.CountersWithSingleLabel
 
 	VReplicationLags     *stats.Timings
 	VReplicationLagRates *stats.Rates
@@ -168,7 +173,8 @@ func NewStats() *Stats {
 	bps.PhaseTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
-	bps.BulkQueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
+	bps.BulkQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
+	bps.TrxQueryBatchCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
 	bps.CopyRowCount = stats.NewCounter("", "")
 	bps.CopyLoopCount = stats.NewCounter("", "")
 	bps.ErrorCounts = stats.NewCountersWithMultiLabels("", "", []string{"type"})
