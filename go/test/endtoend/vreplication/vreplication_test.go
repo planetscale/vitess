@@ -279,6 +279,11 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
+	ogflags := extraVTTabletArgs
+	defer func() { extraVTTabletArgs = ogflags }()
+	// Test VPlayer batching mode.
+	extraVTTabletArgs = append(extraVTTabletArgs, fmt.Sprintf("--vreplication_experimental_flags=%d",
+		vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching))
 	sourceKsOpts["DBTypeVersion"] = "mysql-8.0"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t, "noblob")
@@ -582,13 +587,12 @@ func testVStreamCellFlag(t *testing.T) {
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	mainClusterConfig.vreplicationCompressGTID = true
-
-	// Enable the bulk delete vplayer optimization in this test, which is disabled by default, to confirm that we
-	// don't have a regression due to the bulk delete functionality  of this functionality.
 	oldVTTabletExtraArgs := extraVTTabletArgs
-	extraVTTabletArgs = append(extraVTTabletArgs, fmt.Sprintf("--vreplication_experimental_flags=%d",
-		vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagVPlayerBatching))
-
+	extraVTTabletArgs = append(extraVTTabletArgs,
+		// Test VPlayer batching mode.
+		fmt.Sprintf("--vreplication_experimental_flags=%d",
+			vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
+	)
 	defer func() {
 		mainClusterConfig.vreplicationCompressGTID = false
 		extraVTTabletArgs = oldVTTabletExtraArgs
