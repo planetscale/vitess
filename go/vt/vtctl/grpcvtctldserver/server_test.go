@@ -9482,7 +9482,7 @@ func TestShardReplicationPositions(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				PrimaryPositionDelays: map[string]time.Duration{
-					"zone1-0000000100": time.Millisecond * 100,
+					"zone1-0000000100": time.Second * 2,
 				},
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -9493,7 +9493,7 @@ func TestShardReplicationPositions(t *testing.T) {
 					},
 				},
 				ReplicationStatusDelays: map[string]time.Duration{
-					"zone1-0000000101": time.Millisecond * 100,
+					"zone1-0000000101": time.Second * 2,
 				},
 				ReplicationStatusResults: map[string]struct {
 					Position *replicationdatapb.Status
@@ -9506,7 +9506,7 @@ func TestShardReplicationPositions(t *testing.T) {
 					},
 				},
 			},
-			ctxTimeout: time.Millisecond * 10,
+			ctxTimeout: time.Second,
 			req: &vtctldatapb.ShardReplicationPositionsRequest{
 				Keyspace: "testkeyspace",
 				Shard:    "-",
