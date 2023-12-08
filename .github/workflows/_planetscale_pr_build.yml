@@ -131,6 +131,7 @@ jobs:
 
       - name: Test kmsbackup
         run: |
+          go env -w GOPRIVATE=github.com/planetscale/*
           echo '${{ secrets.VITESS_PRIVATE_AWS_CREDENTIALS }}' >> "$RUNNER_TEMP/aws.credentials"
           echo '${{ secrets.VITESS_PRIVATE_GCP_CREDENTIALS }}' >> "$RUNNER_TEMP/gcp.credentials"
           go test vitess.io/vitess/go/vt/mysqlctl/kmsbackup -v -race --aws-credentials-file "$RUNNER_TEMP/aws.credentials" --aws-credentials-profile vitess-private-ci
