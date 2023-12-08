@@ -708,7 +708,8 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 		created = append(created, table)
 	}
 	if runNotifier {
-		f(se.tables, created, nil, nil)
+		s := maps.Clone(se.tables)
+		f(s, created, nil, nil)
 	}
 }
 
@@ -736,10 +737,7 @@ func (se *Engine) broadcast(created, altered, dropped []*Table) {
 
 	se.notifierMu.Lock()
 	defer se.notifierMu.Unlock()
-	s := make(map[string]*Table, len(se.tables))
-	for k, v := range se.tables {
-		s[k] = v
-	}
+	s := maps.Clone(se.tables)
 	for _, f := range se.notifiers {
 		f(s, created, altered, dropped)
 	}
@@ -757,10 +755,7 @@ func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 func (se *Engine) GetSchema() map[string]*Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	tables := make(map[string]*Table, len(se.tables))
-	for k, v := range se.tables {
-		tables[k] = v
-	}
+	tables := maps.Clone(se.tables)
 	return tables
 }
 
