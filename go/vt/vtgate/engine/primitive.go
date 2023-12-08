@@ -121,6 +121,9 @@ type (
 		// ReleaseLock releases all the held advisory locks.
 		ReleaseLock(ctx context.Context) error
 
+		// ReleaseReservedConnections releases all the held reserved connections
+		ReleaseReservedConnections(ctx context.Context) error
+
 		// GetWarmingReadsPercent gets the percentage of queries to clone to replicas for bufferpool warming
 		GetWarmingReadsPercent() int
 

@@ -210,10 +210,9 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 	}
 	defer session.ResetTx()
 
-	allsessions := append(session.PreSessions, session.ShardSessions...)
-	allsessions = append(allsessions, session.PostSessions...)
+	allSessions := txc.getAllSessions(session)
 
-	err := txc.runSessions(ctx, allsessions, session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
+	err := txc.runSessions(ctx, allSessions, session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		if s.TransactionId == 0 {
 			return nil
 		}
@@ -244,12 +243,15 @@ func (txc *TxConn) Release(ctx context.Context, session *SafeSession) error {
 	if !session.InTransaction() && !session.InReservedConn() {
 		return nil
 	}
+	return txc.release(ctx, session)
+}
+
+func (txc *TxConn) release(ctx context.Context, session *SafeSession) error {
 	defer session.Reset()
 
-	allsessions := append(session.PreSessions, session.ShardSessions...)
-	allsessions = append(allsessions, session.PostSessions...)
+	allSessions := txc.getAllSessions(session)
 
-	return txc.runSessions(ctx, allsessions, session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
+	return txc.runSessions(ctx, allSessions, session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		if s.ReservedId == 0 && s.TransactionId == 0 {
 			return nil
 		}
@@ -265,6 +267,25 @@ func (txc *TxConn) Release(ctx context.Context, session *SafeSession) error {
 		s.ReservedId = 0
 		return nil
 	})
+}
+
+func (txc *TxConn) getAllSessions(session *SafeSession) []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	allsessions := append(session.PreSessions, session.ShardSessions...)
+	allsessions = append(allsessions, session.PostSessions...)
+	return allsessions
+}
+
+// ReleaseReservedConn releases the reserved connection if possible
+func (txc *TxConn) ReleaseReservedConn(ctx context.Context, session *SafeSession) error {
+	log.Errorf("called ReleaseReservedConn")
+	if !session.shouldReleaseAllSessions() {
+		return nil
+	}
+	log.Errorf("calling Release")
+	return txc.release(ctx, session)
 }
 
 // ReleaseLock releases the reserved connection used for locking.
@@ -293,13 +314,12 @@ func (txc *TxConn) ReleaseAll(ctx context.Context, session *SafeSession) error {
 	}
 	defer session.ResetAll()
 
-	allsessions := append(session.PreSessions, session.ShardSessions...)
-	allsessions = append(allsessions, session.PostSessions...)
+	allSessions := txc.getAllSessions(session)
 	if session.LockSession != nil {
-		allsessions = append(allsessions, session.LockSession)
+		allSessions = append(allSessions, session.LockSession)
 	}
 
-	return txc.runSessions(ctx, allsessions, session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, loggging *executeLogger) error {
+	return txc.runSessions(ctx, allSessions, session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, loggging *executeLogger) error {
 		if s.ReservedId == 0 && s.TransactionId == 0 {
 			return nil
 		}
