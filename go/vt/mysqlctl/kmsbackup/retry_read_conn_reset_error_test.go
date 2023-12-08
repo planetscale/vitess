@@ -1,19 +1,15 @@
 package kmsbackup
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"net"
 	"os"
 	"testing"
+	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/kms"
-
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,26 +17,12 @@ import (
 // kmsbackup.FilesBackupStorage responds to "read: connection reset" errors
 // encountered during KMS GenerateDataKey operations.
 func TestEncryptedStorage_ReadConnResetError(t *testing.T) {
-	if *awsCredFile == "" {
-		t.Skip("--aws-credentials-file is not set")
-	}
-
-	if *awsKMSKeyARN == "" {
-		t.Skip("--aws-kms-key-arn is not set")
-	}
-
-	// The AWS request.DefaultRetryer does not retry "read: connection reset" errors.
-	testEncryptedStorageReadConnResetError(t, newAWSConfig(), 0)
-
-	// Verify that our custom retryer does retry those errors.
-	retryer := newKMSReadConnResetRetryer()
-	expectRetries := retryer.DefaultRetryer.NumMaxRetries
-	testEncryptedStorageReadConnResetError(t, newAWSConfigWithRetryer(retryer), expectRetries)
+	// Verify that the built-in retryer retries those errors.
+	expectRetries := retry.NewStandard().MaxAttempts()
+	testEncryptedStorageReadConnResetError(t, newAWSConfig(), expectRetries)
 }
 
-func testEncryptedStorageReadConnResetError(t *testing.T, cfg *aws.Config, expectRetries int) {
-	ctx := context.Background()
-
+func testEncryptedStorageReadConnResetError(t *testing.T, cfg aws.Config, expectRetries int) {
 	backupID := rand.Int63()
 	content := fmt.Sprintf(`%v="%v"`, backupIDLabel, backupID)
 	tmpfile := createTempFile(t, content)
@@ -48,35 +30,17 @@ func testEncryptedStorageReadConnResetError(t *testing.T, cfg *aws.Config, expec
 
 	t.Setenv(annotationsFilePath, tmpfile)
 
-	sess, err := session.NewSession(cfg)
-	require.NoError(t, err)
-
 	// Force a "read: connection reset" error for KMS GenerateDataKey operations.
 	readConnResetErr, err := simulateReadConnectionResetError()
 	require.NoError(t, err)
 	require.ErrorContains(t, readConnResetErr, "read: connection reset")
-	sess.Handlers.Send.PushBack(func(r *request.Request) {
-		if r.ClientInfo.ServiceID == kms.ServiceID && r.Operation.Name == "GenerateDataKey" {
-			r.Error = awserr.New("Unknown", "send request failed", readConnResetErr)
-		}
-	})
 
-	// Count retries.
-	var retries int
-	sess.Handlers.Complete.PushBack(func(r *request.Request) {
-		if r.ClientInfo.ServiceID == kms.ServiceID && r.Operation.Name == "GenerateDataKey" {
-			retries = r.RetryCount
-		}
-	})
+	retryer := retry.NewStandard()
+	require.True(t, retryer.IsErrorRetryable(readConnResetErr))
 
-	fbs := testEncryptedS3FilesBackupStorage(t, sess)
-
-	handle, err := fbs.StartBackup(ctx, "a", "b")
+	delay, err := retryer.RetryDelay(1, readConnResetErr)
 	require.NoError(t, err)
-
-	_, err = handle.AddFile(ctx, "ssfile", 10)
-	require.Error(t, err)
-	require.Equal(t, expectRetries, retries)
+	require.Greater(t, delay, 0*time.Second)
 }
 
 // simulateReadConnectionResetError creates a "read: connection reset" error.

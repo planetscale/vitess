@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/spf13/pflag"
 
 	"github.com/planetscale/common-libs/files"
@@ -32,6 +32,9 @@ const (
 	lastBackupLabel                  = "psdb.co/last-backup-id"
 	lastBackupExcludedKeyspacesLabel = "psdb.co/last-backup-excluded-keyspaces"
 	backupIDLabel                    = "psdb.co/backup-id"
+
+	// maximum number of request attempts to AWS before we give up
+	requestMaxAttempts = 25
 )
 
 var (
@@ -190,16 +193,16 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 
 	rootPath := path.Join("/", backupID, dir)
 
-	cfg := request.WithRetryer(aws.NewConfig(), newKMSReadConnResetRetryer())
-
-	sess, err := session.NewSession(cfg)
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRetryer(func() aws.Retryer {
+		return retry.AddWithMaxAttempts(retry.NewStandard(), requestMaxAttempts)
+	}))
 	if err != nil {
-		return nil, vterrors.Wrap(err, "failed to initialize aws session")
+		return nil, vterrors.Wrap(err, "failed to initialize aws config")
 	}
 
 	impl := f.files
 	if impl == nil {
-		impl, err = files.NewEncryptedS3Files(sess, f.region, f.bucket, f.kmsKeyID, "", f.arn)
+		impl, err = files.NewEncryptedS3Files(cfg, f.region, f.bucket, f.kmsKeyID, "", f.arn)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "could not create encrypted s3 files")
 		}
@@ -207,7 +210,7 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 
 	unencryptedFs := f.unencryptedFiles
 	if unencryptedFs == nil {
-		unencryptedFs = files.NewS3Files(sess, f.region, f.bucket, f.kmsKeyID, "")
+		unencryptedFs = files.NewS3Files(cfg, f.region, f.bucket, f.kmsKeyID, "")
 	}
 
 	return newFilesBackupHandle(impl, unencryptedFs, rootPath, dir, name), nil
