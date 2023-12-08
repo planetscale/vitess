@@ -56,6 +56,10 @@ type noopVCursor struct {
 	inTx bool
 }
 
+func (t *noopVCursor) ReleaseReservedConnections(ctx context.Context) error {
+	return nil
+}
+
 func (t *noopVCursor) Commit(ctx context.Context) error {
 	return nil
 }

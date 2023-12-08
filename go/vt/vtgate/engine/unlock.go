@@ -46,13 +46,15 @@ func (u *Unlock) GetTableName() string {
 	return ""
 }
 
-func (u *Unlock) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (u *Unlock) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.VT13001("GetFields should not be called for unlock tables")
 }
 
-func (u *Unlock) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	rss := vcursor.Session().ShardSession()
+func (u *Unlock) TryExecute(ctx context.Context, vcursor VCursor, _ map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	// release any held reserved connections once `unlock tables` is executed.
+	defer vcursor.ReleaseReservedConnections(ctx)
 
+	rss := vcursor.Session().ShardSession()
 	if len(rss) == 0 {
 		return &sqltypes.Result{}, nil
 	}

@@ -981,6 +981,25 @@ func (session *SafeSession) GetPrepareData(name string) *vtgatepb.PrepareData {
 	return session.PrepareStatement[name]
 }
 
+func (session *SafeSession) shouldReleaseAllSessions() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if !session.Session.InReservedConn || (session.Options != nil && session.Options.HasCreatedTempTables) {
+		return false
+	}
+
+	allSession := append(session.PreSessions, session.ShardSessions...)
+	allSession = append(allSession, session.PostSessions...)
+
+	for _, ss := range allSession {
+		if ss.TransactionId != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
 	if l == nil {
 		return

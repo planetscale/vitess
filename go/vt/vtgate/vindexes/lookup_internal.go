@@ -348,7 +348,7 @@ nextRow:
 	}
 
 	if _, err := vcursor.Execute(ctx, "VindexCreate", buf.String(), bindVars, true /* rollbackOnError */, co); err != nil {
-		return fmt.Errorf("lookup.Create: %v", err)
+		return vterrors.Wrapf(err, "lookup.Create")
 	}
 	return nil
 }

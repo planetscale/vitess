@@ -72,6 +72,7 @@ type iExecute interface {
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
 	ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
 	ReleaseLock(ctx context.Context, session *SafeSession) error
+	ReleaseReservedConnections(ctx context.Context, session *SafeSession) error
 
 	showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 	showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
@@ -1247,6 +1248,10 @@ func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {
 	return vc.executor.ReleaseLock(ctx, vc.safeSession)
 }
 
+func (vc *vcursorImpl) ReleaseReservedConnections(ctx context.Context) error {
+	return vc.executor.ReleaseReservedConnections(ctx, vc.safeSession)
+}
+
 func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 	safeSession := NewAutocommitSession(vc.safeSession.Session)
 	safeSession.logging = vc.safeSession.logging
@@ -1315,7 +1320,7 @@ func (vc *vcursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	callerId := callerid.EffectiveCallerIDFromContext(ctx)
 	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
 
-	timedCtx, _ := context.WithTimeout(context.Background(), warmingReadsQueryTimeout) //nolint
+	timedCtx, _ := context.WithTimeout(context.Background(), warmingReadsQueryTimeout) // nolint
 	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
 
 	v := &vcursorImpl{
