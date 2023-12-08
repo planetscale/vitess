@@ -1,14 +1,13 @@
 package kmsbackup
 
 import (
+	"context"
 	"flag"
 	"os"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 
 	"github.com/stretchr/testify/require"
 
@@ -42,21 +41,22 @@ func createTempFile(t *testing.T, content string) string {
 	return tmpfile.Name()
 }
 
-func newAWSConfig() *aws.Config {
-	return &aws.Config{
-		Credentials: credentials.NewSharedCredentials(*awsCredFile, *awsCredProfile),
-		Region:      aws.String(*awsRegion),
+func newAWSConfig() aws.Config {
+	cfg, err := config.LoadDefaultConfig(context.Background(),
+		config.WithSharedCredentialsFiles([]string{*awsCredFile}),
+		config.WithSharedConfigProfile(*awsCredProfile),
+		config.WithRegion(*awsRegion),
+	)
+	if err != nil {
+		panic(err)
 	}
+	return cfg
 }
 
-func newAWSConfigWithRetryer(retryer request.Retryer) *aws.Config {
-	return request.WithRetryer(newAWSConfig(), retryer)
-}
+func newEncryptedS3FilesBackupStorage(cfg aws.Config) (*FilesBackupStorage, error) {
+	ufs := files.NewS3Files(cfg, *awsRegion, *awsS3Bucket, *awsS3SSEKMSKeyID, "")
 
-func newEncryptedS3FilesBackupStorage(sess *session.Session) (*FilesBackupStorage, error) {
-	ufs := files.NewS3Files(sess, *awsRegion, *awsS3Bucket, *awsS3SSEKMSKeyID, "")
-
-	fs, err := files.NewEncryptedS3Files(sess, *awsRegion, *awsS3Bucket, *awsS3SSEKMSKeyID, "", *awsKMSKeyARN)
+	fs, err := files.NewEncryptedS3Files(cfg, *awsRegion, *awsS3Bucket, *awsS3SSEKMSKeyID, "", *awsKMSKeyARN)
 	if err != nil {
 		return nil, err
 	}
@@ -71,8 +71,8 @@ func newEncryptedS3FilesBackupStorage(sess *session.Session) (*FilesBackupStorag
 	}, nil
 }
 
-func newS3FilesBackupStorage(sess *session.Session) (*FilesBackupStorage, error) {
-	fs := files.NewS3Files(sess, *awsRegion, *awsS3Bucket, *awsS3SSEKMSKeyID, "")
+func newS3FilesBackupStorage(cfg aws.Config) (*FilesBackupStorage, error) {
+	fs := files.NewS3Files(cfg, *awsRegion, *awsS3Bucket, *awsS3SSEKMSKeyID, "")
 
 	return &FilesBackupStorage{
 		arn:              "not-used",
@@ -107,21 +107,15 @@ func testFilesBackupStorage(t *testing.T) *FilesBackupStorage {
 	if *awsCredFile == "" {
 		return testLocalFilesBackupStorage(t)
 	} else if *awsKMSKeyARN == "" {
-		return testS3FilesBackupStorage(t, nil)
+		return testS3FilesBackupStorage(t, newAWSConfig())
 	}
-	return testEncryptedS3FilesBackupStorage(t, nil)
+	return testEncryptedS3FilesBackupStorage(t, newAWSConfig())
 }
 
-func testEncryptedS3FilesBackupStorage(t *testing.T, sess *session.Session) *FilesBackupStorage {
+func testEncryptedS3FilesBackupStorage(t *testing.T, cfg aws.Config) *FilesBackupStorage {
 	t.Helper()
 
-	if sess == nil {
-		var err error
-		sess, err = session.NewSession(newAWSConfig())
-		require.NoError(t, err)
-	}
-
-	fbs, err := newEncryptedS3FilesBackupStorage(sess)
+	fbs, err := newEncryptedS3FilesBackupStorage(cfg)
 	require.NoError(t, err)
 	return fbs
 }
@@ -134,16 +128,10 @@ func testLocalFilesBackupStorage(t *testing.T) *FilesBackupStorage {
 	return fbs
 }
 
-func testS3FilesBackupStorage(t *testing.T, sess *session.Session) *FilesBackupStorage {
+func testS3FilesBackupStorage(t *testing.T, cfg aws.Config) *FilesBackupStorage {
 	t.Helper()
 
-	if sess == nil {
-		var err error
-		sess, err = session.NewSession(newAWSConfig())
-		require.NoError(t, err)
-	}
-
-	fbs, err := newS3FilesBackupStorage(sess)
+	fbs, err := newS3FilesBackupStorage(cfg)
 	require.NoError(t, err)
 	return fbs
 }
