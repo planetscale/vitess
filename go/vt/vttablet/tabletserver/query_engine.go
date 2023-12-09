@@ -108,7 +108,7 @@ func (ep *TabletPlan) IsValid(hasReservedCon, hasSysSettings bool) error {
 
 func isValid(planType planbuilder.PlanType, hasReservedCon bool, hasSysSettings bool) error {
 	switch planType {
-	case planbuilder.PlanSelectLockFunc, planbuilder.PlanDDL:
+	case planbuilder.PlanSelectLockFunc, planbuilder.PlanDDL, planbuilder.PlanFlush:
 		if hasReservedCon {
 			return nil
 		}
