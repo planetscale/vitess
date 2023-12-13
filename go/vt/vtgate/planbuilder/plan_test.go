@@ -41,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	oprewriters "vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -260,7 +260,7 @@ func TestViews(t *testing.T) {
 }
 
 func TestOne(t *testing.T) {
-	reset := oprewriters.EnableDebugPrinting()
+	reset := operators.EnableDebugPrinting()
 	defer reset()
 
 	lv := loadSchema(t, "vschemas/schema.json", true)
@@ -318,7 +318,7 @@ func TestOneWithUserAsDefault(t *testing.T) {
 }
 
 func TestOneWithTPCHVSchema(t *testing.T) {
-	reset := oprewriters.EnableDebugPrinting()
+	reset := operators.EnableDebugPrinting()
 	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V:             loadSchema(t, "vschemas/tpch_schema.json", true),
@@ -649,6 +649,7 @@ func readJSONTests(filename string) []planTest {
 		panic(err)
 	}
 	dec := json.NewDecoder(file)
+	dec.DisallowUnknownFields()
 	err = dec.Decode(&output)
 	if err != nil {
 		panic(err)
