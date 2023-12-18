@@ -2869,6 +2869,61 @@ func TestStripForeignKeys(t *testing.T) {
 				") ENGINE InnoDB,\n" +
 				"  CHARSET latin1",
 		},
+		{
+			desc: "has FK constraint with cascade",
+			ddl: "CREATE TABLE `access_approvers` (\n" +
+				"`ACCESS_APPROVERSKEY` bigint NOT NULL AUTO_INCREMENT,\n" +
+				"`APPROVEBY` bigint DEFAULT NULL,\n" +
+				"`APPROVEDATE` datetime DEFAULT NULL,\n" +
+				"`APPROVERKEY` bigint NOT NULL,\n" +
+				"`APPROVERTYPE` bigint NOT NULL,\n" +
+				"`COMMENTS` longtext,\n" +
+				"`DUEDATE` datetime DEFAULT NULL,\n" +
+				"`ISFROMINVITE` bit(1) DEFAULT NULL,\n" +
+				"`JBPM_ACTIVITY_NAME` varchar(255) NOT NULL,\n" +
+				"`JBPMEXECUTIONID` varchar(255) NOT NULL,\n" +
+				"`JBPMEXECUTIONIDNEW` varchar(255) DEFAULT NULL,\n" +
+				"`MCREQUIREDFORRISK` varchar(255) DEFAULT NULL,\n" +
+				"`REQUESTEXCEPTIONKEYS` varchar(1024) DEFAULT NULL,\n" +
+				"`REQUEST_ACCESS_KEY` bigint NOT NULL,\n" +
+				"`SERAILTYPE` bigint DEFAULT NULL,\n" +
+				"`STATUS` bigint NOT NULL,\n" +
+				"`SUBMITDATE` datetime DEFAULT NULL,\n" +
+				"`UNIQUID` varchar(255) DEFAULT NULL,\n" +
+				"PRIMARY KEY (`ACCESS_APPROVERSKEY`),\n" +
+				"KEY `FK3767B533F48E8FBA` (`REQUEST_ACCESS_KEY`),\n" +
+				"KEY `APPROVERKEY_IDX` (`APPROVERKEY`),\n" +
+				"KEY `STATUS_IDX` (`STATUS`),\n" +
+				"KEY `JBPMEXECUTIONID_IDX` (`JBPMEXECUTIONID`),\n" +
+				"CONSTRAINT `FK3767B533F48E8FBA` FOREIGN KEY (`REQUEST_ACCESS_KEY`) REFERENCES `request_access` (`REQUEST_ACCESSKEY`) ON DELETE RESTRICT ON UPDATE RESTRICT\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb3",
+			newDDL: "create table access_approvers (\n" +
+				"\tACCESS_APPROVERSKEY bigint not null auto_increment,\n" +
+				"\tAPPROVEBY bigint default null,\n" +
+				"\tAPPROVEDATE datetime default null,\n" +
+				"\tAPPROVERKEY bigint not null,\n" +
+				"\tAPPROVERTYPE bigint not null,\n" +
+				"\tCOMMENTS longtext,\n" +
+				"\tDUEDATE datetime default null,\n" +
+				"\tISFROMINVITE bit(1) default null,\n" +
+				"\tJBPM_ACTIVITY_NAME varchar(255) not null,\n" +
+				"\tJBPMEXECUTIONID varchar(255) not null,\n" +
+				"\tJBPMEXECUTIONIDNEW varchar(255) default null,\n" +
+				"\tMCREQUIREDFORRISK varchar(255) default null,\n" +
+				"\tREQUESTEXCEPTIONKEYS varchar(1024) default null,\n" +
+				"\tREQUEST_ACCESS_KEY bigint not null,\n" +
+				"\tSERAILTYPE bigint default null,\n" +
+				"\t`STATUS` bigint not null,\n" +
+				"\tSUBMITDATE datetime default null,\n" +
+				"\tUNIQUID varchar(255) default null,\n" +
+				"\tprimary key (ACCESS_APPROVERSKEY),\n" +
+				"\tkey FK3767B533F48E8FBA (REQUEST_ACCESS_KEY),\n" +
+				"\tkey APPROVERKEY_IDX (APPROVERKEY),\n" +
+				"\tkey STATUS_IDX (`STATUS`),\n" +
+				"\tkey JBPMEXECUTIONID_IDX (JBPMEXECUTIONID)\n" +
+				") ENGINE InnoDB,\n" +
+				"  CHARSET utf8mb3",
+		},
 	}
 
 	for _, tc := range tcs {
