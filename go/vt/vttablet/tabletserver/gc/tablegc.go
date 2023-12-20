@@ -262,7 +262,6 @@ func (collector *TableGC) operate(ctx context.Context) {
 			return
 		case <-tableCheckTicker.C:
 			{
-				log.Info("TableGC: tableCheckTicker")
 				if gcTables, err := collector.readTables(ctx); err != nil {
 					log.Errorf("TableGC: error while reading tables: %+v", err)
 				} else {
@@ -386,8 +385,6 @@ func (collector *TableGC) shouldTransitionTable(tableName string) (shouldTransit
 
 // readTables reads the list of _vt_% tables from the database
 func (collector *TableGC) readTables(ctx context.Context) (gcTables []*gcTable, err error) {
-	log.Infof("TableGC: read tables")
-
 	conn, err := collector.pool.Get(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -412,8 +409,6 @@ func (collector *TableGC) readTables(ctx context.Context) (gcTables []*gcTable, 
 // It lists _vt_% tables, then filters through those which are due-date.
 // It then applies the necessary operation per table.
 func (collector *TableGC) checkTables(ctx context.Context, gcTables []*gcTable, dropTablesChan chan<- *gcTable, transitionRequestsChan chan<- *transitionRequest) error {
-	log.Infof("TableGC: check tables")
-
 	for i := range gcTables {
 		table := gcTables[i] // we capture as local variable as we will later use this in a goroutine
 		shouldTransition, state, uuid, err := collector.shouldTransitionTable(table.tableName)
