@@ -120,6 +120,9 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	if vtgate.SysVarSetEnabled {
 		args = append(args, "--enable_system_settings")
 	}
+	if vtgate.ErrorLog == "" {
+		vtgate.ErrorLog = path.Join(vtgate.LogDir, "vtgate-error.log")
+	}
 	vtgate.proc = exec.Command(
 		vtgate.Binary,
 		args...,
@@ -153,7 +156,6 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 			close(vtgate.exit)
 		}
 	}()
-
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
 		if vtgate.WaitForStatus() {
@@ -167,7 +169,8 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 			} else {
 				log.Errorf("Failed to read the vtgate error log file %q: %v", vtgate.ErrorLog, ferr)
 			}
-			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtgate.Name, err)
+			log.Errorf("process '%s' exited prematurely (err: %s)", vtgate.Name, err)
+
 		default:
 			time.Sleep(300 * time.Millisecond)
 		}
