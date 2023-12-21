@@ -383,5 +383,10 @@
     "comment": "We need schema tracking to allow unexpanded columns inside UNION",
     "query": "select x from (select t.*, 0 as x from user t union select t.*, 1 as x from user_extra t) AS t",
     "plan": "VT09015: schema tracking required"
+  },
+  {
+    "comment": "select max((select group_concat(col1, col2) from user where id = 1)) from user",
+    "query": "select group_concat(col1, col2) from user",
+    "plan": "VT03001: aggregate functions take a single argument 'group_concat(col1, col2)'"
   }
 ]
