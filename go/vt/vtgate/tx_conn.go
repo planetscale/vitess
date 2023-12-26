@@ -136,11 +136,12 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 	for i, shardSession := range session.ShardSessions {
 		if err := txc.commitShard(ctx, shardSession, session.logging); err != nil {
 			_ = txc.Release(ctx, session)
-			if i > 0 {
+			if i > 0 && warnNonAtomicCommit {
 				session.RecordWarning(&querypb.QueryWarning{
 					Code:    uint32(sqlerror.ERNonAtomicCommit),
 					Message: fmt.Sprintf("multi-db commit failed after committing to %d shards", i),
 				})
+				warnings.Add("NonAtomicCommit", 1)
 			}
 			return err
 		}

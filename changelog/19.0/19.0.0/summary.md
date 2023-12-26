@@ -11,9 +11,10 @@
   - **[New Stats](#new-stats)**
     - [Stream Consolidations](#stream-consolidations)
     - [Build Version in `/debug/vars`](#build-version-in-debug-vars)
+    - [VTGate Non-Atomic Commit Warnings](#vtgate-non-atomic-commit-warnings)
   - **[VTGate](#vtgate)**
     - [`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable](#fk-checks-vitess-aware)
-    - [Partial Multi-shard Commit Warnings](#partial-multi-shard-commit-warnings)
+    - [`--warn-non-atomic-commit` flag](#warn-non-atomic-commit)
   - **[Vttestserver](#vttestserver)**
     - [`--vtcombo-bind-host` flag](#vtcombo-bind-host)
   - **[Query Compatibility](#query-compatibility)**
@@ -59,17 +60,21 @@ Prior to 19.0 VTTablet reported how much time non-streaming executions spend wai
 
 The build version (e.g., `19.0.0-SNAPSHOT`) has been added to `/debug/vars`, allowing users to programmatically inspect Vitess components' build version at runtime.
 
+#### <a id="vtgate-non-atomic-commit-warnings"/>VTGate Non-Atomic Commit Warnings
+
+When VTGate `--warn-non-atomic-commit` is enabled, and a multi-shard commit fails after successfully committing to one or more shards. Vitess will increment the `Warnings` counter for `NonAtomicCommit` type.
+
 ### <a id="vtgate"/>VTGate
 
 #### <a id="fk-checks-vitess-aware"/>`FOREIGN_KEY_CHECKS` is now a Vitess Aware Variable
 
 When VTGate receives a query to change the `FOREIGN_KEY_CHECKS` value for a session, instead of sending the value down to MySQL, VTGate now keeps track of the value and changes the queries by adding `SET_VAR(FOREIGN_KEY_CHECKS=On/Off)` style query optimizer hints wherever required. 
 
-#### <a id="partial-multi-shard-commit-warnings"/>Partial Multi-shard Commit Warnings
+#### <a id="warn-non-atomic-commit"/>`--warn-non-atomic-commit` flag
 
 When using `multi` transaction mode (the default), it is possible for Vitess to successfully commit to one shard, but fail to commit to a subsequent shard, thus breaking the atomicity of a multi-shard transaction.
 
-In `v19.0`, VTGate reports partial-success commits in warnings, e.g.:
+In `v19.0`, VTGate reports these commits as warnings when `--warn-non-atomic-commit` is enabled:
 
 ```mysql
 mysql> commit;
@@ -82,6 +87,8 @@ mysql> show warnings;
 +---------+------+-----------------------------------------------------+
 1 row in set, 1 warning (0.00 sec)
 ```
+
+Additionally, when this flag is enabled, Vitess will increment the `Warnings` counter for `NonAtomicCommit` type.
 
 ### <a id="vttestserver"/>Vttestserver
 
