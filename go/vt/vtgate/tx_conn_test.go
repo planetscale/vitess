@@ -27,7 +27,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -67,6 +66,8 @@ func TestTxConnBegin(t *testing.T) {
 
 func TestTxConnCommitFailure(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
+
+	warnNonAtomicCommitCount := warnings.Counts()["NonAtomicCommit"]
 
 	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, ctx, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
@@ -118,17 +119,43 @@ func TestTxConnCommitFailure(t *testing.T) {
 		rss1[0].Target)
 
 	require.ErrorContains(t, sc.txConn.Commit(ctx, session), expectErr.Error())
-	wantSession = vtgatepb.Session{
+	wantSession = vtgatepb.Session{}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
+	require.Equal(t, warnNonAtomicCommitCount, warnings.Counts()["NonAtomicCommit"])
+}
+
+func TestTxConnCommitFailureWithNonAtomicWarning(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	warnNonAtomicCommit = true
+	defer func() {
+		warnNonAtomicCommit = false
+	}()
+	warnNonAtomicCommitCount := warnings.Counts()["NonAtomicCommit"]
+
+	sc /*sbc0*/, _, sbc1, rss0, _ /*rss1*/, rss01 := newTestTxConnEnv(t, ctx, "TestTxConn")
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	// Sequence the executes to ensure commit order
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
+
+	sbc1.MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 1
+
+	sc.txConn.Commit(ctx, session)
+	wantSession := vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{
 			{
-				Code:    uint32(sqlerror.ERNonAtomicCommit),
+				Code:    301,
 				Message: "multi-db commit failed after committing to 1 shards",
 			},
 		},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
-	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
+	require.Equal(t, warnNonAtomicCommitCount+1, warnings.Counts()["NonAtomicCommit"])
 }
 
 func TestTxConnCommitSuccess(t *testing.T) {
