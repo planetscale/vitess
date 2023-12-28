@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -44,6 +45,13 @@ func TestNormalizeAllFields(t *testing.T) {
 	utils.Exec(t, conn, insertQuery)
 	qr := utils.Exec(t, conn, selectQuery)
 	assert.Equal(t, 1, len(qr.Rows), "wrong number of table rows, expected 1 but had %d. Results: %v", len(qr.Rows), qr.Rows)
+
+	version, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+	// How we read the plan cache changed in v18, so we won't run this test for upgrade downgrade.
+	if version >= 18 {
+		return
+	}
 
 	// Now need to figure out the best way to check the normalized query in the planner cache...
 	results, err := getPlanCache(fmt.Sprintf("%s:%d", vtParams.Host, clusterInstance.VtgateProcess.Port))

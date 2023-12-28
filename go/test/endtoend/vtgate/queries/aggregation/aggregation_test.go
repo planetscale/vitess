@@ -73,6 +73,7 @@ func TestAggregateTypes(t *testing.T) {
 }
 
 func TestGroupBy(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 17, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t3(id5, id6, id7) values(1,1,2), (2,2,4), (3,2,4), (4,1,2), (5,1,2), (6,3,6)")
@@ -319,8 +320,14 @@ func TestAggOnTopOfLimit(t *testing.T) {
 			mcmp.AssertMatches(" select val1, count(*) from (select id, val1 from aggr_test where val2 < 4 order by val1 limit 2) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(1)]]`)
 			mcmp.AssertMatchesNoOrder(" select val1, count(val2) from (select val1, val2 from aggr_test limit 8) as x group by val1", `[[NULL INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)]]`)
 
-			// mysql returns FLOAT64(0), vitess returns DECIMAL(0)
-			mcmp.AssertMatchesNoCompare(" select count(*), sum(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0)]]", "[[INT64(2) FLOAT64(0)]]")
+			version, err := cluster.GetMajorVersion("vtgate")
+			require.NoError(t, err)
+			if version >= 17 {
+				mcmp.AssertMatchesNoCompare(" select count(*), sum(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0)]]", "[[INT64(2) FLOAT64(0)]]")
+			} else {
+				// mysql returns FLOAT64(0), vitess returns DECIMAL(0)
+				mcmp.AssertMatchesNoCompare(" select count(*), sum(val1) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) FLOAT64(0)]]", "[[INT64(2) DECIMAL(0)]]")
+			}
 			mcmp.AssertMatches(" select count(val1), sum(id) from (select id, val1 from aggr_test where val2 < 4 order by val1 desc limit 2) as x", "[[INT64(2) DECIMAL(7)]]")
 			mcmp.AssertMatches(" select count(*), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(2) DECIMAL(14)]]")
 			mcmp.AssertMatches(" select count(val1), sum(id) from (select id, val1 from aggr_test where val2 is null limit 2) as x", "[[INT64(1) DECIMAL(14)]]")
@@ -342,6 +349,11 @@ func TestEmptyTableAggr(t *testing.T) {
 			mcmp.AssertMatches(" select count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
 			mcmp.AssertMatches(" select t1.`name`, count(*) from t1 inner join t2 on (t1.t1_id = t2.id) where t1.value = 'foo' group by t1.`name`", "[]")
+			t.Run("Average in sharded query", func(t *testing.T) {
+				utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+				mcmp.AssertMatches(" select count(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[INT64(0)]]")
+				mcmp.AssertMatches(" select avg(t1.value) from t2 inner join t1 on (t1.t1_id = t2.id) where t1.value = 'foo'", "[[NULL]]")
+			})
 		})
 	}
 
@@ -369,6 +381,7 @@ func TestOrderByCount(t *testing.T) {
 }
 
 func TestAggregateAnyValue(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 17, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -391,11 +404,14 @@ func TestAggregateLeftJoin(t *testing.T) {
 
 	mcmp.AssertMatchesNoOrder("SELECT t1.shardkey FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(1)] [INT64(0)]]`)
 	mcmp.AssertMatches("SELECT count(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(2)]]`)
-	mcmp.AssertMatches("SELECT count(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(1)]]`)
 	mcmp.AssertMatches("SELECT count(*) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(2)]]`)
 	mcmp.AssertMatches("SELECT sum(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(1)]]`)
-	mcmp.AssertMatches("SELECT sum(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(1)]]`)
-	mcmp.AssertMatches("SELECT count(*) FROM t2 LEFT JOIN t1 ON t1.t1_id = t2.id WHERE IFNULL(t1.name, 'NOTSET') = 'r'", `[[INT64(1)]]`)
+	t.Run("Wrap Aggregation", func(t *testing.T) {
+		utils.SkipIfBinaryIsBelowVersion(t, 17, "vtgate")
+		mcmp.AssertMatches("SELECT count(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(1)]]`)
+		mcmp.AssertMatches("SELECT sum(t2.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(1)]]`)
+		mcmp.AssertMatches("SELECT count(*) FROM t2 LEFT JOIN t1 ON t1.t1_id = t2.id WHERE IFNULL(t1.name, 'NOTSET') = 'r'", `[[INT64(1)]]`)
+	})
 }
 
 // TestScalarAggregate tests validates that only count is returned and no additional field is returned.gst
@@ -436,6 +452,7 @@ func TestAggregationRandomOnAnAggregatedValue(t *testing.T) {
 }
 
 func TestBuggyQueries(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 17, "vtgate")
 	// These queries have been found to be producing the wrong results by the query fuzzer
 	// Adding them as end2end tests to make sure we never get them wrong again
 	mcmp, closer := start(t)
@@ -467,6 +484,7 @@ func TestMinMaxAcrossJoins(t *testing.T) {
 }
 
 func TestComplexAggregation(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 17, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493)")
@@ -479,10 +497,15 @@ func TestComplexAggregation(t *testing.T) {
 	mcmp.Exec(`SELECT shardkey + MIN(t1_id)+MAX(t1_id) FROM t1 GROUP BY shardkey`)
 	mcmp.Exec(`SELECT name+COUNT(t1_id)+1 FROM t1 GROUP BY name`)
 	mcmp.Exec(`SELECT COUNT(*)+shardkey+MIN(t1_id)+1+MAX(t1_id)*SUM(t1_id)+1+name FROM t1 GROUP BY shardkey, name`)
+	t.Run("Average in sharded query", func(t *testing.T) {
+		utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+		mcmp.Exec(`SELECT COUNT(t1_id)+MAX(shardkey)+AVG(t1_id) FROM t1`)
+	})
 }
 
 // TestGroupConcatAggregation tests the group_concat function with vitess doing the aggregation.
 func TestGroupConcatAggregation(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 17, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1',null,100), (2,'b1','foo',20), (3,'c1','foo',10), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1',null,893), (10,'a1','titi',2380), (20,'b1','tete',12833), (9,'e1','yoyo',783493)")
@@ -530,6 +553,7 @@ func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grp
 }
 
 func TestDistinctAggregation(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 17, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 	mcmp.Exec("insert into t1(t1_id, `name`, `value`, shardkey) values(1,'a1','foo',100), (2,'b1','foo',200), (3,'c1','foo',300), (4,'a1','foo',100), (5,'d1','toto',200), (6,'c1','tata',893), (7,'a1','titi',2380), (8,'b1','tete',12833), (9,'e1','yoyo',783493)")
