@@ -588,6 +588,14 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `week('2024-12-31', 5)`,
 			result:     `INT64(53)`,
 		},
+		{
+			expression: `0 = time '10:04:58.1'`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `CAST(time '32:34:58.5' AS TIME)`,
+			result:     `TIME("32:34:59")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
