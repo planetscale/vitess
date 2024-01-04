@@ -27,13 +27,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/replication"
-
-	"vitess.io/vitess/go/vt/discovery"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -895,5 +894,5 @@ func needInnoDBRedoLogSubdir() (needIt bool, err error) {
 	if capableOf == nil {
 		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
 	}
-	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
+	return capableOf(capabilities.DynamicRedoLogCapacityFlavorCapability)
 }
