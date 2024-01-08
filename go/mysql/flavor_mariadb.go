@@ -31,7 +31,9 @@ import (
 )
 
 // mariadbFlavor implements the Flavor interface for MariaDB.
-type mariadbFlavor struct{}
+type mariadbFlavor struct {
+	serverVersion string
+}
 type mariadbFlavor101 struct {
 	mariadbFlavor
 }
@@ -263,7 +265,7 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 }
 
 // supportsCapability is part of the Flavor interface.
-func (mariadbFlavor) supportsCapability(serverVersion string, capability capabilities.FlavorCapability) (bool, error) {
+func (mariadbFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {
 	default:
 		return false, nil
