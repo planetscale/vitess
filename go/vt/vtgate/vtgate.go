@@ -359,8 +359,10 @@ func Init(
 			st.Start()
 		}
 		srv := initMySQLProtocol(vtgateInst)
-		servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
-		servenv.OnClose(srv.rollbackAtShutdown)
+		if srv != nil {
+			servenv.OnTermSync(srv.shutdownMysqlProtocolAndDrain)
+			servenv.OnClose(srv.rollbackAtShutdown)
+		}
 
 		if boost != nil {
 			err := boost.Start()
