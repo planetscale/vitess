@@ -32,7 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -741,6 +740,23 @@ func TestToSqlValue(t *testing.T) {
 		typ: sqltypes.Decimal,
 		v:   newEvalFloat(1.2e-16),
 		out: TestValue(sqltypes.Decimal, "0.00000000000000012"),
+	}, {
+		// null in should return null out no matter what type
+		typ: sqltypes.Int64,
+		v:   nil,
+		out: sqltypes.NULL,
+	}, {
+		typ: sqltypes.Uint64,
+		v:   nil,
+		out: sqltypes.NULL,
+	}, {
+		typ: sqltypes.Float64,
+		v:   nil,
+		out: sqltypes.NULL,
+	}, {
+		typ: sqltypes.VarChar,
+		v:   nil,
+		out: sqltypes.NULL,
 	}}
 	for _, tcase := range tcases {
 		got := evalToSQLValueWithType(tcase.v, tcase.typ)
