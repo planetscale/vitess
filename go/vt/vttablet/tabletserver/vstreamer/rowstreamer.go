@@ -19,11 +19,13 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
@@ -200,12 +202,17 @@ func (rs *rowStreamer) buildPlan() error {
 			return err
 		}
 	}
-
+	if s, found := directives.GetString("ukForce", ""); found {
+		st.PKIndexName, err = url.QueryUnescape(s)
+		if err != nil {
+			return err
+		}
+	}
 	rs.pkColumns, err = rs.buildPKColumns(st)
 	if err != nil {
 		return err
 	}
-	rs.sendQuery, err = rs.buildSelect()
+	rs.sendQuery, err = rs.buildSelect(st)
 	if err != nil {
 		return err
 	}
@@ -255,7 +262,7 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	return pkColumns, nil
 }
 
-func (rs *rowStreamer) buildSelect() (string, error) {
+func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	// We could have used select *, but being explicit is more predictable.
 	buf.Myprintf("select %s", GetVReplicationMaxExecutionTimeQueryHint())
@@ -270,7 +277,17 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 		}
 		prefix = ", "
 	}
-	buf.Myprintf(" from %v", sqlparser.NewIdentifierCS(rs.plan.Table.Name))
+	// If we know the index name that we should be using then tell MySQL
+	// to use it if possible. This helps to ensure that we are able to
+	// leverage the ordering from the index itself and avoid having to
+	// do a FILESORT of all the results. This index should contain all
+	// of the PK columns which are used in the ORDER BY clause below.
+	var indexHint string
+	if st.PKIndexName != "" {
+		indexHint = fmt.Sprintf(" force index (%s)",
+			sqlescape.EscapeID(sqlescape.UnescapeID(st.PKIndexName)))
+	}
+	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 {
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("primary key values don't match length: %v vs %v", rs.lastpk, rs.pkColumns)
