@@ -26,7 +26,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -37,6 +36,14 @@ import (
 
 func TestNormalize(t *testing.T) {
 	prefix := "bv"
+
+	v1 := sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.NewVarChar("a"))
+	v2 := sqltypes.TestTuple(sqltypes.NewInt64(2), sqltypes.NewVarChar("b"))
+	tupleBV := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: append([]*querypb.Value{sqltypes.ValueToProto(v1)}, sqltypes.ValueToProto(v2)),
+	}
+
 	testcases := []struct {
 		in      string
 		outstmt string
@@ -388,7 +395,15 @@ func TestNormalize(t *testing.T) {
 			"bv2": sqltypes.Int64BindVariable(2),
 			"bv3": sqltypes.Int64BindVariable(3),
 		},
+	}, {
+		// tuple bind variable
+		in:      "select col from t where (a, b) in ((1, 'a'), (2, 'b'))",
+		outstmt: "select col from t where (a, b) in ::bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": tupleBV,
+		},
 	}}
+
 	parser := NewTestParser()
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -456,7 +471,7 @@ func TestNormalizeValidSQL(t *testing.T) {
 	}
 }
 
-func TestNormalizeOneCasae(t *testing.T) {
+func TestNormalizeOneCase(t *testing.T) {
 	testOne := struct {
 		input, output string
 	}{

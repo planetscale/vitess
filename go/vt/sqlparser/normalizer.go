@@ -302,19 +302,38 @@ func (nz *normalizer) rewriteInComparisons(node *ComparisonExpr) {
 		Type: querypb.Type_TUPLE,
 	}
 	for _, val := range tupleVals {
-		bval := SQLToBindvar(val)
+		bval := astToValue(val)
 		if bval == nil {
 			return
 		}
-		bvals.Values = append(bvals.Values, &querypb.Value{
-			Type:  bval.Type,
-			Value: bval.Value,
-		})
+		bvals.Values = append(bvals.Values, bval)
 	}
 	bvname := nz.reserved.nextUnusedVar()
 	nz.bindVars[bvname] = bvals
 	// Modify RHS to be a list bindvar.
 	node.Right = ListArg(bvname)
+}
+
+func astToValue(node SQLNode) *querypb.Value {
+	switch val := node.(type) {
+	case *Literal:
+		bval := SQLToBindvar(val)
+		return &querypb.Value{
+			Type:  bval.Type,
+			Value: bval.Value,
+		}
+	case ValTuple:
+		var tuple []sqltypes.Value
+		for _, expr := range val {
+			valExpr := astToValue(expr)
+			if valExpr == nil {
+				return nil
+			}
+			tuple = append(tuple, sqltypes.ProtoToValue(valExpr))
+		}
+		return sqltypes.TupleToProto(tuple)
+	}
+	return nil
 }
 
 func (nz *normalizer) convertUpdateExpr(node *UpdateExpr) {
