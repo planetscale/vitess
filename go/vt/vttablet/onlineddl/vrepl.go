@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -613,6 +614,7 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		SourceUniqueKeyColumns:       encodeColumns(&v.chosenSourceUniqueKey.Columns),
 		TargetUniqueKeyColumns:       encodeColumns(&v.chosenTargetUniqueKey.Columns),
 		SourceUniqueKeyTargetColumns: encodeColumns(v.chosenSourceUniqueKey.Columns.MappedNamesColumnList(v.sharedColumnsMap)),
+		ForceUniqueKey:               url.QueryEscape(v.chosenSourceUniqueKey.Name),
 	}
 	if len(v.convertCharset) > 0 {
 		rule.ConvertCharset = v.convertCharset

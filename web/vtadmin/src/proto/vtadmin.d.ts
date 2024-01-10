@@ -29482,6 +29482,9 @@ export namespace binlogdata {
 
         /** Rule convert_int_to_enum */
         convert_int_to_enum?: ({ [k: string]: boolean }|null);
+
+        /** Rule force_unique_key */
+        force_unique_key?: (string|null);
     }
 
     /** Represents a Rule. */
@@ -29516,6 +29519,9 @@ export namespace binlogdata {
 
         /** Rule convert_int_to_enum. */
         public convert_int_to_enum: { [k: string]: boolean };
+
+        /** Rule force_unique_key. */
+        public force_unique_key: string;
 
         /**
          * Creates a new Rule instance using the specified properties.
@@ -31034,6 +31040,9 @@ export namespace binlogdata {
 
         /** MinimalTable p_k_columns */
         p_k_columns?: ((number|Long)[]|null);
+
+        /** MinimalTable p_k_index_name */
+        p_k_index_name?: (string|null);
     }
 
     /** Represents a MinimalTable. */
@@ -31053,6 +31062,9 @@ export namespace binlogdata {
 
         /** MinimalTable p_k_columns. */
         public p_k_columns: (number|Long)[];
+
+        /** MinimalTable p_k_index_name. */
+        public p_k_index_name: string;
 
         /**
          * Creates a new MinimalTable instance using the specified properties.
