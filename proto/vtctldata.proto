@@ -674,6 +674,10 @@ message ExecuteFetchAsDBARequest {
   // ReloadSchema instructs the tablet to reload its schema after executing the
   // query.
   bool reload_schema = 5;
+  bool allow_zero_in_date = 6;
+  // AllowMultiQueries allows the execution of multiple queries in a single request, while
+  // only returning the result of the first.
+  bool allow_multi_queries = 7;
 }
 
 message ExecuteFetchAsDBAResponse {

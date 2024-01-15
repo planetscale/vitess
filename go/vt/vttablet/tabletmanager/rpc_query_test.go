@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -63,4 +64,22 @@ func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 	for _, w := range want {
 		require.Contains(t, got, w)
 	}
+
+	t.Run("reject multi queries", func(t *testing.T) {
+		_, err := tm.ExecuteFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			Query:   []byte("select 42; select 43;"),
+			DbName:  dbName,
+			MaxRows: 10,
+		})
+		assert.ErrorContains(t, err, "unexpected multiple results")
+	})
+	t.Run("allow multi queries", func(t *testing.T) {
+		_, err := tm.ExecuteFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			Query:             []byte("select 42; select 43;"),
+			DbName:            dbName,
+			MaxRows:           10,
+			AllowMultiQueries: true,
+		})
+		assert.NoError(t, err)
+	})
 }

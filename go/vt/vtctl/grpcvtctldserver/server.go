@@ -1243,10 +1243,12 @@ func (s *VtctldServer) ExecuteFetchAsDBA(ctx context.Context, req *vtctldatapb.E
 	}
 
 	qr, err := s.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-		Query:          []byte(req.Query),
-		MaxRows:        uint64(req.MaxRows),
-		DisableBinlogs: req.DisableBinlogs,
-		ReloadSchema:   req.ReloadSchema,
+		Query:             []byte(req.Query),
+		MaxRows:           uint64(req.MaxRows),
+		DisableBinlogs:    req.DisableBinlogs,
+		ReloadSchema:      req.ReloadSchema,
+		AllowZeroInDate:   req.AllowZeroInDate,
+		AllowMultiQueries: req.AllowMultiQueries,
 	})
 	if err != nil {
 		return nil, err

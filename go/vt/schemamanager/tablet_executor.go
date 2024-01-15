@@ -486,7 +486,15 @@ func (exec *TabletExecutor) executeOneTablet(
 			MaxRows: 10,
 		})
 	} else {
+		fmt.Printf("===== QQQ executeOneTablet: %s\n", sql)
+		fmt.Printf("===== QQQ executeOneTablet: exec.batchSize= %v\n", exec.batchSize)
+		req := &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			MaxRows: 10,
+		}
 		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
+			// v19 supports req.AllowZeroInDate
+			req.AllowZeroInDate = true
+			// TODO(shlomi): remove the following in v20 (no need to inject directive):
 			// --allow-zero-in-date Applies to DDLs
 			sql, err = applyAllowZeroInDate(sql, exec.parser)
 			if err != nil {
@@ -494,11 +502,13 @@ func (exec *TabletExecutor) executeOneTablet(
 				return
 			}
 		}
-		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-			Query:   []byte(sql),
-			MaxRows: 10,
-		})
-
+		req.Query = []byte(sql)
+		if exec.batchSize > 1 {
+			req.AllowMultiQueries = true
+			req.MaxRows = uint64(exec.batchSize)
+		}
+		fmt.Printf("===== QQQ executeOneTablet: req= %v\n", req)
+		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, req)
 	}
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
