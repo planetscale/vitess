@@ -488,11 +488,13 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 	}
 
 	response, err := c.ExecuteFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-		Query:          req.Query,
-		DbName:         topoproto.TabletDbName(tablet),
-		MaxRows:        req.MaxRows,
-		DisableBinlogs: req.DisableBinlogs,
-		ReloadSchema:   req.DisableBinlogs,
+		Query:             req.Query,
+		DbName:            topoproto.TabletDbName(tablet),
+		MaxRows:           req.MaxRows,
+		DisableBinlogs:    req.DisableBinlogs,
+		ReloadSchema:      req.DisableBinlogs,
+		AllowZeroInDate:   req.AllowZeroInDate,
+		AllowMultiQueries: req.AllowMultiQueries,
 	})
 	if err != nil {
 		return nil, err

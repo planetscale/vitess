@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqlescape"
@@ -31,6 +32,7 @@ import (
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
 func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
+	fmt.Printf("===== QQQ req: %+v\n", req)
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
@@ -55,40 +57,51 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
+	uq, err := tm.SQLParser.ReplaceTableQualifiersMultiQuery(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	if err != nil {
+		return nil, err
+	}
+
 	// Handle special possible directives
+	// TODO(shlomi): remove in v20. v19 introduces req.AllowZeroInDate as replacement, and in v19 both work concurrently.
 	var directives *sqlparser.CommentDirectives
 	if stmt, err := tm.SQLParser.Parse(string(req.Query)); err == nil {
 		if cmnt, ok := stmt.(sqlparser.Commented); ok {
 			directives = cmnt.GetParsedComments().Directives()
 		}
 	}
-	if directives.IsSet("allowZeroInDate") {
+	// TODO(shlomi): remove `directives` clause in v20. `req.AllowZeroInDate` replaces it.
+	if directives.IsSet("allowZeroInDate") || req.AllowZeroInDate {
 		if _, err := conn.ExecuteFetch("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 1, false); err != nil {
 			return nil, err
 		}
 	}
 
-	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.SQLParser.ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	defer func() {
+		// re-enable binlogs if necessary
+		if err == nil && req.ReloadSchema {
+			reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
+			if reloadErr != nil {
+				log.Errorf("failed to reload the schema %v", reloadErr)
+			}
+		}
+	}()
+
+	if !req.AllowMultiQueries {
+		result, err := conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
+		return sqltypes.ResultToProto3(result), err
+	}
+
+	// Allow multi queries. We only return the results of the first query, but we do return an error
+	// upon any query result.
+	result, more, err := conn.ExecuteFetchMulti(uq, int(req.MaxRows), true /*wantFields*/)
 	if err != nil {
 		return nil, err
 	}
-	result, err := conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
-
-	// re-enable binlogs if necessary
-	if req.DisableBinlogs && !conn.IsClosed() {
-		_, err := conn.ExecuteFetch("SET sql_log_bin = ON", 0, false)
+	for more {
+		_, more, _, err = conn.ReadQueryResult(0, false)
 		if err != nil {
-			// if we can't reset the sql_log_bin flag,
-			// let's just close the connection.
-			conn.Close()
-		}
-	}
-
-	if err == nil && req.ReloadSchema {
-		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
-		if reloadErr != nil {
-			log.Errorf("failed to reload the schema %v", reloadErr)
+			return nil, err
 		}
 	}
 	return sqltypes.ResultToProto3(result), err

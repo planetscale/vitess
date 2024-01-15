@@ -20518,6 +20518,12 @@ export namespace tabletmanagerdata {
 
         /** ExecuteFetchAsDbaRequest reload_schema */
         reload_schema?: (boolean|null);
+
+        /** ExecuteFetchAsDbaRequest allow_zero_in_date */
+        allow_zero_in_date?: (boolean|null);
+
+        /** ExecuteFetchAsDbaRequest allow_multi_queries */
+        allow_multi_queries?: (boolean|null);
     }
 
     /** Represents an ExecuteFetchAsDbaRequest. */
@@ -20543,6 +20549,12 @@ export namespace tabletmanagerdata {
 
         /** ExecuteFetchAsDbaRequest reload_schema. */
         public reload_schema: boolean;
+
+        /** ExecuteFetchAsDbaRequest allow_zero_in_date. */
+        public allow_zero_in_date: boolean;
+
+        /** ExecuteFetchAsDbaRequest allow_multi_queries. */
+        public allow_multi_queries: boolean;
 
         /**
          * Creates a new ExecuteFetchAsDbaRequest instance using the specified properties.
@@ -48574,6 +48586,12 @@ export namespace vtctldata {
 
         /** ExecuteFetchAsDBARequest reload_schema */
         reload_schema?: (boolean|null);
+
+        /** ExecuteFetchAsDBARequest allow_zero_in_date */
+        allow_zero_in_date?: (boolean|null);
+
+        /** ExecuteFetchAsDBARequest allow_multi_queries */
+        allow_multi_queries?: (boolean|null);
     }
 
     /** Represents an ExecuteFetchAsDBARequest. */
@@ -48599,6 +48617,12 @@ export namespace vtctldata {
 
         /** ExecuteFetchAsDBARequest reload_schema. */
         public reload_schema: boolean;
+
+        /** ExecuteFetchAsDBARequest allow_zero_in_date. */
+        public allow_zero_in_date: boolean;
+
+        /** ExecuteFetchAsDBARequest allow_multi_queries. */
+        public allow_multi_queries: boolean;
 
         /**
          * Creates a new ExecuteFetchAsDBARequest instance using the specified properties.
