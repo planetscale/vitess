@@ -382,25 +382,26 @@ func (throttler *Throttler) IsRunning() bool {
 
 // Enable activates the throttler probes; when enabled, the throttler responds to check queries based on
 // the collected metrics.
-func (throttler *Throttler) Enable(ctx context.Context) bool {
+func (throttler *Throttler) Enable(ctx context.Context) *sync.WaitGroup {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
 	isEnabled := throttler.isEnabled.Swap(true)
 	if isEnabled {
 		log.Infof("Throttler: already enabled")
-		return false
+		return nil
 	}
 	log.Infof("Throttler: enabling")
 
 	ctx, throttler.cancelEnableContext = context.WithCancel(ctx)
+	wg := &sync.WaitGroup{}
 	throttler.check.SelfChecks(ctx)
-	throttler.Operate(ctx)
+	throttler.Operate(ctx, wg)
 
 	// Make a one-time request for a lease of heartbeats
 	go throttler.heartbeatWriter.RequestHeartbeats()
 
-	return true
+	return wg
 }
 
 // Disable deactivates the probes and associated operations. When disabled, the throttler reponds to check
@@ -416,10 +417,6 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 	}
 	log.Infof("Throttler: disabling")
 	// _ = throttler.updateConfig(ctx, false, throttler.MetricsThreshold.Get()) // TODO(shlomi)
-	throttler.aggregatedMetrics.Flush()
-	throttler.recentApps.Flush()
-	throttler.nonLowPriorityAppRequestsThrottled.Flush()
-	// we do not flush throttler.throttledApps because this is data submitted by the user; the user expects the data to survive a disable+enable
 
 	throttler.cancelEnableContext()
 	return true
@@ -592,7 +589,7 @@ func (throttler *Throttler) isDormant() bool {
 
 // Operate is the main entry point for the throttler operation and logic. It will
 // run the probes, collect metrics, refresh inventory, etc.
-func (throttler *Throttler) Operate(ctx context.Context) {
+func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	tickers := [](*timer.SuspendableTicker){}
 	addTicker := func(d time.Duration) *timer.SuspendableTicker {
 		t := timer.NewSuspendableTicker(d, false)
@@ -609,7 +606,16 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 
 	tmClient := tmclient.NewTabletManagerClient()
 
+	wg.Add(1)
 	go func() {
+		defer func() {
+			throttler.aggregatedMetrics.Flush()
+			throttler.recentApps.Flush()
+			throttler.nonLowPriorityAppRequestsThrottled.Flush()
+			wg.Done()
+		}()
+		// we do not flush throttler.throttledApps because this is data submitted by the user; the user expects the data to survive a disable+enable
+
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
 		defer tmClient.Close()
 		for _, t := range tickers {
