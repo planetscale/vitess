@@ -883,6 +883,10 @@ func (node IdentifierCI) IsEmpty() bool {
 	return node.val == ""
 }
 
+func (node IdentifierCI) NotEmpty() bool {
+	return !node.IsEmpty()
+}
+
 // String returns the unescaped column name. It must
 // not be used for SQL generation. Use sqlparser.String
 // instead. The Stringer conformance is for usage

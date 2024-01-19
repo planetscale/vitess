@@ -174,7 +174,7 @@ outer:
 		}
 		addedToCol := false
 		for idx, groupBy := range a.Grouping {
-			if ctx.SemTable.EqualsExprWithDeps(groupBy.SimplifiedExpr, ae.Expr) {
+			if ctx.SemTable.EqualsExprWithDeps(groupBy.Inner, ae.Expr) {
 				if !addedToCol {
 					a.Columns = append(a.Columns, ae)
 					addedToCol = true
@@ -212,7 +212,7 @@ func createProjectionForComplexAggregation(a *Aggregator, qp *QueryProjection) O
 	}
 	for i, by := range a.Grouping {
 		a.Grouping[i].ColOffset = len(a.Columns)
-		a.Columns = append(a.Columns, aeWrap(by.SimplifiedExpr))
+		a.Columns = append(a.Columns, aeWrap(by.Inner))
 	}
 	for i, aggregation := range a.Aggregations {
 		a.Aggregations[i].ColOffset = len(a.Columns)
