@@ -94,18 +94,16 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
-	statements, _, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(string(req.Query))
+	statements, _, _, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(string(req.Query))
 	if err != nil {
 		return nil, err
 	}
 	if len(statements) > 1 {
-		// Up to v19, we allow multi-statement SQL in ExecuteFetchAsDba, but only for the specific case
-		// where all statements are CREATE TABLE or CREATE VIEW. This is to support `ApplySchema --batch-size`.
-		// In v20, we will not support multi statements whatsoever.
-		// v20 will throw an error by virtua of using ExecuteFetch instead of ExecuteFetchMulti.
-		if countCreate != len(statements) {
-			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba unless all are CREATE TABLE or CREATE VIEW")
+		queryPrefix := string(req.Query)
+		if len(queryPrefix) > 100 {
+			queryPrefix = queryPrefix[:100] + "..."
 		}
+		log.Warningf("ExecuteFetchAsDba will invoke a multi statement (%d statements) query: %s", len(statements), queryPrefix)
 	}
 	if allowZeroInDate {
 		if _, err := conn.ExecuteFetch("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 1, false); err != nil {
