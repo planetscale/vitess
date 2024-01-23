@@ -18,6 +18,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -121,6 +122,14 @@ func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreat
 		if err != nil {
 			return err
 		}
+		vrOptions := &vtctldatapb.VReplicationWorkflowOptions{}
+		if mz.ms.TenantId > 0 {
+			vrOptions.TenantId = mz.ms.TenantId
+		}
+		optionsJSON, err := json.Marshal(vrOptions)
+		if err != nil {
+			return err
+		}
 		_, err = mz.tmc.CreateVReplicationWorkflow(mz.ctx, targetPrimary.Tablet, &tabletmanagerdatapb.CreateVReplicationWorkflowRequest{
 			Workflow:                  req.Workflow,
 			BinlogSource:              blses,
@@ -132,6 +141,7 @@ func (mz *materializer) createMoveTablesStreams(req *vtctldatapb.MoveTablesCreat
 			DeferSecondaryKeys:        req.DeferSecondaryKeys,
 			AutoStart:                 req.AutoStart,
 			StopAfterCopy:             req.StopAfterCopy,
+			Options:                   string(optionsJSON),
 		})
 		return err
 	})
@@ -307,7 +317,31 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			if !ok {
 				return nil, fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
 			}
-			filter := ts.SourceExpression
+			//filter := ts.SourceExpression
+			// temporary HACK. FIXME: should be got from the VSchema?
+			tenantColumn := "tenant_id"
+			log.Infof("tenant_id column: %s, tenant_id %d", tenantColumn, mz.ms.TenantId)
+			if mz.ms.TenantId > 0 {
+				tenantEqExpr := &sqlparser.ComparisonExpr{
+					Left:     &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(tenantColumn)},
+					Operator: sqlparser.EqualOp,
+					Right:    sqlparser.NewIntLiteral(fmt.Sprintf("%d", mz.ms.TenantId)),
+				}
+				if sel.Where != nil {
+					sel.Where = &sqlparser.Where{
+						Type: sqlparser.WhereClause,
+						Expr: &sqlparser.AndExpr{
+							Left:  tenantEqExpr,
+							Right: sel.Where.Expr,
+						},
+					}
+				} else {
+					sel.Where = &sqlparser.Where{
+						Type: sqlparser.WhereClause,
+						Expr: tenantEqExpr,
+					}
+				}
+			}
 			if !keyRangesEqual && mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
 				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 				if err != nil {
@@ -346,11 +380,8 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 						Expr: inKeyRange,
 					}
 				}
-
-				filter = sqlparser.String(sel)
 			}
-
-			rule.Filter = filter
+			rule.Filter = sqlparser.String(sel)
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
 		blses = append(blses, bls)
