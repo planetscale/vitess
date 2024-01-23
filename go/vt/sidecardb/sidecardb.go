@@ -449,7 +449,9 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 			}
 			si.dbCreated = true
 		}
+		log.Infof("Applying DDL %s for table %s during sidecar database initialization", ddl, table)
 		_, err := si.exec(ctx, ddl, 1, true)
+		log.Infof("Applied DDL %s for table %s during sidecar database initialization: %v", ddl, table, err)
 		if err != nil {
 			ddlErr := vterrors.Wrapf(err,
 				"Error running DDL %s for table %s during sidecar database initialization", ddl, table)

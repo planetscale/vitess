@@ -19,6 +19,7 @@ package workflow
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -338,6 +339,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		targets         = make(map[string]*MigrationTarget, len(targetShards))
 		workflowType    binlogdatapb.VReplicationWorkflowType
 		workflowSubType binlogdatapb.VReplicationWorkflowSubType
+		options         vtctldatapb.VReplicationWorkflowOptions
 	)
 
 	// We check all shards in the target keyspace. Not all of them may have a
@@ -381,7 +383,9 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		optTabletTypes = topoproto.MakeStringTypeCSV(wf.TabletTypes)
 		workflowType = wf.WorkflowType
 		workflowSubType = wf.WorkflowSubType
-
+		if err := json.Unmarshal([]byte(wf.GetOptions()), &options); err != nil {
+			return nil, err
+		}
 		for _, stream := range wf.Streams {
 			if stream.Message == Frozen {
 				frozen = true
@@ -403,6 +407,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		OptTabletTypes:  optTabletTypes,
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
+		Options:         &options,
 	}, nil
 }
 

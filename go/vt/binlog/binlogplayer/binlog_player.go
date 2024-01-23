@@ -617,11 +617,11 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position string, state binlogdatapb.VReplicationWorkflowState, dbName string,
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d)",
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, options) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %s)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled,
 		throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state.String(), encodeString(dbName),
-		workflowType, workflowSubType)
+		workflowType, workflowSubType, encodeString("{}"))
 }
 
 // GenerateUpdatePos returns a statement to record the latest processed gtid in the _vt.vreplication table.

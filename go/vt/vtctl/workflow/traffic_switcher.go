@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -173,6 +175,7 @@ type TargetInfo struct {
 	OptTabletTypes  string
 	WorkflowType    binlogdatapb.VReplicationWorkflowType
 	WorkflowSubType binlogdatapb.VReplicationWorkflowSubType
+	Options         *vtctldatapb.VReplicationWorkflowOptions
 }
 
 // MigrationSource contains the metadata for each migration source.
@@ -233,6 +236,7 @@ type trafficSwitcher struct {
 	targetTimeZone   string
 	workflowType     binlogdatapb.VReplicationWorkflowType
 	workflowSubType  binlogdatapb.VReplicationWorkflowSubType
+	options          *vtctldatapb.VReplicationWorkflowOptions
 }
 
 func (ts *trafficSwitcher) TopoServer() *topo.Server                          { return ts.ws.ts }
@@ -879,9 +883,42 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
 			}
+			stmt, err := ts.ws.env.Parser().Parse(filter)
+			if err != nil {
+				return err
+			}
+			sel, ok := stmt.(*sqlparser.Select)
+			if !ok {
+				return fmt.Errorf("unrecognized statement: %s", filter)
+			}
+			// temporary HACK. FIXME: should be got from the VSchema?
+			tenantColumn := "tenant_id"
+			tenantId := ts.options.TenantId
+			log.Infof("tenant_id column: %s, tenant_id %d", tenantColumn, tenantId)
+			if tenantId > 0 {
+				tenantEqExpr := &sqlparser.ComparisonExpr{
+					Left:     &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(tenantColumn)},
+					Operator: sqlparser.EqualOp,
+					Right:    sqlparser.NewIntLiteral(fmt.Sprintf("%d", tenantId)),
+				}
+				if sel.Where != nil {
+					sel.Where = &sqlparser.Where{
+						Type: sqlparser.WhereClause,
+						Expr: &sqlparser.AndExpr{
+							Left:  tenantEqExpr,
+							Right: sel.Where.Expr,
+						},
+					}
+				} else {
+					sel.Where = &sqlparser.Where{
+						Type: sqlparser.WhereClause,
+						Expr: tenantEqExpr,
+					}
+				}
+			}
 			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
 				Match:  rule.Match,
-				Filter: filter,
+				Filter: sqlparser.String(sel),
 			})
 		}
 		log.Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
