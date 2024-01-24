@@ -142,6 +142,7 @@ message SrvVSchema {
   map<string, Keyspace> keyspaces = 1;
   RoutingRules routing_rules = 2; // table routing rules
   ShardRoutingRules shard_routing_rules = 3;
+  TenantMigrations tenant_migrations = 4;
 }
 
 // ShardRoutingRules specify the shard routing rules for the VSchema.
@@ -154,4 +155,19 @@ message ShardRoutingRule {
   string from_keyspace = 1;
   string to_keyspace = 2;
   string shard = 3;
+}
+
+message TenantMigrations {
+  repeated TenantMigration statuses = 1;
+}
+
+message TenantMigration {
+  int64 tenant_id = 1;
+  TenantStatus status = 2;
+}
+
+enum TenantStatus {
+  UNKNOWN = 0;
+  INPROGRESS = 1;
+  MIGRATED = 2;
 }

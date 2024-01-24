@@ -23,6 +23,10 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/exp/maps"
+
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -50,6 +54,8 @@ const (
 
 // newMultiCol creates a new MultiCol.
 func newMultiCol(name string, m map[string]string) (Vindex, error) {
+	log.Infof("abcx NEW multicol vindex params: %+v = %+v", maps.Keys(m), maps.Values(m))
+	log.Flush()
 	colCount, err := getColumnCount(m)
 	if err != nil {
 		return nil, err
@@ -102,6 +108,7 @@ func (m *MultiCol) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]s
 		}
 		out = append(out, key.DestinationKeyspaceID(ksid))
 	}
+	log.Infof("abcx multicol vindex map of %+v: %v", rowsColValues, out)
 	return out, nil
 }
 

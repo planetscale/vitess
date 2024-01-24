@@ -33,12 +33,31 @@ type multiTenantMigration struct {
 
 const (
 	targetKeyspaceName = "multi_tenant"
-	mtSchema           = "create table t1(id int, tenant_id int, primary key(id, tenant_id)) Engine=InnoDB"
+	stSchema           = "create table t1(id int, tenant_id int, primary key(id, tenant_id)) Engine=InnoDB"
+	stVSchema          = `{"tables": {"t1": {}}}`
 	mtVSchema          = `
 {
-  "tables": {
-    "t1": {}
-  }
+  	"sharded": true,
+	"vindexes": {
+	  "multitenant_vdx": {
+		"type": "multitenant",
+		"params": {
+		  "column_count": "2",
+		  "column_bytes": "3,5",
+		  "column_vindex": "reverse_bits,hash",
+		  "tenant_id_column_name": "tenant_id"
+		}
+	  }
+	},
+	"tables": {
+		"t1": {
+			"column_vindexes": [
+      	    {
+        	  "columns": ["tenant_id","id"],
+        	  "name": "multitenant_vdx"
+			}
+    	]}
+   }
 }
 `
 )
@@ -56,7 +75,7 @@ func initTenantData(t *testing.T, tenantId int) {
 }
 
 func newMultiTenantMigration(t *testing.T) *multiTenantMigration {
-	_, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, targetKeyspaceName, "0", mtVSchema, mtSchema, 1, 0, 200, nil)
+	_, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, targetKeyspaceName, "-80,80-", mtVSchema, stSchema, 1, 0, 200, nil)
 	require.NoError(t, err)
 	mtm := &multiTenantMigration{
 		t:                      t,
@@ -76,7 +95,7 @@ func newMultiTenantMigration(t *testing.T) *multiTenantMigration {
 
 func (mtm *multiTenantMigration) create(tenantId int) {
 	sourceKeyspace := fmt.Sprintf(mtm.sourceKeyspaceTemplate, tenantId)
-	_, err := vc.AddKeyspace(mtm.t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", mtVSchema, mtSchema, 1, 0, 1000+tenantId*100, nil)
+	_, err := vc.AddKeyspace(mtm.t, []*Cell{vc.Cells["zone1"]}, sourceKeyspace, "0", stVSchema, stSchema, 1, 0, 1000+tenantId*100, nil)
 	require.NoError(mtm.t, err)
 	initTenantData(mtm.t, tenantId)
 	mtm.tenantMigrationStatus[tenantId] = tenantMigrationStatusMigrating
@@ -106,7 +125,7 @@ func TestMultiTenant(t *testing.T) {
 
 	mtm := newMultiTenantMigration(t)
 	numMigrated := 0
-	for i := 1; i <= 1; i++ {
+	for i := 1; i <= 2; i++ {
 		migrateTenant(t, mtm, i)
 		numMigrated++
 	}
@@ -120,6 +139,11 @@ func migrateTenant(t *testing.T, mtm *multiTenantMigration, tenantId int) {
 	mt := mtm.activeMoveTables[tenantId]
 	ksWorkflow := fmt.Sprintf("%s.%s", mtm.targetKeyspace, mt.workflowName)
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-	//mt.SwitchReadsAndWrites()
-	//mt.Complete()
+	switch tenantId {
+	case 1:
+		mt.SwitchReadsAndWrites()
+		mt.Complete()
+	case 2:
+		mt.SwitchReadsAndWrites()
+	}
 }

@@ -686,6 +686,17 @@ func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
+	log.Infof("abcxz: allowTableTargetWrites")
+	status := vschemapb.TenantStatus_MIGRATED
+	if IsReverseWorkflow(ts.workflow) {
+		status = vschemapb.TenantStatus_INPROGRESS
+	}
+	if ts.options.TenantId > 0 {
+		if err := setTenantMigrationStatus(ctx, ts.TopoServer(), ts.options.TenantId, status); err != nil {
+			return err
+		}
+	}
+
 	return ts.ForAllTargets(func(target *MigrationTarget) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
 			return si.UpdateDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())

@@ -116,6 +116,10 @@ type (
 		PartialVindex() bool
 	}
 
+	IMultiTenant interface {
+		MultiColumn
+	}
+
 	// Hashing defined the interface for the vindexes that export the Hash function to be used by multi-column vindex.
 	Hashing interface {
 		Hash(id sqltypes.Value) ([]byte, error)

@@ -158,3 +158,47 @@ func (ts *Server) GetShardRoutingRules(ctx context.Context) (*vschemapb.ShardRou
 	}
 	return srr, nil
 }
+
+func (ts *Server) GetTenantMigrations(ctx context.Context) (*vschemapb.TenantMigrations, error) {
+	tms := &vschemapb.TenantMigrations{}
+	data, _, err := ts.globalCell.Get(ctx, TenantMigrationsFile)
+	if err != nil {
+		if IsErrType(err, NoNode) {
+			return tms, nil
+		}
+		return nil, err
+	}
+	err = tms.UnmarshalVT(data)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "bad tenant migrations data: %q", data)
+	}
+	return tms, nil
+}
+
+func (ts *Server) SaveTenantMigrations(ctx context.Context, tenantMigrations *vschemapb.TenantMigrations) error {
+	data, err := tenantMigrations.MarshalVT()
+	if err != nil {
+		return err
+	}
+
+	if len(data) == 0 {
+		if err := ts.globalCell.Delete(ctx, TenantMigrationsFile, nil); err != nil && !IsErrType(err, NoNode) {
+			return err
+		}
+		return nil
+	}
+	log.Infof("abcxz Saving tenant migrations:%d: %v\n", len(tenantMigrations.Statuses), tenantMigrations.Statuses)
+	_, err = ts.globalCell.Update(ctx, TenantMigrationsFile, data, nil)
+	if err != nil {
+		log.Errorf("abcxz failed to update tenant migrations: %v", err)
+	} else {
+		log.Infof("abcxz successfully updated tenant migrations: %+v", tenantMigrations)
+		statuses, err := ts.GetTenantMigrations(ctx)
+		if err != nil {
+			log.Errorf("abcxz failed to get tenant migrations: %v", err)
+		} else {
+			log.Infof("abcxz successfully got tenant migrations: %+v", statuses)
+		}
+	}
+	return err
+}
