@@ -204,6 +204,12 @@ func (ts *Server) RebuildSrvVSchema(ctx context.Context, cells []string) error {
 	}
 	srvVSchema.ShardRoutingRules = srr
 
+	tms, err := ts.GetTenantMigrations(ctx)
+	if err != nil {
+		return fmt.Errorf("GetTenantMigrations failed: %v", err)
+	}
+	srvVSchema.TenantMigrations = tms
+
 	// now save the SrvVSchema in all cells in parallel
 	for _, cell := range cells {
 		wg.Add(1)

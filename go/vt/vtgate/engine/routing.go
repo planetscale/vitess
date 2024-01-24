@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"golang.org/x/exp/maps"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -146,6 +148,7 @@ func (rp *RoutingParameters) findRoute(ctx context.Context, vcursor VCursor, bin
 	case Equal, EqualUnique, SubShard:
 		switch rp.Vindex.(type) {
 		case vindexes.MultiColumn:
+			log.Infof("abcx multicol vindex, bindVars: %+v = %+v", maps.Keys(bindVars), maps.Values(bindVars))
 			return rp.equalMultiCol(ctx, vcursor, bindVars)
 		default:
 			return rp.equal(ctx, vcursor, bindVars)

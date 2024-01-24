@@ -1544,12 +1544,17 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 				return nil, err
 			}
 		}
-
+		if mz.ms.TenantId > 0 {
+			if err := setTenantMigrationStatus(ctx, mz.ts, mz.ms.TenantId, vschemapb.TenantStatus_INPROGRESS); err != nil {
+				return nil, err
+			}
+		}
 		// We added to the vschema.
 		if err := s.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
 			return nil, err
 		}
 	}
+
 	if err := s.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
 	}
@@ -2765,7 +2770,6 @@ func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw is
 			return err
 		}
 	}
-
 	return nil
 }
 

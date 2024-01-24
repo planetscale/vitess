@@ -29,6 +29,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -572,6 +574,10 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 
 }
 
+func IsReverseWorkflow(workflow string) bool {
+	return strings.HasSuffix(workflow, reverseSuffix)
+}
+
 // ReverseWorkflowName returns the "reversed" name of a workflow. For a
 // "forward" workflow, this is the workflow name with "_reverse" appended, and
 // for a "reversed" workflow, this is the workflow name with the "_reverse"
@@ -767,4 +773,19 @@ func LegacyBuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.Table
 		WorkflowType:    workflowType,
 		WorkflowSubType: workflowSubType,
 	}, nil
+}
+
+func setTenantMigrationStatus(ctx context.Context, ts *topo.Server, tenantId int64, status vschemapb.TenantStatus) error {
+	if tenantId > 0 {
+		tenantMigrations, err := topotools.GetTenantMigrations(ctx, ts)
+		if err != nil {
+			return err
+		}
+		log.Infof("abcxz: setTenantMigrationStatus: tenant %d, status %v", tenantId, status)
+		tenantMigrations[tenantId] = status
+		if err := topotools.SaveTenantMigrations(ctx, ts, tenantMigrations); err != nil {
+			return err
+		}
+	}
+	return nil
 }

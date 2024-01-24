@@ -41555,6 +41555,9 @@ export namespace vschema {
 
         /** SrvVSchema shard_routing_rules */
         shard_routing_rules?: (vschema.IShardRoutingRules|null);
+
+        /** SrvVSchema tenant_migrations */
+        tenant_migrations?: (vschema.ITenantMigrations|null);
     }
 
     /** Represents a SrvVSchema. */
@@ -41574,6 +41577,9 @@ export namespace vschema {
 
         /** SrvVSchema shard_routing_rules. */
         public shard_routing_rules?: (vschema.IShardRoutingRules|null);
+
+        /** SrvVSchema tenant_migrations. */
+        public tenant_migrations?: (vschema.ITenantMigrations|null);
 
         /**
          * Creates a new SrvVSchema instance using the specified properties.
@@ -41857,6 +41863,213 @@ export namespace vschema {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a TenantMigrations. */
+    interface ITenantMigrations {
+
+        /** TenantMigrations statuses */
+        statuses?: (vschema.ITenantMigration[]|null);
+    }
+
+    /** Represents a TenantMigrations. */
+    class TenantMigrations implements ITenantMigrations {
+
+        /**
+         * Constructs a new TenantMigrations.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.ITenantMigrations);
+
+        /** TenantMigrations statuses. */
+        public statuses: vschema.ITenantMigration[];
+
+        /**
+         * Creates a new TenantMigrations instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TenantMigrations instance
+         */
+        public static create(properties?: vschema.ITenantMigrations): vschema.TenantMigrations;
+
+        /**
+         * Encodes the specified TenantMigrations message. Does not implicitly {@link vschema.TenantMigrations.verify|verify} messages.
+         * @param message TenantMigrations message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.ITenantMigrations, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TenantMigrations message, length delimited. Does not implicitly {@link vschema.TenantMigrations.verify|verify} messages.
+         * @param message TenantMigrations message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.ITenantMigrations, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TenantMigrations message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TenantMigrations
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.TenantMigrations;
+
+        /**
+         * Decodes a TenantMigrations message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TenantMigrations
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.TenantMigrations;
+
+        /**
+         * Verifies a TenantMigrations message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TenantMigrations message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TenantMigrations
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.TenantMigrations;
+
+        /**
+         * Creates a plain object from a TenantMigrations message. Also converts values to other types if specified.
+         * @param message TenantMigrations
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.TenantMigrations, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TenantMigrations to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TenantMigrations
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a TenantMigration. */
+    interface ITenantMigration {
+
+        /** TenantMigration tenant_id */
+        tenant_id?: (number|Long|null);
+
+        /** TenantMigration status */
+        status?: (vschema.TenantStatus|null);
+    }
+
+    /** Represents a TenantMigration. */
+    class TenantMigration implements ITenantMigration {
+
+        /**
+         * Constructs a new TenantMigration.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.ITenantMigration);
+
+        /** TenantMigration tenant_id. */
+        public tenant_id: (number|Long);
+
+        /** TenantMigration status. */
+        public status: vschema.TenantStatus;
+
+        /**
+         * Creates a new TenantMigration instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TenantMigration instance
+         */
+        public static create(properties?: vschema.ITenantMigration): vschema.TenantMigration;
+
+        /**
+         * Encodes the specified TenantMigration message. Does not implicitly {@link vschema.TenantMigration.verify|verify} messages.
+         * @param message TenantMigration message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.ITenantMigration, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TenantMigration message, length delimited. Does not implicitly {@link vschema.TenantMigration.verify|verify} messages.
+         * @param message TenantMigration message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.ITenantMigration, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TenantMigration message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TenantMigration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.TenantMigration;
+
+        /**
+         * Decodes a TenantMigration message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TenantMigration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.TenantMigration;
+
+        /**
+         * Verifies a TenantMigration message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TenantMigration message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TenantMigration
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.TenantMigration;
+
+        /**
+         * Creates a plain object from a TenantMigration message. Also converts values to other types if specified.
+         * @param message TenantMigration
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.TenantMigration, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TenantMigration to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TenantMigration
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** TenantStatus enum. */
+    enum TenantStatus {
+        UNKNOWN = 0,
+        INPROGRESS = 1,
+        MIGRATED = 2
     }
 }
 

@@ -143,6 +143,10 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) bool
 	if vm.subscriber != nil {
 		vm.subscriber(vschema, vSchemaStats(err, vschema))
 	}
+	srvvschema := vm.currentSrvVschema
+	if srvvschema != nil {
+		vindexes.TenantMigrationCache.Init(srvvschema.TenantMigrations)
+	}
 	return true
 }
 
