@@ -574,6 +574,10 @@ func TestGroupConcatAggregation(t *testing.T) {
 	compareRow(t, mQr, vtQr, nil, []int{0})
 	mQr, vtQr = mcmp.ExecNoCompare(`SELECT group_concat(value), t1.name FROM t1, t2 group by t1.name`)
 	compareRow(t, mQr, vtQr, []int{1}, []int{0})
+
+	utils.SkipIfBinaryIsBelowVersion(t, 19, "vtgate")
+	mQr, vtQr = mcmp.ExecNoCompare(`SELECT group_concat(name, value) FROM t1`)
+	compareRow(t, mQr, vtQr, nil, []int{0})
 }
 
 func compareRow(t *testing.T, mRes *sqltypes.Result, vtRes *sqltypes.Result, grpCols []int, fCols []int) {
@@ -613,6 +617,7 @@ func TestDistinctAggregation(t *testing.T) {
 	tcases := []struct {
 		query       string
 		expectedErr string
+		minVersion  int
 	}{{
 		query:       `SELECT COUNT(DISTINCT value), SUM(DISTINCT shardkey) FROM t1`,
 		expectedErr: "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: sum(distinct shardkey) (errno 1235) (sqlstate 42000)",
@@ -626,10 +631,12 @@ func TestDistinctAggregation(t *testing.T) {
 	}, {
 		query: `SELECT a.value, SUM(DISTINCT b.t1_id), min(DISTINCT a.t1_id) FROM t1 a, t1 b group by a.value`,
 	}, {
-		query: `SELECT distinct count(*) from t1, (select distinct count(*) from t1) as t2`,
+		minVersion: 19,
+		query:      `SELECT count(distinct name, shardkey) from t1`,
 	}}
 
 	for _, tc := range tcases {
+		utils.SkipIfBinaryIsBelowVersion(t, tc.minVersion, "vtgate")
 		mcmp.Run(tc.query, func(mcmp *utils.MySQLCompare) {
 			_, err := mcmp.ExecAllowError(tc.query)
 			if tc.expectedErr == "" {
