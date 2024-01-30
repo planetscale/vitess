@@ -546,9 +546,13 @@ func (dt DateTime) Compare(dt2 DateTime) int {
 	return dt.Time.Compare(dt2.Time)
 }
 
-func (dt DateTime) AddInterval(itv *Interval, stradd bool) (DateTime, uint8, bool) {
+func (dt DateTime) AddInterval(itv *Interval, prec uint8, stradd bool) (DateTime, uint8, bool) {
 	ok := dt.addInterval(itv)
-	return dt, itv.precision(stradd), ok
+	iprec := itv.precision(stradd)
+	if iprec > prec {
+		prec = iprec
+	}
+	return dt, prec, ok
 }
 
 func (dt DateTime) Round(p int) (r DateTime) {
