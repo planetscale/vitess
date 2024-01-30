@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 
@@ -71,6 +72,12 @@ type Factory struct {
 	// err is used for testing purposes to force queries / watches
 	// to return the given error
 	err error
+	// listErr is used for testing purposed to fake errors from
+	// calls to List.
+	listErr error
+	// callstats allows us to keep track of how many topo.Conn calls
+	// we make (Create, Get, Update, Delete, List, ListDir, etc).
+	callstats *stats.CountersWithMultiLabels
 }
 
 // HasGlobalReadOnlyCell is part of the topo.Factory interface.
@@ -104,6 +111,10 @@ func (f *Factory) SetError(err error) {
 			node.PropagateWatchError(err)
 		}
 	}
+}
+
+func (f *Factory) GetCallStats() *stats.CountersWithMultiLabels {
+	return f.callstats
 }
 
 // Lock blocks all requests to the topo and is exposed to allow tests to
@@ -142,6 +153,7 @@ func (c *Conn) dial(ctx context.Context) error {
 
 // Close is part of the topo.Conn interface.
 func (c *Conn) Close() {
+	c.factory.callstats.Add([]string{"Close"}, 1)
 	c.closed = true
 }
 
@@ -238,6 +250,7 @@ func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *F
 	f := &Factory{
 		cells:      make(map[string]*node),
 		generation: uint64(rand.Int63n(1 << 60)),
+		callstats:  stats.NewCountersWithMultiLabels("", "", []string{"Call"}),
 	}
 	f.cells[topo.GlobalCell] = f.newDirectory(topo.GlobalCell, nil)
 
@@ -348,6 +361,13 @@ func (f *Factory) recursiveDelete(n *node) {
 	if len(parent.children) == 0 {
 		f.recursiveDelete(parent)
 	}
+}
+
+func (f *Factory) SetListError(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.listErr = err
 }
 
 func init() {

@@ -36,6 +36,7 @@ const (
 	NoUpdateNeeded
 	NoImplementation
 	NoReadOnlyImplementation
+	ResourceExhausted
 )
 
 // Error represents a topo error.
