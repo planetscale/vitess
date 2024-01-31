@@ -48,7 +48,8 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	}
 
 	// Get the result.
-	colNumber, _, err := c.readComQueryResponse()
+	var packetOk PacketOK
+	colNumber, err := c.readComQueryResponse(&packetOk)
 	if err != nil {
 		return err
 	}
@@ -128,7 +129,8 @@ func (c *Conn) FetchNext(in []sqltypes.Value) ([]sqltypes.Value, *sqltypes.Resul
 		// Warnings and status flags are ignored.
 		c.fields = nil
 		if c.Capabilities&CapabilityClientDeprecateEOF != 0 && c.enableQueryInfo {
-			if packetOK, err := c.parseOKPacket(data); err == nil {
+			var packetOK PacketOK
+			if err := c.parseOKPacket(&packetOK, data); err == nil {
 				result := sqltypes.Result{
 					Info: packetOK.info,
 				}
