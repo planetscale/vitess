@@ -249,7 +249,8 @@ func TestBasicPackets(t *testing.T) {
 	require.NotEmpty(data)
 	assert.EqualValues(data[0], OKPacket, "OKPacket")
 
-	packetOk, err := cConn.parseOKPacket(data)
+	var packetOk PacketOK
+	err = cConn.parseOKPacket(&packetOk, data)
 	require.NoError(err)
 	assert.EqualValues(12, packetOk.affectedRows)
 	assert.EqualValues(34, packetOk.lastInsertID)
@@ -275,7 +276,7 @@ func TestBasicPackets(t *testing.T) {
 	require.NotEmpty(data)
 	assert.EqualValues(data[0], OKPacket, "OKPacket")
 
-	packetOk, err = cConn.parseOKPacket(data)
+	err = cConn.parseOKPacket(&packetOk, data)
 	require.NoError(err)
 	assert.EqualValues(23, packetOk.affectedRows)
 	assert.EqualValues(45, packetOk.lastInsertID)
@@ -298,7 +299,7 @@ func TestBasicPackets(t *testing.T) {
 	require.NotEmpty(data)
 	assert.True(cConn.isEOFPacket(data), "expected EOF")
 
-	packetOk, err = cConn.parseOKPacket(data)
+	err = cConn.parseOKPacket(&packetOk, data)
 	require.NoError(err)
 	assert.EqualValues(12, packetOk.affectedRows)
 	assert.EqualValues(34, packetOk.lastInsertID)
@@ -693,7 +694,8 @@ func TestOkPackets(t *testing.T) {
 			cConn.Capabilities = testCase.cc
 			sConn.Capabilities = testCase.cc
 			// parse the packet
-			packetOk, err := cConn.parseOKPacket(data)
+			var packetOk PacketOK
+			err := cConn.parseOKPacket(&packetOk, data)
 			if testCase.expectedErr != "" {
 				require.Error(t, err)
 				require.Equal(t, testCase.expectedErr, err.Error())
@@ -702,7 +704,7 @@ func TestOkPackets(t *testing.T) {
 			require.NoError(t, err, "failed to parse OK packet")
 
 			// write the ok packet from server
-			err = sConn.writeOKPacket(packetOk)
+			err = sConn.writeOKPacket(&packetOk)
 			require.NoError(t, err, "failed to write OK packet")
 
 			// receive the ok packet on client
