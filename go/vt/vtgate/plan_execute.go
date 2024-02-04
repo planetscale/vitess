@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"golang.org/x/exp/maps"
 	"strings"
 	"time"
 
@@ -114,11 +115,15 @@ func (e *Executor) newExecute(
 		var plan *engine.Plan
 		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.normalize, logStats)
 		execStart := e.logPlanningFinished(logStats, plan)
-
 		if err != nil {
 			safeSession.ClearWarnings()
 			return err
 		}
+
+		log.Infof(">>>>>>>>>>>>>>>>>>>>>>")
+		log.Infof("Tables Used: %+v, Bind Vars %+v, Bind Var Needs %+v", plan.TablesUsed, maps.Keys(bindVars), plan.BindVarNeeds)
+
+		log.Infof("<<<<<<<<<<<<<<<<<<<<<<")
 
 		if plan.Type != sqlparser.StmtShow {
 			safeSession.ClearWarnings()

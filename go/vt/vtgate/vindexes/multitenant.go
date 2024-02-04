@@ -88,6 +88,7 @@ func (m MultiTenant) NeedsVCursor() bool {
 	return m.MultiCol.NeedsVCursor()
 }
 
+// cannot rewrite keyspace here
 func (m MultiTenant) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	for _, rowColValues := range rowsColValues {
 		tenantId, err := rowColValues[0].ToInt64()

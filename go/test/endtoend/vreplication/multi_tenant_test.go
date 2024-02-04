@@ -33,14 +33,17 @@ type multiTenantMigration struct {
 
 const (
 	targetKeyspaceName = "multi_tenant"
-	stSchema           = "create table t1(id int, tenant_id int, primary key(id, tenant_id)) Engine=InnoDB"
-	stVSchema          = `{"tables": {"t1": {}}}`
-	mtVSchema          = `
+	stSchema           = `
+create table t1(id int, tenant_id int, val int, primary key(id, tenant_id)) Engine=InnoDB;
+create table t2(id int, tenant_id int, val int, primary key(id, tenant_id)) Engine=InnoDB;
+`
+	stVSchema = `{"tables": {"t1": {}, "t2": {}}}`
+	mtVSchema = `
 {
   	"sharded": true,
 	"vindexes": {
 	  "multitenant_vdx": {
-		"type": "multitenant",
+		"type": "multicol",
 		"params": {
 		  "column_count": "2",
 		  "column_bytes": "3,5",
@@ -51,6 +54,13 @@ const (
 	},
 	"tables": {
 		"t1": {
+			"column_vindexes": [
+      	    {
+        	  "columns": ["tenant_id","id"],
+        	  "name": "multitenant_vdx"
+			}
+    	]},
+		"t2": {
 			"column_vindexes": [
       	    {
         	  "columns": ["tenant_id","id"],
@@ -70,7 +80,8 @@ func initTenantData(t *testing.T, tenantId int) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	for i := 1; i <= 10; i++ {
-		execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", getSourceKeyspace(tenantId)), fmt.Sprintf("insert into t1(id, tenant_id) values(%d, %d)", i, tenantId))
+		execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", getSourceKeyspace(tenantId)), fmt.Sprintf("insert into t1(id, tenant_id, val) values(%d, %d, %d)", i, tenantId, 10*i))
+		execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:0", getSourceKeyspace(tenantId)), fmt.Sprintf("insert into t2(id, tenant_id, val) values(%d, %d, %d)", i, tenantId, 10*i))
 	}
 }
 
@@ -83,7 +94,7 @@ func newMultiTenantMigration(t *testing.T) *multiTenantMigration {
 		activeMoveTables:       make(map[int]*VtctldMoveTables),
 		sourceKeyspaceTemplate: "tenant%d",
 		targetKeyspace:         targetKeyspaceName,
-		tables:                 "t1",
+		tables:                 "t1,t2",
 		tenantIdColumnName:     "tenant_id",
 	}
 	for i := 1; i <= numTenants; i++ {

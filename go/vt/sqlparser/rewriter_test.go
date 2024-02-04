@@ -17,12 +17,14 @@ limitations under the License.
 package sqlparser
 
 import (
-	"math/rand"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
+	"math/rand"
+	"strconv"
+	"testing"
+	"vitess.io/vitess/go/vt/log"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func BenchmarkVisitLargeExpression(b *testing.B) {
@@ -113,4 +115,90 @@ func TestChangeValueTypeGivesError(t *testing.T) {
 		return true
 	}, nil)
 
+}
+
+func TestTenantRouting(t *testing.T) {
+	type testCase struct {
+		query    string
+		expected string
+		err      bool
+	}
+	testCases := []testCase{
+		{
+			query:    "select * from t1 where id = 1 and tenant_id = 1",
+			expected: "select * from target.t1 where id = 1 and tenant_id = 1",
+		},
+		{
+			query:    "select * from t1 where id = 1 and tenant_id = 2",
+			expected: "select * from source.t1 where id = 1 and tenant_id = 2",
+		},
+		{
+			query:    "select * from t1 where id = 1 and tenant_id = 3",
+			expected: "select * from unknown.t1 where id = 1 and tenant_id = 3",
+		},
+		{
+			query:    "select * from t1, t2 where t1.id = t2.id and t1.tenant_id = 1 and t2.tenant_id = 1",
+			expected: "select * from target.t1, target.t2 where target.t1.id = target.t2.id and target.t1.tenant_id = 1 and target.t2.tenant_id = 1",
+		},
+		{
+			query:    "select * from t1 where tenant_id = 1 and id in (select id from t2 where tenant_id = 1)",
+			expected: "select * from target.t1 where tenant_id = 1 and id in (select id from target.t2 where tenant_id = 1)",
+		},
+		//{
+		//	query: "select * from t1, t2 where t1.id = t2.id and t1.tenant_id = 1 and t2.tenant_id = 2",
+		//	err:   true,
+		//},
+	}
+	for _, tc := range testCases {
+		parser := NewTestParser()
+		stmt, err := parser.Parse(tc.query)
+		require.NoError(t, err)
+		isTenant := false
+		queryTenantId := 0
+		tenantId := 0
+		keyspace := ""
+		var pre ApplyFunc = func(cursor *Cursor) bool {
+			switch node := cursor.Node().(type) {
+			case *ColName:
+				if node.Name.EqualString("tenant_id") {
+					isTenant = true
+				}
+			case *Literal:
+				if isTenant {
+					tenantId, err = strconv.Atoi(node.Val)
+					require.NoError(t, err)
+					if queryTenantId == 0 {
+						queryTenantId = tenantId
+					} else if queryTenantId != tenantId {
+						// how do we signal an error?
+						panic(vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported cross tenant query"))
+					}
+					switch tenantId {
+					case 1:
+						keyspace = "target"
+					case 2:
+						keyspace = "source"
+					default:
+						keyspace = "unknown"
+					}
+					return false
+				}
+			default:
+			}
+			return true
+		}
+		newStmt := Rewrite(stmt, pre, nil)
+		var pre2 ApplyFunc = func(cursor *Cursor) bool {
+			switch node := cursor.Node().(type) {
+			case TableName:
+				node.Qualifier = NewIdentifierCS(keyspace)
+				cursor.Replace(node)
+			default:
+			}
+			return true
+		}
+		newStmt = Rewrite(newStmt, pre2, nil)
+		log.Infof("newStmt: %s", String(newStmt))
+		assert.Equal(t, tc.expected, String(newStmt))
+	}
 }
