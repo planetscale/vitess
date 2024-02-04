@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"fmt"
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -70,7 +71,7 @@ func gen4SelectStmtPlanner(
 	if err != nil {
 		return nil, err
 	}
-
+	log.Infof("abcxz SelectPlan: tablesUsed: %v, primitive %+v", tablesUsed, plan.Primitive())
 	if shouldRetryAfterPredicateRewriting(plan) {
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
 		// TODO: this should move to the operator side of planning

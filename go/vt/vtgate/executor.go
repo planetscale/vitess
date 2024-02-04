@@ -407,15 +407,16 @@ func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	var err error
 	var qr *sqltypes.Result
 	var stmtType sqlparser.StatementType
-	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
-		stmtType = plan.Type
-		qr, err = e.executePlan(ctx, safeSession, plan, vc, bindVars, logStats, time)
-		return err
-	}, func(typ sqlparser.StatementType, result *sqltypes.Result) error {
-		stmtType = typ
-		qr = result
-		return nil
-	})
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats,
+		func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
+			stmtType = plan.Type
+			qr, err = e.executePlan(ctx, safeSession, plan, vc, bindVars, logStats, time)
+			return err
+		}, func(typ sqlparser.StatementType, result *sqltypes.Result) error {
+			stmtType = typ
+			qr = result
+			return nil
+		})
 
 	return stmtType, qr, err
 }

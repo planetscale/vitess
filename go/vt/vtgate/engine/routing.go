@@ -132,6 +132,22 @@ func (code Opcode) IsSingleShard() bool {
 }
 
 func (rp *RoutingParameters) findRoute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	// logging stuff / rohit
+	buf := sqlparser.NewTrackedBuffer(nil)
+	for _, v := range rp.Values {
+		buf.Myprintf("%v", v)
+	}
+	ks := ""
+	if rp.Keyspace != nil {
+		ks = rp.Keyspace.Name
+	}
+	vindex := ""
+	if rp.Vindex != nil {
+		vindex = rp.Vindex.String()
+	}
+	log.Infof("abcxz findRoute: keyspace %s, bindvars %+v, values %s, vindex %s", ks, bindVars, buf.String(), vindex)
+	// end logging stuff / rohit
+
 	switch rp.Opcode {
 	case None:
 		return nil, nil, nil
