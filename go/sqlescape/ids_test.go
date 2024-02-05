@@ -26,6 +26,9 @@ func TestEscapeID(t *testing.T) {
 	}, {
 		in:  "a`a",
 		out: "`a``a`",
+	}, {
+		in:  "a a",
+		out: "`a a`",
 	}}
 	for _, tc := range testcases {
 		out := EscapeID(tc.in)

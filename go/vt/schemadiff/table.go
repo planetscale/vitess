@@ -864,7 +864,9 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered columns for both tables:
 		t1Columns := c.CreateTable.TableSpec.Columns
 		t2Columns := other.CreateTable.TableSpec.Columns
-		c.diffColumns(alterTable, t1Columns, t2Columns, hints, diffedTableCharset != "")
+		if err := c.diffColumns(alterTable, t1Columns, t2Columns, hints, diffedTableCharset != ""); err != nil {
+			return nil, err
+		}
 	}
 	{
 		// diff keys
@@ -1561,7 +1563,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	t2Columns []*sqlparser.ColumnDefinition,
 	hints *DiffHints,
 	tableCharsetChanged bool,
-) {
+) error {
 	getColumnsMap := func(cols []*sqlparser.ColumnDefinition) map[string]*columnDetails {
 		var prevCol *columnDetails
 		m := map[string]*columnDetails{}
@@ -1623,7 +1625,10 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColEntity := NewColumnDefinitionEntity(t2Col)
 
 		// check diff between before/after columns:
-		modifyColumnDiff := t1ColEntity.ColumnDiff(t2ColEntity, hints)
+		modifyColumnDiff, err := t1ColEntity.ColumnDiff(c.Name(), t2ColEntity, hints)
+		if err != nil {
+			return err
+		}
 		if modifyColumnDiff == nil {
 			// even if there's no apparent change, there can still be implicit changes
 			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both varsions 1 and 2,
@@ -1690,6 +1695,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	for _, c := range addColumns {
 		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
 	}
+	return nil
 }
 
 func heuristicallyDetectColumnRenames(
