@@ -33,7 +33,10 @@ func RemovedForeignKeyNames(
 	if originalCreateTable == "" || vreplCreateTable == "" {
 		return nil, nil
 	}
-	diffHints := schemadiff.DiffHints{ConstraintNamesStrategy: schemadiff.ConstraintNamesIgnoreAll}
+	diffHints := schemadiff.DiffHints{
+		ConstraintNamesStrategy: schemadiff.ConstraintNamesIgnoreAll,
+		EnumReorderStrategy:     schemadiff.EnumReorderStrategyAllow,
+	}
 	diff, err := schemadiff.DiffCreateTablesQueries(originalCreateTable, vreplCreateTable, &diffHints)
 	if err != nil {
 		return nil, err

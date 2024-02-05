@@ -28,16 +28,16 @@ import (
 
 func TestDiffTables(t *testing.T) {
 	tt := []struct {
-		name     string
-		from     string
-		to       string
-		diff     string
-		cdiff    string
-		fromName string
-		toName   string
-		action   string
-		isError  bool
-		hints    *DiffHints
+		name        string
+		from        string
+		to          string
+		diff        string
+		cdiff       string
+		fromName    string
+		toName      string
+		action      string
+		expectError string
+		hints       *DiffHints
 	}{
 		{
 			name: "identical",
@@ -221,9 +221,9 @@ func TestDiffTables(t *testing.T) {
 			dq, dqerr := DiffCreateTablesQueries(ts.from, ts.to, hints)
 			d, err := DiffTables(fromCreateTable, toCreateTable, hints)
 			switch {
-			case ts.isError:
-				assert.Error(t, err)
-				assert.Error(t, dqerr)
+			case ts.expectError != "":
+				assert.ErrorContains(t, err, ts.expectError)
+				assert.ErrorContains(t, dqerr, ts.expectError)
 			case ts.diff == "":
 				assert.NoError(t, err)
 				assert.NoError(t, dqerr)

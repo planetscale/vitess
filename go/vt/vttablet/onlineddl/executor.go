@@ -2795,7 +2795,10 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	if newShowCreateTable == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected: cannot find table or view even as it was just created: %v", onlineDDL.Table)
 	}
-	hints := &schemadiff.DiffHints{AutoIncrementStrategy: schemadiff.AutoIncrementApplyHigher}
+	hints := &schemadiff.DiffHints{
+		AutoIncrementStrategy: schemadiff.AutoIncrementApplyHigher,
+		EnumReorderStrategy:   schemadiff.EnumReorderStrategyAllow,
+	}
 	switch ddlStmt.(type) {
 	case *sqlparser.CreateTable:
 		diff, err = schemadiff.DiffCreateTablesQueries(existingShowCreateTable, newShowCreateTable, hints)

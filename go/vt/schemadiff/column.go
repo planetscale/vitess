@@ -79,14 +79,49 @@ func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionE
 
 // ColumnDiff compares this table statement with another table statement, and sees what it takes to
 // change this table to look like the other table.
-// It returns an AlterTable statement if changes are found, or nil if not.
-// the other table may be of different name; its name is ignored.
-func (c *ColumnDefinitionEntity) ColumnDiff(other *ColumnDefinitionEntity, _ *DiffHints) *ModifyColumnDiff {
+// It returns an ModifyColumnDiff statement if changes are found, or nil if not.
+// The function also requires the charset/collate on the source & target tables. This is because the column's
+// charset & collation, if undefined, are really defined by the table's charset & collation.
+//
+//	Anecdotally, in CreateTableEntity.normalize() we actually actively strip away the charset/collate properties
+//	from the column definition, to get a cleaner table definition.
+//
+// Things get complicated when we consider hints.TableCharsetCollateStrategy. Consider this test case:
+//
+//	from: "create table t (a varchar(64)) default charset=latin1",
+//	to:   "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
+//
+// In both cases, the column is really a latin1. But the tables themselves have different collations.
+// We need to denormalize the column's charset/collate properties, so that the comparison can be done.
+func (c *ColumnDefinitionEntity) ColumnDiff(
+	tableName string,
+	other *ColumnDefinitionEntity,
+	hints *DiffHints,
+) (*ModifyColumnDiff, error) {
+
 	if sqlparser.Equals.RefOfColumnDefinition(c.columnDefinition, other.columnDefinition) {
-		return nil
+		return nil, nil
 	}
 
-	return NewModifyColumnDiffByDefinition(other.columnDefinition)
+	getEnumValuesMap := func(enumValues []string) map[string]int {
+		m := make(map[string]int, len(enumValues))
+		for i, enumValue := range enumValues {
+			m[enumValue] = i
+		}
+		return m
+	}
+	switch hints.EnumReorderStrategy {
+	case EnumReorderStrategyReject:
+		otherEnumValuesMap := getEnumValuesMap(other.columnDefinition.Type.EnumValues)
+		for ordinal, enumValue := range c.columnDefinition.Type.EnumValues {
+			if otherOrdinal, ok := otherEnumValuesMap[enumValue]; ok {
+				if ordinal != otherOrdinal {
+					return nil, &EnumValueOrdinalChangedError{Table: tableName, Column: c.columnDefinition.Name.String(), Value: enumValue, Ordinal: ordinal, NewOrdinal: otherOrdinal}
+				}
+			}
+		}
+	}
+	return NewModifyColumnDiffByDefinition(other.columnDefinition), nil
 }
 
 // IsTextual returns true when this column is of textual type, and is capable of having a character set property
