@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM pscale.dev/wolfi-prod/go:1.21.6 AS builder
+FROM --platform=$BUILDPLATFORM pscale.dev/wolfi-prod/go:1.22.0 AS builder
 ARG TARGETOS TARGETARCH
 RUN addgroup -g 999 vitess && adduser -S -u 999 -g vitess -G vitess -s /bin/false -D -H -h /vt vitess
 RUN mkdir -p /vt && chown -R vitess:vitess /vt
