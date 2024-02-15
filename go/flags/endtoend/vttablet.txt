@@ -259,6 +259,8 @@ Flags:
       --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
+      --psdb.aws_request_max_attempts int                                Maximum request attempts to AWS API before failing (default 25)
+      --psdb.aws_request_max_backoff_delay duration                      Maximum request retry backoff delay for AWS API (default 2m0s)
       --psdb.backup_arn string                                           ARN for the S3 bucket
       --psdb.backup_bucket string                                        S3 bucket for backups
       --psdb.backup_region string                                        The region for the backups
