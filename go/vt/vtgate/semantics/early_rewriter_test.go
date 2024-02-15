@@ -32,7 +32,7 @@ import (
 func TestExpandStar(t *testing.T) {
 	ks := &vindexes.Keyspace{
 		Name:    "main",
-		Sharded: false,
+		Sharded: true,
 	}
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{
@@ -483,7 +483,7 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 func TestRewriteNot(t *testing.T) {
 	ks := &vindexes.Keyspace{
 		Name:    "main",
-		Sharded: false,
+		Sharded: true,
 	}
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{
@@ -535,7 +535,7 @@ func TestRewriteNot(t *testing.T) {
 func TestConstantFolding(t *testing.T) {
 	ks := &vindexes.Keyspace{
 		Name:    "main",
-		Sharded: false,
+		Sharded: true,
 	}
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{
