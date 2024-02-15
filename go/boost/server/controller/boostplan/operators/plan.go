@@ -200,7 +200,7 @@ func (report tableUsageMap) resolve(node *Node) []*TableReport {
 }
 
 func (conv *Converter) semanticAnalyze(stmt sqlparser.Statement, keyspace string, si semantics.SchemaInformation) (*semantics.SemTable, error) {
-	semTable, err := semantics.Analyze(stmt, keyspace, si)
+	semTable, err := semantics.AnalyzeStrict(stmt, keyspace, si)
 	if err != nil {
 		return nil, err
 	}
