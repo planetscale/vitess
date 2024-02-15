@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -15,6 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/spf13/pflag"
+
 	"github.com/planetscale/common-libs/files"
 
 	"vitess.io/vitess/go/vt/log"
@@ -22,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -30,19 +32,32 @@ const (
 	lastBackupLabel                  = "psdb.co/last-backup-id"
 	lastBackupExcludedKeyspacesLabel = "psdb.co/last-backup-excluded-keyspaces"
 	backupIDLabel                    = "psdb.co/backup-id"
-
-	// maximum number of request attempts to AWS before we give up
-	requestMaxAttempts = 25
 )
 
 var (
-	backupRegion      = flag.String("psdb.backup_region", "", "The region for the backups")
-	backupBucket      = flag.String("psdb.backup_bucket", "", "S3 bucket for backups")
-	backupARN         = flag.String("psdb.backup_arn", "", "ARN for the S3 bucket")
-	backupSSEKMSKeyID = flag.String("psdb.backup_sse_kms_key_id", "", "KMS Key ID to use for S3-SSE")
+	backupRegion           string
+	backupBucket           string
+	backupARN              string
+	backupSSEKMSKeyID      string
+	requestMaxAttempts     int
+	requestMaxBackoffDelay time.Duration
 )
 
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&backupRegion, "psdb.backup_region", "", "The region for the backups")
+	fs.StringVar(&backupBucket, "psdb.backup_bucket", "", "S3 bucket for backups")
+	fs.StringVar(&backupARN, "psdb.backup_arn", "", "ARN for the S3 bucket")
+	fs.StringVar(&backupSSEKMSKeyID, "psdb.backup_sse_kms_key_id", "", "KMS Key ID to use for S3-SSE")
+	fs.IntVar(&requestMaxAttempts, "psdb.aws_request_max_attempts", 25, "Maximum request attempts to AWS API before failing")
+	fs.DurationVar(&requestMaxBackoffDelay, "psdb.aws_request_max_backoff_delay", 2*time.Minute, "Maximum request retry backoff delay for AWS API")
+}
+
 func init() {
+	servenv.OnParseFor("vtbackup", registerFlags)
+	servenv.OnParseFor("vtctl", registerFlags)
+	servenv.OnParseFor("vtctld", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+
 	backupstorage.BackupStorageMap["kmsbackup"] = &FilesBackupStorage{}
 }
 
@@ -114,7 +129,7 @@ func (f *FilesBackupStorage) ListBackups(ctx context.Context, dir string) ([]bac
 		return nil, err
 	}
 
-	log.Infof("Assigning Vitess-compliant backup name %s to last PSDB backup with id = %s, bucket = %s, kmsKeyID = %s, root = %s.",
+	log.Infof("Assigning Vitess-compliant backup name %s to last PSDB backup with id = %q, bucket = %q, kmsKeyID = %q, root = %q.",
 		name, lastBackupID, f.bucket, f.kmsKeyID, dir)
 
 	return []backupstorage.BackupHandle{fbh}, nil
@@ -148,17 +163,17 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 	}
 
 	// flags are parsed later, hence we need to assign them here
-	if *backupRegion != "" {
-		f.region = *backupRegion
+	if backupRegion != "" {
+		f.region = backupRegion
 	}
-	if *backupBucket != "" {
-		f.bucket = *backupBucket
+	if backupBucket != "" {
+		f.bucket = backupBucket
 	}
-	if *backupARN != "" {
-		f.arn = *backupARN
+	if backupARN != "" {
+		f.arn = backupARN
 	}
-	if *backupSSEKMSKeyID != "" {
-		f.kmsKeyID = *backupSSEKMSKeyID
+	if backupSSEKMSKeyID != "" {
+		f.kmsKeyID = backupSSEKMSKeyID
 	}
 
 	if f.region == "" {
@@ -179,8 +194,10 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 
 	rootPath := path.Join("/", backupID, dir)
 
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRetryer(func() aws.Retryer {
-		return retry.AddWithMaxAttempts(retry.NewStandard(), requestMaxAttempts)
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRetryer(func() (r aws.Retryer) {
+		r = retry.AddWithMaxAttempts(retry.NewStandard(), requestMaxAttempts)
+		r = retry.AddWithMaxBackoffDelay(r, requestMaxBackoffDelay)
+		return
 	}))
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to initialize aws config")
