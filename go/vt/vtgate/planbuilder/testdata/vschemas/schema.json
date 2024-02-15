@@ -209,7 +209,8 @@
             },
             {
               "name": "textcol2",
-              "type": "VARCHAR"
+              "type": "VARCHAR",
+              "collation_name": "big5_bin"
             }
           ]
         },

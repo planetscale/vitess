@@ -25,19 +25,17 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqlescape"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // TabletTypeSuffix maps the tablet type to its suffix string.
@@ -221,10 +219,9 @@ func (col *Column) MarshalJSON() ([]byte, error) {
 func (col *Column) ToEvalengineType() evalengine.Type {
 	collation := collations.DefaultCollationForType(col.Type)
 	if sqltypes.IsText(col.Type) {
-		coll, found := collations.Local().LookupID(col.CollationName)
-		if found {
-			collation = coll
-		}
+		collation, _ = collations.Local().LookupID(col.CollationName)
+	} else {
+		collation = collations.CollationForType(col.Type, collations.ID(collations.Local().DefaultConnectionCharset()))
 	}
 	return evalengine.NewTypeEx(col.Type, collation, col.Nullable, col.Size, col.Scale)
 }
