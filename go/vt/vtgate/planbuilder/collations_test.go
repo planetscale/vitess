@@ -59,7 +59,6 @@ func (tc *collationTestCase) addCollationsToSchema(vschema *vschemawrapper.VSche
 		for i, c := range tbl.Columns {
 			if c.Name.EqualString(collation.colName) {
 				tbl.Columns[i].CollationName = collation.collationName
-				break
 			}
 		}
 	}

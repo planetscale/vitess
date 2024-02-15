@@ -27,6 +27,7 @@ import (
 	"time"
 
 	_flag "vitess.io/vitess/go/internal/flag"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
@@ -40,14 +41,13 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/vterrors"
-	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
 
 func TestSelectNext(t *testing.T) {
@@ -1974,6 +1974,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 				{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+				{Name: "weight_string(textcol)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID},
 			},
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
@@ -1982,6 +1983,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 				// This will allow us to test that cross-shard ordering
 				// still works correctly.
 				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
+				sqltypes.NewVarBinary(fmt.Sprintf("%d", i%4)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -1997,7 +1999,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, textcol from `user` order by textcol desc",
+		Sql:           "select col1, textcol, weight_string(textcol) from `user` order by textcol desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2106,11 +2108,13 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 				{Name: "textcol", Type: sqltypes.VarChar, Charset: uint32(collations.Default())},
+				{Name: "weight_string(textcol)", Type: sqltypes.VarBinary, Charset: collations.CollationBinaryID},
 			},
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
+				sqltypes.NewVarBinary(fmt.Sprintf("%d", i%4)),
 			}},
 		}})
 		conns = append(conns, sbc)
@@ -2123,7 +2127,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id, textcol from `user` order by textcol desc",
+		Sql:           "select id, textcol, weight_string(textcol) from `user` order by textcol desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
