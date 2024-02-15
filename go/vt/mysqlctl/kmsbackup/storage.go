@@ -32,16 +32,15 @@ const (
 	lastBackupLabel                  = "psdb.co/last-backup-id"
 	lastBackupExcludedKeyspacesLabel = "psdb.co/last-backup-excluded-keyspaces"
 	backupIDLabel                    = "psdb.co/backup-id"
-
-	// maximum number of request attempts to AWS before we give up
-	requestMaxAttempts = 25
 )
 
 var (
-	backupRegion      string
-	backupBucket      string
-	backupARN         string
-	backupSSEKMSKeyID string
+	backupRegion           string
+	backupBucket           string
+	backupARN              string
+	backupSSEKMSKeyID      string
+	requestMaxAttempts     int
+	requestMaxBackoffDelay time.Duration
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -49,6 +48,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&backupBucket, "psdb.backup_bucket", "", "S3 bucket for backups")
 	fs.StringVar(&backupARN, "psdb.backup_arn", "", "ARN for the S3 bucket")
 	fs.StringVar(&backupSSEKMSKeyID, "psdb.backup_sse_kms_key_id", "", "KMS Key ID to use for S3-SSE")
+	fs.IntVar(&requestMaxAttempts, "psdb.aws_request_max_attempts", 25, "Maximum request attempts to AWS API before failing")
+	fs.DurationVar(&requestMaxBackoffDelay, "psdb.aws_request_max_backoff_delay", 2*time.Minute, "Maximum request retry backoff delay for AWS API")
 }
 
 func init() {
@@ -193,8 +194,10 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 
 	rootPath := path.Join("/", backupID, dir)
 
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRetryer(func() aws.Retryer {
-		return retry.AddWithMaxAttempts(retry.NewStandard(), requestMaxAttempts)
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRetryer(func() (r aws.Retryer) {
+		r = retry.AddWithMaxAttempts(retry.NewStandard(), requestMaxAttempts)
+		r = retry.AddWithMaxBackoffDelay(r, requestMaxBackoffDelay)
+		return
 	}))
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to initialize aws config")
