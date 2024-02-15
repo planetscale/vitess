@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/stats"
 
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
@@ -399,7 +400,7 @@ func (throttler *Throttler) Enable(ctx context.Context) *sync.WaitGroup {
 	throttler.Operate(ctx, wg)
 
 	// Make a one-time request for a lease of heartbeats
-	go throttler.heartbeatWriter.RequestHeartbeats()
+	throttler.requestHeartbeats()
 
 	return wg
 }
@@ -515,6 +516,13 @@ func (throttler *Throttler) Close() {
 	throttler.pool.Close()
 	throttler.cancelOpenContext()
 	log.Infof("Throttler: finished execution of Close")
+}
+
+// requestHeartbeats sends a heartbeat lease request to the heartbeat writer.
+// This action is recorded in stats.
+func (throttler *Throttler) requestHeartbeats() {
+	go throttler.heartbeatWriter.RequestHeartbeats()
+	go stats.GetOrNewCounter("ThrottlerHeartbeatRequests", "heartbeat requests").Add(1)
 }
 
 func (throttler *Throttler) generateSelfMySQLThrottleMetricFunc(ctx context.Context, probe *mysql.Probe) func() *mysql.MySQLThrottleMetric {
@@ -655,7 +663,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 						if transitionedIntoLeader {
 							// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
 							go mysqlRefreshTicker.TickNow()
-							go throttler.heartbeatWriter.RequestHeartbeats()
+							throttler.requestHeartbeats()
 						}
 					}()
 				}
@@ -776,7 +784,8 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 		if checkResult.RecentlyChecked {
 			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
 			// We therefore renew the heartbeats lease.
-			go throttler.heartbeatWriter.RequestHeartbeats()
+			throttler.requestHeartbeats()
+			go stats.GetOrNewCounter("ThrottlerProbeRecentlyChecked", "probe recently checked").Add(1)
 		}
 		return mySQLThrottleMetric
 	}
@@ -1000,7 +1009,7 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.AppThrottle) {
 	throttler.throttledApps.Delete(appName)
 	// the app is likely to check
-	go throttler.heartbeatWriter.RequestHeartbeats()
+	throttler.requestHeartbeats()
 	return base.NewAppThrottle(appName, time.Now(), 0, false)
 }
 
@@ -1147,7 +1156,7 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		return okMetricCheckResult
 	}
 	if !flags.SkipRequestHeartbeats && !throttlerapp.VitessName.Equals(appName) {
-		go throttler.heartbeatWriter.RequestHeartbeats()
+		throttler.requestHeartbeats()
 		// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
 		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
 		// to the PRIMARY so that it knows it must renew the heartbeat lease.
@@ -1161,6 +1170,7 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 		// If this tablet is a REPLICA or RDONLY, we want to advertise to the PRIMARY that someone did a recent check,
 		// so that the PRIMARY knows it must renew the heartbeat lease.
 		checkResult.RecentlyChecked = true
+		go stats.GetOrNewCounter("ThrottlerRecentlyChecked", "recently checked").Add(1)
 	}
 
 	return checkResult
