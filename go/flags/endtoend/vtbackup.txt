@@ -139,6 +139,8 @@ Usage of vtbackup:
       --mysql_timeout duration                                      how long to wait for mysqld startup (default 5m0s)
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
+      --psdb.aws_request_max_attempts int                           Maximum request attempts to AWS API before failing (default 25)
+      --psdb.aws_request_max_backoff_delay duration                 Maximum request retry backoff delay for AWS API (default 2m0s)
       --psdb.backup_arn string                                      ARN for the S3 bucket
       --psdb.backup_bucket string                                   S3 bucket for backups
       --psdb.backup_region string                                   The region for the backups
