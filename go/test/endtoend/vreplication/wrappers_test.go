@@ -131,8 +131,9 @@ func (vmt *VtctlMoveTables) Cancel() {
 }
 
 func (vmt *VtctlMoveTables) Complete() {
-	//TODO implement me
-	panic("implement me")
+	err := tstWorkflowExec(vmt.vc.t, "", vmt.workflowName, vmt.sourceKeyspace, vmt.targetKeyspace,
+		vmt.tables, workflowActionComplete, "", "", "", vmt.atomicCopy)
+	require.NoError(vmt.vc.t, err)
 }
 
 var _ iMoveTables = (*VtctldMoveTables)(nil)

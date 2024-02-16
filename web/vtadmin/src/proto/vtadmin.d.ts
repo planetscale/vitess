@@ -20745,6 +20745,9 @@ export namespace tabletmanagerdata {
 
         /** ExecuteFetchAsDbaRequest reload_schema */
         reload_schema?: (boolean|null);
+
+        /** ExecuteFetchAsDbaRequest disable_foreign_key_checks */
+        disable_foreign_key_checks?: (boolean|null);
     }
 
     /** Represents an ExecuteFetchAsDbaRequest. */
@@ -20770,6 +20773,9 @@ export namespace tabletmanagerdata {
 
         /** ExecuteFetchAsDbaRequest reload_schema. */
         public reload_schema: boolean;
+
+        /** ExecuteFetchAsDbaRequest disable_foreign_key_checks. */
+        public disable_foreign_key_checks: boolean;
 
         /**
          * Creates a new ExecuteFetchAsDbaRequest instance using the specified properties.
