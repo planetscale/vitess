@@ -2,7 +2,6 @@ package operators
 
 import (
 	"slices"
-	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -116,26 +115,12 @@ func columnTypeHasChanged(colType, destColType *sqlparser.ColumnType) bool {
 	return true
 }
 
-func safeLengthIncrease(from, to *sqlparser.Literal) bool {
+func safeLengthIncrease(from, to *int) bool {
 	if from == nil && to == nil {
 		return true
 	}
 	if from == nil || to == nil {
 		return false
 	}
-	if from.Type != sqlparser.IntVal || to.Type != sqlparser.IntVal {
-		// Should never happen as this is always an int literal but
-		// a safety check just in case
-		return false
-	}
-
-	fromVal, err := strconv.ParseInt(from.Val, 10, 64)
-	if err != nil {
-		return false
-	}
-	toVal, err := strconv.ParseInt(to.Val, 10, 64)
-	if err != nil {
-		return false
-	}
-	return toVal >= fromVal
+	return *to >= *from
 }

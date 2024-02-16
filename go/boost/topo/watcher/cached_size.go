@@ -65,7 +65,7 @@ func (cached *View) CachedSize(alloc bool) int64 {
 	}
 	// field topkOrder []vitess.io/vitess/go/boost/server/controller/boostplan/viewplan.OrderedColumn
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.topkOrder)) * int64(9))
+		size += hack.RuntimeAllocSize(int64(cap(cached.topkOrder)) * int64(16))
 	}
 	// field metrics *vitess.io/vitess/go/boost/topo/watcher.scopedMetrics
 	size += cached.metrics.CachedSize(true)
@@ -83,7 +83,7 @@ func (cached *scopedMetrics) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.publicQueryID)))
 	// field hitrate *vitess.io/vitess/go/boost/common/metrics.RateCounter
 	if cached.hitrate != nil {
-		size += hack.RuntimeAllocSize(int64(57))
+		size += hack.RuntimeAllocSize(int64(64))
 	}
 	return size
 }
