@@ -49,6 +49,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -1751,7 +1752,12 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType w
 					sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
 					sqlescape.EscapeID(sqlescape.UnescapeID(renameName)))
 			}
-			_, err := ts.wr.ExecuteFetchAsDba(ctx, source.GetPrimary().Alias, query, 1, false, true)
+			_, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+				Query:                   []byte(query),
+				MaxRows:                 1,
+				ReloadSchema:            true,
+				DisableForeignKeyChecks: true,
+			})
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v", source.GetPrimary().String(), tableName, err)
 				return err
@@ -1851,7 +1857,12 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
 			ts.Logger().Infof("%s: Dropping table %s.%s\n",
 				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
-			_, err := ts.wr.ExecuteFetchAsDba(ctx, target.GetPrimary().Alias, query, 1, false, true)
+			_, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+				Query:                   []byte(query),
+				MaxRows:                 1,
+				ReloadSchema:            true,
+				DisableForeignKeyChecks: true,
+			})
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v",
 					target.GetPrimary().String(), tableName, err)

@@ -507,9 +507,10 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 					sqlescape.EscapeID(sqlescape.UnescapeID(renameName)))
 			}
 			_, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-				Query:        []byte(query),
-				MaxRows:      1,
-				ReloadSchema: true,
+				Query:                   []byte(query),
+				MaxRows:                 1,
+				ReloadSchema:            true,
+				DisableForeignKeyChecks: true,
 			})
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v", source.GetPrimary().String(), tableName, err)
@@ -1064,7 +1065,6 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 }
 
 func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
-	log.Flush()
 	err := ts.ForAllTargets(func(target *MigrationTarget) error {
 		log.Infof("ForAllTargets: %+v", target)
 		for _, tableName := range ts.Tables() {
@@ -1074,12 +1074,12 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 			ts.Logger().Infof("%s: Dropping table %s.%s\n",
 				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
 			res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-				Query:        []byte(query),
-				MaxRows:      1,
-				ReloadSchema: true,
+				Query:                   []byte(query),
+				MaxRows:                 1,
+				ReloadSchema:            true,
+				DisableForeignKeyChecks: true,
 			})
 			log.Infof("Removed target table with result: %+v", res)
-			log.Flush()
 			if err != nil {
 				ts.Logger().Errorf("%s: Error removing table %s: %v",
 					target.GetPrimary().String(), tableName, err)
