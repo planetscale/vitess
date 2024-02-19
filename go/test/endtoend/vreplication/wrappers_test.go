@@ -202,6 +202,5 @@ func (v VtctldMoveTables) Cancel() {
 }
 
 func (v VtctldMoveTables) Complete() {
-	//TODO implement me
-	panic("implement me")
+	v.exec("Complete")
 }
