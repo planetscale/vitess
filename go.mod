@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.20
+go 1.21
 
 require (
 	cloud.google.com/go/storage v1.30.1
@@ -49,7 +49,6 @@ require (
 	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/pires/go-proxyproto v0.6.2
 	github.com/pkg/errors v0.9.1
-	github.com/planetscale/common-libs v0.3.0
 	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
 	github.com/planetscale/vtprotobuf v0.4.0
 	github.com/prometheus/client_golang v1.15.1
@@ -114,6 +113,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
+	github.com/planetscale/kmsbackup v0.4.0
 	github.com/planetscale/psevents v0.0.0-20230523165553-cab767299381
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/segmentio/fasthash v1.0.3
