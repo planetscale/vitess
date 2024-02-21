@@ -8,10 +8,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-
+	"github.com/planetscale/kmsbackup/files"
 	"github.com/stretchr/testify/require"
-
-	"github.com/planetscale/common-libs/files"
 )
 
 var (
@@ -86,7 +84,6 @@ func newS3FilesBackupStorage(cfg aws.Config) (*FilesBackupStorage, error) {
 
 func newLocalFilesBackupStorage(testDir string) (*FilesBackupStorage, error) {
 	fs, err := files.NewLocalFiles(testDir)
-
 	if err != nil {
 		return nil, err
 	}
