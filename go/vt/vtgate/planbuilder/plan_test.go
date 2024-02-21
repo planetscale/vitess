@@ -276,6 +276,9 @@ func TestOne(t *testing.T) {
 }
 
 func TestOneTPCC(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
+
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/tpcc_schema.json", true),
 	}
@@ -284,6 +287,8 @@ func TestOneTPCC(t *testing.T) {
 }
 
 func TestOneWithMainAsDefault(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/schema.json", true),
 		Keyspace: &vindexes.Keyspace{
@@ -296,6 +301,8 @@ func TestOneWithMainAsDefault(t *testing.T) {
 }
 
 func TestOneWithSecondUserAsDefault(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/schema.json", true),
 		Keyspace: &vindexes.Keyspace{
@@ -308,6 +315,8 @@ func TestOneWithSecondUserAsDefault(t *testing.T) {
 }
 
 func TestOneWithUserAsDefault(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	vschema := &vschemawrapper.VSchemaWrapper{
 		V: loadSchema(t, "vschemas/schema.json", true),
 		Keyspace: &vindexes.Keyspace{
@@ -331,6 +340,8 @@ func TestOneWithTPCHVSchema(t *testing.T) {
 }
 
 func TestOneWith57Version(t *testing.T) {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
 	// first we move everything to use 5.7 logic
 	oldVer := servenv.MySQLServerVersion()
 	servenv.SetMySQLServerVersionForTest("5.7")
