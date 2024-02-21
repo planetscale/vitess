@@ -2043,12 +2043,7 @@
     }
   },
   {
-    "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
-    "query": "select (select col from user limit 1) as a from user join user_extra order by a",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
-  },
-  {
-    "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
+    "comment": "subquery in select expression of derived table",
     "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "plan": {
       "QueryType": "SELECT",
@@ -2116,6 +2111,11 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
+    "query": "select (select col from user limit 1) as a from user join user_extra order by a",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "plan test for a natural character set string",
@@ -4179,8 +4179,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select user_id from (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
-                "Query": "select user_id from (select user_id from user_extra) as ue limit :__upper_limit",
+                "FieldQuery": "select ue.user_id from (select user_id from user_extra where 1 != 1) as ue where 1 != 1",
+                "Query": "select ue.user_id from (select user_id from user_extra) as ue limit :__upper_limit",
                 "Table": "user_extra"
               }
             ]
