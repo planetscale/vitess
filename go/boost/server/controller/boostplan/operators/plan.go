@@ -119,39 +119,18 @@ func (conv *Converter) Plan(ddl DDLSchema, si semantics.SchemaInformation, stmt 
 type tableUsageMap map[semantics.TableSet]*TableReport
 
 func (report tableUsageMap) compute(semTable *semantics.SemTable) (err error) {
-	// First loop through the direct column references but don't
-	// immediately add them, since we loop over a map here so ordering
-	// is undefined, but we need the final report to be ordered by the
-	// table's column order, at least for expanded columns.
-	for expr, tblID := range semTable.Direct {
-		_, ok := expr.(*sqlparser.ColName)
-		if !ok {
+	for idx, tableInfo := range semTable.Tables {
+		vtbl := tableInfo.GetVindexTable()
+		if vtbl == nil {
 			continue
 		}
 
-		_, found := report[tblID]
-		if !found {
-			infoFor, err := semTable.TableInfoFor(tblID)
-			if err != nil {
-				return err
-			}
-
-			vtbl := infoFor.GetVindexTable()
-			if vtbl == nil {
-				continue
-			}
-
-			tr := &TableReport{
-				Name: sqlparser.TableName{
-					Name:      sqlparser.NewIdentifierCS(vtbl.Name.String()),
-					Qualifier: sqlparser.NewIdentifierCS(vtbl.Keyspace.Name),
-				},
-			}
-			report[tblID] = tr
+		report[semantics.SingleTableSet(idx)] = &TableReport{
+			Name: sqlparser.NewTableNameWithQualifier(vtbl.Name.String(), vtbl.Keyspace.Name),
 		}
 	}
 
-	// Add expanded columns first to ensure the are in the proper order.
+	// Add expanded columns first to ensure they are in the proper order.
 	for _, tr := range report {
 		expandedCols := semTable.ExpandedColumns[tr.Name]
 		for _, col := range expandedCols {
