@@ -6,7 +6,7 @@ on: [push]
 jobs:
   build:
     name: Run endtoend tests on Cluster (vreplication_foreign_key_stress)
-    runs-on: ubuntu-shr
+    runs-on: ubuntu-shr-4cpu-16gb
     timeout-minutes: 60
 
     steps:
