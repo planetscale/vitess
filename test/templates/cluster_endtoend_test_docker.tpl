@@ -6,7 +6,7 @@ permissions: read-all
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: ubuntu-shr
+    runs-on: ubuntu-shr-4cpu-16gb
 
     steps:
     - name: Skip CI
