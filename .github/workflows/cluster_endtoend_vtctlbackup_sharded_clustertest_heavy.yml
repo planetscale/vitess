@@ -6,7 +6,7 @@ on: [push]
 jobs:
   build:
     name: Run endtoend tests on Cluster (vtctlbackup_sharded_clustertest_heavy)
-    runs-on: ubuntu-shr
+    runs-on: ubuntu-shr-4cpu-16gb
     timeout-minutes: 60
 
     steps:

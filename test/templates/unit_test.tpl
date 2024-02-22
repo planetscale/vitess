@@ -3,7 +3,7 @@ on: [push]
 
 jobs:
   test:
-    runs-on: ubuntu-shr
+    runs-on: ubuntu-shr-4cpu-16gb
 
     steps:
       - name: Configure git private repo access
