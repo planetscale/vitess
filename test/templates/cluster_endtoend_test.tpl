@@ -14,6 +14,19 @@ jobs:
       run: |
         git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
+    {{if .MemoryCheck}}
+
+    - name: Check Memory
+      run: |
+        totalMem=$(free -g | awk 'NR==2 {print $2}')
+        echo "total memory $totalMem GB"
+        if [[ "$totalMem" -lt 15 ]]; then 
+          echo "Less memory than required"
+          exit 1
+        fi
+
+    {{end}}
+
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
