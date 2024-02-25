@@ -2797,7 +2797,6 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	}
 	hints := &schemadiff.DiffHints{
 		AutoIncrementStrategy: schemadiff.AutoIncrementApplyHigher,
-		EnumReorderStrategy:   schemadiff.EnumReorderStrategyAllow,
 	}
 	switch ddlStmt.(type) {
 	case *sqlparser.CreateTable:
