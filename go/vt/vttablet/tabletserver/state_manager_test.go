@@ -715,7 +715,7 @@ func TestPanicInWait(t *testing.T) {
 
 	// Simulate going to a not serving state and calling unserveCommon that waits on requests.
 	sm.wantState = StateNotServing
-	sm.waitForRequestsToBeEmpty()
+	sm.rw.WaitToBeEmpty()
 }
 
 func verifySubcomponent(t *testing.T, order int64, component any, state testState) {
@@ -745,6 +745,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		ddle:        &testOnlineDDLExecutor{},
 		throttler:   &testLagThrottler{},
 		tableGC:     &testTableGC{},
+		rw:          newRequestsWaiter(),
 	}
 	sm.Init(env, &querypb.Target{})
 	sm.hs.InitDBConfig(&querypb.Target{}, fakesqldb.New(t).ConnParams())
