@@ -25,7 +25,7 @@ limitations under the License.
 // Alternatively, use a Watcher implementation which will constantly watch
 // a source (e.g. the topology) and add and remove tablets as they are
 // added or removed from the source.
-// For a Watcher example have a look at NewCellTabletsWatcher().
+// For a Watcher example have a look at NewTopologyWatcher().
 //
 // Internally, the HealthCheck module is connected to each tablet and has a
 // streaming RPC (StreamHealth) open to receive periodic health infos.
@@ -341,7 +341,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		} else if len(KeyspacesToWatch) > 0 {
 			filter = NewFilterByKeyspace(KeyspacesToWatch)
 		}
-		topoWatchers = append(topoWatchers, NewCellTabletsWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, topo.DefaultConcurrency))
+		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, topo.DefaultConcurrency))
 	}
 
 	hc.topoWatchers = topoWatchers
