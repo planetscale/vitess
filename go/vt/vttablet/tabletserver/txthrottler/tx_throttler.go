@@ -86,14 +86,6 @@ type ThrottlerInterface interface {
 	ResetConfiguration()
 }
 
-// TopologyWatcherInterface defines the public interface that is implemented by
-// discovery.LegacyTopologyWatcher. It is only used here to allow mocking out
-// go/vt/discovery.LegacyTopologyWatcher.
-type TopologyWatcherInterface interface {
-	Start()
-	Stop()
-}
-
 // TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
 // go/vt/throttler.GlobalManager.
 const TxThrottlerName = "TransactionThrottler"
@@ -171,8 +163,7 @@ type txThrottlerState struct {
 	throttler       ThrottlerInterface
 	stopHealthCheck context.CancelFunc
 
-	healthCheck      discovery.HealthCheck
-	topologyWatchers []TopologyWatcherInterface
+	healthCheck discovery.HealthCheck
 }
 
 // NewTxThrottler tries to construct a txThrottler from the
@@ -353,11 +344,6 @@ func (ts *txThrottlerState) deallocateResources() {
 	// We don't really need to nil out the fields here
 	// as deallocateResources is not expected to be called
 	// more than once, but it doesn't hurt to do so.
-	for _, watcher := range ts.topologyWatchers {
-		watcher.Stop()
-	}
-	ts.topologyWatchers = nil
-
 	ts.healthCheck.Close()
 	ts.healthCheck = nil
 
