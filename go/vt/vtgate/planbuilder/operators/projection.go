@@ -274,14 +274,19 @@ func (p *Projection) GetOrdering() ([]ops.OrderBy, error) {
 
 // AllOffsets returns a slice of integer offsets for all columns in the Projection
 // if all columns are of type Offset. If any column is not of type Offset, it returns nil.
-func (p *Projection) AllOffsets() (cols []int) {
-	for _, c := range p.Projections {
+func (p *Projection) AllOffsets() (cols []int, colNames []string) {
+	for idx, c := range p.Projections {
 		offset, ok := c.(Offset)
 		if !ok {
-			return nil
+			return nil, nil
+		}
+		colName := ""
+		if !p.Columns[idx].As.IsEmpty() {
+			colName = p.Columns[idx].As.String()
 		}
 
 		cols = append(cols, offset.Offset)
+		colNames = append(colNames, colName)
 	}
 	return
 }
@@ -311,7 +316,7 @@ func (p *Projection) Compact(ctx *plancontext.PlanningContext) (ops.Operator, *r
 	needed := false
 	for i, projection := range p.Projections {
 		e, ok := projection.(Offset)
-		if !ok || e.Offset != i {
+		if !ok || e.Offset != i || !p.Columns[i].As.IsEmpty() {
 			needed = true
 			break
 		}
@@ -336,6 +341,9 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, src *Appl
 	for idx, col := range p.Projections {
 		switch col := col.(type) {
 		case Offset:
+			if !p.Columns[idx].As.IsEmpty() {
+				return p, rewrite.SameTree, nil
+			}
 			newColumns = append(newColumns, src.Columns[col.Offset])
 			newColumnsAST = append(newColumnsAST, src.JoinColumns[col.Offset])
 		case UnexploredExpression:
