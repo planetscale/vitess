@@ -157,10 +157,10 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 		return nil, err
 	}
 
-	if cols := op.AllOffsets(); cols != nil {
+	if cols, colNames := op.AllOffsets(); cols != nil {
 		// if all this op is doing is passing through columns from the input, we
 		// can use the faster SimpleProjection
-		return useSimpleProjection(ctx, op, cols, src)
+		return useSimpleProjection(ctx, op, cols, colNames, src)
 	}
 
 	expressions := slice.Map(op.Projections, func(from operators.ProjExpr) sqlparser.Expr {
@@ -202,7 +202,7 @@ func transformProjection(ctx *plancontext.PlanningContext, op *operators.Project
 
 // useSimpleProjection uses nothing at all if the output is already correct,
 // or SimpleProjection when we have to reorder or truncate the columns
-func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Projection, cols []int, src logicalPlan) (logicalPlan, error) {
+func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Projection, cols []int, colNames []string, src logicalPlan) (logicalPlan, error) {
 	columns, err := op.Source.GetColumns(ctx)
 	if err != nil {
 		return nil, err
@@ -214,7 +214,8 @@ func useSimpleProjection(ctx *plancontext.PlanningContext, op *operators.Project
 	return &simpleProjection{
 		logicalPlanCommon: newBuilderCommon(src),
 		eSimpleProj: &engine.SimpleProjection{
-			Cols: cols,
+			Cols:     cols,
+			ColNames: colNames,
 		},
 	}, nil
 }
