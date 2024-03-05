@@ -37,7 +37,7 @@ jobs:
   build-tag-push-lite:
     name: vitess/lite
 
-    runs-on: ubuntu-shr
+    runs-on: ubuntu-shr-4cpu-16gb
 
     strategy:
       matrix:
