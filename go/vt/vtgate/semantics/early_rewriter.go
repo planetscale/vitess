@@ -1155,9 +1155,6 @@ func (e *expanderState) addColumn(col ColumnInfo, tbl TableInfo, tblName sqlpars
 	} else {
 		colName = sqlparser.NewColName(col.Name)
 	}
-	if e.needsQualifier {
-		alias = sqlparser.NewIdentifierCI(col.Name)
-	}
 	e.colNames = append(e.colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
 	e.storeExpandInfo(tbl, tblName, colName)
 }
