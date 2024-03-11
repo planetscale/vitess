@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Checkout code
         if: ${{ github.base_ref != 'upstream' }}
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Add initial labels
         if: ${{ github.base_ref != 'upstream' && contains(fromJSON('["opened", "reopened"]'), github.event.action) }}

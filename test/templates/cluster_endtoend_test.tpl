@@ -28,12 +28,12 @@ jobs:
     {{end}}
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: 1.21.7
 
     - name: Set up python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
 
     - name: Tune the OS
       run: |
@@ -43,7 +43,7 @@ jobs:
         sudo sysctl -p /etc/sysctl.conf
 
     - name: Check out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Get dependencies
       env: # Or as an environment variable
