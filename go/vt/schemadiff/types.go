@@ -17,6 +17,9 @@ limitations under the License.
 package schemadiff
 
 import (
+	"strings"
+
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -124,6 +127,11 @@ const (
 	EnumReorderStrategyReject
 )
 
+const (
+	ForeignKeyCheckStrategyStrict int = iota
+	ForeignKeyCheckStrategyIgnore
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering         bool
@@ -137,8 +145,12 @@ type DiffHints struct {
 	TableQualifierHint          int
 	AlterTableAlgorithmStrategy int
 	EnumReorderStrategy         int
+	MySQLServerVersion          string // Used to determine specific capabilities such as INSTANT DDL support
+	ForeignKeyCheckStrategy     int
+}
 
-	MySQLServerVersion string // Used to determine specific capabilities such as INSTANT DDL support
+func EmptyDiffHints() *DiffHints {
+	return &DiffHints{}
 }
 
 const (
@@ -146,3 +158,21 @@ const (
 	ApplyDiffsInOrder      = "ApplyDiffsInOrder"
 	ApplyDiffsSequential   = "ApplyDiffsSequential"
 )
+
+type ForeignKeyTableColumns struct {
+	Table   string
+	Columns []string
+}
+
+func (f ForeignKeyTableColumns) Escaped() string {
+	var b strings.Builder
+	b.WriteString(sqlescape.EscapeID(f.Table))
+	b.WriteString(" (")
+	escapedColumns := make([]string, len(f.Columns))
+	for i, column := range f.Columns {
+		escapedColumns[i] = sqlescape.EscapeID(column)
+	}
+	b.WriteString(strings.Join(escapedColumns, ", "))
+	b.WriteString(")")
+	return b.String()
+}
