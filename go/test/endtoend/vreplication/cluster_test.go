@@ -864,3 +864,10 @@ func setupDBTypeVersion(t *testing.T, value string) func() {
 		unsetVtMySQLRoot()
 	}
 }
+
+func getVTGateConn() (*mysql.Conn, func()) {
+	vtgateConn := vc.GetVTGateConn(vc.t)
+	return vtgateConn, func() {
+		vtgateConn.Close()
+	}
+}
