@@ -820,3 +820,10 @@ func (lg *loadGenerator) waitForCount(want int64) {
 		}
 	}
 }
+
+func getRowCount(t *testing.T, vtgateConn *mysql.Conn, table string) int {
+	query := fmt.Sprintf("select count(*) from %s", table)
+	qr := execVtgateQuery(t, vtgateConn, "", query)
+	numRows, _ := qr.Rows[0][0].ToInt()
+	return numRows
+}

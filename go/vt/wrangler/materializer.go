@@ -1269,6 +1269,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				// For now, and because this is could have wider implications, we ignore any errors in
 				// reading the source schema.
 				schema, err := schemadiff.NewSchemaFromQueries(applyDDLs)
+				log.Infof("AtomicCopy schema:\n %v", applyDDLs)
 				if err != nil {
 					log.Error(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff"))
 				} else {
@@ -1276,13 +1277,14 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 					log.Infof("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs))
 				}
 			}
-			sql := strings.Join(applyDDLs, ";\n")
 
+			sql := strings.Join(applyDDLs, ";\n")
 			_, err = mz.wr.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
-				SQL:              sql,
-				Force:            false,
-				AllowReplication: true,
-				SQLMode:          vreplication.SQLMode,
+				SQL:                     sql,
+				Force:                   false,
+				AllowReplication:        true,
+				SQLMode:                 vreplication.SQLMode,
+				DisableForeignKeyChecks: true,
 			})
 			if err != nil {
 				return err
