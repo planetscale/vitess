@@ -135,7 +135,11 @@ jobs:
           echo '${{ secrets.VITESS_PRIVATE_AWS_CREDENTIALS }}' >> "$RUNNER_TEMP/aws.credentials"
           echo '${{ secrets.VITESS_PRIVATE_GCP_CREDENTIALS }}' >> "$RUNNER_TEMP/gcp.credentials"
           go test vitess.io/vitess/go/vt/mysqlctl/kmsbackup -v -race --aws-credentials-file "$RUNNER_TEMP/aws.credentials" --aws-credentials-profile vitess-private-ci
-          go test vitess.io/vitess/go/vt/mysqlctl/gcsbackup -v -race --gcp-credentials-file "$RUNNER_TEMP/gcp.credentials"
+
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gcp.credentials"
+          go test vitess.io/vitess/go/vt/mysqlctl/gcsbackup -v -race
+
+          # go test vitess.io/vitess/go/vt/mysqlctl/gcsbackup -v -race --gcp-credentials-file "$RUNNER_TEMP/gcp.credentials"
 
       - name: Notify api-bb of new Vitess image version
         if: steps.check-pr-state.outputs.result == 'approved'

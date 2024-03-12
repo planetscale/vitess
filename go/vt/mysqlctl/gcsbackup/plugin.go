@@ -23,8 +23,11 @@ var (
 
 func registerPlugin(fs *pflag.FlagSet) {
 	fs.StringVar(&s.Bucket, "psdb.gcs_backup.bucket", "", "GCS bucket to use for backups.")
-	fs.StringVar(&s.CredsPath, "psdb.gcs_backup.creds_path", "", "Credentials JSON for service account to use.")
 	fs.StringVar(&s.KeyURI, "psdb.gcs_backup.key_uri", "", "GCP KMS Keyring URI to use.")
+
+	// TODO(joem): remove --psdb.gcs_backup.creds_path flag after all GCP tablets stop using it.
+	fs.StringVar(&s.CredsPath, "psdb.gcs_backup.creds_path", "", "Credentials JSON for service account to use.")
+	fs.MarkDeprecated("psdb.gcs_backup.creds_path", "use Application Default Credentials instead.")
 
 	backupstorage.BackupStorageMap["gcsbackup"] = s
 }
