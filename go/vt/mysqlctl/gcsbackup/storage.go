@@ -10,7 +10,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/pkg/errors"
-	cloudkms "google.golang.org/api/cloudkms/v1"
+	"google.golang.org/api/cloudkms/v1"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
@@ -35,6 +35,7 @@ type Storage struct {
 	// CredsPath is the GCP service account credentials.json
 	//
 	// If empty, all storage methods return an error.
+	// Deprecated: Use Application Default Credentials instead. (https://cloud.google.com/docs/authentication/application-default-credentials)
 	CredsPath string
 
 	// KeyURI is the key is the keyring URI to use.
@@ -62,9 +63,10 @@ type Storage struct {
 // Init initializes the storage.
 func (s *Storage) init(ctx context.Context) error {
 	s.once.Do(func() {
-		if s.CredsPath == "" {
-			s.err = errors.New("empty credentials path")
-			return
+		opts := []option.ClientOption{}
+
+		if s.CredsPath != "" {
+			opts = append(opts, option.WithCredentialsFile(s.CredsPath))
 		}
 
 		if s.Bucket == "" {
@@ -77,17 +79,13 @@ func (s *Storage) init(ctx context.Context) error {
 			return
 		}
 
-		c, err := storage.NewClient(ctx,
-			option.WithCredentialsFile(s.CredsPath),
-		)
+		c, err := storage.NewClient(ctx, opts...)
 		if err != nil {
 			s.err = err
 			return
 		}
 
-		service, err := cloudkms.NewService(ctx,
-			option.WithCredentialsFile(s.CredsPath),
-		)
+		service, err := cloudkms.NewService(ctx, opts...)
 		if err != nil {
 			s.err = err
 		}
