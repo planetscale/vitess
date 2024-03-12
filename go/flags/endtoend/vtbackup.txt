@@ -146,7 +146,6 @@ Usage of vtbackup:
       --psdb.backup_region string                                   The region for the backups
       --psdb.backup_sse_kms_key_id string                           KMS Key ID to use for S3-SSE
       --psdb.gcs_backup.bucket string                               GCS bucket to use for backups.
-      --psdb.gcs_backup.creds_path string                           Credentials JSON for service account to use.
       --psdb.gcs_backup.key_uri string                              GCP KMS Keyring URI to use.
       --purge_logs_interval duration                                how often try to remove old logs (default 1h0m0s)
       --remote_operation_timeout duration                           time to wait for a remote operation (default 15s)
