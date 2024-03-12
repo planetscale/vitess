@@ -119,13 +119,17 @@ func (vtctld *ClientProxy) dial(ctx context.Context) error {
 	}
 
 	if vtctld.creds != nil {
+		log.Infof("Using per-RPC credentials for vtctld connection")
 		opts = append(opts, grpc.WithPerRPCCredentials(vtctld.creds))
 	}
 
 	opts = append(opts, grpc.WithResolvers(vtctld.resolver))
 
+	addr := resolver.DialAddr(vtctld.resolver, "vtctld")
+	log.Infof("Using per-RPC credentials for vtctld connection to dial %s", addr)
+
 	// TODO: update dialFunc to take ctx as first arg.
-	client, err := vtctld.dialFunc(resolver.DialAddr(vtctld.resolver, "vtctld"), grpcclient.FailFast(false), opts...)
+	client, err := vtctld.dialFunc(addr, grpcclient.FailFast(false), opts...)
 	if err != nil {
 		return err
 	}

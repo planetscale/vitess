@@ -967,7 +967,7 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 	span, ctx := trace.NewSpan(ctx, "API.GetSchemas")
 	defer span.Finish()
 
-	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+	clusters, ids := api.getClustersForRequest(req.ClusterIds)
 
 	var (
 		schemas []*vtadminpb.Schema
@@ -976,8 +976,10 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 		m       sync.Mutex
 	)
 
+	log.Infof("fetching keyspaces for %v", ids)
 	for _, c := range clusters {
 		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
+			log.Infof("skipping keyspace fetch for unauthorized cluster")
 			continue
 		}
 
