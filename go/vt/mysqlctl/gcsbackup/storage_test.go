@@ -3,7 +3,6 @@ package gcsbackup
 import (
 	"context"
 	"errors"
-	"flag"
 	"io"
 	"os"
 	"path"
@@ -14,21 +13,15 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
-)
-
-var (
-	credsFile = flag.String("gcp-credentials-file", "", "GCP Credentials file")
 )
 
 func TestMain(m *testing.M) {
-	flag.Parse()
 	os.Exit(m.Run())
 }
 
 func TestStorage(t *testing.T) {
-	if *credsFile == "" {
-		t.Skip("GCS backup integration tests are disabled, set --gcp-credentials-file to run them.")
+	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
+		t.Skip("GCS backup integration tests are disabled, set GOOGLE_APPLICATION_CREDENTIALS to run them")
 	}
 
 	t.Run("start backup, list, read", func(t *testing.T) {
@@ -243,9 +236,7 @@ func setupStorage(t testing.TB) *Storage {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := storage.NewClient(ctx,
-		option.WithCredentialsFile(*credsFile),
-	)
+	client, err := storage.NewClient(ctx)
 	if err != nil {
 		t.Fatalf("new client: %s", err)
 	}
@@ -274,9 +265,8 @@ func setupStorage(t testing.TB) *Storage {
 	}
 
 	return &Storage{
-		Bucket:    bucket,
-		CredsPath: *credsFile,
-		KeyURI:    keyURI,
+		Bucket: bucket,
+		KeyURI: keyURI,
 		loader: func(string) (*labels, error) {
 			return &labels{
 				BackupID:                    "backup-id",
