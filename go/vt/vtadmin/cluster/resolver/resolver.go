@@ -195,6 +195,8 @@ func (opts *Options) InstallFlags(fs *pflag.FlagSet) {
 // returning our Resolver back to grpc core. Failing to do this means that our
 // first RPC would hang waiting for a resolver update.
 func (b *builder) Build(target grpcresolver.Target, cc grpcresolver.ClientConn, opts grpcresolver.BuildOptions) (grpcresolver.Resolver, error) {
+	log.Infof("%s: building resolver for target %s", logPrefix, target.URL.String())
+
 	r, err := b.build(target, cc, opts)
 	if err != nil {
 		return nil, err
@@ -244,6 +246,8 @@ func (b *builder) build(target grpcresolver.Target, cc grpcresolver.ClientConn, 
 		cancel:          cancel,
 		createdAt:       time.Now().UTC(),
 	}
+
+	log.Infof("%s: starting watch for resolver %s.%s", logPrefix, r.cluster, r.component)
 
 	r.wg.Add(1)
 	go r.watch()
