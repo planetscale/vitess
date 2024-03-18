@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
@@ -92,6 +93,10 @@ type tmc struct {
 	client tabletmanagerservicepb.TabletManagerClient
 }
 
+const (
+	rpcClientMapExpiration = 10 * time.Second
+)
+
 // grpcClient implements both dialer and poolDialer.
 type grpcClient struct {
 	// This cache of connections is to maximize QPS for ExecuteFetchAs{Dba,App},
@@ -99,7 +104,7 @@ type grpcClient struct {
 	// But that's OK because usually the tasks that use them are one-purpose only.
 	// The map is protected by the mutex.
 	mu           sync.Mutex
-	rpcClientMap map[string]chan *tmc
+	rpcClientMap *cache.Cache
 }
 
 type dialer interface {
@@ -161,12 +166,14 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 
 	client.mu.Lock()
 	if client.rpcClientMap == nil {
-		client.rpcClientMap = make(map[string]chan *tmc)
+		client.rpcClientMap = cache.New(rpcClientMapExpiration, rpcClientMapExpiration)
 	}
-	c, ok := client.rpcClientMap[addr]
+
+	var c chan *tmc
+	cCached, ok := client.rpcClientMap.Get(addr)
 	if !ok {
 		c = make(chan *tmc, concurrency)
-		client.rpcClientMap[addr] = c
+		client.rpcClientMap.Set(addr, c, cache.DefaultExpiration)
 		client.mu.Unlock()
 
 		for i := 0; i < cap(c); i++ {
@@ -180,6 +187,7 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 			}
 		}
 	} else {
+		c = cCached.(chan *tmc)
 		client.mu.Unlock()
 	}
 
@@ -192,7 +200,8 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 func (client *grpcClient) Close() {
 	client.mu.Lock()
 	defer client.mu.Unlock()
-	for _, c := range client.rpcClientMap {
+	for _, cCached := range client.rpcClientMap.Items() {
+		c := cCached.Object.(chan *tmc)
 		close(c)
 		for ch := range c {
 			ch.cc.Close()
