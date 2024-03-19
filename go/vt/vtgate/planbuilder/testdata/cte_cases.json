@@ -1904,7 +1904,7 @@
         ],
         "Inputs": [
           {
-            "OperatorType": "Concatenate",
+            "OperatorType": "SimpleConcatenate",
             "Inputs": [
               {
                 "OperatorType": "Projection",
