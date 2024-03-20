@@ -282,6 +282,7 @@ func TestInitialThrottler(t *testing.T) {
 		}
 	})
 	t.Run("validating pushback response from throttler, again", func(t *testing.T) {
+		time.Sleep(time.Minute + 2*onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops, and beyond dormant period
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("setting high threshold", func(t *testing.T) {
@@ -306,6 +307,7 @@ func TestInitialThrottler(t *testing.T) {
 		}
 	})
 	t.Run("validating pushback response from throttler on low threshold", func(t *testing.T) {
+		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops, and beyond dormant period
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 	t.Run("requesting heartbeats", func(t *testing.T) {
@@ -541,7 +543,7 @@ func TestRestoreDefaultQuery(t *testing.T) {
 		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
 	})
 	t.Run("validating pushback response from throttler on default threshold once heartbeats go stale", func(t *testing.T) {
-		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops
+		time.Sleep(time.Minute + 2*onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops, and beyond dormant period
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
 	})
 }
