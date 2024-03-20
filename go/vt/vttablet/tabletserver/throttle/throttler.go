@@ -593,6 +593,14 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 
 // isDormant returns true when the last check was more than dormantPeriod ago
 func (throttler *Throttler) isDormant() bool {
+	if !throttler.isLeader.Load() {
+		// latest-18.0 and latest-17.0 specific patch:
+		// replicas should not be dormant. They will
+		// continue to collect self metrics and always have
+		// an up-to-date value.
+		// Addresses https://github.com/vitessio/vitess/issues/15433
+		return false
+	}
 	lastCheckTime := time.Unix(0, atomic.LoadInt64(&throttler.lastCheckTimeNano))
 	return time.Since(lastCheckTime) > dormantPeriod
 }
@@ -1166,7 +1174,15 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 	}
 	checkResult = throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
 
-	if atomic.LoadInt64(&throttler.recentCheckValue) >= atomic.LoadInt64(&throttler.recentCheckTickerValue) {
+	// latest-18.0 and latest-17.0 specific patch:
+	// Adding +((dormantPeriod + time.Second).Nanoseconds()/time.Second.Nanoseconds()) to the recentCheckValue.
+	// Addressing starvation scenario in: https://github.com/vitessio/vitess/issues/15397
+	// This hcange ensures that when replica is asked "have you been recently checked", it answers
+	// "yes" if it has been checked in the last `dormantPeriod + time.Second`, which totals 61 seconds.
+	// Thanks to that, even if the Primary is dormant, and is only checking replica once per 60 seconds,
+	// and say the replica was checked by an app while the Primary was not looking at the replica,
+	// the replica will still answer "yes" to the Primary's question "have you been recently checked".
+	if atomic.LoadInt64(&throttler.recentCheckValue)+((dormantPeriod+time.Second).Nanoseconds()/time.Second.Nanoseconds()) >= atomic.LoadInt64(&throttler.recentCheckTickerValue) {
 		// This indicates someone, who is not "vitess" ie not internal to the throttling logic, did a _recent_ `check`.
 		// This could be online-ddl, or vreplication or whoever else.
 		// If this tablet is a REPLICA or RDONLY, we want to advertise to the PRIMARY that someone did a recent check,
