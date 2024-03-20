@@ -6867,7 +6867,7 @@
     }
   },
   {
-    "comment": "",
+    "comment": "select count(distinct name, id) from user",
     "query": "select count(distinct name, id) from user",
     "plan": {
       "QueryType": "SELECT",
