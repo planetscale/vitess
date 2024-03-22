@@ -184,6 +184,27 @@ func (st *SemTable) CopyDependenciesOnSQLNodes(from, to sqlparser.SQLNode) {
 	st.CopyDependencies(f, t)
 }
 
+// CopySemanticInfo copies all semantic information we have about this SQLNode so that it also applies to the `to` node
+func (st *SemTable) CopySemanticInfo(from, to sqlparser.SQLNode) {
+	switch f := from.(type) {
+	case sqlparser.Expr:
+		t, ok := to.(sqlparser.Expr)
+		if !ok {
+			return
+		}
+		st.CopyDependencies(f, t)
+	case *sqlparser.Union:
+		t, ok := to.(*sqlparser.Union)
+		if !ok {
+			return
+		}
+		exprs := st.columns[f]
+		st.columns[t] = exprs
+	default:
+		return
+	}
+}
+
 // Cloned copies the dependencies from one expression into the other
 func (st *SemTable) Cloned(from, to sqlparser.SQLNode) {
 	f, fromOK := from.(sqlparser.Expr)
