@@ -1,0 +1,21 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "xxhash": {
+      "type": "xxhash"
+    },
+    "hash": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "oltp_test": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}
