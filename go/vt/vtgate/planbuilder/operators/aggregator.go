@@ -310,7 +310,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		}
 
 		offset := a.Source.AddWSColumn(ctx, gb.ColOffset, false)
-		a.Aggregations[idx].WSOffset = offset
+		a.Grouping[idx].WSOffset = offset
 	}
 
 	for idx, aggr := range a.Aggregations {
