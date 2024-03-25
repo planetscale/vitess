@@ -150,10 +150,12 @@ type TestSpecOptions struct {
 // TestSpec is defined one per unit test.
 type TestSpec struct {
 	// test=specific parameters
-	t       *testing.T
-	ddls    []string         // create table statements
-	tests   [][]*TestQuery   // list of input queries and expected events for each query
-	options *TestSpecOptions // test-specific options
+	t *testing.T
+
+	ddls           []string         // create table statements
+	additionalDDLs []string         // additional tables created during the test, should not be created upfront
+	tests          [][]*TestQuery   // list of input queries and expected events for each query
+	options        *TestSpecOptions // test-specific options
 
 	// internal state
 	inited          bool                       // whether the test has been initialized
@@ -174,38 +176,25 @@ func (ts *TestSpec) setCurrentState(table string, row *query.Row) {
 	ts.state[table] = row
 }
 
-// Init() initializes the test. It creates the tables and sets up the internal state.
-func (ts *TestSpec) Init() error {
+func (ts *TestSpec) loadSchema() error {
 	var err error
-	if ts.inited {
-		return nil
-	}
-	defer func() { ts.inited = true }()
-	if ts.options == nil {
-		ts.options = &TestSpecOptions{}
-	}
-	// Add the unicode character set to each table definition.
-	// The collation used will then be the default for that character set
-	// in the given MySQL version used in the test:
-	// - 5.7: utf8mb4_general_ci
-	// - 8.0: utf8mb4_0900_ai_ci
-	tableOptions := "ENGINE=InnoDB CHARSET=utf8mb4"
-	for i := range ts.ddls {
-		ts.ddls[i] = fmt.Sprintf("%s %s", ts.ddls[i], tableOptions)
-	}
-	ts.schema, err = schemadiff.NewSchemaFromQueries(schemadiff.NewTestEnv(), ts.ddls)
+	ddls := append(ts.ddls, ts.additionalDDLs...)
+	ts.schema, err = schemadiff.NewSchemaFromQueries(schemadiff.NewTestEnv(), ddls)
 	if err != nil {
 		return err
 	}
-	ts.fieldEvents = make(map[string]*TestFieldEvent)
-	ts.fieldEventsSent = make(map[string]bool)
-	ts.state = make(map[string]*query.Row)
-	ts.metadata = make(map[string][]string)
-	ts.pkColumns = make(map[string][]string)
-	// create tables
-	require.Equal(ts.t, len(ts.ddls), len(ts.schema.Tables()), "number of tables in ddls and schema do not match")
 	for i, t := range ts.schema.Tables() {
-		execStatement(ts.t, ts.ddls[i])
+		mustCreate := true
+		for _, ddl := range ts.additionalDDLs {
+			// these tables are created on the fly
+			if ddl == ddls[i] {
+				mustCreate = false
+				break
+			}
+		}
+		if mustCreate {
+			execStatement(ts.t, ddls[i])
+		}
 		fe := ts.getFieldEvent(t)
 		ts.fieldEvents[t.Name()] = fe
 
@@ -229,6 +218,37 @@ func (ts *TestSpec) Init() error {
 		ts.pkColumns[t.Name()] = pkColumns
 	}
 	engine.se.Reload(context.Background())
+	return nil
+}
+
+// Init() initializes the test. It creates the tables and sets up the internal state.
+func (ts *TestSpec) Init() error {
+	if ts.inited {
+		return nil
+	}
+	defer func() { ts.inited = true }()
+	if ts.options == nil {
+		ts.options = &TestSpecOptions{}
+	}
+	// Add the unicode character set to each table definition.
+	// The collation used will then be the default for that character set
+	// in the given MySQL version used in the test:
+	// - 5.7: utf8mb4_general_ci
+	// - 8.0: utf8mb4_0900_ai_ci
+	tableOptions := "ENGINE=InnoDB CHARSET=utf8mb4"
+	for i := range ts.ddls {
+		ts.ddls[i] = fmt.Sprintf("%s %s", ts.ddls[i], tableOptions)
+	}
+	ts.fieldEvents = make(map[string]*TestFieldEvent)
+	ts.fieldEventsSent = make(map[string]bool)
+	ts.state = make(map[string]*query.Row)
+	ts.metadata = make(map[string][]string)
+	ts.pkColumns = make(map[string][]string)
+	// create tables
+	if err := ts.loadSchema(); err != nil {
+		return err
+	}
+	require.Equal(ts.t, len(ts.ddls)+len(ts.additionalDDLs), len(ts.schema.Tables()), "number of tables in ddls and schema do not match")
 	return nil
 }
 
@@ -267,10 +287,10 @@ func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[
 func (ts *TestSpec) getBindVarsForUpdate(stmt sqlparser.Statement) (string, map[string]string) {
 	bv := make(map[string]string)
 	upd := stmt.(*sqlparser.Update)
-	//buf := sqlparser.NewTrackedBuffer(nil)
+	// buf := sqlparser.NewTrackedBuffer(nil)
 	table := sqlparser.String(upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr)
-	//upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
-	//table := buf.String()
+	// upd.TableExprs[0].(*sqlparser.AliasedTableExpr).Expr.Format(buf)
+	// table := buf.String()
 	fe, ok := ts.fieldEvents[table]
 	require.True(ts.t, ok, "field event for table %s not found", table)
 	index := int64(0)
@@ -327,9 +347,12 @@ func (ts *TestSpec) Run() {
 				}
 				stmt, err := sqlparser.NewTestParser().Parse(tq.query)
 				require.NoError(ts.t, err)
+
 				bv := make(map[string]string)
 				isRowEvent := false
 				switch stmt.(type) {
+				case *sqlparser.CreateTable:
+					output = append(output, "gtid", getDDLEvent(tq.query))
 				case *sqlparser.Begin:
 					output = append(output, "begin")
 				case *sqlparser.Commit:
@@ -366,6 +389,14 @@ func (ts *TestSpec) Run() {
 		testcases = append(testcases, tc)
 	}
 	runCases(ts.t, ts.options.filter, testcases, "current", nil)
+}
+
+func getDDLEvent(query string) string {
+	ev := &binlogdata.VEvent{
+		Type:      binlogdata.VEventType_DDL,
+		Statement: query,
+	}
+	return ev.String()
 }
 
 func (ts *TestSpec) getFieldEvent(table *schemadiff.CreateTableEntity) *TestFieldEvent {
