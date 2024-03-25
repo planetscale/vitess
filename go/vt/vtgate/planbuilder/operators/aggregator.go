@@ -141,23 +141,48 @@ func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr
 
 func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	if len(a.Columns) <= offset {
-		panic(vterrors.VT13001("offset out of range"))
+		panic(vterrors.VT13001("offset out of range1"))
 	}
 
 	var expr sqlparser.Expr
 	for i, by := range a.Grouping {
-		if by.ColOffset == offset {
-			if by.WSOffset >= 0 {
+		if by.ColOffset != offset {
+			continue
+		}
+		if by.WSOffset >= 0 {
+			// ah, we already have a weigh_string for this column. let's return it as is
+			return by.WSOffset
+		}
+
+		// we need to add a WS column
+		a.Grouping[i].WSOffset = len(a.Columns)
+		expr = a.Columns[offset].Expr
+		break
+	}
+
+	if expr == nil {
+		for i, aggr := range a.Aggregations {
+			if aggr.ColOffset != offset {
+				continue
+			}
+			if aggr.WSOffset >= 0 {
 				// ah, we already have a weigh_string for this column. let's return it as is
-				return by.WSOffset
+				return aggr.WSOffset
 			}
 
 			// we need to add a WS column
-			a.Grouping[i].WSOffset = len(a.Columns)
-			expr = a.Columns[offset].Expr
+			offset := len(a.Columns)
+			a.Aggregations[i].WSOffset = offset
+			expr = aggr.Func.GetArg()
+			a.Grouping = append(a.Grouping, GroupBy{
+				Inner:     weightStringFor(expr),
+				ColOffset: offset,
+				WSOffset:  -1,
+			})
 			break
 		}
 	}
+
 	if expr == nil {
 		panic(vterrors.VT13001("could not find group by"))
 	}
@@ -307,6 +332,12 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		}
 		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {
 			continue
+		}
+
+		if gb.ColOffset < 0 {
+			// we haven't projected this column yet
+			gb.ColOffset = a.AddColumn(ctx, true, true, aeWrap(gb.Inner))
+			a.Grouping[idx].ColOffset = gb.ColOffset
 		}
 
 		offset := a.Source.AddWSColumn(ctx, gb.ColOffset, false)

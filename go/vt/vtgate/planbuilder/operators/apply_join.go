@@ -425,7 +425,7 @@ func (bve BindVarExpr) String() string {
 }
 
 func FromLeftOffset(i int) int {
-	return -i + 1
+	return -i - 1
 }
 
 func ToLeftOffset(i int) int {
