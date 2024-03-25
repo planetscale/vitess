@@ -121,7 +121,7 @@ func (hj *HashJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bo
 	return len(hj.columns.columns) - 1
 }
 
-func (hj *HashJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+func (hj *HashJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	hj.planOffsets(ctx)
 
 	if len(hj.ColumnOffsets) <= offset {
@@ -130,10 +130,10 @@ func (hj *HashJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int) in
 	i := hj.ColumnOffsets[offset]
 	out := 0
 	if i < 0 {
-		out = hj.LHS.AddWSColumn(ctx, FromLeftOffset(i))
+		out = hj.LHS.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
 		out = ToLeftOffset(out)
 	} else {
-		out = hj.RHS.AddWSColumn(ctx, FromRightOffset(i))
+		out = hj.RHS.AddWSColumn(ctx, FromRightOffset(i), underRoute)
 		out = ToRightOffset(out)
 	}
 	hj.ColumnOffsets = append(hj.ColumnOffsets, out)
@@ -221,7 +221,7 @@ func (hj *HashJoin) ShortDescription() string {
 			result += fmt.Sprintf("(%s)", sqlparser.String(from.expr))
 			return
 		})
-		return fmt.Sprintf("%s columns [%v]", cmp, strings.Join(cols, ", "))
+		return fmt.Sprintf("%s columns [%v]", cmp, stringList(cols))
 	}
 
 	return cmp

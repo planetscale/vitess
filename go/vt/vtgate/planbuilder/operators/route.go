@@ -575,14 +575,14 @@ func createProjection(ctx *plancontext.PlanningContext, src Operator, derivedNam
 	return proj
 }
 
-func (r *Route) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+func (r *Route) AddWSColumn(ctx *plancontext.PlanningContext, offset int, _ bool) int {
 	proj := makeSureWeCanProject(ctx, r.Source)
 	if proj == nil {
 		proj = createProjection(ctx, r.Source, "")
 		r.Source = proj
 	}
 
-	return proj.AddWSColumn(ctx, offset)
+	return proj.AddWSColumn(ctx, offset, true)
 }
 
 func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
@@ -875,7 +875,7 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			Direction: order.Inner.Direction,
 		}
 		if ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
-			offset := r.AddWSColumn(ctx, offset)
+			offset := r.AddWSColumn(ctx, offset, true)
 			o.WOffset = offset
 		}
 		r.Ordering = append(r.Ordering, o)

@@ -19,7 +19,6 @@ package operators
 import (
 	"fmt"
 	"slices"
-	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -325,7 +324,7 @@ func (p *Projection) addColumn(
 	return p.addProjExpr(pe)
 }
 
-func (p *Projection) AddWSColumn(_ *plancontext.PlanningContext, offset int) int {
+func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	cols := p.Columns.GetColumns()
 	if len(cols) <= offset {
 		panic(vterrors.VT13001("offset out of range"))
@@ -432,7 +431,7 @@ func (p *Projection) ShortDescription() string {
 		}
 	}
 
-	return strings.Join(result, ", ")
+	return stringList(result)
 }
 
 func (p *Projection) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult) {

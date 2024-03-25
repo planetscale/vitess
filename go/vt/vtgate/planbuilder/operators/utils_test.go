@@ -50,7 +50,7 @@ func (f *fakeOp) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	panic("implement me")
 }
 
-func (f *fakeOp) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+func (f *fakeOp) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	panic("implement me")
 }
 

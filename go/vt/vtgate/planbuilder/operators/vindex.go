@@ -61,7 +61,7 @@ func (v *Vindex) Clone([]Operator) Operator {
 	return &clone
 }
 
-func (v *Vindex) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+func (v *Vindex) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	panic("try to add weight string to a vindex table")
 }
 

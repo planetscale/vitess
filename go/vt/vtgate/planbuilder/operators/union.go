@@ -159,7 +159,7 @@ func (u *Union) GetSelectFor(source int) *sqlparser.Select {
 	}
 }
 
-func (u *Union) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+func (u *Union) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	return u.addWeightStringToOffset(ctx, offset, true)
 }
 

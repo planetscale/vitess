@@ -18,7 +18,6 @@ package operators
 
 import (
 	"fmt"
-	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -110,7 +109,7 @@ func expandSelectHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, sel
 		extracted = append(extracted, "Limit")
 	}
 
-	return op, Rewrote(fmt.Sprintf("expand SELECT horizon into (%s)", strings.Join(extracted, ", ")))
+	return op, Rewrote(fmt.Sprintf("expand SELECT horizon into (%s)", stringList(extracted)))
 }
 
 func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProjection) Operator {

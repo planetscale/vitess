@@ -139,7 +139,7 @@ func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr
 	return -1
 }
 
-func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	if len(a.Columns) <= offset {
 		panic(vterrors.VT13001("offset out of range"))
 	}
@@ -147,6 +147,12 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int) i
 	var expr sqlparser.Expr
 	for i, by := range a.Grouping {
 		if by.ColOffset == offset {
+			if by.WSOffset >= 0 {
+				// ah, we already have a weigh_string for this column. let's return it as is
+				return by.WSOffset
+			}
+
+			// we need to add a WS column
 			a.Grouping[i].WSOffset = len(a.Columns)
 			expr = a.Columns[offset].Expr
 			break
@@ -161,7 +167,10 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int) i
 
 	wsOffset := len(a.Columns)
 	a.Columns = append(a.Columns, wsAe)
-	incomingOffset := a.Source.AddWSColumn(ctx, offset)
+	if underRoute {
+		return wsOffset
+	}
+	incomingOffset := a.Source.AddWSColumn(ctx, offset, false)
 	if offset != incomingOffset {
 		panic(errFailedToPlan(wsAe))
 	}
@@ -257,15 +266,22 @@ func (a *Aggregator) ShortDescription() string {
 	}
 
 	if len(a.Grouping) == 0 {
-		return fmt.Sprintf("%s%s", org, strings.Join(columns, ", "))
+		return fmt.Sprintf("%s%s", org, stringList(columns))
 	}
 
 	var grouping []string
 	for _, gb := range a.Grouping {
 		grouping = append(grouping, sqlparser.String(gb.Inner))
+		if gb.WSOffset >= 0 {
+			grouping = append(grouping, sqlparser.String(weightStringFor(gb.Inner)))
+		}
 	}
 
-	return fmt.Sprintf("%s%s group by %s", org, strings.Join(columns, ", "), strings.Join(grouping, ","))
+	return fmt.Sprintf("%s%s group by %s", org, stringList(columns), stringList(grouping))
+}
+
+func stringList(in []string) string {
+	return strings.Join(in, ", ")
 }
 
 func (a *Aggregator) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
@@ -293,7 +309,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			continue
 		}
 
-		offset := a.Source.AddWSColumn(ctx, gb.ColOffset)
+		offset := a.Source.AddWSColumn(ctx, gb.ColOffset, false)
 		a.Aggregations[idx].WSOffset = offset
 	}
 
@@ -301,7 +317,7 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		if !aggr.NeedsWeightString(ctx) {
 			continue
 		}
-		offset := a.Source.AddWSColumn(ctx, aggr.ColOffset)
+		offset := a.Source.AddWSColumn(ctx, aggr.ColOffset, false)
 		a.Aggregations[idx].WSOffset = offset
 	}
 	return nil
@@ -423,7 +439,9 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 }
 
 func (a *Aggregator) internalAddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
-	wsOffset := a.Source.AddWSColumn(ctx, offset)
+	// we are doing this as part of our offset planning,
+	// so we know we are on top of any route
+	wsOffset := a.Source.AddWSColumn(ctx, offset, false)
 
 	a.Columns = append(a.Columns, aeWrap(weightStringFor(a.Columns[offset].Expr)))
 	return wsOffset

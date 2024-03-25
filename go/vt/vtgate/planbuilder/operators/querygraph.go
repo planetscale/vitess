@@ -17,8 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -205,5 +203,5 @@ func (qg *QueryGraph) tableNames() (tables []string) {
 }
 
 func (qg *QueryGraph) ShortDescription() string {
-	return strings.Join(qg.tableNames(), ", ")
+	return stringList(qg.tableNames())
 }

@@ -18,7 +18,6 @@ package operators
 
 import (
 	"slices"
-	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -61,8 +60,8 @@ func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bo
 	return o.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (o *Ordering) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
-	return o.Source.AddWSColumn(ctx, offset)
+func (o *Ordering) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return o.Source.AddWSColumn(ctx, offset, underRoute)
 }
 
 func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
@@ -91,7 +90,7 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			continue
 		}
 
-		offset = o.Source.AddWSColumn(ctx, offset)
+		offset = o.Source.AddWSColumn(ctx, offset, false)
 		o.WOffset = append(o.WOffset, offset)
 	}
 	return nil
@@ -101,7 +100,7 @@ func (o *Ordering) ShortDescription() string {
 	ordering := slice.Map(o.Order, func(o OrderBy) string {
 		return sqlparser.String(o.SimplifiedExpr)
 	})
-	return strings.Join(ordering, ", ")
+	return stringList(ordering)
 }
 
 func (o *Ordering) setTruncateColumnCount(offset int) {

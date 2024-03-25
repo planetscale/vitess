@@ -53,7 +53,7 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		typ, _ := ctx.SemTable.TypeForExpr(e)
 
 		if ctx.SemTable.NeedsWeightString(e) {
-			offset := d.Source.AddWSColumn(ctx, idx)
+			offset := d.Source.AddWSColumn(ctx, idx, false)
 			wsCol = &offset
 		}
 
@@ -95,8 +95,8 @@ func (d *Distinct) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bo
 	return d.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
-func (d *Distinct) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
-	return d.Source.AddWSColumn(ctx, offset)
+func (d *Distinct) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return d.Source.AddWSColumn(ctx, offset, underRoute)
 }
 
 func (d *Distinct) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {

@@ -122,7 +122,7 @@ func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool
 	return offset
 }
 
-func (h *Horizon) AddWSColumn(_ *plancontext.PlanningContext, _ int) int {
+func (h *Horizon) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	panic(errNoNewColumns)
 }
 

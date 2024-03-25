@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -237,7 +236,7 @@ func (aj *ApplyJoin) AddColumn(
 	return offset
 }
 
-func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	if len(aj.Columns) == 0 {
 		aj.planOffsets(ctx)
 	}
@@ -248,10 +247,10 @@ func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int) i
 	i := aj.Columns[offset]
 	out := 0
 	if i < 0 {
-		out = aj.LHS.AddWSColumn(ctx, FromLeftOffset(i))
+		out = aj.LHS.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
 		out = ToLeftOffset(out)
 	} else {
-		out = aj.RHS.AddWSColumn(ctx, FromRightOffset(i))
+		out = aj.RHS.AddWSColumn(ctx, FromRightOffset(i), underRoute)
 		out = ToRightOffset(out)
 	}
 	aj.Columns = append(aj.Columns, out)
@@ -303,7 +302,7 @@ func (aj *ApplyJoin) ShortDescription() string {
 		out := slice.Map(cols.columns, func(jc applyJoinColumn) string {
 			return jc.String()
 		})
-		return strings.Join(out, ", ")
+		return stringList(out)
 	}
 
 	firstPart := fmt.Sprintf("on %s columns: %s", fn(aj.JoinPredicates), fn(aj.JoinColumns))
@@ -312,7 +311,7 @@ func (aj *ApplyJoin) ShortDescription() string {
 	}
 	extraCols := slice.Map(aj.ExtraLHSVars, func(s BindVarExpr) string { return s.String() })
 
-	return firstPart + " extra: " + strings.Join(extraCols, ", ")
+	return firstPart + " extra: " + stringList(extraCols)
 }
 
 func (aj *ApplyJoin) isColNameMovedFromL2R(bindVarName string) bool {
@@ -402,7 +401,7 @@ func (jc applyJoinColumn) String() string {
 	lhs := slice.Map(jc.LHSExprs, func(e BindVarExpr) string {
 		return sqlparser.String(e.Expr)
 	})
-	return fmt.Sprintf("[%s | %s | %s]", strings.Join(lhs, ", "), rhs, sqlparser.String(jc.Original))
+	return fmt.Sprintf("[%s | %s | %s]", stringList(lhs), rhs, sqlparser.String(jc.Original))
 }
 
 func (jc applyJoinColumn) IsPureLeft() bool {
