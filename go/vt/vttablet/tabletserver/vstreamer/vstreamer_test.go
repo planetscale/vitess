@@ -76,6 +76,40 @@ func (tfe *TestFieldEvent) String() string {
 	return s
 }
 
+func TestMatchAll(t *testing.T) {
+	t3ddl := "create table t3(id int, id2 int, primary key(id))"
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id int, id2 int, primary key(id))",
+			"create table t2(id int, id2 int, primary key(id))",
+		},
+		additionalDDLs: []string{t3ddl},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match: "/.*",
+				}},
+			},
+		},
+	}
+	require.NoError(t, ts.Init())
+	defer ts.Close()
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 10)", nil},
+		{"insert into t2 values (1, 10)", nil},
+		{"commit", nil},
+	}, {
+		{t3ddl, nil},
+	}, {
+		{"begin", nil},
+		{"insert into t3 values (1, 10)", nil},
+		{"commit", nil},
+	}}
+	ts.Run()
+}
+
 // TestPlayerNoBlob sets up a new environment with mysql running with
 // binlog_row_image as noblob. It confirms that the VEvents created are
 // correct: that they don't contain the missing columns and that the
@@ -234,7 +268,7 @@ func TestSetStatement(t *testing.T) {
 		"insert into t1 values (1, 'aaa')",
 		"commit",
 		"set global log_builtin_as_identified_by_password=1",
-		"SET PASSWORD FOR 'vt_appdebug'@'localhost'='*AA17DA66C7C714557F5485E84BCAFF2C209F2F53'", //select password('vtappdebug_password');
+		"SET PASSWORD FOR 'vt_appdebug'@'localhost'='*AA17DA66C7C714557F5485E84BCAFF2C209F2F53'", // select password('vtappdebug_password');
 	}
 	testcases := []testcase{{
 		input: queries,
