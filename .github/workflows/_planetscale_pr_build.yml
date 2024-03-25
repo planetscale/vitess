@@ -6,6 +6,7 @@ on:
       - opened
       - synchronize
       - reopened
+      - labeled
 
 # Serialize workflow runs
 # Also, if previous build hasn't finished, cancel it
@@ -104,14 +105,14 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           file: docker/lite/Dockerfile.private
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          push: true
+          push: ${{contains( github.event.pull_request.labels.*.name, 'Push PR Image Build')}}
           secrets: github_token=${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
           build-args: | 
             BUILD_TIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
@@ -135,10 +136,14 @@ jobs:
 
       - name: Notify api-bb of new Vitess image version
         if: steps.check-pr-state.outputs.result == 'approved'
-        run: >-
-          go run vitess.io/vitess/go/cmd/planetscale/push-image-version
-          --hmac-key ${{ secrets.PS_API_BB_EXTERNAL_ADMIN_HMAC }}
-          --url "https://admin.planetscale.com/external/vitess-image-versions"
-          --pr-number ${{ github.event.pull_request.number }} 
-          --commit-sha ${{ github.event.pull_request.head.sha }} 
-          --commit-date ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Push PR Image Build')}}" == "true" ]]; then
+            go run vitess.io/vitess/go/cmd/planetscale/push-image-version \
+            --hmac-key ${{ secrets.PS_API_BB_EXTERNAL_ADMIN_HMAC }} \
+            --url "https://admin.planetscale.com/external/vitess-image-versions" \
+            --pr-number ${{ github.event.pull_request.number }} \
+            --commit-sha ${{ github.event.pull_request.head.sha }} \
+            --commit-date ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          else 
+            echo "Skipping pushing PR build image as the 'Push PR Image Build' label is not present"
+          fi
