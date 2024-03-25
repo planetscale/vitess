@@ -12,24 +12,46 @@ jobs:
       run: |
         git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Check for changes in relevant files
+      uses: dorny/paths-filter@v3.0.1
+      id: changes
+      with:
+        token: ''
+        filters: |
+          proto_changes:
+            - 'bootstrap.sh'
+            - 'tools/**'
+            - 'build.env'
+            - 'go.sum'
+            - 'go.mod'
+            - 'Makefile'
+            - 'go/vt/proto/**'
+            - 'proto/*.proto'
+            - 'web/vtadmin/src/proto/**'
+            - '.github/workflows/check_make_vtadmin_web_proto.yml'
+
     - name: Set up Go
+      if: steps.changes.outputs.proto_changes == 'true'
       uses: actions/setup-go@v5
       with:
         go-version: 1.21.7
 
-    - name: Check out code
-      uses: actions/checkout@v4
-
     - name: Setup Node
+      if: steps.changes.outputs.proto_changes == 'true'
       uses: actions/setup-node@v4
       with:
         # node-version should match package.json
         node-version: '18.16.0'
 
     - name: Install npm dependencies
+      if: steps.changes.outputs.proto_changes == 'true'
       run: npm ci
       working-directory: ./web/vtadmin
 
     - name: check_make_vtadmin_web_proto
+      if: steps.changes.outputs.proto_changes == 'true'
       run: |
         tools/check_make_vtadmin_web_proto.sh

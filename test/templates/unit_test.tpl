@@ -12,12 +12,36 @@ jobs:
         run: |
           git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@v3.0.1
+        id: changes
+        with:
+          token: ''
+          filters: |
+            unit_tests:
+              - 'go/**'
+              - 'test.go'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.sum'
+              - 'go.mod'
+              - 'proto/*.proto'
+              - 'tools/**'
+              - 'config/**'
+              - 'bootstrap.sh'
+              - '.github/workflows/{{.FileName}}'
+
       - name: Set up Go
-        uses: actions/setup-go@v5
+        if: steps.changes.outputs.unit_tests == 'true'
+        uses: actions/setup-go@v4
         with:
           go-version: 1.21.7
 
       - name: Tune the OS
+        if: steps.changes.outputs.unit_tests == 'true'
         run: |
           sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
           # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
@@ -25,9 +49,11 @@ jobs:
           sudo sysctl -p /etc/sysctl.conf
 
       - name: Check out code
+        if: steps.changes.outputs.unit_tests == 'true'
         uses: actions/checkout@v4
 
       - name: Get dependencies
+        if: steps.changes.outputs.unit_tests == 'true'
         env: # Or as an environment variable
           AWS_ACCESS_KEY_ID: ${{"{{"}} secrets.BUILDKITE_S3_ACCESS_KEY_ID {{"}}"}}
           AWS_SECRET_ACCESS_KEY: ${{"{{"}} secrets.BUILDKITE_S3_SECRET_ACCESS_KEY {{"}}"}}
@@ -67,10 +93,12 @@ jobs:
           go install golang.org/x/tools/cmd/goimports@latest
 
       - name: Run make tools
+        if: steps.changes.outputs.unit_tests == 'true'
         run: |
           make tools
 
       - name: Run test
+        if: steps.changes.outputs.unit_tests == 'true'
         timeout-minutes: 30
         run: |
           # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
