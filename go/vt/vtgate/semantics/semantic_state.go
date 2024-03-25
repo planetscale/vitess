@@ -993,3 +993,9 @@ func (st *SemTable) GetTargetTableSetForTableName(name sqlparser.TableName) (Tab
 	}
 	return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "target table '%s' not found", sqlparser.String(name))
 }
+
+func (st *SemTable) AddTable(tbl TableInfo) TableSet {
+	tableID := SingleTableSet(len(st.Tables))
+	st.Tables = append(st.Tables, tbl)
+	return tableID
+}

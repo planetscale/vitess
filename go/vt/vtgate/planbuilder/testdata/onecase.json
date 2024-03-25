@@ -1,9 +1,32 @@
 [
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "comment": "count with distinct no unique vindex and no group by",
+    "query": "select count(distinct col2) from user",
     "plan": {
-
+      "QueryType": "SELECT",
+      "Original": "select count(distinct col2) from user",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count_distinct(0|1) AS count(distinct col2)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col2, weight_string(col2) from `user` where 1 != 1 group by col2, weight_string(col2)",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select col2, weight_string(col2) from `user` group by col2, weight_string(col2) order by col2 asc",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
     }
-  }
-]
+  }]

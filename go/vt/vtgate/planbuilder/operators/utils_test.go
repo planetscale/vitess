@@ -50,6 +50,10 @@ func (f *fakeOp) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	panic("implement me")
 }
 
+func (f *fakeOp) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+	panic("implement me")
+}
+
 func (f *fakeOp) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, _ bool, expr *sqlparser.AliasedExpr) int {
 	if offset := f.FindCol(ctx, expr.Expr, false); reuseExisting && offset >= 0 {
 		return offset

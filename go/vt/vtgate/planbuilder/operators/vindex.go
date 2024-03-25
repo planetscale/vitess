@@ -61,6 +61,10 @@ func (v *Vindex) Clone([]Operator) Operator {
 	return &clone
 }
 
+func (v *Vindex) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+	panic("try to add weight string to a vindex table")
+}
+
 func (v *Vindex) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, ae *sqlparser.AliasedExpr) int {
 	if gb {
 		panic(vterrors.VT13001("tried to add group by to a table"))

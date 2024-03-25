@@ -313,22 +313,6 @@ func (p *Projection) addColumn(
 		}
 	}
 
-	// ok, we need to add the expression. let's check if we should rewrite a ws expression first
-	ws, ok := expr.(*sqlparser.WeightStringFuncExpr)
-	if ok {
-		cols, ok := p.Columns.(AliasedProjections)
-		if !ok {
-			panic(vterrors.VT09015())
-		}
-		for _, projExpr := range cols {
-			if ctx.SemTable.EqualsExprWithDeps(ws.Expr, projExpr.ColExpr) {
-				// if someone is asking for the ws of something we are projecting,
-				// we need push down the ws of the eval expression
-				ws.Expr = projExpr.EvalExpr
-			}
-		}
-	}
-
 	pe := newProjExprWithInner(ae, expr)
 	if !push {
 		return p.addProjExpr(pe)
@@ -339,6 +323,17 @@ func (p *Projection) addColumn(
 
 	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
 	return p.addProjExpr(pe)
+}
+
+func (p *Projection) AddWSColumn(_ *plancontext.PlanningContext, offset int) int {
+	cols := p.Columns.GetColumns()
+	if len(cols) <= offset {
+		panic(vterrors.VT13001("offset out of range"))
+	}
+
+	ws := weightStringFor(cols[offset].Expr)
+	aeWs := aeWrap(ws)
+	return p.addUnexploredExpr(aeWs, ws)
 }
 
 func (po Offset) expr()             {}

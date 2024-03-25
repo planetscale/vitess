@@ -237,21 +237,45 @@ func (aj *ApplyJoin) AddColumn(
 	return offset
 }
 
+func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+	if len(aj.Columns) == 0 {
+		aj.planOffsets(ctx)
+	}
+
+	if len(aj.Columns) <= offset {
+		panic(vterrors.VT13001("offset out of range"))
+	}
+	i := aj.Columns[offset]
+	out := 0
+	if i < 0 {
+		out = aj.LHS.AddWSColumn(ctx, FromLeftOffset(i))
+		out = ToLeftOffset(out)
+	} else {
+		out = aj.RHS.AddWSColumn(ctx, FromRightOffset(i))
+		out = ToRightOffset(out)
+	}
+	aj.Columns = append(aj.Columns, out)
+	return len(aj.Columns) - 1
+}
+
 func (aj *ApplyJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	if len(aj.Columns) > 0 {
+		return aj
+	}
 	for _, col := range aj.JoinColumns.columns {
 		// Read the type description for applyJoinColumn to understand the following code
 		for _, lhsExpr := range col.LHSExprs {
 			offset := aj.LHS.AddColumn(ctx, true, col.GroupBy, aeWrap(lhsExpr.Expr))
 			if col.RHSExpr == nil {
 				// if we don't have an RHS expr, it means that this is a pure LHS expression
-				aj.addOffset(-offset - 1)
+				aj.addOffset(ToLeftOffset(offset))
 			} else {
 				aj.Vars[lhsExpr.Name] = offset
 			}
 		}
 		if col.RHSExpr != nil {
 			offset := aj.RHS.AddColumn(ctx, true, col.GroupBy, aeWrap(col.RHSExpr))
-			aj.addOffset(offset + 1)
+			aj.addOffset(ToRightOffset(offset))
 		}
 	}
 
@@ -399,4 +423,20 @@ func (bve BindVarExpr) String() string {
 	}
 
 	return fmt.Sprintf(":%s|`%s`", bve.Name, sqlparser.String(bve.Expr))
+}
+
+func FromLeftOffset(i int) int {
+	return -i + 1
+}
+
+func ToLeftOffset(i int) int {
+	return -i - 1
+}
+
+func FromRightOffset(i int) int {
+	return i - 1
+}
+
+func ToRightOffset(i int) int {
+	return i + 1
 }

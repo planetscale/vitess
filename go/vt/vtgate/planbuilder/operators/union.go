@@ -159,6 +159,10 @@ func (u *Union) GetSelectFor(source int) *sqlparser.Select {
 	}
 }
 
+func (u *Union) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+	return u.addWeightStringToOffset(ctx, offset, true)
+}
+
 func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	if reuse {
 		offset := u.FindCol(ctx, expr.Expr, false)

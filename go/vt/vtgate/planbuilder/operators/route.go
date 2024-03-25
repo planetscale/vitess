@@ -575,6 +575,16 @@ func createProjection(ctx *plancontext.PlanningContext, src Operator, derivedNam
 	return proj
 }
 
+func (r *Route) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+	proj := makeSureWeCanProject(ctx, r.Source)
+	if proj == nil {
+		proj = createProjection(ctx, r.Source, "")
+		r.Source = proj
+	}
+
+	return proj.AddWSColumn(ctx, offset)
+}
+
 func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	removeKeyspaceFromSelectExpr(expr)
 
@@ -587,7 +597,8 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 
 	// if at least one column is not already present, we check if we can easily find a projection
 	// or aggregation in our source that we can add to
-	derived, op, ok, offsets := addMultipleColumnsToInput(ctx, r.Source, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
+	exprs := []*sqlparser.AliasedExpr{expr}
+	derived, op, ok, offsets := addMultipleColumnsToInput(ctx, r.Source, reuse, []bool{gb}, exprs)
 	r.Source = op
 	if ok {
 		return offsets[0]
@@ -597,7 +608,7 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 	src := createProjection(ctx, r.Source, derived)
 	r.Source = src
 
-	offsets = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, []*sqlparser.AliasedExpr{expr})
+	offsets = src.addColumnsWithoutPushing(ctx, reuse, []bool{gb}, exprs)
 	return offsets[0]
 }
 
@@ -672,21 +683,134 @@ func addMultipleColumnsToInput(
 		return "", op, true, offset
 
 	case *Union:
-		tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
-		ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
-		unionColumns := op.GetColumns(ctx)
-		proj := &Projection{
-			Source:  op,
-			Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
-			DT: &DerivedTable{
-				TableID: tableID,
-				Alias:   "dt",
-			},
-		}
-		return addMultipleColumnsToInput(ctx, proj, reuse, addToGroupBy, exprs)
+		return addColumnsToUnion(ctx, op, exprs)
 	default:
 		return "", op, false, nil
 	}
+}
+
+// addColumnToInput adds columns to an operator without pushing them down
+func makeSureWeCanProject(
+	ctx *plancontext.PlanningContext,
+	operator Operator,
+) ( // if we found a derived table, this will contain its name
+	projection Operator, // if an operator was found, we return it here
+) {
+	switch op := operator.(type) {
+	case *SubQuery:
+		return makeSureWeCanProject(ctx, op.Outer)
+
+	case *Distinct:
+		return makeSureWeCanProject(ctx, op.Source)
+
+	case *Limit:
+		return makeSureWeCanProject(ctx, op.Source)
+
+	case *Ordering:
+		return makeSureWeCanProject(ctx, op.Source)
+
+	case *LockAndComment:
+		return makeSureWeCanProject(ctx, op.Source)
+
+	case *Horizon:
+		// if the horizon has an alias, then it is a derived table,
+		// we have to add a new projection and can't build on this one
+		return nil
+
+	case selectExpressions:
+		name := op.derivedName()
+		if name != "" {
+			// if the only thing we can push to is a derived table,
+			// we have to add a new projection and can't build on this one
+			return nil
+		}
+		return op
+
+	case *Union:
+		return addProjectionOnTopOfUnion(ctx, op)
+	default:
+		return nil
+	}
+}
+
+func addColumnsToUnion(ctx *plancontext.PlanningContext, op *Union, exprs []*sqlparser.AliasedExpr,
+) (derivedName string, // if we found a derived table, this will contain its name
+	projection Operator, // if an operator needed to be built, it will be returned here
+	found bool, // whether a matching op was found or not
+	offsets []int, // the offsets the expressions received
+) {
+	tableID := semantics.SingleTableSet(len(ctx.SemTable.Tables))
+	ctx.SemTable.Tables = append(ctx.SemTable.Tables, nil)
+	unionColumns := op.GetColumns(ctx)
+	columns := make(sqlparser.Columns, 0, len(unionColumns))
+	for i := range unionColumns {
+		columns = append(columns, sqlparser.NewIdentifierCI(fmt.Sprintf("c%d", i)))
+	}
+	derivedProj := &Projection{
+		Source:  op,
+		Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
+		DT: &DerivedTable{
+			TableID: tableID,
+			Alias:   "dt",
+			Columns: columns,
+		},
+	}
+
+	proj := newAliasedProjection(derivedProj)
+	tbl := sqlparser.NewTableName("dt")
+	for i, col := range unionColumns {
+		projExpr := newProjExpr(col)
+		projExpr.EvalExpr = sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", i), tbl)
+		proj.addProjExpr(projExpr)
+	}
+
+	offsets = make([]int, 0, len(exprs))
+	for _, ae := range exprs {
+		ws, ok := ae.Expr.(*sqlparser.WeightStringFuncExpr)
+		if !ok {
+			panic(143)
+		}
+		offset := op.FindCol(ctx, ws.Expr, true)
+		if offset < 0 {
+			panic(144)
+		}
+		ws.Expr = sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", offset), tbl)
+		offsets = append(offsets, proj.addUnexploredExpr(ae, ws))
+	}
+
+	return "", proj, true, offsets
+}
+
+func addProjectionOnTopOfUnion(
+	ctx *plancontext.PlanningContext,
+	op *Union,
+) (projection Operator) {
+	// create new table ID
+	tableID := ctx.SemTable.AddTable(nil) // we add an empty table just to get a table ID
+	unionColumns := op.GetColumns(ctx)
+	columns := make(sqlparser.Columns, 0, len(unionColumns))
+	for i := range unionColumns {
+		columns = append(columns, sqlparser.NewIdentifierCI(fmt.Sprintf("c%d", i)))
+	}
+	derivedProj := &Projection{
+		Source:  op,
+		Columns: AliasedProjections(slice.Map(unionColumns, newProjExpr)),
+		DT: &DerivedTable{
+			TableID: tableID,
+			Alias:   "dt",
+			Columns: columns,
+		},
+	}
+
+	proj := newAliasedProjection(derivedProj)
+	tbl := sqlparser.NewTableName("dt")
+	for i, col := range unionColumns {
+		projExpr := newProjExpr(col)
+		projExpr.EvalExpr = sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", i), tbl)
+		proj.addProjExpr(projExpr)
+	}
+
+	return proj
 }
 
 func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
@@ -751,8 +875,7 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			Direction: order.Inner.Direction,
 		}
 		if ctx.SemTable.NeedsWeightString(order.SimplifiedExpr) {
-			ws := weightStringFor(order.SimplifiedExpr)
-			offset := r.AddColumn(ctx, true, false, aeWrap(ws))
+			offset := r.AddWSColumn(ctx, offset)
 			o.WOffset = offset
 		}
 		r.Ordering = append(r.Ordering, o)

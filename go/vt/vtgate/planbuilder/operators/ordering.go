@@ -61,6 +61,10 @@ func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bo
 	return o.Source.AddColumn(ctx, reuse, gb, expr)
 }
 
+func (o *Ordering) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+	return o.Source.AddWSColumn(ctx, offset)
+}
+
 func (o *Ordering) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return o.Source.FindCol(ctx, expr, underRoute)
 }
@@ -87,8 +91,7 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			continue
 		}
 
-		wsExpr := &sqlparser.WeightStringFuncExpr{Expr: order.SimplifiedExpr}
-		offset = o.Source.AddColumn(ctx, true, false, aeWrap(wsExpr))
+		offset = o.Source.AddWSColumn(ctx, offset)
 		o.WOffset = append(o.WOffset, offset)
 	}
 	return nil

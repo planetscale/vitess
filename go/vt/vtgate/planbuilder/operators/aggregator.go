@@ -139,6 +139,35 @@ func (a *Aggregator) FindCol(ctx *plancontext.PlanningContext, in sqlparser.Expr
 	return -1
 }
 
+func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+	if len(a.Columns) <= offset {
+		panic(vterrors.VT13001("offset out of range"))
+	}
+
+	var expr sqlparser.Expr
+	for i, by := range a.Grouping {
+		if by.ColOffset == offset {
+			a.Grouping[i].WSOffset = len(a.Columns)
+			expr = a.Columns[offset].Expr
+			break
+		}
+	}
+	if expr == nil {
+		panic(vterrors.VT13001("could not find group by"))
+	}
+
+	wsExpr := weightStringFor(expr)
+	wsAe := aeWrap(wsExpr)
+
+	wsOffset := len(a.Columns)
+	a.Columns = append(a.Columns, wsAe)
+	incomingOffset := a.Source.AddWSColumn(ctx, offset)
+	if offset != incomingOffset {
+		panic(errFailedToPlan(wsAe))
+	}
+	return wsOffset
+}
+
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) int {
 	rewritten := a.DT.RewriteExpression(ctx, ae.Expr)
 
@@ -151,19 +180,6 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 		offset := a.findColInternal(ctx, ae, groupBy)
 		if offset >= 0 {
 			return offset
-		}
-	}
-
-	// Upon receiving a weight string function from an upstream operator, check for an existing grouping on the argument expression.
-	// If a grouping is found, continue to push the function down, marking it with 'addToGroupBy' to ensure it's correctly treated as a grouping column.
-	// This process also sets the weight string column offset, eliminating the need for a later addition in the aggregator operator's planOffset.
-	if wsExpr, isWS := rewritten.(*sqlparser.WeightStringFuncExpr); isWS {
-		idx := slices.IndexFunc(a.Grouping, func(by GroupBy) bool {
-			return ctx.SemTable.EqualsExprWithDeps(wsExpr.Expr, by.Inner)
-		})
-		if idx >= 0 {
-			a.Grouping[idx].WSOffset = len(a.Columns)
-			groupBy = true
 		}
 	}
 
@@ -277,16 +293,15 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			continue
 		}
 
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.Inner)), true)
-		a.Grouping[idx].WSOffset = offset
+		offset := a.Source.AddWSColumn(ctx, gb.ColOffset)
+		a.Aggregations[idx].WSOffset = offset
 	}
 
 	for idx, aggr := range a.Aggregations {
 		if !aggr.NeedsWeightString(ctx) {
 			continue
 		}
-		arg := aggr.getPushColumn()
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(arg)), true)
+		offset := a.Source.AddWSColumn(ctx, aggr.ColOffset)
 		a.Aggregations[idx].WSOffset = offset
 	}
 	return nil
@@ -380,7 +395,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			continue
 		}
 
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.Inner)), false)
+		offset := a.internalAddWSColumn(ctx, gb.ColOffset)
 		a.Grouping[idx].WSOffset = offset
 	}
 	for idx, aggr := range a.Aggregations {
@@ -388,8 +403,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			continue
 		}
 
-		arg := aggr.getPushColumn()
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(arg)), false)
+		offset := a.internalAddWSColumn(ctx, aggr.ColOffset)
 		a.Aggregations[idx].WSOffset = offset
 	}
 }
@@ -406,6 +420,13 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 		a.Columns = append(a.Columns, aliasedExpr)
 	}
 	return offset
+}
+
+func (a *Aggregator) internalAddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+	wsOffset := a.Source.AddWSColumn(ctx, offset)
+
+	a.Columns = append(a.Columns, aeWrap(weightStringFor(a.Columns[offset].Expr)))
+	return wsOffset
 }
 
 // SplitAggregatorBelowRoute returns the aggregator that will live under the Route.

@@ -65,6 +65,8 @@ type (
 
 		AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int
 
+		AddWSColumn(ctx *plancontext.PlanningContext, offset int) int
+
 		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int
 
 		GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr

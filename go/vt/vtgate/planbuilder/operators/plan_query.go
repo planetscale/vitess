@@ -110,6 +110,10 @@ func (noColumns) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.
 	panic(vterrors.VT13001("noColumns operators have no column"))
 }
 
+func (noColumns) AddWSColumn(_ *plancontext.PlanningContext, _ int) int {
+	panic(vterrors.VT13001("noColumns operators have no column"))
+}
+
 func (noColumns) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	panic(vterrors.VT13001("noColumns operators have no column"))
 }

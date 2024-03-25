@@ -121,6 +121,25 @@ func (hj *HashJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bo
 	return len(hj.columns.columns) - 1
 }
 
+func (hj *HashJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int) int {
+	hj.planOffsets(ctx)
+
+	if len(hj.ColumnOffsets) <= offset {
+		panic(vterrors.VT13001("offset out of range"))
+	}
+	i := hj.ColumnOffsets[offset]
+	out := 0
+	if i < 0 {
+		out = hj.LHS.AddWSColumn(ctx, FromLeftOffset(i))
+		out = ToLeftOffset(out)
+	} else {
+		out = hj.RHS.AddWSColumn(ctx, FromRightOffset(i))
+		out = ToRightOffset(out)
+	}
+	hj.ColumnOffsets = append(hj.ColumnOffsets, out)
+	return len(hj.ColumnOffsets) - 1
+}
+
 func (hj *HashJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	if hj.offset {
 		return nil
