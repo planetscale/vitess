@@ -44587,6 +44587,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings workflow_options */
         workflow_options?: (vtctldata.IWorkflowOptions|null);
+
+        /** MaterializeSettings match_all_tables */
+        match_all_tables?: (boolean|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -44648,6 +44651,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings workflow_options. */
         public workflow_options?: (vtctldata.IWorkflowOptions|null);
+
+        /** MaterializeSettings match_all_tables. */
+        public match_all_tables: boolean;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.

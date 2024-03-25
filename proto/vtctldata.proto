@@ -98,6 +98,7 @@ message MaterializeSettings {
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 15;
   bool atomic_copy = 16;
   WorkflowOptions workflow_options = 17;
+  bool match_all_tables = 18;
 }
 
 /* Data types for VtctldServer */

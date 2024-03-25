@@ -1219,7 +1219,7 @@ func (ts *trafficSwitcher) validate(ctx context.Context) error {
 		// Wildcard table names not allowed.
 		for _, table := range ts.tables {
 			if strings.HasPrefix(table, "/") {
-				return fmt.Errorf("cannot migrate streams with wild card table names: %v", table)
+				// FIXME(rohit) return fmt.Errorf("cannot migrate streams with wild card table names: %v", table)
 			}
 		}
 	}

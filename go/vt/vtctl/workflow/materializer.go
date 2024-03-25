@@ -187,66 +187,73 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 			TargetTimeZone:  mz.ms.TargetTimeZone,
 			OnDdl:           binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[mz.ms.OnDdl]),
 		}
-
-		var tenantClause *sqlparser.Expr
-		var err error
-		if mz.IsMultiTenantMigration() {
-			tenantClause, err = mz.getTenantClause()
-			if err != nil {
-				return nil, err
+		if mz.ms.MatchAllTables {
+			rule := &binlogdatapb.Rule{Match: "/.*/", Filter: ""}
+			if !keyRangesEqual && mz.targetVSchema.Keyspace.Sharded {
+				rule.Filter = sourceShard.ShardName()
 			}
-		}
-
-		for _, ts := range mz.ms.TableSettings {
-			rule := &binlogdatapb.Rule{
-				Match: ts.TargetTable,
-			}
-
-			if ts.SourceExpression == "" {
-				bls.Filter.Rules = append(bls.Filter.Rules, rule)
-				continue
-			}
-
-			// Validate non-empty query.
-			stmt, err := mz.env.Parser().Parse(ts.SourceExpression)
-			if err != nil {
-				return nil, err
-			}
-			sel, ok := stmt.(*sqlparser.Select)
-			if !ok {
-				return nil, fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
-			}
-			if !keyRangesEqual && mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
-				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
+			bls.Filter.Rules = append(bls.Filter.Rules, rule)
+		} else {
+			var tenantClause *sqlparser.Expr
+			var err error
+			if mz.IsMultiTenantMigration() {
+				tenantClause, err = mz.getTenantClause()
 				if err != nil {
 					return nil, err
 				}
-				mappedCols := make([]*sqlparser.ColName, 0, len(cv.Columns))
-				for _, col := range cv.Columns {
-					colName, err := matchColInSelect(col, sel)
+			}
+
+			for _, ts := range mz.ms.TableSettings {
+				rule := &binlogdatapb.Rule{
+					Match: ts.TargetTable,
+				}
+
+				if ts.SourceExpression == "" {
+					bls.Filter.Rules = append(bls.Filter.Rules, rule)
+					continue
+				}
+
+				// Validate non-empty query.
+				stmt, err := mz.env.Parser().Parse(ts.SourceExpression)
+				if err != nil {
+					return nil, err
+				}
+				sel, ok := stmt.(*sqlparser.Select)
+				if !ok {
+					return nil, fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
+				}
+				if !keyRangesEqual && mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
+					cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 					if err != nil {
 						return nil, err
 					}
-					mappedCols = append(mappedCols, colName)
+					mappedCols := make([]*sqlparser.ColName, 0, len(cv.Columns))
+					for _, col := range cv.Columns {
+						colName, err := matchColInSelect(col, sel)
+						if err != nil {
+							return nil, err
+						}
+						mappedCols = append(mappedCols, colName)
+					}
+					subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
+					for _, mappedCol := range mappedCols {
+						subExprs = append(subExprs, mappedCol)
+					}
+					vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+					subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
+					subExprs = append(subExprs, sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange)))
+					inKeyRange := &sqlparser.FuncExpr{
+						Name:  sqlparser.NewIdentifierCI("in_keyrange"),
+						Exprs: subExprs,
+					}
+					addFilter(sel, inKeyRange)
 				}
-				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
-				for _, mappedCol := range mappedCols {
-					subExprs = append(subExprs, mappedCol)
+				if tenantClause != nil {
+					addFilter(sel, *tenantClause)
 				}
-				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
-				subExprs = append(subExprs, sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange)))
-				inKeyRange := &sqlparser.FuncExpr{
-					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
-					Exprs: subExprs,
-				}
-				addFilter(sel, inKeyRange)
+				rule.Filter = sqlparser.String(sel)
+				bls.Filter.Rules = append(bls.Filter.Rules, rule)
 			}
-			if tenantClause != nil {
-				addFilter(sel, *tenantClause)
-			}
-			rule.Filter = sqlparser.String(sel)
-			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
 		blses = append(blses, bls)
 	}
