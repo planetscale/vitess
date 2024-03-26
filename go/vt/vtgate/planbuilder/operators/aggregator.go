@@ -173,7 +173,7 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 			// we need to add a WS column
 			offset := len(a.Columns)
 			a.Aggregations[i].WSOffset = offset
-			expr = aggr.Func.GetArg()
+			expr = aggr.getPushColumn()
 			a.Grouping = append(a.Grouping, GroupBy{
 				Inner:     weightStringFor(expr),
 				ColOffset: offset,
@@ -196,7 +196,7 @@ func (a *Aggregator) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 		return wsOffset
 	}
 	incomingOffset := a.Source.AddWSColumn(ctx, offset, false)
-	if offset != incomingOffset {
+	if wsOffset != incomingOffset {
 		panic(errFailedToPlan(wsAe))
 	}
 	return wsOffset
@@ -340,8 +340,8 @@ func (a *Aggregator) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			a.Grouping[idx].ColOffset = gb.ColOffset
 		}
 
-		offset := a.Source.AddWSColumn(ctx, gb.ColOffset, false)
-		a.Grouping[idx].WSOffset = offset
+		// we don't need to store the offset since it is stored by AddWSColumn
+		_ = a.AddWSColumn(ctx, gb.ColOffset, false)
 	}
 
 	for idx, aggr := range a.Aggregations {
@@ -436,6 +436,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 		if gb.ColOffset == -1 {
 			offset := a.internalAddColumn(ctx, aeWrap(gb.Inner), false)
 			a.Grouping[idx].ColOffset = offset
+			gb.ColOffset = offset
 		}
 
 		if gb.WSOffset != -1 || !ctx.SemTable.NeedsWeightString(gb.Inner) {

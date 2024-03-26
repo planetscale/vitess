@@ -244,14 +244,22 @@ func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 	if len(aj.Columns) <= offset {
 		panic(vterrors.VT13001("offset out of range"))
 	}
+
+	wsExpr := weightStringFor(aj.JoinColumns.columns[offset].Original)
+	if index := aj.FindCol(ctx, wsExpr, false); index != -1 {
+		return index
+	}
+
 	i := aj.Columns[offset]
 	out := 0
 	if i < 0 {
 		out = aj.LHS.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
 		out = ToLeftOffset(out)
+		aj.JoinColumns.addLeft(wsExpr)
 	} else {
 		out = aj.RHS.AddWSColumn(ctx, FromRightOffset(i), underRoute)
 		out = ToRightOffset(out)
+		aj.JoinColumns.addRight(wsExpr)
 	}
 	aj.Columns = append(aj.Columns, out)
 	return len(aj.Columns) - 1

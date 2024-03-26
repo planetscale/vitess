@@ -326,13 +326,22 @@ func (p *Projection) addColumn(
 
 func (p *Projection) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	cols := p.Columns.GetColumns()
-	if len(cols) <= offset {
-		panic(vterrors.VT13001("offset out of range"))
+	if offset >= len(cols) || offset < 0 {
+		panic(vterrors.VT13001(fmt.Sprintf("offset [%d] out of range [%d]", offset, len(cols))))
 	}
 
 	ws := weightStringFor(cols[offset].Expr)
 	aeWs := aeWrap(ws)
-	return p.addUnexploredExpr(aeWs, ws)
+
+	pe := newProjExprWithInner(aeWs, ws)
+	if underRoute {
+		return p.addProjExpr(pe)
+	}
+
+	// we need to push down this column to our input
+	inputOffset := p.Source.AddWSColumn(ctx, offset, false)
+	pe.Info = Offset(inputOffset) // since we already know the offset, let's save the information
+	return p.addProjExpr(pe)
 }
 
 func (po Offset) expr()             {}
