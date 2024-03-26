@@ -223,7 +223,7 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 	qb.addPredicate(onCondition)
 }
 
-func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser.Expr) {
+func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr, joinType sqlparser.JoinType) {
 	sel := qb.stmt.(*sqlparser.Select)
 	otherSel := other.stmt.(*sqlparser.Select)
 	var lhs sqlparser.TableExpr
@@ -241,7 +241,7 @@ func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser
 	sel.From = []sqlparser.TableExpr{&sqlparser.JoinTableExpr{
 		LeftExpr:  lhs,
 		RightExpr: rhs,
-		Join:      sqlparser.LeftJoinType,
+		Join:      joinType,
 		Condition: &sqlparser.JoinCondition{
 			On: onCondition,
 		},
@@ -516,10 +516,10 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
 
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.RHS, qbR)
-	if op.LeftJoin {
-		qb.joinOuterWith(qbR, pred)
-	} else {
+	if op.JoinType == sqlparser.NormalJoinType {
 		qb.joinInnerWith(qbR, pred)
+	} else {
+		qb.joinWith(qbR, pred, op.JoinType)
 	}
 }
 
