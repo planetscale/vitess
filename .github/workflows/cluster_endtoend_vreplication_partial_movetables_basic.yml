@@ -37,7 +37,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/cluster_endtoend_vreplication_partial_movetables_and_materialize.yml'
+            - '.github/workflows/cluster_endtoend_vreplication_partial_movetables_basic.yml'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
