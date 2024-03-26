@@ -438,7 +438,7 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 		return nil, err
 	}
 	opCode := engine.InnerJoin
-	if n.LeftJoin {
+	if !n.JoinType.IsInner() {
 		opCode = engine.LeftJoin
 	}
 
