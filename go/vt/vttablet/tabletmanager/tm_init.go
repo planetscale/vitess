@@ -90,7 +90,7 @@ var (
 
 	initPopulateMetadata bool
 	initTimeout          = 1 * time.Minute
-	mysqlShutdownTimeout = 5 * time.Minute
+	mysqlShutdownTimeout = mysqlctl.DefaultShutdownTimeout
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
