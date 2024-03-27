@@ -46,14 +46,20 @@ var (
 
 	// mysqlctl init flags
 	waitTime         = 5 * time.Minute
-	shutdownWaitTime = 5 * time.Minute
+	shutdownWaitTime = mysqlctl.DefaultShutdownTimeout
 	initDBSQLFile    string
+
+	timeouts = &servenv.TimeoutFlags{
+		LameduckPeriod: 50 * time.Millisecond,
+		OnTermTimeout:  shutdownWaitTime + 10*time.Second,
+		OnCloseTimeout: 10 * time.Second,
+	}
 )
 
 func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSocketFileFlags()
-	servenv.RegisterFlags()
+	servenv.RegisterFlagsWithTimeouts(timeouts)
 	servenv.RegisterGRPCServerFlags()
 	servenv.RegisterGRPCServerAuthFlags()
 	servenv.RegisterServiceMapFlag()
