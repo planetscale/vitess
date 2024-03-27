@@ -12,19 +12,41 @@ jobs:
       run: |
         git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Check for changes in relevant files
+      uses: dorny/paths-filter@v3.0.1
+      id: changes
+      with:
+        token: ''
+        filters: |
+          end_to_end:
+            - 'go/**/*.go'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.sum'
+            - 'go.mod'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - '.github/workflows/e2e_race.yml'
+
     - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
         go-version: 1.20.13
 
     - name: Tune the OS
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
-    - name: Check out code
-      uses: actions/checkout@v4
-
     - name: Get dependencies
+      if: steps.changes.outputs.end_to_end == 'true'
       env: # Or as an environment variable
         AWS_ACCESS_KEY_ID: ${{ secrets.BUILDKITE_S3_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.BUILDKITE_S3_SECRET_ACCESS_KEY }}
@@ -60,10 +82,12 @@ jobs:
         go mod download
 
     - name: Run make minimaltools
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         make minimaltools
 
     - name: e2e_race
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
         make e2e_test_race
