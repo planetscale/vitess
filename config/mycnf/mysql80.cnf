@@ -57,3 +57,6 @@ master_retry_count = 300
 # in super-read-only mode.
 super-read-only
 
+# Replication parameters to ensure reparents are fast.
+replica_net_timeout = 8
+
