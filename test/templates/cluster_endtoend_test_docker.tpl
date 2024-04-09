@@ -56,7 +56,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.20.13
+        go-version: 1.21.9
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -72,3 +72,4 @@ jobs:
         export VTDATAROOT="/tmp/"
 
         go run test.go -docker=true --follow -shard {{.Shard}}
+
