@@ -58,5 +58,5 @@ master_retry_count = 300
 super-read-only
 
 # Replication parameters to ensure reparents are fast.
-replica_net_timeout = 8
+slave_net_timeout = 8
 
