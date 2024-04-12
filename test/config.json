@@ -1,17 +1,5 @@
 {
 	"Tests": {
-		"java": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"make",
-				"java_test"
-			],
-			"Manual": false,
-			"Shard": "10",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"client_test": {
 			"File": "",
 			"Args": [],
@@ -331,26 +319,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"pitr": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "10",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
-		"recovery": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtctlbackup_sharded_clustertest_heavy",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"emergencyreparent": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/emergencyreparent", "-timeout", "20m"],
@@ -434,19 +402,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"tabletmanager_consul": {
-			"File": "unused.go",
-			"Args": [
-				"vitess.io/vitess/go/test/endtoend/tabletmanager","--topo-flavor=consul"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": "tabletmanager_consul",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
 		"tabletmanager_throttler_topo": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo"],
@@ -465,19 +420,6 @@
 			"Manual": false,
 			"Shard": "tabletmanager_tablegc",
 			"RetryMax": 2,
-			"Tags": [
-				"site_test"
-			]
-		},
-		"tabletmanager_zk2": {
-			"File": "unused.go",
-			"Args": [
-				"vitess.io/vitess/go/test/endtoend/tabletmanager","--topo-flavor=zk2"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": "25",
-			"RetryMax": 1,
 			"Tags": [
 				"site_test"
 			]
@@ -923,24 +865,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"topo_zk2": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "--topo-flavor=zk2"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "25",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"topo_consul": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/consul", "--topo-flavor=consul"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtgate_topo_consul",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"topo_etcd2": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/etcd2"],
@@ -993,15 +917,6 @@
 			"Manual": false,
 			"Shard": "vtgate_vindex_heavy",
 			"RetryMax": 2,
-			"Tags": []
-		},
-		"vttest_sample": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtcombo"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "25",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"xb_recovery": {

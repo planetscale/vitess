@@ -44,7 +44,6 @@ const (
 	DiscoveryQueueMaxStatisticsSize       = 120
 	DiscoveryCollectionRetentionSeconds   = 120
 	UnseenInstanceForgetHours             = 240 // Number of hours after which an unseen instance is forgotten
-	FailureDetectionPeriodBlockMinutes    = 60  // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
 )
 
 var (
@@ -77,6 +76,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&auditToSyslog, "audit-to-syslog", auditToSyslog, "Whether to store the audit log in the syslog")
 	fs.DurationVar(&auditPurgeDuration, "audit-purge-duration", auditPurgeDuration, "Duration for which audit logs are held before being purged. Should be in multiples of days")
 	fs.DurationVar(&recoveryPeriodBlockDuration, "recovery-period-block-duration", recoveryPeriodBlockDuration, "Duration for which a new recovery is blocked on an instance after running a recovery")
+	fs.MarkDeprecated("recovery-period-block-duration", "As of v20 this is ignored and will be removed in a future release.")
 	fs.BoolVar(&preventCrossCellFailover, "prevent-cross-cell-failover", preventCrossCellFailover, "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
 	fs.Duration("lock-shard-timeout", 30*time.Second, "Duration for which a shard lock is held when running a recovery")
 	_ = fs.MarkDeprecated("lock-shard-timeout", "Please use lock-timeout instead.")

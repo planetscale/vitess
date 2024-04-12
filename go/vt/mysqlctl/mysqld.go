@@ -43,10 +43,9 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"vitess.io/vitess/config"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -54,13 +53,16 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlclient"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtenv "vitess.io/vitess/go/vt/env"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// DbaGrantWaitTime is the amount of time to wait for the grants to have applied
+const DbaGrantWaitTime = 10 * time.Second
 
 var (
 
@@ -496,6 +498,40 @@ func (mysqld *Mysqld) Wait(ctx context.Context, cnf *Mycnf) error {
 	}
 
 	return mysqld.wait(ctx, cnf, params)
+}
+
+// WaitForDBAGrants waits for the grants to have applied for all the users.
+func (mysqld *Mysqld) WaitForDBAGrants(ctx context.Context, waitTime time.Duration) (err error) {
+	if waitTime == 0 {
+		return nil
+	}
+	timer := time.NewTimer(waitTime)
+	ctx, cancel := context.WithTimeout(ctx, waitTime)
+	defer cancel()
+	for {
+		conn, connErr := dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.DbaConnector())
+		if connErr == nil {
+			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
+			conn.Close()
+			if fetchErr != nil {
+				log.Errorf("Error running SHOW GRANTS - %v", fetchErr)
+			}
+			if fetchErr == nil && res != nil && len(res.Rows) > 0 && len(res.Rows[0]) > 0 {
+				privileges := res.Rows[0][0].ToString()
+				// In MySQL 8.0, all the privileges are listed out explicitly, so we can search for SUPER in the output.
+				// In MySQL 5.7, all the privileges are not listed explicitly, instead ALL PRIVILEGES is written, so we search for that too.
+				if strings.Contains(privileges, "SUPER") || strings.Contains(privileges, "ALL PRIVILEGES") {
+					return nil
+				}
+			}
+		}
+		select {
+		case <-timer.C:
+			return fmt.Errorf("timed out after %v waiting for the dba user to have the required permissions", waitTime)
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 }
 
 // wait is the internal version of Wait, that takes credentials.

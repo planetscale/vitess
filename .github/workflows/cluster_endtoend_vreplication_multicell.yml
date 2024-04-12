@@ -16,15 +16,41 @@ jobs:
       run: |
         git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Check for changes in relevant files
+      uses: dorny/paths-filter@v3.0.1
+      id: changes
+      with:
+        token: ''
+        filters: |
+          end_to_end:
+            - 'go/**/*.go'
+            - 'go/vt/sidecardb/**/*.sql'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.sum'
+            - 'go.mod'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - '.github/workflows/cluster_endtoend_vreplication_multicell.yml'
+
     - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: 1.20.13
+        go-version: 1.21.9
 
     - name: Set up python
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@v5
 
     - name: Tune the OS
+      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
@@ -32,9 +58,11 @@ jobs:
         sudo sysctl -p /etc/sysctl.conf
 
     - name: Check out code
+      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v4
 
     - name: Get dependencies
+      if: steps.changes.outputs.end_to_end == 'true'
       env: # Or as an environment variable
         AWS_ACCESS_KEY_ID: ${{ secrets.BUILDKITE_S3_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.BUILDKITE_S3_SECRET_ACCESS_KEY }}
@@ -70,6 +98,7 @@ jobs:
         go mod download
 
     - name: Run cluster endtoend test
+      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 45
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
