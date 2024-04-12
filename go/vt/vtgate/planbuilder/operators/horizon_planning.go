@@ -378,7 +378,7 @@ func createProjectionWithTheseColumns(
 	if len(p.cols) == 0 {
 		return src, nil
 	}
-	proj, err := createProjection(ctx, src)
+	proj, err := createProjection(ctx, src, "")
 	if err != nil {
 		return nil, err
 	}
