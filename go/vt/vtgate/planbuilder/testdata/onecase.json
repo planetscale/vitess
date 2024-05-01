@@ -1,9 +1,241 @@
 [
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "comment": "TPC-H query 9",
+    "query": "select nation, o_year, sum(amount) as sum_profit from ( select n_name as nation, extract(year from o_orderdate) as o_year, l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from part, supplier, lineitem, partsupp, orders, nation where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey and p_partkey = l_partkey and o_orderkey = l_orderkey and s_nationkey = n_nationkey and p_name like '%green%' ) as profit group by nation, o_year order by nation, o_year desc",
     "plan": {
-
+      "QueryType": "SELECT",
+      "Original": "select nation, o_year, sum(amount) as sum_profit from ( select n_name as nation, extract(year from o_orderdate) as o_year, l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from part, supplier, lineitem, partsupp, orders, nation where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey and p_partkey = l_partkey and o_orderkey = l_orderkey and s_nationkey = n_nationkey and p_name like '%green%' ) as profit group by nation, o_year order by nation, o_year desc",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum(2) AS sum_profit",
+        "GroupBy": "(0|3), (1|4)",
+        "ResultColumns": 3,
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(3|6) ASC, (4|7) DESC",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "R:0,L:0,L:1,R:1,L:3,L:4,R:2,L:5",
+                    "JoinVars": {
+                      "l_suppkey": 2
+                    },
+                    "TableName": "orders_lineitem_part_partsupp_supplier_nation",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "L:0,R:1,L:4,L:6,R:0,L:7",
+                        "JoinVars": {
+                          "l_discount": 2,
+                          "l_extendedprice": 1,
+                          "l_partkey": 5,
+                          "l_quantity": 3,
+                          "l_suppkey": 4
+                        },
+                        "TableName": "orders_lineitem_part_partsupp",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "L:2,R:0,R:1,R:2,R:3,R:4,L:0,L:3",
+                            "JoinVars": {
+                              "o_orderkey": 1
+                            },
+                            "TableName": "orders_lineitem_part",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select profit.o_year, profit.o_orderkey, extract(year from o_orderdate), weight_string(profit.o_year) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders where 1 != 1) as profit where 1 != 1",
+                                "Query": "select profit.o_year, profit.o_orderkey, extract(year from o_orderdate), weight_string(profit.o_year) from (select extract(year from o_orderdate) as o_year, o_orderkey as o_orderkey from orders) as profit",
+                                "Table": "orders"
+                              },
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "L:0,L:1,L:2,L:3,L:4",
+                                "JoinVars": {
+                                  "l_partkey": 4
+                                },
+                                "TableName": "lineitem_part",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "VindexLookup",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "Values": [
+                                      ":o_orderkey"
+                                    ],
+                                    "Vindex": "lineitem_map",
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "Route",
+                                        "Variant": "IN",
+                                        "Keyspace": {
+                                          "Name": "main",
+                                          "Sharded": true
+                                        },
+                                        "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                                        "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                                        "Table": "lineitem_map",
+                                        "Values": [
+                                          "::l_orderkey"
+                                        ],
+                                        "Vindex": "md5"
+                                      },
+                                      {
+                                        "OperatorType": "Route",
+                                        "Variant": "ByDestination",
+                                        "Keyspace": {
+                                          "Name": "main",
+                                          "Sharded": true
+                                        },
+                                        "FieldQuery": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where 1 != 1) as profit where 1 != 1",
+                                        "Query": "select profit.l_extendedprice, profit.l_discount, profit.l_quantity, profit.l_suppkey, profit.l_partkey from (select l_extendedprice, l_discount, l_quantity, l_suppkey as l_suppkey, l_partkey as l_partkey from lineitem where l_orderkey = :o_orderkey) as profit",
+                                        "Table": "lineitem"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "EqualUnique",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select 1 from part where 1 != 1",
+                                    "Query": "select 1 from part where p_name like '%green%' and p_partkey = :l_partkey",
+                                    "Table": "part",
+                                    "Values": [
+                                      ":l_partkey"
+                                    ],
+                                    "Vindex": "hash"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "OperatorType": "VindexLookup",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "Values": [
+                              ":l_partkey"
+                            ],
+                            "Vindex": "partsupp_map",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "IN",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select ps_partkey, ps_suppkey from partsupp_map where 1 != 1",
+                                "Query": "select ps_partkey, ps_suppkey from partsupp_map where ps_partkey in ::__vals",
+                                "Table": "partsupp_map",
+                                "Values": [
+                                  "::ps_partkey"
+                                ],
+                                "Vindex": "md5"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "ByDestination",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select profit.amount, :l_extendedprice * (1 - :l_discount) - ps_supplycost * :l_quantity from (select :l_extendedprice * (1 - :l_discount) - ps_supplycost * :l_quantity as amount from partsupp where 1 != 1) as profit where 1 != 1",
+                                "Query": "select profit.amount, :l_extendedprice * (1 - :l_discount) - ps_supplycost * :l_quantity from (select :l_extendedprice * (1 - :l_discount) - ps_supplycost * :l_quantity as amount from partsupp where ps_partkey = :l_partkey and ps_suppkey = :l_suppkey) as profit",
+                                "Table": "partsupp"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "R:1,R:0,R:2",
+                        "JoinVars": {
+                          "s_nationkey": 0
+                        },
+                        "TableName": "supplier_nation",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select profit.s_nationkey from (select s_nationkey as s_nationkey from supplier where 1 != 1) as profit where 1 != 1",
+                            "Query": "select profit.s_nationkey from (select s_nationkey as s_nationkey from supplier where s_suppkey = :l_suppkey) as profit",
+                            "Table": "supplier",
+                            "Values": [
+                              ":l_suppkey"
+                            ],
+                            "Vindex": "hash"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select profit.nation, n_name, weight_string(profit.nation) from (select n_name as nation from nation where 1 != 1) as profit where 1 != 1",
+                            "Query": "select profit.nation, n_name, weight_string(profit.nation) from (select n_name as nation from nation where n_nationkey = :s_nationkey) as profit",
+                            "Table": "nation",
+                            "Values": [
+                              ":s_nationkey"
+                            ],
+                            "Vindex": "hash"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.lineitem",
+        "main.nation",
+        "main.orders",
+        "main.part",
+        "main.partsupp",
+        "main.supplier"
+      ]
     }
   }
 ]

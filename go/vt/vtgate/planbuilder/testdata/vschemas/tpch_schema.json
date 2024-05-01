@@ -1,186 +1,24 @@
 {
+  "routing_rules": null,
+  "shard_routing_rules": null,
+  "keyspace_routing_rules": null,
   "keyspaces": {
     "main": {
       "sharded": true,
+      "foreignKeyMode": "unspecified",
       "vindexes": {
-        "hash": {
-          "type": "hash"
-        },
-        "partsupp_map": {
-          "type": "lookup_hash_unique",
-          "owner": "partsupp_map",
-          "params": {
-            "table": "partsupp_map",
-            "from": "ps_partkey",
-            "to": "ps_suppkey"
-          }
-        },
-        "lineitem_map": {
-          "type": "lookup_hash_unique",
-          "owner": "lineitem_map",
-          "params": {
-            "table": "lineitem_map",
-            "from": "l_orderkey",
-            "to": "l_linenumber"
-          }
-        },
-        "md5": {
-          "type": "unicode_loose_md5"
+        "xxhash": {
+          "type": "xxhash"
         }
       },
       "tables": {
-        "nation": {
-          "column_vindexes": [
-            {
-              "column": "n_nationkey",
-              "name": "hash"
-            }
-          ],
-          "columns": [
-            {
-              "name": "n_nationkey"
-            },
-            {
-              "name": "n_name"
-            },
-            {
-              "name": "n_regionkey"
-            },
-            {
-              "name": "n_comment"
-            }
-          ],
-          "column_list_authoritative": true
-        },
-        "region": {
-          "column_vindexes": [
-            {
-              "column": "r_regionkey",
-              "name": "hash"
-            }
-          ],
-          "columns": [
-            {
-              "name": "r_regionkey"
-            },
-            {
-              "name": "r_name"
-            },
-            {
-              "name": "r_comment"
-            }
-          ],
-          "column_list_authoritative": true
-        },
-        "part": {
-          "column_vindexes": [
-            {
-              "column": "p_partkey",
-              "name": "hash"
-            }
-          ],
-          "columns": [
-            {
-              "name": "p_partkey"
-            },
-            {
-              "name": "p_name"
-            },
-            {
-              "name": "p_mfgr"
-            },
-            {
-              "name": "p_brand"
-            },
-            {
-              "name": "p_type"
-            },
-            {
-              "name": "p_size"
-            },
-            {
-              "name": "p_container"
-            },
-            {
-              "name": "p_retailprice"
-            },
-            {
-              "name": "p_comment"
-            }
-          ],
-          "column_list_authoritative": true
-        },
-        "supplier": {
-          "column_vindexes": [
-            {
-              "column": "s_suppkey",
-              "name": "hash"
-            }
-          ],
-          "columns": [
-            {
-              "name": "s_suppkey"
-            },
-            {
-              "name": "s_name"
-            },
-            {
-              "name": "s_address"
-            },
-            {
-              "name": "s_nationkey"
-            },
-            {
-              "name": "s_phone"
-            },
-            {
-              "name": "s_acctbal"
-            },
-            {
-              "name": "s_comment"
-            }
-          ],
-          "column_list_authoritative": true
-        },
-        "partsupp": {
-          "column_vindexes": [
-            {
-              "column": "ps_partkey",
-              "name": "partsupp_map"
-            }
-          ],
-          "columns": [
-            {
-              "name": "ps_partkey"
-            },
-            {
-              "name": "ps_suppkey"
-            },
-            {
-              "name": "ps_availqty"
-            },
-            {
-              "name": "ps_supplycost"
-            },
-            {
-              "name": "ps_comment"
-            }
-          ],
-          "column_list_authoritative": true
-        },
-        "partsupp_map": {
-          "column_vindexes": [
-            {
-              "column": "ps_partkey",
-              "name": "md5"
-            }
-          ]
-        },
         "customer": {
+          "name": "customer",
           "column_vindexes": [
             {
-              "column": "c_custkey",
-              "name": "hash"
+              "column": "C_CUSTKEY",
+              "name": "xxhash",
+              "type": "xxhash"
             }
           ],
           "columns": [
@@ -211,49 +49,16 @@
           ],
           "column_list_authoritative": true
         },
-        "orders": {
-          "column_vindexes": [
-            {
-              "column": "o_orderkey",
-              "name": "hash"
-            }
-          ],
-          "columns": [
-            {
-              "name": "o_orderkey"
-            },
-            {
-              "name": "o_custkey"
-            },
-            {
-              "name": "o_orderstatus"
-            },
-            {
-              "name": "o_totalprice"
-            },
-            {
-              "name": "o_orderdate"
-            },
-            {
-              "name": "o_orderpriority"
-            },
-            {
-              "name": "o_clerk"
-            },
-            {
-              "name": "o_shippriority"
-            },
-            {
-              "name": "o_comment"
-            }
-          ],
-          "column_list_authoritative": true
-        },
         "lineitem": {
+          "name": "lineitem",
           "column_vindexes": [
             {
-              "column": "l_orderkey",
-              "name": "lineitem_map"
+              "columns": [
+                "L_ORDERKEY",
+                "L_LINENUMBER"
+              ],
+              "name": "xxhash",
+              "type": "xxhash"
             }
           ],
           "columns": [
@@ -308,30 +113,207 @@
           ],
           "column_list_authoritative": true
         },
-        "lineitem_map": {
+        "nation": {
+          "name": "nation",
           "column_vindexes": [
             {
-              "column": "l_orderkey",
-              "name": "md5"
-            }
-          ]
-        },
-        "revenue0": {
-          "column_vindexes": [
-            {
-              "column": "supplier_no",
-              "name": "hash"
+              "column": "N_NATIONKEY",
+              "name": "xxhash",
+              "type": "xxhash"
             }
           ],
           "columns": [
             {
-              "name": "supplier_no"
+              "name": "n_nationkey"
             },
             {
-              "name": "total_revenue"
+              "name": "n_name"
+            },
+            {
+              "name": "n_regionkey"
+            },
+            {
+              "name": "n_comment"
             }
           ],
           "column_list_authoritative": true
+        },
+        "orders": {
+          "name": "orders",
+          "column_vindexes": [
+            {
+              "column": "O_ORDERKEY",
+              "name": "xxhash",
+              "type": "xxhash"
+            }
+          ],
+          "columns": [
+            {
+              "name": "o_orderkey"
+            },
+            {
+              "name": "o_custkey"
+            },
+            {
+              "name": "o_orderstatus"
+            },
+            {
+              "name": "o_totalprice"
+            },
+            {
+              "name": "o_orderdate"
+            },
+            {
+              "name": "o_orderpriority"
+            },
+            {
+              "name": "o_clerk"
+            },
+            {
+              "name": "o_shippriority"
+            },
+            {
+              "name": "o_comment"
+            }
+          ],
+          "column_list_authoritative": true
+        },
+        "part": {
+          "name": "part",
+          "column_vindexes": [
+            {
+              "column": "P_PARTKEY",
+              "name": "xxhash",
+              "type": "xxhash"
+            }
+          ],
+          "columns": [
+            {
+              "name": "p_partkey"
+            },
+            {
+              "name": "p_name"
+            },
+            {
+              "name": "p_mfgr"
+            },
+            {
+              "name": "p_brand"
+            },
+            {
+              "name": "p_type"
+            },
+            {
+              "name": "p_size"
+            },
+            {
+              "name": "p_container"
+            },
+            {
+              "name": "p_retailprice"
+            },
+            {
+              "name": "p_comment"
+            }
+          ],
+          "column_list_authoritative": true
+        },
+        "partsupp": {
+          "name": "partsupp",
+          "column_vindexes": [
+            {
+              "columns": [
+                "PS_PARTKEY",
+                "PS_SUPPKEY"
+              ],
+              "name": "xxhash",
+              "type": "xxhash"
+            }
+          ],
+          "columns": [
+            {
+              "name": "ps_partkey"
+            },
+            {
+              "name": "ps_suppkey"
+            },
+            {
+              "name": "ps_availqty"
+            },
+            {
+              "name": "ps_supplycost"
+            },
+            {
+              "name": "ps_comment"
+            }
+          ],
+          "column_list_authoritative": true
+        },
+        "region": {
+          "name": "region",
+          "column_vindexes": [
+            {
+              "column": "R_REGIONKEY",
+              "name": "xxhash",
+              "type": "xxhash"
+            }
+          ],
+          "columns": [
+            {
+              "name": "r_regionkey"
+            },
+            {
+              "name": "r_name"
+            },
+            {
+              "name": "r_comment"
+            }
+          ],
+          "column_list_authoritative": true
+        },
+        "supplier": {
+          "name": "supplier",
+          "column_vindexes": [
+            {
+              "column": "S_SUPPKEY",
+              "name": "xxhash",
+              "type": "xxhash"
+            }
+          ],
+          "columns": [
+            {
+              "name": "s_suppkey"
+            },
+            {
+              "name": "s_name"
+            },
+            {
+              "name": "s_address"
+            },
+            {
+              "name": "s_nationkey"
+            },
+            {
+              "name": "s_phone"
+            },
+            {
+              "name": "s_acctbal"
+            },
+            {
+              "name": "s_comment"
+            }
+          ],
+          "column_list_authoritative": true
+        },
+        "test": {
+          "name": "test",
+          "column_vindexes": [
+            {
+              "column": "S_SUPPKEY",
+              "name": "xxhash",
+              "type": "xxhash"
+            }
+          ]
         }
       }
     }
