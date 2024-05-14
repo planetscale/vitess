@@ -19,6 +19,7 @@ package semantics
 import (
 	"fmt"
 	"strconv"
+	"vitess.io/vitess/go/slice"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -116,8 +117,8 @@ func handleDelete(del *sqlparser.Delete) error {
 	return nil
 }
 
-func (r *earlyRewriter) handleAliasedTable(node *sqlparser.AliasedTableExpr) error {
-	tbl, ok := node.Expr.(sqlparser.TableName)
+func (r *earlyRewriter) handleAliasedTable(tableExpr *sqlparser.AliasedTableExpr) error {
+	tbl, ok := tableExpr.Expr.(sqlparser.TableName)
 	if !ok || tbl.Qualifier.NotEmpty() {
 		return nil
 	}
@@ -126,27 +127,27 @@ func (r *earlyRewriter) handleAliasedTable(node *sqlparser.AliasedTableExpr) err
 	if cte == nil {
 		return nil
 	}
-	if node.As.IsEmpty() {
-		node.As = tbl.Name
+	if tableExpr.As.IsEmpty() {
+		tableExpr.As = tbl.Name
 	}
-	node.Expr = &sqlparser.DerivedTable{
-		Select: cte.Subquery.Select,
+	tableExpr.Expr = &sqlparser.DerivedTable{
+		Select: cte.query,
 	}
-	if len(cte.Columns) > 0 {
-		node.Columns = cte.Columns
-	}
+	tableExpr.Columns = slice.Map(cte.columns, sqlparser.NewIdentifierCI)
 	return nil
 }
 
 func (r *earlyRewriter) handleWith(node *sqlparser.With) error {
 	scope := r.scoper.currentScope()
 	for _, cte := range node.CTEs {
-		err := scope.addCTE(cte)
+		err := scope.addCTE(cte, node)
 		if err != nil {
 			return err
 		}
 	}
-	node.CTEs = nil
+	if !node.Recursive {
+		node.CTEs = nil
+	}
 	return nil
 }
 

@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"reflect"
+	"vitess.io/vitess/go/slice"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -47,10 +48,22 @@ type (
 		isUnion      bool
 		joinUsing    map[string]TableSet
 		stmtScope    bool
-		ctes         map[string]*sqlparser.CommonTableExpr
+		ctes         map[string]cte
 		inGroupBy    bool
 		inHaving     bool
 		inHavingAggr bool
+	}
+
+	cte struct {
+		// recursive can have three states.
+		// nil means that we are in a WITH that has not been declared as recursive
+		// true means a recursive CTE in a WITH that has been declared as recursive
+		// false means a non-recursive CTE in a WITH that has been declared as recursive
+		recursive *bool
+
+		name    string
+		columns []string
+		query   sqlparser.SelectStatement
 	}
 )
 
@@ -338,37 +351,30 @@ func newScope(parent *scope) *scope {
 	return &scope{
 		parent:    parent,
 		joinUsing: map[string]TableSet{},
-		ctes:      map[string]*sqlparser.CommonTableExpr{},
+		ctes:      map[string]cte{},
 	}
 }
 
-func (s *scope) addCTE(cte *sqlparser.CommonTableExpr) error {
-	name := cte.ID.String()
+func (s *scope) addCTE(ast *sqlparser.CommonTableExpr, parent *sqlparser.With) error {
+	name := ast.ID.String()
 	_, exists := s.ctes[name]
 	if exists {
 		return vterrors.VT03013(name)
 	}
-	if err := checkForInvalidAliasUse(cte, name); err != nil {
-		return err
-	}
-	s.ctes[name] = cte
-	return nil
-}
 
-func checkForInvalidAliasUse(cte *sqlparser.CommonTableExpr, name string) (err error) {
-	// TODO I'm sure there is a better. way, but we need to do this to stop infinite loops from occurring
-	down := func(node sqlparser.SQLNode, parent sqlparser.SQLNode) bool {
-		tbl, ok := node.(sqlparser.TableName)
-		if !ok || tbl.Qualifier.NotEmpty() {
-			return err == nil
-		}
-		if tbl.Name.String() == name {
-			err = vterrors.VT12001("do not support CTE that use the CTE alias inside the CTE query")
-		}
-		return err == nil
+	b := false
+	var recursive *bool
+	if parent.Recursive {
+		recursive = &b
 	}
-	_ = sqlparser.CopyOnRewrite(cte.Subquery.Select, down, nil, nil)
-	return err
+
+	s.ctes[name] = cte{
+		recursive: recursive,
+		name:      name,
+		columns:   slice.Map(ast.Columns, func(from sqlparser.IdentifierCI) string { return from.String() }),
+		query:     ast.Subquery.Select,
+	}
+	return nil
 }
 
 func (s *scope) addTable(info TableInfo) error {
@@ -418,12 +424,18 @@ func (s *scope) findParentScopeOfStatement() *scope {
 }
 
 // findCTE will search in this scope, and then recursively search the parents
-func (s *scope) findCTE(name string) *sqlparser.CommonTableExpr {
-	cte, found := s.ctes[name]
-	if found || s.parent == nil {
-		// if we don't have a parent, we'll return
-		// whatever we have, even if it happens to be nil
-		return cte
+func (s *scope) findCTE(name string) *cte {
+	node, found := s.ctes[name]
+	if found {
+		// if we found the CTE, return it
+		return &node
 	}
-	return s.parent.findCTE(name)
+
+	if s.parent != nil {
+		// if we didn't find the CTE, search the parent
+		return s.parent.findCTE(name)
+	}
+
+	// if we didn't find the CTE and there is no parent, return nil
+	return nil
 }
