@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -844,20 +845,29 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 // to commit/complete a replicated user transaction within a configured
 // period of time.
 type stallHandler struct {
-	timer    atomic.Pointer[time.Timer]
-	deadline time.Duration
-	fire     chan error
-	stop     chan struct{}
+	timer       atomic.Pointer[time.Timer]
+	deadline    time.Duration
+	fire        chan error
+	stop        chan struct{}
+	totalCount  atomic.Int64
+	activeCount atomic.Int64
+	id          int64
 }
 
+var totalStallHandlerCount atomic.Int64
+
 func newStallHandler(dl time.Duration, ch chan error) *stallHandler {
+	totalStallHandlerCount.Add(1)
 	return &stallHandler{
 		deadline: dl,
 		fire:     ch,
 		stop:     make(chan struct{}),
+		id:       rand.Int64(),
 	}
 }
-
+func (sh *stallHandler) String() string {
+	return fmt.Sprintf("StallHandler-%v", sh.id)
+}
 func (sh *stallHandler) startTimer() error {
 	if sh == nil || sh.deadline == 0 { // Stall handling is disabled
 		return nil
@@ -865,6 +875,7 @@ func (sh *stallHandler) startTimer() error {
 	// If the timer has not been initializeded yet, then do so.
 	if swapped := sh.timer.CompareAndSwap(nil, time.NewTimer(sh.deadline)); !swapped {
 		// Otherwise, reset the timer.
+		log.Infof("%s: Resetting the stall handler timer to %v", sh, sh.deadline)
 		if sh.timer.Load().Reset(sh.deadline) {
 			// The timer was already running, so be sure the channel is drained.
 			select {
@@ -875,11 +886,21 @@ func (sh *stallHandler) startTimer() error {
 		}
 	}
 	go func() {
+		sh.totalCount.Add(1)
+		sh.activeCount.Add(1)
+		log.Infof("%s: Starting the stall handler goroutine for %v, total: %v, active: %v, totalStallHandlerCount: %v",
+			sh, sh.deadline, sh.totalCount.Load(), sh.activeCount.Load(), totalStallHandlerCount.Load())
+		defer func() {
+			sh.activeCount.Add(-1)
+			log.Infof("%s: After stopping the stall handler goroutine for %v, total: %v, active: %v -- totalStallHandlerCount: %v",
+				sh, sh.deadline, sh.totalCount.Load(), sh.activeCount.Load(), totalStallHandlerCount.Load())
+		}()
 		select {
 		case <-sh.timer.Load().C: // The timer expired
 			sh.fire <- vterrors.Wrapf(ErrVPlayerStalled,
 				"failed to commit transaction batch before the configured --vplayer-progress-deadline of %v", vplayerProgressDeadline)
 		case <-sh.stop: // The timer was stopped
+			log.Infof("%s: the stall handler timer was stopped", sh)
 		}
 	}()
 	return nil
@@ -891,6 +912,7 @@ func (sh *stallHandler) stopTimer() error {
 	}
 	if sh.timer.Load().Stop() {
 		// It was running, so signal the goroutine to stop.
+		log.Infof("%s: Stopping the stall handler timer", sh)
 		sh.stop <- struct{}{}
 		return nil
 	}
