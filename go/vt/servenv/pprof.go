@@ -299,8 +299,8 @@ func (prof *profile) init() (start func(), stop func()) {
 
 func init() {
 	OnParse(func(fs *pflag.FlagSet) {
-		fs.BoolVar(&httpPprof, "pprof-http", httpPprof, "enable pprof http endpoints")
-		fs.StringSliceVar(&pprofFlag, "pprof", pprofFlag, "enable profiling")
+		fs.BoolVar(&httpPprof, "pprof-http", true, "enable pprof http endpoints")
+		fs.StringSliceVar(&pprofFlag, "pprof", []string{"goroutine"}, "enable profiling")
 	})
 	OnInit(pprofInit)
 	OnInit(HTTPRegisterProfile)

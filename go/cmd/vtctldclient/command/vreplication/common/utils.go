@@ -206,7 +206,7 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 }
 
 func AddCommonFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(&BaseOptions.TargetKeyspace, "target-keyspace", "", "Target keyspace for this workflow.")
+	cmd.PersistentFlags().StringVarP(&BaseOptions.TargetKeyspace, "target-keyspace", "k", "", "Target keyspace for this workflow.")
 	cmd.MarkPersistentFlagRequired("target-keyspace")
 	cmd.PersistentFlags().StringVarP(&BaseOptions.Workflow, "workflow", "w", "", "The workflow you want to perform the command on.")
 	cmd.MarkPersistentFlagRequired("workflow")
