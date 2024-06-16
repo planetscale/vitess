@@ -167,7 +167,6 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
 				log.Errorf("read error while streaming binlog events: %v", err)
 				return
 			}
-
 			select {
 			case eventChan <- event:
 			case <-ctx.Done():

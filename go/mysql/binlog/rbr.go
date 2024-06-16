@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -36,9 +38,160 @@ var ZeroTimestamp = []byte("0000-00-00 00:00:00")
 
 var dig2bytes = []int{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
 
+func readLenEncInt(data []byte, pos int) (uint64, int, bool) {
+	if pos >= len(data) {
+		return 0, 0, false
+	}
+	switch data[pos] {
+	case 0xfc:
+		// Encoded in the next 2 bytes.
+		if pos+2 >= len(data) {
+			return 0, 0, false
+		}
+		return uint64(data[pos+1]) |
+			uint64(data[pos+2])<<8, pos + 3, true
+	case 0xfd:
+		// Encoded in the next 3 bytes.
+		if pos+3 >= len(data) {
+			return 0, 0, false
+		}
+		return uint64(data[pos+1]) |
+			uint64(data[pos+2])<<8 |
+			uint64(data[pos+3])<<16, pos + 4, true
+	case 0xfe:
+		// Encoded in the next 8 bytes.
+		if pos+8 >= len(data) {
+			return 0, 0, false
+		}
+		return uint64(data[pos+1]) |
+			uint64(data[pos+2])<<8 |
+			uint64(data[pos+3])<<16 |
+			uint64(data[pos+4])<<24 |
+			uint64(data[pos+5])<<32 |
+			uint64(data[pos+6])<<40 |
+			uint64(data[pos+7])<<48 |
+			uint64(data[pos+8])<<56, pos + 9, true
+	}
+	return uint64(data[pos]), pos + 1, true
+}
+
+// FixedLengthInt: little endian
+func FixedLengthInt(buf []byte) uint64 {
+	var num uint64 = 0
+	for i, b := range buf {
+		num |= uint64(b) << (uint(i) * 8)
+	}
+	return num
+}
+
+type (
+	// JsonDiffOperation is an enum that describes what kind of operation a JsonDiff object represents.
+	// https://github.com/mysql/mysql-server/blob/8.0/sql/json_diff.h
+	JsonDiffOperation byte
+)
+
+const (
+	// The JSON value in the given path is replaced with a new value.
+	//
+	// It has the same effect as `JSON_REPLACE(col, path, value)`.
+	JsonDiffOperationReplace = JsonDiffOperation(iota)
+
+	// Add a new element at the given path.
+	//
+	//  If the path specifies an array element, it has the same effect as `JSON_ARRAY_INSERT(col, path, value)`.
+	//
+	//  If the path specifies an object member, it has the same effect as `JSON_INSERT(col, path, value)`.
+	JsonDiffOperationInsert
+
+	// The JSON value at the given path is removed from an array or object.
+	//
+	// It has the same effect as `JSON_REMOVE(col, path)`.
+	JsonDiffOperationRemove
+)
+
+type JsonDiff struct {
+	Field *querypb.Field
+	Op    JsonDiffOperation
+	Path  string
+	Value json.Value
+}
+
+func (j JsonDiff) String() string {
+	return fmt.Sprintf("Op: %v, Path: %v, Value: %v", j.Op, j.Path, j.Value)
+}
+
+func (j JsonDiff) ToQuery() string {
+	switch j.Op {
+	case JsonDiffOperationReplace:
+		return fmt.Sprintf("JSON_REPLACE(%s, '%s', %s)", j.Field.Name, j.Path, j.Value.MarshalSQLTo(nil))
+	case JsonDiffOperationInsert:
+		return fmt.Sprintf("JSON_INSERT(%s, '%s', %s)", j.Field.Name, j.Path, j.Value.MarshalSQLTo(nil))
+	case JsonDiffOperationRemove:
+		return fmt.Sprintf("JSON_REMOVE(%s, '%s')", j.Field.Name, j.Path)
+	default:
+		return ""
+	}
+}
+
+func getPartialJSONQuery(field *querypb.Field, data []byte, pos int, metadata uint16) (string, error) {
+	data = data[pos:]
+	op := JsonDiffOperation(data[0])
+	switch op {
+	case JsonDiffOperationReplace:
+	case JsonDiffOperationInsert:
+	case JsonDiffOperationRemove:
+	default:
+		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported json diff operation %v", op)
+	}
+	data = data[1:]
+	pathLength, read, ok := readLenEncInt(data, 0)
+	if !ok {
+		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "readLenEncInt failed for partial json")
+	}
+	data = data[read:]
+	path := data[:pathLength]
+	data = data[pathLength:]
+
+	diff := &JsonDiff{
+		Field: field,
+		Op:    op,
+		Path:  string(path),
+		// Value will be filled below
+	}
+	if op == JsonDiffOperationRemove {
+		log.Infof("Found remove operation, returning %s", diff.ToQuery())
+		return diff.ToQuery(), nil
+	}
+
+	valueLength, read, ok := readLenEncInt(data, 0)
+	if !ok {
+		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "readLenEncInt failed for partial json")
+	}
+	log.Infof("Value length: %v", valueLength)
+	data = data[read:]
+	val, err := ParseBinaryJSON(data[:valueLength])
+	if err != nil {
+		return "", err
+	}
+	diff.Value = *val
+	log.Infof("Returning json query %s", diff.ToQuery())
+	return diff.ToQuery(), nil
+}
+
+type JSONInfo struct {
+	IsPartialRowsEvent bool
+	IsAfterImage       bool
+	NumJSONColumns     int
+}
+
+func bitmapByteSize(columnCount int) int {
+	return (columnCount + 7) / 8
+}
+
 // CellLength returns the new position after the field with the given
 // type is read.
-func CellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
+func CellLength(data []byte, pos int, typ byte, metadata uint16, jsonInfo *JSONInfo) (int, error) {
+	log.Infof("In CellLength with data %v: pos: %v, typ: %v, metadata: %v", data[pos:], pos, typ, metadata)
 	switch typ {
 	case TypeNull:
 		return 0, nil
@@ -114,6 +267,36 @@ func CellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry:
 		// Of the Blobs, only TypeBlob is used in binary logs,
 		// but supports others just in case.
+		var length uint64
+		var read int
+		var ok bool
+		if jsonInfo != nil && jsonInfo.IsPartialRowsEvent {
+			log.Infof("Is partial json event")
+			if jsonInfo.IsAfterImage {
+				log.Infof("Is after image")
+				length, read, ok = readLenEncInt(data, pos)
+				if !ok {
+					return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "readLenEncInt failed for partial json")
+				}
+				if data[0] == 1 {
+					byteCount := bitmapByteSize(int(jsonInfo.NumJSONColumns))
+					length += uint64(byteCount)
+					log.Infof("byteCount: %v, length %d", byteCount, length)
+				}
+				log.Infof("Is partial json after image, length: %v, read %d", length, read)
+			} else {
+				log.Infof("Is before image")
+				length = FixedLengthInt(data[pos : pos+int(metadata)])
+				log.Infof("Is partial json before image, length: %v", length)
+
+			}
+			length += uint64(metadata)
+			log.Infof("Returning partial json length: %v", int(length))
+			return int(length), nil
+		} else {
+			log.Infof("Is not partial json event")
+		}
+
 		switch metadata {
 		case 1:
 			return 1 + int(uint32(data[pos])), nil
@@ -176,7 +359,7 @@ func printTimestamp(v uint32) *bytes.Buffer {
 // byte to determine general shared aspects of types and the querypb.Field to
 // determine other info specifically about its underlying column (SQL column
 // type, column length, charset, etc)
-func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.Field) (sqltypes.Value, int, error) {
+func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.Field, isPartialJSON bool) (sqltypes.Value, int, error) {
 	switch typ {
 	case TypeTiny:
 		if sqltypes.IsSigned(field.Type) {
@@ -678,15 +861,24 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 
 		// For JSON, we parse the data, and emit SQL.
 		if typ == TypeJSON {
-			var err error
-			jsonData := data[pos : pos+l]
-			jsonVal, err := ParseBinaryJSON(jsonData)
-			if err != nil {
-				panic(err)
+			if !isPartialJSON {
+				var err error
+				jsonData := data[pos : pos+l]
+				jsonVal, err := ParseBinaryJSON(jsonData)
+				if err != nil {
+					panic(err)
+				}
+				log.Infof("jsonVal: %v", jsonVal)
+				d := jsonVal.MarshalTo(nil)
+				return sqltypes.MakeTrusted(sqltypes.Expression,
+					d), l + int(metadata), nil
+			} else {
+				query, err := getPartialJSONQuery(field, data, pos, metadata)
+				if err != nil {
+					return sqltypes.NULL, 0, err
+				}
+				return sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(query)), len(query), nil
 			}
-			d := jsonVal.MarshalTo(nil)
-			return sqltypes.MakeTrusted(sqltypes.Expression,
-				d), l + int(metadata), nil
 		}
 
 		return sqltypes.MakeTrusted(querypb.Type_VARBINARY,

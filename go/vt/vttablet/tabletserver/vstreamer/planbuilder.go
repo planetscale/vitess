@@ -245,7 +245,9 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 			}
 		}
 	}
+	log.Infof("Number of exprs in plan: %d, len of values: %d, values %q, result %q", len(plan.ColExprs), len(values), values, result)
 	for i, colExpr := range plan.ColExprs {
+		log.Infof("ColExpr: %d:%v", i, colExpr)
 		if colExpr.ColNum == -1 {
 			result[i] = colExpr.FixedValue
 			continue

@@ -186,7 +186,7 @@ func (ev binlogEvent) IsWriteRows() bool {
 // We do not support v0.
 func (ev binlogEvent) IsUpdateRows() bool {
 	return ev.Type() == eUpdateRowsEventV1 ||
-		ev.Type() == eUpdateRowsEventV2
+		ev.Type() == eUpdateRowsEventV2 || ev.Type() == ePartialJSON
 }
 
 // IsDeleteRows implements BinlogEvent.IsDeleteRows().

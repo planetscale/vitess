@@ -33,7 +33,7 @@ source ../common/env.sh # Required so that "mysql" works from alias
 
 ./101_initial_cluster.sh
 sleep 5 # Give vtgate time to really start.
-
+exit
 killall_vtdataroot
 # verify local example is able to start on an existing setup
 
