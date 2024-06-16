@@ -32,6 +32,10 @@ type mysql56BinlogEvent struct {
 	semiSyncAckRequested bool
 }
 
+func (ev mysql56BinlogEvent) IsPartialJSON() bool {
+	return ev.Type() == ePartialJSON
+}
+
 // NewMysql56BinlogEventWithSemiSyncInfo creates a BinlogEvent from given byte array
 func NewMysql56BinlogEventWithSemiSyncInfo(buf []byte, semiSyncAckRequested bool) BinlogEvent {
 	return mysql56BinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: semiSyncAckRequested}

@@ -143,6 +143,8 @@ type BinlogEvent interface {
 	// payload event is found (binlog_transaction_compression=ON).
 	IsTransactionPayload() bool
 
+	IsPartialJSON() bool
+
 	// Bytes returns the binary representation of the event
 	Bytes() []byte
 }
@@ -264,6 +266,8 @@ type Row struct {
 	// Data is the raw data.
 	// It is only set for WRITE and UPDATE events.
 	Data []byte
+
+	IsPartialJson bool
 }
 
 // Bitmap is used by the previous structures.

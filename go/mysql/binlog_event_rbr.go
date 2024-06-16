@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"encoding/binary"
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
@@ -258,6 +259,147 @@ func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error
 	return collationIDs, nil
 }
 
+func (ev binlogEvent) partialJSONRows(f BinlogFormat, tm *TableMap) (Rows, error) {
+	typ := ev.Type()
+	log.Infof("Partial JSON Rows (%d) event: %s for table %s", typ, ev, tm.Name)
+	data := ev.Bytes()[f.HeaderLength:]
+	log.Infof("Partial JSON Data: len %d: %v", len(data), data)
+	result := Rows{}
+	pos := 6
+	if f.HeaderSize(typ) == 6 {
+		pos = 4
+	}
+	result.Flags = binary.LittleEndian.Uint16(data[pos : pos+2])
+	pos += 2
+
+	extraDataLength := binary.LittleEndian.Uint16(data[pos : pos+2])
+	pos += int(extraDataLength)
+	if extraDataLength != 2 {
+		return result, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "partial json: expected data length 2 at position %v (data=%v)", pos, data)
+	}
+
+	columnCount, read, ok := readLenEncInt(data, pos)
+	if !ok {
+		return result, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected column count at position %v (data=%v)", pos, data)
+	}
+
+	log.Infof("Column Count: %v", columnCount)
+	pos = read
+	log.Infof("Pos after column count: %v", pos)
+	numIdentifyColumns := 0
+	numDataColumns := 0
+
+	// Bitmap of the columns used for identify.
+	result.IdentifyColumns, pos = newBitmap(data, pos, int(columnCount))
+	numIdentifyColumns = result.IdentifyColumns.BitCount()
+	log.Infof("Pos after identify columns: %v", pos)
+	// Bitmap of columns that are present.
+	result.DataColumns, pos = newBitmap(data, pos, int(columnCount))
+	numDataColumns = result.DataColumns.BitCount()
+	log.Infof("Pos after data columns: %v", pos)
+	log.Infof("numIdentifyColumns: %v, numDataColumns: %v", numIdentifyColumns, numDataColumns)
+
+	jsonInfo := &binlog.JSONInfo{
+		IsPartialRowsEvent: true,
+	}
+	var numJSONColumns int
+	for _, col := range tm.Types {
+		if col == binlog.TypeJSON {
+			numJSONColumns++
+		}
+	}
+	jsonInfo.NumJSONColumns = numJSONColumns
+
+	// One row at a time.
+	rowNum := 0
+	for pos < len(data) {
+		rowNum++
+
+		log.Infof("\n===================================================================== ROW %d", rowNum)
+		row := Row{IsPartialJson: true}
+		hasIdentify := true
+		hasData := true
+		if hasIdentify {
+			// Bitmap of identify columns that are null (amongst the ones that are present).
+			row.NullIdentifyColumns, pos = newBitmap(data, pos, numIdentifyColumns)
+
+			// Get the identify values.
+			startPos := pos
+			valueIndex := 0
+			log.Infof("Before identify loop: pos %d, numIdentifyColumns %d", pos, numIdentifyColumns)
+			for c := 0; c < int(columnCount); c++ {
+				log.Infof("Identify loop: c %d, valueIndex %d", c, valueIndex)
+				if !result.IdentifyColumns.Bit(c) {
+					// This column is not represented.
+					log.Infof("Identify loop: column %d not represented", c)
+					continue
+				}
+
+				if row.NullIdentifyColumns.Bit(valueIndex) {
+					// This column is represented, but its value is NULL.
+					log.Infof("Identify loop: column %d is represented, but its value is NULL", c)
+					valueIndex++
+					continue
+				}
+
+				// This column is represented now. We need to skip its length.
+				log.Infof("Calling CellLength for identify column %d, with pos %d", c, pos)
+				l, err := binlog.CellLength(data, pos, tm.Types[c], tm.Metadata[c], jsonInfo)
+				if err != nil {
+					return result, err
+				}
+				log.Infof("CellLength returned for identify column %d: %d", c, l)
+				pos += l
+				valueIndex++
+			}
+			row.Identify = data[startPos:pos]
+		}
+		log.Infof("#identify ROW %d, len %d, data %v, pos %d", rowNum, len(row.Identify), row.Identify, pos)
+		pos += 2 // hack: why is this needed?
+		if hasData {
+			jsonInfo.IsAfterImage = true
+			// Bitmap of columns that are null (amongst the ones that are present).
+			row.NullColumns, pos = newBitmap(data, pos, numDataColumns)
+
+			// Get the values.
+			startPos := pos
+			log.Infof("Before data loop: startPos %d", pos)
+			valueIndex := 0
+			for c := 0; c < int(columnCount); c++ {
+				if !result.DataColumns.Bit(c) {
+					// This column is not represented.
+					log.Infof("Data loop: column %d not represented", c)
+					continue
+				}
+
+				if row.NullColumns.Bit(valueIndex) {
+					// This column is represented, but its value is NULL.
+					log.Infof("Data loop: column %d is represented, but its value is NULL", c)
+					valueIndex++
+					continue
+				}
+
+				// This column is represented now. We need to skip its length.
+				log.Infof("Calling CellLength for data column %d, with pos %d", c, pos)
+				l, err := binlog.CellLength(data, pos, tm.Types[c], tm.Metadata[c], jsonInfo)
+				if err != nil {
+					return result, err
+				}
+				log.Infof("CellLength returned for data column %d: %d", c, l)
+				pos += l
+				valueIndex++
+			}
+			log.Infof("StartPos: %d, Pos: %d, MaxOffset: %d", startPos, pos, len(data))
+			row.Data = data[startPos:pos]
+		}
+		log.Infof("########## ROW Data %d %d %q, %s\n", rowNum, len(row.Data), row.Data, string(row.Data))
+
+		result.Rows = append(result.Rows, row)
+	}
+
+	return result, nil
+}
+
 // Rows implements BinlogEvent.TableMap().
 //
 // Expected format (L = total length of event data):
@@ -280,8 +422,16 @@ func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error
 // <var>      values for each data field
 // --
 func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
+	log.Infof("Rows event: %s", ev, tm.Name)
 	typ := ev.Type()
+
+	if typ == ePartialJSON {
+		return ev.partialJSONRows(f, tm)
+	}
+
 	data := ev.Bytes()[f.HeaderLength:]
+	log.Infof("Row Event Data: %v", data)
+
 	hasIdentify := typ == eUpdateRowsEventV1 || typ == eUpdateRowsEventV2 ||
 		typ == eDeleteRowsEventV1 || typ == eDeleteRowsEventV2
 	hasData := typ == eWriteRowsEventV1 || typ == eWriteRowsEventV2 ||
@@ -300,12 +450,14 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 		// This extraDataLength contains the 2 bytes length.
 		extraDataLength := binary.LittleEndian.Uint16(data[pos : pos+2])
 		pos += int(extraDataLength)
+		log.Infof("extraDataLength: %v", extraDataLength)
 	}
 
 	columnCount, read, ok := readLenEncInt(data, pos)
 	if !ok {
 		return result, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected column count at position %v (data=%v)", pos, data)
 	}
+	log.Infof("Column Count: %v", columnCount)
 	pos = read
 
 	numIdentifyColumns := 0
@@ -322,9 +474,13 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 		result.DataColumns, pos = newBitmap(data, pos, int(columnCount))
 		numDataColumns = result.DataColumns.BitCount()
 	}
+	log.Infof("numIdentifyColumns: %v, numDataColumns: %v", numIdentifyColumns, numDataColumns)
 
 	// One row at a time.
+	rowNum := 0
 	for pos < len(data) {
+		rowNum++
+		log.Infof("ROW %d", rowNum)
 		row := Row{}
 
 		if hasIdentify {
@@ -347,7 +503,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 				}
 
 				// This column is represented now. We need to skip its length.
-				l, err := binlog.CellLength(data, pos, tm.Types[c], tm.Metadata[c])
+				l, err := binlog.CellLength(data, pos, tm.Types[c], tm.Metadata[c], nil)
 				if err != nil {
 					return result, err
 				}
@@ -356,7 +512,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 			}
 			row.Identify = data[startPos:pos]
 		}
-
+		log.Infof("#identify ROW %d %d %q", rowNum, len(row.Identify), row.Identify)
 		if hasData {
 			// Bitmap of columns that are null (amongst the ones that are present).
 			row.NullColumns, pos = newBitmap(data, pos, numDataColumns)
@@ -377,7 +533,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 				}
 
 				// This column is represented now. We need to skip its length.
-				l, err := binlog.CellLength(data, pos, tm.Types[c], tm.Metadata[c])
+				l, err := binlog.CellLength(data, pos, tm.Types[c], tm.Metadata[c], nil)
 				if err != nil {
 					return result, err
 				}
@@ -386,6 +542,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 			}
 			row.Data = data[startPos:pos]
 		}
+		log.Infof("#data ROW %d %d %q", rowNum, len(row.Data), row.Data)
 
 		result.Rows = append(result.Rows, row)
 	}
@@ -416,7 +573,7 @@ func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, erro
 		}
 
 		// We have real data
-		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
+		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64}, false)
 		if err != nil {
 			return nil, err
 		}
@@ -451,7 +608,7 @@ func (rs *Rows) StringIdentifiesForTests(tm *TableMap, rowIndex int) ([]string, 
 		}
 
 		// We have real data
-		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
+		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64}, false)
 		if err != nil {
 			return nil, err
 		}

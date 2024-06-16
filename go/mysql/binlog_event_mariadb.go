@@ -32,6 +32,11 @@ type mariadbBinlogEvent struct {
 	semiSyncAckRequested bool
 }
 
+func (ev mariadbBinlogEvent) IsPartialJSON() bool {
+	// TODO implement me
+	panic("implement me")
+}
+
 // NewMariadbBinlogEventWithSemiSyncInfo creates a BinlogEvent instance from given byte array
 func NewMariadbBinlogEventWithSemiSyncInfo(buf []byte, semiSyncAckRequested bool) BinlogEvent {
 	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: semiSyncAckRequested}

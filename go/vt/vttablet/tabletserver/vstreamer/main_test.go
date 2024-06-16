@@ -314,6 +314,9 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 		defer timer.Stop()
 
 		log.Infof("Received events: %v", evs)
+		for _, ev := range evs {
+			log.Infof("Event: %v", ev)
+		}
 		select {
 		case ch <- evs:
 		case <-ctx.Done():

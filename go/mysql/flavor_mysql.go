@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"

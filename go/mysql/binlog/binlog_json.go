@@ -77,10 +77,10 @@ const (
 	jsonInt32       = 7
 	jsonUint32      = 8
 	jsonInt64       = 9
-	jsonUint64      = 10 //0x0a
-	jsonDouble      = 11 //0x0b
-	jsonString      = 12 //0x0c a utf8mb4 string
-	jsonOpaque      = 15 //0x0f "custom" data
+	jsonUint64      = 10 // 0x0a
+	jsonDouble      = 11 // 0x0b
+	jsonString      = 12 // 0x0c a utf8mb4 string
+	jsonOpaque      = 15 // 0x0f "custom" data
 )
 
 // literals in the binary json format can be one of three types: null, true, false
@@ -200,7 +200,7 @@ func binparserElement(data []byte, pos int, large bool) (*json.Value, int, error
 			return nil, 0, fmt.Errorf("unable to decode element: %+v", data)
 		}
 		newData := data[offset:]
-		//newPos ignored because this is an offset into the "extra" section of the buffer
+		// newPos ignored because this is an offset into the "extra" section of the buffer
 		elem, err = binparserNode(typ, newData, 1)
 		if err != nil {
 			return nil, 0, err
@@ -209,7 +209,7 @@ func binparserElement(data []byte, pos int, large bool) (*json.Value, int, error
 	return elem, pos, nil
 }
 
-//endregion
+// endregion
 
 var binaryIntSizes = map[jsonDataType]int{
 	jsonUint64: 8,
@@ -315,7 +315,7 @@ func binparserOpaque(_ jsonDataType, data []byte, pos int) (node *json.Value, er
 		precision := decimalData[0]
 		scale := decimalData[1]
 		metadata := (uint16(precision) << 8) + uint16(scale)
-		val, _, err := CellValue(decimalData, 2, TypeNewDecimal, metadata, &querypb.Field{Type: querypb.Type_DECIMAL})
+		val, _, err := CellValue(decimalData, 2, TypeNewDecimal, metadata, &querypb.Field{Type: querypb.Type_DECIMAL}, false)
 		if err != nil {
 			return nil, err
 		}

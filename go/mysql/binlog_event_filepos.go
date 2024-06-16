@@ -30,6 +30,11 @@ type filePosBinlogEvent struct {
 	semiSyncAckRequested bool
 }
 
+func (ev *filePosBinlogEvent) IsPartialJSON() bool {
+	// TODO implement me
+	panic("implement me")
+}
+
 // newFilePosBinlogEventWithSemiSyncInfo creates a BinlogEvent from given byte array
 func newFilePosBinlogEventWithSemiSyncInfo(buf []byte, semiSyncAckRequested bool) *filePosBinlogEvent {
 	return &filePosBinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: semiSyncAckRequested}
@@ -97,7 +102,7 @@ func (ev *filePosBinlogEvent) rotate(f BinlogFormat) (int, string) {
 	return int(pos), string(file)
 }
 
-//----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 // filePosQueryEvent is a fake begin event.
 type filePosQueryEvent struct {
@@ -132,7 +137,7 @@ func (ev filePosQueryEvent) Bytes() []byte {
 	return []byte{}
 }
 
-//----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 // filePosFakeEvent is the base class for fake events.
 type filePosFakeEvent struct {
@@ -263,11 +268,14 @@ func (ev filePosFakeEvent) IsTransactionPayload() bool {
 	return false
 }
 
+func (ev filePosFakeEvent) IsPartialJSON() bool {
+	return false
+}
 func (ev filePosFakeEvent) Bytes() []byte {
 	return []byte{}
 }
 
-//----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 // filePosGTIDEvent is a fake GTID event for filePos.
 type filePosGTIDEvent struct {

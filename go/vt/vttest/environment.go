@@ -223,7 +223,8 @@ func (env *LocalTestEnv) Directory() string {
 
 // TearDown implements TearDown for LocalTestEnv
 func (env *LocalTestEnv) TearDown() error {
-	return os.RemoveAll(env.TmpPath)
+	return nil // FIXME: rohit
+	// return os.RemoveAll(env.TmpPath)
 }
 
 func tmpdir(dataroot string) (dir string, err error) {
