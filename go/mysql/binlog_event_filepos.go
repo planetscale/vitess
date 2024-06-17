@@ -97,12 +97,16 @@ func (ev *filePosBinlogEvent) rotate(f BinlogFormat) (int, string) {
 	return int(pos), string(file)
 }
 
-//----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 // filePosQueryEvent is a fake begin event.
 type filePosQueryEvent struct {
 	query string
 	filePosFakeEvent
+}
+
+func (ev filePosQueryEvent) IsPartialUpdateRows() bool {
+	return false
 }
 
 func newFilePosQueryEvent(query string, ts uint32) filePosQueryEvent {
@@ -132,7 +136,7 @@ func (ev filePosQueryEvent) Bytes() []byte {
 	return []byte{}
 }
 
-//----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 // filePosFakeEvent is the base class for fake events.
 type filePosFakeEvent struct {
@@ -267,12 +271,16 @@ func (ev filePosFakeEvent) Bytes() []byte {
 	return []byte{}
 }
 
-//----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 // filePosGTIDEvent is a fake GTID event for filePos.
 type filePosGTIDEvent struct {
 	filePosFakeEvent
 	gtid replication.FilePosGTID
+}
+
+func (ev filePosGTIDEvent) IsPartialUpdateRows() bool {
+	return false
 }
 
 func newFilePosGTIDEvent(file string, pos uint32, timestamp uint32) filePosGTIDEvent {

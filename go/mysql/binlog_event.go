@@ -88,6 +88,8 @@ type BinlogEvent interface {
 	IsUpdateRows() bool
 	// IsDeleteRows returns true if this is a DELETE_ROWS_EVENT.
 	IsDeleteRows() bool
+	// IsPartialUpdateRows returns true if this is a PARTIAL_UPDATE_ROWS_EVENT.
+	IsPartialUpdateRows() bool
 
 	// Timestamp returns the timestamp from the event header.
 	Timestamp() uint32
