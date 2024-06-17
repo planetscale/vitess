@@ -133,7 +133,7 @@ func (j JsonDiff) ToQuery() string {
 	}
 }
 
-func getPartialJSONQuery(field *querypb.Field, data []byte, pos int, metadata uint16) (string, error) {
+func getJsonDiff(field *querypb.Field, data []byte, pos int, metadata uint16) (*JsonDiff, int, error) {
 	data = data[pos:]
 	op := JsonDiffOperation(data[0])
 	switch op {
@@ -141,15 +141,18 @@ func getPartialJSONQuery(field *querypb.Field, data []byte, pos int, metadata ui
 	case JsonDiffOperationInsert:
 	case JsonDiffOperationRemove:
 	default:
-		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported json diff operation %v", op)
+		return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported json diff operation %v", op)
 	}
 	data = data[1:]
+	pos++
 	pathLength, read, ok := readLenEncInt(data, 0)
 	if !ok {
-		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "readLenEncInt failed for partial json")
+		return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "readLenEncInt failed for partial json")
 	}
+	pos += read
 	data = data[read:]
 	path := data[:pathLength]
+	pos += int(pathLength)
 	data = data[pathLength:]
 
 	diff := &JsonDiff{
@@ -160,22 +163,24 @@ func getPartialJSONQuery(field *querypb.Field, data []byte, pos int, metadata ui
 	}
 	if op == JsonDiffOperationRemove {
 		log.Infof("Found remove operation, returning %s", diff.ToQuery())
-		return diff.ToQuery(), nil
+		return diff, 0, nil
 	}
 
 	valueLength, read, ok := readLenEncInt(data, 0)
 	if !ok {
-		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "readLenEncInt failed for partial json")
+		return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "readLenEncInt failed for partial json")
 	}
 	log.Infof("Value length: %v", valueLength)
+	pos += read
 	data = data[read:]
 	val, err := ParseBinaryJSON(data[:valueLength])
 	if err != nil {
-		return "", err
+		return nil, 0, err
 	}
 	diff.Value = *val
-	log.Infof("Returning json query %s", diff.ToQuery())
-	return diff.ToQuery(), nil
+	log.Infof("Returning json query %v", diff)
+	pos += int(valueLength)
+	return diff, pos, nil
 }
 
 type JSONInfo struct {
@@ -873,7 +878,9 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 				return sqltypes.MakeTrusted(sqltypes.Expression,
 					d), l + int(metadata), nil
 			} else {
-				query, err := getPartialJSONQuery(field, data, pos, metadata)
+				var jd *JsonDiff
+				var err error
+				jd, pos, err = getJsonDiff(field, data, pos, metadata)
 				if err != nil {
 					return sqltypes.NULL, 0, err
 				}
