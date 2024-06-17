@@ -57,6 +57,50 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	return false
 }
 
+func TestPartialJSON(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	oldEngine := engine
+	engine = nil
+	oldEnv := env
+	env = nil
+	newEngine(t, ctx, "noblob")
+	defer func() {
+		if engine != nil {
+			engine.Close()
+		}
+		if env != nil {
+			env.Close()
+		}
+		engine = oldEngine
+		env = oldEnv
+	}()
+
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id int, id2 int, jsn json, primary key(id))",
+		},
+	}
+	defer ts.Close()
+	ts.Init()
+	execStatements(t, []string{
+		"set session binlog_row_value_options=PARTIAL_JSON",
+	})
+	pos := primaryPosition(t)
+	ts.SetStartPosition(pos)
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (65, 89, '{\"a\": 11, \"b\": 22, \"c\": 33}')", nil},
+		{"update t1 set jsn = json_remove(json_set(jsn, '$.a', 69), '$.b') where id = 65", nil},
+		{"commit", nil},
+	}}
+	ts.Run()
+	execStatements(t, []string{
+		"flush logs", // FIXME: remove before merging
+	})
+}
+
 // TestPlayerNoBlob sets up a new environment with mysql running with
 // binlog_row_image as noblob. It confirms that the VEvents created are
 // correct: that they don't contain the missing columns and that the
