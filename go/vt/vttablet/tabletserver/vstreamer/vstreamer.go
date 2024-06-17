@@ -550,8 +550,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			}, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_OTHER,
 			})
-		default:
-			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", cat, q.SQL)
 		}
 	case ev.IsTableMap():
 		// This is very frequent. It precedes every row event.
