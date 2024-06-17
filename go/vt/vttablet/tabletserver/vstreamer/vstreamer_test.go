@@ -92,7 +92,7 @@ func TestPartialJSON(t *testing.T) {
 	ts.tests = [][]*TestQuery{{
 		{"begin", nil},
 		{"insert into t1 values (65, 89, '{\"a\": 11, \"b\": 22, \"c\": 33}')", nil},
-		{"update t1 set jsn = json_set(jsn, '$.a', 69) where id = 65", []TestRowEvent{}},
+		{"update t1 set jsn = json_remove(json_set(jsn, '$.a', 69), '$.b') where id = 65", []TestRowEvent{}},
 		{"commit", nil},
 	}}
 	ts.Run()
