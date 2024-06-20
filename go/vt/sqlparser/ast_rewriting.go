@@ -53,6 +53,7 @@ func PrepareAST(
 	sysVars map[string]string,
 	fkChecksState *bool,
 	views VSchemaViews,
+	aggrUDFs []string,
 ) (*RewriteASTResult, error) {
 	if parameterize {
 		err := Normalize(in, reservedVars, bindVars)
@@ -60,7 +61,7 @@ func PrepareAST(
 			return nil, err
 		}
 	}
-	return RewriteAST(in, keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views)
+	return RewriteAST(in, keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views, aggrUDFs)
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries.
@@ -73,8 +74,9 @@ func RewriteAST(
 	sysVars map[string]string,
 	fkChecksState *bool,
 	views VSchemaViews,
+	aggrUDFs []string,
 ) (*RewriteASTResult, error) {
-	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views)
+	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views, aggrUDFs)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	result := SafeRewrite(in, er.rewriteDown, er.rewriteUp)
 	if er.err != nil {
@@ -126,9 +128,19 @@ type astRewriter struct {
 	fkChecksState *bool
 	sysVars       map[string]string
 	views         VSchemaViews
+	aggrCheck     *AggrChecker
+	aggrUDFs      []string
 }
 
-func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysVars map[string]string, fkChecksState *bool, views VSchemaViews) *astRewriter {
+func newASTRewriter(
+	keyspace string,
+	selectLimit int,
+	setVarComment string,
+	sysVars map[string]string,
+	fkChecksState *bool,
+	views VSchemaViews,
+	aggrUDFs []string,
+) *astRewriter {
 	return &astRewriter{
 		bindVars:      &BindVarNeeds{},
 		keyspace:      keyspace,
@@ -137,6 +149,8 @@ func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysV
 		fkChecksState: fkChecksState,
 		sysVars:       sysVars,
 		views:         views,
+		aggrCheck:     NewExprChecker(aggrUDFs),
+		aggrUDFs:      aggrUDFs,
 	}
 }
 
@@ -158,7 +172,8 @@ const (
 )
 
 func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
-	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars, nil, er.views)
+	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars, nil, er.views, er.aggrUDFs)
+	inner.aggrCheck = er.aggrCheck
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 	tmp := SafeRewrite(node.Expr, inner.rewriteDown, inner.rewriteUp)
 	newExpr, ok := tmp.(Expr)
@@ -516,7 +531,7 @@ func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 		return
 	}
 
-	if sel.GroupBy == nil && sel.SelectExprs.AllAggregation() {
+	if sel.GroupBy == nil && er.aggrCheck.AllAggregations(sel.SelectExprs) {
 		// in these situations, we are guaranteed to always get a non-empty result,
 		// so we can replace the EXISTS with a literal true
 		cursor.Replace(BoolVal(true))
