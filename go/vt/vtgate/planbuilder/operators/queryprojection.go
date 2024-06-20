@@ -19,7 +19,6 @@ package operators
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"slices"
 	"sort"
 	"strings"
@@ -202,41 +201,6 @@ func (qp *QueryProjection) addSelectExpressions(ctx *plancontext.PlanningContext
 	}
 }
 
-func IsAggr(ctx *plancontext.PlanningContext, e sqlparser.SQLNode) bool {
-	switch node := e.(type) {
-	case sqlparser.AggrFunc:
-		return true
-	case *sqlparser.FuncExpr:
-		return node.Name.EqualsAnyString(ctx.VSchema.GetAggregateUDFs())
-	}
-
-	return false
-}
-
-func ContainsAggr(ctx *plancontext.PlanningContext, e sqlparser.SQLNode) (hasAggr bool) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node.(type) {
-		case *sqlparser.Offset:
-			// offsets here indicate that a possible aggregation has already been handled by an input,
-			// so we don't need to worry about aggregation in the original
-			return false, nil
-		case sqlparser.AggrFunc:
-			hasAggr = true
-			return false, io.EOF
-		case *sqlparser.Subquery:
-			return false, nil
-		case *sqlparser.FuncExpr:
-			if IsAggr(ctx, node) {
-				hasAggr = true
-				return false, io.EOF
-			}
-		}
-
-		return true, nil
-	}, e)
-	return
-}
-
 // createQPFromUnion creates the QueryProjection for the input *sqlparser.Union
 func createQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) *QueryProjection {
 	qp := &QueryProjection{}
@@ -279,7 +243,7 @@ func (qp *QueryProjection) addOrderBy(ctx *plancontext.PlanningContext, orderBy 
 			Inner:          ctx.SemTable.Clone(order).(*sqlparser.Order),
 			SimplifiedExpr: order.Expr,
 		})
-		canPushSorting = canPushSorting && !ContainsAggr(ctx, order.Expr)
+		canPushSorting = canPushSorting && !ctx.AggrChecker.ContainsAggregation(order.Expr, nil)
 	}
 }
 
@@ -450,7 +414,7 @@ func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningConte
 
 		idxCopy := idx
 
-		if !ContainsAggr(ctx, expr.Col) {
+		if !ctx.AggrChecker.ContainsAggregation(expr.Col, sqlparser.NoSubQueries()) {
 			getExpr, err := expr.GetExpr()
 			if err != nil {
 				panic(err)
@@ -462,7 +426,7 @@ func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningConte
 			}
 			continue
 		}
-		if !IsAggr(ctx, aliasedExpr.Expr) && !allowComplexExpression {
+		if !ctx.AggrChecker.IsAggregation(aliasedExpr.Expr) && !allowComplexExpression {
 			panic(vterrors.VT12001("in scatter query: complex aggregate expression"))
 		}
 
@@ -493,7 +457,7 @@ func (qp *QueryProjection) extractAggr(
 			addAggr(aggrFunc)
 			return false
 		}
-		if IsAggr(ctx, node) {
+		if ctx.AggrChecker.IsAggregation(node) {
 			// If we are here, we have a function that is an aggregation but not parsed into an AggrFunc.
 			// This is the case for UDFs - we have to be careful with these because we can't evaluate them in VTGate.
 			aggr := NewAggr(opcode.AggregateUDF, nil, aeWrap(ex), "")
@@ -501,7 +465,7 @@ func (qp *QueryProjection) extractAggr(
 			addAggr(aggr)
 			return false
 		}
-		if ContainsAggr(ctx, node) {
+		if ctx.AggrChecker.ContainsAggregation(node, nil) {
 			makeComplex()
 			return true
 		}

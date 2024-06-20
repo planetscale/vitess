@@ -41,7 +41,7 @@ type earlyRewriter struct {
 	// have happened, and we are introducing or changing the AST. We invoke it so all parts of the query have been
 	// typed, scoped and bound correctly
 	reAnalyze func(n sqlparser.SQLNode) error
-	aggrUDFs  []string
+	aggrCheck *sqlparser.AggrChecker
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -485,7 +485,7 @@ func (r *earlyRewriter) rewriteAliasesInGroupBy(node sqlparser.Expr, sel *sqlpar
 
 			if item.ambiguous {
 				err = newAmbiguousColumnError(col)
-			} else if aggrTrack.insideAggr && sqlparser.ContainsAggregation(item.expr) {
+			} else if aggrTrack.insideAggr && r.aggrCheck.ContainsAggregation(item.expr, nil) {
 				err = &InvalidUseOfGroupFunction{}
 			}
 			if err != nil {
@@ -574,10 +574,11 @@ func (r *earlyRewriter) rewriteAliasesInHaving(node sqlparser.Expr, sel *sqlpars
 
 type aggrTracker struct {
 	insideAggr bool
-	aggrUDFs   []string
+	aggrCheck  sqlparser.AggrChecker
 }
 
 func (at *aggrTracker) down(node, _ sqlparser.SQLNode) bool {
+	_, isSQ := node.(*sqlparser.Subquery)
 	switch node := node.(type) {
 	case *sqlparser.Subquery:
 		return false

@@ -2165,23 +2165,65 @@ func formatAddress(address string) string {
 	return buf.String()
 }
 
-// ContainsAggregation returns true if the expression contains aggregation
-func ContainsAggregation(e SQLNode) bool {
-	hasAggregates := false
-	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+func NewExprChecker(aggregateFunctions []string) *AggrChecker {
+	def := []string{"json_arrayagg", "json_objectagg"} // TODO: we should parse these into AggrFunc instead
+	return &AggrChecker{udfAggrs: append(def, aggregateFunctions...)}
+}
+
+type AggrChecker struct {
+	// the list of user defined functions known to be aggregate functions in the system
+	udfAggrs []string
+}
+
+// IsAggregation returns true if the expression is an aggregation
+func (ec *AggrChecker) IsAggregation(e SQLNode) bool {
+	switch node := e.(type) {
+	case AggrFunc:
+		return true
+	case *FuncExpr:
+		return node.Name.EqualsAnyString(ec.udfAggrs)
+	default:
+		return false
+	}
+}
+
+func NoSubQueries() func(node SQLNode) bool {
+	return func(node SQLNode) bool {
 		switch node.(type) {
-		case *Offset:
-			// offsets here indicate that a possible aggregation has already been handled by an input
-			// so we don't need to worry about aggregation in the original
-			return false, nil
-		case AggrFunc:
+		case *Subquery:
+			return false
+		}
+		return true
+	}
+}
+
+// ContainsAggregation returns true if the expression contains aggregation
+func (ec *AggrChecker) ContainsAggregation(
+	e SQLNode,
+	continueDown func(SQLNode) bool, // used to stop the tree walker from entering subtree we are not interested in
+) (hasAggregates bool) {
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		if ec.IsAggregation(node) {
 			hasAggregates = true
 			return false, io.EOF
 		}
 
-		return true, nil
+		if continueDown == nil {
+			return true, nil
+		}
+
+		return continueDown(node), nil
 	}, e)
-	return hasAggregates
+	return
+}
+
+func (ec *AggrChecker) AllAggregations(se SelectExprs) bool {
+	for _, e := range se {
+		if !ec.ContainsAggregation(e, func(node SQLNode) bool { return true }) {
+			return false
+		}
+	}
+	return true
 }
 
 // setFuncArgs sets the arguments for the aggregation function, while checking that there is only one argument
@@ -2234,16 +2276,6 @@ func (ae *AliasedExpr) ColumnName() string {
 	}
 
 	return String(ae.Expr)
-}
-
-// AllAggregation returns true if all the expressions contain aggregation
-func (s SelectExprs) AllAggregation() bool {
-	for _, k := range s {
-		if !ContainsAggregation(k) {
-			return false
-		}
-	}
-	return true
 }
 
 // RemoveKeyspaceInCol removes the Qualifier.Qualifier on all ColNames in the AST

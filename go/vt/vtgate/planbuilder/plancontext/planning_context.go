@@ -62,6 +62,9 @@ type PlanningContext struct {
 	// OuterTables contains the tables that are outer to the current query
 	// Used to set the nullable flag on the columns
 	OuterTables semantics.TableSet
+
+	// AggrCheck is used to check if an expression is an aggregate function
+	AggrCheck *sqlparser.AggrChecker
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -95,6 +98,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
 		Statement:         stmt,
+		AggrCheck:         sqlparser.NewExprChecker(vschema.GetAggregateUDFs()),
 	}, nil
 }
 
@@ -221,4 +225,14 @@ func (ctx *PlanningContext) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool
 		t.SetNullability(true)
 	}
 	return t, true
+}
+
+// IsAggregate returns true if the given expression is an aggregation function.
+func (ctx *PlanningContext) IsAggregate(e sqlparser.Expr) bool {
+	return ctx.AggrCheck.IsAggregation(e)
+}
+
+// ContainsAggregation returns true if the given expression contains an aggregation function.
+func (ctx *PlanningContext) ContainsAggregation(e sqlparser.SQLNode) bool {
+	return ctx.AggrCheck.ContainsAggregation(e, sqlparser.NoSubQueries())
 }
