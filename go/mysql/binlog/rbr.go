@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -36,9 +37,59 @@ var ZeroTimestamp = []byte("0000-00-00 00:00:00")
 
 var dig2bytes = []int{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
 
+// FixedLengthInt: little endian
+func FixedLengthInt(buf []byte) uint64 {
+	var num uint64 = 0
+	for i, b := range buf {
+		num |= uint64(b) << (uint(i) * 8)
+	}
+	return num
+}
+
+func readLenEncInt(data []byte, pos int) (uint64, int, bool) {
+	if pos >= len(data) {
+		return 0, 0, false
+	}
+	switch data[pos] {
+	case 0xfc:
+		// Encoded in the next 2 bytes.
+		if pos+2 >= len(data) {
+			return 0, 0, false
+		}
+		return uint64(data[pos+1]) |
+			uint64(data[pos+2])<<8, pos + 3, true
+	case 0xfd:
+		// Encoded in the next 3 bytes.
+		if pos+3 >= len(data) {
+			return 0, 0, false
+		}
+		return uint64(data[pos+1]) |
+			uint64(data[pos+2])<<8 |
+			uint64(data[pos+3])<<16, pos + 4, true
+	case 0xfe:
+		// Encoded in the next 8 bytes.
+		if pos+8 >= len(data) {
+			return 0, 0, false
+		}
+		return uint64(data[pos+1]) |
+			uint64(data[pos+2])<<8 |
+			uint64(data[pos+3])<<16 |
+			uint64(data[pos+4])<<24 |
+			uint64(data[pos+5])<<32 |
+			uint64(data[pos+6])<<40 |
+			uint64(data[pos+7])<<48 |
+			uint64(data[pos+8])<<56, pos + 9, true
+	}
+	return uint64(data[pos]), pos + 1, true
+}
+
+func bitmapByteSize(columnCount int) int {
+	return (columnCount + 7) / 8
+}
+
 // CellLength returns the new position after the field with the given
 // type is read.
-func CellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
+func CellLength(data []byte, pos int, typ byte, metadata uint16, partialJsonEvent *PartialJsonEvent) (int, error) {
 	switch typ {
 	case TypeNull:
 		return 0, nil
@@ -112,6 +163,25 @@ func CellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 	case TypeEnum, TypeSet:
 		return int(metadata & 0xff), nil
 	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry:
+		if typ == TypeJSON && partialJsonEvent != nil {
+			log.Infof("partialJsonEvent: %v", partialJsonEvent)
+			var length uint64
+			var ok bool
+			if !partialJsonEvent.IsAfterImage {
+				length = FixedLengthInt(data[pos : pos+int(metadata)])
+			} else {
+				length, _, ok = readLenEncInt(data, pos)
+				if !ok {
+					return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "readLenEncInt failed for partial json")
+				}
+				if data[0] == 1 {
+					byteCount := bitmapByteSize(int(partialJsonEvent.NumJsonColumns))
+					length += uint64(byteCount)
+				}
+			}
+			log.Infof("returning length: %v", int(metadata)+int(length))
+			return int(metadata) + int(length), nil
+		}
 		// Of the Blobs, only TypeBlob is used in binary logs,
 		// but supports others just in case.
 		switch metadata {
@@ -176,7 +246,7 @@ func printTimestamp(v uint32) *bytes.Buffer {
 // byte to determine general shared aspects of types and the querypb.Field to
 // determine other info specifically about its underlying column (SQL column
 // type, column length, charset, etc)
-func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.Field) (sqltypes.Value, int, error) {
+func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.Field, isPartialJson bool) (sqltypes.Value, int, error) {
 	switch typ {
 	case TypeTiny:
 		if sqltypes.IsSigned(field.Type) {
