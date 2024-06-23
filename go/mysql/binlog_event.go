@@ -266,6 +266,8 @@ type Row struct {
 	// Data is the raw data.
 	// It is only set for WRITE and UPDATE events.
 	Data []byte
+
+	IsPartialJson bool
 }
 
 // Bitmap is used by the previous structures.

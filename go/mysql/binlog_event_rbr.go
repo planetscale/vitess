@@ -21,10 +21,10 @@ import (
 
 	"vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vterrors"
-
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // These are the TABLE_MAP_EVENT's optional metadata field types from
@@ -280,13 +280,21 @@ func readColumnCollationIDs(data []byte, pos, count int) ([]collations.ID, error
 // <var>      values for each data field
 // --
 func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
+	var partialJsonEvent *binlog.PartialJsonEvent
 	typ := ev.Type()
 	data := ev.Bytes()[f.HeaderLength:]
+	if typ == ePartialUpdateRowsEventV2 {
+		log.Infof("PartialUpdateRowsEventV2: %v", data)
+	}
 	hasIdentify := typ == eUpdateRowsEventV1 || typ == eUpdateRowsEventV2 ||
-		typ == eDeleteRowsEventV1 || typ == eDeleteRowsEventV2
+		typ == eDeleteRowsEventV1 || typ == eDeleteRowsEventV2 || typ == ePartialUpdateRowsEventV2
 	hasData := typ == eWriteRowsEventV1 || typ == eWriteRowsEventV2 ||
-		typ == eUpdateRowsEventV1 || typ == eUpdateRowsEventV2
+		typ == eUpdateRowsEventV1 || typ == eUpdateRowsEventV2 || typ == ePartialUpdateRowsEventV2
 
+	isPartialJson := false
+	if typ == ePartialUpdateRowsEventV2 {
+		isPartialJson = true
+	}
 	result := Rows{}
 	pos := 6
 	if f.HeaderSize(typ) == 6 {
@@ -296,7 +304,8 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 	pos += 2
 
 	// version=2 have extra data here.
-	if typ == eWriteRowsEventV2 || typ == eUpdateRowsEventV2 || typ == eDeleteRowsEventV2 {
+	if typ == eWriteRowsEventV2 || typ == eUpdateRowsEventV2 ||
+		typ == eDeleteRowsEventV2 || typ == ePartialUpdateRowsEventV2 {
 		// This extraDataLength contains the 2 bytes length.
 		extraDataLength := binary.LittleEndian.Uint16(data[pos : pos+2])
 		pos += int(extraDataLength)
@@ -323,11 +332,20 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 		numDataColumns = result.DataColumns.BitCount()
 	}
 
+	if isPartialJson {
+		partialJsonEvent = binlog.NewPartialJsonEvent(tm.Types)
+	}
+
 	// One row at a time.
 	for pos < len(data) {
-		row := Row{}
+		row := Row{
+			IsPartialJson: isPartialJson,
+		}
 
-		if hasIdentify {
+		if hasIdentify { // Before Image
+			if isPartialJson {
+				partialJsonEvent.IsAfterImage = false
+			}
 			// Bitmap of identify columns that are null (amongst the ones that are present).
 			row.NullIdentifyColumns, pos = newBitmap(data, pos, numIdentifyColumns)
 
@@ -347,7 +365,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 				}
 
 				// This column is represented now. We need to skip its length.
-				l, err := binlog.CellLength(data, pos, tm.Types[c], tm.Metadata[c])
+				l, err := binlog.CellLength(data, pos, tm.Types[c], tm.Metadata[c], partialJsonEvent)
 				if err != nil {
 					return result, err
 				}
@@ -356,8 +374,13 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 			}
 			row.Identify = data[startPos:pos]
 		}
-
-		if hasData {
+		if isPartialJson {
+			pos += 2 // Hack, why is this needed?
+		}
+		if hasData { // After Image
+			if isPartialJson {
+				partialJsonEvent.IsAfterImage = true
+			}
 			// Bitmap of columns that are null (amongst the ones that are present).
 			row.NullColumns, pos = newBitmap(data, pos, numDataColumns)
 
@@ -377,7 +400,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 				}
 
 				// This column is represented now. We need to skip its length.
-				l, err := binlog.CellLength(data, pos, tm.Types[c], tm.Metadata[c])
+				l, err := binlog.CellLength(data, pos, tm.Types[c], tm.Metadata[c], partialJsonEvent)
 				if err != nil {
 					return result, err
 				}
@@ -416,7 +439,7 @@ func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, erro
 		}
 
 		// We have real data
-		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
+		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64}, false)
 		if err != nil {
 			return nil, err
 		}
@@ -451,7 +474,7 @@ func (rs *Rows) StringIdentifiesForTests(tm *TableMap, rowIndex int) ([]string, 
 		}
 
 		// We have real data
-		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
+		value, l, err := binlog.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64}, false)
 		if err != nil {
 			return nil, err
 		}
