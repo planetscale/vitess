@@ -156,20 +156,17 @@ func (c *SimpleConcatenate) sequentialExec(
 
 // parallelStreamExec executes the sources in parallel and streams the results.
 func (c *SimpleConcatenate) parallelStreamExec(
-	inCtx context.Context,
+	ctx context.Context,
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 	callback func(*sqltypes.Result) error,
 ) error {
-	// Scoped context; any early exit triggers cancel() to clean up ongoing work.
-	ctx, cancel := context.WithCancel(inCtx)
-	defer cancel()
-
 	// Mutex for dealing with concurrent access to shared state.
 	var (
 		streams, fieldsWg sync.WaitGroup
 		once              sync.Once
 		outerErr          error
+		fieldSent         bool
 	)
 
 	fieldsWg.Add(1)
@@ -184,21 +181,18 @@ func (c *SimpleConcatenate) parallelStreamExec(
 					// for results coming from the first source, we don't need to block
 					once.Do(func() {
 						outerErr = callback(chunk)
+						fieldSent = true
 						fieldsWg.Done()
 					})
 				}
-				fieldsWg.Wait()
-
-				select {
-				case <-ctx.Done():
-					return nil
-				default:
-					return callback(chunk)
+				if !fieldSent {
+					fieldsWg.Wait()
 				}
+
+				return callback(chunk)
 			})
 			if err != nil {
 				outerErr = err
-				cancel()
 			}
 		}()
 	}
