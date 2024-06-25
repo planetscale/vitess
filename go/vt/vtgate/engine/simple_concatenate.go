@@ -19,10 +19,8 @@ package engine
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -169,42 +167,47 @@ func (c *SimpleConcatenate) parallelStreamExec(
 
 	// Mutex for dealing with concurrent access to shared state.
 	var (
-		muCallback sync.Mutex
-		wg         errgroup.Group
-		fieldsWg   sync.WaitGroup
-		fields     []*querypb.Field
-		fieldsDone atomic.Bool
+		streams, fieldsWg sync.WaitGroup
+		once              sync.Once
+		outerErr          error
 	)
 
 	fieldsWg.Add(1)
 	// Start streaming query execution in parallel for all source
 	for i, source := range c.Sources {
-		wg.Go(func() error {
-			return vcursor.StreamExecutePrimitive(ctx, source, bindVars, true, func(chunk *sqltypes.Result) error {
-				// Context check to avoid extra work.
-				if ctx.Err() != nil {
-					return nil
-				}
-				if i == 0 {
+		currIndex, currSource := i, source
+		streams.Add(1)
+		go func() {
+			defer streams.Done()
+			err := vcursor.StreamExecutePrimitive(ctx, currSource, bindVars, true, func(chunk *sqltypes.Result) error {
+				if currIndex == 0 && chunk.Fields != nil {
 					// for results coming from the first source, we don't need to block
-					fieldsAlreadyLoaded := fieldsDone.Swap(true)
-					if !fieldsAlreadyLoaded {
-						fields = chunk.Fields
+					once.Do(func() {
+						outerErr = callback(chunk)
 						fieldsWg.Done()
-					}
-				} else {
-					fieldsWg.Wait()
-					chunk.Fields = fields
+					})
 				}
+				fieldsWg.Wait()
 
-				muCallback.Lock()
-				defer muCallback.Unlock()
-				return callback(chunk)
+				select {
+				case <-ctx.Done():
+					return nil
+				default:
+					return callback(chunk)
+				}
 			})
-		})
+			if err != nil {
+				outerErr = err
+				cancel()
+			}
+		}()
 	}
+	once.Do(func() {
+		fieldsWg.Done()
+	})
 	// Wait for all sources to complete.
-	return wg.Wait()
+	streams.Wait()
+	return outerErr
 }
 
 func (c *SimpleConcatenate) sequentialStreamExec(

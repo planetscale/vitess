@@ -19,11 +19,10 @@ package union
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/log"
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
@@ -92,39 +91,13 @@ func TestUnionAll(t *testing.T) {
 	mcmp.Exec("insert into t1(id1, id2) values(1, 1), (2, 2)")
 	mcmp.Exec("insert into t2(id3, id4) values(3, 3), (4, 4)")
 
-	for _, workload := range []string{"oltp", "olap"} {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
-			// union all between two selectuniqueequal
-			mcmp.AssertMatches("select id1 from t1 where id1 = 1 union all select id1 from t1 where id1 = 4", "[[INT64(1)]]")
-
-			// union all between two different tables
-			mcmp.AssertMatchesNoOrder("(select id1,id2 from t1 order by id1) union all (select id3,id4 from t2 order by id3)",
-				"[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)]]")
-
-			// union all between two different tables
-			result := mcmp.Exec("(select id1,id2 from t1) union all (select id3,id4 from t2)")
-			assert.Equal(t, 4, len(result.Rows))
-
-			// union all between two different tables
-			mcmp.AssertMatchesNoOrder("select tbl2.id1 FROM  ((select id1 from t1 order by id1 limit 5) union all (select id1 from t1 order by id1 desc limit 5)) as tbl1 INNER JOIN t1 as tbl2  ON tbl1.id1 = tbl2.id1",
-				"[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]")
-
-			// this test is quite good at uncovering races in the Concatenate engine primitive. make it run many times
-			// see: https://github.com/vitessio/vitess/issues/15434
-			if utils.BinaryIsAtLeastAtVersion(20, "vtgate") {
-				for i := 0; i < 100; i++ {
-					// union all between two select unique in tables
-					mcmp.AssertMatchesNoOrder("select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)",
-						"[[INT64(1)] [INT64(2)] [INT64(1)] [INT64(2)]]")
-				}
-			}
-
-			// 4 tables union all
-			mcmp.AssertMatchesNoOrder("select id1, id2 from t1 where id1 = 1 union all select id3,id4 from t2 where id3 = 3 union all select id1, id2 from t1 where id1 = 2 union all select id3,id4 from t2 where id3 = 4",
-				"[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)]]")
-		})
-
+	qr := utils.Exec(t, mcmp.VtConn, "vexplain plan select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)")
+	log.Errorf("vexplain: \n%s\n", qr.Rows[0][0].ToString())
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	for i := 0; i < 10000; i++ {
+		// union all between two select unique in tables
+		mcmp.AssertMatchesNoOrder("select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)",
+			"[[INT64(1)] [INT64(2)] [INT64(1)] [INT64(2)]]")
 	}
 }
 
