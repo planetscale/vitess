@@ -75,8 +75,11 @@ func (v *EnumSetValues) Equal(other *EnumSetValues) bool {
 	if v == nil && other == nil {
 		return true
 	}
-	if v == nil || other == nil {
-		return false
+	if other == nil && v != nil && len(*v) == 0 {
+		return true
+	}
+	if v == nil && other != nil && len(*other) == 0 {
+		return true
 	}
 	return slices.Equal(*v, *other)
 }

@@ -207,7 +207,7 @@
           "columns": [
             {
               "name": "col",
-              "type": "INT16"
+              "type": "INT64"
             },
             {
               "name": "predef1"

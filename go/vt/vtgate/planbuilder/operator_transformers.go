@@ -857,7 +857,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (
 }
 
 func typeForExpr(ctx *plancontext.PlanningContext, e sqlparser.Expr) (evalengine.Type, bool) {
-	if typ, found := ctx.SemTable.TypeForExpr(e); found {
+	if typ, found := ctx.TypeForExpr(e); found {
 		return typ, true
 	}
 
@@ -866,7 +866,7 @@ func typeForExpr(ctx *plancontext.PlanningContext, e sqlparser.Expr) (evalengine
 			return 0, nil // we are not going to use these for anything other than getting the type
 		},
 		ResolveType: func(expr sqlparser.Expr) (evalengine.Type, bool) {
-			return ctx.SemTable.TypeForExpr(e)
+			return ctx.TypeForExpr(e)
 		},
 		Collation:   ctx.SemTable.Collation,
 		Environment: ctx.VSchema.Environment(),
@@ -922,7 +922,7 @@ func coercedInputs(ctx *plancontext.PlanningContext, op *operators.Union) ([]eng
 		coerceTypes := make([]*evalengine.Type, len(cols))
 		coerce := false
 		for colIdx, col := range cols {
-			typ, found := ctx.SemTable.TypeForExpr(col.Expr)
+			typ, found := ctx.TypeForExpr(col.Expr)
 			if !found {
 				return orgSources, false, nil
 			}
@@ -932,7 +932,7 @@ func coercedInputs(ctx *plancontext.PlanningContext, op *operators.Union) ([]eng
 				// type calculus, and we can't trust these types
 				return orgSources, false, nil
 			}
-			if resultType != typ {
+			if !resultType.Equal(&typ) {
 				coerceTypes[colIdx] = &resultType
 				coerce = true
 			}
