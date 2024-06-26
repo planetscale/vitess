@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "SELECT id, name, (SELECT LENGTH(col) FROM user_extra) AS total_length_col, AVG(id) AS avg_ids FROM user GROUP BY id, name HAVING (SELECT LENGTH(col) FROM user_extra) > 10",
     "plan": {
 
     }
