@@ -18,8 +18,6 @@ package operators
 
 import (
 	"fmt"
-
-	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -36,7 +34,9 @@ type DerivedTableOp struct {
 	TableID semantics.TableSet  // TableID is the table set that this derived table introduces.
 	TblInfo semantics.TableInfo // TblInfo is the table info for the derived table.
 	Alias   string              // Alias is the alias of the derived table.
-	Columns sqlparser.Columns   // Columns is the list of columns in the derived table.
+
+	ColumnNames []string
+	Columns     []sqlparser.Expr
 }
 
 var _ Operator = (*DerivedTableOp)(nil)
@@ -62,6 +62,14 @@ func (dt *DerivedTableOp) AddPredicate(ctx *plancontext.PlanningContext, expr sq
 }
 
 func (dt *DerivedTableOp) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
+	// expression := semantics.RewriteDerivedTableExpression(expr.Expr, dt.TblInfo)
+	// if reuseExisting {
+	// 	if col := dt.FindCol(ctx, expression, false); col != -1 {
+	// 		return col
+	// 	}
+	// }
+	//
+	// dt.ColumnNames = append(dt.ColumnNames, expr.As.String())
 	// TODO implement me
 	panic("implement me")
 }
@@ -76,13 +84,16 @@ func (dt *DerivedTableOp) FindCol(ctx *plancontext.PlanningContext, expr sqlpars
 	panic("implement me")
 }
 
-func (dt *DerivedTableOp) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return slice.Map(dt.Columns, func(col sqlparser.IdentifierCI) *sqlparser.AliasedExpr {
-		return aeWrap(&sqlparser.ColName{
-			Name:      col,
+func (dt *DerivedTableOp) GetColumns(_ *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	result := make([]*sqlparser.AliasedExpr, len(dt.Columns))
+	for i, col := range dt.ColumnNames {
+		result[i] = aeWrap(&sqlparser.ColName{
+			Name:      sqlparser.NewIdentifierCI(col),
 			Qualifier: sqlparser.NewTableName(dt.Alias),
 		})
-	})
+	}
+
+	return result
 }
 
 func (dt *DerivedTableOp) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
@@ -91,17 +102,12 @@ func (dt *DerivedTableOp) GetSelectExprs(ctx *plancontext.PlanningContext) sqlpa
 }
 
 func (dt *DerivedTableOp) ShortDescription() string {
-	// TODO implement me
-	panic("implement me")
+	return fmt.Sprintf("%v", dt.ColumnNames)
 }
 
 func (dt *DerivedTableOp) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	// TODO implement me
 	panic("implement me")
-}
-
-func (dt *DerivedTableOp) String() string {
-	return fmt.Sprintf("DERIVED %s(%s)", dt.Alias, sqlparser.String(dt.Columns))
 }
 
 func (dt *DerivedTableOp) RewriteExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) sqlparser.Expr {
@@ -116,8 +122,5 @@ func (dt *DerivedTableOp) RewriteExpression(ctx *plancontext.PlanningContext, ex
 }
 
 func (dt *DerivedTableOp) introducesTableID() semantics.TableSet {
-	if dt == nil {
-		return semantics.EmptyTableSet()
-	}
 	return dt.TableID
 }
