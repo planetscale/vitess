@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"slices"
 
-	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -29,10 +28,9 @@ import (
 
 type (
 	projector struct {
-		columns               []*ProjExpr
-		columnAliases         []string
-		explicitColumnAliases bool
-		tableName             sqlparser.TableName
+		columns       []*ProjExpr
+		columnAliases []string
+		tableName     sqlparser.TableName
 	}
 )
 
@@ -249,10 +247,6 @@ func pushProjectionInApplyJoin(
 	}
 
 	lhs, rhs := &projector{}, &projector{}
-	if p.DT != nil && len(p.DT.Columns) > 0 {
-		lhs.explicitColumnAliases = true
-		rhs.explicitColumnAliases = true
-	}
 
 	// We store the original join columns to reuse them.
 	originalJoinColumns := src.JoinColumns
@@ -316,7 +310,7 @@ func splitSubqueryExpression(
 	alias string,
 ) applyJoinColumn {
 	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
-	return pushDownSplitJoinCol(col, lhs, pe, alias, rhs)
+	return pushDownSplitJoinCol(col, pe, alias, lhs, rhs)
 }
 
 func splitUnexploredExpression(
@@ -343,10 +337,10 @@ func splitUnexploredExpression(
 	col := join.getJoinColumnFor(ctx, original, expr, false)
 	col.DTColName = colName
 
-	return pushDownSplitJoinCol(col, lhs, pe, alias, rhs)
+	return pushDownSplitJoinCol(col, pe, alias, lhs, rhs)
 }
 
-func pushDownSplitJoinCol(col applyJoinColumn, lhs *projector, pe *ProjExpr, alias string, rhs *projector) applyJoinColumn {
+func pushDownSplitJoinCol(col applyJoinColumn, pe *ProjExpr, alias string, lhs, rhs *projector) applyJoinColumn {
 	// Update the left and right child columns and names based on the applyJoinColumn type.
 	switch {
 	case col.IsPureLeft():
@@ -396,14 +390,14 @@ func exposeColumnsThroughDerivedTable(ctx *plancontext.PlanningContext, p *Proje
 
 	lhsIDs := TableID(src.LHS)
 	rhsIDs := TableID(src.RHS)
-	rewriteColumnsForJoin(ctx, src.JoinPredicates.columns, lhsIDs, rhsIDs, lhs, rhs)
+	rewriteColumnsForJoin(ctx, src.JoinPredicates.columns, lhsIDs, rhsIDs, lhs)
 }
 
 func rewriteColumnsForJoin(
 	ctx *plancontext.PlanningContext,
 	columns []applyJoinColumn,
 	lhsIDs, rhsIDs semantics.TableSet,
-	lhs, rhs *projector,
+	lhs *projector,
 ) {
 	for colIdx, column := range columns {
 		for lhsIdx, bve := range column.LHSExprs {
@@ -485,11 +479,6 @@ func createProjectionWithTheseColumns(
 	proj.Columns = AliasedProjections(p.columns)
 	if dt != nil {
 		kopy := *dt
-		if p.explicitColumnAliases {
-			kopy.Columns = slice.Map(p.columnAliases, func(s string) sqlparser.IdentifierCI {
-				return sqlparser.NewIdentifierCI(s)
-			})
-		}
 		proj.DT = &kopy
 	}
 
