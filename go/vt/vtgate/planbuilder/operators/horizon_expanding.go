@@ -161,23 +161,33 @@ func expandOrderBy(ctx *plancontext.PlanningContext, op Operator, qp *QueryProje
 func createProjectionFromSelect(ctx *plancontext.PlanningContext, horizon *Horizon) Operator {
 	qp := horizon.getQP(ctx)
 
-	var dt *DerivedTable
-	if horizon.TableId != nil {
-		// if we are dealing with a derived table, we need to create a derived table object
-		dt = &DerivedTable{
-			TableID: *horizon.TableId,
-			Alias:   horizon.Alias,
-			Columns: horizon.ColumnAliases,
-		}
-	}
-
 	if qp.NeedsAggregation() {
+		var dt *DerivedTable
+		if horizon.TableId != nil {
+			// if we are dealing with a derived table, we need to create a derived table object
+			dt = &DerivedTable{
+				TableID: *horizon.TableId,
+				Alias:   horizon.Alias,
+				Columns: horizon.ColumnAliases,
+			}
+		}
+
 		return createProjectionWithAggr(ctx, qp, dt, horizon.src())
 	}
 
-	projX := createProjectionWithoutAggr(ctx, qp, horizon.src())
-	projX.DT = dt
-	return projX
+	if horizon.TableId == nil {
+		return createProjectionWithoutAggr(ctx, qp, horizon.src())
+	} else {
+		id := *horizon.TableId
+		return &DerivedTableOp{
+			Source:      horizon.src(),
+			TableID:     id,
+			TblInfo:     ctx.SemTable.Tables[id.TableOffset()],
+			Alias:       horizon.Alias,
+			ColumnNames: slice.Map(horizon.ColumnAliases, func(col sqlparser.IdentifierCI) string { return col.String() }),
+			Columns:     nil,
+		}
+	}
 }
 
 func createProjectionWithAggr(ctx *plancontext.PlanningContext, qp *QueryProjection, dt *DerivedTable, src Operator) Operator {
