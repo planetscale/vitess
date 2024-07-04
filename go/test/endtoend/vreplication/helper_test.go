@@ -82,7 +82,7 @@ func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout ti
 	var err error
 	for {
 		qr, err = conn.ExecuteFetch(query, 1000, false)
-		if err == nil {
+		if err == nil || qr == nil {
 			return qr
 		}
 		select {
@@ -511,7 +511,7 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 			w = strings.TrimSpace(w[1:])
 			result := strings.HasPrefix(g, w)
 			match = result
-			//t.Logf("Partial match |%v|%v|%v\n", w, g, match)
+			// t.Logf("Partial match |%v|%v|%v\n", w, g, match)
 		} else {
 			match = g == w
 		}

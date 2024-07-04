@@ -582,7 +582,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
-		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+		if false && ts.MigrationType() == binlogdatapb.MigrationType_TABLES { // FIXME(rohit)
 			ts.Logger().Infof("Executing LOCK TABLES on source tables %d times", lockTablesCycles)
 			// Doing this twice with a pause in-between to catch any writes that may have raced in between
 			// the tablet's deny list check and the first mysqld side table lock.
@@ -1743,7 +1743,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 	wg.Wait()
 
 	if !ts.keepRoutingRules {
-		//check if table is routable
+		// check if table is routable
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 			rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 			if err != nil {
