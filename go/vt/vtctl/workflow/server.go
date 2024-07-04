@@ -1406,6 +1406,11 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		AtomicCopy:                req.AtomicCopy,
 		WorkflowOptions:           req.WorkflowOptions,
 	}
+
+	if req.AllTables && req.ExcludeTables == nil {
+		ms.MatchAllTables = true
+	}
+
 	if req.SourceTimeZone != "" {
 		ms.SourceTimeZone = req.SourceTimeZone
 		ms.TargetTimeZone = "UTC"
@@ -3317,7 +3322,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 			return handleError(fmt.Sprintf("failed to stop writes in the %s keyspace", ts.SourceKeyspaceName()), err)
 		}
 
-		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+		if false && ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 			ts.Logger().Infof("Executing LOCK TABLES on source tables %d times", lockTablesCycles)
 			// Doing this twice with a pause in-between to catch any writes that may have raced in between
 			// the tablet's deny list check and the first mysqld side table lock.
