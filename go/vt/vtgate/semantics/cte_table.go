@@ -77,7 +77,7 @@ func (cte *CTETable) canShortCut() shortCut {
 	panic(vterrors.VT12001("should not be called"))
 }
 
-func (cte *CTETable) getColumns(ignoreInvisibleCol bool) []ColumnInfo {
+func (cte *CTETable) getColumns(bool) []ColumnInfo {
 	selExprs := cte.definition.GetColumns()
 	cols := make([]ColumnInfo, 0, len(selExprs))
 	for _, selExpr := range selExprs {

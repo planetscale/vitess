@@ -80,19 +80,24 @@ func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableC
 	}
 }
 
-func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.AliasedTableExpr:
-		etc.visitAliasedTableExpr(node)
-	case *sqlparser.With:
-		for _, cte := range node.CTEs {
-			etc.cte[cte.ID.String()] = CTEDef{
-				definition: cte.Subquery.Select,
-			}
-		}
-		return
+func (etc *earlyTableCollector) down(cursor *sqlparser.Cursor) bool {
+	with, ok := cursor.Node().(*sqlparser.With)
+	if !ok {
+		return true
 	}
+	for _, cte := range with.CTEs {
+		etc.cte[cte.ID.String()] = CTEDef{definition: cte.Subquery.Select}
+	}
+	return true
+}
 
+func (etc *earlyTableCollector) up(cursor *sqlparser.Cursor) bool {
+	ate, ok := cursor.Node().(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return true
+	}
+	etc.visitAliasedTableExpr(ate)
+	return true
 }
 
 func (etc *earlyTableCollector) visitAliasedTableExpr(aet *sqlparser.AliasedTableExpr) {
