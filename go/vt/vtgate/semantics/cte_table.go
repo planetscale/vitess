@@ -74,7 +74,7 @@ func (cte *CTETable) GetAliasedTableExpr() *sqlparser.AliasedTableExpr {
 }
 
 func (cte *CTETable) canShortCut() shortCut {
-	panic(vterrors.VT12001("should not be called"))
+	return canShortCut
 }
 
 func (cte *CTETable) getColumns(bool) []ColumnInfo {
