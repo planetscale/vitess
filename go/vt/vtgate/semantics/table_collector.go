@@ -47,7 +47,7 @@ type (
 	}
 
 	CTEDef struct {
-		definition      sqlparser.SelectStatement
+		Query           sqlparser.SelectStatement
 		isAuthoritative bool
 		recursiveDeps   *TableSet
 	}
@@ -67,7 +67,7 @@ func (cte *CTEDef) recursive(org originable) (id TableSet) {
 		}
 		id = id.Merge(org.tableSetFor(ate))
 		return true, nil
-	}, cte.definition)
+	}, cte.Query)
 	return
 }
 
@@ -86,7 +86,7 @@ func (etc *earlyTableCollector) down(cursor *sqlparser.Cursor) bool {
 		return true
 	}
 	for _, cte := range with.CTEs {
-		etc.cte[cte.ID.String()] = CTEDef{definition: cte.Subquery.Select}
+		etc.cte[cte.ID.String()] = CTEDef{Query: cte.Subquery.Select}
 	}
 	return true
 }

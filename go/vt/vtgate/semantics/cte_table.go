@@ -28,7 +28,7 @@ import (
 
 // CTETable contains the information about the CTE table.
 type CTETable struct {
-	tableName string
+	TableName string
 	ASTNode   *sqlparser.AliasedTableExpr
 	CTEDef
 }
@@ -43,14 +43,14 @@ func newCTETable(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, cteDef
 		name = node.As.String()
 	}
 	return &CTETable{
-		tableName: name,
+		TableName: name,
 		ASTNode:   node,
 		CTEDef:    cteDef,
 	}
 }
 
 func (cte *CTETable) Name() (sqlparser.TableName, error) {
-	return sqlparser.NewTableName(cte.tableName), nil
+	return sqlparser.NewTableName(cte.TableName), nil
 }
 
 func (cte *CTETable) GetVindexTable() *vindexes.Table {
@@ -62,7 +62,7 @@ func (cte *CTETable) IsInfSchema() bool {
 }
 
 func (cte *CTETable) matches(name sqlparser.TableName) bool {
-	return cte.tableName == name.Name.String() && name.Qualifier.IsEmpty()
+	return cte.TableName == name.Name.String() && name.Qualifier.IsEmpty()
 }
 
 func (cte *CTETable) authoritative() bool {
@@ -78,7 +78,7 @@ func (cte *CTETable) canShortCut() shortCut {
 }
 
 func (cte *CTETable) getColumns(bool) []ColumnInfo {
-	selExprs := cte.definition.GetColumns()
+	selExprs := cte.Query.GetColumns()
 	cols := make([]ColumnInfo, 0, len(selExprs))
 	for _, selExpr := range selExprs {
 		ae, isAe := selExpr.(*sqlparser.AliasedExpr)
