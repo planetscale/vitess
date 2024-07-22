@@ -260,7 +260,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			}
 		case *semantics.CTETable:
 			current := ctx.ActiveCTE()
-			if current != nil && current.CTEDef == tableInfo.CTEDef {
+			if current != nil && current.CTEDef.Equals(tableInfo.CTEDef) {
 				return createDualTable(ctx, tableID, tableInfo)
 			}
 			return createRecursiveCTE(ctx, tableInfo)
