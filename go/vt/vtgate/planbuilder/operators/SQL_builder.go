@@ -56,6 +56,17 @@ func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement
 }
 
 func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints sqlparser.IndexHints) {
+	if tableID.NumberOfTables() == 1 {
+		tblInfo, err := qb.ctx.SemTable.TableInfoFor(tableID)
+		if err != nil {
+			panic(err.Error())
+		}
+		cte, isCTE := tblInfo.(*semantics.CTETable)
+		if isCTE {
+			tableName = cte.TableName
+			db = ""
+		}
+	}
 	tableExpr := sqlparser.TableName{
 		Name:      sqlparser.NewIdentifierCS(tableName),
 		Qualifier: sqlparser.NewIdentifierCS(db),

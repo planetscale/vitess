@@ -261,7 +261,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 		case *semantics.CTETable:
 			current := ctx.ActiveCTE()
 			if current != nil && current.CTEDef.Equals(tableInfo.CTEDef) {
-				return createDualTable(ctx, tableID, tableInfo)
+				return createDualCTETable(ctx, tableID, tableInfo)
 			}
 			return createRecursiveCTE(ctx, tableInfo)
 		case *semantics.RealTable:
@@ -293,7 +293,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 	}
 }
 
-func createDualTable(ctx *plancontext.PlanningContext, tableID semantics.TableSet, tableInfo *semantics.CTETable) Operator {
+func createDualCTETable(ctx *plancontext.PlanningContext, tableID semantics.TableSet, tableInfo *semantics.CTETable) Operator {
 	vschemaTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(sqlparser.NewTableName("dual"))
 	if err != nil {
 		panic(err)
