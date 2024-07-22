@@ -17,21 +17,43 @@ limitations under the License.
 package operators
 
 import (
+	"slices"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // Recurse is used to represent a recursive CTE
 type Recurse struct {
+	// Name is the name of the recursive CTE
+	Name string
+
+	// ColumnNames is the list of column names that are sent between the two parts of the recursive CTE
+	ColumnNames []string
+
+	// ColumnOffsets is the list of column offsets that are sent between the two parts of the recursive CTE
+	Offsets []int
+
 	Init, Tail Operator
 }
 
 var _ Operator = (*Recurse)(nil)
 
+func newRecurse(name string, init, tail Operator) *Recurse {
+	return &Recurse{
+		Name: name,
+		Init: init,
+		Tail: tail,
+	}
+}
+
 func (r *Recurse) Clone(inputs []Operator) Operator {
 	return &Recurse{
-		Init: inputs[0],
-		Tail: inputs[1],
+		Name:        r.Name,
+		ColumnNames: slices.Clone(r.ColumnNames),
+		Offsets:     slices.Clone(r.Offsets),
+		Init:        inputs[0],
+		Tail:        inputs[1],
 	}
 }
 
