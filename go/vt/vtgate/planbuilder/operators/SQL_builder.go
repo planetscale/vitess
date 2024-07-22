@@ -207,6 +207,25 @@ func (qb *queryBuilder) unionWith(other *queryBuilder, distinct bool) {
 	}
 }
 
+func (qb *queryBuilder) cteWith(other *queryBuilder, name string) {
+	cteUnion := &sqlparser.Union{
+		Left:  qb.stmt.(sqlparser.SelectStatement),
+		Right: other.stmt.(sqlparser.SelectStatement),
+	}
+
+	qb.stmt = &sqlparser.Select{
+		With: &sqlparser.With{
+			CTEs: []*sqlparser.CommonTableExpr{{
+				ID:       sqlparser.NewIdentifierCS(name),
+				Columns:  nil,
+				Subquery: &sqlparser.Subquery{Select: cteUnion},
+			}},
+		},
+	}
+
+	qb.addTable("", name, "", "", nil)
+}
+
 type FromStatement interface {
 	GetFrom() []sqlparser.TableExpr
 	SetFrom([]sqlparser.TableExpr)
@@ -401,6 +420,8 @@ func buildQuery(op Operator, qb *queryBuilder) {
 		buildDelete(op, qb)
 	case *Insert:
 		buildDML(op, qb)
+	case *Recurse:
+		buildCTE(op, qb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
 	}
@@ -634,6 +655,13 @@ func buildHorizon(op *Horizon, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
 	stripDownQuery(op.Query, qb.asSelectStatement())
 	sqlparser.RemoveKeyspaceInCol(qb.stmt)
+}
+
+func buildCTE(op *Recurse, qb *queryBuilder) {
+	buildQuery(op.Init, qb)
+	qbR := &queryBuilder{ctx: qb.ctx}
+	buildQuery(op.Tail, qbR)
+	qb.cteWith(qbR, op.Name)
 }
 
 func mergeHaving(h1, h2 *sqlparser.Where) *sqlparser.Where {

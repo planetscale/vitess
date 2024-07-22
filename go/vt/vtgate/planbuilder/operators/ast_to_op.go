@@ -320,11 +320,7 @@ func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTETabl
 	if err := ctx.PopCTE(); err != nil {
 		panic(err)
 	}
-
-	return &Recurse{
-		Init: init,
-		Tail: tail,
-	}
+	return newRecurse(def.TableName, init, tail)
 }
 
 func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) Operator {
