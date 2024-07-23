@@ -56,7 +56,7 @@ func ToSQL(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement
 }
 
 func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints sqlparser.IndexHints) {
-	if tableID.NumberOfTables() == 1 {
+	if tableID.NumberOfTables() == 1 && qb.ctx.SemTable != nil {
 		tblInfo, err := qb.ctx.SemTable.TableInfoFor(tableID)
 		if err != nil {
 			panic(err.Error())
