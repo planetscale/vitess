@@ -109,4 +109,21 @@ func TestRecurseDualQuery(t *testing.T) {
 		`StreamExecute col1: type:INT64 value:"4" false`,
 	})
 	expectResult(t, r, wantRes)
+
+	// testing the streaming mode with transaction
+
+	leftPrim.rewind()
+	rightPrim.rewind()
+
+	r, err = wrapStreamExecute(cte, &noopVCursor{inTx: true}, bv, true)
+	require.NoError(t, err)
+
+	rightPrim.ExpectLog(t, []string{
+		`Execute col1: type:INT64 value:"1" false`,
+		`Execute col1: type:INT64 value:"2" false`,
+		`Execute col1: type:INT64 value:"3" false`,
+		`Execute col1: type:INT64 value:"4" false`,
+	})
+	expectResult(t, r, wantRes)
+
 }
