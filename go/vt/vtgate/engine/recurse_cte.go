@@ -65,6 +65,13 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 }
 
 func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	if vcursor.Session().InTransaction() {
+		res, err := r.TryExecute(ctx, vcursor, bindVars, wantfields)
+		if err != nil {
+			return err
+		}
+		return callback(res)
+	}
 	return vcursor.StreamExecutePrimitive(ctx, r.Init, bindVars, wantfields, func(result *sqltypes.Result) error {
 		err := callback(result)
 		if err != nil {
