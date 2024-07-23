@@ -859,7 +859,7 @@ func (cached *Projection) CachedSize(alloc bool) int64 {
 }
 
 //go:nocheckptr
-func (cached *Recurse) CachedSize(alloc bool) int64 {
+func (cached *RecurseCTE) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
