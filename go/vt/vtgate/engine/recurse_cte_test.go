@@ -27,7 +27,7 @@ import (
 )
 
 func TestRecurseDualQuery(t *testing.T) {
-	// Test that the Recurse primitive works as expected.
+	// Test that the RecurseCTE primitive works as expected.
 	// The test is testing something like this:
 	// WITH RECURSIVE cte AS (SELECT 1 as col1 UNION SELECT col1+1 FROM cte WHERE col1 < 5) SELECT * FROM cte;
 	leftPrim := &fakePrimitive{
@@ -66,7 +66,7 @@ func TestRecurseDualQuery(t *testing.T) {
 	}
 	bv := map[string]*querypb.BindVariable{}
 
-	cte := &Recurse{
+	cte := &RecurseCTE{
 		Init:    leftPrim,
 		Recurse: rightPrim,
 		Vars:    map[string]int{"col1": 0},
