@@ -283,13 +283,21 @@ func getValueFor(expr *sqlparser.SetExpr) (any, error) {
 		case sqlparser.StrVal:
 			return strings.ToLower(expr.Val), nil
 		case sqlparser.IntVal:
-			num, err := strconv.ParseInt(expr.Val, 0, 64)
+			str := expr.Val
+			if expr.Neg {
+				str = "-" + str
+			}
+			num, err := strconv.ParseInt(str, 0, 64)
 			if err != nil {
 				return nil, err
 			}
 			return num, nil
 		case sqlparser.FloatVal, sqlparser.DecimalVal:
-			num, err := strconv.ParseFloat(expr.Val, 64)
+			str := expr.Val
+			if expr.Neg {
+				str = "-" + str
+			}
+			num, err := strconv.ParseFloat(str, 64)
 			if err != nil {
 				return nil, err
 			}

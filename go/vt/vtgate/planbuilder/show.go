@@ -370,6 +370,9 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter) ([][]sqltypes.Value, 
 				return nil, vterrors.VT12001("we expect the right side to be a string")
 			}
 			rightString := literal.Val
+			if literal.Neg {
+				rightString = "-" + rightString
+			}
 
 			switch cmpExp.Operator {
 			case sqlparser.EqualOp:
