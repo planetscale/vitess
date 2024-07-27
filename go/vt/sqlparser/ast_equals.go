@@ -3413,7 +3413,8 @@ func (cmp *Comparator) RefOfLiteral(a, b *Literal) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Val == b.Val &&
+	return a.Neg == b.Neg &&
+		a.Val == b.Val &&
 		a.Type == b.Type
 }
 

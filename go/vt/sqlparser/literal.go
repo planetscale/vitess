@@ -40,18 +40,29 @@ func LiteralToValue(lit *Literal) (sqltypes.Value, error) {
 			}
 			return sqltypes.Value{}, err
 		}
+		if lit.Neg {
+			return sqltypes.NewInt64(-1 * int64(uval)), nil
+		}
 		if uval <= math.MaxInt64 {
 			return sqltypes.NewInt64(int64(uval)), nil
 		}
 		return sqltypes.NewUint64(uval), nil
 	case FloatVal:
-		fval, err := fastparse.ParseFloat64(lit.Val)
+		str := lit.Val
+		if lit.Neg {
+			str = "-" + str
+		}
+		fval, err := fastparse.ParseFloat64(str)
 		if err != nil {
 			return sqltypes.Value{}, err
 		}
 		return sqltypes.NewFloat64(fval), nil
 	case DecimalVal:
-		dec, err := decimal.NewFromMySQL(lit.Bytes())
+		bytes := lit.Bytes()
+		if lit.Neg {
+			bytes = append([]byte{'-'}, bytes...)
+		}
+		dec, err := decimal.NewFromMySQL(bytes)
 		if err != nil {
 			return sqltypes.Value{}, err
 		}

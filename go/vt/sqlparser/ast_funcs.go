@@ -151,6 +151,14 @@ type ShowTablesOpt struct {
 // ValType specifies the type for Literal.
 type ValType int
 
+// IsNumerical returns true if the value is a numerical type.
+func (t ValType) IsNumerical() bool {
+	if t == IntVal || t == DecimalVal || t == FloatVal {
+		return true
+	}
+	return false
+}
+
 // These are the possible Valtype values.
 // HexNum represents a 0x... value. It cannot
 // be treated as a simple value because it can
@@ -2669,6 +2677,15 @@ func IsLiteral(expr Expr) bool {
 	default:
 		return false
 	}
+}
+
+// NegativeExpr creates the negative of the expression provided.
+func NegativeExpr(expr Expr) Expr {
+	if lit, isLit := expr.(*Literal); isLit && lit.Type.IsNumerical() {
+		lit.Neg = !lit.Neg
+		return lit
+	}
+	return &UnaryExpr{Operator: UMinusOp, Expr: expr}
 }
 
 // AppendString appends a string to the expression provided.

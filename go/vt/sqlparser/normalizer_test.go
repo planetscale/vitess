@@ -73,6 +73,13 @@ func TestNormalize(t *testing.T) {
 			"foobar": sqltypes.Int64BindVariable(1),
 		},
 	}, {
+		// negative int val
+		in:      "select * from t where foobar = -1",
+		outstmt: "select * from t where foobar = :foobar /* INT64 */",
+		outbv: map[string]*querypb.BindVariable{
+			"foobar": sqltypes.Int64BindVariable(-1),
+		},
+	}, {
 		// float val
 		in:      "select * from t where foobar = 1.2",
 		outstmt: "select * from t where foobar = :foobar /* DECIMAL(2,1) */",

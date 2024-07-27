@@ -2327,6 +2327,7 @@ type (
 	// Literal represents a fixed value.
 	Literal struct {
 		Type ValType
+		Neg  bool
 		Val  string
 	}
 
