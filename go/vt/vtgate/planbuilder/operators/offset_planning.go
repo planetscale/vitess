@@ -25,12 +25,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+type offsettable interface {
+	Operator
+	planOffsets(ctx *plancontext.PlanningContext) Operator
+}
+
 // planOffsets will walk the tree top down, adding offset information to columns in the tree for use in further optimization,
 func planOffsets(ctx *plancontext.PlanningContext, root Operator) Operator {
-	type offsettable interface {
-		Operator
-		planOffsets(ctx *plancontext.PlanningContext) Operator
-	}
 
 	visitor := func(in Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		switch op := in.(type) {
