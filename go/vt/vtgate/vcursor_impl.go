@@ -55,39 +55,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
-	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 var _ engine.VCursor = (*vcursorImpl)(nil)
 var _ plancontext.VSchema = (*vcursorImpl)(nil)
-var _ iExecute = (*Executor)(nil)
 var _ vindexes.VCursor = (*vcursorImpl)(nil)
-
-// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
-type iExecute interface {
-	Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
-	ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
-	StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error) []error
-	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
-	Commit(ctx context.Context, safeSession *SafeSession) error
-	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
-	ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
-	ReleaseLock(ctx context.Context, session *SafeSession) error
-
-	showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
-	showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
-	showTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
-	showVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
-	setVitessMetadata(ctx context.Context, name, value string) error
-
-	// TODO: remove when resolver is gone
-	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
-	VSchema() *vindexes.VSchema
-	planPrepareStmt(ctx context.Context, vcursor *vcursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
-
-	environment() *vtenv.Environment
-	ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
-}
 
 // VSchemaOperator is an interface to Vschema Operations
 type VSchemaOperator interface {
@@ -103,7 +75,7 @@ type vcursorImpl struct {
 	tabletType     topodatapb.TabletType
 	destination    key.Destination
 	marginComments sqlparser.MarginComments
-	executor       iExecute
+	executor       *Executor
 	resolver       *srvtopo.Resolver
 	topoServer     *topo.Server
 	logStats       *logstats.LogStats
@@ -123,9 +95,21 @@ type vcursorImpl struct {
 	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 	pv       plancontext.PlannerVersion
 
+	gatherer resultsGatherer
+
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
 }
+
+type (
+	resultsGatherer interface {
+		gather(*sqltypes.Result)
+	}
+
+	noResultsGatherer struct{}
+)
+
+func (noResultsGatherer) gather(*sqltypes.Result) {}
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
@@ -142,6 +126,7 @@ func newVCursorImpl(
 	serv srvtopo.Server,
 	warnShardedOnly bool,
 	pv plancontext.PlannerVersion,
+	gatherer resultsGatherer,
 ) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
@@ -192,6 +177,7 @@ func newVCursorImpl(
 		pv:                  pv,
 		warmingReadsPercent: warmingReadsPct,
 		warmingReadsChannel: warmingReadsChan,
+		gatherer:            gatherer,
 	}, nil
 }
 
@@ -582,7 +568,7 @@ func (vc *vcursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 		return nil, []error{err}
 	}
 
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, canAutocommit, vc.ignoreMaxMemoryRows)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.gatherer)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 
 	return qr, errs
@@ -620,7 +606,7 @@ func (vc *vcursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false, vc.ignoreMaxMemoryRows, nil)
 	return qr, vterrors.Aggregate(errs)
 }
 
