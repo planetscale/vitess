@@ -90,6 +90,7 @@ var (
 	exclude          = flag.String("exclude", "", "if provided, exclude tests containing any of the given tags (comma delimited)")
 	keepData         = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
 	bench            = flag.String("bench", "", "benchmark tests to run")
+	benchTime        = flag.Duration("benchtime", time.Second, "benchmark runtime")
 	printLog         = flag.Bool("print-log", false, "print the log of each failed test (or all tests if -log-pass) to the console")
 	follow           = flag.Bool("follow", false, "print test output as it runs, instead of waiting to see if it passes or fails")
 	parallel         = flag.Int("parallel", 1, "number of tests to run in parallel")
@@ -185,6 +186,9 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 			}
 			if *bench != "" {
 				testCmd = append(testCmd, "-bench", *bench)
+			}
+			if *benchTime != 0 {
+				testCmd = append(testCmd, "-benchtime", benchTime.String())
 			}
 		} else {
 			testCmd = []string{"test/" + t.File, "-v", "--skip-build", "--keep-logs"}
