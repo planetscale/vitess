@@ -313,6 +313,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"bench_stress": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/bench_stress", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "bench_stress",
+			"RetryMax": 1,
+			"Tags": ["bench_stress"]
+		},
 		"onlineddl_flow": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/flow", "-timeout", "30m"],
