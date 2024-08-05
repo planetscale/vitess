@@ -155,7 +155,7 @@ var (
 )
 
 const (
-	baseSleepInterval    = 250 * time.Millisecond
+	baseSleepInterval    = 5 * time.Millisecond
 	maxTableRows         = 4096
 	migrationWaitTimeout = 30 * time.Second
 )
@@ -240,8 +240,8 @@ func TestMain(m *testing.M) {
 
 }
 
-func runRoutineThrottleCheck(t testing.TB, ctx context.Context) {
-	flags := &throttle.CheckFlags{SkipRequestHeartbeats: true}
+func runRoutineThrottleCheck(t testing.TB, ctx context.Context, flags *throttle.CheckFlags) {
+	throttleWorkload.Store(true) // ensure throttler is checked and is happy before allowing writes.
 	go func() {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
@@ -307,7 +307,8 @@ func TestSchemaChange(t *testing.T) {
 			defer cancelWorkload()
 
 			t.Run("routine throttler check", func(t *testing.T) {
-				runRoutineThrottleCheck(t, workloadCtx)
+				flags := &throttle.CheckFlags{SkipRequestHeartbeats: true}
+				runRoutineThrottleCheck(t, workloadCtx, flags)
 			})
 
 			var wg sync.WaitGroup
@@ -632,7 +633,8 @@ func BenchmarkWorkloadSingleConn(b *testing.B) {
 
 	testWithInitialSchema(b)
 	initTable(b)
-	runRoutineThrottleCheck(b, ctx)
+	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
+	runRoutineThrottleCheck(b, ctx, flags)
 
 	ticker := time.NewTicker(baseSleepInterval)
 	defer ticker.Stop()
@@ -659,4 +661,43 @@ func BenchmarkWorkloadSingleConn(b *testing.B) {
 		}
 		assert.Nil(b, err)
 	}
+}
+
+func BenchmarkWorkloadMultiConn(b *testing.B) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	testWithInitialSchema(b)
+	initTable(b)
+	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
+	runRoutineThrottleCheck(b, ctx, flags)
+
+	ticker := time.NewTicker(baseSleepInterval)
+	defer ticker.Stop()
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		conn, err := mysql.Connect(ctx, &vtParams)
+		require.Nil(b, err)
+		defer conn.Close()
+
+		for pb.Next() {
+			for throttleWorkload.Load() {
+				<-ticker.C
+			}
+			for range len(ticker.C) {
+				<-ticker.C
+			}
+			switch rand.Int32N(3) {
+			case 0:
+				err = generateInsert(b, conn)
+			case 1:
+				err = generateUpdate(b, conn)
+			case 2:
+				err = generateDelete(b, conn)
+			}
+			assert.Nil(b, err)
+		}
+	})
 }
