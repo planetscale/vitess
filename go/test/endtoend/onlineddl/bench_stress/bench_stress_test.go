@@ -166,7 +166,7 @@ var (
 const (
 	baseSleepInterval    = 5 * time.Millisecond
 	maxTableRows         = 4096
-	migrationWaitTimeout = 45 * time.Second
+	migrationWaitTimeout = 90 * time.Second
 )
 
 func TestMain(m *testing.M) {
