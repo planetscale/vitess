@@ -18,7 +18,9 @@ package vreplication
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -161,4 +163,75 @@ func TestMigrate(t *testing.T) {
 		output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--show", "ext1")
 		require.Errorf(t, err, "there is no vitess cluster named ext1")
 	})
+}
+
+// TestShardedMigrate adds a test for a sharded cluster to validate a fix for a bug where the target keyspace name
+// doesn't match that of the source cluster.
+func TestShardedMigrate(t *testing.T) {
+	defaultRdonly = 1
+	vc = setupCluster(t)
+	defer vtgateConn.Close()
+	defer vc.TearDown(t)
+	setupCustomerKeyspace(t)
+	createMoveTablesWorkflow(t, "customer,Lead,datze,customer2")
+	tstWorkflowSwitchReadsAndWrites(t)
+	tstWorkflowComplete(t)
+	var err error
+
+	if false {
+		// Used for testing a hotfix where we create a "fake" target keyspace on the source cluster.
+		// This works if not using the operator, because the operator currently prunes externally created keyspaces.
+		_, err = vc.VtctldClient.ExecuteCommandWithOutput("CreateKeyspace", "rating")
+		require.NoError(t, err)
+		applyVSchema(t, customerVSchema, "rating")
+	}
+
+	extCell := "extcell1"
+	extCells := []string{extCell}
+	extVc := NewVitessCluster(t, "TestMigrateExternal", extCells, externalClusterConfig)
+	require.NotNil(t, extVc)
+	defer extVc.TearDown(t)
+	setupExtKeyspace(t, extVc, "rating", extCell)
+	err = cluster.WaitForHealthyShard(extVc.VtctldClient, "rating", "-80")
+	require.NoError(t, err)
+	verifyClusterHealth(t, extVc)
+	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
+	defer extVtgateConn.Close()
+
+	var output string
+	if output, err = extVc.VtctlClient.ExecuteCommandWithOutput("Mount", "--", "--type=vitess", "--topo_type=etcd2",
+		fmt.Sprintf("--topo_server=localhost:%d", vc.ClusterConfig.topoPort), "--topo_root=/vitess/global", "from"); err != nil {
+		t.Fatalf("Mount command failed with %+v : %s\n", err, output)
+	}
+	ksWorkflow := "rating.e1"
+	if output, err = extVc.VtctlClient.ExecuteCommandWithOutput("Migrate", "--", "--all", "--cells=zone1",
+		"--source=from.customer", "create", ksWorkflow); err != nil {
+		t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
+	}
+	waitForWorkflowState(t, extVc, ksWorkflow, workflowStateRunning)
+	waitForRowCount(t, extVtgateConn, "rating", "customer", 3)
+	waitForRowCount(t, extVtgateConn, "rating", "customer2", 3)
+	waitForRowCount(t, extVtgateConn, "rating", "datze", 6)
+	waitForRowCount(t, extVtgateConn, "rating", "`Lead`", 1)
+	doVDiff1(t, extVc, ksWorkflow, extCell)
+}
+
+func setupExtKeyspace(t *testing.T, vc *VitessCluster, ksName, cellName string) {
+	rdonly := 0
+	shards := []string{"-80", "80-"}
+	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells[cellName]}, ksName, strings.Join(shards, ","),
+		customerVSchema, customerSchema, defaultReplicas, rdonly, 1200, nil); err != nil {
+		t.Fatal(err)
+	}
+	vtgate := vc.Cells[cellName].Vtgates[0]
+	for _, shard := range shards {
+		err := cluster.WaitForHealthyShard(vc.VtctldClient, ksName, shard)
+		require.NoError(t, err)
+		if defaultReplicas > 0 {
+			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shard), defaultReplicas, 30*time.Second))
+		}
+		if rdonly > 0 {
+			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shard), defaultRdonly, 30*time.Second))
+		}
+	}
 }

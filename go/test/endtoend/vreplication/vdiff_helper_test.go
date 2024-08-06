@@ -45,7 +45,7 @@ var (
 func vdiff(t *testing.T, keyspace, workflow, cells string, v1, v2 bool, wantV2Result *expectedVDiff2Result) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	if v1 {
-		doVDiff1(t, ksWorkflow, cells)
+		doVDiff1(t, vc, ksWorkflow, cells)
 	}
 	if v2 {
 		doVdiff2(t, keyspace, workflow, cells, wantV2Result)
@@ -54,7 +54,7 @@ func vdiff(t *testing.T, keyspace, workflow, cells string, v1, v2 bool, wantV2Re
 
 func vdiff1(t *testing.T, ksWorkflow, cells string) {
 	if !runVDiffsSideBySide {
-		doVDiff1(t, ksWorkflow, cells)
+		doVDiff1(t, vc, ksWorkflow, cells)
 		return
 	}
 	arr := strings.Split(ksWorkflow, ".")
@@ -63,7 +63,7 @@ func vdiff1(t *testing.T, ksWorkflow, cells string) {
 	vdiff(t, keyspace, workflowName, cells, true, true, nil)
 }
 
-func doVDiff1(t *testing.T, ksWorkflow, cells string) {
+func doVDiff1(t *testing.T, vc *VitessCluster, ksWorkflow, cells string) {
 	t.Run(fmt.Sprintf("vdiff1 %s", ksWorkflow), func(t *testing.T) {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", ksWorkflow)
 		log.Infof("vdiff1 err: %+v, output: %+v", err, output)

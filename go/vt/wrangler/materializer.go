@@ -123,7 +123,7 @@ func shouldInclude(table string, excludes []string) bool {
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
 	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string, sourceShards []string) error {
-	//FIXME validate tableSpecs, allTables, excludeTables
+	// FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
 	var err error
@@ -1095,9 +1095,9 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			var err error
 			mu.Lock()
 			if len(sourceDDLs) == 0 {
-				//only get ddls for tables, once and lazily: if we need to copy the schema from source to target
-				//we copy schemas from primaries on the source keyspace
-				//and we have found use cases where user just has a replica (no primary) in the source keyspace
+				// only get ddls for tables, once and lazily: if we need to copy the schema from source to target
+				// we copy schemas from primaries on the source keyspace
+				// and we have found use cases where user just has a replica (no primary) in the source keyspace
 				sourceDDLs, err = mz.getSourceTableDDLs(ctx)
 			}
 			mu.Unlock()
@@ -1276,7 +1276,16 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 				for _, mappedCol := range mappedCols {
 					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
 				}
-				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+
+				// If the TargetKeyspace name is different from the SourceKeyspace name, we need to use the
+				// SourceKeyspace name to determine the vindex since the TargetKeyspace name is not known to the source.
+				// Note: it is expected that the source and target keyspaces have the same vindex name and data type.
+				keyspace := mz.ms.TargetKeyspace
+				if mz.ms.ExternalCluster != "" {
+					keyspace = mz.ms.SourceKeyspace
+				}
+				vindexName := fmt.Sprintf("%s.%s", keyspace, cv.Name)
+
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
 				inKeyRange := &sqlparser.FuncExpr{
