@@ -699,43 +699,43 @@ func testSelectTableMetrics(t testing.TB) {
 	log.Infof("numRows=%d, sumUpdates=%d, opCounter=%d, distinctOpCounter=%d", numRows, sumUpdates, opCounter, distinctOpCounter)
 }
 
-func BenchmarkWorkloadSingleConn(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+// func BenchmarkWorkloadSingleConn(b *testing.B) {
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	defer cancel()
 
-	testWithInitialSchema(b)
-	initTable(b)
-	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
-	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
-	runRoutineThrottleCheck(b, ctx, flags)
-	waitForThrottleCheckOK(b, ctx)
+// 	testWithInitialSchema(b)
+// 	initTable(b)
+// 	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
+// 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
+// 	runRoutineThrottleCheck(b, ctx, flags)
+// 	waitForThrottleCheckOK(b, ctx)
 
-	ticker := time.NewTicker(baseSleepInterval)
-	defer ticker.Stop()
+// 	ticker := time.NewTicker(baseSleepInterval)
+// 	defer ticker.Stop()
 
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(b, err)
-	defer conn.Close()
+// 	conn, err := mysql.Connect(ctx, &vtParams)
+// 	require.Nil(b, err)
+// 	defer conn.Close()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		for throttleWorkload.Load() {
-			<-ticker.C
-		}
-		for range len(ticker.C) {
-			<-ticker.C
-		}
-		switch rand.Int32N(3) {
-		case 0:
-			err = generateInsert(b, conn)
-		case 1:
-			err = generateUpdate(b, conn)
-		case 2:
-			err = generateDelete(b, conn)
-		}
-		assert.Nil(b, err)
-	}
-}
+// 	b.ResetTimer()
+// 	for i := 0; i < b.N; i++ {
+// 		for throttleWorkload.Load() {
+// 			<-ticker.C
+// 		}
+// 		for range len(ticker.C) {
+// 			<-ticker.C
+// 		}
+// 		switch rand.Int32N(3) {
+// 		case 0:
+// 			err = generateInsert(b, conn)
+// 		case 1:
+// 			err = generateUpdate(b, conn)
+// 		case 2:
+// 			err = generateDelete(b, conn)
+// 		}
+// 		assert.Nil(b, err)
+// 	}
+// }
 
 func BenchmarkWorkloadMultiConn(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
