@@ -368,7 +368,7 @@ func UnthrottleAppAndWaitUntilTabletsConfirm(t *testing.T, clusterInstance *clus
 
 // WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
 // enabled/disabled and have the provided config (if any) until the specified timeout.
-func WaitForThrottlerStatusEnabled(t *testing.T, vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, enabled bool, config *Config, timeout time.Duration) {
+func WaitForThrottlerStatusEnabled(t testing.TB, vtctldProcess *cluster.VtctldClientProcess, tablet *cluster.Vttablet, enabled bool, config *Config, timeout time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
@@ -471,7 +471,7 @@ func WaitForThrottledApp(t *testing.T, tablet *cluster.Vttablet, throttlerApp th
 // EnableLagThrottlerAndWaitForStatus is a utility function to enable the throttler at the beginning of an endtoend test.
 // The throttler is configued to use the standard replication lag metric. The function waits until the throttler is confirmed
 // to be running on all tablets.
-func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
+func EnableLagThrottlerAndWaitForStatus(t testing.TB, clusterInstance *cluster.LocalProcessCluster) {
 	req := &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true}
 	_, err := UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
 	require.NoError(t, err)
