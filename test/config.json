@@ -315,7 +315,7 @@
 		},
 		"bench_stress": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/bench_stress", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/bench_stress", "-timeout", "40m", "-bench", ".", "-benchtime", "1m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "bench_stress",
