@@ -485,6 +485,22 @@ func EnableLagThrottlerAndWaitForStatus(t testing.TB, clusterInstance *cluster.L
 	}
 }
 
+// DisableLagThrottlerAndWaitForStatus is a utility function to disable the throttler.
+// The function waits until the throttler is confirmed to be disabled on all tablets.
+func DisableLagThrottlerAndWaitForStatus(t testing.TB, clusterInstance *cluster.LocalProcessCluster) {
+	req := &vtctldatapb.UpdateThrottlerConfigRequest{Disable: true}
+	_, err := UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+	require.NoError(t, err)
+
+	for _, ks := range clusterInstance.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				WaitForThrottlerStatusEnabled(t, &clusterInstance.VtctldClientProcess, tablet, false, nil, time.Minute)
+			}
+		}
+	}
+}
+
 func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags, expect int32, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
