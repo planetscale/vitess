@@ -56,20 +56,22 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 type WriteMetrics struct {
 	mu                                                      sync.Mutex
+	opCounter                                               atomic.Int64
 	insertsAttempts, insertsFailures, insertsNoops, inserts int64
 	updatesAttempts, updatesFailures, updatesNoops, updates int64
 	deletesAttempts, deletesFailures, deletesNoops, deletes int64
@@ -127,9 +129,10 @@ var (
 	createStatements      = `
 	  DROP TABLE IF EXISTS stress_test;
 		CREATE TABLE stress_test (
-			id bigint(20) not null,
+			id bigint not null,
 			rand_val varchar(32) null default '',
 			hint_col varchar(64) not null default '',
+			op_counter bigint not null,
 			created_timestamp timestamp not null default current_timestamp,
 			updates int unsigned not null default 0,
 			PRIMARY KEY (id),
@@ -141,16 +144,21 @@ var (
 		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
 	`
 	insertRowStatement = `
-		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
+		INSERT IGNORE INTO stress_test (id, rand_val, op_counter) VALUES (%d, left(md5(rand()), 8), %d)
 	`
 	updateRowStatement = `
-		UPDATE stress_test SET updates=updates+1 WHERE id=%d
+		UPDATE stress_test SET updates=updates+1, op_counter=%d WHERE id=%d
 	`
 	deleteRowStatement = `
 		DELETE FROM stress_test WHERE id=%d AND updates=1
 	`
 	selectCountRowsStatement = `
-		SELECT COUNT(*) AS num_rows, CAST(SUM(updates) AS SIGNED) AS sum_updates FROM stress_test
+		SELECT
+			COUNT(*) AS num_rows,
+			CAST(SUM(updates) AS SIGNED) AS sum_updates,
+			MAX(op_counter) AS op_counter,
+			COUNT(DISTINCT op_counter) AS distinct_op_counter
+		FROM stress_test
 	`
 	writeMetrics WriteMetrics
 )
@@ -158,7 +166,7 @@ var (
 const (
 	baseSleepInterval    = 5 * time.Millisecond
 	maxTableRows         = 4096
-	migrationWaitTimeout = 30 * time.Second
+	migrationWaitTimeout = 45 * time.Second
 )
 
 func TestMain(m *testing.M) {
@@ -183,7 +191,7 @@ func TestMain(m *testing.M) {
 
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--heartbeat_interval", "250ms",
-			"--heartbeat_on_demand_duration", "5s",
+			"--heartbeat_on_demand_duration", "15s",
 			"--migration_check_interval", "2s",
 			"--watch_replication_stream",
 			// Test VPlayer batching mode.
@@ -247,14 +255,23 @@ func runRoutineThrottleCheck(t testing.TB, ctx context.Context, flags *throttle.
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 		for {
-			resp, err := throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.OnlineDDLName, flags)
+			resp, err := throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.TestingName, flags)
 			assert.NoError(t, err)
 			switch {
 			case err != nil:
 			case resp == nil:
 			case resp.Check == nil:
 			default:
-				throttleWorkload.Store(resp.Check.ResponseCode != tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
+				shouldThrottle := resp.Check.ResponseCode != tabletmanagerdatapb.CheckThrottlerResponseCode_OK
+				throttleWorkload.Store(shouldThrottle)
+				if shouldThrottle {
+					go func() {
+						flags := &throttle.CheckFlags{SkipRequestHeartbeats: true, Scope: base.SelfScope}
+						resp, _ := throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.TestingName, flags)
+						log.Infof("Self throttle check: %v", resp)
+					}()
+				}
+				go log.Infof("Throttle check: %v", resp.Check)
 			}
 			select {
 			case <-ticker.C:
@@ -263,6 +280,26 @@ func runRoutineThrottleCheck(t testing.TB, ctx context.Context, flags *throttle.
 			}
 		}
 	}()
+}
+
+func waitForThrottleCheckOK(t testing.TB, ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		if !throttleWorkload.Load() {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			assert.FailNow(t, "throttleWorkload still true after timeout")
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 func generateWorkload(t testing.TB, ctx context.Context, wg *sync.WaitGroup) {
@@ -431,9 +468,39 @@ func getCreateTableStatement(t testing.TB, tablet *cluster.Vttablet, tableName s
 	return statement
 }
 
+func reviewError(err error) error {
+	if err == nil {
+		return err
+	}
+	sqlErr, ok := err.(*sqlerror.SQLError)
+	if !ok {
+		return err
+	}
+
+	// Let's try and account for all known errors:
+	switch sqlErr.Number() {
+	case sqlerror.ERDupEntry: // happens since we hammer the tables randomly
+		return nil
+	case sqlerror.ERTooManyUserConnections: // can happen in Online DDL cut-over
+		return nil
+	case sqlerror.ERUnknownError: // happens when query buffering times out
+		return nil
+	case sqlerror.ERQueryInterrupted: // cancelled due to context expiration
+		return nil
+	case sqlerror.ERLockDeadlock:
+		return nil // bummer, but deadlocks can happen, it's a legit error.
+	case sqlerror.ERLockNowait:
+		return nil // For some queries we use NOWAIT. Bummer, but this can happen, it's a legit error.
+	case sqlerror.ERQueryTimeout:
+		return nil // query timed out, not a FK error
+	}
+	return err
+}
+
 func generateInsert(t testing.TB, conn *mysql.Conn) error {
+	opCounter := writeMetrics.opCounter.Add(1)
 	id := rand.Int32N(int32(maxTableRows))
-	query := fmt.Sprintf(insertRowStatement, id)
+	query := fmt.Sprintf(insertRowStatement, id, opCounter)
 	qr, err := conn.ExecuteFetch(query, 1, false)
 	if err == nil {
 		totalAppliedDML.Add(1)
@@ -455,13 +522,13 @@ func generateInsert(t testing.TB, conn *mysql.Conn) error {
 		}
 		writeMetrics.inserts++
 	}()
-
-	return err
+	return reviewError(err)
 }
 
 func generateUpdate(t testing.TB, conn *mysql.Conn) error {
+	opCounter := writeMetrics.opCounter.Add(1)
 	id := rand.Int32N(int32(maxTableRows))
-	query := fmt.Sprintf(updateRowStatement, id)
+	query := fmt.Sprintf(updateRowStatement, opCounter, id)
 	qr, err := conn.ExecuteFetch(query, 1, false)
 	if err == nil {
 		totalAppliedDML.Add(1)
@@ -483,10 +550,11 @@ func generateUpdate(t testing.TB, conn *mysql.Conn) error {
 		}
 		writeMetrics.updates++
 	}()
-	return err
+	return reviewError(err)
 }
 
 func generateDelete(t testing.TB, conn *mysql.Conn) error {
+	writeMetrics.opCounter.Add(1)
 	id := rand.Int32N(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1, false)
@@ -510,7 +578,7 @@ func generateDelete(t testing.TB, conn *mysql.Conn) error {
 		}
 		writeMetrics.deletes++
 	}()
-	return err
+	return reviewError(err)
 }
 
 func runSingleConnection(ctx context.Context, t testing.TB, sleepInterval time.Duration) {
@@ -617,6 +685,8 @@ func testSelectTableMetrics(t testing.TB) {
 	log.Infof("testSelectTableMetrics, row: %v", row)
 	numRows := row.AsInt64("num_rows", 0)
 	sumUpdates := row.AsInt64("sum_updates", 0)
+	opCounter := row.AsInt64("op_counter", 0)
+	distinctOpCounter := row.AsInt64("distinct_op_counter", 0)
 	assert.NotZero(t, numRows)
 	assert.NotZero(t, sumUpdates)
 	assert.NotZero(t, writeMetrics.inserts)
@@ -624,6 +694,9 @@ func testSelectTableMetrics(t testing.TB) {
 	assert.NotZero(t, writeMetrics.updates)
 	assert.Equal(t, writeMetrics.inserts-writeMetrics.deletes, numRows)
 	assert.Equal(t, writeMetrics.updates-writeMetrics.deletes, sumUpdates) // because we DELETE WHERE updates=1
+	assert.Equal(t, numRows, distinctOpCounter)
+	assert.LessOrEqual(t, opCounter, writeMetrics.opCounter.Load())
+	log.Infof("numRows=%d, sumUpdates=%d, opCounter=%d, distinctOpCounter=%d", numRows, sumUpdates, opCounter, distinctOpCounter)
 }
 
 func BenchmarkWorkloadSingleConn(b *testing.B) {
@@ -635,6 +708,7 @@ func BenchmarkWorkloadSingleConn(b *testing.B) {
 	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
 	runRoutineThrottleCheck(b, ctx, flags)
+	waitForThrottleCheckOK(b, ctx)
 
 	ticker := time.NewTicker(baseSleepInterval)
 	defer ticker.Stop()
@@ -672,6 +746,7 @@ func BenchmarkWorkloadMultiConn(b *testing.B) {
 	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
 	runRoutineThrottleCheck(b, ctx, flags)
+	waitForThrottleCheckOK(b, ctx)
 
 	ticker := time.NewTicker(baseSleepInterval)
 	defer ticker.Stop()
@@ -706,19 +781,8 @@ func BenchmarkWorkloadMultiConnThrottlerDisabled(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	{
-		req := &vtctldatapb.UpdateThrottlerConfigRequest{Disable: true}
-		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
-		assert.NoError(b, err)
-
-		// Wait for the throttler to be disabled everywhere.
-		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
-			throttler.WaitForThrottlerStatusEnabled(b, &clusterInstance.VtctldClientProcess, tablet, false, nil, time.Minute)
-		}
-		throttleWorkload.Store(false)
-
-		defer throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
-	}
+	throttler.DisableLagThrottlerAndWaitForStatus(b, clusterInstance)
+	throttleWorkload.Store(false)
 	testWithInitialSchema(b)
 	initTable(b)
 
@@ -764,6 +828,35 @@ func BenchmarkOnlineDDLWithWorkload(b *testing.B) {
 	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
 	runRoutineThrottleCheck(b, ctx, flags)
+	waitForThrottleCheckOK(b, ctx)
+
+	ticker := time.NewTicker(baseSleepInterval)
+	defer ticker.Stop()
+
+	generateWorkload(b, ctx, &wg)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		hint := "post_completion_hint"
+		uuid := testOnlineDDLStatement(b, fmt.Sprintf(alterHintStatement, hint), "online --force-cut-over-after=1s", "", true)
+		_ = onlineddl.WaitForMigrationStatus(b, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	}
+	cancel()
+	wg.Wait()
+	testSelectTableMetrics(b)
+}
+
+func BenchmarkOnlineDDLWithWorkloadThrottlerDisabled(b *testing.B) {
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	throttler.DisableLagThrottlerAndWaitForStatus(b, clusterInstance)
+	throttleWorkload.Store(false)
+	testWithInitialSchema(b)
+	initTable(b)
 
 	ticker := time.NewTicker(baseSleepInterval)
 	defer ticker.Stop()
