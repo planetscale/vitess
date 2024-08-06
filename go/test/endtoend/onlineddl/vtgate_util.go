@@ -48,7 +48,7 @@ func init() {
 }
 
 // VtgateExecQuery runs a query on VTGate using given query params
-func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
+func VtgateExecQuery(t testing.TB, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
 	t.Helper()
 
 	ctx := context.Background()
@@ -90,7 +90,7 @@ func VtgateExecQueryInTransaction(t *testing.T, vtParams *mysql.ConnParams, quer
 }
 
 // VtgateExecDDL executes a DDL query with given strategy
-func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string, query string, expectError string) *sqltypes.Result {
+func VtgateExecDDL(t testing.TB, vtParams *mysql.ConnParams, ddlStrategy string, query string, expectError string) *sqltypes.Result {
 	t.Helper()
 
 	ctx := context.Background()
@@ -256,7 +256,7 @@ func CheckForceMigrationCutOver(t *testing.T, vtParams *mysql.ConnParams, shards
 }
 
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
-func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
+func CheckMigrationStatus(t testing.TB, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) bool {
 	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -282,7 +282,7 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 }
 
 // WaitForMigrationStatus waits for a migration to reach either provided statuses (returns immediately), or eventually time out
-func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+func WaitForMigrationStatus(t testing.TB, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
 	shardNames := map[string]bool{}
 	for _, shard := range shards {
 		shardNames[shard.Name] = true

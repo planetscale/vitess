@@ -61,6 +61,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
@@ -323,8 +324,6 @@ func TestSchemaChange(t *testing.T) {
 			})
 			t.Run("wait for migration completion", func(t *testing.T) {
 				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-				// require.Equal(t, schema.OnlineDDLStatusComplete, status)
-				// t.Logf("# Migration status (for debug purposes): <%s>", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			})
 			t.Run("validate table schema", func(t *testing.T) {
@@ -352,7 +351,7 @@ func testWithInitialSchema(t testing.TB) {
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
-func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, expectHint string, skipWait bool) (uuid string) {
+func testOnlineDDLStatement(t testing.TB, alterStatement string, ddlStrategy string, expectHint string, skipWait bool) (uuid string) {
 	row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
 	require.NotNil(t, row)
 	uuid = row.AsString("uuid", "")
@@ -414,7 +413,7 @@ func checkTablesCount(t testing.TB, tablet *cluster.Vttablet, showTableName stri
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
-func checkMigratedTable(t *testing.T, tableName, expectHint string) {
+func checkMigratedTable(t testing.TB, tableName, expectHint string) {
 	for i := range clusterInstance.Keyspaces[0].Shards {
 		createStatement := getCreateTableStatement(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], tableName)
 		assert.Contains(t, createStatement, expectHint)
@@ -422,7 +421,7 @@ func checkMigratedTable(t *testing.T, tableName, expectHint string) {
 }
 
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
-func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
+func getCreateTableStatement(t testing.TB, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
 	require.Nil(t, err)
 
@@ -599,7 +598,7 @@ func initTable(t testing.TB) {
 	assert.GreaterOrEqual(t, appliedDMLEnd-appliedDMLStart, int64(maxTableRows))
 }
 
-func testSelectTableMetrics(t *testing.T) {
+func testSelectTableMetrics(t testing.TB) {
 	writeMetrics.mu.Lock()
 	defer writeMetrics.mu.Unlock()
 
@@ -633,6 +632,7 @@ func BenchmarkWorkloadSingleConn(b *testing.B) {
 
 	testWithInitialSchema(b)
 	initTable(b)
+	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
 	runRoutineThrottleCheck(b, ctx, flags)
 
@@ -669,6 +669,7 @@ func BenchmarkWorkloadMultiConn(b *testing.B) {
 
 	testWithInitialSchema(b)
 	initTable(b)
+	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
 	runRoutineThrottleCheck(b, ctx, flags)
 
@@ -700,4 +701,82 @@ func BenchmarkWorkloadMultiConn(b *testing.B) {
 			assert.Nil(b, err)
 		}
 	})
+}
+func BenchmarkWorkloadMultiConnThrottlerDisabled(b *testing.B) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	{
+		req := &vtctldatapb.UpdateThrottlerConfigRequest{Disable: true}
+		_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, nil, nil)
+		assert.NoError(b, err)
+
+		// Wait for the throttler to be disabled everywhere.
+		for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+			throttler.WaitForThrottlerStatusEnabled(b, &clusterInstance.VtctldClientProcess, tablet, false, nil, time.Minute)
+		}
+		throttleWorkload.Store(false)
+
+		defer throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
+	}
+	testWithInitialSchema(b)
+	initTable(b)
+
+	ticker := time.NewTicker(baseSleepInterval)
+	defer ticker.Stop()
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		conn, err := mysql.Connect(ctx, &vtParams)
+		require.Nil(b, err)
+		defer conn.Close()
+
+		for pb.Next() {
+			for throttleWorkload.Load() {
+				<-ticker.C
+			}
+			for range len(ticker.C) {
+				<-ticker.C
+			}
+			switch rand.Int32N(3) {
+			case 0:
+				err = generateInsert(b, conn)
+			case 1:
+				err = generateUpdate(b, conn)
+			case 2:
+				err = generateDelete(b, conn)
+			}
+			assert.Nil(b, err)
+		}
+	})
+}
+
+func BenchmarkOnlineDDLWithWorkload(b *testing.B) {
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	testWithInitialSchema(b)
+	initTable(b)
+	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
+	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
+	runRoutineThrottleCheck(b, ctx, flags)
+
+	ticker := time.NewTicker(baseSleepInterval)
+	defer ticker.Stop()
+
+	generateWorkload(b, ctx, &wg)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		hint := "post_completion_hint"
+		uuid := testOnlineDDLStatement(b, fmt.Sprintf(alterHintStatement, hint), "online --force-cut-over-after=1s", "", true)
+		_ = onlineddl.WaitForMigrationStatus(b, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	}
+	cancel()
+	wg.Wait()
+	testSelectTableMetrics(b)
 }
