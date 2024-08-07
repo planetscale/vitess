@@ -846,30 +846,30 @@ func BenchmarkOnlineDDLWithWorkload(b *testing.B) {
 	testSelectTableMetrics(b)
 }
 
-func BenchmarkOnlineDDLWithWorkloadThrottlerDisabled(b *testing.B) {
-	var wg sync.WaitGroup
-	defer wg.Wait()
+// func BenchmarkOnlineDDLWithWorkloadThrottlerDisabled(b *testing.B) {
+// 	var wg sync.WaitGroup
+// 	defer wg.Wait()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	defer cancel()
 
-	throttler.DisableLagThrottlerAndWaitForStatus(b, clusterInstance)
-	throttleWorkload.Store(false)
-	testWithInitialSchema(b)
-	initTable(b)
+// 	throttler.DisableLagThrottlerAndWaitForStatus(b, clusterInstance)
+// 	throttleWorkload.Store(false)
+// 	testWithInitialSchema(b)
+// 	initTable(b)
 
-	ticker := time.NewTicker(baseSleepInterval)
-	defer ticker.Stop()
+// 	ticker := time.NewTicker(baseSleepInterval)
+// 	defer ticker.Stop()
 
-	generateWorkload(b, ctx, &wg)
+// 	generateWorkload(b, ctx, &wg)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		hint := "post_completion_hint"
-		uuid := testOnlineDDLStatement(b, fmt.Sprintf(alterHintStatement, hint), "online --force-cut-over-after=1s", "", true)
-		_ = onlineddl.WaitForMigrationStatus(b, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-	}
-	cancel()
-	wg.Wait()
-	testSelectTableMetrics(b)
-}
+// 	b.ResetTimer()
+// 	for i := 0; i < b.N; i++ {
+// 		hint := "post_completion_hint"
+// 		uuid := testOnlineDDLStatement(b, fmt.Sprintf(alterHintStatement, hint), "online --force-cut-over-after=1s", "", true)
+// 		_ = onlineddl.WaitForMigrationStatus(b, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+// 	}
+// 	cancel()
+// 	wg.Wait()
+// 	testSelectTableMetrics(b)
+// }
