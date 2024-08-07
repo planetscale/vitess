@@ -75,6 +75,7 @@ type WriteMetrics struct {
 	insertsAttempts, insertsFailures, insertsNoops, inserts int64
 	updatesAttempts, updatesFailures, updatesNoops, updates int64
 	deletesAttempts, deletesFailures, deletesNoops, deletes int64
+	selectsAttempts, selectsFailures, selectsNoops, selects int64
 }
 
 func (w *WriteMetrics) Clear() {
@@ -96,6 +97,10 @@ func (w *WriteMetrics) Clear() {
 	w.deletesAttempts = 0
 	w.deletesFailures = 0
 	w.deletesNoops = 0
+
+	w.selectsAttempts = 0
+	w.selectsFailures = 0
+	w.selectsNoops = 0
 }
 
 func (w *WriteMetrics) String() string {
@@ -103,11 +108,13 @@ func (w *WriteMetrics) String() string {
 insertsAttempts=%d, insertsFailures=%d, insertsNoops=%d, inserts=%d,
 updatesAttempts=%d, updatesFailures=%d, updatesNoops=%d, updates=%d,
 deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
+selectsAttempts=%d, selectsFailures=%d, selectsNoops=%d, selects=%d,
 `,
 		w.inserts-w.deletes, w.updates-w.deletes,
 		w.insertsAttempts, w.insertsFailures, w.insertsNoops, w.inserts,
 		w.updatesAttempts, w.updatesFailures, w.updatesNoops, w.updates,
 		w.deletesAttempts, w.deletesFailures, w.deletesNoops, w.deletes,
+		w.selectsAttempts, w.selectsFailures, w.selectsNoops, w.selects,
 	)
 }
 
@@ -142,6 +149,9 @@ var (
 	`
 	alterHintStatement = `
 		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
+	`
+	selectRowStatement = `
+		SELECT id, rand_val, op_counter, created_timestamp, updates FROM stress_test WHERE id=%d
 	`
 	insertRowStatement = `
 		INSERT IGNORE INTO stress_test (id, rand_val, op_counter) VALUES (%d, left(md5(rand()), 8), %d)
@@ -497,6 +507,30 @@ func reviewError(err error) error {
 	return err
 }
 
+func generateSelect(t testing.TB, conn *mysql.Conn) error {
+	id := rand.Int32N(int32(maxTableRows))
+	query := fmt.Sprintf(selectRowStatement, id)
+	qr, err := conn.ExecuteFetch(query, 1, false)
+
+	func() {
+		writeMetrics.mu.Lock()
+		defer writeMetrics.mu.Unlock()
+
+		writeMetrics.selectsAttempts++
+		if err != nil {
+			writeMetrics.selectsFailures++
+			return
+		}
+		assert.Less(t, len(qr.Rows), int(2))
+		if len(qr.Rows) == 0 {
+			writeMetrics.selectsNoops++
+			return
+		}
+		writeMetrics.selects++
+	}()
+	return reviewError(err)
+}
+
 func generateInsert(t testing.TB, conn *mysql.Conn) error {
 	opCounter := writeMetrics.opCounter.Add(1)
 	id := rand.Int32N(int32(maxTableRows))
@@ -597,13 +631,15 @@ func runSingleConnection(ctx context.Context, t testing.TB, sleepInterval time.D
 
 	for {
 		if !throttleWorkload.Load() {
-			switch rand.Int32N(3) {
+			switch rand.Int32N(4) {
 			case 0:
 				err = generateInsert(t, conn)
 			case 1:
 				err = generateUpdate(t, conn)
 			case 2:
 				err = generateDelete(t, conn)
+			case 3:
+				err = generateSelect(t, conn)
 			}
 		}
 		select {
@@ -702,21 +738,21 @@ func testSelectTableMetrics(t testing.TB) {
 // func BenchmarkWorkloadSingleConn(b *testing.B) {
 // 	ctx, cancel := context.WithCancel(context.Background())
 // 	defer cancel()
-
+//
 // 	testWithInitialSchema(b)
 // 	initTable(b)
 // 	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
 // 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
 // 	runRoutineThrottleCheck(b, ctx, flags)
 // 	waitForThrottleCheckOK(b, ctx)
-
+//
 // 	ticker := time.NewTicker(baseSleepInterval)
 // 	defer ticker.Stop()
-
+//
 // 	conn, err := mysql.Connect(ctx, &vtParams)
 // 	require.Nil(b, err)
 // 	defer conn.Close()
-
+//
 // 	b.ResetTimer()
 // 	for i := 0; i < b.N; i++ {
 // 		for throttleWorkload.Load() {
@@ -765,13 +801,15 @@ func BenchmarkWorkloadMultiConn(b *testing.B) {
 			for range len(ticker.C) {
 				<-ticker.C
 			}
-			switch rand.Int32N(3) {
+			switch rand.Int32N(4) {
 			case 0:
 				err = generateInsert(b, conn)
 			case 1:
 				err = generateUpdate(b, conn)
 			case 2:
 				err = generateDelete(b, conn)
+			case 3:
+				err = generateSelect(b, conn)
 			}
 			assert.Nil(b, err)
 		}
@@ -803,13 +841,15 @@ func BenchmarkWorkloadMultiConnThrottlerDisabled(b *testing.B) {
 			for range len(ticker.C) {
 				<-ticker.C
 			}
-			switch rand.Int32N(3) {
+			switch rand.Int32N(4) {
 			case 0:
 				err = generateInsert(b, conn)
 			case 1:
 				err = generateUpdate(b, conn)
 			case 2:
 				err = generateDelete(b, conn)
+			case 3:
+				err = generateSelect(b, conn)
 			}
 			assert.Nil(b, err)
 		}
@@ -849,20 +889,20 @@ func BenchmarkOnlineDDLWithWorkload(b *testing.B) {
 // func BenchmarkOnlineDDLWithWorkloadThrottlerDisabled(b *testing.B) {
 // 	var wg sync.WaitGroup
 // 	defer wg.Wait()
-
+//
 // 	ctx, cancel := context.WithCancel(context.Background())
 // 	defer cancel()
-
+//
 // 	throttler.DisableLagThrottlerAndWaitForStatus(b, clusterInstance)
 // 	throttleWorkload.Store(false)
 // 	testWithInitialSchema(b)
 // 	initTable(b)
-
+//
 // 	ticker := time.NewTicker(baseSleepInterval)
 // 	defer ticker.Stop()
-
+//
 // 	generateWorkload(b, ctx, &wg)
-
+//
 // 	b.ResetTimer()
 // 	for i := 0; i < b.N; i++ {
 // 		hint := "post_completion_hint"
