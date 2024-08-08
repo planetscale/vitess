@@ -19,28 +19,26 @@ package vreplication
 import (
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet"
-
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
-	retryDelay          = vttablet.DefaultVReplicationConfig.RetryDelay
-	maxTimeToRetryError time.Duration // Default behavior is to keep retrying, for backward compatibility
+	retryDelay          = 5 * time.Second
+	maxTimeToRetryError = 5 * time.Second // Default behavior is to keep retrying, for backward compatibility
 
 	tabletTypesStr = "in_order:REPLICA,PRIMARY" // Default value
 
-	relayLogMaxSize  = vttablet.DefaultVReplicationConfig.RelayLogMaxSize
-	relayLogMaxItems = vttablet.DefaultVReplicationConfig.RelayLogMaxItems
+	relayLogMaxSize  = 25000
+	relayLogMaxItems = 5000
 
-	replicaLagTolerance = vttablet.DefaultVReplicationConfig.ReplicaLagTolerance
+	replicaLagTolerance = 1 * time.Minute
 
-	vreplicationHeartbeatUpdateInterval = vttablet.DefaultVReplicationConfig.HeartbeatUpdateInterval
+	vreplicationHeartbeatUpdateInterval = 1
 
-	vreplicationStoreCompressedGTID   = vttablet.DefaultVReplicationConfig.StoreCompressedGTID
-	vreplicationParallelInsertWorkers = vttablet.DefaultVReplicationConfig.ParallelInsertWorkers
+	vreplicationStoreCompressedGTID   = false
+	vreplicationParallelInsertWorkers = 1
 )
 
 func registerVReplicationFlags(fs *pflag.FlagSet) {
