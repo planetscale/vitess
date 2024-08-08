@@ -741,7 +741,6 @@ func testSelectTableMetrics(t testing.TB) {
 //
 // 	testWithInitialSchema(b)
 // 	initTable(b)
-// 	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
 // 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
 // 	runRoutineThrottleCheck(b, ctx, flags)
 // 	waitForThrottleCheckOK(b, ctx)
@@ -779,7 +778,6 @@ func BenchmarkWorkloadMultiConn(b *testing.B) {
 
 	testWithInitialSchema(b)
 	initTable(b)
-	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
 	runRoutineThrottleCheck(b, ctx, flags)
 	waitForThrottleCheckOK(b, ctx)
@@ -825,7 +823,6 @@ func BenchmarkOnlineDDLWithWorkload(b *testing.B) {
 
 	testWithInitialSchema(b)
 	initTable(b)
-	throttler.EnableLagThrottlerAndWaitForStatus(b, clusterInstance)
 	flags := &throttle.CheckFlags{SkipRequestHeartbeats: false}
 	runRoutineThrottleCheck(b, ctx, flags)
 	waitForThrottleCheckOK(b, ctx)
@@ -846,14 +843,13 @@ func BenchmarkOnlineDDLWithWorkload(b *testing.B) {
 	testSelectTableMetrics(b)
 }
 
-func BenchmarkWorkloadMultiConnThrottlerDisabled(b *testing.B) {
+func BenchmarkWorkloadMultiConnIgnoreThrottler(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	throttler.DisableLagThrottlerAndWaitForStatus(b, clusterInstance)
-	throttleWorkload.Store(false)
 	testWithInitialSchema(b)
 	initTable(b)
+	throttleWorkload.Store(false)
 
 	ticker := time.NewTicker(baseSleepInterval)
 	defer ticker.Stop()
@@ -887,17 +883,16 @@ func BenchmarkWorkloadMultiConnThrottlerDisabled(b *testing.B) {
 	})
 }
 
-// func BenchmarkOnlineDDLWithWorkloadThrottlerDisabled(b *testing.B) {
+// func BenchmarkOnlineDDLWithWorkloadIgnoreThrottler(b *testing.B) {
 // 	var wg sync.WaitGroup
 // 	defer wg.Wait()
 //
 // 	ctx, cancel := context.WithCancel(context.Background())
 // 	defer cancel()
 //
-// 	throttler.DisableLagThrottlerAndWaitForStatus(b, clusterInstance)
-// 	throttleWorkload.Store(false)
 // 	testWithInitialSchema(b)
 // 	initTable(b)
+// 	throttleWorkload.Store(false)
 //
 // 	ticker := time.NewTicker(baseSleepInterval)
 // 	defer ticker.Stop()
