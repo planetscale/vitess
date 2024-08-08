@@ -515,7 +515,7 @@ func (a *Aggregator) pushRemainingGroupingColumnsAndWeightStrings(ctx *planconte
 			continue
 		}
 
-		offset := a.internalAddColumn(ctx, aeWrap(weightStringFor(gb.Inner)), false)
+		offset := a.internalAddWSColumn(ctx, gb.ColOffset, aeWrap(weightStringFor(gb.Inner)), false)
 		a.Grouping[idx].WSOffset = offset
 	}
 	for idx, aggr := range a.Aggregations {
@@ -544,6 +544,16 @@ func (a *Aggregator) internalAddColumn(ctx *plancontext.PlanningContext, aliased
 		a.ResultColumns = len(a.Columns)
 	}
 	offset := a.Source.AddColumn(ctx, true, addToGroupBy, aliasedExpr)
+
+	if offset == len(a.Columns) {
+		// if we get an offset at the end of our current column list, it means we added a new column
+		a.Columns = append(a.Columns, aliasedExpr)
+	}
+	return offset
+}
+
+func (a *Aggregator) internalAddWSColumn(ctx *plancontext.PlanningContext, inOffset int, aliasedExpr *sqlparser.AliasedExpr, addToGroupBy bool) int {
+	offset := a.Source.AddWSColumn(ctx, inOffset, false)
 
 	if offset == len(a.Columns) {
 		// if we get an offset at the end of our current column list, it means we added a new column
