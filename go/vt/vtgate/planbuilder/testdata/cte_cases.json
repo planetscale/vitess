@@ -223,8 +223,10 @@
         "Aggregates": "count_star(0) AS count(*)",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": "3",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "1 as 1"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -237,8 +239,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
-                    "Query": "select x.phone, x.id, x.city, 1 from (select phone, id, city from `user` where id > 12) as x limit 10",
+                    "FieldQuery": "select 1 from (select phone, id, city from `user` where 1 != 1) as x where 1 != 1",
+                    "Query": "select 1 from (select phone, id, city from `user` where id > 12) as x limit 10",
                     "Table": "`user`"
                   }
                 ]
@@ -336,8 +338,12 @@
         "ResultColumns": 2,
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": "1,2,3",
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":1 as val1",
+              "1 as 1",
+              ":2 as weight_string(x.val1)"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Limit",
@@ -350,9 +356,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
-                    "OrderBy": "(1|3) ASC",
-                    "Query": "select x.id, x.val1, 1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by x.val1 asc limit 2",
+                    "FieldQuery": "select x.id, x.val1, weight_string(x.val1) from (select id, val1 from `user` where 1 != 1) as x where 1 != 1",
+                    "OrderBy": "(1|2) ASC",
+                    "Query": "select x.id, x.val1, weight_string(x.val1) from (select id, val1 from `user` where val2 < 4) as x order by x.val1 asc limit 2",
                     "Table": "`user`"
                   }
                 ]
@@ -718,13 +724,15 @@
         "Aggregates": "count_star(0) AS count(*)",
         "Inputs": [
           {
-            "OperatorType": "SimpleProjection",
-            "Columns": "1",
+            "OperatorType": "Projection",
+            "Expressions": [
+              "1 as 1"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Scalar",
-                "Aggregates": "sum_count_star(0) AS count(*), any_value(1)",
+                "Aggregates": "sum_count_star(0) AS count(*)",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -733,8 +741,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(*), 1 from `user` where 1 != 1",
-                    "Query": "select count(*), 1 from `user`",
+                    "FieldQuery": "select count(*) from `user` where 1 != 1",
+                    "Query": "select count(*) from `user`",
                     "Table": "`user`"
                   }
                 ]
@@ -1999,8 +2007,11 @@
                     "Aggregates": "any_value(0), sum(1) AS sum(num)",
                     "Inputs": [
                       {
-                        "OperatorType": "SimpleProjection",
-                        "Columns": "1,0",
+                        "OperatorType": "Projection",
+                        "Expressions": [
+                          "1000 as 1000",
+                          ":0 as num"
+                        ],
                         "Inputs": [
                           {
                             "OperatorType": "Concatenate",
@@ -2012,11 +2023,13 @@
                                   {
                                     "OperatorType": "Aggregate",
                                     "Variant": "Scalar",
-                                    "Aggregates": "count_star(0) AS num, any_value(1)",
+                                    "Aggregates": "count_star(0) AS num",
                                     "Inputs": [
                                       {
-                                        "OperatorType": "SimpleProjection",
-                                        "Columns": "1,2",
+                                        "OperatorType": "Projection",
+                                        "Expressions": [
+                                          "1 as 1"
+                                        ],
                                         "Inputs": [
                                           {
                                             "OperatorType": "Limit",
@@ -2029,8 +2042,8 @@
                                                   "Name": "user",
                                                   "Sharded": true
                                                 },
-                                                "FieldQuery": "select t.id, 1, 1000 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
-                                                "Query": "select t.id, 1, 1000 from (select `user`.id from `user` where `user`.textcol1 = 'open' and `user`.intcol = 1) as t limit :__upper_limit",
+                                                "FieldQuery": "select 1 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
+                                                "Query": "select 1 from (select `user`.id from `user` where `user`.textcol1 = 'open' and `user`.intcol = 1) as t limit :__upper_limit",
                                                 "Table": "`user`"
                                               }
                                             ]
@@ -2048,11 +2061,13 @@
                                   {
                                     "OperatorType": "Aggregate",
                                     "Variant": "Scalar",
-                                    "Aggregates": "count_star(0) AS num, any_value(1)",
+                                    "Aggregates": "count_star(0) AS num",
                                     "Inputs": [
                                       {
-                                        "OperatorType": "SimpleProjection",
-                                        "Columns": "1,2",
+                                        "OperatorType": "Projection",
+                                        "Expressions": [
+                                          "1 as 1"
+                                        ],
                                         "Inputs": [
                                           {
                                             "OperatorType": "Limit",
@@ -2065,8 +2080,8 @@
                                                   "Name": "user",
                                                   "Sharded": true
                                                 },
-                                                "FieldQuery": "select t.id, 1, 1000 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
-                                                "Query": "select t.id, 1, 1000 from (select `user`.id from `user` where `user`.textcol1 = 'closed' and `user`.intcol = 1) as t limit :__upper_limit",
+                                                "FieldQuery": "select 1 from (select `user`.id from `user` where 1 != 1) as t where 1 != 1",
+                                                "Query": "select 1 from (select `user`.id from `user` where `user`.textcol1 = 'closed' and `user`.intcol = 1) as t limit :__upper_limit",
                                                 "Table": "`user`"
                                               }
                                             ]
@@ -2301,6 +2316,74 @@
             "FieldQuery": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where 1 != 1",
             "Query": "select e.id, :cte_level + 1 as `cte.``level`` + 1` from `user` as e where e.manager_id = :cte_id",
             "Table": "`user`, dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Aggregation over CTE output",
+    "query": "WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id FROM user WHERE manager_id IS NULL UNION ALL SELECT e.id, e.name, e.manager_id FROM user e INNER JOIN emp_cte cte ON e.manager_id = cte.id) SELECT manager_id, COUNT(*) AS employee_count FROM emp_cte GROUP BY manager_id;",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "WITH RECURSIVE emp_cte AS (SELECT id, name, manager_id FROM user WHERE manager_id IS NULL UNION ALL SELECT e.id, e.name, e.manager_id FROM user e INNER JOIN emp_cte cte ON e.manager_id = cte.id) SELECT manager_id, COUNT(*) AS employee_count FROM emp_cte GROUP BY manager_id;",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count_star(1) AS employee_count",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":2 as manager_id",
+              "1 as 1",
+              "weight_string(:2) as weight_string(manager_id)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "2 ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "RecurseCTE",
+                    "JoinVars": {
+                      "cte_id": 0
+                    },
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id, `name`, manager_id from `user` where 1 != 1",
+                        "Query": "select id, `name`, manager_id from `user` where manager_id is null",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select e.id, e.`name`, e.manager_id from `user` as e where 1 != 1",
+                        "Query": "select e.id, e.`name`, e.manager_id from `user` as e where e.manager_id = :cte_id",
+                        "Table": "`user`, dual"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
