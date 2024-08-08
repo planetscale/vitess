@@ -17,7 +17,10 @@ limitations under the License.
 package vttablet
 
 import (
+	"fmt"
 	"github.com/spf13/pflag"
+	"strconv"
+	"time"
 
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -31,22 +34,43 @@ const (
 
 var (
 	// Default flags.
-	VReplicationExperimentalFlags = DefaultVReplicationConfig.ExperimentalFlags
-	VReplicationNetReadTimeout    = DefaultVReplicationConfig.NetReadTimeout
-	VReplicationNetWriteTimeout   = DefaultVReplicationConfig.NetWriteTimeout
-	CopyPhaseDuration             = DefaultVReplicationConfig.CopyPhaseDuration
+	VReplicationExperimentalFlags int64
+	VReplicationNetReadTimeout    = 300
+	VReplicationNetWriteTimeout   = 600
+	CopyPhaseDuration             = 1 * time.Hour
 )
 
 func init() {
 	servenv.OnParseFor("vttablet", registerFlags)
 	servenv.OnParseFor("vtcombo", registerFlags)
-
 }
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.Int64Var(&VReplicationExperimentalFlags, "vreplication_experimental_flags", VReplicationExperimentalFlags,
-		"(Bitmask) of experimental features in vreplication to enable")
+	VReplicationConfigFlags.Register(fs, &VReplicationExperimentalFlagsConfig{})
 	fs.IntVar(&VReplicationNetReadTimeout, "vreplication_net_read_timeout", VReplicationNetReadTimeout, "Session value of net_read_timeout for vreplication, in seconds")
 	fs.IntVar(&VReplicationNetWriteTimeout, "vreplication_net_write_timeout", VReplicationNetWriteTimeout, "Session value of net_write_timeout for vreplication, in seconds")
 	fs.DurationVar(&CopyPhaseDuration, "vreplication_copy_phase_duration", CopyPhaseDuration, "Duration for each copy phase loop (before running the next catchup: default 1h)")
 }
+
+type VReplicationExperimentalFlagsConfig struct {
+	ConfigFlag
+}
+
+func (cf *VReplicationExperimentalFlagsConfig) New(flagName string, fs *pflag.FlagSet) {
+	cf.flagName = "vreplication_experimental_flags"
+	fs.Int64Var(&VReplicationExperimentalFlags, cf.flagName, VReplicationExperimentalFlagOptimizeInserts|VReplicationExperimentalFlagAllowNoBlobBinlogRowImage,
+		"(Bitmask) of experimental features in vreplication to enable")
+}
+
+func (cf *VReplicationExperimentalFlagsConfig) Apply(v string) error {
+	value, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid value for vreplication_experimental_flags")
+	}
+	VReplicationExperimentalFlags = value
+	return nil
+}
+
+var (
+	_ IConfigFlag = (*VReplicationExperimentalFlagsConfig)(nil)
+)

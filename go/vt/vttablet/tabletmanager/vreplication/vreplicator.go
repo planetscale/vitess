@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -56,6 +58,10 @@ var (
 	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
 	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
 	vreplicationMinimumHeartbeatUpdateInterval = 60
+
+	vstreamPacketSize              int
+	vstreamDynamicPacketSize       bool
+	vstreamBinlogRotationThreshold int
 )
 
 const (
@@ -239,7 +245,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	if err := vr.getSettingFKCheck(); err != nil {
 		return err
 	}
-	//defensive guard, should be a no-op since it should happen after copy is done
+	// defensive guard, should be a no-op since it should happen after copy is done
 	defer vr.resetFKCheckAfterCopy(vr.dbClient)
 	if err := vr.getSettingFKRestrict(); err != nil {
 		return err
@@ -439,6 +445,9 @@ func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (s
 		vr.WorkflowType = int32(settings.WorkflowType)
 		vr.WorkflowSubType = int32(settings.WorkflowSubType)
 		vr.WorkflowName = settings.WorkflowName
+	}
+	if err := vttablet.VReplicationConfigFlags.Apply(settings.WorkflowOptions.Config); err != nil {
+		return binlogplayer.VRSettings{}, 0, err
 	}
 	return settings, numTablesToCopy, err
 }

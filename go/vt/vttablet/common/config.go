@@ -18,11 +18,65 @@ package vttablet
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
-	"time"
+	"github.com/spf13/pflag"
+	"sync"
 )
 
+var VReplicationConfigFlags vreplicationConfigFlags
+
+type vreplicationConfigFlags struct {
+	mu    sync.Mutex
+	flags []IConfigFlag
+}
+
+func (vcf *vreplicationConfigFlags) Register(fs *pflag.FlagSet, flg IConfigFlag) error {
+	vcf.mu.Lock()
+	defer vcf.mu.Unlock()
+	vcf.flags = append(vcf.flags, flg)
+	flg.New(flg.FlagName(), fs)
+	return nil
+}
+
+func (vcf *vreplicationConfigFlags) Apply(config map[string]string) error {
+	vcf.mu.Lock()
+	defer vcf.mu.Unlock()
+	for k, v := range config {
+		found := false
+		for _, flg := range vcf.flags {
+			if flg.FlagName() == k {
+				err := flg.Apply(v)
+				if err != nil {
+					return err
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("No flag found with name %s", k)
+		}
+	}
+	return nil
+}
+
+type IConfigFlag interface {
+	FlagName() string
+	Apply(value string) error
+	New(flagName string, fs *pflag.FlagSet)
+}
+
+type ConfigFlag struct {
+	IConfigFlag
+	mu       sync.Mutex
+	flagName string
+	fs       *pflag.FlagSet
+}
+
+func (cf *ConfigFlag) FlagName() string {
+	return cf.flagName
+}
+
+/*
 type VReplicationConfig struct {
 	ExperimentalFlags              int64
 	NetReadTimeout                 int
@@ -63,10 +117,11 @@ func init() {
 	}
 }
 
-func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error) {
+func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, []string, error) {
 	c := &VReplicationConfig{}
 	*c = DefaultVReplicationConfig
 	var errors []string
+	var keys []string
 	for k, v := range config {
 		switch k {
 		case "vreplication_experimental_flags":
@@ -177,9 +232,13 @@ func NewVReplicationConfig(config map[string]string) (*VReplicationConfig, error
 		default:
 			errors = append(errors, "unknown vreplication config flag: %s", k)
 		}
+		keys = append(keys, k)
 	}
 	if len(errors) > 0 {
-		return nil, fmt.Errorf(strings.Join(errors, ", "))
+		return nil, nil, fmt.Errorf(strings.Join(errors, ", "))
 	}
-	return c, nil
+	return c, keys, nil
 }
+
+
+*/
