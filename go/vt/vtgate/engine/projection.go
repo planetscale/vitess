@@ -18,7 +18,9 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -56,6 +58,18 @@ func (p *Projection) GetTableName() string {
 
 // TryExecute implements the Primitive interface
 func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			descr := PrimitiveToPlanDescription(p)
+			resultJSON, err := json.Marshal(descr)
+			if err != nil {
+				panic(r)
+			}
+			resultString := string(resultJSON)
+			log.Errorf("projection panicked: %s", resultString)
+			panic(r)
+		}
+	}()
 	result, err := vcursor.ExecutePrimitive(ctx, p.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err

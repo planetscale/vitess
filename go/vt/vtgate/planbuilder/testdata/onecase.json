@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "WITH RECURSIVE emp_cte AS (SELECT id, name, col FROM user WHERE col IS NULL UNION ALL SELECT e.id, e.name, e.col FROM user e INNER JOIN emp_cte cte ON e.col = cte.id) SELECT col, COUNT(*) AS employee_count FROM emp_cte GROUP BY col;",
     "plan": {
     }
   }
