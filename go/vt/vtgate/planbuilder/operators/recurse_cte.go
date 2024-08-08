@@ -134,8 +134,13 @@ func (r *RecurseCTE) makeSureWeHaveTableInfo(ctx *plancontext.PlanningContext) {
 	}
 }
 
-func (r *RecurseCTE) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
-	panic("implement me")
+func (r *RecurseCTE) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	offsetSeed := r.Seed.AddWSColumn(ctx, offset, underRoute)
+	offsetTerm := r.Term.AddWSColumn(ctx, offset, underRoute)
+	if offsetSeed != offsetTerm {
+		panic(vterrors.VT13001("different offsets from seed and term in recursive cte"))
+	}
+	return offsetSeed
 }
 
 func (r *RecurseCTE) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {

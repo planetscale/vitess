@@ -25,7 +25,9 @@ import (
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/dbg"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtenv"
 )
@@ -90,6 +92,7 @@ func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
 	if p, ok := expr.(*CompiledExpr); ok {
 		return env.EvaluateVM(p)
 	}
+	log.Errorf("Expression - %s", dbg.S(expr))
 	e, err := expr.eval(env)
 	return EvalResult{v: e, collationEnv: env.collationEnv}, err
 }
