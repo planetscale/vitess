@@ -77,6 +77,10 @@ var (
 	recvTimeout              = 5 * time.Second
 )
 
+const (
+	getWorkflowsQuery = "select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1"
+)
+
 type LogExpectation struct {
 	Type   string
 	Detail string
