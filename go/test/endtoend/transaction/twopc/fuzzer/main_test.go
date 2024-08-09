@@ -71,6 +71,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--twopc_enable",
 			"--twopc_abandon_age", "1",
+			"--queryserver-config-transaction-cap", "100",
 		)
 
 		// Start keyspace
