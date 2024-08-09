@@ -38,9 +38,9 @@ const (
 var (
 	// Default flags.
 	VReplicationExperimentalFlags int64
-	VReplicationNetReadTimeout    = 300
-	VReplicationNetWriteTimeout   = 600
-	CopyPhaseDuration             = 1 * time.Hour
+	VReplicationNetReadTimeout    int
+	VReplicationNetWriteTimeout   int
+	CopyPhaseDuration             time.Duration
 )
 
 func init() {
@@ -52,9 +52,15 @@ func registerFlags(fs *pflag.FlagSet) {
 	if VReplicationConfigFlags.Register(fs, &VReplicationExperimentalFlagsConfig{}) != nil {
 		log.Warningf("Error registering vreplication_experimental_flags")
 	}
-	fs.IntVar(&VReplicationNetReadTimeout, "vreplication_net_read_timeout", VReplicationNetReadTimeout, "Session value of net_read_timeout for vreplication, in seconds")
-	fs.IntVar(&VReplicationNetWriteTimeout, "vreplication_net_write_timeout", VReplicationNetWriteTimeout, "Session value of net_write_timeout for vreplication, in seconds")
-	fs.DurationVar(&CopyPhaseDuration, "vreplication_copy_phase_duration", CopyPhaseDuration, "Duration for each copy phase loop (before running the next catchup: default 1h)")
+	if VReplicationConfigFlags.Register(fs, &VReplicationNetReadTimeoutConfig{}) != nil {
+		log.Warningf("Error registering vreplication_net_read_timeout")
+	}
+	if VReplicationConfigFlags.Register(fs, &VReplicationNetWriteTimeoutConfig{}) != nil {
+		log.Warningf("Error registering vreplication_net_write_timeout")
+	}
+	if VReplicationConfigFlags.Register(fs, &CopyPhaseDurationConfig{}) != nil {
+		log.Warningf("Error registering vreplication_copy_phase_duration")
+	}
 }
 
 type VReplicationExperimentalFlagsConfig struct {
@@ -63,9 +69,9 @@ type VReplicationExperimentalFlagsConfig struct {
 }
 
 func (cf *VReplicationExperimentalFlagsConfig) New(flagName string, fs *pflag.FlagSet) {
-	cf.flagName = "vreplication_experimental_flags"
+	cf.SetFlagName("vreplication_experimental_flags")
 	cf.vreplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
-	fs.Int64Var(&VReplicationExperimentalFlags, cf.flagName, cf.vreplicationExperimentalFlags,
+	fs.Int64Var(&VReplicationExperimentalFlags, cf.FlagName(), cf.vreplicationExperimentalFlags,
 		"(Bitmask) of experimental features in vreplication to enable")
 }
 
@@ -82,6 +88,84 @@ func (cf *VReplicationExperimentalFlagsConfig) Value() any {
 	return cf.vreplicationExperimentalFlags
 }
 
+type VReplicationNetReadTimeoutConfig struct {
+	ConfigFlag
+	vreplicationNetReadTimeout int
+}
+
+func (cf *VReplicationNetReadTimeoutConfig) New(flagName string, fs *pflag.FlagSet) {
+	cf.SetFlagName("vreplication_net_read_timeout")
+	cf.vreplicationNetReadTimeout = 300
+	fs.IntVar(&VReplicationNetReadTimeout, cf.FlagName(), cf.vreplicationNetReadTimeout,
+		"Session value of net_read_timeout for vreplication, in seconds")
+}
+
+func (cf *VReplicationNetReadTimeoutConfig) Merge(v string) error {
+	value, err := strconv.Atoi(v)
+	if err != nil {
+		return fmt.Errorf("invalid value for vreplication_net_read_timeout")
+	}
+	cf.vreplicationNetReadTimeout = value
+	return nil
+}
+
+func (cf *VReplicationNetReadTimeoutConfig) Value() any {
+	return cf.vreplicationNetReadTimeout
+}
+
+type VReplicationNetWriteTimeoutConfig struct {
+	ConfigFlag
+	vreplicationNetWriteTimeout int
+}
+
+func (cf *VReplicationNetWriteTimeoutConfig) New(flagName string, fs *pflag.FlagSet) {
+	cf.SetFlagName("vreplication_net_write_timeout")
+	cf.vreplicationNetWriteTimeout = 600
+	fs.IntVar(&VReplicationNetWriteTimeout, cf.FlagName(), cf.vreplicationNetWriteTimeout,
+		"Session value of net_write_timeout for vreplication, in seconds")
+}
+
+func (cf *VReplicationNetWriteTimeoutConfig) Merge(v string) error {
+	value, err := strconv.Atoi(v)
+	if err != nil {
+		return fmt.Errorf("invalid value for vreplication_net_write_timeout")
+	}
+	cf.vreplicationNetWriteTimeout = value
+	return nil
+}
+
+func (cf *VReplicationNetWriteTimeoutConfig) Value() any {
+	return cf.vreplicationNetWriteTimeout
+}
+
+type CopyPhaseDurationConfig struct {
+	ConfigFlag
+	copyPhaseDuration time.Duration
+}
+
+func (cf *CopyPhaseDurationConfig) New(flagName string, fs *pflag.FlagSet) {
+	cf.SetFlagName("vreplication_copy_phase_duration")
+	cf.copyPhaseDuration = 1 * time.Hour
+	fs.DurationVar(&CopyPhaseDuration, cf.FlagName(), cf.copyPhaseDuration,
+		"Duration for each copy phase loop (before running the next catchup: default 1h)")
+}
+
+func (cf *CopyPhaseDurationConfig) Merge(v string) error {
+	value, err := time.ParseDuration(v)
+	if err != nil {
+		return fmt.Errorf("invalid value for vreplication_copy_phase_duration")
+	}
+	cf.copyPhaseDuration = value
+	return nil
+}
+
+func (cf *CopyPhaseDurationConfig) Value() any {
+	return cf.copyPhaseDuration
+}
+
 var (
 	_ IConfigFlag = (*VReplicationExperimentalFlagsConfig)(nil)
+	_ IConfigFlag = (*VReplicationNetReadTimeoutConfig)(nil)
+	_ IConfigFlag = (*VReplicationNetWriteTimeoutConfig)(nil)
+	_ IConfigFlag = (*CopyPhaseDurationConfig)(nil)
 )

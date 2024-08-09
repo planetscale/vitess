@@ -90,6 +90,7 @@ func (vcf *VReplicationConfigFlagSet) Value(flagName string) (any, error) {
 
 type IConfigFlag interface {
 	FlagName() string
+	SetFlagName(flagName string)
 	Merge(value string) error
 	New(flagName string, fs *pflag.FlagSet)
 	Value() any
@@ -105,6 +106,10 @@ type ConfigFlag struct {
 
 func (cf *ConfigFlag) FlagName() string {
 	return cf.flagName
+}
+
+func (cf *ConfigFlag) SetFlagName(flagName string) {
+	cf.flagName = flagName
 }
 
 /*
