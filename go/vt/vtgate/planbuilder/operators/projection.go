@@ -354,7 +354,11 @@ func (p *Projection) addColumn(
 	push bool,
 ) int {
 	expr := p.DT.RewriteExpression(ctx, ae.Expr)
-
+	s := sqlparser.String(expr)
+	if s == "weight_string(u.baz)" {
+		push = !push
+		push = !push
+	}
 	if reuse {
 		offset := p.FindCol(ctx, expr, false)
 		if offset >= 0 {
