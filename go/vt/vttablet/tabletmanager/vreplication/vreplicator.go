@@ -445,9 +445,9 @@ func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (s
 		vr.WorkflowType = int32(settings.WorkflowType)
 		vr.WorkflowSubType = int32(settings.WorkflowSubType)
 		vr.WorkflowName = settings.WorkflowName
-	}
-	if err := vttablet.VReplicationConfigFlags.Apply(settings.WorkflowOptions.Config); err != nil {
-		return binlogplayer.VRSettings{}, 0, err
+		if err := vttablet.VReplicationConfigFlags.Merge(settings.WorkflowOptions.Config); err != nil {
+			return binlogplayer.VRSettings{}, 0, err
+		}
 	}
 	return settings, numTablesToCopy, err
 }
