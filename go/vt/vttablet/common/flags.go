@@ -18,9 +18,12 @@ package vttablet
 
 import (
 	"fmt"
-	"github.com/spf13/pflag"
 	"strconv"
 	"time"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -46,7 +49,9 @@ func init() {
 }
 
 func registerFlags(fs *pflag.FlagSet) {
-	VReplicationConfigFlags.Register(fs, &VReplicationExperimentalFlagsConfig{})
+	if VReplicationConfigFlags.Register(fs, &VReplicationExperimentalFlagsConfig{}) != nil {
+		log.Warningf("Error registering vreplication_experimental_flags")
+	}
 	fs.IntVar(&VReplicationNetReadTimeout, "vreplication_net_read_timeout", VReplicationNetReadTimeout, "Session value of net_read_timeout for vreplication, in seconds")
 	fs.IntVar(&VReplicationNetWriteTimeout, "vreplication_net_write_timeout", VReplicationNetWriteTimeout, "Session value of net_write_timeout for vreplication, in seconds")
 	fs.DurationVar(&CopyPhaseDuration, "vreplication_copy_phase_duration", CopyPhaseDuration, "Duration for each copy phase loop (before running the next catchup: default 1h)")
@@ -54,21 +59,27 @@ func registerFlags(fs *pflag.FlagSet) {
 
 type VReplicationExperimentalFlagsConfig struct {
 	ConfigFlag
+	vreplicationExperimentalFlags int64
 }
 
 func (cf *VReplicationExperimentalFlagsConfig) New(flagName string, fs *pflag.FlagSet) {
 	cf.flagName = "vreplication_experimental_flags"
-	fs.Int64Var(&VReplicationExperimentalFlags, cf.flagName, VReplicationExperimentalFlagOptimizeInserts|VReplicationExperimentalFlagAllowNoBlobBinlogRowImage,
+	cf.vreplicationExperimentalFlags = VReplicationExperimentalFlagOptimizeInserts | VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	fs.Int64Var(&VReplicationExperimentalFlags, cf.flagName, cf.vreplicationExperimentalFlags,
 		"(Bitmask) of experimental features in vreplication to enable")
 }
 
-func (cf *VReplicationExperimentalFlagsConfig) Apply(v string) error {
+func (cf *VReplicationExperimentalFlagsConfig) Merge(v string) error {
 	value, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid value for vreplication_experimental_flags")
 	}
-	VReplicationExperimentalFlags = value
+	cf.vreplicationExperimentalFlags = value
 	return nil
+}
+
+func (cf *VReplicationExperimentalFlagsConfig) Value() any {
+	return cf.vreplicationExperimentalFlags
 }
 
 var (

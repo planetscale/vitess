@@ -18,33 +18,52 @@ package vttablet
 
 import (
 	"fmt"
-	"github.com/spf13/pflag"
 	"sync"
+
+	"github.com/spf13/pflag"
 )
 
-var VReplicationConfigFlags vreplicationConfigFlags
+var VReplicationConfigFlags VReplicationConfigFlagSet
 
-type vreplicationConfigFlags struct {
+type IVReplicationConfigFlagSet interface {
+	Register(fs *pflag.FlagSet, flg IConfigFlag) error
+	Merge(config map[string]string) error
+	Clone() *VReplicationConfigFlagSet
+	// String() string
+	Value(flagName string) any
+}
+type VReplicationConfigFlagSet struct {
 	mu    sync.Mutex
-	flags []IConfigFlag
+	flags map[string]IConfigFlag
 }
 
-func (vcf *vreplicationConfigFlags) Register(fs *pflag.FlagSet, flg IConfigFlag) error {
+func (vcf *VReplicationConfigFlagSet) Clone() *VReplicationConfigFlagSet {
 	vcf.mu.Lock()
 	defer vcf.mu.Unlock()
-	vcf.flags = append(vcf.flags, flg)
+	clone := &VReplicationConfigFlagSet{}
+	clone.flags = make(map[string]IConfigFlag)
+	for k, v := range vcf.flags {
+		clone.flags[k] = v
+	}
+	return clone
+}
+
+func (vcf *VReplicationConfigFlagSet) Register(fs *pflag.FlagSet, flg IConfigFlag) error {
+	vcf.mu.Lock()
+	defer vcf.mu.Unlock()
+	vcf.flags[flg.FlagName()] = flg
 	flg.New(flg.FlagName(), fs)
 	return nil
 }
 
-func (vcf *vreplicationConfigFlags) Apply(config map[string]string) error {
+func (vcf *VReplicationConfigFlagSet) Merge(config map[string]string) error {
 	vcf.mu.Lock()
 	defer vcf.mu.Unlock()
 	for k, v := range config {
 		found := false
-		for _, flg := range vcf.flags {
+		for k, flg := range vcf.flags {
 			if flg.FlagName() == k {
-				err := flg.Apply(v)
+				err := flg.Merge(v)
 				if err != nil {
 					return err
 				}
@@ -59,10 +78,22 @@ func (vcf *vreplicationConfigFlags) Apply(config map[string]string) error {
 	return nil
 }
 
+func (vcf *VReplicationConfigFlagSet) Value(flagName string) (any, error) {
+	vcf.mu.Lock()
+	defer vcf.mu.Unlock()
+	flg, ok := vcf.flags[flagName]
+	if !ok {
+		return nil, fmt.Errorf("No flag found with name %s", flagName)
+	}
+	return flg.Value(), nil
+}
+
 type IConfigFlag interface {
 	FlagName() string
-	Apply(value string) error
+	Merge(value string) error
 	New(flagName string, fs *pflag.FlagSet)
+	Value() any
+	String() string
 }
 
 type ConfigFlag struct {

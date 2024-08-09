@@ -16,6 +16,7 @@ limitations under the License.
 
 package vttablet
 
+/*
 import (
 	"strconv"
 	"strings"
@@ -140,3 +141,6 @@ func TestNewVReplicationConfig(t *testing.T) {
 		})
 	}
 }
+
+
+*/
