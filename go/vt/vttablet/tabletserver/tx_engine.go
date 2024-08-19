@@ -147,8 +147,10 @@ func (te *TxEngine) transition(state txEngineState) {
 	log.Infof("TxEngine transition: %v", state)
 
 	// When we are transitioning from read write state, we should close all transactions.
+	teShutdownCompleted := false
 	if te.state == AcceptingReadAndWrite {
 		te.shutdownLocked()
+		teShutdownCompleted = true
 	}
 
 	te.state = state
@@ -161,7 +163,7 @@ func (te *TxEngine) transition(state txEngineState) {
 			// We need to redo prepared transactions here to handle vttablet restarts.
 			// If MySQL continues to work fine, then we won't end up redoing the prepared transactions as part of any RPC call
 			// since VTOrc won't call `UndoDemotePrimary`. We need to do them as part of this transition.
-			te.redoPreparedTransactionsLocked()
+			te.redoPreparedTransactionsLocked(teShutdownCompleted)
 		}
 		te.startTransactionWatcher()
 	}
@@ -173,7 +175,7 @@ func (te *TxEngine) RedoPreparedTransactions() {
 	if te.twopcEnabled {
 		te.stateLock.Lock()
 		defer te.stateLock.Unlock()
-		te.redoPreparedTransactionsLocked()
+		te.redoPreparedTransactionsLocked(false /* teShutdownDone */)
 	}
 }
 
@@ -183,10 +185,12 @@ func (te *TxEngine) RedoPreparedTransactions() {
 // than blocking everything for the sake of a few transactions.
 // We do this async; so we do not end up blocking writes on
 // failover for our setup tasks if using semi-sync replication.
-func (te *TxEngine) redoPreparedTransactionsLocked() {
+func (te *TxEngine) redoPreparedTransactionsLocked(teShutdownDone bool) {
 	oldState := te.state
 	// We shutdown to ensure no other writes are in progress.
-	te.shutdownLocked()
+	if !teShutdownDone {
+		te.shutdownLocked()
+	}
 	defer func() {
 		te.state = oldState
 	}()
