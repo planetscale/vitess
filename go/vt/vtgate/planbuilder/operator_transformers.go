@@ -563,6 +563,7 @@ func getHints(cmt *sqlparser.ParsedComments) *queryHints {
 }
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (engine.Primitive, error) {
+	op.Routing.(*operators.DualRouting)
 	stmt, dmlOp, err := operators.ToSQL(ctx, op.Source)
 	if err != nil {
 		return nil, err
