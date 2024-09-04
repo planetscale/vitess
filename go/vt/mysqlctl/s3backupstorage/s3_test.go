@@ -1,22 +1,19 @@
 package s3backupstorage
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v2S3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -26,29 +23,23 @@ import (
 )
 
 type s3FakeClient struct {
-	s3iface.S3API
+	*v2S3.Client
 	err   error
 	delay time.Duration
 }
 
-func (sfc *s3FakeClient) PutObjectRequest(in *s3.PutObjectInput) (*request.Request, *s3.PutObjectOutput) {
-	u, _ := url.Parse("http://localhost:1234")
-	req := request.Request{
-		HTTPRequest: &http.Request{ // without this we segfault \_(ツ)_/¯ (see https://github.com/aws/aws-sdk-go/blob/v1.28.8/aws/request/request_context.go#L13)
-			Header: make(http.Header),
-			URL:    u,
-		},
-		Retryer: client.DefaultRetryer{},
+func (sfc *s3FakeClient) PutObject(ctx context.Context, in *v2S3.PutObjectInput, optFns ...func(*v2S3.Options)) (*v2S3.PutObjectOutput, error) {
+	// Handle errors and delays
+	if sfc.err != nil {
+		return nil, sfc.err
+	}
+	if sfc.delay > 0 {
+		time.Sleep(sfc.delay)
 	}
 
-	req.Handlers.Send.PushBack(func(r *request.Request) {
-		r.Error = sfc.err
-		if sfc.delay > 0 {
-			time.Sleep(sfc.delay)
-		}
-	})
-
-	return &req, &s3.PutObjectOutput{}
+	return &v2S3.PutObjectOutput{
+		ETag: aws.String("fake-etag"),
+	}, nil
 }
 
 func TestAddFileError(t *testing.T) {
@@ -56,11 +47,17 @@ func TestAddFileError(t *testing.T) {
 		client: &s3FakeClient{err: errors.New("some error")},
 		bs: &S3BackupStorage{
 			params: backupstorage.NoParams(),
+			s3SSE: S3ServerSideEncryption{
+				awsAlg:      new(string),
+				customerAlg: new(string),
+				customerKey: new(string),
+				customerMd5: new(string),
+			},
 		},
 		readOnly: false,
 	}
 
-	wc, err := bh.AddFile(aws.BackgroundContext(), "somefile", 100000)
+	wc, err := bh.AddFile(context.Background(), "somefile", 100000)
 	require.NoErrorf(t, err, "AddFile() expected no error, got %s", err)
 	assert.NotNil(t, wc, "AddFile() expected non-nil WriteCloser")
 
@@ -87,12 +84,18 @@ func TestAddFileStats(t *testing.T) {
 				Logger: logutil.NewMemoryLogger(),
 				Stats:  fakeStats,
 			},
+			s3SSE: S3ServerSideEncryption{
+				awsAlg:      new(string),
+				customerAlg: new(string),
+				customerKey: new(string),
+				customerMd5: new(string),
+			},
 		},
 		readOnly: false,
 	}
 
 	for i := 0; i < 4; i++ {
-		wc, err := bh.AddFile(aws.BackgroundContext(), fmt.Sprintf("somefile-%d", i), 100000)
+		wc, err := bh.AddFile(context.Background(), fmt.Sprintf("somefile-%d", i), 100000)
 		require.NoErrorf(t, err, "AddFile() expected no error, got %s", err)
 		assert.NotNil(t, wc, "AddFile() expected non-nil WriteCloser")
 
@@ -131,11 +134,17 @@ func TestAddFileErrorStats(t *testing.T) {
 				Logger: logutil.NewMemoryLogger(),
 				Stats:  fakeStats,
 			},
+			s3SSE: S3ServerSideEncryption{
+				awsAlg:      new(string),
+				customerAlg: new(string),
+				customerKey: new(string),
+				customerMd5: new(string),
+			},
 		},
 		readOnly: false,
 	}
 
-	wc, err := bh.AddFile(aws.BackgroundContext(), "somefile", 100000)
+	wc, err := bh.AddFile(context.Background(), "somefile", 100000)
 	require.NoErrorf(t, err, "AddFile() expected no error, got %s", err)
 	assert.NotNil(t, wc, "AddFile() expected non-nil WriteCloser")
 
