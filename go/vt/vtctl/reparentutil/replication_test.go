@@ -18,14 +18,19 @@ package reparentutil
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"slices"
+	"sort"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/mysql/replication"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
@@ -235,6 +240,879 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 				keys = append(keys, key)
 			}
 			assert.ElementsMatch(t, tt.expected, keys)
+		})
+	}
+}
+
+func getRelayLogPosition(gtidSets ...string) string {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	u2 := "00000000-0000-0000-0000-000000000002"
+	u3 := "00000000-0000-0000-0000-000000000003"
+	u4 := "00000000-0000-0000-0000-000000000004"
+	uuids := []string{u1, u2, u3, u4}
+
+	res := "MySQL56/"
+	first := true
+	for idx, set := range gtidSets {
+		if set == "" {
+			continue
+		}
+		if !first {
+			res += ","
+		}
+		first = false
+		res += fmt.Sprintf("%s:%s", uuids[idx], set)
+	}
+	return res
+}
+
+func TestErrantGTIDCases(t *testing.T) {
+	u1 := "00000000-0000-0000-0000-000000000001"
+	u2 := "00000000-0000-0000-0000-000000000002"
+	testcases := []struct {
+		name                string
+		statusMap           map[string]*replicationdatapb.StopReplicationStatus
+		primaryStatusMap    map[string]*replicationdatapb.PrimaryStatus
+		tabletMap           map[string]*topo.TabletInfo
+		wantNonErrantGTIDs  []string
+		wantPrimaryPossible []string
+		wantErr             string
+	}{
+		{
+			name: "Case 1a: No Errant GTIDs. This is the first reparent. A replica is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-99"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t2", "t3", "t4"},
+			wantPrimaryPossible: []string{"t2"},
+		},
+		{
+			name: "Case 1b: No Errant GTIDs. This is not the first reparent. A replica is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-99", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t2", "t3", "t4"},
+			wantPrimaryPossible: []string{"t2"},
+		},
+		{
+			name: "Case 1c: No Errant GTIDs. This is not the first reparent. A rdonly is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-99", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-101", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t2", "t3", "t4"},
+			wantPrimaryPossible: []string{"t4"},
+		},
+		{
+			name: "Case 2: Only 1 tablet is recent and all others are severely lagged",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-100"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t3", "t4"},
+			wantPrimaryPossible: []string{"t3"},
+		},
+		{
+			name: "Case 3: All replicas severely lagged (Primary tablet dies with t1: u1-100, u2:1-30, u3:1-100)",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-30"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t2", "t3", "t4"},
+			wantPrimaryPossible: []string{"t2", "t3"},
+		},
+		{
+			name: "Case 4a: Primary dies and comes back, has an extra UUID, and starts replicating. Another replica is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-101", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-90", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t3", "t4"},
+			wantPrimaryPossible: []string{"t3"},
+		},
+		{
+			name: "Case 4b: Primary dies and comes back, has an extra UUID, and starts replicating, and it is also the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-101", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-90", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t3", "t4"},
+			wantPrimaryPossible: []string{"t3"},
+		},
+		{
+			name: "Case 4c: Primary dies and comes back, has an extra UUID, right at the point when a new ERS has started.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-90", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"t2": {
+					Position: getRelayLogPosition("", "1-31", "1-50"),
+				},
+			},
+			wantNonErrantGTIDs: []string{"t2", "t3", "t4"},
+			wantErr:            "split brain detected between servers",
+		},
+		{
+			name: "Case 5a: Old Primary and a rdonly have errant GTID. Primary and rdonly come back up and start replicating. Another replica is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-99", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-101", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-90", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs: []string{"t2", "t3", "t4"},
+			wantErr:            "split brain detected between servers",
+		},
+		{
+			name: "Case 5b: Old Primary and a rdonly have errant GTID. Primary and rdonly come back up and start replicating. Primary is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-101", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-90", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t2", "t3", "t4"},
+			wantPrimaryPossible: []string{"t2"},
+		},
+		{
+			name: "Case 5c: Old Primary and a rdonly have errant GTID. Old primary is permanently lost and comes up from backup and ronly starts replicating. Another replica is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-20", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-99", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t2", "t3"},
+			wantPrimaryPossible: []string{"t3"},
+		},
+		{
+			name: "Case 5d: Old Primary and a rdonly have errant GTID. Old primary is permanently lost and comes up from backup and ronly starts replicating. Rdonly is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-20", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-101", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t2", "t3"},
+			wantPrimaryPossible: []string{"t3"},
+		},
+		{
+			name: "Case 5e: Old Primary and a rdonly have errant GTID. Old primary is permanently lost and comes up from backup and ronly comes up during ERS",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-20", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-31", "1-50"),
+						SourceUuid:       u2,
+					},
+				},
+			},
+			wantNonErrantGTIDs: []string{"t2", "t3", "t4"},
+			wantErr:            "split brain detected between servers",
+		},
+		{
+			name: "Case 6a: Errant GTID introduced on a replica server by a write that shouldn't happen. The replica with errant GTID is not the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-99", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t3", "t4"},
+			wantPrimaryPossible: []string{"t3"},
+		},
+		{
+			name: "Case 6b: Errant GTID introduced on a replica server by a write that shouldn't happen. The replica with errant GTID is the most advanced.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-101", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t3", "t4"},
+			wantPrimaryPossible: []string{"t3"},
+		},
+		{
+			name: "Case 7: Both replicas with errant GTIDs",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t2": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-90", "1-30", "1-50"),
+						SourceUuid:       u1,
+					},
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t4"},
+			wantPrimaryPossible: []string{"t4"},
+		},
+		{
+			name: "Case 8a: Old primary and rdonly have errant GTID and come up during ERS and replica has an errant GTID introduced by the user.",
+			tabletMap: map[string]*topo.TabletInfo{
+				"t2": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t2",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"t3": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t3",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+				"t4": {
+					Tablet: &topodatapb.Tablet{
+						Hostname: "t4",
+						Alias:    &topodatapb.TabletAlias{},
+						Type:     topodatapb.TabletType_RDONLY,
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"t3": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
+						SourceUuid:       u1,
+					},
+				},
+				"t4": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: getRelayLogPosition("", "1-31", "1-50"),
+						SourceUuid:       u2,
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
+				"t2": {
+					Position: getRelayLogPosition("", "1-31", "1-50"),
+				},
+			},
+			wantNonErrantGTIDs:  []string{"t2", "t4"},
+			wantPrimaryPossible: []string{"t2"},
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			positionMap, err := FindValidEmergencyReparentCandidates(tt.statusMap, tt.primaryStatusMap)
+			require.NoError(t, err)
+
+			nonErrantGTIDs := maps.Keys(positionMap)
+			sort.Strings(nonErrantGTIDs)
+			require.EqualValues(t, tt.wantNonErrantGTIDs, nonErrantGTIDs)
+
+			dp, err := GetDurabilityPolicy("semi_sync")
+			require.NoError(t, err)
+			ers := EmergencyReparenter{logger: logutil.NewCallbackLogger(func(*logutilpb.Event) {})}
+			winningPrimary, _, err := ers.findMostAdvanced(positionMap, tt.tabletMap, EmergencyReparentOptions{durability: dp})
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.True(t, slices.Contains(tt.wantPrimaryPossible, winningPrimary.Hostname), winningPrimary.Hostname)
+			}
 		})
 	}
 }
