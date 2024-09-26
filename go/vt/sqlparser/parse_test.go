@@ -48,7 +48,7 @@ var (
 		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT (CURRENT_TIMESTAMP))",
-		output: "create table t (\n\tid int primary key,\n\tdt datetime default (current_timestamp())\n)",
+		output: "create table t (\n\tid int primary key,\n\tdt datetime default (now())\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT now())",
 		output: "create table t (\n\tid int primary key,\n\tdt datetime default now()\n)",
@@ -1022,7 +1022,8 @@ var (
 	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
-		input: "select /* current_timestamp */ current_timestamp() from t",
+		input:  "select /* current_timestamp */ current_timestamp() from t",
+		output: "select /* current_timestamp */ now() from t",
 	}, {
 		input: "select /* current_timestamp as func */ current_timestamp() from t",
 	}, {

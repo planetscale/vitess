@@ -11873,7 +11873,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1639
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("current_timestamp"), Fsp: yyDollar[2].integerUnion()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("now"), Fsp: yyDollar[2].integerUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 221:
@@ -11881,7 +11881,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1643
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("localtime"), Fsp: yyDollar[2].integerUnion()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("now"), Fsp: yyDollar[2].integerUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 222:
@@ -11889,7 +11889,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1647
 		{
-			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("localtimestamp"), Fsp: yyDollar[2].integerUnion()}
+			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("now"), Fsp: yyDollar[2].integerUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 223:
