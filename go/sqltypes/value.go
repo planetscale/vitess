@@ -456,6 +456,9 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 	switch {
 	case v.Type() == Null:
 		b.Write(NullBytes)
+	case v.IsBinary():
+		b.Write(hack.StringBytes("_binary"))
+		encodeBytesSQLStringBuilder(v.val, b)
 	case v.IsQuoted():
 		encodeBytesSQLStringBuilder(v.val, b)
 	case v.Type() == Bit:
