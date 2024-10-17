@@ -18,6 +18,7 @@ package sqlparser
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -299,6 +300,28 @@ func TestCastBindVars(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, testcase.out, out)
+		})
+	}
+}
+
+func TestEncodeValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		value *querypb.BindVariable
+		want  string
+	}{
+		{
+			value: &querypb.BindVariable{
+				Type:  querypb.Type_VARBINARY,
+				Value: []byte{255},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := &strings.Builder{}
+			EncodeValue(buf, tt.value)
+			require.Equal(t, tt.want, buf.String())
 		})
 	}
 }

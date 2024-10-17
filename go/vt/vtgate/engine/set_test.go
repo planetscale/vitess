@@ -73,6 +73,33 @@ func TestSetSystemVariableAsString(t *testing.T) {
 	})
 }
 
+func TestTesting(t *testing.T) {
+	lit, err := evalengine.NewLiteralBinaryFromHex([]byte{'f', 'f'})
+	require.NoError(t, err)
+	setOp := UserDefinedVariable{
+		Name: "p2",
+		Expr: lit,
+	}
+
+	set := &Set{
+		Ops:   []SetOp{&setOp},
+		Input: &SingleRow{},
+	}
+	vc := &loggingVCursor{
+		shards: []string{"-20", "20-"},
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"id",
+				"varchar",
+			),
+			"foobar",
+		)},
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+	}
+	_, err = set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+}
+
 func TestSetTable(t *testing.T) {
 	type testCase struct {
 		testName         string
