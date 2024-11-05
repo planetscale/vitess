@@ -59,8 +59,8 @@ var (
 )
 
 const (
-	SchemaMigrationsTableName = "schema_migrations"
-	RevertActionStr           = "revert"
+	RevertActionStr                 = "revert"
+	VtgateMigrationContextIndicator = "vtgate"
 )
 
 // ValidateMigrationContext validates that the given migration context only uses valid characters
@@ -328,6 +328,12 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 // StrategySetting returns the ddl strategy setting associated with this online DDL
 func (onlineDDL *OnlineDDL) StrategySetting() *DDLStrategySetting {
 	return NewDDLStrategySetting(onlineDDL.Strategy, onlineDDL.Options)
+}
+
+// IsVtgateMigrationContext returns true if the migration context seems to have originated by VTGate,
+// i.e. it starts with "vtgate:" as in "vtgate:e42f06c6-9b79-11ef-87a7-b27afeff3c85"
+func (onlineDDL *OnlineDDL) IsVtgateMigrationContext() bool {
+	return strings.HasPrefix(onlineDDL.MigrationContext, VtgateMigrationContextIndicator+":")
 }
 
 // ToJSON exports this onlineDDL to JSON

@@ -85,7 +85,7 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 	migrationContext := vcursor.Session().GetMigrationContext()
 	if migrationContext == "" {
 		// default to @@session_uuid
-		migrationContext = fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID())
+		migrationContext = fmt.Sprintf("%s:%s", schema.VtgateMigrationContextIndicator, vcursor.Session().GetSessionUUID())
 	}
 	onlineDDLs, err := schema.NewOnlineDDLs(v.GetKeyspaceName(), v.SQL, v.DDL,
 		v.DDLStrategySetting, migrationContext, "", vcursor.Environment().Parser(),
