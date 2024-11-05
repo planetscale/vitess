@@ -4571,6 +4571,7 @@ func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid st
 
 // retryMigrationWhere retries a migration based on a given WHERE clause
 func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
+	log.Infof("RetryMigration: request to retry where %s", whereExpr)
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 	parsed := sqlparser.BuildParsedQuery(sqlRetryMigrationWhere, ":tablet", whereExpr)
@@ -4593,6 +4594,7 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in RETRY: %s", uuid)
 	}
+	log.Infof("RetryMigration: request to retry migration %s", uuid)
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -4603,8 +4605,13 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	if err != nil {
 		return nil, err
 	}
+	rs, err := e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("RetryMigration: %v rows affected marking migration %s for retry", rs.RowsAffected, uuid)
 	defer e.triggerNextCheckInterval()
-	return e.execQuery(ctx, query)
+	return rs, nil
 }
 
 // CleanupMigration sets migration is ready for artifact cleanup. Artifacts are not immediately deleted:
@@ -4865,6 +4872,7 @@ func (e *Executor) submittedMigrationConflictsWithPendingMigrationInSingletonCon
 func (e *Executor) submitCallbackIfNonConflicting(
 	ctx context.Context,
 	onlineDDL *schema.OnlineDDL,
+	allowSameTable bool,
 	callback func() (*sqltypes.Result, error),
 ) (
 	result *sqltypes.Result, err error,
@@ -4899,13 +4907,19 @@ func (e *Executor) submitCallbackIfNonConflicting(
 		case onlineDDL.StrategySetting().IsSingletonContext():
 			// We will reject this migration if there's any pending migration within a different context
 			for _, row := range rows {
+				pendingUUID := row["migration_uuid"].ToString()
+				if !allowSameTable {
+					if row["mysql_table"].ToString() == onlineDDL.Table {
+						// return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s on same table: %s", pendingUUID, onlineDDL.Table)
+						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s on same table: %s; migrationContext=%v, onlineddl context: %v, is this vtgate? %v", pendingUUID, onlineDDL.Table, row["migration_context"].ToString(), onlineDDL.MigrationContext, onlineDDL.IsVtgateMigrationContext())
+					}
+				}
 				migrationContext := row["migration_context"].ToString()
 				if onlineDDL.MigrationContext == migrationContext {
 					// obviously no conflict here. We can skip the next checks, which are more expensive
 					// as they require reading each migration separately.
 					continue
 				}
-				pendingUUID := row["migration_uuid"].ToString()
 				pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
 				if err != nil {
 					return vterrors.Wrapf(err, "validateSingleton() migration: %s", pendingUUID)
@@ -4972,7 +4986,7 @@ func (e *Executor) SubmitMigration(
 		// 2. Possibly, the existing migration is in 'failed' or 'cancelled' state, in which case this
 		//    resubmission should retry the migration.
 		return e.submitCallbackIfNonConflicting(
-			ctx, onlineDDL,
+			ctx, onlineDDL, true,
 			func() (*sqltypes.Result, error) { return e.RetryMigration(ctx, onlineDDL.UUID) },
 		)
 	}
@@ -5016,8 +5030,13 @@ func (e *Executor) SubmitMigration(
 	if err != nil {
 		return nil, err
 	}
+	// We have a new submission. there could be other migrations pending under this same migration-context. Let's validate
+	// there's no conflicts. For example, the same singleton-context should not be submitting two migrations on the same table
+	// as it makes little production sense. We do allow this when it comes from vtgate, because the a user may be running
+	// a CLI, playing around with migrations, reusing their session UUID as migration context. But for two ApplySchema requests
+	// to be in same migration-context and operate on same table is a conflict.
 	result, err := e.submitCallbackIfNonConflicting(
-		ctx, onlineDDL,
+		ctx, onlineDDL, onlineDDL.IsVtgateMigrationContext(),
 		func() (*sqltypes.Result, error) { return e.execQuery(ctx, submitQuery) },
 	)
 	if err != nil {
