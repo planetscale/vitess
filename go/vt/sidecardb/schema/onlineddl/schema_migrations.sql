@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     `log_path`                        varchar(1024)    NOT NULL,
     `artifacts`                       text             NOT NULL,
     `retries`                         int unsigned     NOT NULL DEFAULT '0',
+    `last_retry_timestamp`            timestamp        NULL DEFAULT NULL,
     `tablet`                          varchar(128)     NOT NULL DEFAULT '',
     `tablet_failure`                  tinyint unsigned NOT NULL DEFAULT '0',
     `progress`                        float            NOT NULL DEFAULT '0',
