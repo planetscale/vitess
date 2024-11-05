@@ -1201,7 +1201,7 @@ func testRevert(t *testing.T) {
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, tableName string, expectHint string) (uuid string) {
 	if executeStrategy == "vtgate" {
-		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
+		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "", "").Named().Row()
 		if row != nil {
 			uuid = row.AsString("uuid", "")
 		}
@@ -1239,7 +1239,7 @@ func testOnlineDDLStatementForView(t *testing.T, alterStatement string, ddlStrat
 // testRevertMigration reverts a given migration
 func testRevertMigration(t *testing.T, revertUUID string, ddlStrategy string) (uuid string) {
 	revertQuery := fmt.Sprintf("revert vitess_migration '%s'", revertUUID)
-	r := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, revertQuery, "")
+	r := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, revertQuery, "", "")
 
 	row := r.Named().Row()
 	require.NotNil(t, row)

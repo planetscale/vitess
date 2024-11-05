@@ -90,7 +90,7 @@ func VtgateExecQueryInTransaction(t *testing.T, vtParams *mysql.ConnParams, quer
 }
 
 // VtgateExecDDL executes a DDL query with given strategy
-func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string, query string, expectError string) *sqltypes.Result {
+func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string, query string, migrationContext string, expectError string) *sqltypes.Result {
 	t.Helper()
 
 	ctx := context.Background()
@@ -99,8 +99,14 @@ func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string,
 	defer conn.Close()
 
 	setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
-	_, err = conn.ExecuteFetch(setSession, 1000, true)
-	assert.NoError(t, err)
+	_, err = conn.ExecuteFetch(setSession, 1, true)
+	require.NoError(t, err)
+
+	if migrationContext != "" {
+		setMigrationContext := fmt.Sprintf("set @@migration_context='%s'", migrationContext)
+		_, err = conn.ExecuteFetch(setMigrationContext, 1, true)
+		require.NoError(t, err)
+	}
 
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if expectError == "" {

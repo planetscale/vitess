@@ -937,7 +937,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
 	if executeStrategy == "vtgate" {
-		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, sqlQuery, "").Named().Row()
+		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, sqlQuery, "", "").Named().Row()
 		if row != nil {
 			uuid = row.AsString("uuid", "")
 		}

@@ -904,7 +904,7 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
 	if executeStrategy == "vtgate" {
-		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
+		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "", "").Named().Row()
 		if row != nil {
 			uuid = row.AsString("uuid", "")
 		}

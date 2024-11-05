@@ -332,7 +332,7 @@ func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, expectError string) (uuid string) {
-	qr := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, expectError)
+	qr := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "", expectError)
 	if qr != nil {
 		row := qr.Named().Row()
 		require.NotNil(t, row)

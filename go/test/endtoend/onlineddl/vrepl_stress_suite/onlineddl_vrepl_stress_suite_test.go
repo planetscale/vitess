@@ -510,7 +510,7 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 			t.Run("prepare table", func(t *testing.T) {
 				if testcase.prepareStatement != "" {
 					fullStatement := fmt.Sprintf("alter table %s %s", tableName, testcase.prepareStatement)
-					onlineddl.VtgateExecDDL(t, &vtParams, directDDLStrategy, fullStatement, "")
+					onlineddl.VtgateExecDDL(t, &vtParams, directDDLStrategy, fullStatement, "", "")
 				}
 			})
 			t.Run("init table data", func(t *testing.T) {
@@ -570,7 +570,7 @@ func testWithInitialSchema(t *testing.T) {
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
 	if executeStrategy == "vtgate" {
-		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
+		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "", "").Named().Row()
 		if row != nil {
 			uuid = row.AsString("uuid", "")
 		}

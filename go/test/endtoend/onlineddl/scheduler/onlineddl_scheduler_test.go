@@ -1603,18 +1603,22 @@ func testSingleton(t *testing.T) {
 	`
 		multiAlterTableThrottlingStatement = `
 		ALTER TABLE stress_test ENGINE=InnoDB;
-		ALTER TABLE stress_test ENGINE=InnoDB;
-		ALTER TABLE stress_test ENGINE=InnoDB;
+		DROP TABLE IF EXISTS t_non_existent;
+		DROP TABLE IF EXISTS t_non_existent2;
 	`
 		// A trivial statement which must succeed and does not change the schema
 		alterTableTrivialStatement = `
 		ALTER TABLE stress_test ENGINE=InnoDB
 	`
+		// Another trivial statement which changes nothing, but has intentionally different SQL than `alterTableTrivialStatement`
+		alterTableTrivialStatement2 = `
+		ALTER TABLE stress_test ENGINE=InnoDB, ALGORITHM=INPLACE
+`
 		dropStatement = `
-	DROP TABLE stress_test
+		DROP TABLE stress_test
 `
 		dropIfExistsStatement = `
-DROP TABLE IF EXISTS stress_test
+		DROP TABLE IF EXISTS stress_test
 `
 		dropNonexistentTableStatement = `
 		DROP TABLE IF EXISTS t_non_existent
@@ -1707,29 +1711,78 @@ DROP TABLE IF EXISTS stress_test
 		checkTable(t, tableName, true)
 	})
 
-	var throttledUUIDs []string
-	// singleton-context
-	t.Run("postponed migrations, singleton-context", func(t *testing.T) {
-		uuidList := testOnlineDDLStatement(t, createParams(multiAlterTableThrottlingStatement, "vitess --singleton-context --postpone-completion", "vtctl", "", "hint_col", "", false))
-		throttledUUIDs = strings.Split(uuidList, "\n")
-		assert.Equal(t, 3, len(throttledUUIDs))
-		for _, uuid := range throttledUUIDs {
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
-		}
+	t.Run("singleton-context", func(t *testing.T) {
+		var postponedUUIDs []string
+		// singleton-context
+		t.Run("postponed migrations", func(t *testing.T) {
+			uuidList := testOnlineDDLStatement(t, createParams(multiAlterTableThrottlingStatement, "vitess --singleton-context --postpone-completion", "vtctl", "", "", "", false))
+			postponedUUIDs = strings.Split(uuidList, "\n")
+			assert.Equal(t, 3, len(postponedUUIDs))
+			for _, uuid := range postponedUUIDs {
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+			}
+		})
+		t.Run("failed migrations", func(t *testing.T) {
+			_ = testOnlineDDLStatement(t, createParams(multiAlterTableThrottlingStatement, "vitess --singleton-context --postpone-completion", "vtctl", "", "", "rejected", false))
+		})
+		t.Run("terminate postponed migrations", func(t *testing.T) {
+			for _, uuid := range postponedUUIDs {
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+				onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
+			}
+			time.Sleep(2 * time.Second)
+			for _, uuid := range postponedUUIDs {
+				uuid = strings.TrimSpace(uuid)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			}
+		})
 	})
-	t.Run("failed migrations, singleton-context", func(t *testing.T) {
-		_ = testOnlineDDLStatement(t, createParams(multiAlterTableThrottlingStatement, "vitess --singleton-context --postpone-completion", "vtctl", "", "hint_col", "rejected", false))
-	})
-	t.Run("terminate throttled migrations", func(t *testing.T) {
-		for _, uuid := range throttledUUIDs {
+
+	t.Run("singleton-context, submit same context, same table", func(t *testing.T) {
+		migrationContext := fmt.Sprintf("test-context:%d", rand.Int32())
+		// singleton-context
+		t.Run("postponed migrations", func(t *testing.T) {
+			uuid := testOnlineDDLStatement(t, createParams(alterTableTrivialStatement, "vitess --singleton-context --postpone-completion", "vtctl", migrationContext, "hint_col", "", false))
+			uuids = append(uuids, uuid)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
-			onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
-		}
-		time.Sleep(2 * time.Second)
-		for _, uuid := range throttledUUIDs {
-			uuid = strings.TrimSpace(uuid)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
-		}
+		})
+		t.Run("another migration in same context", func(t *testing.T) {
+			uuid := testOnlineDDLStatement(t, createParams(dropNonexistentTableStatement, "vitess --singleton-context --postpone-completion", "vtctl", migrationContext, "", "", false))
+			uuids = append(uuids, uuid)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+		})
+		t.Run("failed migration in same context on a migrated table", func(t *testing.T) {
+			_ = testOnlineDDLStatement(t, createParams(alterTableTrivialStatement2, "vitess --singleton-context --postpone-completion", "vtctl", migrationContext, "", "rejected", false))
+		})
+		t.Run("terminate postponed migrations", func(t *testing.T) {
+			onlineddl.CheckCancelAllMigrations(t, &vtParams, 2)
+		})
+	})
+
+	t.Run("singleton-context, submit same context, same table, via vtgate", func(t *testing.T) {
+		migrationContext := fmt.Sprintf("%s:%d", schema.VtgateMigrationContextIndicator, rand.Int32())
+		// singleton-context
+		t.Run("postponed migrations", func(t *testing.T) {
+			uuid := testOnlineDDLStatement(t, createParams(alterTableTrivialStatement, "vitess --singleton-context --postpone-completion", "vtgate", migrationContext, "hint_col", "", false))
+			uuids = append(uuids, uuid)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+		})
+		t.Run("another migration in same context", func(t *testing.T) {
+			uuid := testOnlineDDLStatement(t, createParams(dropNonexistentTableStatement, "vitess --singleton-context --postpone-completion", "vtgate", migrationContext, "", "", false))
+			uuids = append(uuids, uuid)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+		})
+		t.Run("another migration in same context on a migrated table", func(t *testing.T) {
+			// This will pass because we do allow vtgate to submit multiple migrations on same table in succession. Vtgate's
+			// migration context is based on @@session_uuid, so we want a user to be able to submit multiple migrations
+			// from within an interactive MySQL shell.
+			uuid := testOnlineDDLStatement(t, createParams(alterTableTrivialStatement2, "vitess --singleton-context --postpone-completion", "vtgate", migrationContext, "hint_col", "", false))
+			uuids = append(uuids, uuid)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+		})
+		t.Run("terminate postponed migrations", func(t *testing.T) {
+			onlineddl.CheckCancelAllMigrations(t, &vtParams, 3)
+		})
 	})
 
 	t.Run("successful multiple statement, singleton-context, vtctl", func(t *testing.T) {
@@ -2730,8 +2783,7 @@ func testOnlineDDLStatement(t *testing.T, params *testOnlineDDLStatementParams) 
 	tableName := parseTableName(t, params.ddlStatement)
 
 	if params.executeStrategy == "vtgate" {
-		require.Empty(t, params.migrationContext, "explicit migration context not supported in vtgate. Test via vtctl")
-		result := onlineddl.VtgateExecDDL(t, &vtParams, params.ddlStrategy, params.ddlStatement, params.expectError)
+		result := onlineddl.VtgateExecDDL(t, &vtParams, params.ddlStrategy, params.ddlStatement, params.migrationContext, params.expectError)
 		if result != nil {
 			row := result.Named().Row()
 			if row != nil {
@@ -2780,7 +2832,7 @@ func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid 
 	revertQuery := fmt.Sprintf("revert vitess_migration '%s'", params.revertUUID)
 	if params.executeStrategy == "vtgate" {
 		require.Empty(t, params.migrationContext, "explicit migration context not supported in vtgate. Test via vtctl")
-		result := onlineddl.VtgateExecDDL(t, &vtParams, params.ddlStrategy, revertQuery, params.expectError)
+		result := onlineddl.VtgateExecDDL(t, &vtParams, params.ddlStrategy, revertQuery, "", params.expectError)
 		if result != nil {
 			row := result.Named().Row()
 			if row != nil {
