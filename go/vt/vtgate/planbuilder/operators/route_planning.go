@@ -381,33 +381,24 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a Operator, exp sqlparse
 			continue
 		}
 
-		deps := ctx.SemTable.RecursiveDeps(expr)
-
-		_ = Visit(a, func(rel Operator) error {
-			to, isTableOp := rel.(tableIDIntroducer)
-			if !isTableOp {
-				return nil
-			}
-			id := to.introducesTableID()
-			if deps.IsSolvedBy(id) {
-				tableInfo, err := ctx.SemTable.TableInfoFor(id)
-				if err != nil {
-					// an error here is OK, we just can't ask this operator about its column vindexes
-					return nil
-				}
-				vtable := tableInfo.GetVindexTable()
-				if vtable != nil {
-					for _, vindex := range vtable.ColumnVindexes {
-						sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
-						if isSingle && vindex.Columns[0].Equal(col.Name) {
-							singCol = sC
-							return io.EOF
-						}
-					}
-				}
-			}
+		deps := ctx.SemTable.DirectDeps(expr)
+		if !deps.IsSolvedBy(TableID(a)) {
+			continue
+		}
+		tableInfo, err := ctx.SemTable.TableInfoFor(deps)
+		// an error here is OK, we just can't ask this operator about its column vindexes
+		if err != nil {
 			return nil
-		})
+		}
+		vtable := tableInfo.GetVindexTable()
+		if vtable != nil {
+			for _, vindex := range vtable.ColumnVindexes {
+				sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
+				if isSingle && vindex.Columns[0].Equal(col.Name) {
+					singCol = sC
+				}
+			}
+		}
 		if singCol != nil {
 			return singCol
 		}
