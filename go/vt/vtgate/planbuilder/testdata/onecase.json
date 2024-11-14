@@ -1,8 +1,29 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "SELECT music_id FROM music_extra WHERE music_id IN (select * from (select music.id from music where music.user_id = 1234 AND music.foo = 'bar' union select music.id from music where music.user_id = 1234 AND music.foo = 'baz') as subquery)",
     "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT music_id FROM music_extra WHERE music_id IN (select music.id from music where music.user_id = 1234 AND music.foo = 'bar' union select music.id from music where music.user_id = 1234 AND music.foo = 'baz')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music_id from music_extra where 1 != 1",
+        "Query": "select music_id from music_extra where music_id in (select music.id from music where music.user_id = 1234 and music.foo = 'bar' union select music.id from music where music.user_id = 1234 and music.foo = 'baz')",
+        "Table": "music_extra",
+        "Values": [
+          "1234"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.music_extra"
+      ]
     }
   }
 ]

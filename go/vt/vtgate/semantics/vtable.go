@@ -104,6 +104,11 @@ func (v *vTableInfo) GetVindexTable() *vindexes.Table {
 	return nil
 }
 
+// getColumnVindexForColumn implements the TableInfo interface
+func (v *vTableInfo) getColumnVindexForColumn(org originable, columnName string) (vList []*vindexes.ColumnVindex, err error) {
+	return nil, nil
+}
+
 func (v *vTableInfo) getColumns(bool) []ColumnInfo {
 	cols := make([]ColumnInfo, 0, len(v.columnNames))
 	for _, col := range v.columnNames {

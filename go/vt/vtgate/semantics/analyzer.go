@@ -343,6 +343,7 @@ type originable interface {
 	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
 	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ evalengine.Type)
 	collationEnv() *collations.Environment
+	tableInfoFor(ts TableSet) (TableInfo, error)
 }
 
 func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ evalengine.Type) {
@@ -350,6 +351,15 @@ func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet,
 	direct = a.binder.direct.dependencies(expr)
 	typ = a.typer.exprType(expr)
 	return
+}
+
+// tableInfoFor returns the table info for the table set. It should contains only single table.
+func (a *analyzer) tableInfoFor(id TableSet) (TableInfo, error) {
+	offset := id.TableOffset()
+	if offset < 0 {
+		return nil, ErrNotSingleTable
+	}
+	return a.tables.Tables[offset], nil
 }
 
 func (a *analyzer) collationEnv() *collations.Environment {

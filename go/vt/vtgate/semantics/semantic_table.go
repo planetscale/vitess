@@ -64,6 +64,9 @@ type (
 		getExprFor(s string) (sqlparser.Expr, error)
 		getTableSet(org originable) TableSet
 
+		// getColumnVindexForColumn gets the vindex for the given column if available.
+		getColumnVindexForColumn(org originable, columnName string) ([]*vindexes.ColumnVindex, error)
+
 		// GetMirrorRule returns the vschema mirror rule for this TableInfo
 		GetMirrorRule() *vindexes.MirrorRule
 	}
@@ -198,6 +201,37 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 			}
 		}
 	}
+}
+
+var _ originable = (*SemTable)(nil)
+
+func (st *SemTable) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
+	return st.TableSetFor(t)
+}
+
+func (st *SemTable) depsForExpr(expr sqlparser.Expr) (TableSet, TableSet, evalengine.Type) {
+	typ, _ := st.TypeForExpr(expr)
+	return st.DirectDeps(expr), st.RecursiveDeps(expr), typ
+}
+
+func (st *SemTable) collationEnv() *collations.Environment {
+	return st.collEnv
+}
+
+func (st *SemTable) tableInfoFor(ts TableSet) (TableInfo, error) {
+	return st.TableInfoFor(ts)
+}
+
+func (st *SemTable) GetVindexesForExpr(expr sqlparser.Expr) ([]*vindexes.ColumnVindex, error) {
+	colName, isCol := expr.(*sqlparser.ColName)
+	if !isCol {
+		return nil, nil
+	}
+	ti, err := st.TableInfoForExpr(colName)
+	if err != nil {
+		return nil, err
+	}
+	return ti.getColumnVindexForColumn(st, colName.Name.String())
 }
 
 // GetChildForeignKeysForTargets gets the child foreign keys as a list for all the target tables.

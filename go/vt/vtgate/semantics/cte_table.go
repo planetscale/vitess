@@ -71,6 +71,11 @@ func (cte *CTETable) GetVindexTable() *vindexes.Table {
 	return nil
 }
 
+// getColumnVindexForColumn implements the TableInfo interface
+func (cte *CTETable) getColumnVindexForColumn(org originable, columnName string) (vList []*vindexes.ColumnVindex, err error) {
+	return nil, nil
+}
+
 func (cte *CTETable) IsInfSchema() bool {
 	return false
 }

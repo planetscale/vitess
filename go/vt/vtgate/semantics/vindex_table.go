@@ -51,6 +51,11 @@ func (v *VindexTable) GetVindexTable() *vindexes.Table {
 	return v.Table.GetVindexTable()
 }
 
+// getColumnVindexForColumn implements the TableInfo interface
+func (v *VindexTable) getColumnVindexForColumn(org originable, columnName string) (vList []*vindexes.ColumnVindex, err error) {
+	return nil, nil
+}
+
 // Matches implements the TableInfo interface
 func (v *VindexTable) matches(name sqlparser.TableName) bool {
 	return v.Table.matches(name)

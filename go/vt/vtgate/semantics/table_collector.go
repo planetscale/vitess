@@ -47,6 +47,13 @@ type (
 		// cte is a map of CTE definitions that are used in the query
 		cte map[string]*CTE
 	}
+
+	unionInfo struct {
+		isAuthoritative bool
+		recursive       []TableSet
+		types           []evalengine.Type
+		exprs           sqlparser.SelectExprs
+	}
 )
 
 func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableCollector {

@@ -31,20 +31,77 @@ type DerivedTable struct {
 	tableName       string
 	ASTNode         *sqlparser.AliasedTableExpr
 	columnNames     []string
-	cols            []sqlparser.Expr
 	tables          TableSet
 	isAuthoritative bool
 
+	selectExprColumns
+}
+
+type selectColumns struct {
+	cols      []sqlparser.Expr
 	recursive []TableSet
 	types     []evalengine.Type
 }
 
-type unionInfo struct {
-	isAuthoritative bool
-	recursive       []TableSet
-	types           []evalengine.Type
-	exprs           sqlparser.SelectExprs
+func (s *selectColumns) getVindexForIndex(org originable, idx int) ([]*vindexes.ColumnVindex, error) {
+	expr := s.cols[idx]
+	colName, isCol := expr.(*sqlparser.ColName)
+	if !isCol {
+		return nil, nil
+	}
+	direct, _, _ := org.depsForExpr(colName)
+	ti, err := org.tableInfoFor(direct)
+	if err != nil {
+		return nil, err
+	}
+	vindexTable := ti.GetVindexTable()
+	var result []*vindexes.ColumnVindex
+	for _, vindex := range vindexTable.ColumnVindexes {
+		if vindex.Columns[0].Equal(colName.Name) {
+			result = append(result, vindex)
+		}
+	}
+	return result, nil
 }
+
+func intersect(a, b []*vindexes.ColumnVindex) []*vindexes.ColumnVindex {
+	var result []*vindexes.ColumnVindex
+	for _, vindex := range a {
+		for _, vindex2 := range b {
+			if vindex == vindex2 {
+				result = append(result, vindex)
+			}
+		}
+	}
+	return result
+}
+
+func (s *unionColumns) getVindexForIndex(org originable, offset int) ([]*vindexes.ColumnVindex, error) {
+	var vlist []*vindexes.ColumnVindex
+	for idx, columns := range s.sc {
+		these, err := columns.getVindexForIndex(org, offset)
+		if err != nil {
+			return nil, err
+		}
+		if idx == 0 {
+			vlist = these
+			continue
+		}
+		vlist = intersect(vlist, these)
+	}
+	return vlist, nil
+}
+
+type unionColumns struct {
+	sc []selectColumns
+}
+
+type selectExprColumns interface {
+	getVindexForIndex(org originable, idx int) ([]*vindexes.ColumnVindex, error)
+}
+
+var _ selectExprColumns = (*selectColumns)(nil)
+var _ selectExprColumns = (*unionColumns)(nil)
 
 var _ TableInfo = (*DerivedTable)(nil)
 
@@ -152,6 +209,22 @@ func (dt *DerivedTable) canShortCut() shortCut {
 // GetVindexTable implements the TableInfo interface
 func (dt *DerivedTable) GetVindexTable() *vindexes.Table {
 	return nil
+}
+
+// getColumnVindexForColumn implements the TableInfo interface
+func (dt *DerivedTable) getColumnVindexForColumn(org originable, columnName string) (vList []*vindexes.ColumnVindex, err error) {
+	offset := -1
+	for idx, name := range dt.columnNames {
+		if name == columnName {
+			offset = idx
+			break
+		}
+	}
+	if offset == -1 {
+		return nil, nil
+	}
+	return dt.selectExprColumns.getVindexForIndex(org, offset)
+
 }
 
 func (dt *DerivedTable) getColumns(bool) []ColumnInfo {

@@ -211,6 +211,16 @@ func (r *RealTable) GetVindexTable() *vindexes.Table {
 	return r.Table
 }
 
+// getColumnVindexForColumn implements the TableInfo interface
+func (r *RealTable) getColumnVindexForColumn(org originable, columnName string) (vList []*vindexes.ColumnVindex, err error) {
+	for _, vindex := range r.Table.ColumnVindexes {
+		if len(vindex.Columns) == 1 && vindex.Columns[0].EqualString(columnName) {
+			vList = append(vList, vindex)
+		}
+	}
+	return vList, nil
+}
+
 // GetVindexHint implements the TableInfo interface
 func (r *RealTable) GetVindexHint() *sqlparser.IndexHint {
 	return r.VindexHint
