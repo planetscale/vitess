@@ -166,6 +166,32 @@ func TestShardDownWithoutTx(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestMySQLDownWithoutTx(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	// initial data
+	utils.Exec(t, conn, `insert into t1(c2, c3, c4) values (1,10,'100'),(2,20,'200'),(3,30,'300'),(4,40,'400'),(5,50,'500')`)
+
+	// retrieve -40 shard
+	mysqlProcess := clusterInstance.Keyspaces[1].Shards[0].Vttablets[0].MysqlctlProcess
+
+	// test query
+	utils.Exec(t, conn, `select c1 from t1 where c2 > 1 limit 2`)
+
+	// tear down -40 shard
+	err := mysqlProcess.Stop()
+	require.NoError(t, err)
+
+	_, err = utils.ExecAllowError(t, conn, `select c1 from t1 where c2 <= 1 limit 5`)
+	assert.ErrorContains(t, err, "target: customer.-40.primary")
+	assert.ErrorContains(t, err, "primary is not serving")
+
+	// bring back -40 shard
+	err = mysqlProcess.StartProvideInit(false)
+	require.NoError(t, err)
+}
+
 func start(t *testing.T) (*mysql.Conn, func()) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
