@@ -305,13 +305,7 @@ func createExecutorEnvWithPrimaryReplicaConn(t testing.TB, ctx context.Context, 
 }
 
 func executorExecSession(ctx context.Context, executor *Executor, sql string, bv map[string]*querypb.BindVariable, session *vtgatepb.Session) (*sqltypes.Result, error) {
-	return executor.Execute(
-		ctx,
-		nil,
-		"TestExecute",
-		econtext.NewSafeSession(session),
-		sql,
-		bv)
+	return executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(session), sql, bv, false)
 }
 
 func executorExec(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {

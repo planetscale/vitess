@@ -66,6 +66,7 @@ func (e *Executor) newExecute(
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
 	logStats *logstats.LogStats,
+	prepared bool,
 	execPlan planExec, // used when there is a plan to execute
 	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
 ) (err error) {
@@ -84,9 +85,13 @@ func (e *Executor) newExecute(
 	query, comments := sqlparser.SplitMarginComments(sql)
 
 	// 2: Parse and Validate query.
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
-	if err != nil {
-		return err
+	var stmt sqlparser.Statement
+	var reservedVars *sqlparser.ReservedVars
+	if !prepared {
+		stmt, reservedVars, err = parseAndValidateQuery(query, e.env.Parser())
+		if err != nil {
+			return err
+		}
 	}
 
 	var (
@@ -131,7 +136,7 @@ func (e *Executor) newExecute(
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.normalize, logStats)
+		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.normalize, logStats, prepared)
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {
@@ -371,7 +376,7 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 	rQuery := safeSession.GetRollbackOnPartialExec()
 	if rQuery != econtext.TxRollback {
 		safeSession.SavepointRollback()
-		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, logStats)
+		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, logStats, false)
 		// If no error, the revert is successful with the savepoint. Notify the reason as error to the client.
 		if err == nil {
 			errMsg.WriteString("reverted partial DML execution failure")

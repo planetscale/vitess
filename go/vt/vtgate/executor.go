@@ -224,14 +224,14 @@ func NewExecutor(
 }
 
 // Execute executes a non-streaming query.
-func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
+func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, prepared bool) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "executor.Execute")
 	span.Annotate("method", method)
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
-	stmtType, result, err := e.execute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats)
+	stmtType, result, err := e.execute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, prepared)
 	logStats.Error = err
 	if result == nil {
 		saveSessionStats(safeSession, stmtType, 0, 0, err)
@@ -372,7 +372,7 @@ func (e *Executor) StreamExecute(
 		return err
 	}
 
-	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, resultHandler, srr.storeResultStats)
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, false, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.rowsReturned, err)
@@ -424,11 +424,11 @@ func saveSessionStats(safeSession *econtext.SafeSession, stmtType sqlparser.Stat
 	}
 }
 
-func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
+func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats, prepared bool) (sqlparser.StatementType, *sqltypes.Result, error) {
 	var err error
 	var qr *sqltypes.Result
 	var stmtType sqlparser.StatementType
-	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, prepared, func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
 		stmtType = plan.Type
 		qr, err = e.executePlan(ctx, safeSession, plan, vc, bindVars, logStats, time)
 		return err
@@ -1087,56 +1087,61 @@ func (e *Executor) getPlan(
 	reservedVars *sqlparser.ReservedVars,
 	allowParameterization bool,
 	logStats *logstats.LogStats,
+	prepared bool,
 ) (*engine.Plan, error) {
 	if e.VSchema() == nil {
 		return nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	qh, err := sqlparser.BuildQueryHints(stmt)
-	if err != nil {
-		return nil, err
-	}
-	vcursor.SetIgnoreMaxMemoryRows(qh.IgnoreMaxMemoryRows)
-	vcursor.SetConsolidator(qh.Consolidator)
-	vcursor.SetWorkloadName(qh.Workload)
-	vcursor.UpdateForeignKeyChecksState(qh.ForeignKeyChecks)
-	vcursor.SetPriority(qh.Priority)
-	vcursor.SetExecQueryTimeout(qh.Timeout)
+	var bindVarNeeds *sqlparser.BindVarNeeds
+	if !prepared {
+		qh, err := sqlparser.BuildQueryHints(stmt)
+		if err != nil {
+			return nil, err
+		}
+		vcursor.SetIgnoreMaxMemoryRows(qh.IgnoreMaxMemoryRows)
+		vcursor.SetConsolidator(qh.Consolidator)
+		vcursor.SetWorkloadName(qh.Workload)
+		vcursor.UpdateForeignKeyChecksState(qh.ForeignKeyChecks)
+		vcursor.SetPriority(qh.Priority)
+		vcursor.SetExecQueryTimeout(qh.Timeout)
 
-	setVarComment, err := prepareSetVarComment(vcursor, stmt)
-	if err != nil {
-		return nil, err
-	}
+		setVarComment, err := prepareSetVarComment(vcursor, stmt)
+		if err != nil {
+			return nil, err
+		}
 
-	// Normalize if possible
-	shouldNormalize := e.canNormalizeStatement(stmt, setVarComment)
-	parameterize := allowParameterization && shouldNormalize
+		// Normalize if possible
+		shouldNormalize := e.canNormalizeStatement(stmt, setVarComment)
+		parameterize := allowParameterization && shouldNormalize
 
-	rewriteASTResult, err := sqlparser.PrepareAST(
-		stmt,
-		reservedVars,
-		bindVars,
-		parameterize,
-		vcursor.GetKeyspace(),
-		vcursor.SafeSession.GetSelectLimit(),
-		setVarComment,
-		vcursor.GetSystemVariablesCopy(),
-		vcursor.GetForeignKeyChecksState(),
-		vcursor,
-	)
-	if err != nil {
-		return nil, err
+		rewriteASTResult, err := sqlparser.PrepareAST(
+			stmt,
+			reservedVars,
+			bindVars,
+			parameterize,
+			vcursor.GetKeyspace(),
+			vcursor.SafeSession.GetSelectLimit(),
+			setVarComment,
+			vcursor.GetSystemVariablesCopy(),
+			vcursor.GetForeignKeyChecksState(),
+			vcursor,
+		)
+		if err != nil {
+			return nil, err
+		}
+		stmt = rewriteASTResult.AST
+		bindVarNeeds = rewriteASTResult.BindVarNeeds
+		// if shouldNormalize {
+		// 	// log.Infof("before query: %v", query)
+		// 	// query = sqlparser.String(stmt)
+		// 	// log.Infof("after query: %v", query)
+		// }
 	}
-	stmt = rewriteASTResult.AST
-	bindVarNeeds := rewriteASTResult.BindVarNeeds
-	if shouldNormalize {
-		query = sqlparser.String(stmt)
-	}
-
 	logStats.SQL = comments.Leading + query + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
-	return e.cacheAndBuildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, logStats)
+	return e.cacheAndBuildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, logStats, prepared)
 }
 
 func (e *Executor) hashPlan(ctx context.Context, vcursor *econtext.VCursorImpl, query string) PlanCacheKey {
@@ -1179,10 +1184,15 @@ func (e *Executor) cacheAndBuildStatement(
 	reservedVars *sqlparser.ReservedVars,
 	bindVarNeeds *sqlparser.BindVarNeeds,
 	logStats *logstats.LogStats,
+	prepared bool,
 ) (*engine.Plan, error) {
-	planCachable := sqlparser.CachePlan(stmt) && vcursor.CachePlan()
-	if planCachable {
+	planCachable := true
+	if !prepared {
+		planCachable = sqlparser.CachePlan(stmt) && vcursor.CachePlan()
+	}
+	if prepared || planCachable {
 		planKey := e.hashPlan(ctx, vcursor, query)
+		// log.Infof("Plan cache key: %v for query: %v", planKey, query)
 
 		var plan *engine.Plan
 		var err error
@@ -1191,6 +1201,9 @@ func (e *Executor) cacheAndBuildStatement(
 		})
 		return plan, err
 	}
+	// if stmt == nil {
+	// 	panic("unexpected for query: " + query + " when prepared: " + strconv.FormatBool(prepared) + " planCachable: " + strconv.FormatBool(planCachable))
+	// }
 	return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds)
 }
 
@@ -1386,8 +1399,11 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 
 	switch stmtType {
 	case sqlparser.StmtSelect, sqlparser.StmtShow:
-		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
-	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
+		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats, false)
+	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
+		_, err := e.handlePrepare(ctx, safeSession, sql, bindVars, logStats, true)
+		return nil, err
+	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
 		return nil, nil
 	}
@@ -1425,7 +1441,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 	}
 }
 
-func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
+func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats, skipFields bool) ([]*querypb.Field, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
 
 	vcursor, _ := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
@@ -1435,7 +1451,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 		return nil, err
 	}
 
-	plan, err := e.getPlan(ctx, vcursor, sql, stmt, comments, bindVars, reservedVars /* parameterize */, false, logStats)
+	plan, err := e.getPlan(ctx, vcursor, sql, stmt, comments, bindVars, reservedVars /* parameterize */, false, logStats, false)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
@@ -1445,7 +1461,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 	}
 
 	err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
-	if err != nil {
+	if err != nil || skipFields {
 		logStats.Error = err
 		return nil, err
 	}
@@ -1621,6 +1637,7 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, vcursor *econtext.VCurso
 		reservedVars, /* normalize */
 		false,
 		lStats,
+		false,
 	)
 	if err != nil {
 		return nil, nil, err
