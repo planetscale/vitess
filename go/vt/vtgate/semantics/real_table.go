@@ -33,6 +33,7 @@ type RealTable struct {
 	Table             *vindexes.Table
 	isInfSchema       bool
 	collationEnv      *collations.Environment
+	columns           []ColumnInfo
 }
 
 var _ TableInfo = (*RealTable)(nil)
@@ -69,7 +70,10 @@ func (r *RealTable) IsInfSchema() bool {
 
 // GetColumns implements the TableInfo interface
 func (r *RealTable) getColumns() []ColumnInfo {
-	return vindexTableToColumnInfo(r.Table, r.collationEnv)
+	if r.columns == nil {
+		r.columns = vindexTableToColumnInfo(r.Table, r.collationEnv)
+	}
+	return r.columns
 }
 
 // GetExpr implements the TableInfo interface
