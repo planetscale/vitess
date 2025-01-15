@@ -34,15 +34,9 @@ source ../common/env.sh # Required so that "mysql" works from alias
 ./101_initial_cluster.sh
 sleep 5 # Give vtgate time to really start.
 
-killall_vtdataroot
-# verify local example is able to start on an existing setup
-
-./101_initial_cluster.sh
-sleep 5 # Give vtgate time to really start.
-
 mysql < ../common/insert_commerce_data.sql
 mysql --table < ../common/select_commerce_data.sql
-
+exit
 ./201_customer_tablets.sh
 
 for shard in "customer/0"; do

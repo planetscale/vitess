@@ -339,7 +339,7 @@ func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream querys
 }
 
 // VStream is part of the queryservice.QueryServer interface
-func (q *query) VStream(request *binlogdatapb.VStreamRequest, stream queryservicepb.Query_VStreamServer) (err error) {
+func (q *query) VStrweam(request *binlogdatapb.VStreamRequest, stream queryservicepb.Query_VStreamServer) (err error) {
 	defer q.server.HandlePanic(&err)
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.EffectiveCallerId,

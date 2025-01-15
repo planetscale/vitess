@@ -30,6 +30,7 @@ const (
 	VReplicationExperimentalFlagOptimizeInserts           = int64(1)
 	VReplicationExperimentalFlagAllowNoBlobBinlogRowImage = int64(2)
 	VReplicationExperimentalFlagVPlayerBatching           = int64(4)
+	VReplicationExperimentalFlagVStreamerPooling          = int64(8)
 )
 
 var (

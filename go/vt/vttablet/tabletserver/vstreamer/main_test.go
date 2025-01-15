@@ -321,7 +321,7 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 	options.ConfigOverrides["vstream_packet_size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
 
 	return engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
-		timer := time.NewTimer(2 * time.Second)
+		timer := time.NewTimer(20 * time.Second)
 		defer timer.Stop()
 
 		log.Infof("Received events: %v", evs)

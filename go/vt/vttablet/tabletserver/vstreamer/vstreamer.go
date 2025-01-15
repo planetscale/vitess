@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -190,30 +191,80 @@ func (vs *vstreamer) Stream() error {
 	return vs.replicate(ctx)
 }
 
+func (vs *vstreamer) streamBinlogs() (cancel func(), events <-chan mysql.BinlogEvent, errs <-chan error, err error) {
+	conn, err := binlog.NewBinlogConnection(vs.cp)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	cancel = func() {
+		defer conn.Close()
+	}
+
+	log.Infof("Starting StartBinlogDumpFromPosition at %v", vs.pos)
+	events, errs, err = conn.StartBinlogDumpFromPosition(vs.ctx, "", vs.pos)
+	return cancel, events, errs, err
+}
+
+func (vs *vstreamer) playBinlogEvents() (cancel func(), events <-chan mysql.BinlogEvent, errs <-chan error, err error) {
+	if !vs.isPoolEnabled() {
+		return vs.streamBinlogs()
+	}
+	log.Infof("Start of playBinlogEvents")
+	poolConn, err := theVStreamerPool.Get(vs)
+	log.Infof("Created pool connection")
+	if err != nil || poolConn == nil {
+		log.Infof("No pool connection available. Using regular connection")
+		return vs.streamBinlogs()
+	}
+	log.Infof(">>>>>> Using VStreamer pool connection")
+	cancel = func() {
+		theVStreamerPool.Put(poolConn)
+	}
+	events2 := make(chan mysql.BinlogEvent)
+	var errs2 <-chan error
+	var evs <-chan mysql.BinlogEvent
+
+	go func() {
+		defer func() {
+			defer close(events2)
+		}()
+		evs, errs2 = poolConn.Stream()
+		for ev := range evs {
+			// log.Infof("$$$$$$  Sending event to channel events2")
+			select {
+			case events2 <- ev:
+			case <-vs.ctx.Done():
+				// log.Infof("$$$$$$  Context done. Exiting")
+				return
+			}
+		}
+	}()
+	return cancel, events2, errs2, nil
+
+}
+
 // Stream streams binlog events.
 func (vs *vstreamer) replicate(ctx context.Context) error {
 	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
+	log.Infof("Opening schema engine")
 	if err := vs.se.Open(); err != nil {
 		return wrapError(err, vs.pos, vs.vse)
 	}
-
-	conn, err := binlog.NewBinlogConnection(vs.cp)
+	log.Infof("Schema engine opened, playBinlogEvents")
+	cancel, events, errs, err := vs.playBinlogEvents()
 	if err != nil {
 		return wrapError(err, vs.pos, vs.vse)
 	}
-	defer conn.Close()
+	defer cancel()
 
-	events, errs, err := conn.StartBinlogDumpFromPosition(vs.ctx, "", vs.pos)
-	if err != nil {
-		return wrapError(err, vs.pos, vs.vse)
-	}
 	err = vs.parseEvents(vs.ctx, events, errs)
 	return wrapError(err, vs.pos, vs.vse)
 }
 
 // parseEvents parses and sends events.
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent, errs <-chan error) error {
+	log.Infof("Starting parseEvents")
 	// bufferAndTransmit uses bufferedEvents and curSize to buffer events.
 	var (
 		bufferedEvents []*binlogdatapb.VEvent
@@ -425,6 +476,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
 	}
 
+	// log.Infof("((((((((( parseEvent: Event received: %t:%t:%t", ev.IsFormatDescription(), ev.IsGTID(), ev.IsXID())
 	// We need to keep checking for FORMAT_DESCRIPTION_EVENT even after we've
 	// seen one, because another one might come along (e.g. on log rotate due to
 	// binlog settings change) that changes the format.
@@ -1273,7 +1325,7 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
-		err = fmt.Errorf("stream (at source tablet) error @ %v: %v", stopPos, err)
+		err = fmt.Errorf("stream (at source tablet) error @ %v: %v: \n%s", stopPos, err, debug.Stack())
 		log.Error(err)
 		return err
 	}
