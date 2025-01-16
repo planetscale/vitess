@@ -1,0 +1,16 @@
+goos: darwin
+goarch: arm64
+pkg: vitess.io/vitess/go/vt/vtgate/planbuilder
+cpu: Apple M1 Ultra
+BenchmarkMine-20    	     202	   5858150 ns/op	 3687144 B/op	   74512 allocs/op
+BenchmarkMine-20    	     205	   5884388 ns/op	 3687345 B/op	   74512 allocs/op
+BenchmarkMine-20    	     205	   5872149 ns/op	 3687565 B/op	   74513 allocs/op
+BenchmarkMine-20    	     206	   5813034 ns/op	 3687350 B/op	   74512 allocs/op
+BenchmarkMine-20    	     207	   5836727 ns/op	 3687054 B/op	   74512 allocs/op
+BenchmarkMine-20    	     207	   5826613 ns/op	 3687322 B/op	   74512 allocs/op
+BenchmarkMine-20    	     204	   5839730 ns/op	 3687249 B/op	   74512 allocs/op
+BenchmarkMine-20    	     205	   5814595 ns/op	 3687180 B/op	   74511 allocs/op
+BenchmarkMine-20    	     205	   5796803 ns/op	 3687704 B/op	   74513 allocs/op
+BenchmarkMine-20    	     207	   5861450 ns/op	 3687561 B/op	   74513 allocs/op
+PASS
+ok  	vitess.io/vitess/go/vt/vtgate/planbuilder	19.160s

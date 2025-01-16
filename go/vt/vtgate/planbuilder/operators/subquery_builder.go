@@ -162,8 +162,8 @@ func createSubquery(
 	isArg bool,
 ) *SubQuery {
 	topLevel := ctx.SemTable.EqualsExpr(original, parent)
-	original = cloneASTAndSemState(ctx, original)
-	originalSq := cloneASTAndSemState(ctx, subq)
+	original, originalSq := cloneASTAndSemState(ctx, original, subq)
+	// originalSq := cloneASTAndSemState(ctx, subq)
 	subqID := findTablesContained(ctx, subq.Select)
 	totalID := subqID.Merge(outerID)
 	sqc := &SubQueryBuilder{totalID: totalID, subqID: subqID, outerID: outerID}

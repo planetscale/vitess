@@ -1,8 +1,32 @@
 [
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "comment": "sharded correlated subquery inside aggregation function on a sharded table on same vindex",
+    "query": "select max((select max(col2) from user u1 where u1.id = u2.id)) from user u2",
     "plan": {
+      "QueryType": "SELECT",
+      "Original": "select max((select max(col2) from user u1 where u1.id = u2.id)) from user u2",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "max(0|1) AS max((select max(col2) from `user` as u1 where u1.id = u2.id))",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select max((select max(col2) from `user` as u1 where 1 != 1)), weight_string(max((select max(col2) from `user` as u1 where 1 != 1))) from `user` as u2 where 1 != 1",
+            "Query": "select max((select max(col2) from `user` as u1 where u1.id = u2.id)), weight_string(max((select max(col2) from `user` as u1 where u1.id = u2.id))) from `user` as u2",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
     }
   }
 ]

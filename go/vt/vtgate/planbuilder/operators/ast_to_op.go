@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"log"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -109,14 +110,25 @@ func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, in sqlpars
 }
 
 // cloneASTAndSemState clones the AST and the semantic state of the input node.
-func cloneASTAndSemState[T sqlparser.SQLNode](ctx *plancontext.PlanningContext, original T) T {
-	return sqlparser.CopyOnRewrite(original, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+func cloneASTAndSemState(ctx *plancontext.PlanningContext, original sqlparser.Expr, subq *sqlparser.Subquery) (sqlparser.Expr, *sqlparser.Subquery) {
+	var newSubQ *sqlparser.Subquery
+	newOriginal := sqlparser.CopyOnRewrite(original, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		e, ok := cursor.Node().(sqlparser.Expr)
 		if !ok {
 			return
 		}
-		cursor.Replace(e) // We do this only to trigger the cloning of the AST
-	}, ctx.SemTable.CopySemanticInfo).(T)
+
+		if sq, ok := e.(*sqlparser.Subquery); ok {
+			log.Println("aa")
+			if subq == e {
+				newSubQ = sq
+			}
+		}
+
+		cursor.Replace(e) // We do this only to trigger the cloning of t
+	}, ctx.SemTable.CopySemanticInfo)
+
+	return newOriginal.(sqlparser.Expr), newSubQ
 }
 
 // findTablesContained returns the TableSet of all the contained
