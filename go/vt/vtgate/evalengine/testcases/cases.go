@@ -1183,6 +1183,11 @@ func MultiComparisons(yield Query) {
 		"_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs",
 		"_utf8mb4 'の東京ノ' COLLATE utf8mb4_ja_0900_as_cs_ks",
 		"_utf8mb4 'ノ東京の' COLLATE utf8mb4_ja_0900_as_cs_ks",
+		`date'2024-02-18'`,
+		`date'2023-02-01'`,
+		`date'2100-02-01'`,
+		`timestamp'2020-12-31 23:59:59'`,
+		`timestamp'2025-01-01 00:00:00'`,
 	}
 
 	for _, method := range []string{"LEAST", "GREATEST"} {

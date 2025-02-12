@@ -19,7 +19,6 @@ package evalengine
 import (
 	"bytes"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
@@ -32,7 +31,7 @@ type (
 		CallExpr
 	}
 
-	multiComparisonFunc func(collationEnv *collations.Environment, args []eval, cmp int) (eval, error)
+	multiComparisonFunc func(env *ExpressionEnv, args []eval, cmp int) (eval, error)
 
 	builtinMultiComparison struct {
 		CallExpr
@@ -101,6 +100,10 @@ func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 		decimals  int
 		text      int
 		binary    int
+		datetime  int
+		timestamp int
+		date      int
+		time      int
 	)
 
 	/*
@@ -114,7 +117,7 @@ func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 
 	for _, arg := range args {
 		if arg == nil {
-			return func(collationEnv *collations.Environment, args []eval, cmp int) (eval, error) {
+			return func(_ *ExpressionEnv, _ []eval, _ int) (eval, error) {
 				return nil, nil
 			}
 		}
@@ -135,7 +138,31 @@ func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 			case sqltypes.Blob, sqltypes.Binary, sqltypes.VarBinary:
 				binary++
 			}
+		case *evalTemporal:
+			switch arg.SQLType() {
+			case sqltypes.Datetime:
+				datetime++
+			case sqltypes.Timestamp:
+				timestamp++
+			case sqltypes.Date:
+				date++
+			case sqltypes.Time:
+				time++
+			}
 		}
+	}
+
+	if datetime > 0 {
+		return compareAllDatetime
+	}
+	if timestamp > 0 {
+		return compareAllTimestamp
+	}
+	if date > 0 {
+		return compareAllDate
+	}
+	if time > 0 {
+		return compareAllTime
 	}
 
 	if integersI+integersU == len(args) {
@@ -165,7 +192,53 @@ func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 	panic("unexpected argument type")
 }
 
-func compareAllInteger_u(_ *collations.Environment, args []eval, cmp int) (eval, error) {
+func compareAllTime(env *ExpressionEnv, args []eval, cmp int) (eval, error) {
+	for i := range args {
+		args[i] = evalToTime(args[i], -1)
+	}
+	return compareAllTemporal(args, cmp), nil
+}
+
+func compareAllDate(env *ExpressionEnv, args []eval, cmp int) (eval, error) {
+	for i := range args {
+		args[i] = evalToDate(args[i], env.now, true)
+	}
+	return compareAllTemporal(args, cmp), nil
+}
+
+func compareAllTimestamp(env *ExpressionEnv, args []eval, cmp int) (eval, error) {
+	for i := range args {
+		args[i] = evalToTimestamp(args[i], -1, env.now, true)
+	}
+	return compareAllTemporal(args, cmp), nil
+}
+
+func compareAllDatetime(env *ExpressionEnv, args []eval, cmp int) (eval, error) {
+	for i := range args {
+		args[i] = evalToDateTime(args[i], -1, env.now, true)
+	}
+	return compareAllTemporal(args, cmp), nil
+}
+
+func compareAllTemporal(args []eval, cmp int) *evalTemporal {
+	var x *evalTemporal
+	for _, arg := range args {
+		if arg == nil {
+			continue
+		}
+		if x == nil {
+			x = arg.(*evalTemporal)
+			continue
+		}
+		y := arg.(*evalTemporal)
+		if (cmp < 0) == (y.compare(x) < 0) {
+			x = y
+		}
+	}
+	return x
+}
+
+func compareAllInteger_u(_ *ExpressionEnv, args []eval, cmp int) (eval, error) {
 	x := args[0].(*evalUint64)
 	for _, arg := range args[1:] {
 		y := arg.(*evalUint64)
@@ -176,7 +249,7 @@ func compareAllInteger_u(_ *collations.Environment, args []eval, cmp int) (eval,
 	return x, nil
 }
 
-func compareAllInteger_i(_ *collations.Environment, args []eval, cmp int) (eval, error) {
+func compareAllInteger_i(_ *ExpressionEnv, args []eval, cmp int) (eval, error) {
 	x := args[0].(*evalInt64)
 	for _, arg := range args[1:] {
 		y := arg.(*evalInt64)
@@ -187,7 +260,7 @@ func compareAllInteger_i(_ *collations.Environment, args []eval, cmp int) (eval,
 	return x, nil
 }
 
-func compareAllFloat(_ *collations.Environment, args []eval, cmp int) (eval, error) {
+func compareAllFloat(_ *ExpressionEnv, args []eval, cmp int) (eval, error) {
 	candidateF, ok := evalToFloat(args[0])
 	if !ok {
 		return nil, errDecimalOutOfRange
@@ -212,7 +285,7 @@ func evalDecimalPrecision(e eval) int32 {
 	return 0
 }
 
-func compareAllDecimal(_ *collations.Environment, args []eval, cmp int) (eval, error) {
+func compareAllDecimal(_ *ExpressionEnv, args []eval, cmp int) (eval, error) {
 	decExtreme := evalToDecimal(args[0], 0, 0).dec
 	precExtreme := evalDecimalPrecision(args[0])
 
@@ -229,12 +302,12 @@ func compareAllDecimal(_ *collations.Environment, args []eval, cmp int) (eval, e
 	return newEvalDecimalWithPrec(decExtreme, precExtreme), nil
 }
 
-func compareAllText(collationEnv *collations.Environment, args []eval, cmp int) (eval, error) {
+func compareAllText(env *ExpressionEnv, args []eval, cmp int) (eval, error) {
 	var charsets = make([]charset.Charset, 0, len(args))
 	var ca collationAggregation
 	for _, arg := range args {
 		col := evalCollation(arg)
-		if err := ca.add(col, collationEnv); err != nil {
+		if err := ca.add(col, env.collationEnv); err != nil {
 			return nil, err
 		}
 		charsets = append(charsets, colldata.Lookup(col.Collation).Charset())
@@ -262,7 +335,7 @@ func compareAllText(collationEnv *collations.Environment, args []eval, cmp int) 
 	return newEvalText(b1, tc), nil
 }
 
-func compareAllBinary(_ *collations.Environment, args []eval, cmp int) (eval, error) {
+func compareAllBinary(_ *ExpressionEnv, args []eval, cmp int) (eval, error) {
 	candidateB := args[0].ToRawBytes()
 
 	for _, arg := range args[1:] {
@@ -280,7 +353,7 @@ func (call *builtinMultiComparison) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
-	return getMultiComparisonFunc(args)(env.collationEnv, args, call.cmp)
+	return getMultiComparisonFunc(args)(env, args, call.cmp)
 }
 
 func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype) (ctype, error) {
@@ -314,14 +387,18 @@ func (call *builtinMultiComparison) compile_d(c *compiler, args []ctype) (ctype,
 
 func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 	var (
-		signed   int
-		unsigned int
-		floats   int
-		decimals int
-		text     int
-		binary   int
-		args     []ctype
-		nullable bool
+		signed    int
+		unsigned  int
+		floats    int
+		decimals  int
+		date      int
+		datetime  int
+		timestamp int
+		time      int
+		text      int
+		binary    int
+		args      []ctype
+		nullable  bool
 	)
 
 	/*
@@ -355,6 +432,14 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 			text++
 		case sqltypes.Blob, sqltypes.Binary, sqltypes.VarBinary:
 			binary++
+		case sqltypes.Date:
+			date++
+		case sqltypes.Datetime:
+			datetime++
+		case sqltypes.Timestamp:
+			timestamp++
+		case sqltypes.Time:
+			time++
 		case sqltypes.Null:
 			nullable = true
 		default:
@@ -365,6 +450,42 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 	var f typeFlag
 	if nullable {
 		f |= flagNullable
+	}
+	if datetime > 0 {
+		for i, tt := range args {
+			if tt.Type != sqltypes.Datetime {
+				c.compileToDateTime(tt, len(args)-i, -1)
+			}
+		}
+		c.asm.Fn_MULTICMP_temporal(len(args), call.cmp < 0)
+		return ctype{Type: sqltypes.Datetime, Flag: f, Col: collationBinary}, nil
+	}
+	if timestamp > 0 {
+		for i, tt := range args {
+			if tt.Type != sqltypes.Timestamp {
+				c.compileToDateTime(tt, len(args)-i, -1)
+			}
+		}
+		c.asm.Fn_MULTICMP_temporal(len(args), call.cmp < 0)
+		return ctype{Type: sqltypes.Timestamp, Flag: f, Col: collationBinary}, nil
+	}
+	if date > 0 {
+		for i, tt := range args {
+			if tt.Type != sqltypes.Date {
+				c.compileToDateTime(tt, len(args)-i, -1)
+			}
+		}
+		c.asm.Fn_MULTICMP_temporal(len(args), call.cmp < 0)
+		return ctype{Type: sqltypes.Date, Flag: f, Col: collationBinary}, nil
+	}
+	if time > 0 {
+		for i, tt := range args {
+			if tt.Type != sqltypes.Time {
+				c.compileToDateTime(tt, len(args)-i, -1)
+			}
+		}
+		c.asm.Fn_MULTICMP_temporal(len(args), call.cmp < 0)
+		return ctype{Type: sqltypes.Time, Flag: f, Col: collationBinary}, nil
 	}
 	if signed+unsigned == len(args) {
 		if signed == len(args) {

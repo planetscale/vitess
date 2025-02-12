@@ -2670,6 +2670,30 @@ func (asm *assembler) Fn_MULTICMP_u(args int, lessThan bool) {
 	}, "FN MULTICMP UINT64(SP-%d)...UINT64(SP-1)", args)
 }
 
+func (asm *assembler) Fn_MULTICMP_temporal(args int, lessThan bool) {
+	asm.adjustStack(-(args - 1))
+
+	asm.emit(func(env *ExpressionEnv) int {
+		var x *evalTemporal
+		for sp := env.vm.sp - args; sp < env.vm.sp; sp++ {
+			if env.vm.stack[sp] == nil {
+				continue
+			}
+			if x == nil {
+				x = env.vm.stack[sp].(*evalTemporal)
+				continue
+			}
+			y := env.vm.stack[sp].(*evalTemporal)
+			if lessThan == (y.compare(x) < 0) {
+				x = y
+			}
+		}
+		env.vm.stack[env.vm.sp-args] = x
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN MULTICMP TEMPORAL(SP-%d)...TEMPORAL(SP-1)", args)
+}
+
 func (asm *assembler) Fn_REPEAT(base sqltypes.Type, fallback sqltypes.Type) {
 	asm.adjustStack(-1)
 

@@ -139,11 +139,6 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs.Exprs[0].(*sqlparser.AliasedExpr).Expr
 	local, err := func() (expr evalengine.Expr, err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				err = fmt.Errorf("PANIC during translate: %v", r)
-			}
-		}()
 		cfg := &evalengine.Config{
 			ResolveColumn:     evalengine.FieldResolver(fields).Column,
 			Collation:         collations.CollationUtf8mb4ID,
