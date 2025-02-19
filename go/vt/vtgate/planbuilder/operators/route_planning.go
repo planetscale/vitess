@@ -287,31 +287,6 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op Operator) (requ
 	return
 }
 
-func newJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) JoinOp {
-	lhsID := TableID(lhs)
-	if !ctx.AllowValuesJoin || lhsID.NumberOfTables() > 1 || !joinType.IsInner() {
-		return NewApplyJoin(ctx, lhs, rhs, nil, joinType)
-	}
-	lhsTableInfo, err := ctx.SemTable.TableInfoFor(lhsID)
-	if err != nil {
-		panic(vterrors.VT13001(err.Error()))
-	}
-	lhsTableName, err := lhsTableInfo.Name()
-	if err != nil {
-		panic(vterrors.VT13001(err.Error()))
-	}
-	bindVariableName := ctx.ReservedVars.ReserveVariable("values")
-	v := &Values{
-		unaryOperator: newUnaryOp(rhs),
-		Name:          lhsTableName.Name.String(),
-		Arg:           bindVariableName,
-	}
-	return &ValuesJoin{
-		binaryOperator: newBinaryOp(lhs, v),
-		BindVarName:    bindVariableName,
-	}
-}
-
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) (Operator, *ApplyResult) {
 	jm := newJoinMerge(joinPredicates, joinType)
 	newPlan := jm.mergeJoinInputs(ctx, lhs, rhs, joinPredicates)
@@ -330,14 +305,14 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 			return join, Rewrote("use a hash join because we have LIMIT on the LHS")
 		}
 
-		join := newJoin(ctx, Clone(rhs), Clone(lhs), joinType)
+		join := NewApplyJoin(ctx, Clone(rhs), Clone(lhs), nil, joinType)
 		for _, pred := range joinPredicates {
 			join.AddJoinPredicate(ctx, pred)
 		}
 		return join, Rewrote("logical join to applyJoin, switching side because LIMIT")
 	}
 
-	join := newJoin(ctx, Clone(lhs), Clone(rhs), joinType)
+	join := NewApplyJoin(ctx, Clone(lhs), Clone(rhs), nil, joinType)
 	for _, pred := range joinPredicates {
 		join.AddJoinPredicate(ctx, pred)
 	}

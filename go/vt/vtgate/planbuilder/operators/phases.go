@@ -34,6 +34,7 @@ type (
 const (
 	physicalTransform Phase = iota
 	initialPlanning
+	rewriteApplyJoin
 	pullDistinctFromUnion
 	delegateAggregation
 	recursiveCTEHorizons
@@ -50,6 +51,8 @@ func (p Phase) String() string {
 		return "physicalTransform"
 	case initialPlanning:
 		return "initial horizon planning optimization"
+	case rewriteApplyJoin:
+		return "rewrite ApplyJoin to ValuesJoin"
 	case pullDistinctFromUnion:
 		return "pull distinct from UNION"
 	case delegateAggregation:
@@ -69,8 +72,11 @@ func (p Phase) String() string {
 	}
 }
 
-func (p Phase) shouldRun(s semantics.QuerySignature) bool {
+func (p Phase) shouldRun(ctx *plancontext.PlanningContext) bool {
+	s := ctx.SemTable.QuerySignature
 	switch p {
+	case rewriteApplyJoin:
+		return ctx.AllowValuesJoin
 	case pullDistinctFromUnion:
 		return s.Union
 	case delegateAggregation:
@@ -85,6 +91,7 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 		return s.SubQueries
 	case dmlWithInput:
 		return s.DML
+
 	default:
 		return true
 	}
@@ -106,9 +113,68 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 		return settleSubqueries(ctx, op)
 	case dmlWithInput:
 		return findDMLAboveRoute(ctx, op)
+	case rewriteApplyJoin:
+		visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+			aj, ok := op.(*ApplyJoin)
+			if !ok {
+				return op, NoRewrite
+			}
+
+			vj := newValuesJoin(ctx, aj.LHS, aj.RHS, aj.JoinType)
+			if vj == nil {
+				return op, NoRewrite
+			}
+
+			for _, pred := range aj.JoinPredicates.columns {
+				err := ctx.SkipJoinPredicates(pred.Original)
+				if err != nil {
+					panic(err)
+				}
+				vj.AddJoinPredicate(ctx, pred.Original)
+			}
+
+			for _, column := range aj.JoinColumns.columns {
+				vj.AddColumn(ctx, true, false, aeWrap(column.Original))
+			}
+
+			return vj, Rewrote("rewrote ApplyJoin to ValuesJoin")
+		}
+
+		return TopDown(op, TableID, visit, stopAtRoute)
+
 	default:
 		return op
 	}
+}
+
+func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) *ValuesJoin {
+	lhsID := TableID(lhs)
+	if lhsID.NumberOfTables() > 1 || !joinType.IsInner() {
+		return nil
+	}
+	lhsTableName := getTableName(ctx, lhsID)
+	bindVariableName := ctx.ReservedVars.ReserveVariable("values")
+	v := &Values{
+		unaryOperator: newUnaryOp(rhs),
+		Name:          lhsTableName,
+		Arg:           bindVariableName,
+	}
+	return &ValuesJoin{
+		binaryOperator: newBinaryOp(lhs, v),
+		BindVarName:    bindVariableName,
+	}
+}
+
+func getTableName(ctx *plancontext.PlanningContext, lhsID semantics.TableSet) string {
+	lhsTableInfo, err := ctx.SemTable.TableInfoFor(lhsID)
+	if err != nil {
+		panic(vterrors.VT13001(err.Error())) // TODO: make name up instead of panic, same below
+	}
+	lhsTableName, err := lhsTableInfo.Name()
+	if err != nil {
+		panic(vterrors.VT13001(err.Error()))
+	}
+	return lhsTableName.Name.String()
 }
 
 type phaser struct {
@@ -124,7 +190,7 @@ func (p *phaser) next(ctx *plancontext.PlanningContext) Phase {
 
 		p.current++
 
-		if curr.shouldRun(ctx.SemTable.QuerySignature) {
+		if curr.shouldRun(ctx) {
 			return curr
 		}
 	}

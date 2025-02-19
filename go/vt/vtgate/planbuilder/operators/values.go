@@ -31,6 +31,10 @@ type Values struct {
 
 func (v *Values) Clone(inputs []Operator) Operator {
 	clone := *v
+
+	if len(inputs) > 0 {
+		clone.Source = inputs[0]
+	}
 	return &clone
 }
 
