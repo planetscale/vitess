@@ -17,6 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
+	"strings"
+
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -46,6 +50,10 @@ type (
 		PureLHS  bool
 	}
 )
+
+func (c valuesJoinColumn) String() string {
+	return fmt.Sprintf("[%s:%s]", sqlparser.SliceString(c.LHS), sqlparser.String(c.Original))
+}
 
 var _ Operator = (*ValuesJoin)(nil)
 var _ JoinOp = (*ValuesJoin)(nil)
@@ -134,7 +142,16 @@ func (vj *ValuesJoin) Clone(inputs []Operator) Operator {
 }
 
 func (vj *ValuesJoin) ShortDescription() string {
-	return ""
+	fn := func(cols []valuesJoinColumn) string {
+		out := slice.Map(cols, func(jc valuesJoinColumn) string {
+			return jc.String()
+		})
+		return strings.Join(out, ", ")
+	}
+
+	firstPart := fmt.Sprintf("on %s columns: %s", fn(vj.JoinPredicates), fn(vj.JoinColumns))
+
+	return firstPart
 }
 
 func (vj *ValuesJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {

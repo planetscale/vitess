@@ -18,6 +18,7 @@ package operators
 
 import (
 	"io"
+	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -125,16 +126,16 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 				return op, NoRewrite
 			}
 
+			for _, column := range aj.JoinColumns.columns {
+				vj.AddColumn(ctx, true, false, aeWrap(column.Original))
+			}
+
 			for _, pred := range aj.JoinPredicates.columns {
 				err := ctx.SkipJoinPredicates(pred.Original)
 				if err != nil {
 					panic(err)
 				}
 				vj.AddJoinPredicate(ctx, pred.Original)
-			}
-
-			for _, column := range aj.JoinColumns.columns {
-				vj.AddColumn(ctx, true, false, aeWrap(column.Original))
 			}
 
 			return vj, Rewrote("rewrote ApplyJoin to ValuesJoin")
@@ -148,10 +149,10 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 }
 
 func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) *ValuesJoin {
-	lhsID := TableID(lhs)
-	if lhsID.NumberOfTables() > 1 || !joinType.IsInner() {
+	if !joinType.IsInner() {
 		return nil
 	}
+	lhsID := TableID(lhs)
 	lhsTableName := getTableName(ctx, lhsID)
 	bindVariableName := ctx.ReservedVars.ReserveVariable("values")
 	v := &Values{
@@ -166,15 +167,21 @@ func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType
 }
 
 func getTableName(ctx *plancontext.PlanningContext, lhsID semantics.TableSet) string {
-	lhsTableInfo, err := ctx.SemTable.TableInfoFor(lhsID)
-	if err != nil {
-		panic(vterrors.VT13001(err.Error())) // TODO: make name up instead of panic, same below
+	var parts []string
+	for _, ts := range lhsID.Constituents() {
+		lhsTableInfo, err := ctx.SemTable.TableInfoFor(ts)
+		if err != nil {
+			parts = append(parts, "X")
+			continue
+		}
+		lhsTableName, err := lhsTableInfo.Name()
+		if err != nil {
+			parts = append(parts, "X")
+			continue
+		}
+		parts = append(parts, lhsTableName.Name.String())
 	}
-	lhsTableName, err := lhsTableInfo.Name()
-	if err != nil {
-		panic(vterrors.VT13001(err.Error()))
-	}
-	return lhsTableName.Name.String()
+	return strings.Join(parts, "_")
 }
 
 type phaser struct {
