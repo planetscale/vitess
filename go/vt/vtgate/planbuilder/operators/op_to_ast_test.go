@@ -27,21 +27,21 @@ import (
 
 func TestToSQLValues(t *testing.T) {
 	ctx := plancontext.CreateEmptyPlanningContext()
-	bindVarName := "toto"
-	ctx.ValuesJoinColumns[bindVarName] = sqlparser.Columns{sqlparser.NewIdentifierCI("user_id")}
+	name := "toto"
+	ctx.ValuesJoinColumns[name] = []*sqlparser.AliasedExpr{{Expr: sqlparser.NewColName("user_id")}}
 
 	tableName := sqlparser.NewTableName("x")
 	tableColumn := sqlparser.NewColName("id")
+	source := &Table{
+		QTable: &QueryTable{
+			Table: tableName,
+			Alias: sqlparser.NewAliasedTableExpr(tableName, ""),
+		},
+		Columns: []*sqlparser.ColName{tableColumn},
+	}
 	op := &Values{
-		unaryOperator: newUnaryOp(&Table{
-			QTable: &QueryTable{
-				Table: tableName,
-				Alias: sqlparser.NewAliasedTableExpr(tableName, ""),
-			},
-			Columns: []*sqlparser.ColName{tableColumn},
-		}),
-		Name: "t",
-		Arg:  bindVarName,
+		unaryOperator: newUnaryOp(source),
+		Name:          name,
 	}
 
 	stmt, _, err := ToAST(ctx, op)
@@ -85,7 +85,7 @@ func TestToSQLValuesJoin(t *testing.T) {
 	}
 
 	const argumentName = "v"
-	ctx.ValuesJoinColumns[argumentName] = sqlparser.Columns{sqlparser.NewIdentifierCI("id")}
+	ctx.ValuesJoinColumns[argumentName] = []*sqlparser.AliasedExpr{{Expr: sqlparser.NewColName("user_id")}}
 	rhsTableName := sqlparser.NewTableName("y")
 	rhsTableColumn := sqlparser.NewColName("tata")
 	rhsFilterPred, err := parser.ParseExpr("y.tata = 42")
@@ -103,14 +103,12 @@ func TestToSQLValuesJoin(t *testing.T) {
 				Columns: []*sqlparser.ColName{rhsTableColumn},
 			}),
 			Name: lhsTableName.Name.String(),
-			Arg:  argumentName,
 		}),
 		Predicates: []sqlparser.Expr{rhsFilterPred, rhsJoinFilterPred},
 	}
 
 	vj := &ValuesJoin{
 		binaryOperator: newBinaryOp(LHS, RHS),
-		BindVarName:    argumentName,
 	}
 
 	stmt, _, err := ToAST(ctx, vj)

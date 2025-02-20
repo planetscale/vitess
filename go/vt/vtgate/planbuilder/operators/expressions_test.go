@@ -50,7 +50,7 @@ func TestSplitComplexPredicateToLHS(t *testing.T) {
 	}, ast)
 
 	valuesJoinCols := breakValuesJoinExpressionInLHS(ctx, ast, lID)
-	nodes := slice.Map(valuesJoinCols.LHS, func(from *sqlparser.ColName) string {
+	nodes := slice.Map(valuesJoinCols.LHS, func(from sqlparser.Expr) string {
 		return sqlparser.String(from)
 	})
 

@@ -18,7 +18,6 @@ package operators
 
 import (
 	"io"
-	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -152,36 +151,17 @@ func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType
 	if !joinType.IsInner() {
 		return nil
 	}
-	lhsID := TableID(lhs)
-	lhsTableName := getTableName(ctx, lhsID)
+
 	bindVariableName := ctx.ReservedVars.ReserveVariable("values")
+	ctx.ValueJoins[bindVariableName] = bindVariableName
 	v := &Values{
 		unaryOperator: newUnaryOp(rhs),
-		Name:          lhsTableName,
-		Arg:           bindVariableName,
+		Name:          bindVariableName,
 	}
 	return &ValuesJoin{
-		binaryOperator: newBinaryOp(lhs, v),
-		BindVarName:    bindVariableName,
+		binaryOperator:    newBinaryOp(lhs, v),
+		ValuesDestination: bindVariableName,
 	}
-}
-
-func getTableName(ctx *plancontext.PlanningContext, lhsID semantics.TableSet) string {
-	var parts []string
-	for _, ts := range lhsID.Constituents() {
-		lhsTableInfo, err := ctx.SemTable.TableInfoFor(ts)
-		if err != nil {
-			parts = append(parts, "X")
-			continue
-		}
-		lhsTableName, err := lhsTableInfo.Name()
-		if err != nil {
-			parts = append(parts, "X")
-			continue
-		}
-		parts = append(parts, lhsTableName.Name.String())
-	}
-	return strings.Join(parts, "_")
 }
 
 type phaser struct {

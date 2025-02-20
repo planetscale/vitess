@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"vitess.io/vitess/go/slice"
@@ -29,7 +30,7 @@ type (
 	ValuesJoin struct {
 		binaryOperator
 
-		BindVarName string
+		ValuesDestination string
 
 		JoinColumns    []valuesJoinColumn
 		JoinPredicates []valuesJoinColumn
@@ -46,7 +47,7 @@ type (
 
 	valuesJoinColumn struct {
 		Original sqlparser.Expr
-		LHS      []*sqlparser.ColName
+		LHS      []sqlparser.Expr
 		PureLHS  bool
 	}
 )
@@ -149,7 +150,7 @@ func (vj *ValuesJoin) ShortDescription() string {
 		return strings.Join(out, ", ")
 	}
 
-	firstPart := fmt.Sprintf("on %s columns: %s", fn(vj.JoinPredicates), fn(vj.JoinColumns))
+	firstPart := fmt.Sprintf("%s on %s columns: %s", vj.ValuesDestination, fn(vj.JoinPredicates), fn(vj.JoinColumns))
 
 	return firstPart
 }
@@ -159,34 +160,30 @@ func (vj *ValuesJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 func (vj *ValuesJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
-	valuesColumns := ctx.ValuesJoinColumns[vj.BindVarName]
+	exprs := ctx.ValuesJoinColumns[vj.ValuesDestination]
 	for _, jc := range vj.JoinColumns {
-		vj.planOffsetsForValueJoinPredicate(ctx, jc.LHS, &valuesColumns)
-		ctx.ValuesJoinColumns[vj.BindVarName] = valuesColumns
-
+		newExprs := vj.planOffsetsForLHSExprs(ctx, jc.LHS)
+		exprs = append(exprs, newExprs...)
 		offset := vj.RHS.AddColumn(ctx, true, false, aeWrap(jc.Original))
 		vj.Columns = append(vj.Columns, ToRightOffset(offset))
 	}
-
-	for _, predicate := range vj.JoinPredicates {
-		vj.planOffsetsForValueJoinPredicate(ctx, predicate.LHS, &valuesColumns)
+	for _, jc := range vj.JoinPredicates {
+		// for join predicates, we only need to push the LHS dependencies. The RHS expressions are already pushed
+		newExprs := vj.planOffsetsForLHSExprs(ctx, jc.LHS)
+		exprs = append(exprs, newExprs...)
 	}
-
-	ctx.ValuesJoinColumns[vj.BindVarName] = valuesColumns
+	ctx.ValuesJoinColumns[vj.ValuesDestination] = exprs
 	return vj
 }
 
-func (vj *ValuesJoin) planOffsetsForValueJoinPredicate(ctx *plancontext.PlanningContext, lhsPred []*sqlparser.ColName, valuesColumns *sqlparser.Columns) {
-outer:
-	for _, lh := range lhsPred {
-		for _, ci := range *valuesColumns {
-			if ci.Equal(lh.Name) {
-				// already there, no need to add it again
-				continue outer
-			}
+func (vj *ValuesJoin) planOffsetsForLHSExprs(ctx *plancontext.PlanningContext, input []sqlparser.Expr) (exprs []*sqlparser.AliasedExpr) {
+	for _, lhsExpr := range input {
+		offset := vj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr))
+		// only add it if we don't already have it
+		if slices.Index(vj.CopyColumnsToRHS, offset) == -1 {
+			vj.CopyColumnsToRHS = append(vj.CopyColumnsToRHS, offset)
+			exprs = append(exprs, aeWrap(lhsExpr))
 		}
-		offset := vj.LHS.AddColumn(ctx, true, false, aeWrap(lh))
-		vj.CopyColumnsToRHS = append(vj.CopyColumnsToRHS, offset)
-		*valuesColumns = append(*valuesColumns, lh.Name)
 	}
+	return exprs
 }

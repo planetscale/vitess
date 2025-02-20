@@ -86,7 +86,12 @@ type PlanningContext struct {
 	isMirrored bool
 
 	// ValuesJoinColumns stores the columns we need for each values statement in the plan.
-	ValuesJoinColumns map[string]sqlparser.Columns
+	ValuesJoinColumns map[string][]*sqlparser.AliasedExpr
+
+	// ValueJoins contains one entry for each value join that has been created.
+	// The key is the value-join ops ValuesDestination, and the value is the Values op associated with it.
+	// When first created, these are one-to-one, but the Values are merged if they end up in the same route
+	ValueJoins map[string]string
 
 	emptyEnv    *evalengine.ExpressionEnv
 	constantCfg *evalengine.Config
@@ -98,7 +103,8 @@ func CreateEmptyPlanningContext() *PlanningContext {
 		skipPredicates:     make(map[sqlparser.Expr]any),
 		skipValuesArgument: make(map[string]any),
 		ReservedArguments:  make(map[sqlparser.Expr]string),
-		ValuesJoinColumns:  make(map[string]sqlparser.Columns),
+		ValuesJoinColumns:  make(map[string][]*sqlparser.AliasedExpr),
+		ValueJoins:         make(map[string]string),
 	}
 }
 
@@ -133,9 +139,10 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		skipValuesArgument: map[string]any{},
 		PlannerVersion:     version,
 		ReservedArguments:  map[sqlparser.Expr]string{},
-		ValuesJoinColumns:  make(map[string]sqlparser.Columns),
+		ValuesJoinColumns:  make(map[string][]*sqlparser.AliasedExpr),
 		Statement:          stmt,
 		AllowValuesJoin:    sqlparser.AllowValuesJoinDirective(stmt),
+		ValueJoins:         make(map[string]string),
 	}, nil
 }
 
@@ -490,6 +497,7 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		CurrentCTE:        ctx.CurrentCTE,
 		emptyEnv:          ctx.emptyEnv,
 		isMirrored:        true,
+		ValuesJoinColumns: ctx.ValuesJoinColumns,
 	}
 	return ctx.mirror
 }

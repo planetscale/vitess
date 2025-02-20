@@ -18,11 +18,13 @@ package operators
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func ToAST(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement, _ Operator, err error) {
@@ -130,7 +132,7 @@ func buildDistinct(op *Distinct, qb *queryBuilder) {
 }
 
 func buildValuesJoin(op *ValuesJoin, qb *queryBuilder) {
-	qb.ctx.SkipValuesArgument(op.BindVarName)
+	qb.ctx.SkipValuesArgument(op.ValuesDestination)
 	buildAST(op.LHS, qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildAST(op.RHS, qbR)
@@ -139,15 +141,42 @@ func buildValuesJoin(op *ValuesJoin, qb *queryBuilder) {
 
 func buildValues(op *Values, qb *queryBuilder) {
 	buildAST(op.Source, qb)
-	if qb.ctx.IsValuesArgumentSkipped(op.Arg) {
+	if qb.ctx.IsValuesArgumentSkipped(op.Name) {
 		return
 	}
 
-	qb.addTableExpr(op.Name, op.Name, TableID(op), &sqlparser.DerivedTable{
+	expr := &sqlparser.DerivedTable{
 		Select: &sqlparser.ValuesStatement{
-			ListArg: sqlparser.NewListArg(op.Arg),
+			ListArg: sqlparser.NewListArg(op.Name),
 		},
-	}, nil, op.getColsFromCtx(qb.ctx))
+	}
+
+	apa := semantics.EmptyTableSet()
+	for _, ae := range qb.ctx.ValuesJoinColumns[op.Name] {
+		apa = apa.Merge(qb.ctx.SemTable.RecursiveDeps(ae.Expr))
+	}
+
+	tableName := getTableName(qb.ctx, apa)
+
+	qb.addTableExpr(tableName, tableName, TableID(op), expr, nil, op.getColumnNamesFromCtx(qb.ctx))
+}
+
+func getTableName(ctx *plancontext.PlanningContext, id semantics.TableSet) string {
+	var names []string
+	for _, ts := range id.Constituents() {
+		ti, err := ctx.SemTable.TableInfoFor(ts)
+		if err != nil {
+			names = append(names, "X")
+			continue
+		}
+		name, err := ti.Name()
+		if err != nil {
+			names = append(names, "X")
+			continue
+		}
+		names = append(names, name.Name.String())
+	}
+	return strings.Join(names, "_")
 }
 
 func buildDelete(op *Delete, qb *queryBuilder) {

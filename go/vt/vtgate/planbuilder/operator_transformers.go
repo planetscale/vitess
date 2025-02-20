@@ -49,8 +49,6 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 		return transformSubQuery(ctx, op)
 	case *operators.Filter:
 		return transformFilter(ctx, op)
-	case *operators.Horizon:
-		panic("should have been solved in the operator")
 	case *operators.Projection:
 		return transformProjection(ctx, op)
 	case *operators.Limit:
@@ -80,26 +78,34 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 	case *operators.PercentBasedMirror:
 		return transformPercentBasedMirror(ctx, op)
 	case *operators.ValuesJoin:
-		lhs, err := transformToPrimitive(ctx, op.LHS)
-		if err != nil {
-			return nil, err
-		}
-		rhs, err := transformToPrimitive(ctx, op.RHS)
-		if err != nil {
-			return nil, err
-		}
-
-		return &engine.ValuesJoin{
-			Left:             lhs,
-			Right:            rhs,
-			CopyColumnsToRHS: op.CopyColumnsToRHS,
-			BindVarName:      op.BindVarName,
-			Cols:             op.Columns,
-			ColNames:         op.ColumnName,
-		}, nil
+		return transformValuesJoin(ctx, op)
+	case *operators.Values:
+		panic("should have been pushed under a route")
+	case *operators.Horizon:
+		panic("should have been solved in the operator")
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToPrimitive)", op))
+}
+
+func transformValuesJoin(ctx *plancontext.PlanningContext, op *operators.ValuesJoin) (engine.Primitive, error) {
+	lhs, err := transformToPrimitive(ctx, op.LHS)
+	if err != nil {
+		return nil, err
+	}
+	rhs, err := transformToPrimitive(ctx, op.RHS)
+	if err != nil {
+		return nil, err
+	}
+
+	return &engine.ValuesJoin{
+		Left:             lhs,
+		Right:            rhs,
+		CopyColumnsToRHS: op.CopyColumnsToRHS,
+		BindVarName:      op.ValuesDestination,
+		Cols:             op.Columns,
+		ColNames:         op.ColumnName,
+	}, nil
 }
 
 func transformPercentBasedMirror(ctx *plancontext.PlanningContext, op *operators.PercentBasedMirror) (engine.Primitive, error) {

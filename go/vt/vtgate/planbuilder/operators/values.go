@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -26,7 +27,6 @@ type Values struct {
 	unaryOperator
 
 	Name string
-	Arg  string
 }
 
 func (v *Values) Clone(inputs []Operator) Operator {
@@ -51,32 +51,34 @@ func (v *Values) AddWSColumn(ctx *plancontext.PlanningContext, offset int, under
 }
 
 func (v *Values) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
-	col, ok := expr.(*sqlparser.ColName)
-	if !ok {
-		return -1
-	}
-	for i, column := range v.getColsFromCtx(ctx) {
-		if col.Name.Equal(column) {
+	for i, column := range v.getExprsFromCtx(ctx) {
+		if ctx.SemTable.EqualsExpr(column, expr) {
 			return i
 		}
 	}
 	return -1
 }
 
-func (v *Values) getColsFromCtx(ctx *plancontext.PlanningContext) sqlparser.Columns {
-	columns, found := ctx.ValuesJoinColumns[v.Arg]
+func (v *Values) getColumnNamesFromCtx(ctx *plancontext.PlanningContext) sqlparser.Columns {
+	columns, found := ctx.ValuesJoinColumns[v.Name]
 	if !found {
 		panic(vterrors.VT13001("columns not found"))
 	}
-	return columns
+	return slice.Map(columns, func(ae *sqlparser.AliasedExpr) sqlparser.IdentifierCI {
+		return sqlparser.NewIdentifierCI(ae.ColumnName())
+	})
+}
+
+func (v *Values) getExprsFromCtx(ctx *plancontext.PlanningContext) []sqlparser.Expr {
+	columns := ctx.ValuesJoinColumns[v.Name]
+	return slice.Map(columns, func(ae *sqlparser.AliasedExpr) sqlparser.Expr {
+		return ae.Expr
+	})
 }
 
 func (v *Values) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	var cols []*sqlparser.AliasedExpr
-	for _, column := range v.getColsFromCtx(ctx) {
-		cols = append(cols, sqlparser.NewAliasedExpr(sqlparser.NewColNameWithQualifier(column.String(), sqlparser.NewTableName(v.Name)), ""))
-	}
-	return cols
+	columns := ctx.ValuesJoinColumns[v.Name]
+	return columns
 }
 
 func (v *Values) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
