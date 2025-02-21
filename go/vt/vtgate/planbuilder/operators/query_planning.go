@@ -699,6 +699,18 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (Operator, *App
 		}
 		src.Outer, in.Source = in, src.Outer
 		return src, Rewrote("push filter to outer query in subquery container")
+	case *Filter:
+		if len(in.Predicates) == 0 {
+			return in.Source, Rewrote("filter with no predicates removed")
+		}
+
+		other, isFilter := in.Source.(*Filter)
+		if !isFilter {
+			return in, NoRewrite
+		}
+		in.Source = other.Source
+		in.Predicates = append(in.Predicates, other.Predicates...)
+		return in, Rewrote("two filters merged into one")
 	}
 
 	return in, NoRewrite

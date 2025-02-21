@@ -508,12 +508,10 @@ func (p *Projection) Compact(ctx *plancontext.PlanningContext) (Operator, *Apply
 		return p.Source, Rewrote("removed projection only passing through the input")
 	}
 
-	switch src := p.Source.(type) {
-	case *Route:
-		return p.compactWithRoute(ctx, src)
-	case *ApplyJoin:
-		return p.compactWithJoin(ctx, src)
-	}
+	// switch src := p.Source.(type) {
+	// case *ApplyJoin:
+	// 	return p.compactWithJoin(ctx, src)
+	// }
 	return p, NoRewrite
 }
 
@@ -529,6 +527,9 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *App
 		switch colInfo := col.Info.(type) {
 		case Offset:
 			if col.Original.As.NotEmpty() {
+				return p, NoRewrite
+			}
+			if len(join.Columns) == 0 {
 				return p, NoRewrite
 			}
 			newColumns = append(newColumns, join.Columns[colInfo])
@@ -553,27 +554,6 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *App
 	join.Columns = newColumns
 	join.JoinColumns = newColumnsAST
 	return join, Rewrote("remove projection from before join")
-}
-
-func (p *Projection) compactWithRoute(ctx *plancontext.PlanningContext, rb *Route) (Operator, *ApplyResult) {
-	ap, err := p.GetAliasedProjections()
-	if err != nil {
-		return p, NoRewrite
-	}
-
-	for i, col := range ap {
-		offset, ok := col.Info.(Offset)
-		if !ok || int(offset) != i {
-			return p, NoRewrite
-		}
-	}
-	columns := rb.GetColumns(ctx)
-
-	if len(columns) == len(ap) {
-		return rb, Rewrote("remove projection from before route")
-	}
-	rb.ResultColumns = len(columns)
-	return rb, NoRewrite
 }
 
 // needsEvaluation finds the expression given by this argument and checks if the inside and outside expressions match
