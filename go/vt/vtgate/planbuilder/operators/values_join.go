@@ -117,6 +117,10 @@ func (vj *ValuesJoin) MakeInner() {
 	// no-op for values-join
 }
 
+func (vj *ValuesJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	return AddPredicate(ctx, vj, expr, false, newFilterSinglePredicate)
+}
+
 func (vj *ValuesJoin) IsInner() bool {
 	return true
 }
@@ -160,7 +164,7 @@ func (vj *ValuesJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 func (vj *ValuesJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
-	exprs := ctx.ValuesJoinColumns[vj.ValuesDestination]
+	exprs := ctx.GetColumns(vj.ValuesDestination)
 	for _, jc := range vj.JoinColumns {
 		newExprs := vj.planOffsetsForLHSExprs(ctx, jc.LHS)
 		exprs = append(exprs, newExprs...)
@@ -172,7 +176,7 @@ func (vj *ValuesJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		newExprs := vj.planOffsetsForLHSExprs(ctx, jc.LHS)
 		exprs = append(exprs, newExprs...)
 	}
-	ctx.ValuesJoinColumns[vj.ValuesDestination] = exprs
+	ctx.SetColumns(vj.ValuesDestination, exprs)
 	return vj
 }
 

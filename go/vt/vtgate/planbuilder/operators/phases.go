@@ -157,6 +157,7 @@ func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType
 	v := &Values{
 		unaryOperator: newUnaryOp(rhs),
 		Name:          bindVariableName,
+		TableID:       TableID(lhs),
 	}
 	return &ValuesJoin{
 		binaryOperator:    newBinaryOp(lhs, v),

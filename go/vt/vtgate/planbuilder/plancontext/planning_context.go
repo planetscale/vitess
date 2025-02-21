@@ -474,6 +474,15 @@ func (ctx *PlanningContext) ActiveCTE() *ContextCTE {
 	return ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
 }
 
+func (ctx *PlanningContext) GetColumns(joinName string) []*sqlparser.AliasedExpr {
+	valuesName := ctx.ValueJoins[joinName]
+	return ctx.ValuesJoinColumns[valuesName]
+}
+func (ctx *PlanningContext) SetColumns(joinName string, cols []*sqlparser.AliasedExpr) {
+	valuesName := ctx.ValueJoins[joinName]
+	ctx.ValuesJoinColumns[valuesName] = cols
+}
+
 func (ctx *PlanningContext) UseMirror() *PlanningContext {
 	if ctx.isMirrored {
 		panic(vterrors.VT13001("cannot mirror already mirrored planning context"))

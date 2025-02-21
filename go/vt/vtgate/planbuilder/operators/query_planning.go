@@ -130,8 +130,7 @@ func tryPushValues(ctx *plancontext.PlanningContext, in *Values) (Operator, *App
 	switch src := in.Source.(type) {
 	case *ValuesJoin:
 		src.LHS = in.Clone([]Operator{src.LHS})
-		src.RHS = in.Clone([]Operator{src.RHS})
-		return src, Rewrote("pushed values under value join")
+		return src, Rewrote("pushed values to the LHS of values join")
 	case *Filter:
 		return Swap(in, src, "pushed values under filter")
 	case *Route:
@@ -724,7 +723,7 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (Operator, *App
 		return src, Rewrote("push filter to outer query in subquery container")
 	case *ValuesJoin:
 		for _, pred := range in.Predicates {
-			src.AddJoinPredicate(ctx, pred)
+			src.AddPredicate(ctx, pred)
 		}
 		return src, Rewrote("pushed filter predicates through values join")
 	}

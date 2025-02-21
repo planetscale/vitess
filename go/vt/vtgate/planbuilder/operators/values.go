@@ -21,12 +21,14 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Values struct {
 	unaryOperator
 
-	Name string
+	Name    string
+	TableID semantics.TableSet
 }
 
 func (v *Values) Clone(inputs []Operator) Operator {
@@ -96,4 +98,8 @@ func (v *Values) ShortDescription() string {
 
 func (v *Values) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return v.Source.GetOrdering(ctx)
+}
+
+func (v *Values) introducesTableID() semantics.TableSet {
+	return v.TableID
 }
