@@ -134,9 +134,7 @@ func tryPushValues(ctx *plancontext.PlanningContext, in *Values) (Operator, *App
 	case *Filter:
 		return Swap(in, src, "pushed values under filter")
 	case *Route:
-		if !reachedPhase(ctx, rewriteApplyJoin+1) {
-			return in, NoRewrite
-		}
+		src.Routing.AddValuesTableID(in.TableID)
 		return Swap(in, src, "pushed values under route")
 	}
 	return in, NoRewrite

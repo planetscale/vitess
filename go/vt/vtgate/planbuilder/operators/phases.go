@@ -114,37 +114,80 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 	case dmlWithInput:
 		return findDMLAboveRoute(ctx, op)
 	case rewriteApplyJoin:
-		visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
-			aj, ok := op.(*ApplyJoin)
-			if !ok {
-				return op, NoRewrite
-			}
-
-			vj := newValuesJoin(ctx, aj.LHS, aj.RHS, aj.JoinType)
-			if vj == nil {
-				return op, NoRewrite
-			}
-
-			for _, column := range aj.JoinColumns.columns {
-				vj.AddColumn(ctx, true, false, aeWrap(column.Original))
-			}
-
-			for _, pred := range aj.JoinPredicates.columns {
-				err := ctx.SkipJoinPredicates(pred.Original)
-				if err != nil {
-					panic(err)
-				}
-				vj.AddJoinPredicate(ctx, pred.Original)
-			}
-
-			return vj, Rewrote("rewrote ApplyJoin to ValuesJoin")
-		}
-
-		return TopDown(op, TableID, visit, stopAtRoute)
+		return rewriteApplyToValues(ctx, op)
 
 	default:
 		return op
 	}
+}
+
+func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operator {
+	var skipped []sqlparser.Expr
+	isSkipped := func(expr sqlparser.Expr) bool {
+		for _, skip := range skipped {
+			if ctx.SemTable.EqualsExpr(expr, skip) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Traverse the operator tree to convert ApplyJoin to ValuesJoin.
+	// Then add a Values node to the RHS of the new ValuesJoin,
+	// and usually a filter containing the join predicates is placed there.
+	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+		aj, ok := op.(*ApplyJoin)
+		if !ok {
+			return op, NoRewrite
+		}
+
+		vj := newValuesJoin(ctx, aj.LHS, aj.RHS, aj.JoinType)
+		if vj == nil {
+			return op, NoRewrite
+		}
+
+		for _, column := range aj.JoinColumns.columns {
+			vj.AddColumn(ctx, true, false, aeWrap(column.Original))
+		}
+
+		for _, pred := range aj.JoinPredicates.columns {
+			skipped = append(skipped, pred.RHSExpr)
+			err := ctx.SkipJoinPredicates(pred.Original)
+			if err != nil {
+				panic(err)
+			}
+			vj.AddJoinPredicate(ctx, pred.Original)
+		}
+
+		return vj, Rewrote("rewrote ApplyJoin to ValuesJoin")
+	}
+
+	shouldVisit := func(op Operator) VisitRule {
+		rb, ok := op.(*Route)
+		if !ok {
+			return VisitChildren
+		}
+
+		routing, ok := rb.Routing.(*ShardedRouting)
+		if !ok {
+			return SkipChildren
+		}
+
+		// We need to skip the predicates that are already pushed down to the mysql -
+		// we will push down the JoinValues predicates, and they will be used for routing
+		var preds []sqlparser.Expr
+		for _, pred := range routing.SeenPredicates {
+			if !isSkipped(pred) {
+				preds = append(preds, pred)
+			}
+		}
+		routing.SeenPredicates = preds
+
+		rb.Routing = routing.resetRoutingLogic(ctx)
+		return SkipChildren
+	}
+
+	return TopDown(op, TableID, visit, shouldVisit)
 }
 
 func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) *ValuesJoin {
