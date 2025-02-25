@@ -163,10 +163,12 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 					return true
 				}
 
-				cursor.Replace(&sqlparser.ColName{
+				newCol := &sqlparser.ColName{
 					Name:      sqlparser.NewIdentifierCI(getValuesJoinColName(ctx, vj.ValuesDestination, valuesTableID, col)),
 					Qualifier: sqlparser.NewTableName(vj.ValuesDestination),
-				})
+				}
+				ctx.SemTable.CopyExprInfo(pred.Original, newCol)
+				cursor.Replace(newCol)
 				return true
 			})
 

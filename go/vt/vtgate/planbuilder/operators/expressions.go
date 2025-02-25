@@ -137,7 +137,7 @@ func breakValuesJoinExpressionInLHS(ctx *plancontext.PlanningContext,
 	result.Original = sqlparser.Clone(expr)
 	result.PureLHS = true
 	result.RHS = expr
-	_ = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool { // TODO: rewrite to use Walk instead (no pun intended, promise!)
 		node := cursor.Node()
 		col, ok := node.(*sqlparser.ColName)
 		if !ok {
