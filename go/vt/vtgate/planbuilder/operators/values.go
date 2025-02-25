@@ -40,19 +40,19 @@ func (v *Values) Clone(inputs []Operator) Operator {
 	return &clone
 }
 
-func (v *Values) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+func (v *Values) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	return newFilter(v, expr)
 }
 
-func (v *Values) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
+func (v *Values) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) int {
 	panic(vterrors.VT13001("we cannot add new columns to a Values operator"))
 }
 
-func (v *Values) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+func (v *Values) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
 	panic(vterrors.VT13001("we cannot add new columns to a Values operator"))
 }
 
-func (v *Values) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+func (v *Values) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
 	for i, column := range v.getExprsFromCtx(ctx) {
 		if ctx.SemTable.EqualsExpr(column, expr) {
 			return i

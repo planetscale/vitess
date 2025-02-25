@@ -18,8 +18,6 @@ package operators
 
 import (
 	"fmt"
-	"strings"
-
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -36,45 +34,6 @@ func ToAST(ctx *plancontext.PlanningContext, op Operator) (_ sqlparser.Statement
 		q.sortTables()
 	}
 	return q.stmt, q.dmlOperator, nil
-}
-
-func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
-	switch expr := expr.(type) {
-	case *sqlparser.AliasedExpr:
-		sqlparser.RemoveKeyspaceInCol(expr.Expr)
-	case *sqlparser.StarExpr:
-		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
-	}
-}
-
-func stripDownQuery(from, to sqlparser.TableStatement) {
-	switch node := from.(type) {
-	case *sqlparser.Select:
-		toNode, ok := to.(*sqlparser.Select)
-		if !ok {
-			panic(vterrors.VT13001("AST did not match"))
-		}
-		toNode.Distinct = node.Distinct
-		toNode.GroupBy = node.GroupBy
-		toNode.Having = node.Having
-		toNode.OrderBy = node.OrderBy
-		toNode.Comments = node.Comments
-		toNode.Limit = node.Limit
-		toNode.SelectExprs = node.SelectExprs
-		for _, expr := range toNode.GetColumns() {
-			removeKeyspaceFromSelectExpr(expr)
-		}
-	case *sqlparser.Union:
-		toNode, ok := to.(*sqlparser.Union)
-		if !ok {
-			panic(vterrors.VT13001("AST did not match"))
-		}
-		stripDownQuery(node.Left, toNode.Left)
-		stripDownQuery(node.Right, toNode.Right)
-		toNode.OrderBy = node.OrderBy
-	default:
-		panic(vterrors.VT13001(fmt.Sprintf("this should not happen - we have covered all implementations of SelectStatement %T", from)))
-	}
 }
 
 // buildAST recursively builds the query into an AST, from an operator tree
@@ -121,6 +80,45 @@ func buildAST(op Operator, qb *queryBuilder) {
 	}
 }
 
+func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
+	switch expr := expr.(type) {
+	case *sqlparser.AliasedExpr:
+		sqlparser.RemoveKeyspaceInCol(expr.Expr)
+	case *sqlparser.StarExpr:
+		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
+	}
+}
+
+func stripDownQuery(from, to sqlparser.TableStatement) {
+	switch node := from.(type) {
+	case *sqlparser.Select:
+		toNode, ok := to.(*sqlparser.Select)
+		if !ok {
+			panic(vterrors.VT13001("AST did not match"))
+		}
+		toNode.Distinct = node.Distinct
+		toNode.GroupBy = node.GroupBy
+		toNode.Having = node.Having
+		toNode.OrderBy = node.OrderBy
+		toNode.Comments = node.Comments
+		toNode.Limit = node.Limit
+		toNode.SelectExprs = node.SelectExprs
+		for _, expr := range toNode.GetColumns() {
+			removeKeyspaceFromSelectExpr(expr)
+		}
+	case *sqlparser.Union:
+		toNode, ok := to.(*sqlparser.Union)
+		if !ok {
+			panic(vterrors.VT13001("AST did not match"))
+		}
+		stripDownQuery(node.Left, toNode.Left)
+		stripDownQuery(node.Right, toNode.Right)
+		toNode.OrderBy = node.OrderBy
+	default:
+		panic(vterrors.VT13001(fmt.Sprintf("this should not happen - we have covered all implementations of SelectStatement %T", from)))
+	}
+}
+
 func buildDistinct(op *Distinct, qb *queryBuilder) {
 	buildAST(op.Source, qb)
 	statement := qb.asSelectStatement()
@@ -151,32 +149,12 @@ func buildValues(op *Values, qb *queryBuilder) {
 		},
 	}
 
-	apa := semantics.EmptyTableSet()
+	deps := semantics.EmptyTableSet()
 	for _, ae := range qb.ctx.ValuesJoinColumns[op.Name] {
-		apa = apa.Merge(qb.ctx.SemTable.RecursiveDeps(ae.Expr))
+		deps = deps.Merge(qb.ctx.SemTable.RecursiveDeps(ae.Expr))
 	}
 
-	tableName := getTableName(qb.ctx, apa)
-
-	qb.addTableExpr(tableName, tableName, TableID(op), expr, nil, op.getColumnNamesFromCtx(qb.ctx))
-}
-
-func getTableName(ctx *plancontext.PlanningContext, id semantics.TableSet) string {
-	var names []string
-	for _, ts := range id.Constituents() {
-		ti, err := ctx.SemTable.TableInfoFor(ts)
-		if err != nil {
-			names = append(names, "X")
-			continue
-		}
-		name, err := ti.Name()
-		if err != nil {
-			names = append(names, "X")
-			continue
-		}
-		names = append(names, name.Name.String())
-	}
-	return strings.Join(names, "_")
+	qb.addTableExpr(op.Name, op.Name, TableID(op), expr, nil, op.getColumnNamesFromCtx(qb.ctx))
 }
 
 func buildDelete(op *Delete, qb *queryBuilder) {

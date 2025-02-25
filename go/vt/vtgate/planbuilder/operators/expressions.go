@@ -134,19 +134,23 @@ func breakValuesJoinExpressionInLHS(ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
 ) (result valuesJoinColumn) {
-	result.Original = expr
+	result.Original = sqlparser.Clone(expr)
 	result.PureLHS = true
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	result.RHS = expr
+	_ = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+		node := cursor.Node()
 		col, ok := node.(*sqlparser.ColName)
 		if !ok {
-			return true, nil
+			return true
 		}
 		if ctx.SemTable.RecursiveDeps(col) == lhs {
 			result.LHS = append(result.LHS, col)
+			// TODO: Fine all the LHS columns, and
+			// rewrite the expression to use the value join name and the column.
 		} else {
 			result.PureLHS = false
 		}
-		return true, nil
-	}, expr)
+		return true
+	}, nil)
 	return
 }

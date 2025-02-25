@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
@@ -47,6 +48,7 @@ type (
 
 	valuesJoinColumn struct {
 		Original sqlparser.Expr
+		RHS      sqlparser.Expr
 		LHS      []sqlparser.Expr
 		PureLHS  bool
 	}
@@ -186,8 +188,31 @@ func (vj *ValuesJoin) planOffsetsForLHSExprs(ctx *plancontext.PlanningContext, i
 		// only add it if we don't already have it
 		if slices.Index(vj.CopyColumnsToRHS, offset) == -1 {
 			vj.CopyColumnsToRHS = append(vj.CopyColumnsToRHS, offset)
-			exprs = append(exprs, aeWrap(lhsExpr))
+			newCol := sqlparser.NewColName(getValuesJoinColName(ctx, vj.ValuesDestination, TableID(vj.LHS), lhsExpr))
+			exprs = append(exprs, aeWrap(newCol))
 		}
 	}
 	return exprs
+}
+
+func getValuesJoinColName(ctx *plancontext.PlanningContext, valuesDestination string, tableID semantics.TableSet, expr sqlparser.Expr) string {
+	col, isCol := expr.(*sqlparser.ColName)
+	if !isCol {
+		panic(fmt.Sprintf("expected a col named '%v'", expr))
+	}
+	tableName := col.Qualifier.Name.String()
+	if tableName == "" {
+		ti, err := ctx.SemTable.TableInfoFor(tableID)
+		if err != nil {
+			tableName = valuesDestination
+		} else {
+			tblName, err := ti.Name()
+			if err != nil {
+				tableName = valuesDestination
+			} else {
+				tableName = tblName.Name.String()
+			}
+		}
+	}
+	return tableName + "_" + col.Name.String()
 }
