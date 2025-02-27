@@ -265,6 +265,21 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 	}
 	newvgtid := &binlogdatapb.VGtid{}
 	for _, sgtid := range vgtid.ShardGtids {
+		// validate table last pks, if present
+		for _, tablepk := range sgtid.TablePKs {
+			log.Infof("tablepk: %+v", tablepk)
+			if tablepk.TableName == "" {
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+					"table name cannot be empty for keyspace/shard %s/%s: %v",
+					sgtid.GetKeyspace(), sgtid.GetShard(), tablepk)
+			}
+			lastPK := tablepk.GetLastpk()
+			if len(lastPK.GetFields()) == 0 || len(lastPK.GetRows()) == 0 || lastPK.GetFields()[0].Name == "" {
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+					"invalid lastPK for keyspace/shard %s/%s, table %s: %v",
+					sgtid.GetKeyspace(), sgtid.GetShard(), tablepk.TableName, tablepk)
+			}
+		}
 		if sgtid.Shard == "" {
 			if sgtid.Gtid != "current" && sgtid.Gtid != "" {
 				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current' or empty; got: %+v",
@@ -286,8 +301,6 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 			newvgtid.ShardGtids = append(newvgtid.ShardGtids, sgtid)
 		}
 	}
-
-	// TODO add tablepk validations
 
 	return newvgtid, filter, flags, nil
 }

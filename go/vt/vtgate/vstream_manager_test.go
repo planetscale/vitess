@@ -1691,6 +1691,126 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 	}
 }
 
+func TestResolveParams(t *testing.T) {
+	ctx := context.Background()
+	cell := "test_cell"
+	ks := "test_keyspace"
+	shard := "0"
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{shard})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+
+	type testcase struct {
+		name    string
+		vgtid   *binlogdatapb.VGtid
+		filter  *binlogdatapb.Filter
+		flags   *vtgatepb.VStreamFlags
+		wantErr string
+	}
+	testcases := []testcase{
+		{
+			name:    "nil vgtid",
+			vgtid:   nil,
+			wantErr: "vgtid must have at least one value with a starting position in ShardGtids",
+		},
+		{
+			name: "empty ShardGtids",
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{},
+			},
+			wantErr: "vgtid must have at least one value with a starting position in ShardGtids",
+		},
+		{
+			name: "empty keyspace with non-current Gtid",
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{{
+					Keyspace: "",
+					Shard:    shard,
+					Gtid:     "invalid",
+				}},
+			},
+			wantErr: "for an empty keyspace, the Gtid value must be 'current'",
+		},
+		{
+			name: "unspecified shards with non-current Gtid",
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{{
+					Keyspace: ks,
+					Shard:    "",
+					Gtid:     "invalid",
+				}},
+			},
+			wantErr: "if shards are unspecified, the Gtid value must be 'current' or empty",
+		},
+		{
+			name: "valid vgtid",
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{{
+					Keyspace: ks,
+					Shard:    shard,
+					Gtid:     "current",
+				}},
+			},
+			wantErr: "",
+		},
+		{
+			name: "invalid TableLastPK",
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{{
+					Keyspace: ks,
+					Shard:    shard,
+					Gtid:     "current",
+					TablePKs: []*binlogdatapb.TableLastPK{{
+						TableName: "table1",
+						Lastpk: &querypb.QueryResult{
+							Fields: []*querypb.Field{},
+							Rows: []*querypb.Row{{
+								Lengths: []int64{1},
+								Values:  []byte{1},
+							}},
+						},
+					}},
+				}},
+			},
+			wantErr: "invalid lastPK",
+		},
+		{
+			name: "invalid TableLastPK field",
+			vgtid: &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{{
+					Keyspace: ks,
+					Shard:    shard,
+					Gtid:     "current",
+					TablePKs: []*binlogdatapb.TableLastPK{{
+						TableName: "table1",
+						Lastpk: &querypb.QueryResult{
+							Fields: []*querypb.Field{{}},
+							Rows: []*querypb.Row{{
+								Lengths: []int64{1},
+								Values:  []byte{1},
+							}},
+						},
+					}},
+				}},
+			},
+			wantErr: "invalid lastPK",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, _, err := vsm.resolveParams(ctx, topodatapb.TabletType_PRIMARY, tc.vgtid, tc.filter, tc.flags)
+			if tc.wantErr != "" {
+				require.Error(t, err)
+				log.Infof("err: %v", err)
+				require.Contains(t, err.Error(), tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func newTestVStreamManager(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vstreamManager {
 	gw := NewTabletGateway(ctx, hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
