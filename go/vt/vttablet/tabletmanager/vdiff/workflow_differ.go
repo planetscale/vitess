@@ -64,13 +64,28 @@ func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (
 // both sides are actually different.
 func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64) {
 	if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxExtraRowsToCompare) {
+
+		extraRowsSourceDiffs := make([]*RowDiff, 0, len(dr.ExtraRowsSourceDiffs))
+		extraRowsTargetDiffs := make([]*RowDiff, 0, len(dr.ExtraRowsTargetDiffs))
+		copy(extraRowsSourceDiffs, dr.ExtraRowsSourceDiffs)
+		copy(extraRowsTargetDiffs, dr.ExtraRowsTargetDiffs)
+
 		for i := range dr.ExtraRowsSourceDiffs {
 			foundMatch := false
 			for j := range dr.ExtraRowsTargetDiffs {
 				if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
-					dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs[:i], dr.ExtraRowsSourceDiffs[i+1:]...)
+					// avoid index out of range error when either i or j is the last index
+					if i < len(dr.ExtraRowsSourceDiffs)-1 {
+						extraRowsSourceDiffs = append(extraRowsSourceDiffs[:i], extraRowsSourceDiffs[i+1:]...)
+					} else {
+						extraRowsSourceDiffs = extraRowsSourceDiffs[:i]
+					}
 					dr.ExtraRowsSource--
-					dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs[:j], dr.ExtraRowsTargetDiffs[j+1:]...)
+					if j < len(dr.ExtraRowsTargetDiffs)-1 {
+						extraRowsTargetDiffs = append(extraRowsTargetDiffs[:j], extraRowsTargetDiffs[j+1:]...)
+					} else {
+						extraRowsTargetDiffs = extraRowsTargetDiffs[:j]
+					}
 					dr.ExtraRowsTarget--
 					dr.ProcessedRows--
 					dr.MatchingRows++
@@ -82,6 +97,8 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 			if !foundMatch {
 				break
 			}
+			dr.ExtraRowsSourceDiffs = extraRowsSourceDiffs
+			dr.ExtraRowsTargetDiffs = extraRowsTargetDiffs
 		}
 	}
 	// We can now trim the extra rows diffs on both sides to the maxVDiffReportSampleRows value
