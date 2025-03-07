@@ -97,9 +97,9 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 			if !foundMatch {
 				break
 			}
-			dr.ExtraRowsSourceDiffs = extraRowsSourceDiffs
-			dr.ExtraRowsTargetDiffs = extraRowsTargetDiffs
 		}
+		dr.ExtraRowsSourceDiffs = extraRowsSourceDiffs
+		dr.ExtraRowsTargetDiffs = extraRowsTargetDiffs
 	}
 	// We can now trim the extra rows diffs on both sides to the maxVDiffReportSampleRows value
 	if len(dr.ExtraRowsSourceDiffs) > maxVDiffReportSampleRows {
