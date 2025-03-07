@@ -79,8 +79,9 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 					break
 				}
 			}
-			// If we didn't find a match then the tables are in fact different and we can short circuit the second pass
 			if !foundMatch {
+				// if we found a match, we removed the element at the ith index and the next element is now the ith
+				// otherwise we go on to the next element
 				i++
 			}
 		}
