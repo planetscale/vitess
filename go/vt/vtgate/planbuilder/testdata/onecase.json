@@ -1,7 +1,11 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
+<<<<<<< Updated upstream
     "query": "select count(*) from `user` u1, `user` u2, `user` u3 where u1.id = 1 and u2.id = 1 and u3.id = 1",
+=======
+    "query": "WITH input_data AS (\n    SELECT 1 AS product_configuration_id, 1 AS inventory_user_id, 1 AS request_catalog_version\n),\nranked_records AS (\n    SELECT \n        pcv.id,\n        pcv.product_configuration_id,\n        pcv.product_configuration_version,\n        pcv.catalog_version,\n        pcv.inventory_user_id,\n  pcv.created_at,\n        ROW_NUMBER() OVER (\n            PARTITION BY pcv.product_configuration_id \n            ORDER BY \n                CASE \n                    WHEN pcv.catalog_version IS NULL THEN 0 \n                    ELSE pcv.catalog_version \n                END DESC,\n                pcv.product_configuration_version DESC\n        ) AS row_num\n    FROM product_configuration_catalog_version pcv\n    INNER JOIN input_data id\n        ON pcv.product_configuration_id = id.product_configuration_id\n        AND pcv.inventory_user_id = id.inventory_user_id\n    WHERE (pcv.catalog_version <= id.request_catalog_version OR pcv.catalog_version IS NULL)\n)\nSELECT * \nFROM ranked_records\nWHERE row_num = 1;",
+>>>>>>> Stashed changes
     "plan": {
     }
   }

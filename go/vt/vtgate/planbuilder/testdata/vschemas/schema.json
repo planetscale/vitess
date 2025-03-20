@@ -220,6 +220,14 @@
         }
       },
       "tables": {
+        "product_configuration_catalog_version": {
+          "column_vindexes": [
+            {
+              "column": "inventory_user_id",
+              "name": "user_index"
+            }
+          ]
+        },
         "user": {
           "column_vindexes": [
             {

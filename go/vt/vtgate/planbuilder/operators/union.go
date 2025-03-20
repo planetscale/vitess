@@ -196,6 +196,7 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 	case *sqlparser.Literal, *sqlparser.Argument:
 		return u.addConstantToUnion(ctx, expr)
 	default:
+		// sqlparser.Walk
 		panic(vterrors.VT13001(fmt.Sprintf("only weight_string function is expected - got %s", sqlparser.String(expr))))
 	}
 }
