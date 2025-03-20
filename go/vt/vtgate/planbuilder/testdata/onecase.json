@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "select count(*) from `user` u1, `user` u2, `user` u3 where u1.id = 1 and u2.id = 1 and u3.id = 1",
     "plan": {
     }
   }
