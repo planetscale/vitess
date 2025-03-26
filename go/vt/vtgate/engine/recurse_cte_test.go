@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -126,4 +127,50 @@ func TestRecurseDualQuery(t *testing.T) {
 	})
 	expectResult(t, r, wantRes)
 
+}
+
+func TestRecurseNeverEndingQuery(t *testing.T) {
+	// Test that the RecurseCTE primitive works as expected.
+	// The test is testing something like this:
+	// WITH RECURSIVE cte AS (SELECT 1 as col1 UNION SELECT col1+1 FROM cte WHERE col1 < 5) SELECT * FROM cte;
+	leftPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col1",
+					"int64",
+				),
+				"1",
+			),
+		},
+	}
+	rightFields := sqltypes.MakeTestFields(
+		"col4",
+		"int64",
+	)
+
+	rightPrim := &fakePrimitive{}
+	// add enough results to make the recursion fail
+	for i := range 10000 {
+		rightPrim.results = append(rightPrim.results, sqltypes.MakeTestResult(rightFields, fmt.Sprintf("%d", i)))
+	}
+
+	bv := map[string]*querypb.BindVariable{}
+
+	cte := &RecurseCTE{
+		Seed: leftPrim,
+		Term: rightPrim,
+		Vars: map[string]int{"col1": 0},
+	}
+
+	_, err := cte.TryExecute(context.Background(), &noopVCursor{}, bv, true)
+	require.Error(t, err)
+
+	// testing the streaming mode.
+
+	leftPrim.rewind()
+	rightPrim.rewind()
+
+	_, err = wrapStreamExecute(cte, &noopVCursor{}, bv, true)
+	require.Error(t, err)
 }

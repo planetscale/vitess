@@ -694,6 +694,16 @@ func TestColumnAliases(t *testing.T) {
 	mcmp.ExecWithColumnCompare(`select a as k from (select count(*) as a from t1) t`)
 }
 
+func TestColumnAliases2(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	mcmp.ExecAllowAndCompareError(`with recursive cte as (select 1 as n union all select n+1 from cte)
+select *
+from cte`, utils.CompareOptions{})
+}
+
 func TestHandleNullableColumn(t *testing.T) {
 	require.NoError(t,
 		utils.WaitForAuthoritative(t, keyspaceName, "tbl", clusterInstance.VtgateProcess.ReadVSchema))

@@ -93,6 +93,10 @@ func TestMain(m *testing.M) {
 		}
 
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
+		err = clusterInstance.EnableGeneralLog()
+		if err != nil {
+			return 1
+		}
 
 		// create mysql instance and connection parameters
 		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL, uschemaSQL)

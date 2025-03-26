@@ -75,44 +75,11 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 }
 
 func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	if vcursor.Session().InTransaction() {
-		res, err := r.TryExecute(ctx, vcursor, bindVars, wantfields)
-		if err != nil {
-			return err
-		}
-		return callback(res)
+	res, err := r.TryExecute(ctx, vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
 	}
-	return vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, func(result *sqltypes.Result) error {
-		err := callback(result)
-		if err != nil {
-			return err
-		}
-		return r.recurse(ctx, vcursor, bindVars, result, callback)
-	})
-}
-
-func (r *RecurseCTE) recurse(ctx context.Context, vcursor VCursor, bindvars map[string]*querypb.BindVariable, result *sqltypes.Result, callback func(*sqltypes.Result) error) error {
-	if len(result.Rows) == 0 {
-		return nil
-	}
-	joinVars := make(map[string]*querypb.BindVariable)
-	for _, row := range result.Rows {
-		for k, col := range r.Vars {
-			joinVars[k] = sqltypes.ValueBindVariable(row[col])
-		}
-
-		err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindvars, joinVars), false, func(result *sqltypes.Result) error {
-			err := callback(result)
-			if err != nil {
-				return err
-			}
-			return r.recurse(ctx, vcursor, bindvars, result, callback)
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return callback(res)
 }
 
 func (r *RecurseCTE) RouteType() string {
