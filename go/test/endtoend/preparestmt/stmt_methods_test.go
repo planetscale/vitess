@@ -428,7 +428,7 @@ func TestBinaryColumn(t *testing.T) {
 	dbo := Connect(t, "interpolateParams=false")
 	defer dbo.Close()
 
-	_, err := dbo.Query(`SELECT DISTINCT
+	stmt, err := dbo.PrepareContext(t.Context(), `SELECT DISTINCT
                 BINARY table_info.table_name AS table_name,
                 table_info.create_options AS create_options,
                 table_info.table_comment AS table_comment
@@ -440,8 +440,46 @@ func TestBinaryColumn(t *testing.T) {
                   AND column_info.table_schema = ?
                   -- Exclude views.
                   AND table_info.table_type = 'BASE TABLE'
-              ORDER BY BINARY table_info.table_name`, uks, uks)
+              ORDER BY BINARY table_info.table_name`)
 	require.NoError(t, err)
+	defer stmt.Close()
+
+	rows, err := stmt.QueryContext(t.Context(), uks, uks)
+	require.NoError(t, err)
+
+	cols, err := rows.Columns()
+	require.NoError(t, err)
+	require.Len(t, cols, 3)
+	require.Equal(t, []string{"table_name", "create_options", "table_comment"}, cols)
+
+	type rowOut struct {
+		tableName, createOptions, tableComment string
+	}
+	expOutput := []rowOut{
+		{
+			tableName:     "t1_seq",
+			createOptions: "",
+			tableComment:  "vitess_sequence",
+		},
+		{
+			tableName:     "vt_prepare_stmt_test",
+			createOptions: "",
+			tableComment:  "",
+		},
+	}
+	actualOutput := make([]rowOut, 0)
+	for rows.Next() {
+		var tableName, createOptions, tableComment sql.RawBytes
+		err := rows.Scan(&tableName, &createOptions, &tableComment)
+		require.NoError(t, err)
+
+		actualOutput = append(actualOutput, rowOut{
+			tableName:     string(tableName),
+			createOptions: string(createOptions),
+			tableComment:  string(tableComment),
+		})
+	}
+	assert.ElementsMatch(t, expOutput, actualOutput)
 }
 
 // TestInsertTest inserts a row with empty json array.
