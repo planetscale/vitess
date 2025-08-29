@@ -72,6 +72,14 @@ func (mtw *MoveTablesWorkflow) SwitchReadsAndWrites() (string, error) {
 	return mtw.exec("SwitchTraffic")
 }
 
+func (mtw *MoveTablesWorkflow) SwitchReads() (string, error) {
+	return mtw.exec("SwitchTraffic", "--tablet-types", "replica,rdonly")
+}
+
+func (mtw *MoveTablesWorkflow) SwitchWrites() (string, error) {
+	return mtw.exec("SwitchTraffic", "--tablet-types", "primary")
+}
+
 func (mtw *MoveTablesWorkflow) ReverseReadsAndWrites() (string, error) {
 	return mtw.exec("ReverseTraffic")
 }
