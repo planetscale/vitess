@@ -20,6 +20,7 @@ import (
 	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -42,6 +43,8 @@ var (
 
 	//go:embed schema.sql
 	SchemaSQL string
+
+	tables = []string{"t1", "t2", "t3", "t4", "t5"}
 )
 
 func TestMain(m *testing.M) {
@@ -100,19 +103,26 @@ func TestQueriesWithRoutingRules(t *testing.T) {
 	}()
 	startQueries(t, ctx)
 
-	workflow := "TestQueriesWithRoutingRules"
-	mtw := cluster.NewMoveTables(t, clusterInstance, workflow, tks, sks, "t1", nil)
-	out, err := mtw.Create()
-	t.Logf("movetables created: %s", out)
-	require.NoError(t, err)
+	mtws := make([]*cluster.MoveTablesWorkflow, 0, len(tables))
+	for _, table := range tables {
+		workflow := "TestQueriesWithRoutingRules_" + table
+		mtw := cluster.NewMoveTables(t, clusterInstance, workflow, tks, sks, table, nil)
+		mtws = append(mtws, mtw)
+		out, err := mtw.Create()
+		t.Logf("movetables created: %s", out)
+		require.NoError(t, err)
+	}
 
-	mtw.WaitForVreplCatchup(5 * time.Second)
-	t.Logf("movetables catchup phase completed")
+	for i, mtw := range mtws {
+		mtw.WaitForVreplCatchup(5 * time.Second)
+		t.Logf("%s catchup phase completed", tables[i])
+	}
 
-	time.Sleep(2 * time.Second)
-	out, err = mtw.SwitchReads()
-	t.Logf("movetables switch reads: %v", out)
-	require.NoError(t, err)
+	for _, mtw := range mtws {
+		out, err := mtw.SwitchReads()
+		t.Logf("switch reads: %v", out)
+		require.NoError(t, err)
+	}
 }
 
 func startQueries(t *testing.T, ctx context.Context) {
@@ -124,14 +134,16 @@ func startQueries(t *testing.T, ctx context.Context) {
 		conns = append(conns, conn)
 	}
 
-	query := "select * from t1"
-	for _, conn := range conns {
-		go func(conn *mysql.Conn) {
+	queryTemp := "select * from %s"
+	for idx, conn := range conns {
+		go func(i int, conn *mysql.Conn) {
 			defer conn.Close()
 			if _, err := conn.ExecuteFetch("use @replica", 1000, true); err != nil {
 				t.Logf("error in use @primary: (%d, %v)", conn.ID(), err)
 			}
+			query := fmt.Sprintf(queryTemp, tables[i%len(tables)])
 			for {
+				// t.Logf("query: %s", query)
 				if ctx.Err() != nil {
 					return
 				}
@@ -146,6 +158,6 @@ func startQueries(t *testing.T, ctx context.Context) {
 				}
 				// time.Sleep(10 * time.Millisecond)
 			}
-		}(conn)
+		}(idx, conn)
 	}
 }
