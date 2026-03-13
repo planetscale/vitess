@@ -111,7 +111,7 @@ var (
 	HealthCheckHealthyTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck - Healthy Tablets")
 
 	// errKeyspacesToWatchAndTabletFilters is an error for cases where incompatible filters are defined.
-	errKeyspacesToWatchAndTabletFilters = errors.New("only one of --keyspaces-to-watch and --tablet_filters may be specified at a time")
+	errKeyspacesToWatchAndTabletFilters = errors.New("only one of --keyspaces-to-watch and --tablet-filters may be specified at a time")
 )
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
@@ -160,7 +160,8 @@ func ParseTabletURLTemplateFromFlag() {
 	tabletURLTemplate = template.New("")
 	_, err := tabletURLTemplate.ParseFromTrustedTemplate(uncheckedconversions.TrustedTemplateFromStringKnownToSatisfyTypeContract(TabletURLTemplateString))
 	if err != nil {
-		log.Exitf("error parsing template: %v", err)
+		log.Error(fmt.Sprintf("error parsing template: %v", err))
+		os.Exit(1)
 	}
 }
 
@@ -174,7 +175,7 @@ func init() {
 }
 
 func registerDiscoveryFlags(fs *pflag.FlagSet) {
-	fs.StringSliceVar(&tabletFilters, "tablet_filters", []string{}, "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.")
+	utils.SetFlagStringSliceVar(fs, &tabletFilters, "tablet-filters", []string{}, "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.")
 	fs.Var(&tabletFilterTags, "tablet-filter-tags", "Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.")
 	utils.SetFlagVar(fs, (*topoproto.TabletTypeListFlag)(&AllowedTabletTypes), "allowed-tablet-types", "Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.")
 	utils.SetFlagStringSliceVar(fs, &KeyspacesToWatch, "keyspaces-to-watch", []string{}, "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.")
@@ -320,7 +321,7 @@ func NewVTGateHealthCheckFilters() (filters TabletFilters, err error) {
 
 		fbs, err := NewFilterByShard(tabletFilters)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse tablet_filters value %q: %v", strings.Join(tabletFilters, ","), err)
+			return nil, fmt.Errorf("failed to parse tablet-filters value %q: %v", strings.Join(tabletFilters, ","), err)
 		}
 		filters = append(filters, fbs)
 	} else if len(KeyspacesToWatch) > 0 {
@@ -359,9 +360,10 @@ func NewVTGateHealthCheckFilters() (filters TabletFilters, err error) {
 //
 // filters.
 //
-//	Is one or more filters to apply when determining what tablets we want to stream healthchecks from.
+//	Is an optional filter (implementing the TabletFilter interface) to apply when determining
+//	what tablets we want to stream healthchecks from. If nil, no filtering is performed.
 func NewHealthCheck(
-	ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filters TabletFilter, opts ...Option,
+	ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filter TabletFilter, opts ...Option,
 ) *HealthCheckImpl {
 	hc := &HealthCheckImpl{
 		ts:                 topoServer,
@@ -390,7 +392,7 @@ func NewHealthCheck(
 		if c == "" {
 			continue
 		}
-		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filters, c, refreshInterval, refreshKnownTablets, opts...))
+		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, opts...))
 	}
 
 	hc.topoWatchers = topoWatchers

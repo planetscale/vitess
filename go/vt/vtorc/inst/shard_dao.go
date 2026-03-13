@@ -18,9 +18,11 @@ package inst
 
 import (
 	"errors"
+	"time"
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -42,7 +44,11 @@ func ReadShardNames(keyspaceName string) (shardNames []string, err error) {
 }
 
 // ReadShardPrimaryInformation reads the vitess shard record and gets the shard primary alias and timestamp.
-func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias string, primaryTimestamp string, err error) {
+func ReadShardPrimaryInformation(keyspaceName, shardName string) (
+	primaryAlias *topodatapb.TabletAlias,
+	primaryTimestamp time.Time,
+	err error,
+) {
 	if err = topo.ValidateKeyspaceName(keyspaceName); err != nil {
 		return
 	}
@@ -50,44 +56,95 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 		return
 	}
 
-	query := `
-		select
+	query := `SELECT
 			primary_alias, primary_timestamp
-		from
+		FROM
 			vitess_shard
-		where keyspace=? and shard=?
-		`
+		WHERE
+			keyspace = ?
+			AND shard = ?`
 	args := sqlutils.Args(keyspaceName, shardName)
 	shardFound := false
-	err = db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, args, func(row sqlutils.RowMap) (err error) {
 		shardFound = true
-		primaryAlias = row.GetString("primary_alias")
-		primaryTimestamp = row.GetString("primary_timestamp")
+		if primaryAliasStr := row.GetString("primary_alias"); primaryAliasStr != "" {
+			primaryAlias, err = topoproto.ParseTabletAlias(primaryAliasStr)
+			if err != nil {
+				return err
+			}
+		}
+		primaryTimestamp = row.GetTime("primary_timestamp")
 		return nil
 	})
 	if err != nil {
 		return
 	}
 	if !shardFound {
-		return "", "", ErrShardNotFound
+		err = ErrShardNotFound
 	}
-	return primaryAlias, primaryTimestamp, nil
+	return primaryAlias, primaryTimestamp, err
+}
+
+// ShardStats represents stats for a single shard watched by VTOrc.
+type ShardStats struct {
+	Keyspace                 string
+	Shard                    string
+	DisableEmergencyReparent bool
+	TabletCount              int64
+}
+
+// ReadKeyspaceShardStats returns stats such as # of tablets watched by keyspace/shard and ERS-disabled state.
+// The backend query uses an index by "keyspace, shard": ks_idx_vitess_tablet.
+func ReadKeyspaceShardStats() ([]ShardStats, error) {
+	ksShardStats := make([]ShardStats, 0)
+	query := `SELECT
+                vt.keyspace AS keyspace,
+                vt.shard AS shard,
+                COUNT() AS tablet_count,
+                MIN(vk.disable_emergency_reparent) AS ks_ers_disabled,
+                MIN(vs.disable_emergency_reparent) AS shard_ers_disabled
+        FROM
+                vitess_tablet vt
+        LEFT JOIN
+                vitess_keyspace vk
+                ON
+                vk.keyspace = vt.keyspace
+        LEFT JOIN
+                vitess_shard vs
+                ON
+                (vs.keyspace = vt.keyspace AND vs.shard = vt.shard)
+        GROUP BY
+                vt.keyspace,
+                vt.shard`
+	err := db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
+		ksShardStats = append(ksShardStats, ShardStats{
+			Keyspace:                 row.GetString("keyspace"),
+			Shard:                    row.GetString("shard"),
+			TabletCount:              row.GetInt64("tablet_count"),
+			DisableEmergencyReparent: row.GetBool("ks_ers_disabled") || row.GetBool("shard_ers_disabled"),
+		})
+		return nil
+	})
+	return ksShardStats, err
 }
 
 // SaveShard saves the shard record against the shard name.
 func SaveShard(shard *topo.ShardInfo) error {
+	var disableEmergencyReparent int
+	if shard.VtorcState != nil && shard.VtorcState.DisableEmergencyReparent {
+		disableEmergencyReparent = 1
+	}
 	_, err := db.ExecVTOrc(`
-		replace
-			into vitess_shard (
-				keyspace, shard, primary_alias, primary_timestamp
-			) values (
-				?, ?, ?, ?
-			)
-		`,
+		replace	into vitess_shard (
+			keyspace, shard, primary_alias, primary_timestamp, disable_emergency_reparent
+		) values (
+			?, ?, ?, ?, ?
+		)`,
 		shard.Keyspace(),
 		shard.ShardName(),
 		getShardPrimaryAliasString(shard),
-		getShardPrimaryTermStartTimeString(shard),
+		getShardPrimaryTermStartTime(shard),
+		disableEmergencyReparent,
 	)
 	return err
 }
@@ -100,12 +157,12 @@ func getShardPrimaryAliasString(shard *topo.ShardInfo) string {
 	return topoproto.TabletAliasString(shard.PrimaryAlias)
 }
 
-// getShardPrimaryAliasString gets the shard primary term start time to be stored as a string in the database.
-func getShardPrimaryTermStartTimeString(shard *topo.ShardInfo) string {
+// getShardPrimaryTermStartTime gets the shard primary term start time to be stored as a string in the database.
+func getShardPrimaryTermStartTime(shard *topo.ShardInfo) time.Time {
 	if shard.PrimaryTermStartTime == nil {
-		return ""
+		return time.Time{}
 	}
-	return protoutil.TimeFromProto(shard.PrimaryTermStartTime).UTC().String()
+	return protoutil.TimeFromProto(shard.PrimaryTermStartTime).UTC()
 }
 
 // DeleteShard deletes a shard using a keyspace and shard name.

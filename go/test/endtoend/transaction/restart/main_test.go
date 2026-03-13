@@ -17,7 +17,6 @@ limitations under the License.
 package misc
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"os"
@@ -60,9 +59,9 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 		}
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--shutdown_grace_period=0s",
+			vtutils.GetFlagVariantForTests("--shutdown-grace-period")+"=0s",
 		)
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -90,7 +89,7 @@ TestStreamTxRestart tests that when a connection is killed my mysql (may be due 
 then the transaction should not continue to serve the query via reconnect.
 */
 func TestStreamTxRestart(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

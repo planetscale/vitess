@@ -20,13 +20,12 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"os"
 	"path"
 	"strings"
 	"syscall"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -215,7 +214,7 @@ func newFromStringFail(t *testing.T) func(ctx context.Context, parentSpan string
 
 func newFromStringError(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
-		return trace.NoopSpan{}, context.Background(), fmt.Errorf("")
+		return trace.NoopSpan{}, context.Background(), errors.New("")
 	}
 }
 
@@ -299,35 +298,39 @@ func TestInitTLSConfigWithServerCA(t *testing.T) {
 }
 
 func testInitTLSConfig(t *testing.T, serverCA bool) {
-	// Create the certs.
-	ctx := utils.LeakCheckContext(t)
+	synctest.Test(t, func(t *testing.T) {
+		// Create the certs.
+		ctx := utils.LeakCheckContext(t)
 
-	root := t.TempDir()
-	tlstest.CreateCA(root)
-	tlstest.CreateCRL(root, tlstest.CA)
-	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+		root := t.TempDir()
+		tlstest.CreateCA(root)
+		tlstest.CreateCRL(root, tlstest.CA)
+		tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 
-	serverCACert := ""
-	if serverCA {
-		serverCACert = path.Join(root, "ca-cert.pem")
-	}
+		serverCACert := ""
+		if serverCA {
+			serverCACert = path.Join(root, "ca-cert.pem")
+		}
 
-	srv := &mysqlServer{tcpListener: &mysql.Listener{}}
-	if err := initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
-		t.Fatalf("init tls config failure due to: +%v", err)
-	}
+		srv := &mysqlServer{tcpListener: &mysql.Listener{}}
+		if err := initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
+			t.Fatalf("init tls config failure due to: +%v", err)
+		}
 
-	serverConfig := srv.tcpListener.TLSConfig.Load()
-	if serverConfig == nil {
-		t.Fatalf("init tls config shouldn't create nil server config")
-	}
+		serverConfig := srv.tcpListener.TLSConfig.Load()
+		if serverConfig == nil {
+			t.Fatalf("init tls config shouldn't create nil server config")
+		}
 
-	srv.sigChan <- syscall.SIGHUP
-	time.Sleep(100 * time.Millisecond) // wait for signal handler
+		srv.sigChan <- syscall.SIGHUP
 
-	if srv.tcpListener.TLSConfig.Load() == serverConfig {
-		t.Fatalf("init tls config should have been recreated after SIGHUP")
-	}
+		// wait for signal handler
+		synctest.Wait()
+
+		if srv.tcpListener.TLSConfig.Load() == serverConfig {
+			t.Fatalf("init tls config should have been recreated after SIGHUP")
+		}
+	})
 }
 
 // TestKillMethods test the mysql plugin for kill method calls.
@@ -565,6 +568,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "1",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
@@ -610,6 +621,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "1",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
@@ -646,6 +665,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "2",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(2),
@@ -682,6 +709,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "3",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(3),
@@ -727,6 +762,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "1",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(1),
@@ -763,6 +806,14 @@ func TestComQueryMulti(t *testing.T) {
 				},
 				{
 					QueryResult: &sqltypes.Result{
+						Fields: []*querypb.Field{
+							{
+								Name:    "2",
+								Type:    sqltypes.Int64,
+								Flags:   uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_NOT_NULL_FLAG),
+								Charset: collations.CollationBinaryID,
+							},
+						},
 						Rows: [][]sqltypes.Value{
 							{
 								sqltypes.NewInt64(2),
@@ -784,7 +835,7 @@ func TestComQueryMulti(t *testing.T) {
 
 	executor, _, _, _, _ := createExecutorEnv(t)
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -825,7 +876,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected, queryTextCharsProcessed: queryTextCharsProcessed})
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -863,7 +914,7 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 
 	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected, queryTextCharsProcessed: queryTextCharsProcessed})
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 

@@ -117,7 +117,8 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 				"1|null",
 			), sqltypes.MakeTestResult(fields,
 				"3|null",
-			)},
+			),
+		},
 	}
 
 	oa := &ScalarAggregate{
@@ -154,7 +155,8 @@ func TestScalarAggregateExecuteTruncate(t *testing.T) {
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(fields,
 				"1|null", "3|null",
-			)},
+			),
+		},
 	}
 
 	oa := &ScalarAggregate{
@@ -188,7 +190,7 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 		"text",
 	)
 
-	var tcases = []struct {
+	tcases := []struct {
 		name        string
 		inputResult *sqltypes.Result
 		expResult   *sqltypes.Result
@@ -276,8 +278,8 @@ func TestScalarDistinctAggrOnEngine(t *testing.T) {
 
 	oa := &ScalarAggregate{
 		Aggregates: []*AggregateParams{
-			NewAggregateParam(AggregateCountDistinct, 0, "count(distinct value)", collations.MySQL8()),
-			NewAggregateParam(AggregateSumDistinct, 1, "sum(distinct value)", collations.MySQL8()),
+			NewAggregateParam(AggregateCountDistinct, 0, nil, "count(distinct value)", collations.MySQL8()),
+			NewAggregateParam(AggregateSumDistinct, 1, nil, "sum(distinct value)", collations.MySQL8()),
 		},
 		Input: fp,
 	}
@@ -314,9 +316,9 @@ func TestScalarDistinctPushedDown(t *testing.T) {
 		"8|90",
 	)}}
 
-	countAggr := NewAggregateParam(AggregateSum, 0, "count(distinct value)", collations.MySQL8())
+	countAggr := NewAggregateParam(AggregateSum, 0, nil, "count(distinct value)", collations.MySQL8())
 	countAggr.OrigOpcode = AggregateCountDistinct
-	sumAggr := NewAggregateParam(AggregateSum, 1, "sum(distinct value)", collations.MySQL8())
+	sumAggr := NewAggregateParam(AggregateSum, 1, nil, "sum(distinct value)", collations.MySQL8())
 	sumAggr.OrigOpcode = AggregateSumDistinct
 	oa := &ScalarAggregate{
 		Aggregates: []*AggregateParams{
@@ -354,7 +356,7 @@ func TestScalarGroupConcat(t *testing.T) {
 		"blob",
 	)
 
-	var tcases = []struct {
+	tcases := []struct {
 		name        string
 		inputResult *sqltypes.Result
 		expResult   *sqltypes.Result

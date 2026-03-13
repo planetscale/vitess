@@ -135,7 +135,8 @@ END;`
 }
 `
 
-	createProcSQL = []string{`
+	createProcSQL = []string{
+		`
 CREATE PROCEDURE in_parameter(IN val int)
 BEGIN
 	insert into allDefaults(id) values(val);
@@ -177,15 +178,17 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3s", "--queryserver-config-max-result-size", "30"}
-		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
-			log.Fatal(err.Error())
+		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false, clusterInstance.Cell); err != nil {
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 
 		// Start vtgate
 		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--warn-sharded-only") + "=true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
-			log.Fatal(err.Error())
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 
@@ -196,14 +199,16 @@ func TestMain(m *testing.M) {
 		}
 		conn, err := mysql.Connect(context.Background(), &vtParams)
 		if err != nil {
-			log.Fatal(err.Error())
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 		defer conn.Close()
 
 		err = runCreateProcedures(conn)
 		if err != nil {
-			log.Fatal(err.Error())
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 
@@ -225,7 +230,7 @@ func runCreateProcedures(conn *mysql.Conn) error {
 func TestSelectIntoAndLoadFrom(t *testing.T) {
 	// Test is skipped because it requires secure-file-priv variable to be set to not NULL or empty.
 	t.Skip()
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -255,7 +260,7 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 }
 
 func TestEmptyStatement(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -267,7 +272,7 @@ func TestEmptyStatement(t *testing.T) {
 }
 
 func TestTopoDownServingQuery(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -282,7 +287,7 @@ func TestTopoDownServingQuery(t *testing.T) {
 }
 
 func TestInsertAllDefaults(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -292,7 +297,7 @@ func TestInsertAllDefaults(t *testing.T) {
 }
 
 func TestDDLUnsharded(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -308,7 +313,7 @@ func TestDDLUnsharded(t *testing.T) {
 }
 
 func TestCallProcedure(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host:   "localhost",
 		Port:   clusterInstance.VtgateMySQLPort,
@@ -354,7 +359,7 @@ func TestCallProcedure(t *testing.T) {
 }
 
 func TestTempTable(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -374,7 +379,7 @@ func TestTempTable(t *testing.T) {
 }
 
 func TestReservedConnDML(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -392,7 +397,7 @@ func TestReservedConnDML(t *testing.T) {
 }
 
 func TestNumericPrecisionScale(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -458,4 +463,71 @@ func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result 
 		res = append(res, qr)
 	}
 	return res
+}
+
+// TestMetricForExplain verifies that query metrics are correctly published for explain queries.
+func TestMetricForExplain(t *testing.T) {
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	initialQP := getQPMetric(t, "QueryExecutions")
+	initialQT := getQPMetric(t, "QueryExecutionsByTable")
+
+	t.Run("explain t1", func(t *testing.T) {
+		utils.Exec(t, conn, "explain t1")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValues(t, 1, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"))
+		assert.EqualValues(t, 1, getValue(updatedQT, "EXPLAIN.customer_t1")-getValue(initialQT, "EXPLAIN.customer_t1"))
+	})
+
+	t.Run("explain `select c1, c2 from t1`", func(t *testing.T) {
+		utils.ExecAllowError(t, conn, "explain `select c1, c2 from t1`")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValues(t, 2, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"))
+		assert.EqualValues(t, 1, getValue(updatedQT, "EXPLAIN.customer_t1")-getValue(initialQT, "EXPLAIN.customer_t1"))
+	})
+
+	t.Run("explain select c1, c2 from t1", func(t *testing.T) {
+		utils.Exec(t, conn, "explain select c1, c2 from t1")
+		updatedQP := getQPMetric(t, "QueryExecutions")
+		updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+		assert.EqualValues(t, 3, getValue(updatedQP, "EXPLAIN.Passthrough.PRIMARY")-getValue(initialQP, "EXPLAIN.Passthrough.PRIMARY"))
+		assert.EqualValues(t, 2, getValue(updatedQT, "EXPLAIN.customer_t1")-getValue(initialQT, "EXPLAIN.customer_t1"))
+	})
+}
+
+func getQPMetric(t *testing.T, metric string) map[string]any {
+	t.Helper()
+
+	vars := clusterInstance.VtgateProcess.GetVars()
+	require.NotNil(t, vars)
+
+	qpVars, exists := vars[metric]
+	if !exists {
+		return nil
+	}
+
+	qpMap, ok := qpVars.(map[string]any)
+	require.True(t, ok, "query queryMetric vars is not a map")
+
+	return qpMap
+}
+
+func getValue(m map[string]any, key string) float64 {
+	if m == nil {
+		return 0
+	}
+	val, exists := m[key]
+	if !exists {
+		return 0
+	}
+	f, ok := val.(float64)
+	if !ok {
+		return 0
+	}
+	return f
 }

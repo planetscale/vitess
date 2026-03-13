@@ -17,20 +17,18 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"sort"
 	"strings"
 	"sync"
 
-	"context"
-
 	"github.com/z-division/go-zookeeper/zk"
 
+	"vitess.io/vitess/go/fileutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/fileutil"
 )
 
 // CreateRecursive is a helper function on top of Create. It will
@@ -131,7 +129,7 @@ func ResolveWildcards(ctx context.Context, zconn *ZkConn, zkPaths []string) ([]s
 			if err != nil {
 				mu.Lock()
 				if firstError != nil {
-					log.Infof("Multiple error: %v", err)
+					log.Info(fmt.Sprintf("Multiple error: %v", err))
 				} else {
 					firstError = err
 				}
@@ -148,7 +146,7 @@ func ResolveWildcards(ctx context.Context, zconn *ZkConn, zkPaths []string) ([]s
 	}
 
 	result := make([]string, 0, 32)
-	for i := 0; i < len(zkPaths); i++ {
+	for i := range zkPaths {
 		subResult := results[i]
 		if subResult != nil {
 			result = append(result, subResult...)
@@ -203,7 +201,7 @@ func resolveRecursive(ctx context.Context, zconn *ZkConn, parts []string, toplev
 						if err != nil {
 							mu.Lock()
 							if firstError != nil {
-								log.Infof("Multiple error: %v", err)
+								log.Info(fmt.Sprintf("Multiple error: %v", err))
 							} else {
 								firstError = err
 							}

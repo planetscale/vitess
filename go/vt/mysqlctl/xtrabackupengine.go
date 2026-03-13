@@ -30,10 +30,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/shlex"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -47,8 +49,7 @@ import (
 // it implements the BackupEngine interface and contains all the logic
 // required to implement a backup/restore by invoking xtrabackup with
 // the appropriate parameters
-type XtrabackupEngine struct {
-}
+type XtrabackupEngine struct{}
 
 var (
 	// path where backup engine program is located
@@ -65,6 +66,8 @@ var (
 	// striping mode
 	xtrabackupStripes         uint
 	xtrabackupStripeBlockSize = uint(102400)
+	// drain a tablet when taking a backup
+	xtrabackupShouldDrain = false
 )
 
 const (
@@ -135,6 +138,7 @@ func registerXtraBackupEngineFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &xtrabackupUser, "xtrabackup-user", xtrabackupUser, "User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.")
 	utils.SetFlagUintVar(fs, &xtrabackupStripes, "xtrabackup-stripes", xtrabackupStripes, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
 	utils.SetFlagUintVar(fs, &xtrabackupStripeBlockSize, "xtrabackup-stripe-block-size", xtrabackupStripeBlockSize, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
+	utils.SetFlagBoolVar(fs, &xtrabackupShouldDrain, "xtrabackup-should-drain", xtrabackupShouldDrain, "Decide if we should drain while taking a backup or continue to serving traffic")
 }
 
 func (be *XtrabackupEngine) backupFileName() string {
@@ -242,6 +246,12 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	}
 	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
+	// Get the hostname
+	hostname, err := netutil.FullyQualifiedHostname()
+	if err != nil {
+		hostname = ""
+	}
+
 	// JSON-encode and write the MANIFEST
 	bm := &xtraBackupManifest{
 		// Common base fields
@@ -252,6 +262,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 			PurgedPosition: replicationPosition,
 			ServerUUID:     serverUUID,
 			TabletAlias:    params.TabletAlias,
+			Hostname:       hostname,
 			Keyspace:       params.Keyspace,
 			Shard:          params.Shard,
 			BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
@@ -295,7 +306,8 @@ func (be *XtrabackupEngine) backupFiles(
 	flavor string,
 ) (replicationPosition replication.Position, finalErr error) {
 	backupProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
-	flagsToExec := []string{"--defaults-file=" + params.Cnf.Path,
+	flagsToExec := []string{
+		"--defaults-file=" + params.Cnf.Path,
 		"--backup",
 		"--socket=" + params.Cnf.SocketFile,
 		"--slave-info",
@@ -307,7 +319,11 @@ func (be *XtrabackupEngine) backupFiles(
 		flagsToExec = append(flagsToExec, "--stream="+xtrabackupStreamMode)
 	}
 	if xtrabackupBackupFlags != "" {
-		flagsToExec = append(flagsToExec, strings.Fields(xtrabackupBackupFlags)...)
+		backupFlags, err := shlex.Split(xtrabackupBackupFlags)
+		if err != nil {
+			return replicationPosition, vterrors.Wrap(err, "failed to parse --xtrabackup-backup-flags")
+		}
+		flagsToExec = append(flagsToExec, backupFlags...)
 	}
 
 	// Create a cancellable Context for calls to bh.AddFile().
@@ -422,11 +438,9 @@ func (be *XtrabackupEngine) backupFiles(
 	}()
 
 	// Copy from the stream output to destination file (optional gzip)
-	blockSize := int64(xtrabackupStripeBlockSize)
-	if blockSize < 1024 {
+	blockSize := max(int64(xtrabackupStripeBlockSize),
 		// Enforce minimum block size.
-		blockSize = 1024
-	}
+		1024)
 	// Add a buffer in front of the raw stdout pipe so io.CopyN() can use the
 	// buffered reader's WriteTo() method instead of allocating a new buffer
 	// every time.
@@ -455,7 +469,7 @@ func (be *XtrabackupEngine) backupFiles(
 	sterrOutput := stderrBuilder.String()
 
 	if err := backupCmd.Wait(); err != nil {
-		return replicationPosition, vterrors.Wrap(err, fmt.Sprintf("xtrabackup failed with error. Output=%s", sterrOutput))
+		return replicationPosition, vterrors.Wrap(err, "xtrabackup failed with error. Output="+sterrOutput)
 	}
 
 	replicationPosition, rerr := findReplicationPositionFromXtrabackupInfo(params.Cnf.TmpDir, flavor, params.Logger)
@@ -468,7 +482,6 @@ func (be *XtrabackupEngine) backupFiles(
 
 // ExecuteRestore restores from a backup. Any error is returned.
 func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
-
 	var bm xtraBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
@@ -531,12 +544,17 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	logger.Infof("Restore: Preparing the extracted files")
 	// prepare the backup
 	restoreProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
-	flagsToExec := []string{"--defaults-file=" + cnf.Path,
+	flagsToExec := []string{
+		"--defaults-file=" + cnf.Path,
 		"--prepare",
 		"--target-dir=" + tempDir,
 	}
 	if xtrabackupPrepareFlags != "" {
-		flagsToExec = append(flagsToExec, strings.Fields(xtrabackupPrepareFlags)...)
+		prepareFlags, err := shlex.Split(xtrabackupPrepareFlags)
+		if err != nil {
+			return vterrors.Wrap(err, "failed to parse --xtrabackup-prepare-flags")
+		}
+		flagsToExec = append(flagsToExec, prepareFlags...)
 	}
 	prepareCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
 	prepareOut, err := prepareCmd.StdoutPipe()
@@ -566,7 +584,8 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	// then move-back
 	logger.Infof("Restore: Move extracted and prepared files to final locations")
 
-	flagsToExec = []string{"--defaults-file=" + cnf.Path,
+	flagsToExec = []string{
+		"--defaults-file=" + cnf.Path,
 		"--move-back",
 		"--target-dir=" + tempDir,
 	}
@@ -633,16 +652,13 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// Create the decompressor if needed.
 		if compressed {
 			var decompressor io.ReadCloser
-			var deCompressionEngine = bm.CompressionEngine
+			deCompressionEngine := bm.CompressionEngine
 			if deCompressionEngine == "" {
 				// For backward compatibility. Incase if Manifest is from N-1 binary
 				// then we assign the default value of compressionEngine.
 				deCompressionEngine = PgzipCompressor
 			}
-			externalDecompressorCmd := ExternalDecompressorCmd
-			if externalDecompressorCmd == "" && bm.ExternalDecompressor != "" {
-				externalDecompressorCmd = bm.ExternalDecompressor
-			}
+			externalDecompressorCmd := resolveExternalDecompressor(bm.ExternalDecompressor)
 			if externalDecompressorCmd != "" {
 				if deCompressionEngine == ExternalCompressor {
 					deCompressionEngine = externalDecompressorCmd
@@ -712,7 +728,11 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		xbstreamProgram := path.Join(xtrabackupEnginePath, xbstream)
 		flagsToExec := []string{"-C", tempDir, "-xv"}
 		if xbstreamRestoreFlags != "" {
-			flagsToExec = append(flagsToExec, strings.Fields(xbstreamRestoreFlags)...)
+			restoreFlags, err := shlex.Split(xbstreamRestoreFlags)
+			if err != nil {
+				return vterrors.Wrap(err, "failed to parse --xbstream-restore-flags")
+			}
+			flagsToExec = append(flagsToExec, restoreFlags...)
 		}
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
@@ -811,7 +831,7 @@ func addStripeFiles(ctx context.Context, params BackupParams, backupHandle backu
 	}
 
 	files := []io.WriteCloser{}
-	for i := 0; i < numStripes; i++ {
+	for i := range numStripes {
 		filename := stripeFileName(baseFileName, i)
 		params.Logger.Infof("Opening backup stripe file %v", filename)
 		file, err := backupHandle.AddFile(ctx, filename, totalSize/int64(numStripes))
@@ -838,7 +858,7 @@ func readStripeFiles(ctx context.Context, backupHandle backupstorage.BackupHandl
 	}
 
 	files := []io.ReadCloser{}
-	for i := 0; i < numStripes; i++ {
+	for i := range numStripes {
 		file, err := backupHandle.ReadFile(ctx, stripeFileName(baseFileName, i))
 		if err != nil {
 			// Close any files we already opened and clear them from the result.
@@ -945,9 +965,9 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 }
 
 // ShouldDrainForBackup satisfies the BackupEngine interface
-// xtrabackup can run while tablet is serving, hence false
+// xtrabackup can run while tablet is serving, so we can control this via a flag.
 func (be *XtrabackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool {
-	return false
+	return xtrabackupShouldDrain
 }
 
 // ShouldStartMySQLAfterRestore signifies if this backup engine needs to restart MySQL once the restore is completed.

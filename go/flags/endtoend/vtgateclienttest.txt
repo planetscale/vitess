@@ -4,7 +4,6 @@ Usage:
   vtgateclienttest [flags]
 
 Flags:
-      --alsologtostderr                                                  log to standard error as well as files
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -13,7 +12,7 @@ Flags:
       --config-path strings                                              Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
-      --default_tablet_type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
+      --default-tablet-type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc-auth-mtls-allowed-substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc-auth-static-client-creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -25,6 +24,7 @@ Flags:
       --grpc-crl string                                                  path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake
       --grpc-dial-concurrency-limit int                                  Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
       --grpc-enable-optional-tls                                         enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port
+      --grpc-enable-orca-metrics                                         gRPC server option to enable sending ORCA metrics to clients for load balancing
       --grpc-enable-tracing                                              Enable gRPC tracing.
       --grpc-initial-conn-window-size int                                gRPC initial connection window size
       --grpc-initial-window-size int                                     gRPC initial window size
@@ -48,12 +48,12 @@ Flags:
       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
       --log-err-stacks                                                   log stack traces for errors
+      --log-format string                                                log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
+      --log-level string                                                 minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
-      --log_dir string                                                   If non-empty, write log files in this directory
-      --logtostderr                                                      log to standard error instead of files
+      --log-structured                                                   enable structured JSON logging (default true)
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
-      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
@@ -63,9 +63,6 @@ Flags:
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
-      --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
-      --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
-      --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
-      --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
+      --vschema-ddl-authorized-users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.

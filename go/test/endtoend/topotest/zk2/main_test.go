@@ -19,21 +19,20 @@ package zk2
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
-
-	topoutils "vitess.io/vitess/go/test/endtoend/topotest/utils"
-	"vitess.io/vitess/go/test/endtoend/utils"
-	"vitess.io/vitess/go/vt/topo"
-
-	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	topoutils "vitess.io/vitess/go/test/endtoend/topotest/utils"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 var (
@@ -81,14 +80,16 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
-			log.Fatal(err.Error())
+		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false, clusterInstance.Cell); err != nil {
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 
 		// Start vtgate
 		if err := clusterInstance.StartVtgate(); err != nil {
-			log.Fatal(err.Error())
+			log.Error(err.Error())
+			os.Exit(1)
 			return 1
 		}
 
@@ -97,8 +98,55 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+// TestNamedLocking tests that named locking works as intended.
+func TestNamedLocking(t *testing.T) {
+	// Create topo server connection.
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
+	require.NoError(t, err)
+
+	ctx := t.Context()
+	lockName := "TestNamedLocking"
+	action := "Testing"
+
+	// Acquire a named lock.
+	ctx, unlock, err := ts.LockName(ctx, lockName, action)
+	require.NoError(t, err)
+
+	// Check that we can't reacquire it from the same context.
+	_, _, err = ts.LockName(ctx, lockName, action)
+	require.ErrorContains(t, err, fmt.Sprintf("lock for named %s is already held", lockName))
+
+	// Check that CheckNameLocked doesn't return an error as we should still be
+	// holding the lock.
+	err = topo.CheckNameLocked(ctx, lockName)
+	require.NoError(t, err)
+
+	// We'll now try to acquire the lock from a different goroutine.
+	secondCallerAcquired := false
+	go func() {
+		_, unlock, err := ts.LockName(context.Background(), lockName, action)
+		defer unlock(&err)
+		require.NoError(t, err)
+		secondCallerAcquired = true
+	}()
+
+	// Wait for some time and ensure that the second attempt at acquiring the lock
+	// is blocked.
+	time.Sleep(100 * time.Millisecond)
+	require.False(t, secondCallerAcquired)
+
+	// Unlock the name.
+	unlock(&err)
+	// Check that we no longer have the named lock.
+	err = topo.CheckNameLocked(ctx, lockName)
+	require.ErrorContains(t, err, fmt.Sprintf("named %s is not locked (no lockInfo in map)", lockName))
+
+	// Wait to see that the second goroutine WAS now able to acquire the named lock.
+	topoutils.WaitForBoolValue(t, &secondCallerAcquired, true)
+}
+
 func TestTopoDownServingQuery(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,

@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -239,41 +240,43 @@ func compare(comparison Opcode, columnValue, filterValue sqltypes.Value, collati
 	return false, nil
 }
 
-// filter filters the row against the plan. It returns false if the row did not match.
-// The output of the filtering operation is stored in the 'result' argument because
-// filtering cannot be performed in-place. The result argument must be a slice of
-// length equal to ColExprs
-func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.ID) (bool, error) {
-	if len(result) != len(plan.ColExprs) {
-		return false, fmt.Errorf("expected %d values in result slice", len(plan.ColExprs))
+// shouldFilter evaluates whether a binlog (before or after) image should be included in the stream based on the plan's filters.
+// It returns:
+// - bool: true if the row should be included in the stream (passes all filters)
+// - bool: true if a vindex filter was applied (indicates sharded filtering)
+func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID) (bool, bool, error) {
+	hasVindex := false
+	if len(values) == 0 {
+		return false, false, nil
 	}
 	for _, filter := range plan.Filters {
 		switch filter.Opcode {
 		case VindexMatch:
 			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns, plan.Table.Fields)
 			if err != nil {
-				return false, err
+				return false, false, err
 			}
+			hasVindex = true
 			if !key.KeyRangeContains(filter.KeyRange, ksid) {
-				return false, nil
+				return false, true, nil
 			}
 		case IsNotNull:
 			if values[filter.ColNum].IsNull() {
-				return false, nil
+				return false, false, nil
 			}
 		case IsNull:
 			if !values[filter.ColNum].IsNull() {
-				return false, nil
+				return false, false, nil
 			}
 		case In:
 			if filter.Values == nil {
-				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected empty filter values when performing IN operator")
+				return false, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected empty filter values when performing IN operator")
 			}
 			found := false
 			for _, filterValue := range filter.Values {
 				match, err := compare(Equal, values[filter.ColNum], filterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
 				if err != nil {
-					return false, err
+					return false, false, err
 				}
 				if match {
 					found = true
@@ -281,7 +284,7 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 				}
 			}
 			if !found {
-				return false, nil
+				return false, false, nil
 			}
 		case NotBetween:
 			// Note that we do not implement filtering for BETWEEN because
@@ -289,49 +292,59 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 			// This is the filtering for NOT BETWEEN since we don't have support
 			// for OR yet.
 			if filter.Values == nil || len(filter.Values) != 2 {
-				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected 2 filter values when performing NOT BETWEEN")
+				return false, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected 2 filter values when performing NOT BETWEEN")
 			}
 			leftFilterValue, rightFilterValue := filter.Values[0], filter.Values[1]
 			isValueLessThanLeftFilter, err := compare(LessThan, values[filter.ColNum], leftFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
 			if err != nil {
-				return false, err
+				return false, false, err
 			}
 			if isValueLessThanLeftFilter {
 				continue
 			}
 			isValueGreaterThanRightFilter, err := compare(GreaterThan, values[filter.ColNum], rightFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
 			if err != nil || !isValueGreaterThanRightFilter {
-				return false, err
+				return false, false, err
 			}
 		default:
 			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value, plan.env.CollationEnv(), charsets[filter.ColNum])
 			if err != nil {
-				return false, err
+				return false, false, err
 			}
 			if !match {
-				return false, nil
+				return false, false, nil
 			}
 		}
 	}
+	return true, hasVindex, nil
+}
+
+// mapValues maps the row values against the plan.
+// The output of the filtering operation is stored in the 'result' argument because
+// filtering cannot be performed in-place. The result argument must be a slice of
+// length equal to ColExprs
+func (plan *Plan) mapValues(values []sqltypes.Value) ([]sqltypes.Value, error) {
+	result := make([]sqltypes.Value, len(plan.ColExprs))
+
 	for i, colExpr := range plan.ColExprs {
 		if colExpr.ColNum == -1 {
 			result[i] = colExpr.FixedValue
 			continue
 		}
 		if colExpr.ColNum >= len(values) {
-			return false, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
+			return nil, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
 		}
 		if colExpr.Vindex == nil {
 			result[i] = values[colExpr.ColNum]
 		} else {
 			ksid, err := getKeyspaceID(values, colExpr.Vindex, colExpr.VindexColumns, plan.Table.Fields)
 			if err != nil {
-				return false, err
+				return nil, err
 			}
-			result[i] = sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(ksid))
+			result[i] = sqltypes.MakeTrusted(sqltypes.VarBinary, ksid)
 		}
 	}
-	return true, nil
+	return result, nil
 }
 
 func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int, fields []*querypb.Field) (key.DestinationKeyspaceID, error) {
@@ -489,11 +502,11 @@ func buildREPlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, filte
 func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, query string) (*Plan, error) {
 	sel, fromTable, err := analyzeSelect(query, env.Parser())
 	if err != nil {
-		log.Errorf("%s", err.Error())
+		log.Error(err.Error())
 		return nil, err
 	}
 	if fromTable.String() != ti.Name {
-		log.Errorf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
+		log.Error(fmt.Sprintf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name))
 		return nil, fmt.Errorf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
 	}
 
@@ -502,16 +515,12 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 		env:   env,
 	}
 	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
-		log.Errorf("%s", err.Error())
+		log.Error(err.Error())
 		return nil, err
 	}
 	if err := plan.analyzeExprs(vschema, sel.GetColumns()); err != nil {
-		log.Errorf("%s", err.Error())
+		log.Error(err.Error())
 		return nil, err
-	}
-
-	if sel.Where == nil {
-		return plan, nil
 	}
 
 	return plan, nil
@@ -887,14 +896,14 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 	case *sqlparser.Literal:
 		// allow only intval 1
 		if inner.Type != sqlparser.IntVal {
-			return ColExpr{}, fmt.Errorf("only integer literals are supported")
+			return ColExpr{}, errors.New("only integer literals are supported")
 		}
 		num, err := strconv.ParseInt(string(inner.Val), 0, 64)
 		if err != nil {
 			return ColExpr{}, err
 		}
 		if num != 1 {
-			return ColExpr{}, fmt.Errorf("only the integer literal 1 is supported")
+			return ColExpr{}, errors.New("only the integer literal 1 is supported")
 		}
 		return ColExpr{
 			Field: &querypb.Field{
@@ -937,7 +946,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			Field:  field,
 		}, nil
 	default:
-		log.Infof("Unsupported expression: %v", inner)
+		log.Info(fmt.Sprintf("Unsupported expression: %v", inner))
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(aliased.Expr))
 	}
 }
@@ -1037,5 +1046,11 @@ func findColumn(ti *Table, name sqlparser.IdentifierCI) (int, error) {
 			return i, nil
 		}
 	}
-	return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "column %s not found in table %s", sqlparser.String(name), ti.Name)
+	// Let's see if the Table only has TableMap event names and if so return a different error.
+	for _, col := range ti.Fields {
+		if !strings.HasPrefix(col.Name, "@") {
+			return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "column %s not found in table %s", sqlparser.String(name), ti.Name)
+		}
+	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot use column names in vstream filter as the current table schema for table %s is not compatible with the current event for this table in the stream", ti.Name)
 }

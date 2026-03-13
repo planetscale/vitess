@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -39,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -78,9 +80,7 @@ vtclient --server vtgate:15991 --target '@primary' --bind_variables '[ 12345, 1,
 	}
 )
 
-var (
-	seqChan = make(chan int, 10)
-)
+var seqChan = make(chan int, 10)
 
 func InitializeFlags() {
 	servenv.MoveFlagsToCobraCommand(Main)
@@ -92,16 +92,16 @@ func InitializeFlags() {
 	Main.Flags().BoolVar(&jsonOutput, "json", jsonOutput, "Output JSON instead of human-readable table")
 	Main.Flags().IntVar(&parallel, "parallel", parallel, "DMLs only: Number of threads executing the same query in parallel. Useful for simple load testing.")
 	Main.Flags().IntVar(&count, "count", count, "DMLs only: Number of times each thread executes the query. Useful for simple, sustained load testing.")
-	Main.Flags().IntVar(&minSeqID, "min_sequence_id", minSeqID, "min sequence ID to generate. When max_sequence_id > min_sequence_id, for each query, a number is generated in [min_sequence_id, max_sequence_id) and attached to the end of the bind variables.")
-	Main.Flags().IntVar(&maxSeqID, "max_sequence_id", maxSeqID, "max sequence ID.")
-	Main.Flags().BoolVar(&useRandom, "use_random_sequence", useRandom, "use random sequence for generating [min_sequence_id, max_sequence_id)")
+	utils.SetFlagIntVar(Main.Flags(), &minSeqID, "min-sequence-id", minSeqID, "min sequence ID to generate. When max-sequence-id > min-sequence-id, for each query, a number is generated in [min-sequence-id, max-sequence-id) and attached to the end of the bind variables.")
+	utils.SetFlagIntVar(Main.Flags(), &maxSeqID, "max-sequence-id", maxSeqID, "max sequence ID.")
+	utils.SetFlagBoolVar(Main.Flags(), &useRandom, "use-random-sequence", useRandom, "use random sequence for generating [min-sequence-id, max-sequence-id)")
 	Main.Flags().IntVar(&qps, "qps", qps, "queries per second to throttle each thread at.")
 
 	acl.RegisterFlags(Main.Flags())
 	grpccommon.RegisterFlags(Main.Flags())
 	servenv.RegisterMySQLServerFlags(Main.Flags())
 
-	bindVariables = newBindvars(Main.Flags(), "bind_variables", "bind variables as a json list")
+	bindVariables = newBindvars(Main.Flags(), "bind-variables", "bind variables as a json list")
 }
 
 type bindvars []any
@@ -146,7 +146,7 @@ func (bv *bindvars) Type() string {
 
 func newBindvars(fs *pflag.FlagSet, name, usage string) *bindvars {
 	var bv bindvars
-	fs.Var(&bv, name, usage)
+	utils.SetFlagVar(fs, &bv, name, usage)
 	return &bv
 }
 
@@ -195,7 +195,7 @@ func _run(cmd *cobra.Command, args []string) (*results, error) {
 		return nil, fmt.Errorf("client error: %w", err)
 	}
 
-	log.Infof("Sending the query...")
+	log.Info("Sending the query...")
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 	defer cancel()
@@ -221,11 +221,7 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 
 	start := time.Now()
 	for i := 0; i < parallel; i++ {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			var ticker *time.Ticker
 			if isThrottled {
 				tickDuration := time.Second / time.Duration(qps)
@@ -257,7 +253,7 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 					<-ticker.C
 				}
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if all != nil {
@@ -395,11 +391,24 @@ func (r *results) print(w io.Writer) {
 		return
 	}
 
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader(r.Fields)
-	table.SetAutoFormatHeaders(false)
-	table.AppendBulk(r.Rows)
-	table.Render()
+	table := tablewriter.NewTable(os.Stdout,
+		tablewriter.WithSymbols(tw.NewSymbols(tw.StyleASCII)),
+		tablewriter.WithHeaderAutoFormat(tw.State(-1)),
+		tablewriter.WithRowMaxWidth(30),
+	)
+	headerAny := make([]any, len(r.Fields))
+	for i, field := range r.Fields {
+		headerAny[i] = field
+	}
+	table.Header(headerAny...)
+	if err := table.Bulk(r.Rows); err != nil {
+		fmt.Fprintf(w, "Error displaying table: %v\n", err)
+		return
+	}
+	if err := table.Render(); err != nil {
+		fmt.Fprintf(w, "Error rendering table: %v\n", err)
+		return
+	}
 	fmt.Fprintf(w, "%v row(s) affected (%v, cum: %v)\n", r.rowsAffected, r.duration, r.cumulativeDuration)
 	if r.lastInsertID != 0 {
 		fmt.Fprintf(w, "Last insert ID: %v\n", r.lastInsertID)

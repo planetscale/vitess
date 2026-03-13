@@ -92,7 +92,7 @@ func main() {
 }
 
 func execReadMeTemplateWithDir(d dir, tmpl string) error {
-	rootRM, err := os.OpenFile(path.Join(d.Path, "README.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0640)
+	rootRM, err := os.OpenFile(path.Join(d.Path, "README.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o640)
 	if err != nil {
 		return err
 	}
@@ -113,6 +113,10 @@ func getDirs(curDir dir) (dir, error) {
 
 	for _, entry := range entries {
 		if entry.IsDir() {
+			// Skip the tooling directory which contains automation tools
+			if entry.Name() == "tooling" {
+				continue
+			}
 			subDir, err := getDirs(dir{
 				Name: entry.Name(),
 				Path: path.Join(curDir.Path, entry.Name()),

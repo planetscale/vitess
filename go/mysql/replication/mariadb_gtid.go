@@ -18,7 +18,8 @@ package replication
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -131,9 +132,7 @@ func (gtidSet MariadbGTIDSet) String() string {
 	for domain := range gtidSet {
 		domains = append(domains, domain)
 	}
-	sort.Slice(domains, func(i, j int) bool {
-		return domains[i] < domains[j]
-	})
+	slices.Sort(domains)
 
 	// Convert each domain's GTID to a string and join all with comma.
 	s := make([]string, len(gtidSet))
@@ -146,6 +145,10 @@ func (gtidSet MariadbGTIDSet) String() string {
 // Flavor implements GTIDSet.Flavor()
 func (gtidSet MariadbGTIDSet) Flavor() string {
 	return MariadbFlavorID
+}
+
+func (gtidSet MariadbGTIDSet) Empty() bool {
+	return len(gtidSet) == 0
 }
 
 // ContainsGTID implements GTIDSet.ContainsGTID().
@@ -216,6 +219,19 @@ func (gtidSet MariadbGTIDSet) AddGTID(other GTID) GTIDSet {
 	return newSet
 }
 
+// AddGTID implements GTIDSet.AddGTID().
+func (gtidSet MariadbGTIDSet) AddGTIDInPlace(other GTID) GTIDSet {
+	if other == nil {
+		return gtidSet
+	}
+	mdbOther, ok := other.(MariadbGTID)
+	if !ok {
+		return gtidSet
+	}
+	gtidSet.addGTID(mdbOther)
+	return gtidSet
+}
+
 // Union implements GTIDSet.Union(). This is a pure method, and does not mutate the receiver.
 func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 	if gtidSet == nil && other != nil {
@@ -237,6 +253,13 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 	return newSet
 }
 
+// Union implements GTIDSet.Union().
+func (gtid MariadbGTIDSet) UnionInPlace(other GTIDSet) GTIDSet {
+	gtid = gtid.Union(other).(MariadbGTIDSet)
+
+	return gtid
+}
+
 // Last returns the last gtid
 func (gtidSet MariadbGTIDSet) Last() string {
 	// Sort domains so the string format is deterministic.
@@ -244,9 +267,7 @@ func (gtidSet MariadbGTIDSet) Last() string {
 	for domain := range gtidSet {
 		domains = append(domains, domain)
 	}
-	sort.Slice(domains, func(i, j int) bool {
-		return domains[i] < domains[j]
-	})
+	slices.Sort(domains)
 
 	lastGTID := domains[len(gtidSet)-1]
 	return gtidSet[lastGTID].String()
@@ -255,9 +276,7 @@ func (gtidSet MariadbGTIDSet) Last() string {
 // deepCopy returns a deep copy of the set.
 func (gtidSet MariadbGTIDSet) deepCopy() MariadbGTIDSet {
 	newSet := make(MariadbGTIDSet, len(gtidSet))
-	for domain, gtid := range gtidSet {
-		newSet[domain] = gtid
-	}
+	maps.Copy(newSet, gtidSet)
 	return newSet
 }
 

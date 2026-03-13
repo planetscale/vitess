@@ -161,12 +161,18 @@ func (entry *watchEntry) update(ctx context.Context, value any, err error, init 
 		entry.onValueLocked(value)
 	}
 
-	listeners := entry.listeners
-	entry.listeners = entry.listeners[:0]
+	// Only notify listeners on success or when no cached value exists after error processing.
+	// This prevents unnecessary notifications during topo outages when cached data is available.
+	shouldNotifyListeners := err == nil || entry.value == nil
 
-	for _, callback := range listeners {
-		if callback(entry.value, entry.lastError) {
-			entry.listeners = append(entry.listeners, callback)
+	if shouldNotifyListeners {
+		listeners := entry.listeners
+		entry.listeners = entry.listeners[:0]
+
+		for _, callback := range listeners {
+			if callback(entry.value, entry.lastError) {
+				entry.listeners = append(entry.listeners, callback)
+			}
 		}
 	}
 }
@@ -201,14 +207,14 @@ func (entry *watchEntry) onErrorLocked(ctx context.Context, err error, init bool
 		// TTL cache is only checked if the error is a known error i.e topo.Error.
 		_, isTopoErr := err.(topo.Error)
 		if entry.value != nil && isTopoErr && time.Since(entry.lastValueTime) > entry.rw.cacheTTL {
-			log.Errorf("WatchSrvKeyspace clearing cached entry for %v", entry.key)
+			log.Error(fmt.Sprintf("WatchSrvKeyspace clearing cached entry for %v", entry.key))
 			entry.value = nil
 		}
 	} else {
 		if !topo.IsErrType(err, topo.Interrupted) {
 			// No need to log if we're explicitly interrupted.
 			entry.lastError = fmt.Errorf("ResilientWatch stream failed for %v: %w", entry.key, err)
-			log.Errorf("%v", entry.lastError)
+			log.Error(fmt.Sprintf("%v", entry.lastError))
 		}
 
 		// Even though we didn't get a new value, update the lastValueTime

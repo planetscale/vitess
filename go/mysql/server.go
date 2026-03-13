@@ -19,6 +19,7 @@ package mysql
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -201,6 +202,8 @@ type Listener struct {
 	// connBufferPooling configures if vtgate server pools connection buffers
 	connBufferPooling bool
 
+	multiQuery bool
+
 	// connKeepAlivePeriod is period between tcp keep-alives.
 	connKeepAlivePeriod time.Duration
 
@@ -233,9 +236,11 @@ func NewFromListener(
 	handler Handler,
 	connReadTimeout time.Duration,
 	connWriteTimeout time.Duration,
+	proxyProtocol bool,
 	connBufferPooling bool,
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
+	multiQuery bool,
 ) (*Listener, error) {
 	cfg := ListenerConfig{
 		Listener:            l,
@@ -247,7 +252,13 @@ func NewFromListener(
 		ConnBufferPooling:   connBufferPooling,
 		ConnKeepAlivePeriod: keepAlivePeriod,
 		FlushDelay:          flushDelay,
+		MultiQuery:          multiQuery,
 	}
+
+	if proxyProtocol {
+		cfg.Listener = &proxyproto.Listener{Listener: l}
+	}
+
 	return NewListenerWithConfig(cfg)
 }
 
@@ -262,17 +273,14 @@ func NewListener(
 	connBufferPooling bool,
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
+	multiQuery bool,
 ) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
 		return nil, err
 	}
-	if proxyProtocol {
-		proxyListener := &proxyproto.Listener{Listener: listener}
-		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay)
-	}
 
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, proxyProtocol, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
@@ -289,6 +297,7 @@ type ListenerConfig struct {
 	ConnBufferPooling   bool
 	ConnKeepAlivePeriod time.Duration
 	FlushDelay          time.Duration
+	MultiQuery          bool
 }
 
 // NewListenerWithConfig creates new listener using provided config. There are
@@ -317,6 +326,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connBufferPooling:   cfg.ConnBufferPooling,
 		connKeepAlivePeriod: cfg.ConnKeepAlivePeriod,
 		flushDelay:          cfg.FlushDelay,
+		multiQuery:          cfg.MultiQuery,
 		truncateErrLen:      cfg.Handler.Env().TruncateErrLen(),
 		charset:             cfg.Handler.Env().CollationEnv().DefaultConnectionCharset(),
 	}, nil
@@ -351,7 +361,7 @@ func (l *Listener) Accept() {
 			if l.PreHandleFunc != nil {
 				conn, err = l.PreHandleFunc(ctx, conn, connectionID)
 				if err != nil {
-					log.Errorf("mysql_server pre hook: %s", err)
+					log.Error(fmt.Sprintf("mysql_server pre hook: %s", err))
 					return
 				}
 			}
@@ -373,7 +383,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// Catch panics, and close the connection in any case.
 	defer func() {
 		if x := recover(); x != nil {
-			log.Errorf("mysql_server caught panic:\n%v\n%s", x, tb.Stack(4))
+			log.Error(fmt.Sprintf("mysql_server caught panic:\n%v\n%s", x, tb.Stack(4)))
 		}
 		// We call endWriterBuffering here in case there's a premature return after
 		// startWriterBuffering is called
@@ -397,7 +407,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	serverAuthPluginData, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, uint8(l.charset), l.TLSConfig.Load() != nil)
 	if err != nil {
 		if err != io.EOF {
-			log.Errorf("Cannot send HandshakeV10 packet to %s: %v", c, err)
+			log.Error(fmt.Sprintf("Cannot send HandshakeV10 packet to %s: %v", c, err))
 		}
 		return
 	}
@@ -408,13 +418,13 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam, same as main read loop.
 		if err != io.EOF {
-			log.Infof("Cannot read client handshake response from %s: %v, it may not be a valid MySQL client", c, err)
+			log.Info(fmt.Sprintf("Cannot read client handshake response from %s: %v, it may not be a valid MySQL client", c, err))
 		}
 		return
 	}
 	user, clientAuthMethod, clientAuthResponse, err := l.parseClientHandshakePacket(c, true, response)
 	if err != nil {
-		log.Errorf("Cannot parse client handshake response from %s: %v", c, err)
+		log.Error(fmt.Sprintf("Cannot parse client handshake response from %s: %v", c, err))
 		return
 	}
 
@@ -424,14 +434,14 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		// SSL was enabled. We need to re-read the auth packet.
 		response, err = c.readEphemeralPacket()
 		if err != nil {
-			log.Errorf("Cannot read post-SSL client handshake response from %s: %v", c, err)
+			log.Error(fmt.Sprintf("Cannot read post-SSL client handshake response from %s: %v", c, err))
 			return
 		}
 
 		// Returns copies of the data, so we can recycle the buffer.
 		user, clientAuthMethod, clientAuthResponse, err = l.parseClientHandshakePacket(c, false, response)
 		if err != nil {
-			log.Errorf("Cannot parse post-SSL client handshake response from %s: %v", c, err)
+			log.Error(fmt.Sprintf("Cannot parse post-SSL client handshake response from %s: %v", c, err))
 			return
 		}
 		c.recycleReadPacket()
@@ -488,18 +498,18 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 		serverAuthPluginData, err = negotiatedAuthMethod.AuthPluginData()
 		if err != nil {
-			log.Errorf("Error generating auth switch packet for %s: %v", c, err)
+			log.Error(fmt.Sprintf("Error generating auth switch packet for %s: %v", c, err))
 			return
 		}
 
 		if err := c.writeAuthSwitchRequest(string(negotiatedAuthMethod.Name()), serverAuthPluginData); err != nil {
-			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
+			log.Error(fmt.Sprintf("Error writing auth switch packet for %s: %v", c, err))
 			return
 		}
 
 		clientAuthResponse, err = c.readEphemeralPacket()
 		if err != nil {
-			log.Errorf("Error reading auth switch response for %s: %v", c, err)
+			log.Error(fmt.Sprintf("Error reading auth switch response for %s: %v", c, err))
 			return
 		}
 		c.recycleReadPacket()
@@ -507,7 +517,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	userData, err := negotiatedAuthMethod.HandleAuthPluginData(c, user, serverAuthPluginData, clientAuthResponse, conn.RemoteAddr())
 	if err != nil {
-		log.Warningf("Error authenticating user %s using: %s", user, negotiatedAuthMethod.Name())
+		log.Warn(fmt.Sprintf("Error authenticating user %s using: %s", user, negotiatedAuthMethod.Name()))
 		c.writeErrorPacketFromError(err)
 		return
 	}
@@ -533,7 +543,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Negotiation worked, send OK packet.
 	if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
-		log.Errorf("Cannot write OK packet to %s: %v", c, err)
+		log.Error(fmt.Sprintf("Cannot write OK packet to %s: %v", c, err))
 		return
 	}
 
@@ -544,7 +554,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	connectTime := time.Since(acceptTime).Nanoseconds()
 	if threshold := l.SlowConnectWarnThreshold.Load(); threshold != 0 && connectTime > threshold {
 		connSlow.Add(1)
-		log.Warningf("Slow connection from %s: %v", c, connectTime)
+		log.Warn(fmt.Sprintf("Slow connection from %s: %v", c, connectTime))
 	}
 
 	// Tell our handler that we're finished handshake and are ready to
@@ -605,20 +615,19 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, ch
 		authMethod = MysqlNativePassword
 	}
 
-	length :=
-		1 + // protocol version
-			lenNullString(serverVersion) +
-			4 + // connection ID
-			8 + // first part of plugin auth data
-			1 + // filler byte
-			2 + // capability flags (lower 2 bytes)
-			1 + // character set
-			2 + // status flag
-			2 + // capability flags (upper 2 bytes)
-			1 + // length of auth plugin data
-			10 + // reserved (0)
-			13 + // auth-plugin-data
-			lenNullString(string(authMethod)) // auth-plugin-name
+	length := 1 + // protocol version
+		lenNullString(serverVersion) +
+		4 + // connection ID
+		8 + // first part of plugin auth data
+		1 + // filler byte
+		2 + // capability flags (lower 2 bytes)
+		1 + // character set
+		2 + // status flag
+		2 + // capability flags (upper 2 bytes)
+		1 + // length of auth plugin data
+		10 + // reserved (0)
+		13 + // auth-plugin-data
+		lenNullString(string(authMethod)) // auth-plugin-name
 
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
@@ -691,7 +700,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, ch
 }
 
 // parseClientHandshakePacket parses the handshake sent by the client.
-// Returns the username, auth method, auth data, error.
+// Returns the username, auth method, auth data, connection attributes, error.
 // The original data is not pointed at, and can be freed.
 func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []byte) (string, AuthMethodDescription, []byte, error) {
 	pos := 0
@@ -762,7 +771,6 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		if !ok {
 			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read auth-response")
 		}
-
 	} else if clientFlags&CapabilityClientSecureConnection != 0 {
 		var l byte
 		l, pos, ok = readByte(data, pos)
@@ -809,58 +817,43 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 
 	// Decode connection attributes send by the client
 	if clientFlags&CapabilityClientConnAttr != 0 {
-		if _, _, err := parseConnAttrs(data, pos); err != nil {
-			log.Warningf("Decode connection attributes send by the client: %v", err)
+		clientAttributes, _, err := parseConnAttrs(data, pos)
+		if err != nil {
+			log.Warn(fmt.Sprintf("Decode connection attributes send by the client: %v", err))
 		}
+
+		c.Attributes = clientAttributes
 	}
 
 	return username, AuthMethodDescription(authMethod), authResponse, nil
 }
 
-func parseConnAttrs(data []byte, pos int) (map[string]string, int, error) {
-	var attrLen uint64
+func parseConnAttrs(data []byte, pos int) (ConnectionAttributes, int, error) {
+	attrs := make(map[string]string)
 
 	attrLen, pos, ok := readLenEncInt(data, pos)
 	if !ok {
 		return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attributes variable length")
 	}
 
-	var attrLenRead uint64
+	addrEndPos := pos + int(attrLen)
 
-	attrs := make(map[string]string)
-
-	for attrLenRead < attrLen {
-		var keyLen byte
-		keyLen, pos, ok = readByte(data, pos)
-		if !ok {
-			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute key length")
-		}
-		attrLenRead += uint64(keyLen) + 1
-
-		var connAttrKey []byte
-		connAttrKey, pos, ok = readBytes(data, pos, int(keyLen))
+	var key, value string
+	for pos < addrEndPos {
+		key, pos, ok = readLenEncString(data, pos)
 		if !ok {
 			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute key")
 		}
 
-		var valLen byte
-		valLen, pos, ok = readByte(data, pos)
-		if !ok {
-			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute value length")
-		}
-		attrLenRead += uint64(valLen) + 1
-
-		var connAttrVal []byte
-		connAttrVal, pos, ok = readBytes(data, pos, int(valLen))
+		value, pos, ok = readLenEncString(data, pos)
 		if !ok {
 			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute value")
 		}
 
-		attrs[string(connAttrKey[:])] = string(connAttrVal[:])
+		attrs[key] = value
 	}
 
 	return attrs, pos, nil
-
 }
 
 // writeAuthSwitchRequest writes an auth switch request packet.

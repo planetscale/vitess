@@ -98,9 +98,7 @@ func TestConnectTimeout(t *testing.T) {
 
 	// Now the server will listen, but close all connections on accept.
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
@@ -109,7 +107,7 @@ func TestConnectTimeout(t *testing.T) {
 			}
 			conn.Close()
 		}
-	}()
+	})
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
 	assertSQLError(t, err, sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "initial packet read failed", "", "")
@@ -151,7 +149,7 @@ func TestTLSClientDisabled(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -223,7 +221,7 @@ func TestTLSClientPreferredDefault(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -296,7 +294,7 @@ func TestTLSClientRequired(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -343,7 +341,7 @@ func TestTLSClientVerifyCA(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -426,7 +424,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
 

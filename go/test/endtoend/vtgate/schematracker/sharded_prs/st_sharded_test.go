@@ -17,20 +17,19 @@ limitations under the License.
 package shardedprs
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/constants/sidecar"
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -143,7 +142,7 @@ func TestMain(m *testing.M) {
 			sidecarDBName = sidecar.DefaultName
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema_change_signal")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer))
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 
 		// Start topo server
@@ -159,7 +158,7 @@ func TestMain(m *testing.M) {
 			VSchema:       VSchema,
 			SidecarDBName: sidecarDBName,
 		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 2, false)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 2, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -187,7 +186,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		if err := clusterInstance.StartVTOrc(KeyspaceName); err != nil {
+		if err := clusterInstance.StartVTOrc(Cell, KeyspaceName); err != nil {
 			return 1
 		}
 
@@ -207,7 +206,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestAddColumn(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

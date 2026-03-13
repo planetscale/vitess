@@ -17,16 +17,15 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
-
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file contains the RPC method helpers for the tablet manager.
@@ -50,7 +49,7 @@ func (tm *TabletManager) unlock() {
 func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, reply any, verbose bool, err *error) {
 	// panic handling
 	if x := recover(); x != nil {
-		log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(tm.tabletAlias), x, tb.Stack(4))
+		log.Error(fmt.Sprintf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(tm.tabletAlias), x, tb.Stack(4)))
 		*err = fmt.Errorf("caught panic during %v: %v", name, x)
 		return
 	}
@@ -69,11 +68,19 @@ func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, 
 
 	if *err != nil {
 		// error case
-		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(tm.tabletAlias), from, (*err).Error())
-		*err = vterrors.Wrapf(*err, "TabletManager.%v on %v", name, topoproto.TabletAliasString(tm.tabletAlias))
+		rootCause := vterrors.RootCause(*err)
+		if sqlErr, ok := rootCause.(*sqlerror.SQLError); ok {
+			// flatten the error and add appropriate error code because
+			// *sqlerror.SQLError does not have an .ErrorCode() method
+			// that does this automatically (via vterrors.Code(...)).
+			*err = vterrors.New(sqlErr.VtRpcErrorCode(), (*err).Error())
+		}
+
+		log.Warn(fmt.Sprintf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(tm.tabletAlias), from, (*err).Error()))
+		*err = vterrors.ToGRPC(vterrors.Wrapf(*err, "TabletManager.%v on %v", name, topoproto.TabletAliasString(tm.tabletAlias)))
 	} else {
 		// success case
-		log.Infof("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(tm.tabletAlias), from, reply)
+		log.Info(fmt.Sprintf("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(tm.tabletAlias), from, reply))
 	}
 }
 

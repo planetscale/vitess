@@ -17,10 +17,10 @@ limitations under the License.
 package mysql
 
 import (
+	"errors"
 	"fmt"
 	"net"
-
-	"github.com/spf13/pflag"
+	"os"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -32,18 +32,14 @@ type AuthServerClientCert struct {
 }
 
 // InitAuthServerClientCert is public so it can be called from plugin_auth_clientcert.go (go/cmd/vtgate)
-func InitAuthServerClientCert(clientcertAuthMethod string) {
-	caValue := pflag.CommandLine.Lookup("mysql-server-ssl-ca").Value.String()
-	//TODO: This block can be removed in v25 when "mysql_server_ssl_ca" will be deprecated.
-	if caValue == "" {
-		caValue = pflag.CommandLine.Lookup("mysql_server_ssl_ca").Value.String()
-	}
+func InitAuthServerClientCert(clientcertAuthMethod string, caValue string) {
 	if caValue == "" {
 		log.Info("Not configuring AuthServerClientCert because mysql-server-ssl-ca is empty")
 		return
 	}
 	if clientcertAuthMethod != string(MysqlClearPassword) && clientcertAuthMethod != string(MysqlDialog) {
-		log.Exitf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
+		log.Error("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
+		os.Exit(1)
 	}
 
 	ascc := newAuthServerClientCert(clientcertAuthMethod)
@@ -62,7 +58,8 @@ func newAuthServerClientCert(clientcertAuthMethod string) *AuthServerClientCert 
 	case MysqlDialog:
 		authMethod = NewMysqlDialogAuthMethod(ascc, ascc, "")
 	default:
-		log.Exitf("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
+		log.Error("Invalid mysql_clientcert_auth_method value: only support mysql_clear_password or dialog")
+		os.Exit(1)
 	}
 
 	ascc.methods = []AuthMethod{authMethod}
@@ -91,7 +88,7 @@ func (asl *AuthServerClientCert) HandleUser(user string) bool {
 func (asl *AuthServerClientCert) UserEntryWithPassword(conn *Conn, user string, password string, remoteAddr net.Addr) (Getter, error) {
 	userCerts := conn.GetTLSClientCerts()
 	if len(userCerts) == 0 {
-		return nil, fmt.Errorf("no client certs for connection")
+		return nil, errors.New("no client certs for connection")
 	}
 	commonName := userCerts[0].Subject.CommonName
 

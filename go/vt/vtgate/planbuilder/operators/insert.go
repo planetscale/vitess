@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"slices"
 	"strconv"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -161,7 +162,7 @@ func checkAndCreateInsertOperator(ctx *plancontext.PlanningContext, ins *sqlpars
 	parentFKs := ctx.SemTable.GetParentForeignKeysList()
 	childFks := ctx.SemTable.GetChildForeignKeysList()
 	if len(parentFKs) > 0 {
-		panic(vterrors.VT12002())
+		panic(vterrors.VT12002(vTbl.String(), parentFKs[0].Table.String()))
 	}
 	if len(childFks) > 0 {
 		if ins.Action == sqlparser.ReplaceAct {
@@ -429,11 +430,8 @@ func insertSelectPlan(
 	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
 	insertTbl := insOp.tableTarget()
 	selTables := TablesUsed(selOp)
-	for _, tbl := range selTables {
-		if insertTbl == tbl {
-			insertSelect.ForceNonStreaming = true
-			break
-		}
+	if slices.Contains(selTables, insertTbl) {
+		insertSelect.ForceNonStreaming = true
 	}
 
 	if len(insOp.ColVindexes) == 0 {

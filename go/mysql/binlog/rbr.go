@@ -164,11 +164,9 @@ func printTimestamp(v uint32) *bytes.Buffer {
 	}
 
 	t := time.Unix(int64(v), 0).UTC()
-	year, month, day := t.Date()
-	hour, minute, second := t.Clock()
 
 	result := &bytes.Buffer{}
-	fmt.Fprintf(result, "%04d-%02d-%02d %02d:%02d:%02d", year, int(month), day, hour, minute, second)
+	result.Write(t.AppendFormat(nil, sqltypes.TimestampFormat))
 	return result
 }
 
@@ -257,7 +255,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		month := val >> 5 & 15
 		year := val >> 9
 		return sqltypes.MakeTrusted(querypb.Type_DATE,
-			[]byte(fmt.Sprintf("%04d-%02d-%02d", year, month, day))), 3, nil
+			fmt.Appendf(nil, "%04d-%02d-%02d", year, month, day)), 3, nil
 	case TypeTime:
 		var hour, minute, second int32
 		if data[pos+2]&128 > 0 {
@@ -278,7 +276,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			second = val % 100
 		}
 		return sqltypes.MakeTrusted(querypb.Type_TIME,
-			[]byte(fmt.Sprintf("%02d:%02d:%02d", hour, minute, second))), 3, nil
+			fmt.Appendf(nil, "%02d:%02d:%02d", hour, minute, second)), 3, nil
 	case TypeDateTime:
 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
 		d := val / 1000000
@@ -290,7 +288,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		minute := (t % 10000) / 100
 		second := t % 100
 		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-			[]byte(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second))), 8, nil
+			fmt.Appendf(nil, "%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)), 8, nil
 	case TypeVarchar, TypeVarString:
 		// We trust that typ is compatible with the field.Type
 		// Length is encoded in 1 or 2 bytes.
@@ -483,7 +481,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		minute := (hms >> 6) % (1 << 6)
 		second := hms % (1 << 6)
 		return sqltypes.MakeTrusted(querypb.Type_TIME,
-			[]byte(fmt.Sprintf("%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr))), 3 + (int(metadata)+1)/2, nil
+			fmt.Appendf(nil, "%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr)), 3 + (int(metadata)+1)/2, nil
 
 	case TypeNewDecimal:
 		precision := int(metadata >> 8) // total digits number
@@ -627,7 +625,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			}
 			s = strings.TrimLeft(s, "0")
 			if isNegative {
-				s = fmt.Sprintf("-%s", s)
+				s = "-" + s
 			}
 			return []byte(s)
 		}

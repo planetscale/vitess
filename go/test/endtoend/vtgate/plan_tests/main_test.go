@@ -67,7 +67,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: uSQL,
 			VSchema:   mainVs,
 		}
-		err = clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false)
+		err = clusterInstance.StartUnshardedKeyspace(*uKeyspace, 0, false, clusterInstance.Cell)
 		if err != nil {
 			fmt.Println(err.Error())
 			return 1
@@ -79,7 +79,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sSQL,
 			VSchema:   userVs,
 		}
-		err = clusterInstance.StartKeyspace(*skeyspace, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*skeyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
 		if err != nil {
 			fmt.Println(err.Error())
 			return 1
@@ -88,7 +88,7 @@ func TestMain(m *testing.M) {
 		// TODO: (@GuptaManan100/@systay): Also run the tests with normalizer on.
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			vtutils.GetFlagVariantForTests("--normalize-queries")+"=false",
-			"--schema_change_signal=true",
+			vtutils.GetFlagVariantForTests("--schema-change-signal")+"=true",
 		)
 
 		// Start vtgate

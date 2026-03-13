@@ -42,6 +42,7 @@ type (
 		// If you change the contents here, please update the toString() method
 		SelectExprs  []SelectExpr
 		HasAggr      bool
+		HasWindow    bool
 		Distinct     bool
 		WithRollup   bool
 		groupByExprs []GroupBy
@@ -100,7 +101,6 @@ func (aggr Aggr) GetTypeCollation(ctx *plancontext.PlanningContext) evalengine.T
 	case opcode.AggregateMin, opcode.AggregateMax, opcode.AggregateSumDistinct, opcode.AggregateCountDistinct:
 		typ, _ := ctx.TypeForExpr(aggr.Func.GetArg())
 		return typ
-
 	}
 	return evalengine.Type{}
 }
@@ -170,6 +170,14 @@ func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 	if !qp.HasAggr && sel.Having != nil {
 		qp.HasAggr = ctx.ContainsAggr(sel.Having.Expr)
 	}
+	if !qp.HasWindow {
+		for _, order := range sel.OrderBy {
+			if ctx.ContainsWindowFunc(order.Expr) {
+				qp.HasWindow = true
+				break
+			}
+		}
+	}
 	qp.calculateDistinct(ctx)
 
 	return qp
@@ -185,6 +193,9 @@ func (qp *QueryProjection) addSelectExpressions(ctx *plancontext.PlanningContext
 			if ctx.ContainsAggr(selExp.Expr) {
 				col.Aggr = true
 				qp.HasAggr = true
+			}
+			if ctx.ContainsWindowFunc(selExp.Expr) {
+				qp.HasWindow = true
 			}
 
 			qp.SelectExprs = append(qp.SelectExprs, col)
@@ -404,19 +415,25 @@ func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningConte
 	// Here we go over the expressions we are returning. Since we know we are aggregating,
 	// all expressions have to be either grouping expressions or aggregate expressions.
 	// If we find an expression that is neither, we treat is as a special aggregation function AggrRandom
-	for _, expr := range qp.SelectExprs {
-		aliasedExpr, err := expr.GetAliasedExpr()
+	for _, selectExpr := range qp.SelectExprs {
+		aliasedExpr, err := selectExpr.GetAliasedExpr()
 		if err != nil {
 			panic(err)
 		}
 
-		if !ctx.ContainsAggr(expr.Col) {
-			getExpr, err := expr.GetExpr()
+		if !ctx.ContainsAggr(selectExpr.Col) {
+			getExpr, err := selectExpr.GetExpr()
 			if err != nil {
 				panic(err)
 			}
+
+			if ctx.ContainsWindowFunc(selectExpr.Col) {
+				sqlparser.CopyOnRewrite(aliasedExpr.Expr, qp.extractAggr(ctx, aliasedExpr, addAggr, makeComplex), nil, nil)
+				continue
+			}
+
 			if !qp.isExprInGroupByExprs(ctx, getExpr) {
-				aggr := NewAggr(opcode.AggregateAnyValue, nil, aliasedExpr, aliasedExpr.ColumnName())
+				aggr := createNonGroupingAggr(aliasedExpr)
 				out = append(out, aggr)
 			}
 			continue
@@ -442,6 +459,9 @@ func (qp *QueryProjection) extractAggr(
 			return true
 		}
 		if aggr, isAggr := node.(sqlparser.AggrFunc); isAggr {
+			if wf, ok := node.(sqlparser.WindowFunc); ok && wf.GetOverClause() != nil {
+				return true
+			}
 			ae := aeWrap(aggr)
 			if aggr == aliasedExpr.Expr {
 				ae = aliasedExpr
@@ -462,7 +482,7 @@ func (qp *QueryProjection) extractAggr(
 			return true
 		}
 		if !qp.isExprInGroupByExprs(ctx, ex) {
-			aggr := NewAggr(opcode.AggregateAnyValue, nil, aeWrap(ex), "")
+			aggr := createNonGroupingAggr(aeWrap(ex))
 			addAggr(aggr)
 		}
 		return false

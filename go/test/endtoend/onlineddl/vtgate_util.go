@@ -39,9 +39,7 @@ const (
 	ThrottledAppsTimeout = 60 * time.Second
 )
 
-var (
-	testsStartupTime time.Time
-)
+var testsStartupTime time.Time
 
 func init() {
 	testsStartupTime = time.Now()
@@ -51,7 +49,7 @@ func init() {
 func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -70,7 +68,7 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 func VtgateExecQueryInTransaction(t *testing.T, vtParams *mysql.ConnParams, query string, expectError string) *sqltypes.Result {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -93,7 +91,7 @@ func VtgateExecQueryInTransaction(t *testing.T, vtParams *mysql.ConnParams, quer
 func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string, query string, expectError string) *sqltypes.Result {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -168,6 +166,22 @@ func CheckCleanupMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cl
 func CheckCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectCompletePossible bool) {
 	query, err := sqlparser.ParseAndBind("alter vitess_migration %a complete",
 		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	if expectCompletePossible {
+		assert.Equal(t, len(shards), int(r.RowsAffected))
+	} else {
+		assert.Equal(t, int(0), int(r.RowsAffected))
+	}
+}
+
+// CheckCompleteMigrationShards attempts to complete a migration for specific shards, and expects success by counting affected rows
+func CheckCompleteMigrationShards(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, completeShards string, expectCompletePossible bool) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a complete vitess_shards %a",
+		sqltypes.StringBindVariable(uuid),
+		sqltypes.StringBindVariable(completeShards),
 	)
 	require.NoError(t, err)
 	r := VtgateExecQuery(t, vtParams, query, "")
@@ -414,7 +428,6 @@ func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 
 // CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
 func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, throttlerApp throttlerapp.Name, expectFind bool) bool {
-
 	ctx, cancel := context.WithTimeout(context.Background(), ThrottledAppsTimeout)
 	defer cancel()
 

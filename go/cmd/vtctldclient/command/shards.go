@@ -56,7 +56,7 @@ that shard.`,
 	// GenerateShardRanges outputs a set of shard ranges assuming a (mostly)
 	// equal distribution of N shards.
 	GenerateShardRanges = &cobra.Command{
-		Use:                   "GenerateShardRanges <num_shards>",
+		Use:                   "GenerateShardRanges <num_shards> [--hex-width=w]",
 		Short:                 "Print a set of shard ranges assuming a keyspace with N shards.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -68,7 +68,7 @@ that shard.`,
 
 			cli.FinishedParsing(cmd)
 
-			shards, err := key.GenerateShardRanges(n)
+			shards, err := key.GenerateShardRanges(n, generateShardRangesOptions.HexWidth)
 			if err != nil {
 				return err
 			}
@@ -210,6 +210,10 @@ var createShardOptions = struct {
 	IncludeParent bool
 }{}
 
+var generateShardRangesOptions = struct {
+	HexWidth int
+}{}
+
 func commandCreateShard(cmd *cobra.Command, args []string) error {
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
 	if err != nil {
@@ -258,7 +262,6 @@ func commandDeleteShards(cmd *cobra.Command, args []string) error {
 		Recursive:     deleteShardsOptions.Recursive,
 		Force:         deleteShardsOptions.Force,
 	})
-
 	if err != nil {
 		return fmt.Errorf("%w: while deleting %d shards; please inspect the topo", err, len(shards))
 	}
@@ -321,7 +324,6 @@ func commandGetShardReplication(cmd *cobra.Command, args []string) error {
 	fmt.Printf("%s\n", data)
 
 	return nil
-
 }
 
 var removeShardCellOptions = struct {
@@ -346,7 +348,6 @@ func commandRemoveShardCell(cmd *cobra.Command, args []string) error {
 		Force:     removeShardCellOptions.Force,
 		Recursive: removeShardCellOptions.Recursive,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -501,7 +502,7 @@ func commandShardReplicationPositions(cmd *cobra.Command, args []string) error {
 		case nil:
 			line = cli.MarshalTabletAWK(rt.Tablet) + "<err> <err> <err>"
 		default:
-			line = cli.MarshalTabletAWK(rt.Tablet) + fmt.Sprintf(" %v %v", rt.Status.Position, rt.Status.ReplicationLagSeconds)
+			line = cli.MarshalTabletAWK(rt.Tablet) + fmt.Sprintf(" %v %v", rt.Position, rt.ReplicationLagSeconds)
 		}
 
 		fmt.Println(line)
@@ -544,7 +545,7 @@ func commandSourceShardAdd(cmd *cobra.Command, args []string) error {
 
 	uid, err := strconv.ParseInt(cmd.Flags().Arg(1), 10, 32)
 	if err != nil {
-		return fmt.Errorf("Failed to parse SourceShard uid: %w", err) // nolint
+		return fmt.Errorf("Failed to parse SourceShard uid: %w", err)
 	}
 
 	sks, sshard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(2))
@@ -598,7 +599,7 @@ func commandSourceShardDelete(cmd *cobra.Command, args []string) error {
 
 	uid, err := strconv.ParseInt(cmd.Flags().Arg(1), 10, 32)
 	if err != nil {
-		return fmt.Errorf("Failed to parse SourceShard uid: %w", err) // nolint
+		return fmt.Errorf("Failed to parse SourceShard uid: %w", err)
 	}
 
 	cli.FinishedParsing(cmd)
@@ -663,6 +664,8 @@ func init() {
 
 	Root.AddCommand(GetShard)
 	Root.AddCommand(GetShardReplication)
+
+	GenerateShardRanges.Flags().IntVar(&generateShardRangesOptions.HexWidth, "hex-width", 0, "The number of hex characters to use for the shard range start and end. If not set or set to 0, it will be automatically computed based on the number of requested shards.")
 	Root.AddCommand(GenerateShardRanges)
 
 	RemoveShardCell.Flags().BoolVarP(&removeShardCellOptions.Force, "force", "f", false, "Proceed even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")

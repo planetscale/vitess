@@ -17,7 +17,6 @@ limitations under the License.
 package sharded
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -32,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -83,8 +83,8 @@ func TestMain(m *testing.M) {
 			SidecarDBName: sidecarDBName,
 		}
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--schema_change_signal",
-			"--vschema_ddl_authorized_users", "%")
+			vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer),
+			vtutils.GetFlagVariantForTestsByVersion("--vschema-ddl-authorized-users", vtgateVer), "%")
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
 
 		if vtgateVer >= 16 && vttabletVer >= 16 {
@@ -92,7 +92,7 @@ func TestMain(m *testing.M) {
 			clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
 		}
 
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -119,7 +119,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewTable(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -160,7 +160,7 @@ func TestNewTable(t *testing.T) {
 }
 
 func TestAmbiguousColumnJoin(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -171,7 +171,7 @@ func TestAmbiguousColumnJoin(t *testing.T) {
 }
 
 func TestInitAndUpdate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -216,11 +216,10 @@ func TestInitAndUpdate(t *testing.T) {
 		100*time.Millisecond,
 		30*time.Second,
 		"test_sc and test_sc_1 should not be in vschema tables")
-
 }
 
 func TestDMLOnNewTable(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -272,7 +271,7 @@ func TestDMLOnNewTable(t *testing.T) {
 
 // TestNewView validates that view tracking works as expected.
 func TestNewView(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -294,7 +293,7 @@ func TestNewView(t *testing.T) {
 
 // TestViewAndTable validates that new column added in table is present in the view definition
 func TestViewAndTable(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

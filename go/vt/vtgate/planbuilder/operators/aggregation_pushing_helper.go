@@ -130,7 +130,7 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		return nil
 	case opcode.AggregateCount, opcode.AggregateSum:
 		return ab.handleAggrWithCountStarMultiplier(ctx, aggr)
-	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateAnyValue:
+	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateAnyValue, opcode.AggregateConstant:
 		return ab.handlePushThroughAggregation(ctx, aggr)
 	case opcode.AggregateGroupConcat:
 		f := aggr.Func.(*sqlparser.GroupConcatExpr)
@@ -150,7 +150,7 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		// we are not going to see values multiple times, so we don't need to multiply with the count(*) from the other side
 		return ab.handlePushThroughAggregation(ctx, aggr)
 	default:
-		panic(vterrors.VT12001(fmt.Sprintf("aggregation not planned: %s", aggr.OpCode.String())))
+		panic(vterrors.VT12001("aggregation not planned: " + aggr.OpCode.String()))
 	}
 }
 

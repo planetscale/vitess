@@ -2556,12 +2556,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Cluster.decode = function decode(reader, length) {
+        Cluster.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Cluster();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.id = reader.string();
@@ -2783,12 +2785,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ClusterBackup.decode = function decode(reader, length) {
+        ClusterBackup.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ClusterBackup();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -3024,12 +3028,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ClusterCellsAliases.decode = function decode(reader, length) {
+        ClusterCellsAliases.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ClusterCellsAliases(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -3305,12 +3311,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ClusterCellInfo.decode = function decode(reader, length) {
+        ClusterCellInfo.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ClusterCellInfo();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -3576,12 +3584,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ClusterShardReplicationPosition.decode = function decode(reader, length) {
+        ClusterShardReplicationPosition.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ClusterShardReplicationPosition();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -3841,12 +3851,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ClusterWorkflows.decode = function decode(reader, length) {
+        ClusterWorkflows.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ClusterWorkflows();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.workflows && message.workflows.length))
@@ -4116,12 +4128,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Keyspace.decode = function decode(reader, length) {
+        Keyspace.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Keyspace(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -4432,12 +4446,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Schema.decode = function decode(reader, length) {
+        Schema.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Schema(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -4744,12 +4760,14 @@ export const vtadmin = $root.vtadmin = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            ShardTableSize.decode = function decode(reader, length) {
+            ShardTableSize.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Schema.ShardTableSize();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.row_count = reader.uint64();
@@ -5014,12 +5032,14 @@ export const vtadmin = $root.vtadmin = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            TableSize.decode = function decode(reader, length) {
+            TableSize.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Schema.TableSize(), key, value;
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.row_count = reader.uint64();
@@ -5323,12 +5343,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SchemaMigration.decode = function decode(reader, length) {
+        SchemaMigration.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.SchemaMigration();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -5560,12 +5582,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Shard.decode = function decode(reader, length) {
+        Shard.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Shard();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -5808,12 +5832,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SrvVSchema.decode = function decode(reader, length) {
+        SrvVSchema.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.SrvVSchema();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cell = reader.string();
@@ -6079,12 +6105,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Tablet.decode = function decode(reader, length) {
+        Tablet.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Tablet();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -6391,12 +6419,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VSchema.decode = function decode(reader, length) {
+        VSchema.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VSchema();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -6651,12 +6681,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Vtctld.decode = function decode(reader, length) {
+        Vtctld.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Vtctld();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.hostname = reader.string();
@@ -6941,12 +6973,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VTGate.decode = function decode(reader, length) {
+        VTGate.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VTGate();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.hostname = reader.string();
@@ -7247,12 +7281,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Workflow.decode = function decode(reader, length) {
+        Workflow.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Workflow();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -7496,12 +7532,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowDeleteRequest.decode = function decode(reader, length) {
+        WorkflowDeleteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.WorkflowDeleteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -7728,12 +7766,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowSwitchTrafficRequest.decode = function decode(reader, length) {
+        WorkflowSwitchTrafficRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.WorkflowSwitchTrafficRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -7982,12 +8022,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplySchemaRequest.decode = function decode(reader, length) {
+        ApplySchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ApplySchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -8238,12 +8280,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CancelSchemaMigrationRequest.decode = function decode(reader, length) {
+        CancelSchemaMigrationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.CancelSchemaMigrationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -8470,12 +8514,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CleanupSchemaMigrationRequest.decode = function decode(reader, length) {
+        CleanupSchemaMigrationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.CleanupSchemaMigrationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -8702,12 +8748,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CompleteSchemaMigrationRequest.decode = function decode(reader, length) {
+        CompleteSchemaMigrationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.CompleteSchemaMigrationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -8934,12 +8982,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ConcludeTransactionRequest.decode = function decode(reader, length) {
+        ConcludeTransactionRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ConcludeTransactionRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -9161,12 +9211,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CreateKeyspaceRequest.decode = function decode(reader, length) {
+        CreateKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.CreateKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -9382,12 +9434,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CreateKeyspaceResponse.decode = function decode(reader, length) {
+        CreateKeyspaceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.CreateKeyspaceResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = $root.vtadmin.Keyspace.decode(reader, reader.uint32());
@@ -9601,12 +9655,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CreateShardRequest.decode = function decode(reader, length) {
+        CreateShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.CreateShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -9833,12 +9889,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteKeyspaceRequest.decode = function decode(reader, length) {
+        DeleteKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.DeleteKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -10065,12 +10123,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteShardsRequest.decode = function decode(reader, length) {
+        DeleteShardsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.DeleteShardsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -10310,12 +10370,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteTabletRequest.decode = function decode(reader, length) {
+        DeleteTabletRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.DeleteTabletRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -10569,12 +10631,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteTabletResponse.decode = function decode(reader, length) {
+        DeleteTabletResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.DeleteTabletResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = reader.string();
@@ -10801,12 +10865,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        EmergencyFailoverShardRequest.decode = function decode(reader, length) {
+        EmergencyFailoverShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.EmergencyFailoverShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -11068,12 +11134,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        EmergencyFailoverShardResponse.decode = function decode(reader, length) {
+        EmergencyFailoverShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.EmergencyFailoverShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -11374,12 +11442,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        FindSchemaRequest.decode = function decode(reader, length) {
+        FindSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.FindSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.table = reader.string();
@@ -11661,12 +11731,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetBackupsRequest.decode = function decode(reader, length) {
+        GetBackupsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetBackupsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -11951,12 +12023,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetBackupsResponse.decode = function decode(reader, length) {
+        GetBackupsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetBackupsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.backups && message.backups.length))
@@ -12199,12 +12273,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetCellInfosRequest.decode = function decode(reader, length) {
+        GetCellInfosRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetCellInfosRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -12458,12 +12534,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetCellInfosResponse.decode = function decode(reader, length) {
+        GetCellInfosResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetCellInfosResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cell_infos && message.cell_infos.length))
@@ -12682,12 +12760,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetCellsAliasesRequest.decode = function decode(reader, length) {
+        GetCellsAliasesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetCellsAliasesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -12901,12 +12981,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetCellsAliasesResponse.decode = function decode(reader, length) {
+        GetCellsAliasesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetCellsAliasesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.aliases && message.aliases.length))
@@ -13112,12 +13194,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetClustersRequest.decode = function decode(reader, length) {
+        GetClustersRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetClustersRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -13300,12 +13384,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetClustersResponse.decode = function decode(reader, length) {
+        GetClustersResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetClustersResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.clusters && message.clusters.length))
@@ -13533,12 +13619,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetFullStatusRequest.decode = function decode(reader, length) {
+        GetFullStatusRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetFullStatusRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -13756,12 +13844,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetGatesRequest.decode = function decode(reader, length) {
+        GetGatesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetGatesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -13975,12 +14065,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetGatesResponse.decode = function decode(reader, length) {
+        GetGatesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetGatesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.gates && message.gates.length))
@@ -14208,12 +14300,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetKeyspaceRequest.decode = function decode(reader, length) {
+        GetKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -14426,12 +14520,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetKeyspacesRequest.decode = function decode(reader, length) {
+        GetKeyspacesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetKeyspacesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -14645,12 +14741,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetKeyspacesResponse.decode = function decode(reader, length) {
+        GetKeyspacesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetKeyspacesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.keyspaces && message.keyspaces.length))
@@ -14900,12 +14998,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaRequest.decode = function decode(reader, length) {
+        GetSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -15158,12 +15258,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemasRequest.decode = function decode(reader, length) {
+        GetSchemasRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSchemasRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -15395,12 +15497,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemasResponse.decode = function decode(reader, length) {
+        GetSchemasResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSchemasResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.schemas && message.schemas.length))
@@ -15619,12 +15723,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaMigrationsRequest.decode = function decode(reader, length) {
+        GetSchemaMigrationsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSchemaMigrationsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_requests && message.cluster_requests.length))
@@ -15849,12 +15955,14 @@ export const vtadmin = $root.vtadmin = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            ClusterRequest.decode = function decode(reader, length) {
+            ClusterRequest.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSchemaMigrationsRequest.ClusterRequest();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.cluster_id = reader.string();
@@ -16075,12 +16183,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaMigrationsResponse.decode = function decode(reader, length) {
+        GetSchemaMigrationsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSchemaMigrationsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.schema_migrations && message.schema_migrations.length))
@@ -16325,12 +16435,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetShardReplicationPositionsRequest.decode = function decode(reader, length) {
+        GetShardReplicationPositionsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetShardReplicationPositionsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -16597,12 +16709,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetShardReplicationPositionsResponse.decode = function decode(reader, length) {
+        GetShardReplicationPositionsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetShardReplicationPositionsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.replication_positions && message.replication_positions.length))
@@ -16843,12 +16957,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvKeyspaceRequest.decode = function decode(reader, length) {
+        GetSrvKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSrvKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -17101,12 +17217,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvKeyspacesRequest.decode = function decode(reader, length) {
+        GetSrvKeyspacesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSrvKeyspacesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -17349,12 +17467,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvKeyspacesResponse.decode = function decode(reader, length) {
+        GetSrvKeyspacesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSrvKeyspacesResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.srv_keyspaces === $util.emptyObject)
@@ -17601,12 +17721,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvVSchemaRequest.decode = function decode(reader, length) {
+        GetSrvVSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSrvVSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -17832,12 +17954,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvVSchemasRequest.decode = function decode(reader, length) {
+        GetSrvVSchemasRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSrvVSchemasRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -18078,12 +18202,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvVSchemasResponse.decode = function decode(reader, length) {
+        GetSrvVSchemasResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSrvVSchemasResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.srv_v_schemas && message.srv_v_schemas.length))
@@ -18311,12 +18437,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaTableSizeOptions.decode = function decode(reader, length) {
+        GetSchemaTableSizeOptions.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSchemaTableSizeOptions();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.aggregate_sizes = reader.bool();
@@ -18540,12 +18668,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTabletRequest.decode = function decode(reader, length) {
+        GetTabletRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetTabletRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -18777,12 +18907,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTabletsRequest.decode = function decode(reader, length) {
+        GetTabletsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetTabletsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -18996,12 +19128,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTabletsResponse.decode = function decode(reader, length) {
+        GetTabletsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetTabletsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.tablets && message.tablets.length))
@@ -19229,12 +19363,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTopologyPathRequest.decode = function decode(reader, length) {
+        GetTopologyPathRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetTopologyPathRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -19456,12 +19592,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTransactionInfoRequest.decode = function decode(reader, length) {
+        GetTransactionInfoRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetTransactionInfoRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -19699,12 +19837,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetUnresolvedTransactionsRequest.decode = function decode(reader, length) {
+        GetUnresolvedTransactionsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetUnresolvedTransactionsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -19952,12 +20092,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetVSchemaRequest.decode = function decode(reader, length) {
+        GetVSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -20170,12 +20312,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetVSchemasRequest.decode = function decode(reader, length) {
+        GetVSchemasRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVSchemasRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -20389,12 +20533,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetVSchemasResponse.decode = function decode(reader, length) {
+        GetVSchemasResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVSchemasResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.v_schemas && message.v_schemas.length))
@@ -20613,12 +20759,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetVtctldsRequest.decode = function decode(reader, length) {
+        GetVtctldsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVtctldsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -20832,12 +20980,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetVtctldsResponse.decode = function decode(reader, length) {
+        GetVtctldsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVtctldsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.vtctlds && message.vtctlds.length))
@@ -21087,12 +21237,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetWorkflowRequest.decode = function decode(reader, length) {
+        GetWorkflowRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetWorkflowRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -21349,12 +21501,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetWorkflowStatusRequest.decode = function decode(reader, length) {
+        GetWorkflowStatusRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetWorkflowStatusRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -21599,12 +21753,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartWorkflowRequest.decode = function decode(reader, length) {
+        StartWorkflowRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.StartWorkflowRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -21849,12 +22005,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopWorkflowRequest.decode = function decode(reader, length) {
+        StopWorkflowRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.StopWorkflowRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -22116,12 +22274,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetWorkflowsRequest.decode = function decode(reader, length) {
+        GetWorkflowsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetWorkflowsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cluster_ids && message.cluster_ids.length))
@@ -22403,12 +22563,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetWorkflowsResponse.decode = function decode(reader, length) {
+        GetWorkflowsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetWorkflowsResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.workflows_by_cluster === $util.emptyObject)
@@ -22655,12 +22817,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LaunchSchemaMigrationRequest.decode = function decode(reader, length) {
+        LaunchSchemaMigrationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.LaunchSchemaMigrationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -22898,12 +23062,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MaterializeCreateRequest.decode = function decode(reader, length) {
+        MaterializeCreateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.MaterializeCreateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -23142,12 +23308,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MoveTablesCompleteRequest.decode = function decode(reader, length) {
+        MoveTablesCompleteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.MoveTablesCompleteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -23374,12 +23542,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MoveTablesCreateRequest.decode = function decode(reader, length) {
+        MoveTablesCreateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.MoveTablesCreateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -23608,12 +23778,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PingTabletRequest.decode = function decode(reader, length) {
+        PingTabletRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.PingTabletRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -23854,12 +24026,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PingTabletResponse.decode = function decode(reader, length) {
+        PingTabletResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.PingTabletResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = reader.string();
@@ -24086,12 +24260,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PlannedFailoverShardRequest.decode = function decode(reader, length) {
+        PlannedFailoverShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.PlannedFailoverShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -24353,12 +24529,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PlannedFailoverShardResponse.decode = function decode(reader, length) {
+        PlannedFailoverShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.PlannedFailoverShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -24670,12 +24848,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RebuildKeyspaceGraphRequest.decode = function decode(reader, length) {
+        RebuildKeyspaceGraphRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.RebuildKeyspaceGraphRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -24925,12 +25105,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RebuildKeyspaceGraphResponse.decode = function decode(reader, length) {
+        RebuildKeyspaceGraphResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.RebuildKeyspaceGraphResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = reader.string();
@@ -25141,12 +25323,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshStateRequest.decode = function decode(reader, length) {
+        RefreshStateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.RefreshStateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -25387,12 +25571,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshStateResponse.decode = function decode(reader, length) {
+        RefreshStateResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.RefreshStateResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = reader.string();
@@ -25682,12 +25868,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemasRequest.decode = function decode(reader, length) {
+        ReloadSchemasRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ReloadSchemasRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.keyspaces && message.keyspaces.length))
@@ -26049,12 +26237,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemasResponse.decode = function decode(reader, length) {
+        ReloadSchemasResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ReloadSchemasResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.keyspace_results && message.keyspace_results.length))
@@ -26344,12 +26534,14 @@ export const vtadmin = $root.vtadmin = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            KeyspaceResult.decode = function decode(reader, length) {
+            KeyspaceResult.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ReloadSchemasResponse.KeyspaceResult();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.keyspace = $root.vtadmin.Keyspace.decode(reader, reader.uint32());
@@ -26597,12 +26789,14 @@ export const vtadmin = $root.vtadmin = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            ShardResult.decode = function decode(reader, length) {
+            ShardResult.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ReloadSchemasResponse.ShardResult();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.shard = $root.vtadmin.Shard.decode(reader, reader.uint32());
@@ -26848,12 +27042,14 @@ export const vtadmin = $root.vtadmin = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            TabletResult.decode = function decode(reader, length) {
+            TabletResult.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ReloadSchemasResponse.TabletResult();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.tablet = $root.vtadmin.Tablet.decode(reader, reader.uint32());
@@ -27127,12 +27323,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemaShardRequest.decode = function decode(reader, length) {
+        ReloadSchemaShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ReloadSchemaShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -27393,12 +27591,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemaShardResponse.decode = function decode(reader, length) {
+        ReloadSchemaShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ReloadSchemaShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.events && message.events.length))
@@ -27628,12 +27828,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshTabletReplicationSourceRequest.decode = function decode(reader, length) {
+        RefreshTabletReplicationSourceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.RefreshTabletReplicationSourceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -27896,12 +28098,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshTabletReplicationSourceResponse.decode = function decode(reader, length) {
+        RefreshTabletReplicationSourceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.RefreshTabletReplicationSourceResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -28190,12 +28394,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RemoveKeyspaceCellRequest.decode = function decode(reader, length) {
+        RemoveKeyspaceCellRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.RemoveKeyspaceCellRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -28442,12 +28648,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RemoveKeyspaceCellResponse.decode = function decode(reader, length) {
+        RemoveKeyspaceCellResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.RemoveKeyspaceCellResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = reader.string();
@@ -28656,12 +28864,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RetrySchemaMigrationRequest.decode = function decode(reader, length) {
+        RetrySchemaMigrationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.RetrySchemaMigrationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -28890,12 +29100,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RunHealthCheckRequest.decode = function decode(reader, length) {
+        RunHealthCheckRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.RunHealthCheckRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -29136,12 +29348,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RunHealthCheckResponse.decode = function decode(reader, length) {
+        RunHealthCheckResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.RunHealthCheckResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = reader.string();
@@ -29368,12 +29582,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReshardCreateRequest.decode = function decode(reader, length) {
+        ReshardCreateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ReshardCreateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -29602,12 +29818,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetReadOnlyRequest.decode = function decode(reader, length) {
+        SetReadOnlyRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.SetReadOnlyRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -29826,12 +30044,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetReadOnlyResponse.decode = function decode(reader, length) {
+        SetReadOnlyResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.SetReadOnlyResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -30025,12 +30245,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetReadWriteRequest.decode = function decode(reader, length) {
+        SetReadWriteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.SetReadWriteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -30249,12 +30471,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetReadWriteResponse.decode = function decode(reader, length) {
+        SetReadWriteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.SetReadWriteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -30448,12 +30672,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartReplicationRequest.decode = function decode(reader, length) {
+        StartReplicationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.StartReplicationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -30694,12 +30920,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartReplicationResponse.decode = function decode(reader, length) {
+        StartReplicationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.StartReplicationResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = reader.string();
@@ -30928,12 +31156,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopReplicationRequest.decode = function decode(reader, length) {
+        StopReplicationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.StopReplicationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -31174,12 +31404,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopReplicationResponse.decode = function decode(reader, length) {
+        StopReplicationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.StopReplicationResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = reader.string();
@@ -31408,12 +31640,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TabletExternallyPromotedRequest.decode = function decode(reader, length) {
+        TabletExternallyPromotedRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.TabletExternallyPromotedRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -31687,12 +31921,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TabletExternallyPromotedResponse.decode = function decode(reader, length) {
+        TabletExternallyPromotedResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.TabletExternallyPromotedResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
@@ -31967,12 +32203,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TabletExternallyReparentedRequest.decode = function decode(reader, length) {
+        TabletExternallyReparentedRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.TabletExternallyReparentedRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -32213,12 +32451,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateRequest.decode = function decode(reader, length) {
+        ValidateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ValidateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -32451,12 +32691,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateKeyspaceRequest.decode = function decode(reader, length) {
+        ValidateKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ValidateKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -32690,12 +32932,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateSchemaKeyspaceRequest.decode = function decode(reader, length) {
+        ValidateSchemaKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ValidateSchemaKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -32939,12 +33183,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateShardRequest.decode = function decode(reader, length) {
+        ValidateShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ValidateShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -33190,12 +33436,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateVersionKeyspaceRequest.decode = function decode(reader, length) {
+        ValidateVersionKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ValidateVersionKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -33428,12 +33676,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateVersionShardRequest.decode = function decode(reader, length) {
+        ValidateVersionShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ValidateVersionShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -33667,12 +33917,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffCreateRequest.decode = function decode(reader, length) {
+        VDiffCreateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VDiffCreateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -33899,12 +34151,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffShowRequest.decode = function decode(reader, length) {
+        VDiffShowRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VDiffShowRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -34131,12 +34385,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffProgress.decode = function decode(reader, length) {
+        VDiffProgress.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VDiffProgress();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.percentage = reader.double();
@@ -34402,12 +34658,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffShardReport.decode = function decode(reader, length) {
+        VDiffShardReport.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VDiffShardReport();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.state = reader.string();
@@ -34689,12 +34947,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffShowResponse.decode = function decode(reader, length) {
+        VDiffShowResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VDiffShowResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.shard_report === $util.emptyObject)
@@ -34952,12 +35212,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VTExplainRequest.decode = function decode(reader, length) {
+        VTExplainRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VTExplainRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster = reader.string();
@@ -35180,12 +35442,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VTExplainResponse.decode = function decode(reader, length) {
+        VTExplainResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VTExplainResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.response = reader.string();
@@ -35405,12 +35669,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VExplainRequest.decode = function decode(reader, length) {
+        VExplainRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VExplainRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cluster_id = reader.string();
@@ -35633,12 +35899,14 @@ export const vtadmin = $root.vtadmin = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VExplainResponse.decode = function decode(reader, length) {
+        VExplainResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VExplainResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.response = reader.string();
@@ -35910,12 +36178,14 @@ export const logutil = $root.logutil = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Event.decode = function decode(reader, length) {
+        Event.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.logutil.Event();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.time = $root.vttime.Time.decode(reader, reader.uint32());
@@ -36233,12 +36503,14 @@ export const vttime = $root.vttime = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Time.decode = function decode(reader, length) {
+        Time.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vttime.Time();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.seconds = reader.int64();
@@ -36474,12 +36746,14 @@ export const vttime = $root.vttime = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Duration.decode = function decode(reader, length) {
+        Duration.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vttime.Duration();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.seconds = reader.int64();
@@ -36718,12 +36992,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartRequest.decode = function decode(reader, length) {
+        StartRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.StartRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.mysqld_args && message.mysqld_args.length))
@@ -36924,12 +37200,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartResponse.decode = function decode(reader, length) {
+        StartResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.StartResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -37121,12 +37399,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShutdownRequest.decode = function decode(reader, length) {
+        ShutdownRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.ShutdownRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.wait_for_mysqld = reader.bool();
@@ -37331,12 +37611,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShutdownResponse.decode = function decode(reader, length) {
+        ShutdownResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.ShutdownResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -37506,12 +37788,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RunMysqlUpgradeRequest.decode = function decode(reader, length) {
+        RunMysqlUpgradeRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.RunMysqlUpgradeRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -37681,12 +37965,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RunMysqlUpgradeResponse.decode = function decode(reader, length) {
+        RunMysqlUpgradeResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.RunMysqlUpgradeResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -37889,12 +38175,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplyBinlogFileRequest.decode = function decode(reader, length) {
+        ApplyBinlogFileRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.ApplyBinlogFileRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.binlog_file_name = reader.string();
@@ -38111,12 +38399,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplyBinlogFileResponse.decode = function decode(reader, length) {
+        ApplyBinlogFileResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.ApplyBinlogFileResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -38299,12 +38589,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadBinlogFilesTimestampsRequest.decode = function decode(reader, length) {
+        ReadBinlogFilesTimestampsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.ReadBinlogFilesTimestampsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.binlog_file_names && message.binlog_file_names.length))
@@ -38549,12 +38841,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadBinlogFilesTimestampsResponse.decode = function decode(reader, length) {
+        ReadBinlogFilesTimestampsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.ReadBinlogFilesTimestampsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.first_timestamp = $root.vttime.Time.decode(reader, reader.uint32());
@@ -38788,12 +39082,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReinitConfigRequest.decode = function decode(reader, length) {
+        ReinitConfigRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.ReinitConfigRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -38963,12 +39259,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReinitConfigResponse.decode = function decode(reader, length) {
+        ReinitConfigResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.ReinitConfigResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -39138,12 +39436,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshConfigRequest.decode = function decode(reader, length) {
+        RefreshConfigRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.RefreshConfigRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -39313,12 +39613,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshConfigResponse.decode = function decode(reader, length) {
+        RefreshConfigResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.RefreshConfigResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -39488,12 +39790,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VersionStringRequest.decode = function decode(reader, length) {
+        VersionStringRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.VersionStringRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -39674,12 +39978,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VersionStringResponse.decode = function decode(reader, length) {
+        VersionStringResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.VersionStringResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.version = reader.string();
@@ -39866,12 +40172,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        HostMetricsRequest.decode = function decode(reader, length) {
+        HostMetricsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.HostMetricsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -40056,12 +40364,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        HostMetricsResponse.decode = function decode(reader, length) {
+        HostMetricsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.HostMetricsResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.metrics === $util.emptyObject)
@@ -40316,12 +40626,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            Metric.decode = function decode(reader, length) {
+            Metric.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.HostMetricsResponse.Metric();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.name = reader.string();
@@ -40961,12 +41273,14 @@ export const mysqlctl = $root.mysqlctl = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BackupInfo.decode = function decode(reader, length) {
+        BackupInfo.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.mysqlctl.BackupInfo();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -41336,12 +41650,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        KeyRange.decode = function decode(reader, length) {
+        KeyRange.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.KeyRange();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.start = reader.bytes();
@@ -41595,12 +41911,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TabletAlias.decode = function decode(reader, length) {
+        TabletAlias.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.TabletAlias();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cell = reader.string();
@@ -41777,6 +42095,8 @@ export const topodata = $root.topodata = (() => {
          * @property {number|null} [mysql_port] Tablet mysql_port
          * @property {vttime.ITime|null} [primary_term_start_time] Tablet primary_term_start_time
          * @property {number|null} [default_conn_collation] Tablet default_conn_collation
+         * @property {vttime.ITime|null} [tablet_start_time] Tablet tablet_start_time
+         * @property {vttime.ITime|null} [tablet_shutdown_time] Tablet tablet_shutdown_time
          */
 
         /**
@@ -41901,6 +42221,22 @@ export const topodata = $root.topodata = (() => {
         Tablet.prototype.default_conn_collation = 0;
 
         /**
+         * Tablet tablet_start_time.
+         * @member {vttime.ITime|null|undefined} tablet_start_time
+         * @memberof topodata.Tablet
+         * @instance
+         */
+        Tablet.prototype.tablet_start_time = null;
+
+        /**
+         * Tablet tablet_shutdown_time.
+         * @member {vttime.ITime|null|undefined} tablet_shutdown_time
+         * @memberof topodata.Tablet
+         * @instance
+         */
+        Tablet.prototype.tablet_shutdown_time = null;
+
+        /**
          * Creates a new Tablet instance using the specified properties.
          * @function create
          * @memberof topodata.Tablet
@@ -41952,6 +42288,10 @@ export const topodata = $root.topodata = (() => {
                 $root.vttime.Time.encode(message.primary_term_start_time, writer.uint32(/* id 14, wireType 2 =*/114).fork()).ldelim();
             if (message.default_conn_collation != null && Object.hasOwnProperty.call(message, "default_conn_collation"))
                 writer.uint32(/* id 16, wireType 0 =*/128).uint32(message.default_conn_collation);
+            if (message.tablet_start_time != null && Object.hasOwnProperty.call(message, "tablet_start_time"))
+                $root.vttime.Time.encode(message.tablet_start_time, writer.uint32(/* id 17, wireType 2 =*/138).fork()).ldelim();
+            if (message.tablet_shutdown_time != null && Object.hasOwnProperty.call(message, "tablet_shutdown_time"))
+                $root.vttime.Time.encode(message.tablet_shutdown_time, writer.uint32(/* id 18, wireType 2 =*/146).fork()).ldelim();
             return writer;
         };
 
@@ -41979,12 +42319,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Tablet.decode = function decode(reader, length) {
+        Tablet.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.Tablet(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -42074,6 +42416,14 @@ export const topodata = $root.topodata = (() => {
                     }
                 case 16: {
                         message.default_conn_collation = reader.uint32();
+                        break;
+                    }
+                case 17: {
+                        message.tablet_start_time = $root.vttime.Time.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 18: {
+                        message.tablet_shutdown_time = $root.vttime.Time.decode(reader, reader.uint32());
                         break;
                     }
                 default:
@@ -42180,6 +42530,16 @@ export const topodata = $root.topodata = (() => {
             if (message.default_conn_collation != null && message.hasOwnProperty("default_conn_collation"))
                 if (!$util.isInteger(message.default_conn_collation))
                     return "default_conn_collation: integer expected";
+            if (message.tablet_start_time != null && message.hasOwnProperty("tablet_start_time")) {
+                let error = $root.vttime.Time.verify(message.tablet_start_time);
+                if (error)
+                    return "tablet_start_time." + error;
+            }
+            if (message.tablet_shutdown_time != null && message.hasOwnProperty("tablet_shutdown_time")) {
+                let error = $root.vttime.Time.verify(message.tablet_shutdown_time);
+                if (error)
+                    return "tablet_shutdown_time." + error;
+            }
             return null;
         };
 
@@ -42290,6 +42650,16 @@ export const topodata = $root.topodata = (() => {
             }
             if (object.default_conn_collation != null)
                 message.default_conn_collation = object.default_conn_collation >>> 0;
+            if (object.tablet_start_time != null) {
+                if (typeof object.tablet_start_time !== "object")
+                    throw TypeError(".topodata.Tablet.tablet_start_time: object expected");
+                message.tablet_start_time = $root.vttime.Time.fromObject(object.tablet_start_time);
+            }
+            if (object.tablet_shutdown_time != null) {
+                if (typeof object.tablet_shutdown_time !== "object")
+                    throw TypeError(".topodata.Tablet.tablet_shutdown_time: object expected");
+                message.tablet_shutdown_time = $root.vttime.Time.fromObject(object.tablet_shutdown_time);
+            }
             return message;
         };
 
@@ -42322,6 +42692,8 @@ export const topodata = $root.topodata = (() => {
                 object.mysql_port = 0;
                 object.primary_term_start_time = null;
                 object.default_conn_collation = 0;
+                object.tablet_start_time = null;
+                object.tablet_shutdown_time = null;
             }
             if (message.alias != null && message.hasOwnProperty("alias"))
                 object.alias = $root.topodata.TabletAlias.toObject(message.alias, options);
@@ -42356,6 +42728,10 @@ export const topodata = $root.topodata = (() => {
                 object.primary_term_start_time = $root.vttime.Time.toObject(message.primary_term_start_time, options);
             if (message.default_conn_collation != null && message.hasOwnProperty("default_conn_collation"))
                 object.default_conn_collation = message.default_conn_collation;
+            if (message.tablet_start_time != null && message.hasOwnProperty("tablet_start_time"))
+                object.tablet_start_time = $root.vttime.Time.toObject(message.tablet_start_time, options);
+            if (message.tablet_shutdown_time != null && message.hasOwnProperty("tablet_shutdown_time"))
+                object.tablet_shutdown_time = $root.vttime.Time.toObject(message.tablet_shutdown_time, options);
             return object;
         };
 
@@ -42400,6 +42776,7 @@ export const topodata = $root.topodata = (() => {
          * @property {Array.<topodata.Shard.ISourceShard>|null} [source_shards] Shard source_shards
          * @property {Array.<topodata.Shard.ITabletControl>|null} [tablet_controls] Shard tablet_controls
          * @property {boolean|null} [is_primary_serving] Shard is_primary_serving
+         * @property {vtorcdata.IShard|null} [vtorc_state] Shard vtorc_state
          */
 
         /**
@@ -42468,6 +42845,14 @@ export const topodata = $root.topodata = (() => {
         Shard.prototype.is_primary_serving = false;
 
         /**
+         * Shard vtorc_state.
+         * @member {vtorcdata.IShard|null|undefined} vtorc_state
+         * @memberof topodata.Shard
+         * @instance
+         */
+        Shard.prototype.vtorc_state = null;
+
+        /**
          * Creates a new Shard instance using the specified properties.
          * @function create
          * @memberof topodata.Shard
@@ -42505,6 +42890,8 @@ export const topodata = $root.topodata = (() => {
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.is_primary_serving);
             if (message.primary_term_start_time != null && Object.hasOwnProperty.call(message, "primary_term_start_time"))
                 $root.vttime.Time.encode(message.primary_term_start_time, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
+            if (message.vtorc_state != null && Object.hasOwnProperty.call(message, "vtorc_state"))
+                $root.vtorcdata.Shard.encode(message.vtorc_state, writer.uint32(/* id 9, wireType 2 =*/74).fork()).ldelim();
             return writer;
         };
 
@@ -42532,12 +42919,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Shard.decode = function decode(reader, length) {
+        Shard.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.Shard();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.primary_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -42565,6 +42954,10 @@ export const topodata = $root.topodata = (() => {
                     }
                 case 7: {
                         message.is_primary_serving = reader.bool();
+                        break;
+                    }
+                case 9: {
+                        message.vtorc_state = $root.vtorcdata.Shard.decode(reader, reader.uint32());
                         break;
                     }
                 default:
@@ -42638,6 +43031,11 @@ export const topodata = $root.topodata = (() => {
             if (message.is_primary_serving != null && message.hasOwnProperty("is_primary_serving"))
                 if (typeof message.is_primary_serving !== "boolean")
                     return "is_primary_serving: boolean expected";
+            if (message.vtorc_state != null && message.hasOwnProperty("vtorc_state")) {
+                let error = $root.vtorcdata.Shard.verify(message.vtorc_state);
+                if (error)
+                    return "vtorc_state." + error;
+            }
             return null;
         };
 
@@ -42690,6 +43088,11 @@ export const topodata = $root.topodata = (() => {
             }
             if (object.is_primary_serving != null)
                 message.is_primary_serving = Boolean(object.is_primary_serving);
+            if (object.vtorc_state != null) {
+                if (typeof object.vtorc_state !== "object")
+                    throw TypeError(".topodata.Shard.vtorc_state: object expected");
+                message.vtorc_state = $root.vtorcdata.Shard.fromObject(object.vtorc_state);
+            }
             return message;
         };
 
@@ -42715,6 +43118,7 @@ export const topodata = $root.topodata = (() => {
                 object.key_range = null;
                 object.is_primary_serving = false;
                 object.primary_term_start_time = null;
+                object.vtorc_state = null;
             }
             if (message.primary_alias != null && message.hasOwnProperty("primary_alias"))
                 object.primary_alias = $root.topodata.TabletAlias.toObject(message.primary_alias, options);
@@ -42734,6 +43138,8 @@ export const topodata = $root.topodata = (() => {
                 object.is_primary_serving = message.is_primary_serving;
             if (message.primary_term_start_time != null && message.hasOwnProperty("primary_term_start_time"))
                 object.primary_term_start_time = $root.vttime.Time.toObject(message.primary_term_start_time, options);
+            if (message.vtorc_state != null && message.hasOwnProperty("vtorc_state"))
+                object.vtorc_state = $root.vtorcdata.Shard.toObject(message.vtorc_state, options);
             return object;
         };
 
@@ -42894,12 +43300,14 @@ export const topodata = $root.topodata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            SourceShard.decode = function decode(reader, length) {
+            SourceShard.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.Shard.SourceShard();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.uid = reader.int32();
@@ -43203,12 +43611,14 @@ export const topodata = $root.topodata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            TabletControl.decode = function decode(reader, length) {
+            TabletControl.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.Shard.TabletControl();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.tablet_type = reader.int32();
@@ -43467,6 +43877,8 @@ export const topodata = $root.topodata = (() => {
          * @property {string|null} [durability_policy] Keyspace durability_policy
          * @property {topodata.IThrottlerConfig|null} [throttler_config] Keyspace throttler_config
          * @property {string|null} [sidecar_db_name] Keyspace sidecar_db_name
+         * @property {vtorcdata.IKeyspace|null} [vtorc_state] Keyspace vtorc_state
+         * @property {querythrottler.IConfig|null} [query_throttler_config] Keyspace query_throttler_config
          */
 
         /**
@@ -43533,6 +43945,22 @@ export const topodata = $root.topodata = (() => {
         Keyspace.prototype.sidecar_db_name = "";
 
         /**
+         * Keyspace vtorc_state.
+         * @member {vtorcdata.IKeyspace|null|undefined} vtorc_state
+         * @memberof topodata.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.vtorc_state = null;
+
+        /**
+         * Keyspace query_throttler_config.
+         * @member {querythrottler.IConfig|null|undefined} query_throttler_config
+         * @memberof topodata.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.query_throttler_config = null;
+
+        /**
          * Creates a new Keyspace instance using the specified properties.
          * @function create
          * @memberof topodata.Keyspace
@@ -43568,6 +43996,10 @@ export const topodata = $root.topodata = (() => {
                 $root.topodata.ThrottlerConfig.encode(message.throttler_config, writer.uint32(/* id 9, wireType 2 =*/74).fork()).ldelim();
             if (message.sidecar_db_name != null && Object.hasOwnProperty.call(message, "sidecar_db_name"))
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.sidecar_db_name);
+            if (message.vtorc_state != null && Object.hasOwnProperty.call(message, "vtorc_state"))
+                $root.vtorcdata.Keyspace.encode(message.vtorc_state, writer.uint32(/* id 11, wireType 2 =*/90).fork()).ldelim();
+            if (message.query_throttler_config != null && Object.hasOwnProperty.call(message, "query_throttler_config"))
+                $root.querythrottler.Config.encode(message.query_throttler_config, writer.uint32(/* id 12, wireType 2 =*/98).fork()).ldelim();
             return writer;
         };
 
@@ -43595,12 +44027,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Keyspace.decode = function decode(reader, length) {
+        Keyspace.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.Keyspace();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 5: {
                         message.keyspace_type = reader.int32();
@@ -43624,6 +44058,14 @@ export const topodata = $root.topodata = (() => {
                     }
                 case 10: {
                         message.sidecar_db_name = reader.string();
+                        break;
+                    }
+                case 11: {
+                        message.vtorc_state = $root.vtorcdata.Keyspace.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 12: {
+                        message.query_throttler_config = $root.querythrottler.Config.decode(reader, reader.uint32());
                         break;
                     }
                 default:
@@ -43688,6 +44130,16 @@ export const topodata = $root.topodata = (() => {
             if (message.sidecar_db_name != null && message.hasOwnProperty("sidecar_db_name"))
                 if (!$util.isString(message.sidecar_db_name))
                     return "sidecar_db_name: string expected";
+            if (message.vtorc_state != null && message.hasOwnProperty("vtorc_state")) {
+                let error = $root.vtorcdata.Keyspace.verify(message.vtorc_state);
+                if (error)
+                    return "vtorc_state." + error;
+            }
+            if (message.query_throttler_config != null && message.hasOwnProperty("query_throttler_config")) {
+                let error = $root.querythrottler.Config.verify(message.query_throttler_config);
+                if (error)
+                    return "query_throttler_config." + error;
+            }
             return null;
         };
 
@@ -43735,6 +44187,16 @@ export const topodata = $root.topodata = (() => {
             }
             if (object.sidecar_db_name != null)
                 message.sidecar_db_name = String(object.sidecar_db_name);
+            if (object.vtorc_state != null) {
+                if (typeof object.vtorc_state !== "object")
+                    throw TypeError(".topodata.Keyspace.vtorc_state: object expected");
+                message.vtorc_state = $root.vtorcdata.Keyspace.fromObject(object.vtorc_state);
+            }
+            if (object.query_throttler_config != null) {
+                if (typeof object.query_throttler_config !== "object")
+                    throw TypeError(".topodata.Keyspace.query_throttler_config: object expected");
+                message.query_throttler_config = $root.querythrottler.Config.fromObject(object.query_throttler_config);
+            }
             return message;
         };
 
@@ -43758,6 +44220,8 @@ export const topodata = $root.topodata = (() => {
                 object.durability_policy = "";
                 object.throttler_config = null;
                 object.sidecar_db_name = "";
+                object.vtorc_state = null;
+                object.query_throttler_config = null;
             }
             if (message.keyspace_type != null && message.hasOwnProperty("keyspace_type"))
                 object.keyspace_type = options.enums === String ? $root.topodata.KeyspaceType[message.keyspace_type] === undefined ? message.keyspace_type : $root.topodata.KeyspaceType[message.keyspace_type] : message.keyspace_type;
@@ -43771,6 +44235,10 @@ export const topodata = $root.topodata = (() => {
                 object.throttler_config = $root.topodata.ThrottlerConfig.toObject(message.throttler_config, options);
             if (message.sidecar_db_name != null && message.hasOwnProperty("sidecar_db_name"))
                 object.sidecar_db_name = message.sidecar_db_name;
+            if (message.vtorc_state != null && message.hasOwnProperty("vtorc_state"))
+                object.vtorc_state = $root.vtorcdata.Keyspace.toObject(message.vtorc_state, options);
+            if (message.query_throttler_config != null && message.hasOwnProperty("query_throttler_config"))
+                object.query_throttler_config = $root.querythrottler.Config.toObject(message.query_throttler_config, options);
             return object;
         };
 
@@ -43890,12 +44358,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardReplication.decode = function decode(reader, length) {
+        ShardReplication.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ShardReplication();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.nodes && message.nodes.length))
@@ -44109,12 +44579,14 @@ export const topodata = $root.topodata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            Node.decode = function decode(reader, length) {
+            Node.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ShardReplication.Node();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -44331,12 +44803,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardReplicationError.decode = function decode(reader, length) {
+        ShardReplicationError.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ShardReplicationError();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.type = reader.int32();
@@ -44603,12 +45077,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardReference.decode = function decode(reader, length) {
+        ShardReference.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ShardReference();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -44846,12 +45322,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardTabletControl.decode = function decode(reader, length) {
+        ShardTabletControl.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ShardTabletControl();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -45112,12 +45590,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ThrottledAppRule.decode = function decode(reader, length) {
+        ThrottledAppRule.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ThrottledAppRule();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -45433,12 +45913,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ThrottlerConfig.decode = function decode(reader, length) {
+        ThrottlerConfig.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ThrottlerConfig(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.enabled = reader.bool();
@@ -45817,12 +46299,14 @@ export const topodata = $root.topodata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            MetricNames.decode = function decode(reader, length) {
+            MetricNames.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ThrottlerConfig.MetricNames();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             if (!(message.names && message.names.length))
@@ -45960,6 +46444,7 @@ export const topodata = $root.topodata = (() => {
          * @interface ISrvKeyspace
          * @property {Array.<topodata.SrvKeyspace.IKeyspacePartition>|null} [partitions] SrvKeyspace partitions
          * @property {topodata.IThrottlerConfig|null} [throttler_config] SrvKeyspace throttler_config
+         * @property {querythrottler.IConfig|null} [query_throttler_config] SrvKeyspace query_throttler_config
          */
 
         /**
@@ -45995,6 +46480,14 @@ export const topodata = $root.topodata = (() => {
         SrvKeyspace.prototype.throttler_config = null;
 
         /**
+         * SrvKeyspace query_throttler_config.
+         * @member {querythrottler.IConfig|null|undefined} query_throttler_config
+         * @memberof topodata.SrvKeyspace
+         * @instance
+         */
+        SrvKeyspace.prototype.query_throttler_config = null;
+
+        /**
          * Creates a new SrvKeyspace instance using the specified properties.
          * @function create
          * @memberof topodata.SrvKeyspace
@@ -46023,6 +46516,8 @@ export const topodata = $root.topodata = (() => {
                     $root.topodata.SrvKeyspace.KeyspacePartition.encode(message.partitions[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
             if (message.throttler_config != null && Object.hasOwnProperty.call(message, "throttler_config"))
                 $root.topodata.ThrottlerConfig.encode(message.throttler_config, writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+            if (message.query_throttler_config != null && Object.hasOwnProperty.call(message, "query_throttler_config"))
+                $root.querythrottler.Config.encode(message.query_throttler_config, writer.uint32(/* id 7, wireType 2 =*/58).fork()).ldelim();
             return writer;
         };
 
@@ -46050,12 +46545,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SrvKeyspace.decode = function decode(reader, length) {
+        SrvKeyspace.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.SrvKeyspace();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.partitions && message.partitions.length))
@@ -46065,6 +46562,10 @@ export const topodata = $root.topodata = (() => {
                     }
                 case 6: {
                         message.throttler_config = $root.topodata.ThrottlerConfig.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 7: {
+                        message.query_throttler_config = $root.querythrottler.Config.decode(reader, reader.uint32());
                         break;
                     }
                 default:
@@ -46116,6 +46617,11 @@ export const topodata = $root.topodata = (() => {
                 if (error)
                     return "throttler_config." + error;
             }
+            if (message.query_throttler_config != null && message.hasOwnProperty("query_throttler_config")) {
+                let error = $root.querythrottler.Config.verify(message.query_throttler_config);
+                if (error)
+                    return "query_throttler_config." + error;
+            }
             return null;
         };
 
@@ -46146,6 +46652,11 @@ export const topodata = $root.topodata = (() => {
                     throw TypeError(".topodata.SrvKeyspace.throttler_config: object expected");
                 message.throttler_config = $root.topodata.ThrottlerConfig.fromObject(object.throttler_config);
             }
+            if (object.query_throttler_config != null) {
+                if (typeof object.query_throttler_config !== "object")
+                    throw TypeError(".topodata.SrvKeyspace.query_throttler_config: object expected");
+                message.query_throttler_config = $root.querythrottler.Config.fromObject(object.query_throttler_config);
+            }
             return message;
         };
 
@@ -46164,8 +46675,10 @@ export const topodata = $root.topodata = (() => {
             let object = {};
             if (options.arrays || options.defaults)
                 object.partitions = [];
-            if (options.defaults)
+            if (options.defaults) {
                 object.throttler_config = null;
+                object.query_throttler_config = null;
+            }
             if (message.partitions && message.partitions.length) {
                 object.partitions = [];
                 for (let j = 0; j < message.partitions.length; ++j)
@@ -46173,6 +46686,8 @@ export const topodata = $root.topodata = (() => {
             }
             if (message.throttler_config != null && message.hasOwnProperty("throttler_config"))
                 object.throttler_config = $root.topodata.ThrottlerConfig.toObject(message.throttler_config, options);
+            if (message.query_throttler_config != null && message.hasOwnProperty("query_throttler_config"))
+                object.query_throttler_config = $root.querythrottler.Config.toObject(message.query_throttler_config, options);
             return object;
         };
 
@@ -46313,12 +46828,14 @@ export const topodata = $root.topodata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            KeyspacePartition.decode = function decode(reader, length) {
+            KeyspacePartition.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.SrvKeyspace.KeyspacePartition();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.served_type = reader.int32();
@@ -46658,12 +47175,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CellInfo.decode = function decode(reader, length) {
+        CellInfo.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.CellInfo();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.server_address = reader.string();
@@ -46876,12 +47395,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CellsAlias.decode = function decode(reader, length) {
+        CellsAlias.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.CellsAlias();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 2: {
                         if (!(message.cells && message.cells.length))
@@ -47115,12 +47636,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TopoConfig.decode = function decode(reader, length) {
+        TopoConfig.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.TopoConfig();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.topo_type = reader.string();
@@ -47343,12 +47866,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExternalVitessCluster.decode = function decode(reader, length) {
+        ExternalVitessCluster.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ExternalVitessCluster();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.topo_config = $root.topodata.TopoConfig.decode(reader, reader.uint32());
@@ -47553,12 +48078,14 @@ export const topodata = $root.topodata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExternalClusters.decode = function decode(reader, length) {
+        ExternalClusters.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ExternalClusters();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.vitess_cluster && message.vitess_cluster.length))
@@ -47693,6 +48220,2442 @@ export const topodata = $root.topodata = (() => {
     return topodata;
 })();
 
+export const vtorcdata = $root.vtorcdata = (() => {
+
+    /**
+     * Namespace vtorcdata.
+     * @exports vtorcdata
+     * @namespace
+     */
+    const vtorcdata = {};
+
+    vtorcdata.Keyspace = (function() {
+
+        /**
+         * Properties of a Keyspace.
+         * @memberof vtorcdata
+         * @interface IKeyspace
+         * @property {boolean|null} [disable_emergency_reparent] Keyspace disable_emergency_reparent
+         */
+
+        /**
+         * Constructs a new Keyspace.
+         * @memberof vtorcdata
+         * @classdesc Represents a Keyspace.
+         * @implements IKeyspace
+         * @constructor
+         * @param {vtorcdata.IKeyspace=} [properties] Properties to set
+         */
+        function Keyspace(properties) {
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Keyspace disable_emergency_reparent.
+         * @member {boolean} disable_emergency_reparent
+         * @memberof vtorcdata.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.disable_emergency_reparent = false;
+
+        /**
+         * Creates a new Keyspace instance using the specified properties.
+         * @function create
+         * @memberof vtorcdata.Keyspace
+         * @static
+         * @param {vtorcdata.IKeyspace=} [properties] Properties to set
+         * @returns {vtorcdata.Keyspace} Keyspace instance
+         */
+        Keyspace.create = function create(properties) {
+            return new Keyspace(properties);
+        };
+
+        /**
+         * Encodes the specified Keyspace message. Does not implicitly {@link vtorcdata.Keyspace.verify|verify} messages.
+         * @function encode
+         * @memberof vtorcdata.Keyspace
+         * @static
+         * @param {vtorcdata.IKeyspace} message Keyspace message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Keyspace.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.disable_emergency_reparent != null && Object.hasOwnProperty.call(message, "disable_emergency_reparent"))
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.disable_emergency_reparent);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link vtorcdata.Keyspace.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtorcdata.Keyspace
+         * @static
+         * @param {vtorcdata.IKeyspace} message Keyspace message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Keyspace.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtorcdata.Keyspace
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtorcdata.Keyspace} Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Keyspace.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtorcdata.Keyspace();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        message.disable_emergency_reparent = reader.bool();
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtorcdata.Keyspace
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtorcdata.Keyspace} Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Keyspace.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Keyspace message.
+         * @function verify
+         * @memberof vtorcdata.Keyspace
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Keyspace.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.disable_emergency_reparent != null && message.hasOwnProperty("disable_emergency_reparent"))
+                if (typeof message.disable_emergency_reparent !== "boolean")
+                    return "disable_emergency_reparent: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtorcdata.Keyspace
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtorcdata.Keyspace} Keyspace
+         */
+        Keyspace.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtorcdata.Keyspace)
+                return object;
+            let message = new $root.vtorcdata.Keyspace();
+            if (object.disable_emergency_reparent != null)
+                message.disable_emergency_reparent = Boolean(object.disable_emergency_reparent);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtorcdata.Keyspace
+         * @static
+         * @param {vtorcdata.Keyspace} message Keyspace
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Keyspace.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.defaults)
+                object.disable_emergency_reparent = false;
+            if (message.disable_emergency_reparent != null && message.hasOwnProperty("disable_emergency_reparent"))
+                object.disable_emergency_reparent = message.disable_emergency_reparent;
+            return object;
+        };
+
+        /**
+         * Converts this Keyspace to JSON.
+         * @function toJSON
+         * @memberof vtorcdata.Keyspace
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Keyspace.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for Keyspace
+         * @function getTypeUrl
+         * @memberof vtorcdata.Keyspace
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        Keyspace.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/vtorcdata.Keyspace";
+        };
+
+        return Keyspace;
+    })();
+
+    vtorcdata.Shard = (function() {
+
+        /**
+         * Properties of a Shard.
+         * @memberof vtorcdata
+         * @interface IShard
+         * @property {boolean|null} [disable_emergency_reparent] Shard disable_emergency_reparent
+         */
+
+        /**
+         * Constructs a new Shard.
+         * @memberof vtorcdata
+         * @classdesc Represents a Shard.
+         * @implements IShard
+         * @constructor
+         * @param {vtorcdata.IShard=} [properties] Properties to set
+         */
+        function Shard(properties) {
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Shard disable_emergency_reparent.
+         * @member {boolean} disable_emergency_reparent
+         * @memberof vtorcdata.Shard
+         * @instance
+         */
+        Shard.prototype.disable_emergency_reparent = false;
+
+        /**
+         * Creates a new Shard instance using the specified properties.
+         * @function create
+         * @memberof vtorcdata.Shard
+         * @static
+         * @param {vtorcdata.IShard=} [properties] Properties to set
+         * @returns {vtorcdata.Shard} Shard instance
+         */
+        Shard.create = function create(properties) {
+            return new Shard(properties);
+        };
+
+        /**
+         * Encodes the specified Shard message. Does not implicitly {@link vtorcdata.Shard.verify|verify} messages.
+         * @function encode
+         * @memberof vtorcdata.Shard
+         * @static
+         * @param {vtorcdata.IShard} message Shard message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Shard.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.disable_emergency_reparent != null && Object.hasOwnProperty.call(message, "disable_emergency_reparent"))
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.disable_emergency_reparent);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Shard message, length delimited. Does not implicitly {@link vtorcdata.Shard.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtorcdata.Shard
+         * @static
+         * @param {vtorcdata.IShard} message Shard message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Shard.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Shard message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtorcdata.Shard
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtorcdata.Shard} Shard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Shard.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtorcdata.Shard();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        message.disable_emergency_reparent = reader.bool();
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Shard message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtorcdata.Shard
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtorcdata.Shard} Shard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Shard.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Shard message.
+         * @function verify
+         * @memberof vtorcdata.Shard
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Shard.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.disable_emergency_reparent != null && message.hasOwnProperty("disable_emergency_reparent"))
+                if (typeof message.disable_emergency_reparent !== "boolean")
+                    return "disable_emergency_reparent: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a Shard message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtorcdata.Shard
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtorcdata.Shard} Shard
+         */
+        Shard.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtorcdata.Shard)
+                return object;
+            let message = new $root.vtorcdata.Shard();
+            if (object.disable_emergency_reparent != null)
+                message.disable_emergency_reparent = Boolean(object.disable_emergency_reparent);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Shard message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtorcdata.Shard
+         * @static
+         * @param {vtorcdata.Shard} message Shard
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Shard.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.defaults)
+                object.disable_emergency_reparent = false;
+            if (message.disable_emergency_reparent != null && message.hasOwnProperty("disable_emergency_reparent"))
+                object.disable_emergency_reparent = message.disable_emergency_reparent;
+            return object;
+        };
+
+        /**
+         * Converts this Shard to JSON.
+         * @function toJSON
+         * @memberof vtorcdata.Shard
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Shard.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for Shard
+         * @function getTypeUrl
+         * @memberof vtorcdata.Shard
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        Shard.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/vtorcdata.Shard";
+        };
+
+        return Shard;
+    })();
+
+    vtorcdata.PrimaryHealthEvent = (function() {
+
+        /**
+         * Properties of a PrimaryHealthEvent.
+         * @memberof vtorcdata
+         * @interface IPrimaryHealthEvent
+         * @property {number|Long|null} [at_unix_nanos] PrimaryHealthEvent at_unix_nanos
+         * @property {boolean|null} [success] PrimaryHealthEvent success
+         */
+
+        /**
+         * Constructs a new PrimaryHealthEvent.
+         * @memberof vtorcdata
+         * @classdesc Represents a PrimaryHealthEvent.
+         * @implements IPrimaryHealthEvent
+         * @constructor
+         * @param {vtorcdata.IPrimaryHealthEvent=} [properties] Properties to set
+         */
+        function PrimaryHealthEvent(properties) {
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * PrimaryHealthEvent at_unix_nanos.
+         * @member {number|Long} at_unix_nanos
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @instance
+         */
+        PrimaryHealthEvent.prototype.at_unix_nanos = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * PrimaryHealthEvent success.
+         * @member {boolean} success
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @instance
+         */
+        PrimaryHealthEvent.prototype.success = false;
+
+        /**
+         * Creates a new PrimaryHealthEvent instance using the specified properties.
+         * @function create
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @static
+         * @param {vtorcdata.IPrimaryHealthEvent=} [properties] Properties to set
+         * @returns {vtorcdata.PrimaryHealthEvent} PrimaryHealthEvent instance
+         */
+        PrimaryHealthEvent.create = function create(properties) {
+            return new PrimaryHealthEvent(properties);
+        };
+
+        /**
+         * Encodes the specified PrimaryHealthEvent message. Does not implicitly {@link vtorcdata.PrimaryHealthEvent.verify|verify} messages.
+         * @function encode
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @static
+         * @param {vtorcdata.IPrimaryHealthEvent} message PrimaryHealthEvent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrimaryHealthEvent.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.at_unix_nanos != null && Object.hasOwnProperty.call(message, "at_unix_nanos"))
+                writer.uint32(/* id 1, wireType 0 =*/8).int64(message.at_unix_nanos);
+            if (message.success != null && Object.hasOwnProperty.call(message, "success"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.success);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PrimaryHealthEvent message, length delimited. Does not implicitly {@link vtorcdata.PrimaryHealthEvent.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @static
+         * @param {vtorcdata.IPrimaryHealthEvent} message PrimaryHealthEvent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrimaryHealthEvent.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a PrimaryHealthEvent message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtorcdata.PrimaryHealthEvent} PrimaryHealthEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrimaryHealthEvent.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtorcdata.PrimaryHealthEvent();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        message.at_unix_nanos = reader.int64();
+                        break;
+                    }
+                case 2: {
+                        message.success = reader.bool();
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a PrimaryHealthEvent message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtorcdata.PrimaryHealthEvent} PrimaryHealthEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrimaryHealthEvent.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PrimaryHealthEvent message.
+         * @function verify
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PrimaryHealthEvent.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.at_unix_nanos != null && message.hasOwnProperty("at_unix_nanos"))
+                if (!$util.isInteger(message.at_unix_nanos) && !(message.at_unix_nanos && $util.isInteger(message.at_unix_nanos.low) && $util.isInteger(message.at_unix_nanos.high)))
+                    return "at_unix_nanos: integer|Long expected";
+            if (message.success != null && message.hasOwnProperty("success"))
+                if (typeof message.success !== "boolean")
+                    return "success: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a PrimaryHealthEvent message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtorcdata.PrimaryHealthEvent} PrimaryHealthEvent
+         */
+        PrimaryHealthEvent.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtorcdata.PrimaryHealthEvent)
+                return object;
+            let message = new $root.vtorcdata.PrimaryHealthEvent();
+            if (object.at_unix_nanos != null)
+                if ($util.Long)
+                    (message.at_unix_nanos = $util.Long.fromValue(object.at_unix_nanos)).unsigned = false;
+                else if (typeof object.at_unix_nanos === "string")
+                    message.at_unix_nanos = parseInt(object.at_unix_nanos, 10);
+                else if (typeof object.at_unix_nanos === "number")
+                    message.at_unix_nanos = object.at_unix_nanos;
+                else if (typeof object.at_unix_nanos === "object")
+                    message.at_unix_nanos = new $util.LongBits(object.at_unix_nanos.low >>> 0, object.at_unix_nanos.high >>> 0).toNumber();
+            if (object.success != null)
+                message.success = Boolean(object.success);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PrimaryHealthEvent message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @static
+         * @param {vtorcdata.PrimaryHealthEvent} message PrimaryHealthEvent
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PrimaryHealthEvent.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.defaults) {
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.at_unix_nanos = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.at_unix_nanos = options.longs === String ? "0" : 0;
+                object.success = false;
+            }
+            if (message.at_unix_nanos != null && message.hasOwnProperty("at_unix_nanos"))
+                if (typeof message.at_unix_nanos === "number")
+                    object.at_unix_nanos = options.longs === String ? String(message.at_unix_nanos) : message.at_unix_nanos;
+                else
+                    object.at_unix_nanos = options.longs === String ? $util.Long.prototype.toString.call(message.at_unix_nanos) : options.longs === Number ? new $util.LongBits(message.at_unix_nanos.low >>> 0, message.at_unix_nanos.high >>> 0).toNumber() : message.at_unix_nanos;
+            if (message.success != null && message.hasOwnProperty("success"))
+                object.success = message.success;
+            return object;
+        };
+
+        /**
+         * Converts this PrimaryHealthEvent to JSON.
+         * @function toJSON
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PrimaryHealthEvent.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for PrimaryHealthEvent
+         * @function getTypeUrl
+         * @memberof vtorcdata.PrimaryHealthEvent
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        PrimaryHealthEvent.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/vtorcdata.PrimaryHealthEvent";
+        };
+
+        return PrimaryHealthEvent;
+    })();
+
+    vtorcdata.PrimaryHealthState = (function() {
+
+        /**
+         * Properties of a PrimaryHealthState.
+         * @memberof vtorcdata
+         * @interface IPrimaryHealthState
+         * @property {Array.<vtorcdata.IPrimaryHealthEvent>|null} [events] PrimaryHealthState events
+         * @property {boolean|null} [unhealthy] PrimaryHealthState unhealthy
+         */
+
+        /**
+         * Constructs a new PrimaryHealthState.
+         * @memberof vtorcdata
+         * @classdesc Represents a PrimaryHealthState.
+         * @implements IPrimaryHealthState
+         * @constructor
+         * @param {vtorcdata.IPrimaryHealthState=} [properties] Properties to set
+         */
+        function PrimaryHealthState(properties) {
+            this.events = [];
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * PrimaryHealthState events.
+         * @member {Array.<vtorcdata.IPrimaryHealthEvent>} events
+         * @memberof vtorcdata.PrimaryHealthState
+         * @instance
+         */
+        PrimaryHealthState.prototype.events = $util.emptyArray;
+
+        /**
+         * PrimaryHealthState unhealthy.
+         * @member {boolean} unhealthy
+         * @memberof vtorcdata.PrimaryHealthState
+         * @instance
+         */
+        PrimaryHealthState.prototype.unhealthy = false;
+
+        /**
+         * Creates a new PrimaryHealthState instance using the specified properties.
+         * @function create
+         * @memberof vtorcdata.PrimaryHealthState
+         * @static
+         * @param {vtorcdata.IPrimaryHealthState=} [properties] Properties to set
+         * @returns {vtorcdata.PrimaryHealthState} PrimaryHealthState instance
+         */
+        PrimaryHealthState.create = function create(properties) {
+            return new PrimaryHealthState(properties);
+        };
+
+        /**
+         * Encodes the specified PrimaryHealthState message. Does not implicitly {@link vtorcdata.PrimaryHealthState.verify|verify} messages.
+         * @function encode
+         * @memberof vtorcdata.PrimaryHealthState
+         * @static
+         * @param {vtorcdata.IPrimaryHealthState} message PrimaryHealthState message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrimaryHealthState.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.events != null && message.events.length)
+                for (let i = 0; i < message.events.length; ++i)
+                    $root.vtorcdata.PrimaryHealthEvent.encode(message.events[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.unhealthy != null && Object.hasOwnProperty.call(message, "unhealthy"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.unhealthy);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PrimaryHealthState message, length delimited. Does not implicitly {@link vtorcdata.PrimaryHealthState.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtorcdata.PrimaryHealthState
+         * @static
+         * @param {vtorcdata.IPrimaryHealthState} message PrimaryHealthState message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrimaryHealthState.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a PrimaryHealthState message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtorcdata.PrimaryHealthState
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtorcdata.PrimaryHealthState} PrimaryHealthState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrimaryHealthState.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtorcdata.PrimaryHealthState();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        if (!(message.events && message.events.length))
+                            message.events = [];
+                        message.events.push($root.vtorcdata.PrimaryHealthEvent.decode(reader, reader.uint32()));
+                        break;
+                    }
+                case 2: {
+                        message.unhealthy = reader.bool();
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a PrimaryHealthState message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtorcdata.PrimaryHealthState
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtorcdata.PrimaryHealthState} PrimaryHealthState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrimaryHealthState.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PrimaryHealthState message.
+         * @function verify
+         * @memberof vtorcdata.PrimaryHealthState
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PrimaryHealthState.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.events != null && message.hasOwnProperty("events")) {
+                if (!Array.isArray(message.events))
+                    return "events: array expected";
+                for (let i = 0; i < message.events.length; ++i) {
+                    let error = $root.vtorcdata.PrimaryHealthEvent.verify(message.events[i]);
+                    if (error)
+                        return "events." + error;
+                }
+            }
+            if (message.unhealthy != null && message.hasOwnProperty("unhealthy"))
+                if (typeof message.unhealthy !== "boolean")
+                    return "unhealthy: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a PrimaryHealthState message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtorcdata.PrimaryHealthState
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtorcdata.PrimaryHealthState} PrimaryHealthState
+         */
+        PrimaryHealthState.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtorcdata.PrimaryHealthState)
+                return object;
+            let message = new $root.vtorcdata.PrimaryHealthState();
+            if (object.events) {
+                if (!Array.isArray(object.events))
+                    throw TypeError(".vtorcdata.PrimaryHealthState.events: array expected");
+                message.events = [];
+                for (let i = 0; i < object.events.length; ++i) {
+                    if (typeof object.events[i] !== "object")
+                        throw TypeError(".vtorcdata.PrimaryHealthState.events: object expected");
+                    message.events[i] = $root.vtorcdata.PrimaryHealthEvent.fromObject(object.events[i]);
+                }
+            }
+            if (object.unhealthy != null)
+                message.unhealthy = Boolean(object.unhealthy);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PrimaryHealthState message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtorcdata.PrimaryHealthState
+         * @static
+         * @param {vtorcdata.PrimaryHealthState} message PrimaryHealthState
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PrimaryHealthState.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.arrays || options.defaults)
+                object.events = [];
+            if (options.defaults)
+                object.unhealthy = false;
+            if (message.events && message.events.length) {
+                object.events = [];
+                for (let j = 0; j < message.events.length; ++j)
+                    object.events[j] = $root.vtorcdata.PrimaryHealthEvent.toObject(message.events[j], options);
+            }
+            if (message.unhealthy != null && message.hasOwnProperty("unhealthy"))
+                object.unhealthy = message.unhealthy;
+            return object;
+        };
+
+        /**
+         * Converts this PrimaryHealthState to JSON.
+         * @function toJSON
+         * @memberof vtorcdata.PrimaryHealthState
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PrimaryHealthState.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for PrimaryHealthState
+         * @function getTypeUrl
+         * @memberof vtorcdata.PrimaryHealthState
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        PrimaryHealthState.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/vtorcdata.PrimaryHealthState";
+        };
+
+        return PrimaryHealthState;
+    })();
+
+    return vtorcdata;
+})();
+
+export const querythrottler = $root.querythrottler = (() => {
+
+    /**
+     * Namespace querythrottler.
+     * @exports querythrottler
+     * @namespace
+     */
+    const querythrottler = {};
+
+    /**
+     * ThrottlingStrategy enum.
+     * @name querythrottler.ThrottlingStrategy
+     * @enum {number}
+     * @property {number} UNKNOWN=0 UNKNOWN value
+     * @property {number} TABLET_THROTTLER=1 TABLET_THROTTLER value
+     */
+    querythrottler.ThrottlingStrategy = (function() {
+        const valuesById = {}, values = Object.create(valuesById);
+        values[valuesById[0] = "UNKNOWN"] = 0;
+        values[valuesById[1] = "TABLET_THROTTLER"] = 1;
+        return values;
+    })();
+
+    querythrottler.Config = (function() {
+
+        /**
+         * Properties of a Config.
+         * @memberof querythrottler
+         * @interface IConfig
+         * @property {boolean|null} [enabled] Config enabled
+         * @property {querythrottler.ThrottlingStrategy|null} [strategy] Config strategy
+         * @property {querythrottler.ITabletStrategyConfig|null} [tablet_strategy_config] Config tablet_strategy_config
+         * @property {boolean|null} [dry_run] Config dry_run
+         */
+
+        /**
+         * Constructs a new Config.
+         * @memberof querythrottler
+         * @classdesc Represents a Config.
+         * @implements IConfig
+         * @constructor
+         * @param {querythrottler.IConfig=} [properties] Properties to set
+         */
+        function Config(properties) {
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Config enabled.
+         * @member {boolean} enabled
+         * @memberof querythrottler.Config
+         * @instance
+         */
+        Config.prototype.enabled = false;
+
+        /**
+         * Config strategy.
+         * @member {querythrottler.ThrottlingStrategy} strategy
+         * @memberof querythrottler.Config
+         * @instance
+         */
+        Config.prototype.strategy = 0;
+
+        /**
+         * Config tablet_strategy_config.
+         * @member {querythrottler.ITabletStrategyConfig|null|undefined} tablet_strategy_config
+         * @memberof querythrottler.Config
+         * @instance
+         */
+        Config.prototype.tablet_strategy_config = null;
+
+        /**
+         * Config dry_run.
+         * @member {boolean} dry_run
+         * @memberof querythrottler.Config
+         * @instance
+         */
+        Config.prototype.dry_run = false;
+
+        /**
+         * Creates a new Config instance using the specified properties.
+         * @function create
+         * @memberof querythrottler.Config
+         * @static
+         * @param {querythrottler.IConfig=} [properties] Properties to set
+         * @returns {querythrottler.Config} Config instance
+         */
+        Config.create = function create(properties) {
+            return new Config(properties);
+        };
+
+        /**
+         * Encodes the specified Config message. Does not implicitly {@link querythrottler.Config.verify|verify} messages.
+         * @function encode
+         * @memberof querythrottler.Config
+         * @static
+         * @param {querythrottler.IConfig} message Config message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Config.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.enabled != null && Object.hasOwnProperty.call(message, "enabled"))
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.enabled);
+            if (message.strategy != null && Object.hasOwnProperty.call(message, "strategy"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.strategy);
+            if (message.tablet_strategy_config != null && Object.hasOwnProperty.call(message, "tablet_strategy_config"))
+                $root.querythrottler.TabletStrategyConfig.encode(message.tablet_strategy_config, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.dry_run != null && Object.hasOwnProperty.call(message, "dry_run"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.dry_run);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Config message, length delimited. Does not implicitly {@link querythrottler.Config.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof querythrottler.Config
+         * @static
+         * @param {querythrottler.IConfig} message Config message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Config.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Config message from the specified reader or buffer.
+         * @function decode
+         * @memberof querythrottler.Config
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {querythrottler.Config} Config
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Config.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.querythrottler.Config();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        message.enabled = reader.bool();
+                        break;
+                    }
+                case 2: {
+                        message.strategy = reader.int32();
+                        break;
+                    }
+                case 3: {
+                        message.tablet_strategy_config = $root.querythrottler.TabletStrategyConfig.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 4: {
+                        message.dry_run = reader.bool();
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Config message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof querythrottler.Config
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {querythrottler.Config} Config
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Config.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Config message.
+         * @function verify
+         * @memberof querythrottler.Config
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Config.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.enabled != null && message.hasOwnProperty("enabled"))
+                if (typeof message.enabled !== "boolean")
+                    return "enabled: boolean expected";
+            if (message.strategy != null && message.hasOwnProperty("strategy"))
+                switch (message.strategy) {
+                default:
+                    return "strategy: enum value expected";
+                case 0:
+                case 1:
+                    break;
+                }
+            if (message.tablet_strategy_config != null && message.hasOwnProperty("tablet_strategy_config")) {
+                let error = $root.querythrottler.TabletStrategyConfig.verify(message.tablet_strategy_config);
+                if (error)
+                    return "tablet_strategy_config." + error;
+            }
+            if (message.dry_run != null && message.hasOwnProperty("dry_run"))
+                if (typeof message.dry_run !== "boolean")
+                    return "dry_run: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a Config message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof querythrottler.Config
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {querythrottler.Config} Config
+         */
+        Config.fromObject = function fromObject(object) {
+            if (object instanceof $root.querythrottler.Config)
+                return object;
+            let message = new $root.querythrottler.Config();
+            if (object.enabled != null)
+                message.enabled = Boolean(object.enabled);
+            switch (object.strategy) {
+            default:
+                if (typeof object.strategy === "number") {
+                    message.strategy = object.strategy;
+                    break;
+                }
+                break;
+            case "UNKNOWN":
+            case 0:
+                message.strategy = 0;
+                break;
+            case "TABLET_THROTTLER":
+            case 1:
+                message.strategy = 1;
+                break;
+            }
+            if (object.tablet_strategy_config != null) {
+                if (typeof object.tablet_strategy_config !== "object")
+                    throw TypeError(".querythrottler.Config.tablet_strategy_config: object expected");
+                message.tablet_strategy_config = $root.querythrottler.TabletStrategyConfig.fromObject(object.tablet_strategy_config);
+            }
+            if (object.dry_run != null)
+                message.dry_run = Boolean(object.dry_run);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Config message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof querythrottler.Config
+         * @static
+         * @param {querythrottler.Config} message Config
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Config.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.defaults) {
+                object.enabled = false;
+                object.strategy = options.enums === String ? "UNKNOWN" : 0;
+                object.tablet_strategy_config = null;
+                object.dry_run = false;
+            }
+            if (message.enabled != null && message.hasOwnProperty("enabled"))
+                object.enabled = message.enabled;
+            if (message.strategy != null && message.hasOwnProperty("strategy"))
+                object.strategy = options.enums === String ? $root.querythrottler.ThrottlingStrategy[message.strategy] === undefined ? message.strategy : $root.querythrottler.ThrottlingStrategy[message.strategy] : message.strategy;
+            if (message.tablet_strategy_config != null && message.hasOwnProperty("tablet_strategy_config"))
+                object.tablet_strategy_config = $root.querythrottler.TabletStrategyConfig.toObject(message.tablet_strategy_config, options);
+            if (message.dry_run != null && message.hasOwnProperty("dry_run"))
+                object.dry_run = message.dry_run;
+            return object;
+        };
+
+        /**
+         * Converts this Config to JSON.
+         * @function toJSON
+         * @memberof querythrottler.Config
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Config.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for Config
+         * @function getTypeUrl
+         * @memberof querythrottler.Config
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        Config.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/querythrottler.Config";
+        };
+
+        return Config;
+    })();
+
+    querythrottler.TabletStrategyConfig = (function() {
+
+        /**
+         * Properties of a TabletStrategyConfig.
+         * @memberof querythrottler
+         * @interface ITabletStrategyConfig
+         * @property {Object.<string,querythrottler.IStatementRuleSet>|null} [tablet_rules] TabletStrategyConfig tablet_rules
+         */
+
+        /**
+         * Constructs a new TabletStrategyConfig.
+         * @memberof querythrottler
+         * @classdesc Represents a TabletStrategyConfig.
+         * @implements ITabletStrategyConfig
+         * @constructor
+         * @param {querythrottler.ITabletStrategyConfig=} [properties] Properties to set
+         */
+        function TabletStrategyConfig(properties) {
+            this.tablet_rules = {};
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * TabletStrategyConfig tablet_rules.
+         * @member {Object.<string,querythrottler.IStatementRuleSet>} tablet_rules
+         * @memberof querythrottler.TabletStrategyConfig
+         * @instance
+         */
+        TabletStrategyConfig.prototype.tablet_rules = $util.emptyObject;
+
+        /**
+         * Creates a new TabletStrategyConfig instance using the specified properties.
+         * @function create
+         * @memberof querythrottler.TabletStrategyConfig
+         * @static
+         * @param {querythrottler.ITabletStrategyConfig=} [properties] Properties to set
+         * @returns {querythrottler.TabletStrategyConfig} TabletStrategyConfig instance
+         */
+        TabletStrategyConfig.create = function create(properties) {
+            return new TabletStrategyConfig(properties);
+        };
+
+        /**
+         * Encodes the specified TabletStrategyConfig message. Does not implicitly {@link querythrottler.TabletStrategyConfig.verify|verify} messages.
+         * @function encode
+         * @memberof querythrottler.TabletStrategyConfig
+         * @static
+         * @param {querythrottler.ITabletStrategyConfig} message TabletStrategyConfig message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        TabletStrategyConfig.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.tablet_rules != null && Object.hasOwnProperty.call(message, "tablet_rules"))
+                for (let keys = Object.keys(message.tablet_rules), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.querythrottler.StatementRuleSet.encode(message.tablet_rules[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified TabletStrategyConfig message, length delimited. Does not implicitly {@link querythrottler.TabletStrategyConfig.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof querythrottler.TabletStrategyConfig
+         * @static
+         * @param {querythrottler.ITabletStrategyConfig} message TabletStrategyConfig message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        TabletStrategyConfig.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a TabletStrategyConfig message from the specified reader or buffer.
+         * @function decode
+         * @memberof querythrottler.TabletStrategyConfig
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {querythrottler.TabletStrategyConfig} TabletStrategyConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        TabletStrategyConfig.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.querythrottler.TabletStrategyConfig(), key, value;
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        if (message.tablet_rules === $util.emptyObject)
+                            message.tablet_rules = {};
+                        let end2 = reader.uint32() + reader.pos;
+                        key = "";
+                        value = null;
+                        while (reader.pos < end2) {
+                            let tag2 = reader.uint32();
+                            switch (tag2 >>> 3) {
+                            case 1:
+                                key = reader.string();
+                                break;
+                            case 2:
+                                value = $root.querythrottler.StatementRuleSet.decode(reader, reader.uint32());
+                                break;
+                            default:
+                                reader.skipType(tag2 & 7);
+                                break;
+                            }
+                        }
+                        message.tablet_rules[key] = value;
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a TabletStrategyConfig message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof querythrottler.TabletStrategyConfig
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {querythrottler.TabletStrategyConfig} TabletStrategyConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        TabletStrategyConfig.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a TabletStrategyConfig message.
+         * @function verify
+         * @memberof querythrottler.TabletStrategyConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        TabletStrategyConfig.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.tablet_rules != null && message.hasOwnProperty("tablet_rules")) {
+                if (!$util.isObject(message.tablet_rules))
+                    return "tablet_rules: object expected";
+                let key = Object.keys(message.tablet_rules);
+                for (let i = 0; i < key.length; ++i) {
+                    let error = $root.querythrottler.StatementRuleSet.verify(message.tablet_rules[key[i]]);
+                    if (error)
+                        return "tablet_rules." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a TabletStrategyConfig message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof querythrottler.TabletStrategyConfig
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {querythrottler.TabletStrategyConfig} TabletStrategyConfig
+         */
+        TabletStrategyConfig.fromObject = function fromObject(object) {
+            if (object instanceof $root.querythrottler.TabletStrategyConfig)
+                return object;
+            let message = new $root.querythrottler.TabletStrategyConfig();
+            if (object.tablet_rules) {
+                if (typeof object.tablet_rules !== "object")
+                    throw TypeError(".querythrottler.TabletStrategyConfig.tablet_rules: object expected");
+                message.tablet_rules = {};
+                for (let keys = Object.keys(object.tablet_rules), i = 0; i < keys.length; ++i) {
+                    if (typeof object.tablet_rules[keys[i]] !== "object")
+                        throw TypeError(".querythrottler.TabletStrategyConfig.tablet_rules: object expected");
+                    message.tablet_rules[keys[i]] = $root.querythrottler.StatementRuleSet.fromObject(object.tablet_rules[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a TabletStrategyConfig message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof querythrottler.TabletStrategyConfig
+         * @static
+         * @param {querythrottler.TabletStrategyConfig} message TabletStrategyConfig
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        TabletStrategyConfig.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.objects || options.defaults)
+                object.tablet_rules = {};
+            let keys2;
+            if (message.tablet_rules && (keys2 = Object.keys(message.tablet_rules)).length) {
+                object.tablet_rules = {};
+                for (let j = 0; j < keys2.length; ++j)
+                    object.tablet_rules[keys2[j]] = $root.querythrottler.StatementRuleSet.toObject(message.tablet_rules[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this TabletStrategyConfig to JSON.
+         * @function toJSON
+         * @memberof querythrottler.TabletStrategyConfig
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        TabletStrategyConfig.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for TabletStrategyConfig
+         * @function getTypeUrl
+         * @memberof querythrottler.TabletStrategyConfig
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        TabletStrategyConfig.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/querythrottler.TabletStrategyConfig";
+        };
+
+        return TabletStrategyConfig;
+    })();
+
+    querythrottler.StatementRuleSet = (function() {
+
+        /**
+         * Properties of a StatementRuleSet.
+         * @memberof querythrottler
+         * @interface IStatementRuleSet
+         * @property {Object.<string,querythrottler.IMetricRuleSet>|null} [statement_rules] StatementRuleSet statement_rules
+         */
+
+        /**
+         * Constructs a new StatementRuleSet.
+         * @memberof querythrottler
+         * @classdesc Represents a StatementRuleSet.
+         * @implements IStatementRuleSet
+         * @constructor
+         * @param {querythrottler.IStatementRuleSet=} [properties] Properties to set
+         */
+        function StatementRuleSet(properties) {
+            this.statement_rules = {};
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * StatementRuleSet statement_rules.
+         * @member {Object.<string,querythrottler.IMetricRuleSet>} statement_rules
+         * @memberof querythrottler.StatementRuleSet
+         * @instance
+         */
+        StatementRuleSet.prototype.statement_rules = $util.emptyObject;
+
+        /**
+         * Creates a new StatementRuleSet instance using the specified properties.
+         * @function create
+         * @memberof querythrottler.StatementRuleSet
+         * @static
+         * @param {querythrottler.IStatementRuleSet=} [properties] Properties to set
+         * @returns {querythrottler.StatementRuleSet} StatementRuleSet instance
+         */
+        StatementRuleSet.create = function create(properties) {
+            return new StatementRuleSet(properties);
+        };
+
+        /**
+         * Encodes the specified StatementRuleSet message. Does not implicitly {@link querythrottler.StatementRuleSet.verify|verify} messages.
+         * @function encode
+         * @memberof querythrottler.StatementRuleSet
+         * @static
+         * @param {querythrottler.IStatementRuleSet} message StatementRuleSet message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StatementRuleSet.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.statement_rules != null && Object.hasOwnProperty.call(message, "statement_rules"))
+                for (let keys = Object.keys(message.statement_rules), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.querythrottler.MetricRuleSet.encode(message.statement_rules[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StatementRuleSet message, length delimited. Does not implicitly {@link querythrottler.StatementRuleSet.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof querythrottler.StatementRuleSet
+         * @static
+         * @param {querythrottler.IStatementRuleSet} message StatementRuleSet message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StatementRuleSet.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StatementRuleSet message from the specified reader or buffer.
+         * @function decode
+         * @memberof querythrottler.StatementRuleSet
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {querythrottler.StatementRuleSet} StatementRuleSet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StatementRuleSet.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.querythrottler.StatementRuleSet(), key, value;
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        if (message.statement_rules === $util.emptyObject)
+                            message.statement_rules = {};
+                        let end2 = reader.uint32() + reader.pos;
+                        key = "";
+                        value = null;
+                        while (reader.pos < end2) {
+                            let tag2 = reader.uint32();
+                            switch (tag2 >>> 3) {
+                            case 1:
+                                key = reader.string();
+                                break;
+                            case 2:
+                                value = $root.querythrottler.MetricRuleSet.decode(reader, reader.uint32());
+                                break;
+                            default:
+                                reader.skipType(tag2 & 7);
+                                break;
+                            }
+                        }
+                        message.statement_rules[key] = value;
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StatementRuleSet message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof querythrottler.StatementRuleSet
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {querythrottler.StatementRuleSet} StatementRuleSet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StatementRuleSet.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StatementRuleSet message.
+         * @function verify
+         * @memberof querythrottler.StatementRuleSet
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StatementRuleSet.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.statement_rules != null && message.hasOwnProperty("statement_rules")) {
+                if (!$util.isObject(message.statement_rules))
+                    return "statement_rules: object expected";
+                let key = Object.keys(message.statement_rules);
+                for (let i = 0; i < key.length; ++i) {
+                    let error = $root.querythrottler.MetricRuleSet.verify(message.statement_rules[key[i]]);
+                    if (error)
+                        return "statement_rules." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a StatementRuleSet message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof querythrottler.StatementRuleSet
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {querythrottler.StatementRuleSet} StatementRuleSet
+         */
+        StatementRuleSet.fromObject = function fromObject(object) {
+            if (object instanceof $root.querythrottler.StatementRuleSet)
+                return object;
+            let message = new $root.querythrottler.StatementRuleSet();
+            if (object.statement_rules) {
+                if (typeof object.statement_rules !== "object")
+                    throw TypeError(".querythrottler.StatementRuleSet.statement_rules: object expected");
+                message.statement_rules = {};
+                for (let keys = Object.keys(object.statement_rules), i = 0; i < keys.length; ++i) {
+                    if (typeof object.statement_rules[keys[i]] !== "object")
+                        throw TypeError(".querythrottler.StatementRuleSet.statement_rules: object expected");
+                    message.statement_rules[keys[i]] = $root.querythrottler.MetricRuleSet.fromObject(object.statement_rules[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StatementRuleSet message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof querythrottler.StatementRuleSet
+         * @static
+         * @param {querythrottler.StatementRuleSet} message StatementRuleSet
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StatementRuleSet.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.objects || options.defaults)
+                object.statement_rules = {};
+            let keys2;
+            if (message.statement_rules && (keys2 = Object.keys(message.statement_rules)).length) {
+                object.statement_rules = {};
+                for (let j = 0; j < keys2.length; ++j)
+                    object.statement_rules[keys2[j]] = $root.querythrottler.MetricRuleSet.toObject(message.statement_rules[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this StatementRuleSet to JSON.
+         * @function toJSON
+         * @memberof querythrottler.StatementRuleSet
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StatementRuleSet.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for StatementRuleSet
+         * @function getTypeUrl
+         * @memberof querythrottler.StatementRuleSet
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        StatementRuleSet.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/querythrottler.StatementRuleSet";
+        };
+
+        return StatementRuleSet;
+    })();
+
+    querythrottler.MetricRuleSet = (function() {
+
+        /**
+         * Properties of a MetricRuleSet.
+         * @memberof querythrottler
+         * @interface IMetricRuleSet
+         * @property {Object.<string,querythrottler.IMetricRule>|null} [metric_rules] MetricRuleSet metric_rules
+         */
+
+        /**
+         * Constructs a new MetricRuleSet.
+         * @memberof querythrottler
+         * @classdesc Represents a MetricRuleSet.
+         * @implements IMetricRuleSet
+         * @constructor
+         * @param {querythrottler.IMetricRuleSet=} [properties] Properties to set
+         */
+        function MetricRuleSet(properties) {
+            this.metric_rules = {};
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * MetricRuleSet metric_rules.
+         * @member {Object.<string,querythrottler.IMetricRule>} metric_rules
+         * @memberof querythrottler.MetricRuleSet
+         * @instance
+         */
+        MetricRuleSet.prototype.metric_rules = $util.emptyObject;
+
+        /**
+         * Creates a new MetricRuleSet instance using the specified properties.
+         * @function create
+         * @memberof querythrottler.MetricRuleSet
+         * @static
+         * @param {querythrottler.IMetricRuleSet=} [properties] Properties to set
+         * @returns {querythrottler.MetricRuleSet} MetricRuleSet instance
+         */
+        MetricRuleSet.create = function create(properties) {
+            return new MetricRuleSet(properties);
+        };
+
+        /**
+         * Encodes the specified MetricRuleSet message. Does not implicitly {@link querythrottler.MetricRuleSet.verify|verify} messages.
+         * @function encode
+         * @memberof querythrottler.MetricRuleSet
+         * @static
+         * @param {querythrottler.IMetricRuleSet} message MetricRuleSet message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MetricRuleSet.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.metric_rules != null && Object.hasOwnProperty.call(message, "metric_rules"))
+                for (let keys = Object.keys(message.metric_rules), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.querythrottler.MetricRule.encode(message.metric_rules[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified MetricRuleSet message, length delimited. Does not implicitly {@link querythrottler.MetricRuleSet.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof querythrottler.MetricRuleSet
+         * @static
+         * @param {querythrottler.IMetricRuleSet} message MetricRuleSet message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MetricRuleSet.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a MetricRuleSet message from the specified reader or buffer.
+         * @function decode
+         * @memberof querythrottler.MetricRuleSet
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {querythrottler.MetricRuleSet} MetricRuleSet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MetricRuleSet.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.querythrottler.MetricRuleSet(), key, value;
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        if (message.metric_rules === $util.emptyObject)
+                            message.metric_rules = {};
+                        let end2 = reader.uint32() + reader.pos;
+                        key = "";
+                        value = null;
+                        while (reader.pos < end2) {
+                            let tag2 = reader.uint32();
+                            switch (tag2 >>> 3) {
+                            case 1:
+                                key = reader.string();
+                                break;
+                            case 2:
+                                value = $root.querythrottler.MetricRule.decode(reader, reader.uint32());
+                                break;
+                            default:
+                                reader.skipType(tag2 & 7);
+                                break;
+                            }
+                        }
+                        message.metric_rules[key] = value;
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a MetricRuleSet message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof querythrottler.MetricRuleSet
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {querythrottler.MetricRuleSet} MetricRuleSet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MetricRuleSet.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a MetricRuleSet message.
+         * @function verify
+         * @memberof querythrottler.MetricRuleSet
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        MetricRuleSet.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.metric_rules != null && message.hasOwnProperty("metric_rules")) {
+                if (!$util.isObject(message.metric_rules))
+                    return "metric_rules: object expected";
+                let key = Object.keys(message.metric_rules);
+                for (let i = 0; i < key.length; ++i) {
+                    let error = $root.querythrottler.MetricRule.verify(message.metric_rules[key[i]]);
+                    if (error)
+                        return "metric_rules." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a MetricRuleSet message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof querythrottler.MetricRuleSet
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {querythrottler.MetricRuleSet} MetricRuleSet
+         */
+        MetricRuleSet.fromObject = function fromObject(object) {
+            if (object instanceof $root.querythrottler.MetricRuleSet)
+                return object;
+            let message = new $root.querythrottler.MetricRuleSet();
+            if (object.metric_rules) {
+                if (typeof object.metric_rules !== "object")
+                    throw TypeError(".querythrottler.MetricRuleSet.metric_rules: object expected");
+                message.metric_rules = {};
+                for (let keys = Object.keys(object.metric_rules), i = 0; i < keys.length; ++i) {
+                    if (typeof object.metric_rules[keys[i]] !== "object")
+                        throw TypeError(".querythrottler.MetricRuleSet.metric_rules: object expected");
+                    message.metric_rules[keys[i]] = $root.querythrottler.MetricRule.fromObject(object.metric_rules[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a MetricRuleSet message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof querythrottler.MetricRuleSet
+         * @static
+         * @param {querythrottler.MetricRuleSet} message MetricRuleSet
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        MetricRuleSet.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.objects || options.defaults)
+                object.metric_rules = {};
+            let keys2;
+            if (message.metric_rules && (keys2 = Object.keys(message.metric_rules)).length) {
+                object.metric_rules = {};
+                for (let j = 0; j < keys2.length; ++j)
+                    object.metric_rules[keys2[j]] = $root.querythrottler.MetricRule.toObject(message.metric_rules[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this MetricRuleSet to JSON.
+         * @function toJSON
+         * @memberof querythrottler.MetricRuleSet
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        MetricRuleSet.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for MetricRuleSet
+         * @function getTypeUrl
+         * @memberof querythrottler.MetricRuleSet
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        MetricRuleSet.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/querythrottler.MetricRuleSet";
+        };
+
+        return MetricRuleSet;
+    })();
+
+    querythrottler.MetricRule = (function() {
+
+        /**
+         * Properties of a MetricRule.
+         * @memberof querythrottler
+         * @interface IMetricRule
+         * @property {Array.<querythrottler.IThrottleThreshold>|null} [thresholds] MetricRule thresholds
+         */
+
+        /**
+         * Constructs a new MetricRule.
+         * @memberof querythrottler
+         * @classdesc Represents a MetricRule.
+         * @implements IMetricRule
+         * @constructor
+         * @param {querythrottler.IMetricRule=} [properties] Properties to set
+         */
+        function MetricRule(properties) {
+            this.thresholds = [];
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * MetricRule thresholds.
+         * @member {Array.<querythrottler.IThrottleThreshold>} thresholds
+         * @memberof querythrottler.MetricRule
+         * @instance
+         */
+        MetricRule.prototype.thresholds = $util.emptyArray;
+
+        /**
+         * Creates a new MetricRule instance using the specified properties.
+         * @function create
+         * @memberof querythrottler.MetricRule
+         * @static
+         * @param {querythrottler.IMetricRule=} [properties] Properties to set
+         * @returns {querythrottler.MetricRule} MetricRule instance
+         */
+        MetricRule.create = function create(properties) {
+            return new MetricRule(properties);
+        };
+
+        /**
+         * Encodes the specified MetricRule message. Does not implicitly {@link querythrottler.MetricRule.verify|verify} messages.
+         * @function encode
+         * @memberof querythrottler.MetricRule
+         * @static
+         * @param {querythrottler.IMetricRule} message MetricRule message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MetricRule.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.thresholds != null && message.thresholds.length)
+                for (let i = 0; i < message.thresholds.length; ++i)
+                    $root.querythrottler.ThrottleThreshold.encode(message.thresholds[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified MetricRule message, length delimited. Does not implicitly {@link querythrottler.MetricRule.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof querythrottler.MetricRule
+         * @static
+         * @param {querythrottler.IMetricRule} message MetricRule message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MetricRule.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a MetricRule message from the specified reader or buffer.
+         * @function decode
+         * @memberof querythrottler.MetricRule
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {querythrottler.MetricRule} MetricRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MetricRule.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.querythrottler.MetricRule();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        if (!(message.thresholds && message.thresholds.length))
+                            message.thresholds = [];
+                        message.thresholds.push($root.querythrottler.ThrottleThreshold.decode(reader, reader.uint32()));
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a MetricRule message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof querythrottler.MetricRule
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {querythrottler.MetricRule} MetricRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MetricRule.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a MetricRule message.
+         * @function verify
+         * @memberof querythrottler.MetricRule
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        MetricRule.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.thresholds != null && message.hasOwnProperty("thresholds")) {
+                if (!Array.isArray(message.thresholds))
+                    return "thresholds: array expected";
+                for (let i = 0; i < message.thresholds.length; ++i) {
+                    let error = $root.querythrottler.ThrottleThreshold.verify(message.thresholds[i]);
+                    if (error)
+                        return "thresholds." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a MetricRule message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof querythrottler.MetricRule
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {querythrottler.MetricRule} MetricRule
+         */
+        MetricRule.fromObject = function fromObject(object) {
+            if (object instanceof $root.querythrottler.MetricRule)
+                return object;
+            let message = new $root.querythrottler.MetricRule();
+            if (object.thresholds) {
+                if (!Array.isArray(object.thresholds))
+                    throw TypeError(".querythrottler.MetricRule.thresholds: array expected");
+                message.thresholds = [];
+                for (let i = 0; i < object.thresholds.length; ++i) {
+                    if (typeof object.thresholds[i] !== "object")
+                        throw TypeError(".querythrottler.MetricRule.thresholds: object expected");
+                    message.thresholds[i] = $root.querythrottler.ThrottleThreshold.fromObject(object.thresholds[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a MetricRule message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof querythrottler.MetricRule
+         * @static
+         * @param {querythrottler.MetricRule} message MetricRule
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        MetricRule.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.arrays || options.defaults)
+                object.thresholds = [];
+            if (message.thresholds && message.thresholds.length) {
+                object.thresholds = [];
+                for (let j = 0; j < message.thresholds.length; ++j)
+                    object.thresholds[j] = $root.querythrottler.ThrottleThreshold.toObject(message.thresholds[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this MetricRule to JSON.
+         * @function toJSON
+         * @memberof querythrottler.MetricRule
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        MetricRule.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for MetricRule
+         * @function getTypeUrl
+         * @memberof querythrottler.MetricRule
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        MetricRule.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/querythrottler.MetricRule";
+        };
+
+        return MetricRule;
+    })();
+
+    querythrottler.ThrottleThreshold = (function() {
+
+        /**
+         * Properties of a ThrottleThreshold.
+         * @memberof querythrottler
+         * @interface IThrottleThreshold
+         * @property {number|null} [above] ThrottleThreshold above
+         * @property {number|null} [throttle] ThrottleThreshold throttle
+         */
+
+        /**
+         * Constructs a new ThrottleThreshold.
+         * @memberof querythrottler
+         * @classdesc Represents a ThrottleThreshold.
+         * @implements IThrottleThreshold
+         * @constructor
+         * @param {querythrottler.IThrottleThreshold=} [properties] Properties to set
+         */
+        function ThrottleThreshold(properties) {
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ThrottleThreshold above.
+         * @member {number} above
+         * @memberof querythrottler.ThrottleThreshold
+         * @instance
+         */
+        ThrottleThreshold.prototype.above = 0;
+
+        /**
+         * ThrottleThreshold throttle.
+         * @member {number} throttle
+         * @memberof querythrottler.ThrottleThreshold
+         * @instance
+         */
+        ThrottleThreshold.prototype.throttle = 0;
+
+        /**
+         * Creates a new ThrottleThreshold instance using the specified properties.
+         * @function create
+         * @memberof querythrottler.ThrottleThreshold
+         * @static
+         * @param {querythrottler.IThrottleThreshold=} [properties] Properties to set
+         * @returns {querythrottler.ThrottleThreshold} ThrottleThreshold instance
+         */
+        ThrottleThreshold.create = function create(properties) {
+            return new ThrottleThreshold(properties);
+        };
+
+        /**
+         * Encodes the specified ThrottleThreshold message. Does not implicitly {@link querythrottler.ThrottleThreshold.verify|verify} messages.
+         * @function encode
+         * @memberof querythrottler.ThrottleThreshold
+         * @static
+         * @param {querythrottler.IThrottleThreshold} message ThrottleThreshold message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ThrottleThreshold.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.above != null && Object.hasOwnProperty.call(message, "above"))
+                writer.uint32(/* id 1, wireType 1 =*/9).double(message.above);
+            if (message.throttle != null && Object.hasOwnProperty.call(message, "throttle"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.throttle);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ThrottleThreshold message, length delimited. Does not implicitly {@link querythrottler.ThrottleThreshold.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof querythrottler.ThrottleThreshold
+         * @static
+         * @param {querythrottler.IThrottleThreshold} message ThrottleThreshold message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ThrottleThreshold.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ThrottleThreshold message from the specified reader or buffer.
+         * @function decode
+         * @memberof querythrottler.ThrottleThreshold
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {querythrottler.ThrottleThreshold} ThrottleThreshold
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ThrottleThreshold.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.querythrottler.ThrottleThreshold();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        message.above = reader.double();
+                        break;
+                    }
+                case 2: {
+                        message.throttle = reader.int32();
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ThrottleThreshold message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof querythrottler.ThrottleThreshold
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {querythrottler.ThrottleThreshold} ThrottleThreshold
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ThrottleThreshold.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ThrottleThreshold message.
+         * @function verify
+         * @memberof querythrottler.ThrottleThreshold
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ThrottleThreshold.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.above != null && message.hasOwnProperty("above"))
+                if (typeof message.above !== "number")
+                    return "above: number expected";
+            if (message.throttle != null && message.hasOwnProperty("throttle"))
+                if (!$util.isInteger(message.throttle))
+                    return "throttle: integer expected";
+            return null;
+        };
+
+        /**
+         * Creates a ThrottleThreshold message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof querythrottler.ThrottleThreshold
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {querythrottler.ThrottleThreshold} ThrottleThreshold
+         */
+        ThrottleThreshold.fromObject = function fromObject(object) {
+            if (object instanceof $root.querythrottler.ThrottleThreshold)
+                return object;
+            let message = new $root.querythrottler.ThrottleThreshold();
+            if (object.above != null)
+                message.above = Number(object.above);
+            if (object.throttle != null)
+                message.throttle = object.throttle | 0;
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ThrottleThreshold message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof querythrottler.ThrottleThreshold
+         * @static
+         * @param {querythrottler.ThrottleThreshold} message ThrottleThreshold
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ThrottleThreshold.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.defaults) {
+                object.above = 0;
+                object.throttle = 0;
+            }
+            if (message.above != null && message.hasOwnProperty("above"))
+                object.above = options.json && !isFinite(message.above) ? String(message.above) : message.above;
+            if (message.throttle != null && message.hasOwnProperty("throttle"))
+                object.throttle = message.throttle;
+            return object;
+        };
+
+        /**
+         * Converts this ThrottleThreshold to JSON.
+         * @function toJSON
+         * @memberof querythrottler.ThrottleThreshold
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ThrottleThreshold.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for ThrottleThreshold
+         * @function getTypeUrl
+         * @memberof querythrottler.ThrottleThreshold
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        ThrottleThreshold.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/querythrottler.ThrottleThreshold";
+        };
+
+        return ThrottleThreshold;
+    })();
+
+    return querythrottler;
+})();
+
 export const vtrpc = $root.vtrpc = (() => {
 
     /**
@@ -47822,12 +50785,14 @@ export const vtrpc = $root.vtrpc = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CallerID.decode = function decode(reader, length) {
+        CallerID.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtrpc.CallerID();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.principal = reader.string();
@@ -48136,12 +51101,14 @@ export const vtrpc = $root.vtrpc = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RPCError.decode = function decode(reader, length) {
+        RPCError.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtrpc.RPCError();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 2: {
                         message.message = reader.string();
@@ -48567,12 +51534,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TableDefinition.decode = function decode(reader, length) {
+        TableDefinition.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.TableDefinition();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -48945,12 +51914,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SchemaDefinition.decode = function decode(reader, length) {
+        SchemaDefinition.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SchemaDefinition();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.database_schema = reader.string();
@@ -49191,12 +52162,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SchemaChangeResult.decode = function decode(reader, length) {
+        SchemaChangeResult.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SchemaChangeResult();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.before_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32());
@@ -49452,12 +52425,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UserPermission.decode = function decode(reader, length) {
+        UserPermission.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UserPermission(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.host = reader.string();
@@ -49775,12 +52750,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DbPermission.decode = function decode(reader, length) {
+        DbPermission.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.DbPermission(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.host = reader.string();
@@ -50064,12 +53041,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Permissions.decode = function decode(reader, length) {
+        Permissions.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.Permissions();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.user_permissions && message.user_permissions.length))
@@ -50318,12 +53297,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PingRequest.decode = function decode(reader, length) {
+        PingRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PingRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.payload = reader.string();
@@ -50521,12 +53502,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PingResponse.decode = function decode(reader, length) {
+        PingResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PingResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.payload = reader.string();
@@ -50724,12 +53707,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SleepRequest.decode = function decode(reader, length) {
+        SleepRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SleepRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.duration = reader.int64();
@@ -50930,12 +53915,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SleepResponse.decode = function decode(reader, length) {
+        SleepResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SleepResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -51142,12 +54129,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteHookRequest.decode = function decode(reader, length) {
+        ExecuteHookRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteHookRequest(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -51440,12 +54429,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteHookResponse.decode = function decode(reader, length) {
+        ExecuteHookResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteHookResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.exit_status = reader.int64();
@@ -51719,12 +54710,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaRequest.decode = function decode(reader, length) {
+        GetSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.tables && message.tables.length))
@@ -51989,12 +54982,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaResponse.decode = function decode(reader, length) {
+        GetSchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetSchemaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.schema_definition = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32());
@@ -52186,12 +55181,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetPermissionsRequest.decode = function decode(reader, length) {
+        GetPermissionsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetPermissionsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -52372,12 +55369,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetPermissionsResponse.decode = function decode(reader, length) {
+        GetPermissionsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetPermissionsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.permissions = $root.tabletmanagerdata.Permissions.decode(reader, reader.uint32());
@@ -52582,12 +55581,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetGlobalStatusVarsRequest.decode = function decode(reader, length) {
+        GetGlobalStatusVarsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetGlobalStatusVarsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.variables && message.variables.length))
@@ -52801,12 +55802,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetGlobalStatusVarsResponse.decode = function decode(reader, length) {
+        GetGlobalStatusVarsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetGlobalStatusVarsResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.status_values === $util.emptyObject)
@@ -53026,12 +56029,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetReadOnlyRequest.decode = function decode(reader, length) {
+        SetReadOnlyRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SetReadOnlyRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -53201,12 +56206,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetReadOnlyResponse.decode = function decode(reader, length) {
+        SetReadOnlyResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SetReadOnlyResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -53376,12 +56383,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetReadWriteRequest.decode = function decode(reader, length) {
+        SetReadWriteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SetReadWriteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -53551,12 +56560,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetReadWriteResponse.decode = function decode(reader, length) {
+        SetReadWriteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SetReadWriteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -53748,12 +56759,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ChangeTypeRequest.decode = function decode(reader, length) {
+        ChangeTypeRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ChangeTypeRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_type = reader.int32();
@@ -54017,12 +57030,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ChangeTypeResponse.decode = function decode(reader, length) {
+        ChangeTypeResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ChangeTypeResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -54192,12 +57207,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshStateRequest.decode = function decode(reader, length) {
+        RefreshStateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.RefreshStateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -54367,12 +57384,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshStateResponse.decode = function decode(reader, length) {
+        RefreshStateResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.RefreshStateResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -54542,12 +57561,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RunHealthCheckRequest.decode = function decode(reader, length) {
+        RunHealthCheckRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.RunHealthCheckRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -54717,12 +57738,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RunHealthCheckResponse.decode = function decode(reader, length) {
+        RunHealthCheckResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.RunHealthCheckResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -54903,12 +57926,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemaRequest.decode = function decode(reader, length) {
+        ReloadSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReloadSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.wait_position = reader.string();
@@ -55095,12 +58120,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemaResponse.decode = function decode(reader, length) {
+        ReloadSchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReloadSchemaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -55283,12 +58310,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PreflightSchemaRequest.decode = function decode(reader, length) {
+        PreflightSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PreflightSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.changes && message.changes.length))
@@ -55502,12 +58531,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PreflightSchemaResponse.decode = function decode(reader, length) {
+        PreflightSchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PreflightSchemaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.change_results && message.change_results.length))
@@ -55801,12 +58832,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplySchemaRequest.decode = function decode(reader, length) {
+        ApplySchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ApplySchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.sql = reader.string();
@@ -56124,12 +59157,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplySchemaResponse.decode = function decode(reader, length) {
+        ApplySchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ApplySchemaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.before_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32());
@@ -56339,12 +59374,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LockTablesRequest.decode = function decode(reader, length) {
+        LockTablesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.LockTablesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -56514,12 +59551,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LockTablesResponse.decode = function decode(reader, length) {
+        LockTablesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.LockTablesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -56689,12 +59728,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UnlockTablesRequest.decode = function decode(reader, length) {
+        UnlockTablesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UnlockTablesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -56864,12 +59905,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UnlockTablesResponse.decode = function decode(reader, length) {
+        UnlockTablesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UnlockTablesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -57083,12 +60126,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteQueryRequest.decode = function decode(reader, length) {
+        ExecuteQueryRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteQueryRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.query = reader.bytes();
@@ -57351,12 +60396,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteQueryResponse.decode = function decode(reader, length) {
+        ExecuteQueryResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteQueryResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -57614,12 +60661,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteFetchAsDbaRequest.decode = function decode(reader, length) {
+        ExecuteFetchAsDbaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteFetchAsDbaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.query = reader.bytes();
@@ -57901,12 +60950,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteFetchAsDbaResponse.decode = function decode(reader, length) {
+        ExecuteFetchAsDbaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteFetchAsDbaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -58164,12 +61215,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteMultiFetchAsDbaRequest.decode = function decode(reader, length) {
+        ExecuteMultiFetchAsDbaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteMultiFetchAsDbaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.sql = reader.bytes();
@@ -58453,12 +61506,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteMultiFetchAsDbaResponse.decode = function decode(reader, length) {
+        ExecuteMultiFetchAsDbaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteMultiFetchAsDbaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.results && message.results.length))
@@ -58708,12 +61763,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteFetchAsAllPrivsRequest.decode = function decode(reader, length) {
+        ExecuteFetchAsAllPrivsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteFetchAsAllPrivsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.query = reader.bytes();
@@ -58971,12 +62028,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteFetchAsAllPrivsResponse.decode = function decode(reader, length) {
+        ExecuteFetchAsAllPrivsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteFetchAsAllPrivsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -59190,12 +62249,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteFetchAsAppRequest.decode = function decode(reader, length) {
+        ExecuteFetchAsAppRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteFetchAsAppRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.query = reader.bytes();
@@ -59429,12 +62490,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteFetchAsAppResponse.decode = function decode(reader, length) {
+        ExecuteFetchAsAppResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ExecuteFetchAsAppResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -59637,12 +62700,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetUnresolvedTransactionsRequest.decode = function decode(reader, length) {
+        GetUnresolvedTransactionsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetUnresolvedTransactionsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.abandon_age = reader.int64();
@@ -59856,12 +62921,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetUnresolvedTransactionsResponse.decode = function decode(reader, length) {
+        GetUnresolvedTransactionsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetUnresolvedTransactionsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.transactions && message.transactions.length))
@@ -60078,12 +63145,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadTransactionRequest.decode = function decode(reader, length) {
+        ReadTransactionRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReadTransactionRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.dtid = reader.string();
@@ -60281,12 +63350,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadTransactionResponse.decode = function decode(reader, length) {
+        ReadTransactionResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReadTransactionResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.transaction = $root.query.TransactionMetadata.decode(reader, reader.uint32());
@@ -60489,12 +63560,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTransactionInfoRequest.decode = function decode(reader, length) {
+        GetTransactionInfoRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetTransactionInfoRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.dtid = reader.string();
@@ -60727,12 +63800,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTransactionInfoResponse.decode = function decode(reader, length) {
+        GetTransactionInfoResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetTransactionInfoResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.state = reader.string();
@@ -61007,12 +64082,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ConcludeTransactionRequest.decode = function decode(reader, length) {
+        ConcludeTransactionRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ConcludeTransactionRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.dtid = reader.string();
@@ -61212,12 +64289,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ConcludeTransactionResponse.decode = function decode(reader, length) {
+        ConcludeTransactionResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ConcludeTransactionResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -61387,12 +64466,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MysqlHostMetricsRequest.decode = function decode(reader, length) {
+        MysqlHostMetricsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.MysqlHostMetricsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -61573,12 +64654,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MysqlHostMetricsResponse.decode = function decode(reader, length) {
+        MysqlHostMetricsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.MysqlHostMetricsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.HostMetrics = $root.mysqlctl.HostMetricsResponse.decode(reader, reader.uint32());
@@ -61770,12 +64853,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReplicationStatusRequest.decode = function decode(reader, length) {
+        ReplicationStatusRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReplicationStatusRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -61956,12 +65041,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReplicationStatusResponse.decode = function decode(reader, length) {
+        ReplicationStatusResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReplicationStatusResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = $root.replicationdata.Status.decode(reader, reader.uint32());
@@ -62153,12 +65240,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PrimaryStatusRequest.decode = function decode(reader, length) {
+        PrimaryStatusRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PrimaryStatusRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -62339,12 +65428,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PrimaryStatusResponse.decode = function decode(reader, length) {
+        PrimaryStatusResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PrimaryStatusResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = $root.replicationdata.PrimaryStatus.decode(reader, reader.uint32());
@@ -62536,12 +65627,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PrimaryPositionRequest.decode = function decode(reader, length) {
+        PrimaryPositionRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PrimaryPositionRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -62722,12 +65815,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PrimaryPositionResponse.decode = function decode(reader, length) {
+        PrimaryPositionResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PrimaryPositionResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.position = reader.string();
@@ -62925,12 +66020,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WaitForPositionRequest.decode = function decode(reader, length) {
+        WaitForPositionRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.WaitForPositionRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.position = reader.string();
@@ -63117,12 +66214,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WaitForPositionResponse.decode = function decode(reader, length) {
+        WaitForPositionResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.WaitForPositionResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -63292,12 +66391,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopReplicationRequest.decode = function decode(reader, length) {
+        StopReplicationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.StopReplicationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -63467,12 +66568,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopReplicationResponse.decode = function decode(reader, length) {
+        StopReplicationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.StopReplicationResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -63664,12 +66767,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopReplicationMinimumRequest.decode = function decode(reader, length) {
+        StopReplicationMinimumRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.StopReplicationMinimumRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.position = reader.string();
@@ -63894,12 +66999,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopReplicationMinimumResponse.decode = function decode(reader, length) {
+        StopReplicationMinimumResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.StopReplicationMinimumResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.position = reader.string();
@@ -64097,12 +67204,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartReplicationRequest.decode = function decode(reader, length) {
+        StartReplicationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.StartReplicationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.semiSync = reader.bool();
@@ -64289,12 +67398,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartReplicationResponse.decode = function decode(reader, length) {
+        StartReplicationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.StartReplicationResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -64388,6 +67499,388 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         };
 
         return StartReplicationResponse;
+    })();
+
+    tabletmanagerdata.RestartReplicationRequest = (function() {
+
+        /**
+         * Properties of a RestartReplicationRequest.
+         * @memberof tabletmanagerdata
+         * @interface IRestartReplicationRequest
+         * @property {boolean|null} [semiSync] RestartReplicationRequest semiSync
+         */
+
+        /**
+         * Constructs a new RestartReplicationRequest.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a RestartReplicationRequest.
+         * @implements IRestartReplicationRequest
+         * @constructor
+         * @param {tabletmanagerdata.IRestartReplicationRequest=} [properties] Properties to set
+         */
+        function RestartReplicationRequest(properties) {
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RestartReplicationRequest semiSync.
+         * @member {boolean} semiSync
+         * @memberof tabletmanagerdata.RestartReplicationRequest
+         * @instance
+         */
+        RestartReplicationRequest.prototype.semiSync = false;
+
+        /**
+         * Creates a new RestartReplicationRequest instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.RestartReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.IRestartReplicationRequest=} [properties] Properties to set
+         * @returns {tabletmanagerdata.RestartReplicationRequest} RestartReplicationRequest instance
+         */
+        RestartReplicationRequest.create = function create(properties) {
+            return new RestartReplicationRequest(properties);
+        };
+
+        /**
+         * Encodes the specified RestartReplicationRequest message. Does not implicitly {@link tabletmanagerdata.RestartReplicationRequest.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.RestartReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.IRestartReplicationRequest} message RestartReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RestartReplicationRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.semiSync != null && Object.hasOwnProperty.call(message, "semiSync"))
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.semiSync);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RestartReplicationRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.RestartReplicationRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.RestartReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.IRestartReplicationRequest} message RestartReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RestartReplicationRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RestartReplicationRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.RestartReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.RestartReplicationRequest} RestartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RestartReplicationRequest.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.RestartReplicationRequest();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        message.semiSync = reader.bool();
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RestartReplicationRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.RestartReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.RestartReplicationRequest} RestartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RestartReplicationRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RestartReplicationRequest message.
+         * @function verify
+         * @memberof tabletmanagerdata.RestartReplicationRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RestartReplicationRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.semiSync != null && message.hasOwnProperty("semiSync"))
+                if (typeof message.semiSync !== "boolean")
+                    return "semiSync: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a RestartReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.RestartReplicationRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.RestartReplicationRequest} RestartReplicationRequest
+         */
+        RestartReplicationRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.RestartReplicationRequest)
+                return object;
+            let message = new $root.tabletmanagerdata.RestartReplicationRequest();
+            if (object.semiSync != null)
+                message.semiSync = Boolean(object.semiSync);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RestartReplicationRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.RestartReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.RestartReplicationRequest} message RestartReplicationRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RestartReplicationRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.defaults)
+                object.semiSync = false;
+            if (message.semiSync != null && message.hasOwnProperty("semiSync"))
+                object.semiSync = message.semiSync;
+            return object;
+        };
+
+        /**
+         * Converts this RestartReplicationRequest to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.RestartReplicationRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RestartReplicationRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for RestartReplicationRequest
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.RestartReplicationRequest
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        RestartReplicationRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/tabletmanagerdata.RestartReplicationRequest";
+        };
+
+        return RestartReplicationRequest;
+    })();
+
+    tabletmanagerdata.RestartReplicationResponse = (function() {
+
+        /**
+         * Properties of a RestartReplicationResponse.
+         * @memberof tabletmanagerdata
+         * @interface IRestartReplicationResponse
+         */
+
+        /**
+         * Constructs a new RestartReplicationResponse.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a RestartReplicationResponse.
+         * @implements IRestartReplicationResponse
+         * @constructor
+         * @param {tabletmanagerdata.IRestartReplicationResponse=} [properties] Properties to set
+         */
+        function RestartReplicationResponse(properties) {
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new RestartReplicationResponse instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.RestartReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.IRestartReplicationResponse=} [properties] Properties to set
+         * @returns {tabletmanagerdata.RestartReplicationResponse} RestartReplicationResponse instance
+         */
+        RestartReplicationResponse.create = function create(properties) {
+            return new RestartReplicationResponse(properties);
+        };
+
+        /**
+         * Encodes the specified RestartReplicationResponse message. Does not implicitly {@link tabletmanagerdata.RestartReplicationResponse.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.RestartReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.IRestartReplicationResponse} message RestartReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RestartReplicationResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RestartReplicationResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.RestartReplicationResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.RestartReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.IRestartReplicationResponse} message RestartReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RestartReplicationResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RestartReplicationResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.RestartReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.RestartReplicationResponse} RestartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RestartReplicationResponse.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.RestartReplicationResponse();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RestartReplicationResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.RestartReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.RestartReplicationResponse} RestartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RestartReplicationResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RestartReplicationResponse message.
+         * @function verify
+         * @memberof tabletmanagerdata.RestartReplicationResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RestartReplicationResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a RestartReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.RestartReplicationResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.RestartReplicationResponse} RestartReplicationResponse
+         */
+        RestartReplicationResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.tabletmanagerdata.RestartReplicationResponse)
+                return object;
+            return new $root.tabletmanagerdata.RestartReplicationResponse();
+        };
+
+        /**
+         * Creates a plain object from a RestartReplicationResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.RestartReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.RestartReplicationResponse} message RestartReplicationResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RestartReplicationResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this RestartReplicationResponse to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.RestartReplicationResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RestartReplicationResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for RestartReplicationResponse
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.RestartReplicationResponse
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        RestartReplicationResponse.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/tabletmanagerdata.RestartReplicationResponse";
+        };
+
+        return RestartReplicationResponse;
     })();
 
     tabletmanagerdata.StartReplicationUntilAfterRequest = (function() {
@@ -64486,12 +67979,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartReplicationUntilAfterRequest.decode = function decode(reader, length) {
+        StartReplicationUntilAfterRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.StartReplicationUntilAfterRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.position = reader.string();
@@ -64705,12 +68200,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartReplicationUntilAfterResponse.decode = function decode(reader, length) {
+        StartReplicationUntilAfterResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.StartReplicationUntilAfterResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -64880,12 +68377,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetReplicasRequest.decode = function decode(reader, length) {
+        GetReplicasRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetReplicasRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -65068,12 +68567,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetReplicasResponse.decode = function decode(reader, length) {
+        GetReplicasResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetReplicasResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.addrs && message.addrs.length))
@@ -65274,12 +68775,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ResetReplicationRequest.decode = function decode(reader, length) {
+        ResetReplicationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ResetReplicationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -65449,12 +68952,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ResetReplicationResponse.decode = function decode(reader, length) {
+        ResetReplicationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ResetReplicationResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -65635,12 +69140,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VReplicationExecRequest.decode = function decode(reader, length) {
+        VReplicationExecRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.VReplicationExecRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.query = reader.string();
@@ -65838,12 +69345,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VReplicationExecResponse.decode = function decode(reader, length) {
+        VReplicationExecResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.VReplicationExecResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -66057,12 +69566,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VReplicationWaitForPosRequest.decode = function decode(reader, length) {
+        VReplicationWaitForPosRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.VReplicationWaitForPosRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.id = reader.int32();
@@ -66262,12 +69773,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VReplicationWaitForPosResponse.decode = function decode(reader, length) {
+        VReplicationWaitForPosResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.VReplicationWaitForPosResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -66448,12 +69961,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        InitPrimaryRequest.decode = function decode(reader, length) {
+        InitPrimaryRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.InitPrimaryRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.semiSync = reader.bool();
@@ -66651,12 +70166,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        InitPrimaryResponse.decode = function decode(reader, length) {
+        InitPrimaryResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.InitPrimaryResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.position = reader.string();
@@ -66887,12 +70404,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PopulateReparentJournalRequest.decode = function decode(reader, length) {
+        PopulateReparentJournalRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PopulateReparentJournalRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.time_created_ns = reader.int64();
@@ -67135,12 +70654,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PopulateReparentJournalResponse.decode = function decode(reader, length) {
+        PopulateReparentJournalResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PopulateReparentJournalResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -67310,12 +70831,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadReparentJournalInfoRequest.decode = function decode(reader, length) {
+        ReadReparentJournalInfoRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReadReparentJournalInfoRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -67496,12 +71019,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadReparentJournalInfoResponse.decode = function decode(reader, length) {
+        ReadReparentJournalInfoResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReadReparentJournalInfoResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.length = reader.int32();
@@ -67732,12 +71257,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        InitReplicaRequest.decode = function decode(reader, length) {
+        InitReplicaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.InitReplicaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.parent = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -67980,12 +71507,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        InitReplicaResponse.decode = function decode(reader, length) {
+        InitReplicaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.InitReplicaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -68087,6 +71616,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a DemotePrimaryRequest.
          * @memberof tabletmanagerdata
          * @interface IDemotePrimaryRequest
+         * @property {boolean|null} [force] DemotePrimaryRequest force
          */
 
         /**
@@ -68103,6 +71633,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     if (properties[keys[i]] != null)
                         this[keys[i]] = properties[keys[i]];
         }
+
+        /**
+         * DemotePrimaryRequest force.
+         * @member {boolean} force
+         * @memberof tabletmanagerdata.DemotePrimaryRequest
+         * @instance
+         */
+        DemotePrimaryRequest.prototype.force = false;
 
         /**
          * Creates a new DemotePrimaryRequest instance using the specified properties.
@@ -68128,6 +71666,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         DemotePrimaryRequest.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
+            if (message.force != null && Object.hasOwnProperty.call(message, "force"))
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.force);
             return writer;
         };
 
@@ -68155,13 +71695,19 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DemotePrimaryRequest.decode = function decode(reader, length) {
+        DemotePrimaryRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.DemotePrimaryRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
+                case 1: {
+                        message.force = reader.bool();
+                        break;
+                    }
                 default:
                     reader.skipType(tag & 7);
                     break;
@@ -68197,6 +71743,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         DemotePrimaryRequest.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
+            if (message.force != null && message.hasOwnProperty("force"))
+                if (typeof message.force !== "boolean")
+                    return "force: boolean expected";
             return null;
         };
 
@@ -68211,7 +71760,10 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         DemotePrimaryRequest.fromObject = function fromObject(object) {
             if (object instanceof $root.tabletmanagerdata.DemotePrimaryRequest)
                 return object;
-            return new $root.tabletmanagerdata.DemotePrimaryRequest();
+            let message = new $root.tabletmanagerdata.DemotePrimaryRequest();
+            if (object.force != null)
+                message.force = Boolean(object.force);
+            return message;
         };
 
         /**
@@ -68223,8 +71775,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        DemotePrimaryRequest.toObject = function toObject() {
-            return {};
+        DemotePrimaryRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.defaults)
+                object.force = false;
+            if (message.force != null && message.hasOwnProperty("force"))
+                object.force = message.force;
+            return object;
         };
 
         /**
@@ -68341,12 +71900,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DemotePrimaryResponse.decode = function decode(reader, length) {
+        DemotePrimaryResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.DemotePrimaryResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 2: {
                         message.primary_status = $root.replicationdata.PrimaryStatus.decode(reader, reader.uint32());
@@ -68549,12 +72110,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UndoDemotePrimaryRequest.decode = function decode(reader, length) {
+        UndoDemotePrimaryRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UndoDemotePrimaryRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.semiSync = reader.bool();
@@ -68741,12 +72304,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UndoDemotePrimaryResponse.decode = function decode(reader, length) {
+        UndoDemotePrimaryResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UndoDemotePrimaryResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -68916,12 +72481,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReplicaWasPromotedRequest.decode = function decode(reader, length) {
+        ReplicaWasPromotedRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReplicaWasPromotedRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -69091,12 +72658,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReplicaWasPromotedResponse.decode = function decode(reader, length) {
+        ReplicaWasPromotedResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReplicaWasPromotedResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -69266,12 +72835,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ResetReplicationParametersRequest.decode = function decode(reader, length) {
+        ResetReplicationParametersRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ResetReplicationParametersRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -69441,12 +73012,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ResetReplicationParametersResponse.decode = function decode(reader, length) {
+        ResetReplicationParametersResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ResetReplicationParametersResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -69616,12 +73189,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        FullStatusRequest.decode = function decode(reader, length) {
+        FullStatusRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.FullStatusRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -69802,12 +73377,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        FullStatusResponse.decode = function decode(reader, length) {
+        FullStatusResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.FullStatusResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = $root.replicationdata.FullStatus.decode(reader, reader.uint32());
@@ -70065,12 +73642,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetReplicationSourceRequest.decode = function decode(reader, length) {
+        SetReplicationSourceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SetReplicationSourceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.parent = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -70337,12 +73916,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetReplicationSourceResponse.decode = function decode(reader, length) {
+        SetReplicationSourceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.SetReplicationSourceResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -70523,12 +74104,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReplicaWasRestartedRequest.decode = function decode(reader, length) {
+        ReplicaWasRestartedRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReplicaWasRestartedRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.parent = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -70720,12 +74303,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReplicaWasRestartedResponse.decode = function decode(reader, length) {
+        ReplicaWasRestartedResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReplicaWasRestartedResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -70906,12 +74491,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopReplicationAndGetStatusRequest.decode = function decode(reader, length) {
+        StopReplicationAndGetStatusRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.StopReplicationAndGetStatusRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.stop_replication_mode = reader.int32();
@@ -71128,12 +74715,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopReplicationAndGetStatusResponse.decode = function decode(reader, length) {
+        StopReplicationAndGetStatusResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.StopReplicationAndGetStatusResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 2: {
                         message.status = $root.replicationdata.StopReplicationStatus.decode(reader, reader.uint32());
@@ -71336,12 +74925,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PromoteReplicaRequest.decode = function decode(reader, length) {
+        PromoteReplicaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PromoteReplicaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.semiSync = reader.bool();
@@ -71539,12 +75130,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PromoteReplicaResponse.decode = function decode(reader, length) {
+        PromoteReplicaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.PromoteReplicaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.position = reader.string();
@@ -71669,6 +75262,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [upgrade_safe] BackupRequest upgrade_safe
          * @property {string|null} [backup_engine] BackupRequest backup_engine
          * @property {vttime.IDuration|null} [mysql_shutdown_timeout] BackupRequest mysql_shutdown_timeout
+         * @property {tabletmanagerdata.BackupRequest.IInitSQL|null} [init_sql] BackupRequest init_sql
          */
 
         /**
@@ -71734,6 +75328,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          */
         BackupRequest.prototype.mysql_shutdown_timeout = null;
 
+        /**
+         * BackupRequest init_sql.
+         * @member {tabletmanagerdata.BackupRequest.IInitSQL|null|undefined} init_sql
+         * @memberof tabletmanagerdata.BackupRequest
+         * @instance
+         */
+        BackupRequest.prototype.init_sql = null;
+
         // OneOf field names bound to virtual getters and setters
         let $oneOfFields;
 
@@ -71779,6 +75381,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.backup_engine);
             if (message.mysql_shutdown_timeout != null && Object.hasOwnProperty.call(message, "mysql_shutdown_timeout"))
                 $root.vttime.Duration.encode(message.mysql_shutdown_timeout, writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+            if (message.init_sql != null && Object.hasOwnProperty.call(message, "init_sql"))
+                $root.tabletmanagerdata.BackupRequest.InitSQL.encode(message.init_sql, writer.uint32(/* id 7, wireType 2 =*/58).fork()).ldelim();
             return writer;
         };
 
@@ -71806,12 +75410,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BackupRequest.decode = function decode(reader, length) {
+        BackupRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.BackupRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.concurrency = reader.int32();
@@ -71835,6 +75441,10 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     }
                 case 6: {
                         message.mysql_shutdown_timeout = $root.vttime.Duration.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 7: {
+                        message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.uint32());
                         break;
                     }
                 default:
@@ -71895,6 +75505,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (error)
                     return "mysql_shutdown_timeout." + error;
             }
+            if (message.init_sql != null && message.hasOwnProperty("init_sql")) {
+                let error = $root.tabletmanagerdata.BackupRequest.InitSQL.verify(message.init_sql);
+                if (error)
+                    return "init_sql." + error;
+            }
             return null;
         };
 
@@ -71925,6 +75540,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     throw TypeError(".tabletmanagerdata.BackupRequest.mysql_shutdown_timeout: object expected");
                 message.mysql_shutdown_timeout = $root.vttime.Duration.fromObject(object.mysql_shutdown_timeout);
             }
+            if (object.init_sql != null) {
+                if (typeof object.init_sql !== "object")
+                    throw TypeError(".tabletmanagerdata.BackupRequest.init_sql: object expected");
+                message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.fromObject(object.init_sql);
+            }
             return message;
         };
 
@@ -71947,6 +75567,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.incremental_from_pos = "";
                 object.upgrade_safe = false;
                 object.mysql_shutdown_timeout = null;
+                object.init_sql = null;
             }
             if (message.concurrency != null && message.hasOwnProperty("concurrency"))
                 object.concurrency = message.concurrency;
@@ -71963,6 +75584,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             }
             if (message.mysql_shutdown_timeout != null && message.hasOwnProperty("mysql_shutdown_timeout"))
                 object.mysql_shutdown_timeout = $root.vttime.Duration.toObject(message.mysql_shutdown_timeout, options);
+            if (message.init_sql != null && message.hasOwnProperty("init_sql"))
+                object.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.toObject(message.init_sql, options);
             return object;
         };
 
@@ -71991,6 +75614,392 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             }
             return typeUrlPrefix + "/tabletmanagerdata.BackupRequest";
         };
+
+        BackupRequest.InitSQL = (function() {
+
+            /**
+             * Properties of an InitSQL.
+             * @memberof tabletmanagerdata.BackupRequest
+             * @interface IInitSQL
+             * @property {Array.<string>|null} [queries] InitSQL queries
+             * @property {Array.<topodata.TabletType>|null} [tablet_types] InitSQL tablet_types
+             * @property {vttime.IDuration|null} [timeout] InitSQL timeout
+             * @property {boolean|null} [fail_on_error] InitSQL fail_on_error
+             */
+
+            /**
+             * Constructs a new InitSQL.
+             * @memberof tabletmanagerdata.BackupRequest
+             * @classdesc Represents an InitSQL.
+             * @implements IInitSQL
+             * @constructor
+             * @param {tabletmanagerdata.BackupRequest.IInitSQL=} [properties] Properties to set
+             */
+            function InitSQL(properties) {
+                this.queries = [];
+                this.tablet_types = [];
+                if (properties)
+                    for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null)
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * InitSQL queries.
+             * @member {Array.<string>} queries
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @instance
+             */
+            InitSQL.prototype.queries = $util.emptyArray;
+
+            /**
+             * InitSQL tablet_types.
+             * @member {Array.<topodata.TabletType>} tablet_types
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @instance
+             */
+            InitSQL.prototype.tablet_types = $util.emptyArray;
+
+            /**
+             * InitSQL timeout.
+             * @member {vttime.IDuration|null|undefined} timeout
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @instance
+             */
+            InitSQL.prototype.timeout = null;
+
+            /**
+             * InitSQL fail_on_error.
+             * @member {boolean} fail_on_error
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @instance
+             */
+            InitSQL.prototype.fail_on_error = false;
+
+            /**
+             * Creates a new InitSQL instance using the specified properties.
+             * @function create
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @static
+             * @param {tabletmanagerdata.BackupRequest.IInitSQL=} [properties] Properties to set
+             * @returns {tabletmanagerdata.BackupRequest.InitSQL} InitSQL instance
+             */
+            InitSQL.create = function create(properties) {
+                return new InitSQL(properties);
+            };
+
+            /**
+             * Encodes the specified InitSQL message. Does not implicitly {@link tabletmanagerdata.BackupRequest.InitSQL.verify|verify} messages.
+             * @function encode
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @static
+             * @param {tabletmanagerdata.BackupRequest.IInitSQL} message InitSQL message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            InitSQL.encode = function encode(message, writer) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (message.queries != null && message.queries.length)
+                    for (let i = 0; i < message.queries.length; ++i)
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.queries[i]);
+                if (message.tablet_types != null && message.tablet_types.length) {
+                    writer.uint32(/* id 2, wireType 2 =*/18).fork();
+                    for (let i = 0; i < message.tablet_types.length; ++i)
+                        writer.int32(message.tablet_types[i]);
+                    writer.ldelim();
+                }
+                if (message.timeout != null && Object.hasOwnProperty.call(message, "timeout"))
+                    $root.vttime.Duration.encode(message.timeout, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                if (message.fail_on_error != null && Object.hasOwnProperty.call(message, "fail_on_error"))
+                    writer.uint32(/* id 4, wireType 0 =*/32).bool(message.fail_on_error);
+                return writer;
+            };
+
+            /**
+             * Encodes the specified InitSQL message, length delimited. Does not implicitly {@link tabletmanagerdata.BackupRequest.InitSQL.verify|verify} messages.
+             * @function encodeDelimited
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @static
+             * @param {tabletmanagerdata.BackupRequest.IInitSQL} message InitSQL message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            InitSQL.encodeDelimited = function encodeDelimited(message, writer) {
+                return this.encode(message, writer).ldelim();
+            };
+
+            /**
+             * Decodes an InitSQL message from the specified reader or buffer.
+             * @function decode
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {tabletmanagerdata.BackupRequest.InitSQL} InitSQL
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            InitSQL.decode = function decode(reader, length, error) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.BackupRequest.InitSQL();
+                while (reader.pos < end) {
+                    let tag = reader.uint32();
+                    if (tag === error)
+                        break;
+                    switch (tag >>> 3) {
+                    case 1: {
+                            if (!(message.queries && message.queries.length))
+                                message.queries = [];
+                            message.queries.push(reader.string());
+                            break;
+                        }
+                    case 2: {
+                            if (!(message.tablet_types && message.tablet_types.length))
+                                message.tablet_types = [];
+                            if ((tag & 7) === 2) {
+                                let end2 = reader.uint32() + reader.pos;
+                                while (reader.pos < end2)
+                                    message.tablet_types.push(reader.int32());
+                            } else
+                                message.tablet_types.push(reader.int32());
+                            break;
+                        }
+                    case 3: {
+                            message.timeout = $root.vttime.Duration.decode(reader, reader.uint32());
+                            break;
+                        }
+                    case 4: {
+                            message.fail_on_error = reader.bool();
+                            break;
+                        }
+                    default:
+                        reader.skipType(tag & 7);
+                        break;
+                    }
+                }
+                return message;
+            };
+
+            /**
+             * Decodes an InitSQL message from the specified reader or buffer, length delimited.
+             * @function decodeDelimited
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @returns {tabletmanagerdata.BackupRequest.InitSQL} InitSQL
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            InitSQL.decodeDelimited = function decodeDelimited(reader) {
+                if (!(reader instanceof $Reader))
+                    reader = new $Reader(reader);
+                return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies an InitSQL message.
+             * @function verify
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            InitSQL.verify = function verify(message) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (message.queries != null && message.hasOwnProperty("queries")) {
+                    if (!Array.isArray(message.queries))
+                        return "queries: array expected";
+                    for (let i = 0; i < message.queries.length; ++i)
+                        if (!$util.isString(message.queries[i]))
+                            return "queries: string[] expected";
+                }
+                if (message.tablet_types != null && message.hasOwnProperty("tablet_types")) {
+                    if (!Array.isArray(message.tablet_types))
+                        return "tablet_types: array expected";
+                    for (let i = 0; i < message.tablet_types.length; ++i)
+                        switch (message.tablet_types[i]) {
+                        default:
+                            return "tablet_types: enum value[] expected";
+                        case 0:
+                        case 1:
+                        case 1:
+                        case 2:
+                        case 3:
+                        case 3:
+                        case 4:
+                        case 5:
+                        case 6:
+                        case 7:
+                        case 8:
+                            break;
+                        }
+                }
+                if (message.timeout != null && message.hasOwnProperty("timeout")) {
+                    let error = $root.vttime.Duration.verify(message.timeout);
+                    if (error)
+                        return "timeout." + error;
+                }
+                if (message.fail_on_error != null && message.hasOwnProperty("fail_on_error"))
+                    if (typeof message.fail_on_error !== "boolean")
+                        return "fail_on_error: boolean expected";
+                return null;
+            };
+
+            /**
+             * Creates an InitSQL message from a plain object. Also converts values to their respective internal types.
+             * @function fromObject
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @static
+             * @param {Object.<string,*>} object Plain object
+             * @returns {tabletmanagerdata.BackupRequest.InitSQL} InitSQL
+             */
+            InitSQL.fromObject = function fromObject(object) {
+                if (object instanceof $root.tabletmanagerdata.BackupRequest.InitSQL)
+                    return object;
+                let message = new $root.tabletmanagerdata.BackupRequest.InitSQL();
+                if (object.queries) {
+                    if (!Array.isArray(object.queries))
+                        throw TypeError(".tabletmanagerdata.BackupRequest.InitSQL.queries: array expected");
+                    message.queries = [];
+                    for (let i = 0; i < object.queries.length; ++i)
+                        message.queries[i] = String(object.queries[i]);
+                }
+                if (object.tablet_types) {
+                    if (!Array.isArray(object.tablet_types))
+                        throw TypeError(".tabletmanagerdata.BackupRequest.InitSQL.tablet_types: array expected");
+                    message.tablet_types = [];
+                    for (let i = 0; i < object.tablet_types.length; ++i)
+                        switch (object.tablet_types[i]) {
+                        default:
+                            if (typeof object.tablet_types[i] === "number") {
+                                message.tablet_types[i] = object.tablet_types[i];
+                                break;
+                            }
+                        case "UNKNOWN":
+                        case 0:
+                            message.tablet_types[i] = 0;
+                            break;
+                        case "PRIMARY":
+                        case 1:
+                            message.tablet_types[i] = 1;
+                            break;
+                        case "MASTER":
+                        case 1:
+                            message.tablet_types[i] = 1;
+                            break;
+                        case "REPLICA":
+                        case 2:
+                            message.tablet_types[i] = 2;
+                            break;
+                        case "RDONLY":
+                        case 3:
+                            message.tablet_types[i] = 3;
+                            break;
+                        case "BATCH":
+                        case 3:
+                            message.tablet_types[i] = 3;
+                            break;
+                        case "SPARE":
+                        case 4:
+                            message.tablet_types[i] = 4;
+                            break;
+                        case "EXPERIMENTAL":
+                        case 5:
+                            message.tablet_types[i] = 5;
+                            break;
+                        case "BACKUP":
+                        case 6:
+                            message.tablet_types[i] = 6;
+                            break;
+                        case "RESTORE":
+                        case 7:
+                            message.tablet_types[i] = 7;
+                            break;
+                        case "DRAINED":
+                        case 8:
+                            message.tablet_types[i] = 8;
+                            break;
+                        }
+                }
+                if (object.timeout != null) {
+                    if (typeof object.timeout !== "object")
+                        throw TypeError(".tabletmanagerdata.BackupRequest.InitSQL.timeout: object expected");
+                    message.timeout = $root.vttime.Duration.fromObject(object.timeout);
+                }
+                if (object.fail_on_error != null)
+                    message.fail_on_error = Boolean(object.fail_on_error);
+                return message;
+            };
+
+            /**
+             * Creates a plain object from an InitSQL message. Also converts values to other types if specified.
+             * @function toObject
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @static
+             * @param {tabletmanagerdata.BackupRequest.InitSQL} message InitSQL
+             * @param {$protobuf.IConversionOptions} [options] Conversion options
+             * @returns {Object.<string,*>} Plain object
+             */
+            InitSQL.toObject = function toObject(message, options) {
+                if (!options)
+                    options = {};
+                let object = {};
+                if (options.arrays || options.defaults) {
+                    object.queries = [];
+                    object.tablet_types = [];
+                }
+                if (options.defaults) {
+                    object.timeout = null;
+                    object.fail_on_error = false;
+                }
+                if (message.queries && message.queries.length) {
+                    object.queries = [];
+                    for (let j = 0; j < message.queries.length; ++j)
+                        object.queries[j] = message.queries[j];
+                }
+                if (message.tablet_types && message.tablet_types.length) {
+                    object.tablet_types = [];
+                    for (let j = 0; j < message.tablet_types.length; ++j)
+                        object.tablet_types[j] = options.enums === String ? $root.topodata.TabletType[message.tablet_types[j]] === undefined ? message.tablet_types[j] : $root.topodata.TabletType[message.tablet_types[j]] : message.tablet_types[j];
+                }
+                if (message.timeout != null && message.hasOwnProperty("timeout"))
+                    object.timeout = $root.vttime.Duration.toObject(message.timeout, options);
+                if (message.fail_on_error != null && message.hasOwnProperty("fail_on_error"))
+                    object.fail_on_error = message.fail_on_error;
+                return object;
+            };
+
+            /**
+             * Converts this InitSQL to JSON.
+             * @function toJSON
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @instance
+             * @returns {Object.<string,*>} JSON object
+             */
+            InitSQL.prototype.toJSON = function toJSON() {
+                return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+            };
+
+            /**
+             * Gets the default type url for InitSQL
+             * @function getTypeUrl
+             * @memberof tabletmanagerdata.BackupRequest.InitSQL
+             * @static
+             * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns {string} The default type url
+             */
+            InitSQL.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                if (typeUrlPrefix === undefined) {
+                    typeUrlPrefix = "type.googleapis.com";
+                }
+                return typeUrlPrefix + "/tabletmanagerdata.BackupRequest.InitSQL";
+            };
+
+            return InitSQL;
+        })();
 
         return BackupRequest;
     })();
@@ -72080,12 +76089,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BackupResponse.decode = function decode(reader, length) {
+        BackupResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.BackupResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.event = $root.logutil.Event.decode(reader, reader.uint32());
@@ -72334,12 +76345,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RestoreFromBackupRequest.decode = function decode(reader, length) {
+        RestoreFromBackupRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.RestoreFromBackupRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.backup_time = $root.vttime.Time.decode(reader, reader.uint32());
@@ -72611,12 +76624,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RestoreFromBackupResponse.decode = function decode(reader, length) {
+        RestoreFromBackupResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.RestoreFromBackupResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.event = $root.logutil.Event.decode(reader, reader.uint32());
@@ -72938,12 +76953,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CreateVReplicationWorkflowRequest.decode = function decode(reader, length) {
+        CreateVReplicationWorkflowRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.CreateVReplicationWorkflowRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -73467,12 +77484,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CreateVReplicationWorkflowResponse.decode = function decode(reader, length) {
+        CreateVReplicationWorkflowResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.CreateVReplicationWorkflowResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -73688,12 +77707,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteTableDataRequest.decode = function decode(reader, length) {
+        DeleteTableDataRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.DeleteTableDataRequest(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.table_filters === $util.emptyObject)
@@ -73940,12 +77961,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteTableDataResponse.decode = function decode(reader, length) {
+        DeleteTableDataResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.DeleteTableDataResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -74126,12 +78149,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteVReplicationWorkflowRequest.decode = function decode(reader, length) {
+        DeleteVReplicationWorkflowRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.DeleteVReplicationWorkflowRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -74329,12 +78354,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteVReplicationWorkflowResponse.decode = function decode(reader, length) {
+        DeleteVReplicationWorkflowResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.DeleteVReplicationWorkflowResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -74526,12 +78553,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        HasVReplicationWorkflowsRequest.decode = function decode(reader, length) {
+        HasVReplicationWorkflowsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.HasVReplicationWorkflowsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -74712,12 +78741,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        HasVReplicationWorkflowsResponse.decode = function decode(reader, length) {
+        HasVReplicationWorkflowsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.HasVReplicationWorkflowsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.has = reader.bool();
@@ -74989,12 +79020,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadVReplicationWorkflowsRequest.decode = function decode(reader, length) {
+        ReadVReplicationWorkflowsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReadVReplicationWorkflowsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.include_ids && message.include_ids.length))
@@ -75429,12 +79462,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadVReplicationWorkflowsResponse.decode = function decode(reader, length) {
+        ReadVReplicationWorkflowsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReadVReplicationWorkflowsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.workflows && message.workflows.length))
@@ -75651,12 +79686,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadVReplicationWorkflowRequest.decode = function decode(reader, length) {
+        ReadVReplicationWorkflowRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReadVReplicationWorkflowRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -75984,12 +80021,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadVReplicationWorkflowResponse.decode = function decode(reader, length) {
+        ReadVReplicationWorkflowResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReadVReplicationWorkflowResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 2: {
                         message.workflow = reader.string();
@@ -76685,12 +80724,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            Stream.decode = function decode(reader, length) {
+            Stream.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.id = reader.int32();
@@ -77148,12 +81189,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateVReplicationPermissionsRequest.decode = function decode(reader, length) {
+        ValidateVReplicationPermissionsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ValidateVReplicationPermissionsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -77257,6 +81300,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @interface IValidateVReplicationPermissionsResponse
          * @property {string|null} [user] ValidateVReplicationPermissionsResponse user
          * @property {boolean|null} [ok] ValidateVReplicationPermissionsResponse ok
+         * @property {string|null} [error] ValidateVReplicationPermissionsResponse error
          */
 
         /**
@@ -77291,6 +81335,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ValidateVReplicationPermissionsResponse.prototype.ok = false;
 
         /**
+         * ValidateVReplicationPermissionsResponse error.
+         * @member {string} error
+         * @memberof tabletmanagerdata.ValidateVReplicationPermissionsResponse
+         * @instance
+         */
+        ValidateVReplicationPermissionsResponse.prototype.error = "";
+
+        /**
          * Creates a new ValidateVReplicationPermissionsResponse instance using the specified properties.
          * @function create
          * @memberof tabletmanagerdata.ValidateVReplicationPermissionsResponse
@@ -77318,6 +81370,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.user);
             if (message.ok != null && Object.hasOwnProperty.call(message, "ok"))
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.ok);
+            if (message.error != null && Object.hasOwnProperty.call(message, "error"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.error);
             return writer;
         };
 
@@ -77345,12 +81399,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateVReplicationPermissionsResponse.decode = function decode(reader, length) {
+        ValidateVReplicationPermissionsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ValidateVReplicationPermissionsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.user = reader.string();
@@ -77358,6 +81414,10 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     }
                 case 2: {
                         message.ok = reader.bool();
+                        break;
+                    }
+                case 3: {
+                        message.error = reader.string();
                         break;
                     }
                 default:
@@ -77401,6 +81461,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.ok != null && message.hasOwnProperty("ok"))
                 if (typeof message.ok !== "boolean")
                     return "ok: boolean expected";
+            if (message.error != null && message.hasOwnProperty("error"))
+                if (!$util.isString(message.error))
+                    return "error: string expected";
             return null;
         };
 
@@ -77420,6 +81483,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 message.user = String(object.user);
             if (object.ok != null)
                 message.ok = Boolean(object.ok);
+            if (object.error != null)
+                message.error = String(object.error);
             return message;
         };
 
@@ -77439,11 +81504,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (options.defaults) {
                 object.user = "";
                 object.ok = false;
+                object.error = "";
             }
             if (message.user != null && message.hasOwnProperty("user"))
                 object.user = message.user;
             if (message.ok != null && message.hasOwnProperty("ok"))
                 object.ok = message.ok;
+            if (message.error != null && message.hasOwnProperty("error"))
+                object.error = message.error;
             return object;
         };
 
@@ -77616,12 +81684,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffRequest.decode = function decode(reader, length) {
+        VDiffRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.VDiffRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -77907,12 +81977,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffResponse.decode = function decode(reader, length) {
+        VDiffResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.VDiffResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.id = reader.int64();
@@ -78176,12 +82248,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffPickerOptions.decode = function decode(reader, length) {
+        VDiffPickerOptions.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.VDiffPickerOptions();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_types = reader.string();
@@ -78448,12 +82522,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffReportOptions.decode = function decode(reader, length) {
+        VDiffReportOptions.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.VDiffReportOptions();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.only_pks = reader.bool();
@@ -78836,12 +82912,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffCoreOptions.decode = function decode(reader, length) {
+        VDiffCoreOptions.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.VDiffCoreOptions();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tables = reader.string();
@@ -79245,12 +83323,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffOptions.decode = function decode(reader, length) {
+        VDiffOptions.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.VDiffOptions();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.picker_options = $root.tabletmanagerdata.VDiffPickerOptions.decode(reader, reader.uint32());
@@ -79508,12 +83588,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffTableLastPK.decode = function decode(reader, length) {
+        VDiffTableLastPK.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.VDiffTableLastPK();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.target = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -79878,12 +83960,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateVReplicationWorkflowRequest.decode = function decode(reader, length) {
+        UpdateVReplicationWorkflowRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UpdateVReplicationWorkflowRequest(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -80469,12 +84553,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateVReplicationWorkflowResponse.decode = function decode(reader, length) {
+        UpdateVReplicationWorkflowResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UpdateVReplicationWorkflowResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -80757,12 +84843,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateVReplicationWorkflowsRequest.decode = function decode(reader, length) {
+        UpdateVReplicationWorkflowsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UpdateVReplicationWorkflowsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.all_workflows = reader.bool();
@@ -81107,12 +85195,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateVReplicationWorkflowsResponse.decode = function decode(reader, length) {
+        UpdateVReplicationWorkflowsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UpdateVReplicationWorkflowsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -81317,12 +85407,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ResetSequencesRequest.decode = function decode(reader, length) {
+        ResetSequencesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ResetSequencesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.tables && message.tables.length))
@@ -81523,12 +85615,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ResetSequencesResponse.decode = function decode(reader, length) {
+        ResetSequencesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ResetSequencesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -81742,12 +85836,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CheckThrottlerRequest.decode = function decode(reader, length) {
+        CheckThrottlerRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.CheckThrottlerRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.app_name = reader.string();
@@ -82096,12 +86192,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CheckThrottlerResponse.decode = function decode(reader, length) {
+        CheckThrottlerResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.CheckThrottlerResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 2: {
                         message.value = reader.double();
@@ -82537,12 +86635,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            Metric.decode = function decode(reader, length) {
+            Metric.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.CheckThrottlerResponse.Metric();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.name = reader.string();
@@ -82844,12 +86944,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetThrottlerStatusRequest.decode = function decode(reader, length) {
+        GetThrottlerStatusRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetThrottlerStatusRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -83237,12 +87339,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetThrottlerStatusResponse.decode = function decode(reader, length) {
+        GetThrottlerStatusResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetThrottlerStatusResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = reader.string();
@@ -83868,12 +87972,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            MetricResult.decode = function decode(reader, length) {
+            MetricResult.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetThrottlerStatusResponse.MetricResult();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.value = reader.double();
@@ -84095,12 +88201,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            MetricHealth.decode = function decode(reader, length) {
+            MetricHealth.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.last_healthy_at = $root.vttime.Time.decode(reader, reader.uint32());
@@ -84341,12 +88449,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            RecentApp.decode = function decode(reader, length) {
+            RecentApp.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetThrottlerStatusResponse.RecentApp();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.checked_at = $root.vttime.Time.decode(reader, reader.uint32());
@@ -84617,12 +88727,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ChangeTagsRequest.decode = function decode(reader, length) {
+        ChangeTagsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ChangeTagsRequest(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.tags === $util.emptyObject)
@@ -84868,12 +88980,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ChangeTagsResponse.decode = function decode(reader, length) {
+        ChangeTagsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.ChangeTagsResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.tags === $util.emptyObject)
@@ -85106,12 +89220,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateSequenceTablesRequest.decode = function decode(reader, length) {
+        UpdateSequenceTablesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UpdateSequenceTablesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.sequences && message.sequences.length))
@@ -85347,12 +89463,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            SequenceMetadata.decode = function decode(reader, length) {
+            SequenceMetadata.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.backing_table_name = reader.string();
@@ -85581,12 +89699,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateSequenceTablesResponse.decode = function decode(reader, length) {
+        UpdateSequenceTablesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.UpdateSequenceTablesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -85769,12 +89889,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetMaxValueForSequencesRequest.decode = function decode(reader, length) {
+        GetMaxValueForSequencesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetMaxValueForSequencesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.sequences && message.sequences.length))
@@ -86021,12 +90143,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            SequenceMetadata.decode = function decode(reader, length) {
+            SequenceMetadata.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.backing_table_name = reader.string();
@@ -86266,12 +90390,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetMaxValueForSequencesResponse.decode = function decode(reader, length) {
+        GetMaxValueForSequencesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.tabletmanagerdata.GetMaxValueForSequencesResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.max_values_by_sequence_table === $util.emptyObject)
@@ -86546,12 +90672,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Charset.decode = function decode(reader, length) {
+        Charset.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.Charset();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.client = reader.int32();
@@ -86787,12 +90915,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BinlogTransaction.decode = function decode(reader, length) {
+        BinlogTransaction.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.BinlogTransaction();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.statements && message.statements.length))
@@ -87046,12 +91176,14 @@ export const binlogdata = $root.binlogdata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            Statement.decode = function decode(reader, length) {
+            Statement.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.BinlogTransaction.Statement();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.category = reader.int32();
@@ -87402,12 +91534,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StreamKeyRangeRequest.decode = function decode(reader, length) {
+        StreamKeyRangeRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.StreamKeyRangeRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.position = reader.string();
@@ -87640,12 +91774,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StreamKeyRangeResponse.decode = function decode(reader, length) {
+        StreamKeyRangeResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.StreamKeyRangeResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.binlog_transaction = $root.binlogdata.BinlogTransaction.decode(reader, reader.uint32());
@@ -87872,12 +92008,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StreamTablesRequest.decode = function decode(reader, length) {
+        StreamTablesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.StreamTablesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.position = reader.string();
@@ -88120,12 +92258,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StreamTablesResponse.decode = function decode(reader, length) {
+        StreamTablesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.StreamTablesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.binlog_transaction = $root.binlogdata.BinlogTransaction.decode(reader, reader.uint32());
@@ -88339,12 +92479,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CharsetConversion.decode = function decode(reader, length) {
+        CharsetConversion.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.CharsetConversion();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.from_charset = reader.string();
@@ -88651,12 +92793,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Rule.decode = function decode(reader, length) {
+        Rule.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.Rule(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.match = reader.string();
@@ -89090,12 +93234,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Filter.decode = function decode(reader, length) {
+        Filter.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.Filter();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.rules && message.rules.length))
@@ -89600,12 +93746,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BinlogSource.decode = function decode(reader, length) {
+        BinlogSource.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.BinlogSource();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -89994,6 +94142,8 @@ export const binlogdata = $root.binlogdata = (() => {
      * @property {number} LASTPK=18 LASTPK value
      * @property {number} SAVEPOINT=19 SAVEPOINT value
      * @property {number} COPY_COMPLETED=20 COPY_COMPLETED value
+     * @property {number} PREVIOUS_GTIDS=21 PREVIOUS_GTIDS value
+     * @property {number} ROWS_QUERY=22 ROWS_QUERY value
      */
     binlogdata.VEventType = (function() {
         const valuesById = {}, values = Object.create(valuesById);
@@ -90018,6 +94168,8 @@ export const binlogdata = $root.binlogdata = (() => {
         values[valuesById[18] = "LASTPK"] = 18;
         values[valuesById[19] = "SAVEPOINT"] = 19;
         values[valuesById[20] = "COPY_COMPLETED"] = 20;
+        values[valuesById[21] = "PREVIOUS_GTIDS"] = 21;
+        values[valuesById[22] = "ROWS_QUERY"] = 22;
         return values;
     })();
 
@@ -90139,12 +94291,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RowChange.decode = function decode(reader, length) {
+        RowChange.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.RowChange();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.before = $root.query.Row.decode(reader, reader.uint32());
@@ -90407,12 +94561,14 @@ export const binlogdata = $root.binlogdata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            Bitmap.decode = function decode(reader, length) {
+            Bitmap.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.RowChange.Bitmap();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.count = reader.int64();
@@ -90706,12 +94862,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RowEvent.decode = function decode(reader, length) {
+        RowEvent.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.RowEvent();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.table_name = reader.string();
@@ -91047,12 +95205,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        FieldEvent.decode = function decode(reader, length) {
+        FieldEvent.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.FieldEvent();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.table_name = reader.string();
@@ -91366,12 +95526,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardGtid.decode = function decode(reader, length) {
+        ShardGtid.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.ShardGtid();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -91628,12 +95790,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VGtid.decode = function decode(reader, length) {
+        VGtid.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VGtid();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.shard_gtids && message.shard_gtids.length))
@@ -91861,12 +96025,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        KeyspaceShard.decode = function decode(reader, length) {
+        KeyspaceShard.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.KeyspaceShard();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -92165,12 +96331,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Journal.decode = function decode(reader, length) {
+        Journal.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.Journal();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.id = reader.int64();
@@ -92478,6 +96646,9 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {string|null} [shard] VEvent shard
          * @property {boolean|null} [throttled] VEvent throttled
          * @property {string|null} [throttled_reason] VEvent throttled_reason
+         * @property {number|Long|null} [commit_parent] VEvent commit_parent
+         * @property {number|Long|null} [sequence_number] VEvent sequence_number
+         * @property {string|null} [event_gtid] VEvent event_gtid
          */
 
         /**
@@ -92616,6 +96787,30 @@ export const binlogdata = $root.binlogdata = (() => {
         VEvent.prototype.throttled_reason = "";
 
         /**
+         * VEvent commit_parent.
+         * @member {number|Long} commit_parent
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.commit_parent = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * VEvent sequence_number.
+         * @member {number|Long} sequence_number
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.sequence_number = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * VEvent event_gtid.
+         * @member {string} event_gtid
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.event_gtid = "";
+
+        /**
          * Creates a new VEvent instance using the specified properties.
          * @function create
          * @memberof binlogdata.VEvent
@@ -92669,6 +96864,12 @@ export const binlogdata = $root.binlogdata = (() => {
                 writer.uint32(/* id 24, wireType 0 =*/192).bool(message.throttled);
             if (message.throttled_reason != null && Object.hasOwnProperty.call(message, "throttled_reason"))
                 writer.uint32(/* id 25, wireType 2 =*/202).string(message.throttled_reason);
+            if (message.commit_parent != null && Object.hasOwnProperty.call(message, "commit_parent"))
+                writer.uint32(/* id 26, wireType 0 =*/208).int64(message.commit_parent);
+            if (message.sequence_number != null && Object.hasOwnProperty.call(message, "sequence_number"))
+                writer.uint32(/* id 27, wireType 0 =*/216).int64(message.sequence_number);
+            if (message.event_gtid != null && Object.hasOwnProperty.call(message, "event_gtid"))
+                writer.uint32(/* id 28, wireType 2 =*/226).string(message.event_gtid);
             return writer;
         };
 
@@ -92696,12 +96897,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VEvent.decode = function decode(reader, length) {
+        VEvent.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VEvent();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.type = reader.int32();
@@ -92761,6 +96964,18 @@ export const binlogdata = $root.binlogdata = (() => {
                     }
                 case 25: {
                         message.throttled_reason = reader.string();
+                        break;
+                    }
+                case 26: {
+                        message.commit_parent = reader.int64();
+                        break;
+                    }
+                case 27: {
+                        message.sequence_number = reader.int64();
+                        break;
+                    }
+                case 28: {
+                        message.event_gtid = reader.string();
                         break;
                     }
                 default:
@@ -92823,6 +97038,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 18:
                 case 19:
                 case 20:
+                case 21:
+                case 22:
                     break;
                 }
             if (message.timestamp != null && message.hasOwnProperty("timestamp"))
@@ -92877,6 +97094,15 @@ export const binlogdata = $root.binlogdata = (() => {
             if (message.throttled_reason != null && message.hasOwnProperty("throttled_reason"))
                 if (!$util.isString(message.throttled_reason))
                     return "throttled_reason: string expected";
+            if (message.commit_parent != null && message.hasOwnProperty("commit_parent"))
+                if (!$util.isInteger(message.commit_parent) && !(message.commit_parent && $util.isInteger(message.commit_parent.low) && $util.isInteger(message.commit_parent.high)))
+                    return "commit_parent: integer|Long expected";
+            if (message.sequence_number != null && message.hasOwnProperty("sequence_number"))
+                if (!$util.isInteger(message.sequence_number) && !(message.sequence_number && $util.isInteger(message.sequence_number.low) && $util.isInteger(message.sequence_number.high)))
+                    return "sequence_number: integer|Long expected";
+            if (message.event_gtid != null && message.hasOwnProperty("event_gtid"))
+                if (!$util.isString(message.event_gtid))
+                    return "event_gtid: string expected";
             return null;
         };
 
@@ -92983,6 +97209,14 @@ export const binlogdata = $root.binlogdata = (() => {
             case 20:
                 message.type = 20;
                 break;
+            case "PREVIOUS_GTIDS":
+            case 21:
+                message.type = 21;
+                break;
+            case "ROWS_QUERY":
+            case 22:
+                message.type = 22;
+                break;
             }
             if (object.timestamp != null)
                 if ($util.Long)
@@ -93041,6 +97275,26 @@ export const binlogdata = $root.binlogdata = (() => {
                 message.throttled = Boolean(object.throttled);
             if (object.throttled_reason != null)
                 message.throttled_reason = String(object.throttled_reason);
+            if (object.commit_parent != null)
+                if ($util.Long)
+                    (message.commit_parent = $util.Long.fromValue(object.commit_parent)).unsigned = false;
+                else if (typeof object.commit_parent === "string")
+                    message.commit_parent = parseInt(object.commit_parent, 10);
+                else if (typeof object.commit_parent === "number")
+                    message.commit_parent = object.commit_parent;
+                else if (typeof object.commit_parent === "object")
+                    message.commit_parent = new $util.LongBits(object.commit_parent.low >>> 0, object.commit_parent.high >>> 0).toNumber();
+            if (object.sequence_number != null)
+                if ($util.Long)
+                    (message.sequence_number = $util.Long.fromValue(object.sequence_number)).unsigned = false;
+                else if (typeof object.sequence_number === "string")
+                    message.sequence_number = parseInt(object.sequence_number, 10);
+                else if (typeof object.sequence_number === "number")
+                    message.sequence_number = object.sequence_number;
+                else if (typeof object.sequence_number === "object")
+                    message.sequence_number = new $util.LongBits(object.sequence_number.low >>> 0, object.sequence_number.high >>> 0).toNumber();
+            if (object.event_gtid != null)
+                message.event_gtid = String(object.event_gtid);
             return message;
         };
 
@@ -93081,6 +97335,17 @@ export const binlogdata = $root.binlogdata = (() => {
                 object.shard = "";
                 object.throttled = false;
                 object.throttled_reason = "";
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.commit_parent = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.commit_parent = options.longs === String ? "0" : 0;
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.sequence_number = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.sequence_number = options.longs === String ? "0" : 0;
+                object.event_gtid = "";
             }
             if (message.type != null && message.hasOwnProperty("type"))
                 object.type = options.enums === String ? $root.binlogdata.VEventType[message.type] === undefined ? message.type : $root.binlogdata.VEventType[message.type] : message.type;
@@ -93118,6 +97383,18 @@ export const binlogdata = $root.binlogdata = (() => {
                 object.throttled = message.throttled;
             if (message.throttled_reason != null && message.hasOwnProperty("throttled_reason"))
                 object.throttled_reason = message.throttled_reason;
+            if (message.commit_parent != null && message.hasOwnProperty("commit_parent"))
+                if (typeof message.commit_parent === "number")
+                    object.commit_parent = options.longs === String ? String(message.commit_parent) : message.commit_parent;
+                else
+                    object.commit_parent = options.longs === String ? $util.Long.prototype.toString.call(message.commit_parent) : options.longs === Number ? new $util.LongBits(message.commit_parent.low >>> 0, message.commit_parent.high >>> 0).toNumber() : message.commit_parent;
+            if (message.sequence_number != null && message.hasOwnProperty("sequence_number"))
+                if (typeof message.sequence_number === "number")
+                    object.sequence_number = options.longs === String ? String(message.sequence_number) : message.sequence_number;
+                else
+                    object.sequence_number = options.longs === String ? $util.Long.prototype.toString.call(message.sequence_number) : options.longs === Number ? new $util.LongBits(message.sequence_number.low >>> 0, message.sequence_number.high >>> 0).toNumber() : message.sequence_number;
+            if (message.event_gtid != null && message.hasOwnProperty("event_gtid"))
+                object.event_gtid = message.event_gtid;
             return object;
         };
 
@@ -93275,12 +97552,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MinimalTable.decode = function decode(reader, length) {
+        MinimalTable.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.MinimalTable();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -93567,12 +97846,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MinimalSchema.decode = function decode(reader, length) {
+        MinimalSchema.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.MinimalSchema();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.tables && message.tables.length))
@@ -93713,6 +97994,8 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {Array.<string>|null} [internal_tables] VStreamOptions internal_tables
          * @property {Object.<string,string>|null} [config_overrides] VStreamOptions config_overrides
          * @property {Array.<string>|null} [tables_to_copy] VStreamOptions tables_to_copy
+         * @property {boolean|null} [no_timeouts] VStreamOptions no_timeouts
+         * @property {Array.<binlogdata.VEventType>|null} [event_types] VStreamOptions event_types
          */
 
         /**
@@ -93727,6 +98010,7 @@ export const binlogdata = $root.binlogdata = (() => {
             this.internal_tables = [];
             this.config_overrides = {};
             this.tables_to_copy = [];
+            this.event_types = [];
             if (properties)
                 for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -93756,6 +98040,22 @@ export const binlogdata = $root.binlogdata = (() => {
          * @instance
          */
         VStreamOptions.prototype.tables_to_copy = $util.emptyArray;
+
+        /**
+         * VStreamOptions no_timeouts.
+         * @member {boolean} no_timeouts
+         * @memberof binlogdata.VStreamOptions
+         * @instance
+         */
+        VStreamOptions.prototype.no_timeouts = false;
+
+        /**
+         * VStreamOptions event_types.
+         * @member {Array.<binlogdata.VEventType>} event_types
+         * @memberof binlogdata.VStreamOptions
+         * @instance
+         */
+        VStreamOptions.prototype.event_types = $util.emptyArray;
 
         /**
          * Creates a new VStreamOptions instance using the specified properties.
@@ -93790,6 +98090,14 @@ export const binlogdata = $root.binlogdata = (() => {
             if (message.tables_to_copy != null && message.tables_to_copy.length)
                 for (let i = 0; i < message.tables_to_copy.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.tables_to_copy[i]);
+            if (message.no_timeouts != null && Object.hasOwnProperty.call(message, "no_timeouts"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.no_timeouts);
+            if (message.event_types != null && message.event_types.length) {
+                writer.uint32(/* id 5, wireType 2 =*/42).fork();
+                for (let i = 0; i < message.event_types.length; ++i)
+                    writer.int32(message.event_types[i]);
+                writer.ldelim();
+            }
             return writer;
         };
 
@@ -93817,12 +98125,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VStreamOptions.decode = function decode(reader, length) {
+        VStreamOptions.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamOptions(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.internal_tables && message.internal_tables.length))
@@ -93857,6 +98167,21 @@ export const binlogdata = $root.binlogdata = (() => {
                         if (!(message.tables_to_copy && message.tables_to_copy.length))
                             message.tables_to_copy = [];
                         message.tables_to_copy.push(reader.string());
+                        break;
+                    }
+                case 4: {
+                        message.no_timeouts = reader.bool();
+                        break;
+                    }
+                case 5: {
+                        if (!(message.event_types && message.event_types.length))
+                            message.event_types = [];
+                        if ((tag & 7) === 2) {
+                            let end2 = reader.uint32() + reader.pos;
+                            while (reader.pos < end2)
+                                message.event_types.push(reader.int32());
+                        } else
+                            message.event_types.push(reader.int32());
                         break;
                     }
                 default:
@@ -93916,6 +98241,42 @@ export const binlogdata = $root.binlogdata = (() => {
                     if (!$util.isString(message.tables_to_copy[i]))
                         return "tables_to_copy: string[] expected";
             }
+            if (message.no_timeouts != null && message.hasOwnProperty("no_timeouts"))
+                if (typeof message.no_timeouts !== "boolean")
+                    return "no_timeouts: boolean expected";
+            if (message.event_types != null && message.hasOwnProperty("event_types")) {
+                if (!Array.isArray(message.event_types))
+                    return "event_types: array expected";
+                for (let i = 0; i < message.event_types.length; ++i)
+                    switch (message.event_types[i]) {
+                    default:
+                        return "event_types: enum value[] expected";
+                    case 0:
+                    case 1:
+                    case 2:
+                    case 3:
+                    case 4:
+                    case 5:
+                    case 6:
+                    case 7:
+                    case 8:
+                    case 9:
+                    case 10:
+                    case 11:
+                    case 12:
+                    case 13:
+                    case 14:
+                    case 15:
+                    case 16:
+                    case 17:
+                    case 18:
+                    case 19:
+                    case 20:
+                    case 21:
+                    case 22:
+                        break;
+                    }
+            }
             return null;
         };
 
@@ -93952,6 +98313,113 @@ export const binlogdata = $root.binlogdata = (() => {
                 for (let i = 0; i < object.tables_to_copy.length; ++i)
                     message.tables_to_copy[i] = String(object.tables_to_copy[i]);
             }
+            if (object.no_timeouts != null)
+                message.no_timeouts = Boolean(object.no_timeouts);
+            if (object.event_types) {
+                if (!Array.isArray(object.event_types))
+                    throw TypeError(".binlogdata.VStreamOptions.event_types: array expected");
+                message.event_types = [];
+                for (let i = 0; i < object.event_types.length; ++i)
+                    switch (object.event_types[i]) {
+                    default:
+                        if (typeof object.event_types[i] === "number") {
+                            message.event_types[i] = object.event_types[i];
+                            break;
+                        }
+                    case "UNKNOWN":
+                    case 0:
+                        message.event_types[i] = 0;
+                        break;
+                    case "GTID":
+                    case 1:
+                        message.event_types[i] = 1;
+                        break;
+                    case "BEGIN":
+                    case 2:
+                        message.event_types[i] = 2;
+                        break;
+                    case "COMMIT":
+                    case 3:
+                        message.event_types[i] = 3;
+                        break;
+                    case "ROLLBACK":
+                    case 4:
+                        message.event_types[i] = 4;
+                        break;
+                    case "DDL":
+                    case 5:
+                        message.event_types[i] = 5;
+                        break;
+                    case "INSERT":
+                    case 6:
+                        message.event_types[i] = 6;
+                        break;
+                    case "REPLACE":
+                    case 7:
+                        message.event_types[i] = 7;
+                        break;
+                    case "UPDATE":
+                    case 8:
+                        message.event_types[i] = 8;
+                        break;
+                    case "DELETE":
+                    case 9:
+                        message.event_types[i] = 9;
+                        break;
+                    case "SET":
+                    case 10:
+                        message.event_types[i] = 10;
+                        break;
+                    case "OTHER":
+                    case 11:
+                        message.event_types[i] = 11;
+                        break;
+                    case "ROW":
+                    case 12:
+                        message.event_types[i] = 12;
+                        break;
+                    case "FIELD":
+                    case 13:
+                        message.event_types[i] = 13;
+                        break;
+                    case "HEARTBEAT":
+                    case 14:
+                        message.event_types[i] = 14;
+                        break;
+                    case "VGTID":
+                    case 15:
+                        message.event_types[i] = 15;
+                        break;
+                    case "JOURNAL":
+                    case 16:
+                        message.event_types[i] = 16;
+                        break;
+                    case "VERSION":
+                    case 17:
+                        message.event_types[i] = 17;
+                        break;
+                    case "LASTPK":
+                    case 18:
+                        message.event_types[i] = 18;
+                        break;
+                    case "SAVEPOINT":
+                    case 19:
+                        message.event_types[i] = 19;
+                        break;
+                    case "COPY_COMPLETED":
+                    case 20:
+                        message.event_types[i] = 20;
+                        break;
+                    case "PREVIOUS_GTIDS":
+                    case 21:
+                        message.event_types[i] = 21;
+                        break;
+                    case "ROWS_QUERY":
+                    case 22:
+                        message.event_types[i] = 22;
+                        break;
+                    }
+            }
             return message;
         };
 
@@ -93971,9 +98439,12 @@ export const binlogdata = $root.binlogdata = (() => {
             if (options.arrays || options.defaults) {
                 object.internal_tables = [];
                 object.tables_to_copy = [];
+                object.event_types = [];
             }
             if (options.objects || options.defaults)
                 object.config_overrides = {};
+            if (options.defaults)
+                object.no_timeouts = false;
             if (message.internal_tables && message.internal_tables.length) {
                 object.internal_tables = [];
                 for (let j = 0; j < message.internal_tables.length; ++j)
@@ -93989,6 +98460,13 @@ export const binlogdata = $root.binlogdata = (() => {
                 object.tables_to_copy = [];
                 for (let j = 0; j < message.tables_to_copy.length; ++j)
                     object.tables_to_copy[j] = message.tables_to_copy[j];
+            }
+            if (message.no_timeouts != null && message.hasOwnProperty("no_timeouts"))
+                object.no_timeouts = message.no_timeouts;
+            if (message.event_types && message.event_types.length) {
+                object.event_types = [];
+                for (let j = 0; j < message.event_types.length; ++j)
+                    object.event_types[j] = options.enums === String ? $root.binlogdata.VEventType[message.event_types[j]] === undefined ? message.event_types[j] : $root.binlogdata.VEventType[message.event_types[j]] : message.event_types[j];
             }
             return object;
         };
@@ -94175,12 +98653,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VStreamRequest.decode = function decode(reader, length) {
+        VStreamRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -94498,12 +98978,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VStreamResponse.decode = function decode(reader, length) {
+        VStreamResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.events && message.events.length))
@@ -94775,12 +99257,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VStreamRowsRequest.decode = function decode(reader, length) {
+        VStreamRowsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamRowsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -95147,12 +99631,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VStreamRowsResponse.decode = function decode(reader, length) {
+        VStreamRowsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamRowsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.fields && message.fields.length))
@@ -95532,12 +100018,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VStreamTablesRequest.decode = function decode(reader, length) {
+        VStreamTablesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamTablesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -95853,12 +100341,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VStreamTablesResponse.decode = function decode(reader, length) {
+        VStreamTablesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamTablesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.table_name = reader.string();
@@ -96192,12 +100682,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LastPKEvent.decode = function decode(reader, length) {
+        LastPKEvent.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.LastPKEvent();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.table_last_p_k = $root.binlogdata.TableLastPK.decode(reader, reader.uint32());
@@ -96424,12 +100916,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TableLastPK.decode = function decode(reader, length) {
+        TableLastPK.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.TableLastPK();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.table_name = reader.string();
@@ -96678,12 +101172,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VStreamResultsRequest.decode = function decode(reader, length) {
+        VStreamResultsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamResultsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -96959,12 +101455,14 @@ export const binlogdata = $root.binlogdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VStreamResultsResponse.decode = function decode(reader, length) {
+        VStreamResultsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamResultsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.fields && message.fields.length))
@@ -97271,12 +101769,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Target.decode = function decode(reader, length) {
+        Target.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.Target();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -97588,12 +102088,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VTGateCallerID.decode = function decode(reader, length) {
+        VTGateCallerID.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.VTGateCallerID();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.username = reader.string();
@@ -97840,12 +102342,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        EventToken.decode = function decode(reader, length) {
+        EventToken.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.EventToken();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.timestamp = reader.int64();
@@ -98253,12 +102757,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Value.decode = function decode(reader, length) {
+        Value.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.Value();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.type = reader.int32();
@@ -98701,12 +103207,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BindVariable.decode = function decode(reader, length) {
+        BindVariable.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.BindVariable();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.type = reader.int32();
@@ -99172,12 +103680,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BoundQuery.decode = function decode(reader, length) {
+        BoundQuery.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.BoundQuery(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.sql = reader.string();
@@ -99362,6 +103872,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [authoritative_timeout] ExecuteOptions authoritative_timeout
          * @property {boolean|null} [fetch_last_insert_id] ExecuteOptions fetch_last_insert_id
          * @property {boolean|null} [in_dml_execution] ExecuteOptions in_dml_execution
+         * @property {number|Long|null} [transaction_timeout] ExecuteOptions transaction_timeout
          */
 
         /**
@@ -99500,6 +104011,14 @@ export const query = $root.query = (() => {
          */
         ExecuteOptions.prototype.in_dml_execution = false;
 
+        /**
+         * ExecuteOptions transaction_timeout.
+         * @member {number|Long|null|undefined} transaction_timeout
+         * @memberof query.ExecuteOptions
+         * @instance
+         */
+        ExecuteOptions.prototype.transaction_timeout = null;
+
         // OneOf field names bound to virtual getters and setters
         let $oneOfFields;
 
@@ -99511,6 +104030,12 @@ export const query = $root.query = (() => {
          */
         Object.defineProperty(ExecuteOptions.prototype, "timeout", {
             get: $util.oneOfGetter($oneOfFields = ["authoritative_timeout"]),
+            set: $util.oneOfSetter($oneOfFields)
+        });
+
+        // Virtual OneOf for proto3 optional field
+        Object.defineProperty(ExecuteOptions.prototype, "_transaction_timeout", {
+            get: $util.oneOfGetter($oneOfFields = ["transaction_timeout"]),
             set: $util.oneOfSetter($oneOfFields)
         });
 
@@ -99572,6 +104097,8 @@ export const query = $root.query = (() => {
                 writer.uint32(/* id 18, wireType 0 =*/144).bool(message.fetch_last_insert_id);
             if (message.in_dml_execution != null && Object.hasOwnProperty.call(message, "in_dml_execution"))
                 writer.uint32(/* id 19, wireType 0 =*/152).bool(message.in_dml_execution);
+            if (message.transaction_timeout != null && Object.hasOwnProperty.call(message, "transaction_timeout"))
+                writer.uint32(/* id 20, wireType 0 =*/160).int64(message.transaction_timeout);
             return writer;
         };
 
@@ -99599,12 +104126,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteOptions.decode = function decode(reader, length) {
+        ExecuteOptions.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ExecuteOptions();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 4: {
                         message.included_fields = reader.int32();
@@ -99671,6 +104200,10 @@ export const query = $root.query = (() => {
                     }
                 case 19: {
                         message.in_dml_execution = reader.bool();
+                        break;
+                    }
+                case 20: {
+                        message.transaction_timeout = reader.int64();
                         break;
                     }
                 default:
@@ -99807,6 +104340,11 @@ export const query = $root.query = (() => {
             if (message.in_dml_execution != null && message.hasOwnProperty("in_dml_execution"))
                 if (typeof message.in_dml_execution !== "boolean")
                     return "in_dml_execution: boolean expected";
+            if (message.transaction_timeout != null && message.hasOwnProperty("transaction_timeout")) {
+                properties._transaction_timeout = 1;
+                if (!$util.isInteger(message.transaction_timeout) && !(message.transaction_timeout && $util.isInteger(message.transaction_timeout.low) && $util.isInteger(message.transaction_timeout.high)))
+                    return "transaction_timeout: integer|Long expected";
+            }
             return null;
         };
 
@@ -100023,6 +104561,15 @@ export const query = $root.query = (() => {
                 message.fetch_last_insert_id = Boolean(object.fetch_last_insert_id);
             if (object.in_dml_execution != null)
                 message.in_dml_execution = Boolean(object.in_dml_execution);
+            if (object.transaction_timeout != null)
+                if ($util.Long)
+                    (message.transaction_timeout = $util.Long.fromValue(object.transaction_timeout)).unsigned = false;
+                else if (typeof object.transaction_timeout === "string")
+                    message.transaction_timeout = parseInt(object.transaction_timeout, 10);
+                else if (typeof object.transaction_timeout === "number")
+                    message.transaction_timeout = object.transaction_timeout;
+                else if (typeof object.transaction_timeout === "object")
+                    message.transaction_timeout = new $util.LongBits(object.transaction_timeout.low >>> 0, object.transaction_timeout.high >>> 0).toNumber();
             return message;
         };
 
@@ -100102,6 +104649,14 @@ export const query = $root.query = (() => {
                 object.fetch_last_insert_id = message.fetch_last_insert_id;
             if (message.in_dml_execution != null && message.hasOwnProperty("in_dml_execution"))
                 object.in_dml_execution = message.in_dml_execution;
+            if (message.transaction_timeout != null && message.hasOwnProperty("transaction_timeout")) {
+                if (typeof message.transaction_timeout === "number")
+                    object.transaction_timeout = options.longs === String ? String(message.transaction_timeout) : message.transaction_timeout;
+                else
+                    object.transaction_timeout = options.longs === String ? $util.Long.prototype.toString.call(message.transaction_timeout) : options.longs === Number ? new $util.LongBits(message.transaction_timeout.low >>> 0, message.transaction_timeout.high >>> 0).toNumber() : message.transaction_timeout;
+                if (options.oneofs)
+                    object._transaction_timeout = "transaction_timeout";
+            }
             return object;
         };
 
@@ -100447,12 +105002,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Field.decode = function decode(reader, length) {
+        Field.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.Field();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -100986,12 +105543,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Row.decode = function decode(reader, length) {
+        Row.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.Row();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.lengths && message.lengths.length))
@@ -101310,12 +105869,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        QueryResult.decode = function decode(reader, length) {
+        QueryResult.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.QueryResult();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.fields && message.fields.length))
@@ -101665,12 +106226,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        QueryWarning.decode = function decode(reader, length) {
+        QueryWarning.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.QueryWarning();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.code = reader.uint32();
@@ -101894,12 +106457,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StreamEvent.decode = function decode(reader, length) {
+        StreamEvent.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.StreamEvent();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.statements && message.statements.length))
@@ -102179,12 +106744,14 @@ export const query = $root.query = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            Statement.decode = function decode(reader, length) {
+            Statement.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.StreamEvent.Statement();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.category = reader.int32();
@@ -102589,12 +107156,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteRequest.decode = function decode(reader, length) {
+        ExecuteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ExecuteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -102918,12 +107487,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteResponse.decode = function decode(reader, length) {
+        ExecuteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ExecuteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -103137,12 +107708,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ResultWithError.decode = function decode(reader, length) {
+        ResultWithError.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ResultWithError();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32());
@@ -103429,12 +108002,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StreamExecuteRequest.decode = function decode(reader, length) {
+        StreamExecuteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.StreamExecuteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -103758,12 +108333,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StreamExecuteResponse.decode = function decode(reader, length) {
+        StreamExecuteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.StreamExecuteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -103999,12 +108576,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BeginRequest.decode = function decode(reader, length) {
+        BeginRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.BeginRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -104281,12 +108860,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BeginResponse.decode = function decode(reader, length) {
+        BeginResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.BeginResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.transaction_id = reader.int64();
@@ -104561,12 +109142,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CommitRequest.decode = function decode(reader, length) {
+        CommitRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.CommitRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -104830,12 +109413,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CommitResponse.decode = function decode(reader, length) {
+        CommitResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.CommitResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.reserved_id = reader.int64();
@@ -105080,12 +109665,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RollbackRequest.decode = function decode(reader, length) {
+        RollbackRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.RollbackRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -105349,12 +109936,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RollbackResponse.decode = function decode(reader, length) {
+        RollbackResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.RollbackResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.reserved_id = reader.int64();
@@ -105610,12 +110199,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PrepareRequest.decode = function decode(reader, length) {
+        PrepareRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.PrepareRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -105880,12 +110471,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PrepareResponse.decode = function decode(reader, length) {
+        PrepareResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.PrepareResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -106099,12 +110692,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CommitPreparedRequest.decode = function decode(reader, length) {
+        CommitPreparedRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.CommitPreparedRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -106343,12 +110938,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CommitPreparedResponse.decode = function decode(reader, length) {
+        CommitPreparedResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.CommitPreparedResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -106573,12 +111170,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RollbackPreparedRequest.decode = function decode(reader, length) {
+        RollbackPreparedRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.RollbackPreparedRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -106843,12 +111442,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RollbackPreparedResponse.decode = function decode(reader, length) {
+        RollbackPreparedResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.RollbackPreparedResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -107075,12 +111676,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CreateTransactionRequest.decode = function decode(reader, length) {
+        CreateTransactionRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.CreateTransactionRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -107351,12 +111954,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CreateTransactionResponse.decode = function decode(reader, length) {
+        CreateTransactionResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.CreateTransactionResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -107581,12 +112186,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartCommitRequest.decode = function decode(reader, length) {
+        StartCommitRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.StartCommitRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -107878,12 +112485,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartCommitResponse.decode = function decode(reader, length) {
+        StartCommitResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.StartCommitResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.state = reader.int32();
@@ -108149,12 +112758,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetRollbackRequest.decode = function decode(reader, length) {
+        SetRollbackRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.SetRollbackRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -108419,12 +113030,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetRollbackResponse.decode = function decode(reader, length) {
+        SetRollbackResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.SetRollbackResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -108638,12 +113251,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ConcludeTransactionRequest.decode = function decode(reader, length) {
+        ConcludeTransactionRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ConcludeTransactionRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -108882,12 +113497,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ConcludeTransactionResponse.decode = function decode(reader, length) {
+        ConcludeTransactionResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ConcludeTransactionResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -109101,12 +113718,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadTransactionRequest.decode = function decode(reader, length) {
+        ReadTransactionRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReadTransactionRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -109356,12 +113975,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReadTransactionResponse.decode = function decode(reader, length) {
+        ReadTransactionResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReadTransactionResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.metadata = $root.query.TransactionMetadata.decode(reader, reader.uint32());
@@ -109597,12 +114218,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UnresolvedTransactionsRequest.decode = function decode(reader, length) {
+        UnresolvedTransactionsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.UnresolvedTransactionsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -109868,12 +114491,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UnresolvedTransactionsResponse.decode = function decode(reader, length) {
+        UnresolvedTransactionsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.UnresolvedTransactionsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.transactions && message.transactions.length))
@@ -110158,12 +114783,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BeginExecuteRequest.decode = function decode(reader, length) {
+        BeginExecuteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.BeginExecuteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -110532,12 +115159,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BeginExecuteResponse.decode = function decode(reader, length) {
+        BeginExecuteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.BeginExecuteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32());
@@ -110881,12 +115510,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BeginStreamExecuteRequest.decode = function decode(reader, length) {
+        BeginStreamExecuteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.BeginStreamExecuteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -111255,12 +115886,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BeginStreamExecuteResponse.decode = function decode(reader, length) {
+        BeginStreamExecuteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.BeginStreamExecuteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32());
@@ -111569,12 +116202,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MessageStreamRequest.decode = function decode(reader, length) {
+        MessageStreamRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.MessageStreamRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -111824,12 +116459,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MessageStreamResponse.decode = function decode(reader, length) {
+        MessageStreamResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.MessageStreamResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -112078,12 +116715,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MessageAckRequest.decode = function decode(reader, length) {
+        MessageAckRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.MessageAckRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -112365,12 +117004,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MessageAckResponse.decode = function decode(reader, length) {
+        MessageAckResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.MessageAckResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -112641,12 +117282,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReserveExecuteRequest.decode = function decode(reader, length) {
+        ReserveExecuteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReserveExecuteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -113004,12 +117647,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReserveExecuteResponse.decode = function decode(reader, length) {
+        ReserveExecuteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReserveExecuteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32());
@@ -113341,12 +117986,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReserveStreamExecuteRequest.decode = function decode(reader, length) {
+        ReserveStreamExecuteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReserveStreamExecuteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -113704,12 +118351,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReserveStreamExecuteResponse.decode = function decode(reader, length) {
+        ReserveStreamExecuteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReserveStreamExecuteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32());
@@ -114043,12 +118692,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReserveBeginExecuteRequest.decode = function decode(reader, length) {
+        ReserveBeginExecuteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReserveBeginExecuteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -114429,12 +119080,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReserveBeginExecuteResponse.decode = function decode(reader, length) {
+        ReserveBeginExecuteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReserveBeginExecuteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32());
@@ -114806,12 +119459,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReserveBeginStreamExecuteRequest.decode = function decode(reader, length) {
+        ReserveBeginStreamExecuteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReserveBeginStreamExecuteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -115192,12 +119847,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReserveBeginStreamExecuteResponse.decode = function decode(reader, length) {
+        ReserveBeginStreamExecuteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReserveBeginStreamExecuteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32());
@@ -115543,12 +120200,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReleaseRequest.decode = function decode(reader, length) {
+        ReleaseRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReleaseRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
@@ -115827,12 +120486,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReleaseResponse.decode = function decode(reader, length) {
+        ReleaseResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.ReleaseResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -116002,12 +120663,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StreamHealthRequest.decode = function decode(reader, length) {
+        StreamHealthRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.StreamHealthRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -116291,12 +120954,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RealtimeStats.decode = function decode(reader, length) {
+        RealtimeStats.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.RealtimeStats();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.health_error = reader.string();
@@ -116680,12 +121345,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        AggregateStats.decode = function decode(reader, length) {
+        AggregateStats.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.AggregateStats();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.healthy_tablet_count = reader.int32();
@@ -116964,12 +121631,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StreamHealthResponse.decode = function decode(reader, length) {
+        StreamHealthResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.StreamHealthResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.target = $root.query.Target.decode(reader, reader.uint32());
@@ -117298,12 +121967,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TransactionMetadata.decode = function decode(reader, length) {
+        TransactionMetadata.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.TransactionMetadata();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.dtid = reader.string();
@@ -117643,12 +122314,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaRequest.decode = function decode(reader, length) {
+        GetSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.GetSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.target = $root.query.Target.decode(reader, reader.uint32());
@@ -117942,12 +122615,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UDFInfo.decode = function decode(reader, length) {
+        UDFInfo.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.UDFInfo();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -118384,12 +123059,14 @@ export const query = $root.query = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaResponse.decode = function decode(reader, length) {
+        GetSchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.query.GetSchemaResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.udfs && message.udfs.length))
@@ -118608,6 +123285,10 @@ export const replicationdata = $root.replicationdata = (() => {
          * @property {boolean|null} [ssl_allowed] Status ssl_allowed
          * @property {boolean|null} [replication_lag_unknown] Status replication_lag_unknown
          * @property {boolean|null} [backup_running] Status backup_running
+         * @property {boolean|null} [semi_sync_primary_enabled] Status semi_sync_primary_enabled
+         * @property {boolean|null} [semi_sync_replica_enabled] Status semi_sync_replica_enabled
+         * @property {boolean|null} [semi_sync_primary_status] Status semi_sync_primary_status
+         * @property {boolean|null} [semi_sync_replica_status] Status semi_sync_replica_status
          */
 
         /**
@@ -118810,6 +123491,38 @@ export const replicationdata = $root.replicationdata = (() => {
         Status.prototype.backup_running = false;
 
         /**
+         * Status semi_sync_primary_enabled.
+         * @member {boolean} semi_sync_primary_enabled
+         * @memberof replicationdata.Status
+         * @instance
+         */
+        Status.prototype.semi_sync_primary_enabled = false;
+
+        /**
+         * Status semi_sync_replica_enabled.
+         * @member {boolean} semi_sync_replica_enabled
+         * @memberof replicationdata.Status
+         * @instance
+         */
+        Status.prototype.semi_sync_replica_enabled = false;
+
+        /**
+         * Status semi_sync_primary_status.
+         * @member {boolean} semi_sync_primary_status
+         * @memberof replicationdata.Status
+         * @instance
+         */
+        Status.prototype.semi_sync_primary_status = false;
+
+        /**
+         * Status semi_sync_replica_status.
+         * @member {boolean} semi_sync_replica_status
+         * @memberof replicationdata.Status
+         * @instance
+         */
+        Status.prototype.semi_sync_replica_status = false;
+
+        /**
          * Creates a new Status instance using the specified properties.
          * @function create
          * @memberof replicationdata.Status
@@ -118879,6 +123592,14 @@ export const replicationdata = $root.replicationdata = (() => {
                 writer.uint32(/* id 24, wireType 0 =*/192).bool(message.replication_lag_unknown);
             if (message.backup_running != null && Object.hasOwnProperty.call(message, "backup_running"))
                 writer.uint32(/* id 25, wireType 0 =*/200).bool(message.backup_running);
+            if (message.semi_sync_primary_enabled != null && Object.hasOwnProperty.call(message, "semi_sync_primary_enabled"))
+                writer.uint32(/* id 26, wireType 0 =*/208).bool(message.semi_sync_primary_enabled);
+            if (message.semi_sync_replica_enabled != null && Object.hasOwnProperty.call(message, "semi_sync_replica_enabled"))
+                writer.uint32(/* id 27, wireType 0 =*/216).bool(message.semi_sync_replica_enabled);
+            if (message.semi_sync_primary_status != null && Object.hasOwnProperty.call(message, "semi_sync_primary_status"))
+                writer.uint32(/* id 28, wireType 0 =*/224).bool(message.semi_sync_primary_status);
+            if (message.semi_sync_replica_status != null && Object.hasOwnProperty.call(message, "semi_sync_replica_status"))
+                writer.uint32(/* id 29, wireType 0 =*/232).bool(message.semi_sync_replica_status);
             return writer;
         };
 
@@ -118906,12 +123627,14 @@ export const replicationdata = $root.replicationdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Status.decode = function decode(reader, length) {
+        Status.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.replicationdata.Status();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.position = reader.string();
@@ -119003,6 +123726,22 @@ export const replicationdata = $root.replicationdata = (() => {
                     }
                 case 25: {
                         message.backup_running = reader.bool();
+                        break;
+                    }
+                case 26: {
+                        message.semi_sync_primary_enabled = reader.bool();
+                        break;
+                    }
+                case 27: {
+                        message.semi_sync_replica_enabled = reader.bool();
+                        break;
+                    }
+                case 28: {
+                        message.semi_sync_primary_status = reader.bool();
+                        break;
+                    }
+                case 29: {
+                        message.semi_sync_replica_status = reader.bool();
                         break;
                     }
                 default:
@@ -119109,6 +123848,18 @@ export const replicationdata = $root.replicationdata = (() => {
             if (message.backup_running != null && message.hasOwnProperty("backup_running"))
                 if (typeof message.backup_running !== "boolean")
                     return "backup_running: boolean expected";
+            if (message.semi_sync_primary_enabled != null && message.hasOwnProperty("semi_sync_primary_enabled"))
+                if (typeof message.semi_sync_primary_enabled !== "boolean")
+                    return "semi_sync_primary_enabled: boolean expected";
+            if (message.semi_sync_replica_enabled != null && message.hasOwnProperty("semi_sync_replica_enabled"))
+                if (typeof message.semi_sync_replica_enabled !== "boolean")
+                    return "semi_sync_replica_enabled: boolean expected";
+            if (message.semi_sync_primary_status != null && message.hasOwnProperty("semi_sync_primary_status"))
+                if (typeof message.semi_sync_primary_status !== "boolean")
+                    return "semi_sync_primary_status: boolean expected";
+            if (message.semi_sync_replica_status != null && message.hasOwnProperty("semi_sync_replica_status"))
+                if (typeof message.semi_sync_replica_status !== "boolean")
+                    return "semi_sync_replica_status: boolean expected";
             return null;
         };
 
@@ -119170,6 +123921,14 @@ export const replicationdata = $root.replicationdata = (() => {
                 message.replication_lag_unknown = Boolean(object.replication_lag_unknown);
             if (object.backup_running != null)
                 message.backup_running = Boolean(object.backup_running);
+            if (object.semi_sync_primary_enabled != null)
+                message.semi_sync_primary_enabled = Boolean(object.semi_sync_primary_enabled);
+            if (object.semi_sync_replica_enabled != null)
+                message.semi_sync_replica_enabled = Boolean(object.semi_sync_replica_enabled);
+            if (object.semi_sync_primary_status != null)
+                message.semi_sync_primary_status = Boolean(object.semi_sync_primary_status);
+            if (object.semi_sync_replica_status != null)
+                message.semi_sync_replica_status = Boolean(object.semi_sync_replica_status);
             return message;
         };
 
@@ -119210,6 +123969,10 @@ export const replicationdata = $root.replicationdata = (() => {
                 object.ssl_allowed = false;
                 object.replication_lag_unknown = false;
                 object.backup_running = false;
+                object.semi_sync_primary_enabled = false;
+                object.semi_sync_replica_enabled = false;
+                object.semi_sync_primary_status = false;
+                object.semi_sync_replica_status = false;
             }
             if (message.position != null && message.hasOwnProperty("position"))
                 object.position = message.position;
@@ -119257,6 +124020,14 @@ export const replicationdata = $root.replicationdata = (() => {
                 object.replication_lag_unknown = message.replication_lag_unknown;
             if (message.backup_running != null && message.hasOwnProperty("backup_running"))
                 object.backup_running = message.backup_running;
+            if (message.semi_sync_primary_enabled != null && message.hasOwnProperty("semi_sync_primary_enabled"))
+                object.semi_sync_primary_enabled = message.semi_sync_primary_enabled;
+            if (message.semi_sync_replica_enabled != null && message.hasOwnProperty("semi_sync_replica_enabled"))
+                object.semi_sync_replica_enabled = message.semi_sync_replica_enabled;
+            if (message.semi_sync_primary_status != null && message.hasOwnProperty("semi_sync_primary_status"))
+                object.semi_sync_primary_status = message.semi_sync_primary_status;
+            if (message.semi_sync_replica_status != null && message.hasOwnProperty("semi_sync_replica_status"))
+                object.semi_sync_replica_status = message.semi_sync_replica_status;
             return object;
         };
 
@@ -119385,12 +124156,14 @@ export const replicationdata = $root.replicationdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Configuration.decode = function decode(reader, length) {
+        Configuration.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.replicationdata.Configuration();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.heartbeat_interval = reader.double();
@@ -119612,12 +124385,14 @@ export const replicationdata = $root.replicationdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopReplicationStatus.decode = function decode(reader, length) {
+        StopReplicationStatus.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.replicationdata.StopReplicationStatus();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.before = $root.replicationdata.Status.decode(reader, reader.uint32());
@@ -119874,12 +124649,14 @@ export const replicationdata = $root.replicationdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PrimaryStatus.decode = function decode(reader, length) {
+        PrimaryStatus.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.replicationdata.PrimaryStatus();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.position = reader.string();
@@ -120366,12 +125143,14 @@ export const replicationdata = $root.replicationdata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        FullStatus.decode = function decode(reader, length) {
+        FullStatus.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.replicationdata.FullStatus();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.server_id = reader.uint32();
@@ -120965,12 +125744,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RoutingRules.decode = function decode(reader, length) {
+        RoutingRules.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.RoutingRules();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.rules && message.rules.length))
@@ -121200,12 +125981,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RoutingRule.decode = function decode(reader, length) {
+        RoutingRule.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.RoutingRule();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.from_table = reader.string();
@@ -121493,12 +126276,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Keyspace.decode = function decode(reader, length) {
+        Keyspace.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Keyspace(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.sharded = reader.bool();
@@ -121897,12 +126682,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MultiTenantSpec.decode = function decode(reader, length) {
+        MultiTenantSpec.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.MultiTenantSpec();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tenant_id_column_name = reader.string();
@@ -122336,12 +127123,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Vindex.decode = function decode(reader, length) {
+        Vindex.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Vindex(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.type = reader.string();
@@ -122668,12 +127457,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Table.decode = function decode(reader, length) {
+        Table.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Table();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.type = reader.string();
@@ -123013,12 +127804,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ColumnVindex.decode = function decode(reader, length) {
+        ColumnVindex.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.ColumnVindex();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.column = reader.string();
@@ -123267,12 +128060,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        AutoIncrement.decode = function decode(reader, length) {
+        AutoIncrement.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.AutoIncrement();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.column = reader.string();
@@ -123582,12 +128377,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Column.decode = function decode(reader, length) {
+        Column.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Column();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -124149,12 +128946,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SrvVSchema.decode = function decode(reader, length) {
+        SrvVSchema.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.SrvVSchema(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.keyspaces === $util.emptyObject)
@@ -124462,12 +129261,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardRoutingRules.decode = function decode(reader, length) {
+        ShardRoutingRules.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.ShardRoutingRules();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.rules && message.rules.length))
@@ -124706,12 +129507,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardRoutingRule.decode = function decode(reader, length) {
+        ShardRoutingRule.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.ShardRoutingRule();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.from_keyspace = reader.string();
@@ -124936,12 +129739,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        KeyspaceRoutingRules.decode = function decode(reader, length) {
+        KeyspaceRoutingRules.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.KeyspaceRoutingRules();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.rules && message.rules.length))
@@ -125169,12 +129974,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        KeyspaceRoutingRule.decode = function decode(reader, length) {
+        KeyspaceRoutingRule.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.KeyspaceRoutingRule();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.from_keyspace = reader.string();
@@ -125387,12 +130194,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MirrorRules.decode = function decode(reader, length) {
+        MirrorRules.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.MirrorRules();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.rules && message.rules.length))
@@ -125631,12 +130440,14 @@ export const vschema = $root.vschema = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MirrorRule.decode = function decode(reader, length) {
+        MirrorRule.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.MirrorRule();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.from_table = reader.string();
@@ -125884,12 +130695,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteVtctlCommandRequest.decode = function decode(reader, length) {
+        ExecuteVtctlCommandRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ExecuteVtctlCommandRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.args && message.args.length))
@@ -126128,12 +130941,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteVtctlCommandResponse.decode = function decode(reader, length) {
+        ExecuteVtctlCommandResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ExecuteVtctlCommandResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.event = $root.logutil.Event.decode(reader, reader.uint32());
@@ -126376,12 +131191,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TableMaterializeSettings.decode = function decode(reader, length) {
+        TableMaterializeSettings.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.TableMaterializeSettings();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.target_table = reader.string();
@@ -126797,12 +131614,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MaterializeSettings.decode = function decode(reader, length) {
+        MaterializeSettings.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MaterializeSettings();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -127323,12 +132142,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Keyspace.decode = function decode(reader, length) {
+        Keyspace.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Keyspace();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -127535,6 +132356,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vttime.ITime|null} [reviewed_at] SchemaMigration reviewed_at
          * @property {vttime.ITime|null} [ready_to_complete_at] SchemaMigration ready_to_complete_at
          * @property {string|null} [removed_foreign_key_names] SchemaMigration removed_foreign_key_names
+         * @property {number|Long|null} [in_order_completion_pending_count] SchemaMigration in_order_completion_pending_count
          */
 
         /**
@@ -127985,6 +132807,14 @@ export const vtctldata = $root.vtctldata = (() => {
         SchemaMigration.prototype.removed_foreign_key_names = "";
 
         /**
+         * SchemaMigration in_order_completion_pending_count.
+         * @member {number|Long} in_order_completion_pending_count
+         * @memberof vtctldata.SchemaMigration
+         * @instance
+         */
+        SchemaMigration.prototype.in_order_completion_pending_count = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+        /**
          * Creates a new SchemaMigration instance using the specified properties.
          * @function create
          * @memberof vtctldata.SchemaMigration
@@ -128116,6 +132946,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.vttime.Time.encode(message.ready_to_complete_at, writer.uint32(/* id 53, wireType 2 =*/426).fork()).ldelim();
             if (message.removed_foreign_key_names != null && Object.hasOwnProperty.call(message, "removed_foreign_key_names"))
                 writer.uint32(/* id 54, wireType 2 =*/434).string(message.removed_foreign_key_names);
+            if (message.in_order_completion_pending_count != null && Object.hasOwnProperty.call(message, "in_order_completion_pending_count"))
+                writer.uint32(/* id 55, wireType 0 =*/440).uint64(message.in_order_completion_pending_count);
             return writer;
         };
 
@@ -128143,12 +132975,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SchemaMigration.decode = function decode(reader, length) {
+        SchemaMigration.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SchemaMigration();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.uuid = reader.string();
@@ -128364,6 +133198,10 @@ export const vtctldata = $root.vtctldata = (() => {
                     }
                 case 54: {
                         message.removed_foreign_key_names = reader.string();
+                        break;
+                    }
+                case 55: {
+                        message.in_order_completion_pending_count = reader.uint64();
                         break;
                     }
                 default:
@@ -128607,6 +133445,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.removed_foreign_key_names != null && message.hasOwnProperty("removed_foreign_key_names"))
                 if (!$util.isString(message.removed_foreign_key_names))
                     return "removed_foreign_key_names: string expected";
+            if (message.in_order_completion_pending_count != null && message.hasOwnProperty("in_order_completion_pending_count"))
+                if (!$util.isInteger(message.in_order_completion_pending_count) && !(message.in_order_completion_pending_count && $util.isInteger(message.in_order_completion_pending_count.low) && $util.isInteger(message.in_order_completion_pending_count.high)))
+                    return "in_order_completion_pending_count: integer|Long expected";
             return null;
         };
 
@@ -128864,6 +133705,15 @@ export const vtctldata = $root.vtctldata = (() => {
             }
             if (object.removed_foreign_key_names != null)
                 message.removed_foreign_key_names = String(object.removed_foreign_key_names);
+            if (object.in_order_completion_pending_count != null)
+                if ($util.Long)
+                    (message.in_order_completion_pending_count = $util.Long.fromValue(object.in_order_completion_pending_count)).unsigned = true;
+                else if (typeof object.in_order_completion_pending_count === "string")
+                    message.in_order_completion_pending_count = parseInt(object.in_order_completion_pending_count, 10);
+                else if (typeof object.in_order_completion_pending_count === "number")
+                    message.in_order_completion_pending_count = object.in_order_completion_pending_count;
+                else if (typeof object.in_order_completion_pending_count === "object")
+                    message.in_order_completion_pending_count = new $util.LongBits(object.in_order_completion_pending_count.low >>> 0, object.in_order_completion_pending_count.high >>> 0).toNumber(true);
             return message;
         };
 
@@ -128955,6 +133805,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.reviewed_at = null;
                 object.ready_to_complete_at = null;
                 object.removed_foreign_key_names = "";
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, true);
+                    object.in_order_completion_pending_count = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.in_order_completion_pending_count = options.longs === String ? "0" : 0;
             }
             if (message.uuid != null && message.hasOwnProperty("uuid"))
                 object.uuid = message.uuid;
@@ -129079,6 +133934,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.ready_to_complete_at = $root.vttime.Time.toObject(message.ready_to_complete_at, options);
             if (message.removed_foreign_key_names != null && message.hasOwnProperty("removed_foreign_key_names"))
                 object.removed_foreign_key_names = message.removed_foreign_key_names;
+            if (message.in_order_completion_pending_count != null && message.hasOwnProperty("in_order_completion_pending_count"))
+                if (typeof message.in_order_completion_pending_count === "number")
+                    object.in_order_completion_pending_count = options.longs === String ? String(message.in_order_completion_pending_count) : message.in_order_completion_pending_count;
+                else
+                    object.in_order_completion_pending_count = options.longs === String ? $util.Long.prototype.toString.call(message.in_order_completion_pending_count) : options.longs === Number ? new $util.LongBits(message.in_order_completion_pending_count.low >>> 0, message.in_order_completion_pending_count.high >>> 0).toNumber(true) : message.in_order_completion_pending_count;
             return object;
         };
 
@@ -129262,12 +134122,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Shard.decode = function decode(reader, length) {
+        Shard.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Shard();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -129572,12 +134434,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowOptions.decode = function decode(reader, length) {
+        WorkflowOptions.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowOptions(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tenant_id = reader.string();
@@ -130027,12 +134891,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Workflow.decode = function decode(reader, length) {
+        Workflow.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -130431,12 +135297,14 @@ export const vtctldata = $root.vtctldata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            ReplicationLocation.decode = function decode(reader, length) {
+            ReplicationLocation.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow.ReplicationLocation();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.keyspace = reader.string();
@@ -130687,12 +135555,14 @@ export const vtctldata = $root.vtctldata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            ShardStream.decode = function decode(reader, length) {
+            ShardStream.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow.ShardStream();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             if (!(message.streams && message.streams.length))
@@ -131176,12 +136046,14 @@ export const vtctldata = $root.vtctldata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            Stream.decode = function decode(reader, length) {
+            Stream.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow.Stream();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.id = reader.int64();
@@ -131855,12 +136727,14 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                CopyState.decode = function decode(reader, length) {
+                CopyState.decode = function decode(reader, length, error) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
                     let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow.Stream.CopyState();
                     while (reader.pos < end) {
                         let tag = reader.uint32();
+                        if (tag === error)
+                            break;
                         switch (tag >>> 3) {
                         case 1: {
                                 message.table = reader.string();
@@ -132174,12 +137048,14 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                Log.decode = function decode(reader, length) {
+                Log.decode = function decode(reader, length, error) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
                     let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow.Stream.Log();
                     while (reader.pos < end) {
                         let tag = reader.uint32();
+                        if (tag === error)
+                            break;
                         switch (tag >>> 3) {
                         case 1: {
                                 message.id = reader.int64();
@@ -132525,12 +137401,14 @@ export const vtctldata = $root.vtctldata = (() => {
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                ThrottlerStatus.decode = function decode(reader, length) {
+                ThrottlerStatus.decode = function decode(reader, length, error) {
                     if (!(reader instanceof $Reader))
                         reader = $Reader.create(reader);
                     let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow.Stream.ThrottlerStatus();
                     while (reader.pos < end) {
                         let tag = reader.uint32();
+                        if (tag === error)
+                            break;
                         switch (tag >>> 3) {
                         case 1: {
                                 message.component_throttled = reader.string();
@@ -132763,12 +137641,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        AddCellInfoRequest.decode = function decode(reader, length) {
+        AddCellInfoRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.AddCellInfoRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -132973,12 +137853,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        AddCellInfoResponse.decode = function decode(reader, length) {
+        AddCellInfoResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.AddCellInfoResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -133172,12 +138054,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        AddCellsAliasRequest.decode = function decode(reader, length) {
+        AddCellsAliasRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.AddCellsAliasRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -133391,12 +138275,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        AddCellsAliasResponse.decode = function decode(reader, length) {
+        AddCellsAliasResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.AddCellsAliasResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -133601,12 +138487,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplyKeyspaceRoutingRulesRequest.decode = function decode(reader, length) {
+        ApplyKeyspaceRoutingRulesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplyKeyspaceRoutingRulesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace_routing_rules = $root.vschema.KeyspaceRoutingRules.decode(reader, reader.uint32());
@@ -133849,12 +138737,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplyKeyspaceRoutingRulesResponse.decode = function decode(reader, length) {
+        ApplyKeyspaceRoutingRulesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplyKeyspaceRoutingRulesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace_routing_rules = $root.vschema.KeyspaceRoutingRules.decode(reader, reader.uint32());
@@ -134081,12 +138971,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplyRoutingRulesRequest.decode = function decode(reader, length) {
+        ApplyRoutingRulesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplyRoutingRulesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.uint32());
@@ -134318,12 +139210,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplyRoutingRulesResponse.decode = function decode(reader, length) {
+        ApplyRoutingRulesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplyRoutingRulesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -134528,12 +139422,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplyShardRoutingRulesRequest.decode = function decode(reader, length) {
+        ApplyShardRoutingRulesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplyShardRoutingRulesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.shard_routing_rules = $root.vschema.ShardRoutingRules.decode(reader, reader.uint32());
@@ -134765,12 +139661,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplyShardRoutingRulesResponse.decode = function decode(reader, length) {
+        ApplyShardRoutingRulesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplyShardRoutingRulesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -135032,12 +139930,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplySchemaRequest.decode = function decode(reader, length) {
+        ApplySchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplySchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -135389,12 +140289,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplySchemaResponse.decode = function decode(reader, length) {
+        ApplySchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplySchemaResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.uuid_list && message.uuid_list.length))
@@ -135730,12 +140632,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplyVSchemaRequest.decode = function decode(reader, length) {
+        ApplyVSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplyVSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -136041,12 +140945,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ApplyVSchemaResponse.decode = function decode(reader, length) {
+        ApplyVSchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplyVSchemaResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.v_schema = $root.vschema.Keyspace.decode(reader, reader.uint32());
@@ -136299,12 +141205,14 @@ export const vtctldata = $root.vtctldata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            ParamList.decode = function decode(reader, length) {
+            ParamList.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ApplyVSchemaResponse.ParamList();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             if (!(message.params && message.params.length))
@@ -136447,6 +141355,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [upgrade_safe] BackupRequest upgrade_safe
          * @property {string|null} [backup_engine] BackupRequest backup_engine
          * @property {vttime.IDuration|null} [mysql_shutdown_timeout] BackupRequest mysql_shutdown_timeout
+         * @property {tabletmanagerdata.BackupRequest.IInitSQL|null} [init_sql] BackupRequest init_sql
          */
 
         /**
@@ -136520,6 +141429,14 @@ export const vtctldata = $root.vtctldata = (() => {
          */
         BackupRequest.prototype.mysql_shutdown_timeout = null;
 
+        /**
+         * BackupRequest init_sql.
+         * @member {tabletmanagerdata.BackupRequest.IInitSQL|null|undefined} init_sql
+         * @memberof vtctldata.BackupRequest
+         * @instance
+         */
+        BackupRequest.prototype.init_sql = null;
+
         // OneOf field names bound to virtual getters and setters
         let $oneOfFields;
 
@@ -136567,6 +141484,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.backup_engine);
             if (message.mysql_shutdown_timeout != null && Object.hasOwnProperty.call(message, "mysql_shutdown_timeout"))
                 $root.vttime.Duration.encode(message.mysql_shutdown_timeout, writer.uint32(/* id 7, wireType 2 =*/58).fork()).ldelim();
+            if (message.init_sql != null && Object.hasOwnProperty.call(message, "init_sql"))
+                $root.tabletmanagerdata.BackupRequest.InitSQL.encode(message.init_sql, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
             return writer;
         };
 
@@ -136594,12 +141513,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BackupRequest.decode = function decode(reader, length) {
+        BackupRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.BackupRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -136627,6 +141548,10 @@ export const vtctldata = $root.vtctldata = (() => {
                     }
                 case 7: {
                         message.mysql_shutdown_timeout = $root.vttime.Duration.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 8: {
+                        message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.uint32());
                         break;
                     }
                 default:
@@ -136692,6 +141617,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (error)
                     return "mysql_shutdown_timeout." + error;
             }
+            if (message.init_sql != null && message.hasOwnProperty("init_sql")) {
+                let error = $root.tabletmanagerdata.BackupRequest.InitSQL.verify(message.init_sql);
+                if (error)
+                    return "init_sql." + error;
+            }
             return null;
         };
 
@@ -136727,6 +141657,11 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw TypeError(".vtctldata.BackupRequest.mysql_shutdown_timeout: object expected");
                 message.mysql_shutdown_timeout = $root.vttime.Duration.fromObject(object.mysql_shutdown_timeout);
             }
+            if (object.init_sql != null) {
+                if (typeof object.init_sql !== "object")
+                    throw TypeError(".vtctldata.BackupRequest.init_sql: object expected");
+                message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.fromObject(object.init_sql);
+            }
             return message;
         };
 
@@ -136750,6 +141685,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.incremental_from_pos = "";
                 object.upgrade_safe = false;
                 object.mysql_shutdown_timeout = null;
+                object.init_sql = null;
             }
             if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias"))
                 object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options);
@@ -136768,6 +141704,8 @@ export const vtctldata = $root.vtctldata = (() => {
             }
             if (message.mysql_shutdown_timeout != null && message.hasOwnProperty("mysql_shutdown_timeout"))
                 object.mysql_shutdown_timeout = $root.vttime.Duration.toObject(message.mysql_shutdown_timeout, options);
+            if (message.init_sql != null && message.hasOwnProperty("init_sql"))
+                object.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.toObject(message.init_sql, options);
             return object;
         };
 
@@ -136918,12 +141856,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BackupResponse.decode = function decode(reader, length) {
+        BackupResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.BackupResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -137096,6 +142036,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [upgrade_safe] BackupShardRequest upgrade_safe
          * @property {string|null} [incremental_from_pos] BackupShardRequest incremental_from_pos
          * @property {vttime.IDuration|null} [mysql_shutdown_timeout] BackupShardRequest mysql_shutdown_timeout
+         * @property {tabletmanagerdata.BackupRequest.IInitSQL|null} [init_sql] BackupShardRequest init_sql
          */
 
         /**
@@ -137170,6 +142111,14 @@ export const vtctldata = $root.vtctldata = (() => {
         BackupShardRequest.prototype.mysql_shutdown_timeout = null;
 
         /**
+         * BackupShardRequest init_sql.
+         * @member {tabletmanagerdata.BackupRequest.IInitSQL|null|undefined} init_sql
+         * @memberof vtctldata.BackupShardRequest
+         * @instance
+         */
+        BackupShardRequest.prototype.init_sql = null;
+
+        /**
          * Creates a new BackupShardRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.BackupShardRequest
@@ -137207,6 +142156,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.incremental_from_pos);
             if (message.mysql_shutdown_timeout != null && Object.hasOwnProperty.call(message, "mysql_shutdown_timeout"))
                 $root.vttime.Duration.encode(message.mysql_shutdown_timeout, writer.uint32(/* id 7, wireType 2 =*/58).fork()).ldelim();
+            if (message.init_sql != null && Object.hasOwnProperty.call(message, "init_sql"))
+                $root.tabletmanagerdata.BackupRequest.InitSQL.encode(message.init_sql, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
             return writer;
         };
 
@@ -137234,12 +142185,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        BackupShardRequest.decode = function decode(reader, length) {
+        BackupShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.BackupShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -137267,6 +142220,10 @@ export const vtctldata = $root.vtctldata = (() => {
                     }
                 case 7: {
                         message.mysql_shutdown_timeout = $root.vttime.Duration.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 8: {
+                        message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.uint32());
                         break;
                     }
                 default:
@@ -137327,6 +142284,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (error)
                     return "mysql_shutdown_timeout." + error;
             }
+            if (message.init_sql != null && message.hasOwnProperty("init_sql")) {
+                let error = $root.tabletmanagerdata.BackupRequest.InitSQL.verify(message.init_sql);
+                if (error)
+                    return "init_sql." + error;
+            }
             return null;
         };
 
@@ -137359,6 +142321,11 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw TypeError(".vtctldata.BackupShardRequest.mysql_shutdown_timeout: object expected");
                 message.mysql_shutdown_timeout = $root.vttime.Duration.fromObject(object.mysql_shutdown_timeout);
             }
+            if (object.init_sql != null) {
+                if (typeof object.init_sql !== "object")
+                    throw TypeError(".vtctldata.BackupShardRequest.init_sql: object expected");
+                message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.fromObject(object.init_sql);
+            }
             return message;
         };
 
@@ -137383,6 +142350,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.upgrade_safe = false;
                 object.incremental_from_pos = "";
                 object.mysql_shutdown_timeout = null;
+                object.init_sql = null;
             }
             if (message.keyspace != null && message.hasOwnProperty("keyspace"))
                 object.keyspace = message.keyspace;
@@ -137398,6 +142366,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.incremental_from_pos = message.incremental_from_pos;
             if (message.mysql_shutdown_timeout != null && message.hasOwnProperty("mysql_shutdown_timeout"))
                 object.mysql_shutdown_timeout = $root.vttime.Duration.toObject(message.mysql_shutdown_timeout, options);
+            if (message.init_sql != null && message.hasOwnProperty("init_sql"))
+                object.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.toObject(message.init_sql, options);
             return object;
         };
 
@@ -137537,12 +142507,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CancelSchemaMigrationRequest.decode = function decode(reader, length) {
+        CancelSchemaMigrationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CancelSchemaMigrationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -137772,12 +142744,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CancelSchemaMigrationResponse.decode = function decode(reader, length) {
+        CancelSchemaMigrationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CancelSchemaMigrationResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.rows_affected_by_shard === $util.emptyObject)
@@ -138042,12 +143016,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ChangeTabletTagsRequest.decode = function decode(reader, length) {
+        ChangeTabletTagsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ChangeTabletTagsRequest(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -138324,12 +143300,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ChangeTabletTagsResponse.decode = function decode(reader, length) {
+        ChangeTabletTagsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ChangeTabletTagsResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.before_tags === $util.emptyObject)
@@ -138627,12 +143605,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ChangeTabletTypeRequest.decode = function decode(reader, length) {
+        ChangeTabletTypeRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ChangeTabletTypeRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -138946,12 +143926,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ChangeTabletTypeResponse.decode = function decode(reader, length) {
+        ChangeTabletTypeResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ChangeTabletTypeResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.before_tablet = $root.topodata.Tablet.decode(reader, reader.uint32());
@@ -139228,12 +144210,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CheckThrottlerRequest.decode = function decode(reader, length) {
+        CheckThrottlerRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CheckThrottlerRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -139496,12 +144480,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CheckThrottlerResponse.decode = function decode(reader, length) {
+        CheckThrottlerResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CheckThrottlerResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -139744,12 +144730,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CleanupSchemaMigrationRequest.decode = function decode(reader, length) {
+        CleanupSchemaMigrationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CleanupSchemaMigrationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -139979,12 +144967,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CleanupSchemaMigrationResponse.decode = function decode(reader, length) {
+        CleanupSchemaMigrationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CleanupSchemaMigrationResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.rows_affected_by_shard === $util.emptyObject)
@@ -140247,12 +145237,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CompleteSchemaMigrationRequest.decode = function decode(reader, length) {
+        CompleteSchemaMigrationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CompleteSchemaMigrationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -140482,12 +145474,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CompleteSchemaMigrationResponse.decode = function decode(reader, length) {
+        CompleteSchemaMigrationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CompleteSchemaMigrationResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.rows_affected_by_shard === $util.emptyObject)
@@ -140809,12 +145803,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CopySchemaShardRequest.decode = function decode(reader, length) {
+        CopySchemaShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CopySchemaShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.source_tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -141126,12 +146122,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CopySchemaShardResponse.decode = function decode(reader, length) {
+        CopySchemaShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CopySchemaShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -141389,12 +146387,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CreateKeyspaceRequest.decode = function decode(reader, length) {
+        CreateKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CreateKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -141701,12 +146701,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CreateKeyspaceResponse.decode = function decode(reader, length) {
+        CreateKeyspaceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CreateKeyspaceResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.uint32());
@@ -141942,12 +146944,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CreateShardRequest.decode = function decode(reader, length) {
+        CreateShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CreateShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -142204,12 +147208,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        CreateShardResponse.decode = function decode(reader, length) {
+        CreateShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CreateShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.uint32());
@@ -142453,12 +147459,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteCellInfoRequest.decode = function decode(reader, length) {
+        DeleteCellInfoRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteCellInfoRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -142658,12 +147666,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteCellInfoResponse.decode = function decode(reader, length) {
+        DeleteCellInfoResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteCellInfoResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -142844,12 +147854,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteCellsAliasRequest.decode = function decode(reader, length) {
+        DeleteCellsAliasRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteCellsAliasRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -143036,12 +148048,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteCellsAliasResponse.decode = function decode(reader, length) {
+        DeleteCellsAliasResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteCellsAliasResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -143244,12 +148258,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteKeyspaceRequest.decode = function decode(reader, length) {
+        DeleteKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -143461,12 +148477,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteKeyspaceResponse.decode = function decode(reader, length) {
+        DeleteKeyspaceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteKeyspaceResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -143682,12 +148700,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteShardsRequest.decode = function decode(reader, length) {
+        DeleteShardsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteShardsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.shards && message.shards.length))
@@ -143931,12 +148951,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteShardsResponse.decode = function decode(reader, length) {
+        DeleteShardsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteShardsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -144117,12 +149139,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteSrvVSchemaRequest.decode = function decode(reader, length) {
+        DeleteSrvVSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteSrvVSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cell = reader.string();
@@ -144309,12 +149333,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteSrvVSchemaResponse.decode = function decode(reader, length) {
+        DeleteSrvVSchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteSrvVSchemaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -144508,12 +149534,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteTabletsRequest.decode = function decode(reader, length) {
+        DeleteTabletsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteTabletsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.tablet_aliases && message.tablet_aliases.length))
@@ -144732,12 +149760,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DeleteTabletsResponse.decode = function decode(reader, length) {
+        DeleteTabletsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteTabletsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -144997,12 +150027,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        EmergencyReparentShardRequest.decode = function decode(reader, length) {
+        EmergencyReparentShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.EmergencyReparentShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -145355,12 +150387,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        EmergencyReparentShardResponse.decode = function decode(reader, length) {
+        EmergencyReparentShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.EmergencyReparentShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -145653,12 +150687,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteFetchAsAppRequest.decode = function decode(reader, length) {
+        ExecuteFetchAsAppRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ExecuteFetchAsAppRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -145912,12 +150948,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteFetchAsAppResponse.decode = function decode(reader, length) {
+        ExecuteFetchAsAppResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ExecuteFetchAsAppResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -146164,12 +151202,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteFetchAsDBARequest.decode = function decode(reader, length) {
+        ExecuteFetchAsDBARequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ExecuteFetchAsDBARequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -146435,12 +151475,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteFetchAsDBAResponse.decode = function decode(reader, length) {
+        ExecuteFetchAsDBAResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ExecuteFetchAsDBAResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.result = $root.query.QueryResult.decode(reader, reader.uint32());
@@ -146654,12 +151696,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteHookRequest.decode = function decode(reader, length) {
+        ExecuteHookRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ExecuteHookRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -146880,12 +151924,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteHookResponse.decode = function decode(reader, length) {
+        ExecuteHookResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ExecuteHookResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.hook_result = $root.tabletmanagerdata.ExecuteHookResponse.decode(reader, reader.uint32());
@@ -147132,12 +152178,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteMultiFetchAsDBARequest.decode = function decode(reader, length) {
+        ExecuteMultiFetchAsDBARequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ExecuteMultiFetchAsDBARequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -147405,12 +152453,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ExecuteMultiFetchAsDBAResponse.decode = function decode(reader, length) {
+        ExecuteMultiFetchAsDBAResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ExecuteMultiFetchAsDBAResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.results && message.results.length))
@@ -147627,12 +152677,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        FindAllShardsInKeyspaceRequest.decode = function decode(reader, length) {
+        FindAllShardsInKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.FindAllShardsInKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -147834,12 +152886,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        FindAllShardsInKeyspaceResponse.decode = function decode(reader, length) {
+        FindAllShardsInKeyspaceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.FindAllShardsInKeyspaceResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.shards === $util.emptyObject)
@@ -148097,12 +153151,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ForceCutOverSchemaMigrationRequest.decode = function decode(reader, length) {
+        ForceCutOverSchemaMigrationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ForceCutOverSchemaMigrationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -148332,12 +153388,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ForceCutOverSchemaMigrationResponse.decode = function decode(reader, length) {
+        ForceCutOverSchemaMigrationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ForceCutOverSchemaMigrationResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.rows_affected_by_shard === $util.emptyObject)
@@ -148622,12 +153680,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetBackupsRequest.decode = function decode(reader, length) {
+        GetBackupsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetBackupsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -148876,12 +153936,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetBackupsResponse.decode = function decode(reader, length) {
+        GetBackupsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetBackupsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.backups && message.backups.length))
@@ -149098,12 +154160,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetCellInfoRequest.decode = function decode(reader, length) {
+        GetCellInfoRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetCellInfoRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cell = reader.string();
@@ -149301,12 +154365,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetCellInfoResponse.decode = function decode(reader, length) {
+        GetCellInfoResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetCellInfoResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cell_info = $root.topodata.CellInfo.decode(reader, reader.uint32());
@@ -149498,12 +154564,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetCellInfoNamesRequest.decode = function decode(reader, length) {
+        GetCellInfoNamesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetCellInfoNamesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -149686,12 +154754,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetCellInfoNamesResponse.decode = function decode(reader, length) {
+        GetCellInfoNamesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetCellInfoNamesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.names && message.names.length))
@@ -149892,12 +154962,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetCellsAliasesRequest.decode = function decode(reader, length) {
+        GetCellsAliasesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetCellsAliasesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -150082,12 +155154,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetCellsAliasesResponse.decode = function decode(reader, length) {
+        GetCellsAliasesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetCellsAliasesResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.aliases === $util.emptyObject)
@@ -150323,12 +155397,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetFullStatusRequest.decode = function decode(reader, length) {
+        GetFullStatusRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetFullStatusRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -150531,12 +155607,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetFullStatusResponse.decode = function decode(reader, length) {
+        GetFullStatusResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetFullStatusResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = $root.replicationdata.FullStatus.decode(reader, reader.uint32());
@@ -150728,12 +155806,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetKeyspacesRequest.decode = function decode(reader, length) {
+        GetKeyspacesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetKeyspacesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -150916,12 +155996,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetKeyspacesResponse.decode = function decode(reader, length) {
+        GetKeyspacesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetKeyspacesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.keyspaces && message.keyspaces.length))
@@ -151138,12 +156220,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetKeyspaceRequest.decode = function decode(reader, length) {
+        GetKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -151341,12 +156425,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetKeyspaceResponse.decode = function decode(reader, length) {
+        GetKeyspaceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetKeyspaceResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.uint32());
@@ -151549,12 +156635,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetPermissionsRequest.decode = function decode(reader, length) {
+        GetPermissionsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetPermissionsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -151757,12 +156845,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetPermissionsResponse.decode = function decode(reader, length) {
+        GetPermissionsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetPermissionsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.permissions = $root.tabletmanagerdata.Permissions.decode(reader, reader.uint32());
@@ -151954,12 +157044,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetKeyspaceRoutingRulesRequest.decode = function decode(reader, length) {
+        GetKeyspaceRoutingRulesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetKeyspaceRoutingRulesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -152140,12 +157232,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetKeyspaceRoutingRulesResponse.decode = function decode(reader, length) {
+        GetKeyspaceRoutingRulesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetKeyspaceRoutingRulesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace_routing_rules = $root.vschema.KeyspaceRoutingRules.decode(reader, reader.uint32());
@@ -152337,12 +157431,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetRoutingRulesRequest.decode = function decode(reader, length) {
+        GetRoutingRulesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetRoutingRulesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -152523,12 +157619,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetRoutingRulesResponse.decode = function decode(reader, length) {
+        GetRoutingRulesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetRoutingRulesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.uint32());
@@ -152801,12 +157899,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaRequest.decode = function decode(reader, length) {
+        GetSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -153112,12 +158212,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaResponse.decode = function decode(reader, length) {
+        GetSchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSchemaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32());
@@ -153397,12 +158499,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaMigrationsRequest.decode = function decode(reader, length) {
+        GetSchemaMigrationsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSchemaMigrationsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -153793,12 +158897,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSchemaMigrationsResponse.decode = function decode(reader, length) {
+        GetSchemaMigrationsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSchemaMigrationsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.migrations && message.migrations.length))
@@ -154039,12 +159145,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetShardReplicationRequest.decode = function decode(reader, length) {
+        GetShardReplicationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetShardReplicationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -154286,12 +159394,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetShardReplicationResponse.decode = function decode(reader, length) {
+        GetShardReplicationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetShardReplicationResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.shard_replication_by_cell === $util.emptyObject)
@@ -154538,12 +159648,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetShardRequest.decode = function decode(reader, length) {
+        GetShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -154754,12 +159866,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetShardResponse.decode = function decode(reader, length) {
+        GetShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.shard = $root.vtctldata.Shard.decode(reader, reader.uint32());
@@ -154951,12 +160065,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetShardRoutingRulesRequest.decode = function decode(reader, length) {
+        GetShardRoutingRulesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetShardRoutingRulesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -155137,12 +160253,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetShardRoutingRulesResponse.decode = function decode(reader, length) {
+        GetShardRoutingRulesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetShardRoutingRulesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.shard_routing_rules = $root.vschema.ShardRoutingRules.decode(reader, reader.uint32());
@@ -155347,12 +160465,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvKeyspaceNamesRequest.decode = function decode(reader, length) {
+        GetSrvKeyspaceNamesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspaceNamesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cells && message.cells.length))
@@ -155568,12 +160688,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvKeyspaceNamesResponse.decode = function decode(reader, length) {
+        GetSrvKeyspaceNamesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspaceNamesResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.names === $util.emptyObject)
@@ -155808,12 +160930,14 @@ export const vtctldata = $root.vtctldata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            NameList.decode = function decode(reader, length) {
+            NameList.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             if (!(message.names && message.names.length))
@@ -156041,12 +161165,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvKeyspacesRequest.decode = function decode(reader, length) {
+        GetSrvKeyspacesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspacesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -156275,12 +161401,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvKeyspacesResponse.decode = function decode(reader, length) {
+        GetSrvKeyspacesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspacesResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.srv_keyspaces === $util.emptyObject)
@@ -156639,12 +161767,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateThrottlerConfigRequest.decode = function decode(reader, length) {
+        UpdateThrottlerConfigRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.UpdateThrottlerConfigRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -156984,12 +162114,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateThrottlerConfigResponse.decode = function decode(reader, length) {
+        UpdateThrottlerConfigResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.UpdateThrottlerConfigResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -157170,12 +162302,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvVSchemaRequest.decode = function decode(reader, length) {
+        GetSrvVSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvVSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cell = reader.string();
@@ -157373,12 +162507,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvVSchemaResponse.decode = function decode(reader, length) {
+        GetSrvVSchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvVSchemaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.srv_v_schema = $root.vschema.SrvVSchema.decode(reader, reader.uint32());
@@ -157583,12 +162719,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvVSchemasRequest.decode = function decode(reader, length) {
+        GetSrvVSchemasRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvVSchemasRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 2: {
                         if (!(message.cells && message.cells.length))
@@ -157804,12 +162942,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetSrvVSchemasResponse.decode = function decode(reader, length) {
+        GetSrvVSchemasResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvVSchemasResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.srv_v_schemas === $util.emptyObject)
@@ -158045,12 +163185,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTabletRequest.decode = function decode(reader, length) {
+        GetTabletRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetTabletRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -158253,12 +163395,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTabletResponse.decode = function decode(reader, length) {
+        GetTabletResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetTabletResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet = $root.topodata.Tablet.decode(reader, reader.uint32());
@@ -158520,12 +163664,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTabletsRequest.decode = function decode(reader, length) {
+        GetTabletsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetTabletsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -158885,12 +164031,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTabletsResponse.decode = function decode(reader, length) {
+        GetTabletsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetTabletsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.tablets && message.tablets.length))
@@ -159107,12 +164255,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetThrottlerStatusRequest.decode = function decode(reader, length) {
+        GetThrottlerStatusRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetThrottlerStatusRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -159315,12 +164465,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetThrottlerStatusResponse.decode = function decode(reader, length) {
+        GetThrottlerStatusResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetThrottlerStatusResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.status = $root.tabletmanagerdata.GetThrottlerStatusResponse.decode(reader, reader.uint32());
@@ -159545,12 +164697,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTopologyPathRequest.decode = function decode(reader, length) {
+        GetTopologyPathRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetTopologyPathRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.path = reader.string();
@@ -159787,12 +164941,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTopologyPathResponse.decode = function decode(reader, length) {
+        GetTopologyPathResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetTopologyPathResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.cell = $root.vtctldata.TopologyCell.decode(reader, reader.uint32());
@@ -160041,12 +165197,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TopologyCell.decode = function decode(reader, length) {
+        TopologyCell.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.TopologyCell();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -160333,12 +165491,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetUnresolvedTransactionsRequest.decode = function decode(reader, length) {
+        GetUnresolvedTransactionsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetUnresolvedTransactionsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -160565,12 +165725,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetUnresolvedTransactionsResponse.decode = function decode(reader, length) {
+        GetUnresolvedTransactionsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetUnresolvedTransactionsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.transactions && message.transactions.length))
@@ -160787,12 +165949,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTransactionInfoRequest.decode = function decode(reader, length) {
+        GetTransactionInfoRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetTransactionInfoRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.dtid = reader.string();
@@ -161036,12 +166200,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardTransactionState.decode = function decode(reader, length) {
+        ShardTransactionState.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardTransactionState();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.shard = reader.string();
@@ -161330,12 +166496,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetTransactionInfoResponse.decode = function decode(reader, length) {
+        GetTransactionInfoResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetTransactionInfoResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.metadata = $root.query.TransactionMetadata.decode(reader, reader.uint32());
@@ -161583,12 +166751,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ConcludeTransactionRequest.decode = function decode(reader, length) {
+        ConcludeTransactionRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ConcludeTransactionRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.dtid = reader.string();
@@ -161807,12 +166977,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ConcludeTransactionResponse.decode = function decode(reader, length) {
+        ConcludeTransactionResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ConcludeTransactionResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -161993,12 +167165,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetVSchemaRequest.decode = function decode(reader, length) {
+        GetVSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetVSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -162196,12 +167370,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetVersionRequest.decode = function decode(reader, length) {
+        GetVersionRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetVersionRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -162404,12 +167580,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetVersionResponse.decode = function decode(reader, length) {
+        GetVersionResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetVersionResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.version = reader.string();
@@ -162607,12 +167785,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetVSchemaResponse.decode = function decode(reader, length) {
+        GetVSchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetVSchemaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.v_schema = $root.vschema.Keyspace.decode(reader, reader.uint32());
@@ -162872,12 +168052,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetWorkflowsRequest.decode = function decode(reader, length) {
+        GetWorkflowsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetWorkflowsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -163153,12 +168335,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetWorkflowsResponse.decode = function decode(reader, length) {
+        GetWorkflowsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetWorkflowsResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.workflows && message.workflows.length))
@@ -163419,12 +168603,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        InitShardPrimaryRequest.decode = function decode(reader, length) {
+        InitShardPrimaryRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.InitShardPrimaryRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -163683,12 +168869,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        InitShardPrimaryResponse.decode = function decode(reader, length) {
+        InitShardPrimaryResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.InitShardPrimaryResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.events && message.events.length))
@@ -163927,12 +169115,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LaunchSchemaMigrationRequest.decode = function decode(reader, length) {
+        LaunchSchemaMigrationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.LaunchSchemaMigrationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -164162,12 +169352,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LaunchSchemaMigrationResponse.decode = function decode(reader, length) {
+        LaunchSchemaMigrationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.LaunchSchemaMigrationResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.rows_affected_by_shard === $util.emptyObject)
@@ -164430,12 +169622,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LookupVindexCompleteRequest.decode = function decode(reader, length) {
+        LookupVindexCompleteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.LookupVindexCompleteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -164647,12 +169841,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LookupVindexCompleteResponse.decode = function decode(reader, length) {
+        LookupVindexCompleteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.LookupVindexCompleteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -164906,12 +170102,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LookupVindexCreateRequest.decode = function decode(reader, length) {
+        LookupVindexCreateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.LookupVindexCreateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -165299,12 +170497,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LookupVindexCreateResponse.decode = function decode(reader, length) {
+        LookupVindexCreateResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.LookupVindexCreateResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -165518,12 +170718,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LookupVindexExternalizeRequest.decode = function decode(reader, length) {
+        LookupVindexExternalizeRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.LookupVindexExternalizeRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -165769,12 +170971,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LookupVindexExternalizeResponse.decode = function decode(reader, length) {
+        LookupVindexExternalizeResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.LookupVindexExternalizeResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow_stopped = reader.bool();
@@ -166007,12 +171211,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LookupVindexInternalizeRequest.decode = function decode(reader, length) {
+        LookupVindexInternalizeRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.LookupVindexInternalizeRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -166224,12 +171430,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        LookupVindexInternalizeResponse.decode = function decode(reader, length) {
+        LookupVindexInternalizeResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.LookupVindexInternalizeResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -166410,12 +171618,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MaterializeCreateRequest.decode = function decode(reader, length) {
+        MaterializeCreateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MaterializeCreateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.settings = $root.vtctldata.MaterializeSettings.decode(reader, reader.uint32());
@@ -166607,12 +171817,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MaterializeCreateResponse.decode = function decode(reader, length) {
+        MaterializeCreateResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MaterializeCreateResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -166828,12 +172040,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowAddTablesRequest.decode = function decode(reader, length) {
+        WorkflowAddTablesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowAddTablesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -167106,12 +172320,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowAddTablesResponse.decode = function decode(reader, length) {
+        WorkflowAddTablesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowAddTablesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -167479,12 +172695,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MigrateCreateRequest.decode = function decode(reader, length) {
+        MigrateCreateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MigrateCreateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -168081,12 +173299,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MigrateCompleteRequest.decode = function decode(reader, length) {
+        MigrateCompleteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MigrateCompleteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -168358,12 +173578,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MigrateCompleteResponse.decode = function decode(reader, length) {
+        MigrateCompleteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MigrateCompleteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.summary = reader.string();
@@ -168621,12 +173843,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MountRegisterRequest.decode = function decode(reader, length) {
+        MountRegisterRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MountRegisterRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.topo_type = reader.string();
@@ -168850,12 +174074,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MountRegisterResponse.decode = function decode(reader, length) {
+        MountRegisterResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MountRegisterResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -169036,12 +174262,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MountUnregisterRequest.decode = function decode(reader, length) {
+        MountUnregisterRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MountUnregisterRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 4: {
                         message.name = reader.string();
@@ -169228,12 +174456,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MountUnregisterResponse.decode = function decode(reader, length) {
+        MountUnregisterResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MountUnregisterResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -169414,12 +174644,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MountShowRequest.decode = function decode(reader, length) {
+        MountShowRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MountShowRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 4: {
                         message.name = reader.string();
@@ -169650,12 +174882,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MountShowResponse.decode = function decode(reader, length) {
+        MountShowResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MountShowResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.topo_type = reader.string();
@@ -169879,12 +175113,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MountListRequest.decode = function decode(reader, length) {
+        MountListRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MountListRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -170067,12 +175303,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MountListResponse.decode = function decode(reader, length) {
+        MountListResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MountListResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.names && message.names.length))
@@ -170506,12 +175744,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MoveTablesCreateRequest.decode = function decode(reader, length) {
+        MoveTablesCreateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MoveTablesCreateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -171121,12 +176361,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MoveTablesCreateResponse.decode = function decode(reader, length) {
+        MoveTablesCreateResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MoveTablesCreateResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.summary = reader.string();
@@ -171364,12 +176606,14 @@ export const vtctldata = $root.vtctldata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            TabletInfo.decode = function decode(reader, length) {
+            TabletInfo.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MoveTablesCreateResponse.TabletInfo();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -171667,12 +176911,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MoveTablesCompleteRequest.decode = function decode(reader, length) {
+        MoveTablesCompleteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MoveTablesCompleteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -171983,12 +177229,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MoveTablesCompleteResponse.decode = function decode(reader, length) {
+        MoveTablesCompleteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MoveTablesCompleteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.summary = reader.string();
@@ -172213,12 +177461,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PingTabletRequest.decode = function decode(reader, length) {
+        PingTabletRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.PingTabletRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -172410,12 +177660,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PingTabletResponse.decode = function decode(reader, length) {
+        PingTabletResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.PingTabletResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -172673,12 +177925,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PlannedReparentShardRequest.decode = function decode(reader, length) {
+        PlannedReparentShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.PlannedReparentShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -173021,12 +178275,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        PlannedReparentShardResponse.decode = function decode(reader, length) {
+        PlannedReparentShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.PlannedReparentShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -173310,12 +178566,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RebuildKeyspaceGraphRequest.decode = function decode(reader, length) {
+        RebuildKeyspaceGraphRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RebuildKeyspaceGraphRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -173542,12 +178800,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RebuildKeyspaceGraphResponse.decode = function decode(reader, length) {
+        RebuildKeyspaceGraphResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RebuildKeyspaceGraphResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -173730,12 +178990,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RebuildVSchemaGraphRequest.decode = function decode(reader, length) {
+        RebuildVSchemaGraphRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RebuildVSchemaGraphRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.cells && message.cells.length))
@@ -173936,12 +179198,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RebuildVSchemaGraphResponse.decode = function decode(reader, length) {
+        RebuildVSchemaGraphResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RebuildVSchemaGraphResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -174122,12 +179386,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshStateRequest.decode = function decode(reader, length) {
+        RefreshStateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RefreshStateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -174319,12 +179585,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshStateResponse.decode = function decode(reader, length) {
+        RefreshStateResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RefreshStateResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -174529,12 +179797,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshStateByShardRequest.decode = function decode(reader, length) {
+        RefreshStateByShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RefreshStateByShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -174783,12 +180053,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RefreshStateByShardResponse.decode = function decode(reader, length) {
+        RefreshStateByShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RefreshStateByShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.is_partial_refresh = reader.bool();
@@ -174999,12 +180271,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemaRequest.decode = function decode(reader, length) {
+        ReloadSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ReloadSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -175196,12 +180470,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemaResponse.decode = function decode(reader, length) {
+        ReloadSchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ReloadSchemaResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -175415,12 +180691,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemaKeyspaceRequest.decode = function decode(reader, length) {
+        ReloadSchemaKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ReloadSchemaKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -175657,12 +180935,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemaKeyspaceResponse.decode = function decode(reader, length) {
+        ReloadSchemaKeyspaceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ReloadSchemaKeyspaceResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.events && message.events.length))
@@ -175923,12 +181203,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemaShardRequest.decode = function decode(reader, length) {
+        ReloadSchemaShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ReloadSchemaShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -176177,12 +181459,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReloadSchemaShardResponse.decode = function decode(reader, length) {
+        ReloadSchemaShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ReloadSchemaShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 2: {
                         if (!(message.events && message.events.length))
@@ -176421,12 +181705,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RemoveBackupRequest.decode = function decode(reader, length) {
+        RemoveBackupRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RemoveBackupRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -176638,12 +181924,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RemoveBackupResponse.decode = function decode(reader, length) {
+        RemoveBackupResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RemoveBackupResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -176857,12 +182145,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RemoveKeyspaceCellRequest.decode = function decode(reader, length) {
+        RemoveKeyspaceCellRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RemoveKeyspaceCellRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -177086,12 +182376,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RemoveKeyspaceCellResponse.decode = function decode(reader, length) {
+        RemoveKeyspaceCellResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RemoveKeyspaceCellResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -177316,12 +182608,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RemoveShardCellRequest.decode = function decode(reader, length) {
+        RemoveShardCellRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RemoveShardCellRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -177557,12 +182851,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RemoveShardCellResponse.decode = function decode(reader, length) {
+        RemoveShardCellResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RemoveShardCellResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -177743,12 +183039,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReparentTabletRequest.decode = function decode(reader, length) {
+        ReparentTabletRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ReparentTabletRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -177973,12 +183271,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReparentTabletResponse.decode = function decode(reader, length) {
+        ReparentTabletResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ReparentTabletResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -178349,12 +183649,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ReshardCreateRequest.decode = function decode(reader, length) {
+        ReshardCreateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ReshardCreateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -178910,12 +184212,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RestoreFromBackupRequest.decode = function decode(reader, length) {
+        RestoreFromBackupRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RestoreFromBackupRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -179237,12 +184541,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RestoreFromBackupResponse.decode = function decode(reader, length) {
+        RestoreFromBackupResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RestoreFromBackupResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -179509,12 +184815,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RetrySchemaMigrationRequest.decode = function decode(reader, length) {
+        RetrySchemaMigrationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RetrySchemaMigrationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -179744,12 +185052,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RetrySchemaMigrationResponse.decode = function decode(reader, length) {
+        RetrySchemaMigrationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RetrySchemaMigrationResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.rows_affected_by_shard === $util.emptyObject)
@@ -179990,12 +185300,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RunHealthCheckRequest.decode = function decode(reader, length) {
+        RunHealthCheckRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RunHealthCheckRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -180187,12 +185499,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        RunHealthCheckResponse.decode = function decode(reader, length) {
+        RunHealthCheckResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RunHealthCheckResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -180384,12 +185698,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetKeyspaceDurabilityPolicyRequest.decode = function decode(reader, length) {
+        SetKeyspaceDurabilityPolicyRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetKeyspaceDurabilityPolicyRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -180600,12 +185916,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetKeyspaceDurabilityPolicyResponse.decode = function decode(reader, length) {
+        SetKeyspaceDurabilityPolicyResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetKeyspaceDurabilityPolicyResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = $root.topodata.Keyspace.decode(reader, reader.uint32());
@@ -180819,12 +186137,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetKeyspaceShardingInfoRequest.decode = function decode(reader, length) {
+        SetKeyspaceShardingInfoRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetKeyspaceShardingInfoRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -181035,12 +186355,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetKeyspaceShardingInfoResponse.decode = function decode(reader, length) {
+        SetKeyspaceShardingInfoResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetKeyspaceShardingInfoResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = $root.topodata.Keyspace.decode(reader, reader.uint32());
@@ -181265,12 +186587,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetShardIsPrimaryServingRequest.decode = function decode(reader, length) {
+        SetShardIsPrimaryServingRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetShardIsPrimaryServingRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -181493,12 +186817,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetShardIsPrimaryServingResponse.decode = function decode(reader, length) {
+        SetShardIsPrimaryServingResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetShardIsPrimaryServingResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.shard = $root.topodata.Shard.decode(reader, reader.uint32());
@@ -181771,12 +187097,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetShardTabletControlRequest.decode = function decode(reader, length) {
+        SetShardTabletControlRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetShardTabletControlRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -182141,12 +187469,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetShardTabletControlResponse.decode = function decode(reader, length) {
+        SetShardTabletControlResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetShardTabletControlResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.shard = $root.topodata.Shard.decode(reader, reader.uint32());
@@ -182360,12 +187690,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetWritableRequest.decode = function decode(reader, length) {
+        SetWritableRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetWritableRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -182570,12 +187902,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SetWritableResponse.decode = function decode(reader, length) {
+        SetWritableResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetWritableResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -182778,12 +188112,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardReplicationAddRequest.decode = function decode(reader, length) {
+        ShardReplicationAddRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationAddRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -183000,12 +188336,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardReplicationAddResponse.decode = function decode(reader, length) {
+        ShardReplicationAddResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationAddResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -183208,12 +188546,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardReplicationFixRequest.decode = function decode(reader, length) {
+        ShardReplicationFixRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationFixRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -183436,12 +188776,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardReplicationFixResponse.decode = function decode(reader, length) {
+        ShardReplicationFixResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationFixResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.error = $root.topodata.ShardReplicationError.decode(reader, reader.uint32());
@@ -183655,12 +188997,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardReplicationPositionsRequest.decode = function decode(reader, length) {
+        ShardReplicationPositionsRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationPositionsRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -183890,12 +189234,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardReplicationPositionsResponse.decode = function decode(reader, length) {
+        ShardReplicationPositionsResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationPositionsResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.replication_statuses === $util.emptyObject)
@@ -184203,12 +189549,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardReplicationRemoveRequest.decode = function decode(reader, length) {
+        ShardReplicationRemoveRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationRemoveRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -184425,12 +189773,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ShardReplicationRemoveResponse.decode = function decode(reader, length) {
+        ShardReplicationRemoveResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationRemoveResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -184622,12 +189972,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SleepTabletRequest.decode = function decode(reader, length) {
+        SleepTabletRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SleepTabletRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -184837,12 +190189,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SleepTabletResponse.decode = function decode(reader, length) {
+        SleepTabletResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SleepTabletResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -185091,12 +190445,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SourceShardAddRequest.decode = function decode(reader, length) {
+        SourceShardAddRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SourceShardAddRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -185387,12 +190743,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SourceShardAddResponse.decode = function decode(reader, length) {
+        SourceShardAddResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SourceShardAddResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.shard = $root.topodata.Shard.decode(reader, reader.uint32());
@@ -185617,12 +190975,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SourceShardDeleteRequest.decode = function decode(reader, length) {
+        SourceShardDeleteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SourceShardDeleteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -185845,12 +191205,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        SourceShardDeleteResponse.decode = function decode(reader, length) {
+        SourceShardDeleteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SourceShardDeleteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.shard = $root.topodata.Shard.decode(reader, reader.uint32());
@@ -186053,12 +191415,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartReplicationRequest.decode = function decode(reader, length) {
+        StartReplicationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StartReplicationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -186250,12 +191614,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StartReplicationResponse.decode = function decode(reader, length) {
+        StartReplicationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StartReplicationResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -186436,12 +191802,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopReplicationRequest.decode = function decode(reader, length) {
+        StopReplicationRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StopReplicationRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -186633,12 +192001,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        StopReplicationResponse.decode = function decode(reader, length) {
+        StopReplicationResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StopReplicationResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -186819,12 +192189,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TabletExternallyReparentedRequest.decode = function decode(reader, length) {
+        TabletExternallyReparentedRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.TabletExternallyReparentedRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -187060,12 +192432,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TabletExternallyReparentedResponse.decode = function decode(reader, length) {
+        TabletExternallyReparentedResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.TabletExternallyReparentedResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -187321,12 +192695,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateCellInfoRequest.decode = function decode(reader, length) {
+        UpdateCellInfoRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.UpdateCellInfoRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -187553,12 +192929,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateCellInfoResponse.decode = function decode(reader, length) {
+        UpdateCellInfoResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.UpdateCellInfoResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -187785,12 +193163,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateCellsAliasRequest.decode = function decode(reader, length) {
+        UpdateCellsAliasRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.UpdateCellsAliasRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -188017,12 +193397,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        UpdateCellsAliasResponse.decode = function decode(reader, length) {
+        UpdateCellsAliasResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.UpdateCellsAliasResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.name = reader.string();
@@ -188238,12 +193620,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateRequest.decode = function decode(reader, length) {
+        ValidateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.ping_tablets = reader.bool();
@@ -188458,12 +193842,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateResponse.decode = function decode(reader, length) {
+        ValidateResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.results && message.results.length))
@@ -188737,12 +194123,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateKeyspaceRequest.decode = function decode(reader, length) {
+        ValidateKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -188970,12 +194358,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateKeyspaceResponse.decode = function decode(reader, length) {
+        ValidateKeyspaceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateKeyspaceResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.results && message.results.length))
@@ -189251,12 +194641,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidatePermissionsKeyspaceRequest.decode = function decode(reader, length) {
+        ValidatePermissionsKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidatePermissionsKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -189470,12 +194862,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidatePermissionsKeyspaceResponse.decode = function decode(reader, length) {
+        ValidatePermissionsKeyspaceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidatePermissionsKeyspaceResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -189715,12 +195109,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateSchemaKeyspaceRequest.decode = function decode(reader, length) {
+        ValidateSchemaKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateSchemaKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -190026,12 +195422,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateSchemaKeyspaceResponse.decode = function decode(reader, length) {
+        ValidateSchemaKeyspaceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateSchemaKeyspaceResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.results && message.results.length))
@@ -190316,12 +195714,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateShardRequest.decode = function decode(reader, length) {
+        ValidateShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -190546,12 +195946,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateShardResponse.decode = function decode(reader, length) {
+        ValidateShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.results && message.results.length))
@@ -190763,12 +196165,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateVersionKeyspaceRequest.decode = function decode(reader, length) {
+        ValidateVersionKeyspaceRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateVersionKeyspaceRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -190983,12 +196387,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateVersionKeyspaceResponse.decode = function decode(reader, length) {
+        ValidateVersionKeyspaceResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateVersionKeyspaceResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.results && message.results.length))
@@ -191262,12 +196668,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateVersionShardRequest.decode = function decode(reader, length) {
+        ValidateVersionShardRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateVersionShardRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -191480,12 +196888,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateVersionShardResponse.decode = function decode(reader, length) {
+        ValidateVersionShardResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateVersionShardResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.results && message.results.length))
@@ -191734,12 +197144,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateVSchemaRequest.decode = function decode(reader, length) {
+        ValidateVSchemaRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateVSchemaRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -192021,12 +197433,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        ValidateVSchemaResponse.decode = function decode(reader, length) {
+        ValidateVSchemaResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ValidateVSchemaResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (!(message.results && message.results.length))
@@ -192540,12 +197954,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffCreateRequest.decode = function decode(reader, length) {
+        VDiffCreateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.VDiffCreateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -193223,12 +198639,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffCreateResponse.decode = function decode(reader, length) {
+        VDiffCreateResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.VDiffCreateResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.UUID = reader.string();
@@ -193448,12 +198866,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffDeleteRequest.decode = function decode(reader, length) {
+        VDiffDeleteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.VDiffDeleteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -193665,12 +199085,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffDeleteResponse.decode = function decode(reader, length) {
+        VDiffDeleteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.VDiffDeleteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -193886,12 +199308,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffResumeRequest.decode = function decode(reader, length) {
+        VDiffResumeRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.VDiffResumeRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -194130,12 +199554,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffResumeResponse.decode = function decode(reader, length) {
+        VDiffResumeResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.VDiffResumeResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -194338,12 +199764,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffShowRequest.decode = function decode(reader, length) {
+        VDiffShowRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.VDiffShowRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -194570,12 +199998,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffShowResponse.decode = function decode(reader, length) {
+        VDiffShowResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.VDiffShowResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.tablet_responses === $util.emptyObject)
@@ -194846,12 +200276,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffStopRequest.decode = function decode(reader, length) {
+        VDiffStopRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.VDiffStopRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.workflow = reader.string();
@@ -195090,12 +200522,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        VDiffStopResponse.decode = function decode(reader, length) {
+        VDiffStopResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.VDiffStopResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -195344,12 +200778,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowDeleteRequest.decode = function decode(reader, length) {
+        WorkflowDeleteRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowDeleteRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -195662,12 +201098,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowDeleteResponse.decode = function decode(reader, length) {
+        WorkflowDeleteResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowDeleteResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.summary = reader.string();
@@ -195905,12 +201343,14 @@ export const vtctldata = $root.vtctldata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            TabletInfo.decode = function decode(reader, length) {
+            TabletInfo.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowDeleteResponse.TabletInfo();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -196153,12 +201593,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowStatusRequest.decode = function decode(reader, length) {
+        WorkflowStatusRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowStatusRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -196311,6 +201753,24 @@ export const vtctldata = $root.vtctldata = (() => {
         return WorkflowStatusRequest;
     })();
 
+    /**
+     * TableCopyPhase enum.
+     * @name vtctldata.TableCopyPhase
+     * @enum {number}
+     * @property {number} UNKNOWN=0 UNKNOWN value
+     * @property {number} NOT_STARTED=1 NOT_STARTED value
+     * @property {number} IN_PROGRESS=2 IN_PROGRESS value
+     * @property {number} COMPLETE=3 COMPLETE value
+     */
+    vtctldata.TableCopyPhase = (function() {
+        const valuesById = {}, values = Object.create(valuesById);
+        values[valuesById[0] = "UNKNOWN"] = 0;
+        values[valuesById[1] = "NOT_STARTED"] = 1;
+        values[valuesById[2] = "IN_PROGRESS"] = 2;
+        values[valuesById[3] = "COMPLETE"] = 3;
+        return values;
+    })();
+
     vtctldata.WorkflowStatusResponse = (function() {
 
         /**
@@ -196426,12 +201886,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowStatusResponse.decode = function decode(reader, length) {
+        WorkflowStatusResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowStatusResponse(), key, value;
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         if (message.table_copy_state === $util.emptyObject)
@@ -196654,6 +202116,7 @@ export const vtctldata = $root.vtctldata = (() => {
              * @property {number|Long|null} [bytes_copied] TableCopyState bytes_copied
              * @property {number|Long|null} [bytes_total] TableCopyState bytes_total
              * @property {number|null} [bytes_percentage] TableCopyState bytes_percentage
+             * @property {vtctldata.TableCopyPhase|null} [phase] TableCopyState phase
              */
 
             /**
@@ -196720,6 +202183,14 @@ export const vtctldata = $root.vtctldata = (() => {
             TableCopyState.prototype.bytes_percentage = 0;
 
             /**
+             * TableCopyState phase.
+             * @member {vtctldata.TableCopyPhase} phase
+             * @memberof vtctldata.WorkflowStatusResponse.TableCopyState
+             * @instance
+             */
+            TableCopyState.prototype.phase = 0;
+
+            /**
              * Creates a new TableCopyState instance using the specified properties.
              * @function create
              * @memberof vtctldata.WorkflowStatusResponse.TableCopyState
@@ -196755,6 +202226,8 @@ export const vtctldata = $root.vtctldata = (() => {
                     writer.uint32(/* id 5, wireType 0 =*/40).int64(message.bytes_total);
                 if (message.bytes_percentage != null && Object.hasOwnProperty.call(message, "bytes_percentage"))
                     writer.uint32(/* id 6, wireType 5 =*/53).float(message.bytes_percentage);
+                if (message.phase != null && Object.hasOwnProperty.call(message, "phase"))
+                    writer.uint32(/* id 7, wireType 0 =*/56).int32(message.phase);
                 return writer;
             };
 
@@ -196782,12 +202255,14 @@ export const vtctldata = $root.vtctldata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            TableCopyState.decode = function decode(reader, length) {
+            TableCopyState.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowStatusResponse.TableCopyState();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.rows_copied = reader.int64();
@@ -196811,6 +202286,10 @@ export const vtctldata = $root.vtctldata = (() => {
                         }
                     case 6: {
                             message.bytes_percentage = reader.float();
+                            break;
+                        }
+                    case 7: {
+                            message.phase = reader.int32();
                             break;
                         }
                     default:
@@ -196866,6 +202345,16 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (message.bytes_percentage != null && message.hasOwnProperty("bytes_percentage"))
                     if (typeof message.bytes_percentage !== "number")
                         return "bytes_percentage: number expected";
+                if (message.phase != null && message.hasOwnProperty("phase"))
+                    switch (message.phase) {
+                    default:
+                        return "phase: enum value expected";
+                    case 0:
+                    case 1:
+                    case 2:
+                    case 3:
+                        break;
+                    }
                 return null;
             };
 
@@ -196921,6 +202410,30 @@ export const vtctldata = $root.vtctldata = (() => {
                         message.bytes_total = new $util.LongBits(object.bytes_total.low >>> 0, object.bytes_total.high >>> 0).toNumber();
                 if (object.bytes_percentage != null)
                     message.bytes_percentage = Number(object.bytes_percentage);
+                switch (object.phase) {
+                default:
+                    if (typeof object.phase === "number") {
+                        message.phase = object.phase;
+                        break;
+                    }
+                    break;
+                case "UNKNOWN":
+                case 0:
+                    message.phase = 0;
+                    break;
+                case "NOT_STARTED":
+                case 1:
+                    message.phase = 1;
+                    break;
+                case "IN_PROGRESS":
+                case 2:
+                    message.phase = 2;
+                    break;
+                case "COMPLETE":
+                case 3:
+                    message.phase = 3;
+                    break;
+                }
                 return message;
             };
 
@@ -196960,6 +202473,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     } else
                         object.bytes_total = options.longs === String ? "0" : 0;
                     object.bytes_percentage = 0;
+                    object.phase = options.enums === String ? "UNKNOWN" : 0;
                 }
                 if (message.rows_copied != null && message.hasOwnProperty("rows_copied"))
                     if (typeof message.rows_copied === "number")
@@ -196985,6 +202499,8 @@ export const vtctldata = $root.vtctldata = (() => {
                         object.bytes_total = options.longs === String ? $util.Long.prototype.toString.call(message.bytes_total) : options.longs === Number ? new $util.LongBits(message.bytes_total.low >>> 0, message.bytes_total.high >>> 0).toNumber() : message.bytes_total;
                 if (message.bytes_percentage != null && message.hasOwnProperty("bytes_percentage"))
                     object.bytes_percentage = options.json && !isFinite(message.bytes_percentage) ? String(message.bytes_percentage) : message.bytes_percentage;
+                if (message.phase != null && message.hasOwnProperty("phase"))
+                    object.phase = options.enums === String ? $root.vtctldata.TableCopyPhase[message.phase] === undefined ? message.phase : $root.vtctldata.TableCopyPhase[message.phase] : message.phase;
                 return object;
             };
 
@@ -197157,12 +202673,14 @@ export const vtctldata = $root.vtctldata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            ShardStreamState.decode = function decode(reader, length) {
+            ShardStreamState.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowStatusResponse.ShardStreamState();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.id = reader.int32();
@@ -197428,12 +202946,14 @@ export const vtctldata = $root.vtctldata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            ShardStreams.decode = function decode(reader, length) {
+            ShardStreams.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowStatusResponse.ShardStreams();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 2: {
                             if (!(message.streams && message.streams.length))
@@ -197783,12 +203303,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowSwitchTrafficRequest.decode = function decode(reader, length) {
+        WorkflowSwitchTrafficRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowSwitchTrafficRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -198277,12 +203799,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowSwitchTrafficResponse.decode = function decode(reader, length) {
+        WorkflowSwitchTrafficResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowSwitchTrafficResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.summary = reader.string();
@@ -198543,12 +204067,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowUpdateRequest.decode = function decode(reader, length) {
+        WorkflowUpdateRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowUpdateRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -198777,12 +204303,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowUpdateResponse.decode = function decode(reader, length) {
+        WorkflowUpdateResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowUpdateResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.summary = reader.string();
@@ -199020,12 +204548,14 @@ export const vtctldata = $root.vtctldata = (() => {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            TabletInfo.decode = function decode(reader, length) {
+            TabletInfo.decode = function decode(reader, length, error) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
                 let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowUpdateResponse.TabletInfo();
                 while (reader.pos < end) {
                     let tag = reader.uint32();
+                    if (tag === error)
+                        break;
                     switch (tag >>> 3) {
                     case 1: {
                             message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32());
@@ -199233,12 +204763,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetMirrorRulesRequest.decode = function decode(reader, length) {
+        GetMirrorRulesRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetMirrorRulesRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 default:
                     reader.skipType(tag & 7);
@@ -199419,12 +204951,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        GetMirrorRulesResponse.decode = function decode(reader, length) {
+        GetMirrorRulesResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetMirrorRulesResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.mirror_rules = $root.vschema.MirrorRules.decode(reader, reader.uint32());
@@ -199665,12 +205199,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowMirrorTrafficRequest.decode = function decode(reader, length) {
+        WorkflowMirrorTrafficRequest.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowMirrorTrafficRequest();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.keyspace = reader.string();
@@ -200011,12 +205547,14 @@ export const vtctldata = $root.vtctldata = (() => {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        WorkflowMirrorTrafficResponse.decode = function decode(reader, length) {
+        WorkflowMirrorTrafficResponse.decode = function decode(reader, length, error) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.WorkflowMirrorTrafficResponse();
             while (reader.pos < end) {
                 let tag = reader.uint32();
+                if (tag === error)
+                    break;
                 switch (tag >>> 3) {
                 case 1: {
                         message.summary = reader.string();
@@ -200152,6 +205690,435 @@ export const vtctldata = $root.vtctldata = (() => {
         };
 
         return WorkflowMirrorTrafficResponse;
+    })();
+
+    vtctldata.SetVtorcEmergencyReparentRequest = (function() {
+
+        /**
+         * Properties of a SetVtorcEmergencyReparentRequest.
+         * @memberof vtctldata
+         * @interface ISetVtorcEmergencyReparentRequest
+         * @property {string|null} [keyspace] SetVtorcEmergencyReparentRequest keyspace
+         * @property {string|null} [shard] SetVtorcEmergencyReparentRequest shard
+         * @property {boolean|null} [disable] SetVtorcEmergencyReparentRequest disable
+         */
+
+        /**
+         * Constructs a new SetVtorcEmergencyReparentRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a SetVtorcEmergencyReparentRequest.
+         * @implements ISetVtorcEmergencyReparentRequest
+         * @constructor
+         * @param {vtctldata.ISetVtorcEmergencyReparentRequest=} [properties] Properties to set
+         */
+        function SetVtorcEmergencyReparentRequest(properties) {
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * SetVtorcEmergencyReparentRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @instance
+         */
+        SetVtorcEmergencyReparentRequest.prototype.keyspace = "";
+
+        /**
+         * SetVtorcEmergencyReparentRequest shard.
+         * @member {string} shard
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @instance
+         */
+        SetVtorcEmergencyReparentRequest.prototype.shard = "";
+
+        /**
+         * SetVtorcEmergencyReparentRequest disable.
+         * @member {boolean} disable
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @instance
+         */
+        SetVtorcEmergencyReparentRequest.prototype.disable = false;
+
+        /**
+         * Creates a new SetVtorcEmergencyReparentRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @static
+         * @param {vtctldata.ISetVtorcEmergencyReparentRequest=} [properties] Properties to set
+         * @returns {vtctldata.SetVtorcEmergencyReparentRequest} SetVtorcEmergencyReparentRequest instance
+         */
+        SetVtorcEmergencyReparentRequest.create = function create(properties) {
+            return new SetVtorcEmergencyReparentRequest(properties);
+        };
+
+        /**
+         * Encodes the specified SetVtorcEmergencyReparentRequest message. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @static
+         * @param {vtctldata.ISetVtorcEmergencyReparentRequest} message SetVtorcEmergencyReparentRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetVtorcEmergencyReparentRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.disable != null && Object.hasOwnProperty.call(message, "disable"))
+                writer.uint32(/* id 3, wireType 0 =*/24).bool(message.disable);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SetVtorcEmergencyReparentRequest message, length delimited. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @static
+         * @param {vtctldata.ISetVtorcEmergencyReparentRequest} message SetVtorcEmergencyReparentRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetVtorcEmergencyReparentRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a SetVtorcEmergencyReparentRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.SetVtorcEmergencyReparentRequest} SetVtorcEmergencyReparentRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetVtorcEmergencyReparentRequest.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetVtorcEmergencyReparentRequest();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        message.keyspace = reader.string();
+                        break;
+                    }
+                case 2: {
+                        message.shard = reader.string();
+                        break;
+                    }
+                case 3: {
+                        message.disable = reader.bool();
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a SetVtorcEmergencyReparentRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.SetVtorcEmergencyReparentRequest} SetVtorcEmergencyReparentRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetVtorcEmergencyReparentRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SetVtorcEmergencyReparentRequest message.
+         * @function verify
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SetVtorcEmergencyReparentRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.disable != null && message.hasOwnProperty("disable"))
+                if (typeof message.disable !== "boolean")
+                    return "disable: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a SetVtorcEmergencyReparentRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.SetVtorcEmergencyReparentRequest} SetVtorcEmergencyReparentRequest
+         */
+        SetVtorcEmergencyReparentRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.SetVtorcEmergencyReparentRequest)
+                return object;
+            let message = new $root.vtctldata.SetVtorcEmergencyReparentRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.disable != null)
+                message.disable = Boolean(object.disable);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a SetVtorcEmergencyReparentRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @static
+         * @param {vtctldata.SetVtorcEmergencyReparentRequest} message SetVtorcEmergencyReparentRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SetVtorcEmergencyReparentRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+                object.disable = false;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.disable != null && message.hasOwnProperty("disable"))
+                object.disable = message.disable;
+            return object;
+        };
+
+        /**
+         * Converts this SetVtorcEmergencyReparentRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SetVtorcEmergencyReparentRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for SetVtorcEmergencyReparentRequest
+         * @function getTypeUrl
+         * @memberof vtctldata.SetVtorcEmergencyReparentRequest
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        SetVtorcEmergencyReparentRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/vtctldata.SetVtorcEmergencyReparentRequest";
+        };
+
+        return SetVtorcEmergencyReparentRequest;
+    })();
+
+    vtctldata.SetVtorcEmergencyReparentResponse = (function() {
+
+        /**
+         * Properties of a SetVtorcEmergencyReparentResponse.
+         * @memberof vtctldata
+         * @interface ISetVtorcEmergencyReparentResponse
+         */
+
+        /**
+         * Constructs a new SetVtorcEmergencyReparentResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a SetVtorcEmergencyReparentResponse.
+         * @implements ISetVtorcEmergencyReparentResponse
+         * @constructor
+         * @param {vtctldata.ISetVtorcEmergencyReparentResponse=} [properties] Properties to set
+         */
+        function SetVtorcEmergencyReparentResponse(properties) {
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new SetVtorcEmergencyReparentResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.SetVtorcEmergencyReparentResponse
+         * @static
+         * @param {vtctldata.ISetVtorcEmergencyReparentResponse=} [properties] Properties to set
+         * @returns {vtctldata.SetVtorcEmergencyReparentResponse} SetVtorcEmergencyReparentResponse instance
+         */
+        SetVtorcEmergencyReparentResponse.create = function create(properties) {
+            return new SetVtorcEmergencyReparentResponse(properties);
+        };
+
+        /**
+         * Encodes the specified SetVtorcEmergencyReparentResponse message. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.SetVtorcEmergencyReparentResponse
+         * @static
+         * @param {vtctldata.ISetVtorcEmergencyReparentResponse} message SetVtorcEmergencyReparentResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetVtorcEmergencyReparentResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SetVtorcEmergencyReparentResponse message, length delimited. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.SetVtorcEmergencyReparentResponse
+         * @static
+         * @param {vtctldata.ISetVtorcEmergencyReparentResponse} message SetVtorcEmergencyReparentResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetVtorcEmergencyReparentResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a SetVtorcEmergencyReparentResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.SetVtorcEmergencyReparentResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.SetVtorcEmergencyReparentResponse} SetVtorcEmergencyReparentResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetVtorcEmergencyReparentResponse.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetVtorcEmergencyReparentResponse();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a SetVtorcEmergencyReparentResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.SetVtorcEmergencyReparentResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.SetVtorcEmergencyReparentResponse} SetVtorcEmergencyReparentResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetVtorcEmergencyReparentResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SetVtorcEmergencyReparentResponse message.
+         * @function verify
+         * @memberof vtctldata.SetVtorcEmergencyReparentResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SetVtorcEmergencyReparentResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a SetVtorcEmergencyReparentResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.SetVtorcEmergencyReparentResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.SetVtorcEmergencyReparentResponse} SetVtorcEmergencyReparentResponse
+         */
+        SetVtorcEmergencyReparentResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.SetVtorcEmergencyReparentResponse)
+                return object;
+            return new $root.vtctldata.SetVtorcEmergencyReparentResponse();
+        };
+
+        /**
+         * Creates a plain object from a SetVtorcEmergencyReparentResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.SetVtorcEmergencyReparentResponse
+         * @static
+         * @param {vtctldata.SetVtorcEmergencyReparentResponse} message SetVtorcEmergencyReparentResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SetVtorcEmergencyReparentResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this SetVtorcEmergencyReparentResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.SetVtorcEmergencyReparentResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SetVtorcEmergencyReparentResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for SetVtorcEmergencyReparentResponse
+         * @function getTypeUrl
+         * @memberof vtctldata.SetVtorcEmergencyReparentResponse
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        SetVtorcEmergencyReparentResponse.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/vtctldata.SetVtorcEmergencyReparentResponse";
+        };
+
+        return SetVtorcEmergencyReparentResponse;
     })();
 
     return vtctldata;

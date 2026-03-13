@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
@@ -57,7 +58,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtgateGrpcPort = clusterInstance.GetAndReservePort()
 		// Set extra tablet args for twopc
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--twopc_abandon_age", "3600",
+			vtutils.GetFlagVariantForTests("--twopc-abandon-age"), "3600",
 		}
 
 		// Start topo server
@@ -72,7 +73,7 @@ func TestMain(m *testing.M) {
 			VSchema:          VSchema,
 			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false, clusterInstance.Cell); err != nil {
 			return 1, err
 		}
 
@@ -94,8 +95,7 @@ func TestMain(m *testing.M) {
 
 // TestTransactionModes tests transactions using twopc mode
 func TestTransactionModes(t *testing.T) {
-
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -139,7 +139,7 @@ func TestTransactionModes(t *testing.T) {
 
 // TestTransactionIsolation tests transaction isolation level.
 func TestTransactionIsolation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -175,7 +175,7 @@ func TestTransactionAccessModes(t *testing.T) {
 	closer := start(t)
 	defer closer()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -208,7 +208,7 @@ func TestTransactionAccessModes(t *testing.T) {
 // TestTransactionIsolationInTx tests transaction isolation level inside transaction
 // and setting isolation level to different values.
 func TestTransactionIsolationInTx(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

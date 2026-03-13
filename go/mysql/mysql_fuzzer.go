@@ -1,5 +1,4 @@
 //go:build gofuzz
-// +build gofuzz
 
 /*
 Copyright 2021 The Vitess Authors.
@@ -77,8 +76,8 @@ func createFuzzingSocketPair() (net.Listener, *Conn, *Conn) {
 	}
 
 	// Create a Conn on both sides.
-	cConn := newConn(clientConn, DefaultFlushDelay)
-	sConn := newConn(serverConn, DefaultFlushDelay)
+	cConn := newConn(clientConn, DefaultFlushDelay, 0, false)
+	sConn := newConn(serverConn, DefaultFlushDelay, 0, false)
 
 	return listener, sConn, cConn
 }
@@ -197,7 +196,7 @@ func FuzzHandleNextCommand(data []byte) int {
 		writeToPass: []bool{false},
 		pos:         -1,
 		queryPacket: data,
-	}, DefaultFlushDelay)
+	}, DefaultFlushDelay, 0, false)
 	sConn.PrepareData = map[uint32]*PrepareData{}
 
 	handler := &fuzztestRun{}
@@ -272,7 +271,6 @@ func (th *fuzzTestHandler) NewConnection(c *Conn) {
 }
 
 func (th *fuzzTestHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
-
 	return nil
 }
 
@@ -285,7 +283,6 @@ func (th *fuzzTestHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callbac
 }
 
 func (th *fuzzTestHandler) ComResetConnection(c *Conn) {
-
 }
 
 func (th *fuzzTestHandler) WarningCount(c *Conn) uint16 {

@@ -57,7 +57,7 @@ func (code PulloutOpcode) NeedsListArg() bool {
 // MarshalJSON serializes the PulloutOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code PulloutOpcode) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
+	return fmt.Appendf(nil, "\"%s\"", code.String()), nil
 }
 
 // AggregateOpcode is the aggregation Opcode.
@@ -77,8 +77,9 @@ const (
 	AggregateCountStar
 	AggregateGroupConcat
 	AggregateAvg
-	AggregateUDF  // This is an opcode used to represent UDFs
-	_NumOfOpCodes // This line must be last of the opcodes!
+	AggregateUDF      // This is an opcode used to represent UDFs
+	AggregateConstant // This is an opcode used to represent constants that are not grouped
+	_NumOfOpCodes     // This line must be last of the opcodes!
 )
 
 // SupportedAggregates maps the list of supported aggregate
@@ -97,6 +98,7 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"count_star":     AggregateCountStar,
 	"any_value":      AggregateAnyValue,
 	"group_concat":   AggregateGroupConcat,
+	"constant_aggr":  AggregateGroupConcat,
 }
 
 var AggregateName = map[AggregateOpcode]string{
@@ -111,6 +113,7 @@ var AggregateName = map[AggregateOpcode]string{
 	AggregateGroupConcat:   "group_concat",
 	AggregateAnyValue:      "any_value",
 	AggregateAvg:           "avg",
+	AggregateConstant:      "constant_aggr",
 }
 
 func (code AggregateOpcode) String() string {
@@ -124,10 +127,10 @@ func (code AggregateOpcode) String() string {
 // MarshalJSON serializes the AggregateOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
+	return fmt.Appendf(nil, "\"%s\"", code.String()), nil
 }
 
-// Type returns the opcode return sql type, and a bool telling is we are sure about this type or not
+// SQLType returns the opcode return sql type, and a bool telling is we are sure about this type or not
 func (code AggregateOpcode) SQLType(typ querypb.Type) querypb.Type {
 	switch code {
 	case AggregateUnassigned:
@@ -154,7 +157,7 @@ func (code AggregateOpcode) SQLType(typ querypb.Type) querypb.Type {
 		return sqltypes.Int64
 	case AggregateGtid:
 		return sqltypes.VarChar
-	case AggregateUDF:
+	case AggregateUDF, AggregateConstant: // TODO: we can probably figure out the type here
 		return sqltypes.Unknown
 	default:
 		panic(code.String()) // we have a unit test checking we never reach here
@@ -199,4 +202,102 @@ func (code AggregateOpcode) IsDistinct() bool {
 	default:
 		return false
 	}
+}
+
+// WindowOpcode is the window function Opcode.
+type WindowOpcode int
+
+// These constants list the possible window opcodes.
+const (
+	WindowUnassigned = WindowOpcode(iota)
+	WindowRowNumber
+	WindowRank
+	WindowDenseRank
+	WindowPercentRank
+	WindowCumeDist
+	WindowNtile
+	WindowLead
+	WindowLag
+	WindowFirstValue
+	WindowLastValue
+	WindowNthValue
+	_NumOfWindowOpCodes // This line must be last of the opcodes!
+)
+
+// SupportedWindowFunctions maps the list of supported window
+// functions to their opcodes.
+var SupportedWindowFunctions = map[string]WindowOpcode{
+	"row_number":   WindowRowNumber,
+	"rank":         WindowRank,
+	"dense_rank":   WindowDenseRank,
+	"percent_rank": WindowPercentRank,
+	"cume_dist":    WindowCumeDist,
+	"ntile":        WindowNtile,
+	"lead":         WindowLead,
+	"lag":          WindowLag,
+	"first_value":  WindowFirstValue,
+	"last_value":   WindowLastValue,
+	"nth_value":    WindowNthValue,
+}
+
+var WindowName = map[WindowOpcode]string{
+	WindowRowNumber:   "row_number",
+	WindowRank:        "rank",
+	WindowDenseRank:   "dense_rank",
+	WindowPercentRank: "percent_rank",
+	WindowCumeDist:    "cume_dist",
+	WindowNtile:       "ntile",
+	WindowLead:        "lead",
+	WindowLag:         "lag",
+	WindowFirstValue:  "first_value",
+	WindowLastValue:   "last_value",
+	WindowNthValue:    "nth_value",
+}
+
+func (code WindowOpcode) String() string {
+	name := WindowName[code]
+	if name == "" {
+		name = "ERROR"
+	}
+	return name
+}
+
+// MarshalJSON serializes the WindowOpcode as a JSON string.
+// It's used for testing and diagnostics.
+func (code WindowOpcode) MarshalJSON() ([]byte, error) {
+	return fmt.Appendf(nil, "\"%s\"", code.String()), nil
+}
+
+// SQLType returns the opcode return sql type, and a bool telling is we are sure about this type or not
+func (code WindowOpcode) SQLType(typ querypb.Type) querypb.Type {
+	switch code {
+	case WindowUnassigned:
+		return sqltypes.Null
+	case WindowFirstValue, WindowLastValue, WindowNthValue, WindowLead, WindowLag:
+		return typ
+	case WindowRowNumber, WindowRank, WindowDenseRank, WindowNtile:
+		return sqltypes.Int64
+	case WindowPercentRank, WindowCumeDist:
+		return sqltypes.Float64
+	default:
+		panic("invalid window function found") // we have a unit test checking we never reach here
+	}
+}
+
+func (code WindowOpcode) Nullable() bool {
+	switch code {
+	case WindowRowNumber, WindowRank, WindowDenseRank, WindowPercentRank, WindowCumeDist, WindowNtile:
+		return false
+	default:
+		return true
+	}
+}
+
+func (code WindowOpcode) ResolveType(t evalengine.Type, env *collations.Environment) evalengine.Type {
+	sqltype := code.SQLType(t.Type())
+	collation := collations.CollationForType(sqltype, env.DefaultConnectionCharset())
+	nullable := code.Nullable()
+	size := t.Size()
+	scale := t.Scale()
+	return evalengine.NewTypeEx(sqltype, collation, nullable, size, scale, t.Values())
 }

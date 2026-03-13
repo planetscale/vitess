@@ -17,15 +17,21 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"vitess.io/vitess/go/cmd/vtorc/cli"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 // main is the application's entry point. It will spawn an HTTP interface.
 func main() {
 	// TODO: viperutil.BindFlags()
 
+	cli.Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := cli.Main.Execute(); err != nil {
-		log.Exit(err)
+		log.Error(fmt.Sprint(err))
+		os.Exit(1)
 	}
 }

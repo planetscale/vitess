@@ -17,7 +17,6 @@ limitations under the License.
 package fuzz
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -66,23 +65,24 @@ func TestMain(m *testing.M) {
 
 		// Set extra args for twopc
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--transaction_mode", "TWOPC",
+			"--transaction-mode", "TWOPC",
 			vtutils.GetFlagVariantForTests("--grpc-use-effective-callerid"),
 			vtutils.GetFlagVariantForTests("--tablet-refresh-interval"), "2s",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_abandon_age", "1",
+			"--twopc-abandon-age", "1",
 			vtutils.GetFlagVariantForTests("--migration-check-interval"), "2s",
 		)
 
 		// Start keyspace
+		cell := clusterInstance.Cell
 		keyspace := &cluster.Keyspace{
 			Name:             keyspaceName,
 			SchemaSQL:        SchemaSQL,
 			VSchema:          VSchema,
 			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, cell); err != nil {
 			return 1
 		}
 
@@ -93,7 +93,7 @@ func TestMain(m *testing.M) {
 			VSchema:          "{}",
 			DurabilityPolicy: policy.DurabilitySemiSync,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*unshardedKeyspace, 2, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*unshardedKeyspace, 2, false, cell); err != nil {
 			return 1
 		}
 
@@ -110,7 +110,7 @@ func TestMain(m *testing.M) {
 }
 
 func start(t *testing.T) (*mysql.Conn, func()) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	cleanup(t)
@@ -122,7 +122,6 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 }
 
 func cleanup(t *testing.T) {
-
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_insert")
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_update")
 	utils.ClearOutTable(t, vtParams, "twopc_fuzzer_multi")

@@ -148,13 +148,14 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start keyspace
+		cell := clusterInstance.Cell
 		ks := cluster.Keyspace{Name: uks, SchemaSQL: uSQLSchema, VSchema: uVschema}
-		if err := clusterInstance.StartUnshardedKeyspace(ks, 1, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(ks, 1, false, cell); err != nil {
 			return 1, err
 		}
 
 		ks = cluster.Keyspace{Name: sks, SchemaSQL: sSQLSchema, VSchema: sVschema}
-		if err := clusterInstance.StartKeyspace(ks, []string{"-"}, 0, false); err != nil {
+		if err := clusterInstance.StartKeyspace(ks, []string{"-"}, 0, false, cell); err != nil {
 			return 1, err
 		}
 
@@ -163,9 +164,9 @@ func TestMain(m *testing.M) {
 		// add extra arguments
 		vtgateInstance.ExtraArgs = []string{
 			utils.GetFlagVariantForTests("--mysql-server-query-timeout"), "1s",
-			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
+			"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
 			"--pprof-http",
-			"--schema_change_signal=false",
+			utils.GetFlagVariantForTests("--schema-change-signal") + "=false",
 		}
 
 		// Start vtgate
@@ -186,7 +187,6 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
-
 }
 
 // ConnectionString generates the connection string using dbinfo.

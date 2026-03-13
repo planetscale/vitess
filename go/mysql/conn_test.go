@@ -57,19 +57,15 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 
 	var clientConn net.Conn
 	var clientErr error
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		clientConn, clientErr = net.DialTimeout("tcp", addr, 10*time.Second)
-	}()
+	})
 
 	var serverConn net.Conn
 	var serverErr error
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		serverConn, serverErr = listener.Accept()
-	}()
+	})
 
 	wg.Wait()
 	require.Nil(t, clientErr, "Dial failed: %v", clientErr)
@@ -131,17 +127,16 @@ func useWriteEphemeralPacketDirect(t *testing.T, cConn *Conn, data []byte) {
 
 func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
 	write func(t *testing.T, cConn *Conn, data []byte),
-	read func() ([]byte, error)) {
+	read func() ([]byte, error),
+) {
 	// Have to do it in the background if it cannot be buffered.
 	// Note we have to wait for it to finish at the end of the
 	// test, as the write may write all the data to the socket,
 	// and the flush may not be done after we're done with the read.
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		write(t, cConn, data)
-		wg.Done()
-	}()
+	})
 
 	received, err := read()
 	if err != nil || !bytes.Equal(data, received) {
@@ -724,8 +719,8 @@ func ReadHexDump(value string) []byte {
 		indexOfPipe := strings.Index(line, "|")
 		indexOfFirstSpace := strings.Index(line, " ")
 		s := line[indexOfFirstSpace:indexOfPipe]
-		hexValues := strings.Split(s, " ")
-		for _, val := range hexValues {
+		hexValues := strings.SplitSeq(s, " ")
+		for val := range hexValues {
 			if val != "" {
 				i, _ := hex.DecodeString(val)
 				data = append(data, i...)
@@ -804,14 +799,10 @@ func TestIsEOFPacket(t *testing.T) {
 }
 
 func TestMultiStatementStopsOnError(t *testing.T) {
-	origMysqlMultiQuery := mysqlMultiQuery
-	defer func() {
-		mysqlMultiQuery = origMysqlMultiQuery
-	}()
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
-			mysqlMultiQuery = b
 			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = b
 			sConn.Capabilities |= CapabilityClientMultiStatements
 			defer func() {
 				listener.Close()
@@ -824,7 +815,7 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 
 			// this handler will return results according to the query. In case the query contains "error" it will return an error
 			// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-			handler := &testRun{err: fmt.Errorf("execution failed")}
+			handler := &testRun{err: errors.New("execution failed")}
 			res := sConn.handleNextCommand(handler)
 			// Execution error will occur in this case because the query sent is error and testRun will throw an error.
 			// We should send an error packet but not close the connection.
@@ -839,14 +830,10 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 }
 
 func TestEmptyQuery(t *testing.T) {
-	origMysqlMultiQuery := mysqlMultiQuery
-	defer func() {
-		mysqlMultiQuery = origMysqlMultiQuery
-	}()
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
-			mysqlMultiQuery = b
 			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = b
 			sConn.Capabilities |= CapabilityClientMultiStatements
 			defer func() {
 				listener.Close()
@@ -873,14 +860,10 @@ func TestEmptyQuery(t *testing.T) {
 }
 
 func TestMultiStatement(t *testing.T) {
-	origMysqlMultiQuery := mysqlMultiQuery
-	defer func() {
-		mysqlMultiQuery = origMysqlMultiQuery
-	}()
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
-			mysqlMultiQuery = b
 			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = b
 			sConn.Capabilities |= CapabilityClientMultiStatements
 			defer func() {
 				listener.Close()
@@ -930,14 +913,10 @@ func TestMultiStatement(t *testing.T) {
 }
 
 func TestMultiStatementOnSplitError(t *testing.T) {
-	origMysqlMultiQuery := mysqlMultiQuery
-	defer func() {
-		mysqlMultiQuery = origMysqlMultiQuery
-	}()
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
-			mysqlMultiQuery = b
 			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = b
 			sConn.Capabilities |= CapabilityClientMultiStatements
 			defer func() {
 				listener.Close()
@@ -950,7 +929,7 @@ func TestMultiStatementOnSplitError(t *testing.T) {
 
 			// this handler will return results according to the query. In case the query contains "error" it will return an error
 			// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-			handler := &testRun{err: fmt.Errorf("execution failed")}
+			handler := &testRun{err: errors.New("execution failed")}
 
 			// We will encounter an error in split statement when this multi statement is processed.
 			res := sConn.handleNextCommand(handler)
@@ -979,7 +958,7 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 
 	// this handler will return results according to the query. In case the query contains "error" it will return an error
 	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-	handler := &testRun{err: fmt.Errorf("execution failed")}
+	handler := &testRun{err: errors.New("execution failed")}
 	res := sConn.handleNextCommand(handler)
 	require.True(t, res, "we should not break the connection because of execution errors")
 
@@ -990,19 +969,16 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 }
 
 func TestConnectionErrorWhileWritingComQuery(t *testing.T) {
-	origMysqlMultiQuery := mysqlMultiQuery
-	defer func() {
-		mysqlMultiQuery = origMysqlMultiQuery
-	}()
 	for _, b := range []bool{true, false} {
 		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
-			mysqlMultiQuery = b
 			// Set the conn for the server connection to the simulated connection which always returns an error on writing
 			sConn := newConn(testConn{
 				writeToPass: []bool{false, true},
 				pos:         -1,
-				queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComQuery, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
-					0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
+				queryPacket: []byte{
+					0x21, 0x00, 0x00, 0x00, ComQuery, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
+					0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31,
+				},
 			}, DefaultFlushDelay, 0)
 
 			// this handler will return an error on the first run, and fail the test if it's run more times
@@ -1019,12 +995,14 @@ func TestConnectionErrorWhileWritingComStmtSendLongData(t *testing.T) {
 	sConn := newConn(testConn{
 		writeToPass: []bool{false, true},
 		pos:         -1,
-		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComStmtSendLongData, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
-			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
+		queryPacket: []byte{
+			0x21, 0x00, 0x00, 0x00, ComStmtSendLongData, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
+			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31,
+		},
 	}, DefaultFlushDelay, 0)
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &testRun{err: fmt.Errorf("not used")}
+	handler := &testRun{err: errors.New("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -1038,7 +1016,7 @@ func TestConnectionErrorWhileWritingComPrepare(t *testing.T) {
 	}, DefaultFlushDelay, 0)
 	sConn.Capabilities = sConn.Capabilities | CapabilityClientMultiStatements
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &testRun{err: fmt.Errorf("not used")}
+	handler := &testRun{err: errors.New("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -1048,11 +1026,13 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 	sConn := newConn(testConn{
 		writeToPass: []bool{false},
 		pos:         -1,
-		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComStmtExecute, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
-			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
+		queryPacket: []byte{
+			0x21, 0x00, 0x00, 0x00, ComStmtExecute, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
+			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31,
+		},
 	}, DefaultFlushDelay, 0)
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &testRun{err: fmt.Errorf("not used")}
+	handler := &testRun{err: errors.New("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }

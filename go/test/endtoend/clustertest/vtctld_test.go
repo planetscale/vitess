@@ -32,14 +32,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	oneTableOutput = `+---+
+var oneTableOutput = `+---+
 | a |
 +---+
 | 1 |
 +---+
 `
-)
 
 func TestVtctldProcess(t *testing.T) {
 	url := fmt.Sprintf("http://%s:%d/api/keyspaces/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
@@ -121,7 +119,7 @@ func testTabletStatus(t *testing.T) {
 	respByte, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	result := string(respByte)
-	log.Infof("Tablet status response: %v", result)
+	log.Info(fmt.Sprintf("Tablet status response: %v", result))
 	assert.True(t, strings.Contains(result, `/debug/health`))
 	assert.True(t, strings.Contains(result, `</html>`))
 }
@@ -153,8 +151,8 @@ func testExecuteAsDba(t *testing.T) {
 			result: "",
 		},
 		{
-			query:  "create table if not exists t(id int); create table if not exists t(id int);",
-			result: "",
+			query:     "create table if not exists t(id int); create table if not exists t(id int);",
+			expectErr: true,
 		},
 		{
 			query:     "create table if not exists t(id int); create table if not exists t(id int); SELECT 1 AS a",

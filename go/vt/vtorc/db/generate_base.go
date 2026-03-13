@@ -30,6 +30,7 @@ var TableNames = []string{
 	"topology_recovery_steps",
 	"database_instance_stale_binlog_coordinates",
 	"vitess_tablet",
+	"primary_health",
 	"vitess_keyspace",
 	"vitess_shard",
 }
@@ -289,6 +290,16 @@ CREATE INDEX cell_idx_vitess_tablet ON vitess_tablet (cell)
 CREATE INDEX ks_idx_vitess_tablet ON vitess_tablet (keyspace, shard)
 	`,
 	`
+DROP TABLE IF EXISTS primary_health
+`,
+	`
+CREATE TABLE primary_health (
+	alias varchar(256) NOT NULL,
+	health_state text NOT NULL,
+	last_updated timestamp not null default (''),
+	PRIMARY KEY (alias)
+)`,
+	`
 DROP TABLE IF EXISTS vitess_keyspace
 `,
 	`
@@ -296,6 +307,7 @@ CREATE TABLE vitess_keyspace (
 	keyspace varchar(128) NOT NULL,
 	keyspace_type smallint(5) NOT NULL,
 	durability_policy varchar(512) NOT NULL,
+	disable_emergency_reparent tinyint NOT NULL,
 	PRIMARY KEY (keyspace)
 )`,
 	`
@@ -307,6 +319,7 @@ CREATE TABLE vitess_shard (
 	shard varchar(128) NOT NULL,
 	primary_alias varchar(512) NOT NULL,
 	primary_timestamp varchar(512) NOT NULL,
+	disable_emergency_reparent tinyint NOT NULL,
 	PRIMARY KEY (keyspace, shard)
 )`,
 	`

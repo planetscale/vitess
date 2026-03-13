@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqlescape"
@@ -63,7 +64,6 @@ func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (q
 				allowZeroInDate = true
 			}
 		}
-
 	}
 	return queries, parseable, countCreate, allowZeroInDate, nil
 }
@@ -129,9 +129,6 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err != nil {
 		return nil, err
 	}
-	// TODO(shlomi): we use ExecuteFetchMulti for backwards compatibility. In v20 we will not accept
-	// multi statement queries in ExecuteFetchAsDBA. This will be rewritten as:
-	//  (in v20): result, err := ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 	results := make([]*querypb.QueryResult, 0, len(queries))
 	result, more, err := conn.ExecuteFetchMulti(uq, maxRows, true /*wantFields*/)
 	if err == nil {
@@ -168,7 +165,7 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err == nil && reloadSchema {
 		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
-			log.Errorf("failed to reload the schema %v", reloadErr)
+			log.Error(fmt.Sprintf("failed to reload the schema %v", reloadErr))
 		}
 	}
 	return results, err
@@ -185,14 +182,11 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		req.DisableBinlogs,
 		req.DisableForeignKeyChecks,
 		func(queries []string, countCreate int) error {
-			// Up to v19, we allow multi-statement SQL in ExecuteFetchAsDba, but only for the specific case
-			// where all statements are CREATE TABLE or CREATE VIEW. This is to support `ApplySchema --batch-size`.
-			// In v20, we still support multi-statement SQL, but again only if all statements are CREATE TABLE or CREATE VIEW.
-			// We then also add ExecuteMultiFetchAsDba for future use of multiple statements.
-			// In v21 we will not tolerate multi-statement SQL in ExecuteFetchAsDba at all, and
+			// As of v23 we do not allow multi-statement SQL in ExecuteFetchAsDba at all, and
 			// ExecuteMultiFetchAsDba will be the only way to execute multiple statements.
-			if len(queries) > 1 && len(queries) != countCreate {
-				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba unless all are CREATE TABLE or CREATE VIEW")
+			// See https://github.com/vitessio/vitess/issues/15505
+			if len(queries) > 1 {
+				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba")
 			}
 			return nil
 		},
@@ -249,7 +243,7 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	if err == nil && req.ReloadSchema {
 		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
-			log.Errorf("failed to reload the schema %v", reloadErr)
+			log.Error(fmt.Sprintf("failed to reload the schema %v", reloadErr))
 		}
 	}
 	return sqltypes.ResultToProto3(result), err
@@ -300,6 +294,6 @@ func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdat
 	if err != nil {
 		return nil, err
 	}
-	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, target, uq, nil, 0, 0, nil)
+	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, nil, target, uq, nil, 0, 0, nil)
 	return sqltypes.ResultToProto3(result), err
 }

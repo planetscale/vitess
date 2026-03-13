@@ -120,7 +120,7 @@ func getValue(valueStr, valueType string) (sqltypes.Value, error) {
 func getShardMap(shardsCSV *string) []*topodata.ShardReference {
 	var allShards []*topodata.ShardReference
 
-	for _, shard := range strings.Split(*shardsCSV, ",") {
+	for shard := range strings.SplitSeq(*shardsCSV, ",") {
 		_, keyRange, err := topo.ValidateShardName(shard)
 		if err != nil {
 			log.Fatalf("invalid shard range: %s", shard)
@@ -189,7 +189,7 @@ func main() {
 		if *shardsCSV != "" {
 			log.Fatalf("cannot specify both total_shards and shards")
 		}
-		shardArr, err := key.GenerateShardRanges(*totalShards)
+		shardArr, err := key.GenerateShardRanges(*totalShards, 0)
 		if err != nil {
 			log.Fatalf("failed to generate shard ranges: %v", err)
 		}

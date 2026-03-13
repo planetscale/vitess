@@ -21,12 +21,14 @@ package mysqlctlclient
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var protocol = "grpc"
@@ -36,7 +38,7 @@ func init() {
 }
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&protocol, "mysqlctl_client_protocol", protocol, "the protocol to use to talk to the mysqlctl server")
+	utils.SetFlagStringVar(fs, &protocol, "mysqlctl-client-protocol", protocol, "the protocol to use to talk to the mysqlctl server")
 }
 
 // MysqlctlClient defines the interface used to send remote mysqlctl commands
@@ -77,7 +79,8 @@ var factories = make(map[string]Factory)
 // RegisterFactory allows a client implementation to register itself
 func RegisterFactory(name string, factory Factory) {
 	if _, ok := factories[name]; ok {
-		log.Fatalf("RegisterFactory %s already exists", name)
+		log.Error(fmt.Sprintf("RegisterFactory %s already exists", name))
+		os.Exit(1)
 	}
 	factories[name] = factory
 }

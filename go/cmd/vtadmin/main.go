@@ -18,7 +18,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -36,6 +38,7 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	"vitess.io/vitess/go/vt/vtadmin/http/debug"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
+	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
@@ -57,13 +60,20 @@ var (
 
 	rootCmd = &cobra.Command{
 		Use: "vtadmin",
-		PreRun: func(cmd *cobra.Command, args []string) {
+		PreRunE: func(cmd *cobra.Command, args []string) error {
 			_flag.TrickGlog()
+
+			if err := log.Init(cmd.Flags()); err != nil {
+				return err
+			}
+
 			logutil.PurgeLogs()
 
 			if opts.EnableTracing || httpOpts.EnableTracing {
 				startTracing(cmd)
 			}
+
+			return nil
 		},
 		Run: run,
 		PostRun: func(cmd *cobra.Command, args []string) {
@@ -74,10 +84,11 @@ var (
 )
 
 // fatal ensures the tracer is closed and final spans are sent before issuing
-// a log.Fatal call with the given args.
+// a log.Error call followed by os.Exit(1) with the given args.
 func fatal(args ...any) {
 	trace.LogErrorsWhenClosing(traceCloser)
-	log.Fatal(args...)
+	log.Error(fmt.Sprint(args...))
+	os.Exit(1)
 }
 
 // startTracing checks the value of --tracer and then starts tracing, populating
@@ -85,12 +96,12 @@ func fatal(args ...any) {
 func startTracing(cmd *cobra.Command) {
 	tracer, err := cmd.Flags().GetString("tracer")
 	if err != nil {
-		log.Warningf("not starting tracer; err: %s", err)
+		log.Warn(fmt.Sprintf("not starting tracer; err: %s", err))
 		return
 	}
 
 	if tracer == "" || tracer == "noop" {
-		log.Warningf("starting tracing with noop tracer")
+		log.Warn("starting tracing with noop tracer")
 	}
 
 	traceCloser = trace.StartTracing("vtadmin")
@@ -135,7 +146,7 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	if cacheRefreshKey == "" {
-		log.Warningf("no cache-refresh-key set; forcing cache refreshes will not be possible")
+		log.Warn("no cache-refresh-key set; forcing cache refreshes will not be possible")
 	}
 	cache.SetCacheRefreshKey(cacheRefreshKey)
 
@@ -160,7 +171,7 @@ func run(cmd *cobra.Command, args []string) {
 	}
 }
 
-func main() {
+func registerFlags() {
 	// Common flags
 	rootCmd.Flags().StringVar(&opts.Addr, "addr", ":15000", "address to serve on")
 	rootCmd.Flags().DurationVar(&opts.CMuxReadTimeout, "lmux-read-timeout", time.Second, "how long to spend connection muxing")
@@ -209,6 +220,9 @@ func main() {
 		"Note: any whitespace characters are replaced with hyphens."
 	rootCmd.Flags().StringVar(&cacheRefreshKey, "cache-refresh-key", "vt-cache-refresh", cacheRefreshHelp)
 
+	// Structured logging flags.
+	log.RegisterFlags(rootCmd.Flags())
+
 	// glog flags, no better way to do this
 	rootCmd.Flags().AddGoFlag(flag.Lookup("v"))
 	rootCmd.Flags().AddGoFlag(flag.Lookup("logtostderr"))
@@ -216,10 +230,26 @@ func main() {
 	rootCmd.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
 	rootCmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
 
+	const deprecationMsg = "glog and its flags have been deprecated, use the default structured logging instead (\"--log-structured\")"
+	rootCmd.Flags().MarkDeprecated("v", deprecationMsg)
+	rootCmd.Flags().MarkDeprecated("logtostderr", deprecationMsg)
+	rootCmd.Flags().MarkDeprecated("alsologtostderr", deprecationMsg)
+	rootCmd.Flags().MarkDeprecated("stderrthreshold", deprecationMsg)
+	rootCmd.Flags().MarkDeprecated("log_dir", deprecationMsg)
+
 	servenv.RegisterMySQLServerFlags(rootCmd.Flags())
 
+	// Register TLS flags for gRPC connections to vtctld
+	grpcclientcommon.RegisterFlags(rootCmd.Flags())
+}
+
+func main() {
+	registerFlags()
+
+	rootCmd.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal(err)
+		log.Error(fmt.Sprint(err))
+		os.Exit(1)
 	}
 }
 

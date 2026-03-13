@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/pflag"
 
 	vtschema "vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -57,7 +58,7 @@ func init() {
 }
 
 func registerHealthStreamerFlags(fs *pflag.FlagSet) {
-	fs.UintVar(&streamHealthBufferSize, "stream_health_buffer_size", streamHealthBufferSize, "max streaming health entries to buffer per streaming health client")
+	utils.SetFlagUintVar(fs, &streamHealthBufferSize, "stream-health-buffer-size", streamHealthBufferSize, "max streaming health entries to buffer per streaming health client")
 }
 
 // healthStreamer streams health information to callers.
@@ -238,7 +239,7 @@ func (hs *healthStreamer) broadCastToClients(shr *querypb.StreamHealthResponse) 
 			// when there hasn't been an update and/or move away from using channels toward a model where
 			// old updates can be purged from the buffer in favor of more recent updates (since only the
 			// most recent health state really matters to gates).
-			log.Warning("A streaming health buffer is full. Closing the channel")
+			log.Warn("A streaming health buffer is full. Closing the channel")
 			close(ch)
 			delete(hs.clients, ch)
 		}
@@ -302,7 +303,7 @@ func (hs *healthStreamer) MakePrimary(serving bool) {
 	if serving && hs.signalWhenSchemaChange {
 		hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []*schema.Table, udfsChanged bool) {
 			if err := hs.reload(created, altered, dropped, udfsChanged); err != nil {
-				log.Errorf("periodic schema reload failed in health stream: %v", err)
+				log.Error(fmt.Sprintf("periodic schema reload failed in health stream: %v", err))
 			}
 		}, false)
 	}

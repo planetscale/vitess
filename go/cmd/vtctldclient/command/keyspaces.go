@@ -24,16 +24,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/protoutil"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 var (
@@ -220,7 +219,6 @@ func commandDeleteKeyspace(cmd *cobra.Command, args []string) error {
 		Recursive: deleteKeyspaceOptions.Recursive,
 		Force:     deleteKeyspaceOptions.Force,
 	})
-
 	if err != nil {
 		return fmt.Errorf("DeleteKeyspace(%v) error: %w; please check the topo", ks, err)
 	}
@@ -237,7 +235,6 @@ func commandFindAllShardsInKeyspace(cmd *cobra.Command, args []string) error {
 	resp, err := client.FindAllShardsInKeyspace(commandCtx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
 		Keyspace: ks,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -307,7 +304,6 @@ func commandRemoveKeyspaceCell(cmd *cobra.Command, args []string) error {
 		Force:     removeKeyspaceCellOptions.Force,
 		Recursive: removeKeyspaceCellOptions.Recursive,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -349,7 +345,6 @@ func commandValidateVersionKeyspace(cmd *cobra.Command, args []string) error {
 	resp, err := client.ValidateVersionKeyspace(commandCtx, &vtctldatapb.ValidateVersionKeyspaceRequest{
 		Keyspace: ks,
 	})
-
 	if err != nil {
 		return err
 	}

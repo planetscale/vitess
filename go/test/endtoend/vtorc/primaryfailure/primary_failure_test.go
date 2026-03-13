@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -44,16 +43,16 @@ func TestDownPrimary(t *testing.T) {
 	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{fmt.Sprintf("%s=10s", vtutils.GetFlagVariantForTests("--remote-operation-timeout")), "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, policy.DurabilitySemiSync)
+	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
 	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	// find the replica and rdonly tablets
@@ -76,19 +75,19 @@ func TestDownPrimary(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica, crossCellReplica}, 10*time.Second)
 	// since all tablets are up and running, InstancePollSecondsExceeded should have `0` zero value
-	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, "InstancePollSecondsExceeded", 0, true)
+	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 0, true)
 	// Make the rdonly vttablet unavailable
 	err := rdonly.VttabletProcess.TearDown()
 	require.NoError(t, err)
 	err = rdonly.MysqlctlProcess.Stop()
 	require.NoError(t, err)
-	// We have bunch of Vttablets down. Therefore we expect at least 1 occurrence of InstancePollSecondsExceeded
-	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, "InstancePollSecondsExceeded", 1, false)
 	// Make the current primary vttablet unavailable.
 	err = curPrimary.VttabletProcess.TearDown()
 	require.NoError(t, err)
 	err = curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
+	// We have bunch of Vttablets down. Therefore we expect at least 1 occurrence of InstancePollSecondsExceeded
+	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 1, false)
 	defer func() {
 		// we remove the tablet from our global list
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
@@ -100,7 +99,93 @@ func TestDownPrimary(t *testing.T) {
 
 	// also check that the replication is working correctly after failover
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+	t.Run("Check ERS and PRS Vars and Metrics", func(t *testing.T) {
+		utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentCounts")
+		utils.CheckVarExists(t, vtOrcProcess, "PlannedReparentCounts")
+		utils.CheckVarExists(t, vtOrcProcess, "ReparentShardOperationTimings")
+
+		// Metrics registered in prometheus
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_counts")
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_planned_reparent_counts")
+		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_reparent_shard_operation_timings_bucket")
+	})
+}
+
+// bring down primary, with keyspace-level ERS disabled via SetVtorcEmergencyReparent --disable.
+// confirm no ERS occurs.
+func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// find primary from topo
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+
+	// find the replica and rdonly tablets
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two replcia tablets, so the one not the primary must be the other replica
+		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	assert.NotNil(t, replica, "could not find replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
+	// check that the replication is setup correctly before we failover
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
+
+	// check before ERS disabled state is false
+	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
+
+	// disable ERS on the keyspace via SetVtorcEmergencyReparent --disable
+	_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspace.Name)
+	assert.NoError(t, err)
+	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, true)
+	utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentShardDisabled")
+	utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_shard_disabled")
+
+	// make the current primary vttablet unavailable
+	err = curPrimary.VttabletProcess.TearDown()
+	assert.NoError(t, err)
+	err = curPrimary.MysqlctlProcess.Stop()
+	assert.NoError(t, err)
+	defer func() {
+		// we remove the tablet from our global list
+		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
+	}()
+
+	// check ERS did not occur. For the RecoverDeadPrimary recovery, expect >= 1 skipped recoveries, 0 successful recoveries and 0 ERS operations.
+	utils.WaitForSkippedRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, logic.RecoverySkipERSDisabled, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
+	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 0)
+
+	// check that the shard primary remains the same because ERS is disabled on the keyspace
+	origPrimary := curPrimary
+	curPrimary = utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary)
+	assert.Equal(t, origPrimary.Alias, curPrimary.Alias)
+
+	// enable ERS on the keyspace via SetVtorcEmergencyReparent --enable
+	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspace.Name)
+	assert.NoError(t, err)
+	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
+
+	// check that the replica gets promoted by vtorc
+	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+
+	// also check that the replication is working correctly after failover
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 	t.Run("Check ERS and PRS Vars and Metrics", func(t *testing.T) {
 		utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentCounts")
@@ -117,7 +202,7 @@ func TestDownPrimary(t *testing.T) {
 // bring down primary before VTOrc has started, let vtorc repair.
 func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{}, 0, policy.DurabilityNone)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	curPrimary := shard0.Vttablets[0]
@@ -149,9 +234,9 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start a VTOrc instance
-	utils.StartVTOrcs(t, clusterInfo, []string{fmt.Sprintf("%s=10s", vtutils.GetFlagVariantForTests("--remote-operation-timeout"))}, cluster.VTOrcConfiguration{
+	utils.StartVTOrcs(t, clusterInfo, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1)
+	}, cluster.DefaultVtorcsByCell)
 
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 
@@ -165,21 +250,21 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 
 	// also check that the replication is working correctly after failover
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 }
 
 // delete the primary record and let vtorc repair.
 func TestDeletedPrimaryTablet(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{fmt.Sprintf("%s=10s", vtutils.GetFlagVariantForTests("--remote-operation-timeout"))}, cluster.VTOrcConfiguration{}, 1, policy.DurabilityNone)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout") + "=10s"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
 	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	// find the replica and rdonly tablets
@@ -230,7 +315,7 @@ func TestDeletedPrimaryTablet(t *testing.T) {
 
 	// also check that the replication is working correctly after failover
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryTabletDeletedRecoveryName, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverPrimaryTabletDeletedRecoveryName, keyspace.Name, shard0.Name, 1)
 }
 
 // TestDeadPrimaryRecoversImmediately test Vtorc ability to recover immediately if primary is dead.
@@ -243,14 +328,14 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, policy.DurabilitySemiSync)
+	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
 	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulPRSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	// find the replica and rdonly tablets
@@ -277,6 +362,7 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	curPrimary.VttabletProcess.Kill()
 	err := curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
+
 	defer func() {
 		// we remove the tablet from our global list
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
@@ -284,36 +370,20 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
-	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, "InstancePollSecondsExceeded", 2, false)
+	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 2, false)
 	// also check that the replication is working correctly after failover
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
-	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
-	// Parse log file and find out how much time it took for DeadPrimary to recover.
-	logFile := path.Join(vtOrcProcess.LogDir, vtOrcProcess.LogFileName)
-	// log prefix printed at the end of analysis where we conclude we have DeadPrimary
-	t1 := extractTimeFromLog(t, logFile, "Proceeding with DeadPrimary recovery")
-	// log prefix printed at the end of recovery
-	t2 := extractTimeFromLog(t, logFile, "auditType:RecoverDeadPrimary")
-	curr := time.Now().Format("2006-01-02")
-	timeLayout := "2006-01-02 15:04:05.000000"
-	timeStr1 := fmt.Sprintf("%s %s", curr, t1)
-	timeStr2 := fmt.Sprintf("%s %s", curr, t2)
-	time1, err := time.Parse(timeLayout, timeStr1)
-	if err != nil {
-		t.Errorf("unable to parse time %s", err.Error())
-	}
-	time2, err := time.Parse(timeLayout, timeStr2)
-	if err != nil {
-		t.Errorf("unable to parse time %s", err.Error())
-	}
-	diff := time2.Sub(time1)
-	fmt.Printf("The difference between %s and %s is %v seconds.\n", t1, t2, diff.Seconds())
 	// assert that it takes less than `remote-operation-timeout` to recover from `DeadPrimary`
 	// use the value provided in `remote-operation-timeout` flag to compare with.
 	// We are testing against 9.5 seconds to be safe and prevent flakiness.
-	assert.Less(t, diff.Seconds(), 9.5)
+	//
+	// TODO: this is really flimsy since it relies on parsing VTOrc's logs and assumes a specific
+	// log format. We should change this to something more robust.
+	d := recoveryDuration(t, vtOrcProcess, "DeadPrimary", keyspace.Name, shard0.Name)
+	assert.Less(t, d.Seconds(), 9.5)
 }
 
 // Failover should not be cross data centers, according to the configuration file
@@ -322,7 +392,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -367,7 +437,7 @@ func TestCrossDataCenterFailureError(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 1, 1, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -413,7 +483,7 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 2, nil, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -493,7 +563,7 @@ func TestPromotionLagSuccess(t *testing.T) {
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		ReplicationLagQuery:              "select 59",
 		FailPrimaryPromotionOnLagMinutes: 1,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -542,7 +612,7 @@ func TestPromotionLagFailure(t *testing.T) {
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 1, nil, cluster.VTOrcConfiguration{
 		ReplicationLagQuery:              "select 61",
 		FailPrimaryPromotionOnLagMinutes: 1,
-	}, 1, "")
+	}, cluster.DefaultVtorcsByCell, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -593,7 +663,7 @@ func TestDownPrimaryPromotionRule(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		LockShardTimeoutSeconds: 5,
-	}, 1, "test")
+	}, cluster.DefaultVtorcsByCell, "test")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -640,7 +710,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		LockShardTimeoutSeconds: 5,
-	}, 1, "test")
+	}, cluster.DefaultVtorcsByCell, "test")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -720,7 +790,7 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 		LockShardTimeoutSeconds:  5,
 		PreventCrossCellFailover: true,
-	}, 1, "test")
+	}, cluster.DefaultVtorcsByCell, "test")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -791,28 +861,60 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica, rdonly}, 15*time.Second)
 }
 
-func extractTimeFromLog(t *testing.T, logFile string, logStatement string) string {
-	file, err := os.Open(logFile)
-	if err != nil {
-		t.Errorf("fail to extract time from log statement %s", err.Error())
-	}
-	defer file.Close()
+// recoveryDuration returns the duration of the actual recovery execution by parsing VTOrc's log
+// for the given analysis code and shard.
+func recoveryDuration(t *testing.T, vtorcProcess *cluster.VTOrcProcess, analysisCode string, keyspace string, shard string) time.Duration {
+	t.Helper()
 
-	scanner := bufio.NewScanner(file)
+	logPath := path.Join(vtorcProcess.LogDir, vtorcProcess.LogFileName)
+	f, err := os.Open(logPath)
+	require.NoError(t, err, "failed to open VTOrc log file %s", logPath)
+	t.Cleanup(func() { f.Close() })
 
+	recoveryPrefix := fmt.Sprintf("Recovery for %s on %s/%s", analysisCode, keyspace, shard)
+	startMarker := "proceeding with recovery on"
+	endMarker := "Recovery succeeded"
+
+	var startTime, endTime time.Time
+	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.Contains(line, logStatement) {
-			// Regular expression pattern for date format
-			pattern := `\d{2}:\d{2}:\d{2}\.\d{6}`
-			re := regexp.MustCompile(pattern)
-			match := re.FindString(line)
-			return match
+		if !strings.Contains(line, recoveryPrefix) {
+			continue
+		}
+
+		ts, ok := parseLogTimestamp(line)
+		if !ok {
+			continue
+		}
+
+		if strings.Contains(line, startMarker) {
+			startTime = ts
+		} else if strings.Contains(line, endMarker) {
+			endTime = ts
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		t.Errorf("fail to extract time from log statement %s", err.Error())
+	require.NoError(t, scanner.Err())
+	require.NotZero(t, startTime, "could not find recovery start log line for %s", analysisCode)
+	require.NotZero(t, endTime, "could not find recovery succeeded log line for %s", analysisCode)
+	require.False(t, endTime.Before(startTime), "recovery end time %v is before start time %v", endTime, startTime)
+
+	return endTime.Sub(startTime)
+}
+
+// parseLogTimestamp parses the timestamp from the first three fields of a VTOrc text log line.
+// This assumes that the `--log-format` is `text`, which is the default for tests.
+func parseLogTimestamp(line string) (time.Time, bool) {
+	fields := strings.Fields(line)
+	if len(fields) < 3 {
+		return time.Time{}, false
 	}
-	return ""
+
+	t, err := time.Parse("2006-01-02 15:04:05.000 MST", fields[0]+" "+fields[1]+" "+fields[2])
+	if err != nil {
+		return time.Time{}, false
+	}
+
+	return t, true
 }

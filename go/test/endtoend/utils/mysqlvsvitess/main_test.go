@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlvsvitess
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -27,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -64,7 +64,6 @@ var (
 )
 
 func TestMain(m *testing.M) {
-
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
 		defer clusterInstance.Teardown()
@@ -81,9 +80,9 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vschema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--schema-change-signal")}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -115,7 +114,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestCreateMySQL(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	mysqlConn, err := mysql.Connect(ctx, &mysqlParams)
 	require.NoError(t, err)
 	defer mysqlConn.Close()

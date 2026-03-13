@@ -29,11 +29,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 // TestReconcileExtraRows tests reconcileExtraRows() by providing different types of source and target slices and validating
@@ -49,17 +52,10 @@ func TestReconcileExtraRows(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	ct := vdenv.newController(t, controllerQR)
 	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
 	require.NoError(t, err)
-
-	dr := &DiffReport{
-		TableName:            "t1",
-		ExtraRowsSourceDiffs: []*RowDiff{},
-		ExtraRowsTargetDiffs: []*RowDiff{},
-		MismatchedRowsDiffs:  nil,
-	}
 
 	type testCase struct {
 		name             string
@@ -175,35 +171,243 @@ func TestReconcileExtraRows(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			dr := &DiffReport{
+				TableName: "t1",
+
+				ProcessedRows: 10 + max(int64(len(tc.extraDiffsSource)), int64(len(tc.extraDiffsTarget))),
+
+				MatchingRows: 10,
+
+				MismatchedRows:      0,
+				MismatchedRowsDiffs: nil,
+
+				ExtraRowsSource:      int64(len(tc.extraDiffsSource)),
+				ExtraRowsSourceDiffs: tc.extraDiffsSource,
+
+				ExtraRowsTarget:      int64(len(tc.extraDiffsTarget)),
+				ExtraRowsTargetDiffs: tc.extraDiffsTarget,
+			}
+
 			maxExtras := int64(10)
 			if tc.maxExtras != 0 {
 				maxExtras = tc.maxExtras
 			}
 
-			dr.ExtraRowsSourceDiffs = tc.extraDiffsSource
-			dr.ExtraRowsTargetDiffs = tc.extraDiffsTarget
-			dr.ExtraRowsSource = int64(len(tc.extraDiffsSource))
-			dr.ExtraRowsTarget = int64(len(tc.extraDiffsTarget))
 			origExtraRowsSource := dr.ExtraRowsSource
-
-			dr.MatchingRows = 0
-			dr.MismatchedRows = dr.ExtraRowsSource
-			dr.ProcessedRows = 0
 
 			require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
 
-			// check counts
-			require.Equal(t, dr.MatchingRows, origExtraRowsSource-dr.ExtraRowsSource)
-			require.Equal(t, dr.ProcessedRows, dr.MatchingRows)
-			require.Equal(t, dr.MismatchedRows, origExtraRowsSource-dr.MatchingRows)
-			require.Equal(t, dr.ExtraRowsSource, int64(len(tc.wantExtraSource)))
-			require.Equal(t, dr.ExtraRowsTarget, int64(len(tc.wantExtraTarget)))
+			// Matching rows should increase by the number of rows that we could reconcile
+			require.Equal(t, 10+origExtraRowsSource-dr.ExtraRowsSource, dr.MatchingRows)
+
+			// Processed rows should not change from the original value
+			require.Equal(t, 10+max(int64(len(tc.extraDiffsSource)), int64(len(tc.extraDiffsTarget))), dr.ProcessedRows)
+
+			// Mismatched rows should remain the same
+			require.Equal(t, int64(0), dr.MismatchedRows)
+
+			// Check other counts
+			require.Equal(t, int64(len(tc.wantExtraSource)), dr.ExtraRowsSource)
+			require.Equal(t, int64(len(tc.wantExtraTarget)), dr.ExtraRowsTarget)
 
 			// check actual extra rows
 			require.EqualValues(t, dr.ExtraRowsSourceDiffs, tc.wantExtraSource)
 			require.EqualValues(t, dr.ExtraRowsTargetDiffs, tc.wantExtraTarget)
 		})
 	}
+
+	t.Run("with `ExtraRowsSource` larger than `extraDiffsSource`", func(t *testing.T) {
+		dr := &DiffReport{
+			TableName: "t1",
+
+			// The max number of rows loaded on the source or the target
+			ProcessedRows: 6,
+
+			MismatchedRows:      0,
+			MismatchedRowsDiffs: nil,
+
+			// Simulate having hit `maxExtraRowsToCompare` / having found more rows on the source
+			ExtraRowsSource: 6,
+			ExtraRowsSourceDiffs: []*RowDiff{
+				{Row: map[string]string{"1": "c1"}},
+				{Row: map[string]string{"3a": "c3a"}},
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"3b": "c3b"}},
+			},
+
+			ExtraRowsTarget: 4,
+			ExtraRowsTargetDiffs: []*RowDiff{
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"4a": "c4a"}},
+				{Row: map[string]string{"4b": "c4b"}},
+				{Row: map[string]string{"1": "c1"}},
+			},
+		}
+
+		maxExtras := int64(4)
+		require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
+
+		// Verify that reconciliation does not change the number of processed or mismatched rows
+		require.Equal(t, int64(6), dr.ProcessedRows)
+		require.Equal(t, int64(0), dr.MismatchedRows)
+
+		require.Equal(t, int64(4), dr.ExtraRowsSource)
+		require.Equal(t, int64(2), dr.ExtraRowsTarget)
+
+		require.Equal(t, int64(2), dr.MatchingRows)
+	})
+	t.Run("with `ExtraRowsTarget` larger than `extraDiffsTarget`", func(t *testing.T) {
+		dr := &DiffReport{
+			TableName: "t1",
+
+			// The max number of rows loaded on the source or the target
+			ProcessedRows: 6,
+
+			MismatchedRows:      0,
+			MismatchedRowsDiffs: nil,
+
+			ExtraRowsSource: 4,
+			ExtraRowsSourceDiffs: []*RowDiff{
+				{Row: map[string]string{"1": "c1"}},
+				{Row: map[string]string{"3a": "c3a"}},
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"3b": "c3b"}},
+			},
+
+			// Simulate having hit `maxExtraRowsToCompare` / having found more rows on the target
+			ExtraRowsTarget: 6,
+			ExtraRowsTargetDiffs: []*RowDiff{
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"4a": "c4a"}},
+				{Row: map[string]string{"4b": "c4b"}},
+				{Row: map[string]string{"1": "c1"}},
+			},
+		}
+
+		maxExtras := int64(4)
+		require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
+
+		// Verify that reconciliation does not change the number of processed or mismatched rows
+		require.Equal(t, int64(6), dr.ProcessedRows)
+		require.Equal(t, int64(0), dr.MismatchedRows)
+
+		require.Equal(t, int64(2), dr.ExtraRowsSource)
+		require.Equal(t, int64(4), dr.ExtraRowsTarget)
+
+		require.Equal(t, int64(2), dr.MatchingRows)
+	})
+}
+
+func TestReconcileReferenceTables(t *testing.T) {
+	ctx := t.Context()
+	vdenv := newTestVDiffEnv(t)
+	defer vdenv.close()
+	UUID := uuid.New()
+	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		vdiffTestCols,
+		vdiffTestColTypes,
+	),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
+	)
+
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
+	ct := vdenv.newController(t, controllerQR)
+	ct.sourceKeyspace = tstenv.KeyspaceName
+	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
+	require.NoError(t, err)
+
+	// Create VSchema for the source keyspace with a reference table.
+	err = tstenv.TopoServ.EnsureVSchema(ctx, tstenv.KeyspaceName)
+	require.NoError(t, err)
+	sourceVS := &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"ref_table": {
+				Type: "reference",
+			},
+		},
+	}
+	err = tstenv.TopoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     tstenv.KeyspaceName,
+		Keyspace: sourceVS,
+	})
+	require.NoError(t, err)
+
+	t.Run("division by zero with zero matching rows - source side", func(t *testing.T) {
+		dr := &DiffReport{
+			TableName:            "ref_table",
+			ProcessedRows:        10,
+			MatchingRows:         0,
+			MismatchedRows:       0, // Must be 0 to enter reconciliation logic
+			ExtraRowsSource:      10,
+			ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"id": "1"}}},
+			ExtraRowsTarget:      0,
+		}
+
+		err := wd.reconcileReferenceTables(dr)
+		require.NoError(t, err)
+
+		// Values should remain unchanged since MatchingRows is 0.
+		require.Equal(t, int64(10), dr.ExtraRowsSource)
+		require.Equal(t, int64(0), dr.ExtraRowsTarget)
+	})
+
+	t.Run("division by zero with zero matching rows - target side", func(t *testing.T) {
+		dr := &DiffReport{
+			TableName:            "ref_table",
+			ProcessedRows:        10,
+			MatchingRows:         0,
+			MismatchedRows:       0, // Must be 0 to enter reconciliation logic
+			ExtraRowsSource:      0,
+			ExtraRowsTarget:      10,
+			ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"id": "1"}}},
+		}
+
+		err := wd.reconcileReferenceTables(dr)
+		require.NoError(t, err)
+
+		// Values should remain unchanged since MatchingRows is 0.
+		require.Equal(t, int64(0), dr.ExtraRowsSource)
+		require.Equal(t, int64(10), dr.ExtraRowsTarget)
+	})
+
+	t.Run("reference table with positive matching rows - works correctly", func(t *testing.T) {
+		dr := &DiffReport{
+			TableName:            "ref_table",
+			ProcessedRows:        15,
+			MatchingRows:         5,
+			MismatchedRows:       0,
+			ExtraRowsSource:      10, // 10 % 5 = 0, so it's a multiple.
+			ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"id": "1"}}},
+			ExtraRowsTarget:      0,
+		}
+
+		err := wd.reconcileReferenceTables(dr)
+		require.NoError(t, err)
+
+		// ExtraRowsSource should be cleared since it's a multiple of MatchingRows.
+		require.Equal(t, int64(0), dr.ExtraRowsSource)
+		require.Equal(t, 0, len(dr.ExtraRowsSourceDiffs))
+	})
+
+	t.Run("mismatched rows - reconciliation skipped entirely", func(t *testing.T) {
+		// With mismatched rows, reconciliation is skipped, so no VSchema access.
+		dr := &DiffReport{
+			TableName:            "ref_table",
+			ProcessedRows:        10,
+			MatchingRows:         0,
+			MismatchedRows:       5, // Non-zero means early return, no VSchema access
+			ExtraRowsSource:      10,
+			ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"id": "1"}}},
+			ExtraRowsTarget:      0,
+		}
+
+		err := wd.reconcileReferenceTables(dr)
+		require.NoError(t, err)
+
+		// Values should remain unchanged.
+		require.Equal(t, int64(10), dr.ExtraRowsSource)
+		require.Equal(t, int64(0), dr.ExtraRowsTarget)
+	})
 }
 
 func TestBuildPlanSuccess(t *testing.T) {
@@ -217,7 +421,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	ct := vdenv.newController(t, controllerQR)
 	ct.sources = map[string]*migrationSource{
 		tstenv.ShardName: {
@@ -686,8 +890,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 				Direction: sqlparser.AscOrder,
 			}},
 			aggregates: []*engine.AggregateParams{
-				engine.NewAggregateParam(opcode.AggregateSum, 2, "", collations.MySQL8()),
-				engine.NewAggregateParam(opcode.AggregateSum, 3, "", collations.MySQL8()),
+				engine.NewAggregateParam(opcode.AggregateSum, 2, nil, "", collations.MySQL8()),
+				engine.NewAggregateParam(opcode.AggregateSum, 3, nil, "", collations.MySQL8()),
 			},
 		},
 	}, {
@@ -865,7 +1069,7 @@ func TestBuildPlanFailure(t *testing.T) {
 	),
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
-	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName), noResults, nil)
 	ct := vdenv.newController(t, controllerQR)
 	testcases := []struct {
 		input *binlogdatapb.Rule
@@ -899,7 +1103,7 @@ func TestBuildPlanFailure(t *testing.T) {
 			Match:  "t1",
 			Filter: "select c3 from t1",
 		},
-		err: "column c3 not found in table t1 on tablet cell:\"cell1\" uid:100",
+		err: fmt.Sprintf("column c3 not found in table t1 on tablet %v", &topodatapb.TabletAlias{Cell: "cell1", Uid: 100}),
 	}}
 	for _, tcase := range testcases {
 		dbc := binlogplayer.NewMockDBClient(t)

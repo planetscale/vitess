@@ -18,12 +18,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 
 	"vitess.io/vitess/go/cmd/zk/command"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 func main() {
@@ -38,9 +40,10 @@ func main() {
 		cancel()
 	}()
 
+	command.Root.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	// Run the command.
 	if err := command.Root.ExecuteContext(ctx); err != nil {
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 		exit.Return(1)
 	}
 }

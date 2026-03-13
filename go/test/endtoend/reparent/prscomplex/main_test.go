@@ -17,7 +17,6 @@ limitations under the License.
 package misc
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"os"
@@ -68,9 +67,9 @@ func TestMain(m *testing.M) {
 			"--queryserver-config-stream-pool-size=3",
 			"--queryserver-config-transaction-cap=2",
 			"--queryserver-config-transaction-timeout=20s",
-			"--shutdown_grace_period=3s",
+			vtutils.GetFlagVariantForTests("--shutdown-grace-period")+"=3s",
 			"--queryserver-config-schema-change-signal=false")
-		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
@@ -79,7 +78,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"--planner-version=gen4",
 			vtutils.GetFlagVariantForTests("--mysql-default-workload")+"=olap",
-			"--schema_change_signal=false")
+			vtutils.GetFlagVariantForTests("--schema-change-signal")+"=false")
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -106,7 +105,7 @@ func TestAcquireSameConnID(t *testing.T) {
 			require.Equal(t, "Fail in goroutine after TestAcquireSameConnID has completed", err)
 		}
 	}()
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -131,7 +130,7 @@ func TestAcquireSameConnID(t *testing.T) {
 	totalErrCount := 0
 	// run through 100 times to acquire new connection, this might override the original connection id.
 	var conn2 *mysql.Conn
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		conn2, err = mysql.Connect(ctx, &vtParams)
 		require.NoError(t, err)
 

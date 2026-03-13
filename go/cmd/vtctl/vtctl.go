@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
@@ -86,10 +87,12 @@ func init() {
 			vtctl.PrintAllCommands(logger)
 		}
 
-		fs.DurationVar(&waitTime, "wait-time", waitTime, "time to wait on an action")
+		utils.SetFlagDurationVar(fs, &waitTime, "wait-time", waitTime, "time to wait on an action")
 		fs.BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run vtcl detached from the terminal")
 
 		acl.RegisterFlags(fs)
+
+		fs.SetNormalizeFunc(utils.NormalizeUnderscoresToDashes)
 	})
 }
 
@@ -136,7 +139,8 @@ func main() {
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		log.Fatalf("cannot initialize sql parser: %v", err)
+		log.Error(fmt.Sprintf("cannot initialize sql parser: %v", err))
+		os.Exit(1)
 	}
 
 	// (TODO:ajm188) <Begin backwards compatibility support>.
@@ -169,7 +173,7 @@ func main() {
 
 		os.Args = append([]string{"vtctldclient"}, args[1:]...)
 		if err := command.Root.ExecuteContext(ctx); err != nil {
-			log.Errorf("action failed: %v %v", action, err)
+			log.Error(fmt.Sprintf("action failed: %v %v", action, err))
 			exit.Return(255)
 		}
 	case strings.EqualFold(action, "LegacyVtctlCommand"):
@@ -178,7 +182,7 @@ func main() {
 		args = args[1:]
 		fallthrough
 	default:
-		log.Warningf("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
+		log.Warn("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
 		wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 		if args[0] == "--" {
@@ -196,7 +200,7 @@ func main() {
 		case nil:
 			// keep going
 		default:
-			log.Errorf("action failed: %v %v", action, err)
+			log.Error(fmt.Sprintf("action failed: %v %v", action, err))
 			exit.Return(255)
 		}
 	}

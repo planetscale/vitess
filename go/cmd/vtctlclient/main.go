@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -47,10 +48,12 @@ var (
 
 func init() {
 	servenv.OnParse(func(fs *pflag.FlagSet) {
-		fs.DurationVar(&actionTimeout, "action_timeout", actionTimeout, "timeout for the total command")
+		utils.SetFlagDurationVar(fs, &actionTimeout, "action-timeout", actionTimeout, "timeout for the total command")
 		fs.StringVar(&server, "server", server, "server to use for connection")
 
 		acl.RegisterFlags(fs)
+
+		fs.SetNormalizeFunc(utils.NormalizeUnderscoresToDashes)
 	})
 }
 
@@ -83,7 +86,7 @@ func main() {
 
 	// We can't do much without a --server flag
 	if server == "" {
-		log.Error(errors.New("please specify --server <vtctld_host:vtctld_port> to specify the vtctld server to connect to"))
+		log.Error(fmt.Sprint(errors.New("please specify --server <vtctld_host:vtctld_port> to specify the vtctld server to connect to")))
 		os.Exit(1)
 	}
 
@@ -102,7 +105,7 @@ func main() {
 
 		errStr := strings.ReplaceAll(err.Error(), "remote error: ", "")
 		fmt.Printf("%s Error: %s\n", args[0], errStr)
-		log.Error(err)
+		log.Error(fmt.Sprint(err))
 		os.Exit(1)
 	}
 }

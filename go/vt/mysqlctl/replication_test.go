@@ -18,9 +18,10 @@ package mysqlctl
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"math"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,7 +40,6 @@ func testRedacted(t *testing.T, source, expected string) {
 }
 
 func TestRedactSourcePassword(t *testing.T) {
-
 	// regular test case
 	testRedacted(t, `CHANGE REPLICATION SOURCE TO
   SOURCE_PASSWORD = 'AAA',
@@ -70,7 +70,6 @@ func TestRedactSourcePassword(t *testing.T) {
 }
 
 func TestRedactMasterPassword(t *testing.T) {
-
 	// regular test case
 	testRedacted(t, `CHANGE MASTER TO
   MASTER_PASSWORD = 'AAA',
@@ -98,6 +97,11 @@ func TestRedactMasterPassword(t *testing.T) {
 	testRedacted(t, `CHANGE MASTER TO
   MASTER_PASSWORD = 'AAA`, `CHANGE MASTER TO
   MASTER_PASSWORD = 'AAA`)
+}
+
+func TestRedactIdentifiedByPassword(t *testing.T) {
+	testRedacted(t, "CLONE INSTANCE FROM 'user'@'host':3306 IDENTIFIED BY 'secret' REQUIRE SSL",
+		"CLONE INSTANCE FROM 'user'@'host':3306 IDENTIFIED BY '****' REQUIRE SSL")
 }
 
 func TestRedactPassword(t *testing.T) {
@@ -136,7 +140,7 @@ func TestWaitForReplicationStart(t *testing.T) {
 	err := WaitForReplicationStart(context.Background(), fakemysqld, 2)
 	assert.NoError(t, err)
 
-	fakemysqld.ReplicationStatusError = fmt.Errorf("test error")
+	fakemysqld.ReplicationStatusError = errors.New("test error")
 	err = WaitForReplicationStart(context.Background(), fakemysqld, 2)
 	assert.ErrorContains(t, err, "test error")
 
@@ -287,6 +291,7 @@ func TestPrimaryStatus(t *testing.T) {
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("SHOW MASTER STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_status"))
+	db.AddQuery("SHOW BINARY LOG STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_status"))
 	db.AddQuery("SELECT @@global.server_uuid", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "test_uuid"))
 
 	testMysqld := NewMysqld(dbc)
@@ -299,6 +304,7 @@ func TestPrimaryStatus(t *testing.T) {
 	assert.EqualValues(t, "test_uuid", res.ServerUUID)
 
 	db.AddQuery("SHOW MASTER STATUS", &sqltypes.Result{})
+	db.AddQuery("SHOW BINARY LOG STATUS", &sqltypes.Result{})
 	_, err = testMysqld.PrimaryStatus(ctx)
 	assert.ErrorContains(t, err, "no master status")
 }
@@ -379,6 +385,7 @@ func TestSetReplicationPosition(t *testing.T) {
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("RESET MASTER", &sqltypes.Result{})
+	db.AddQuery("RESET BINARY LOGS AND GTIDS", &sqltypes.Result{})
 
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
@@ -409,6 +416,7 @@ func TestSetReplicationSource(t *testing.T) {
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("RESET MASTER", &sqltypes.Result{})
+	db.AddQuery("RESET BINARY LOGS AND GTIDS", &sqltypes.Result{})
 	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
 
 	testMysqld := NewMysqld(dbc)
@@ -445,10 +453,12 @@ func TestResetReplication(t *testing.T) {
 	// We expect this query to be executed
 	db.AddQuery("RESET REPLICA ALL", &sqltypes.Result{})
 	err = testMysqld.ResetReplication(ctx)
-	assert.ErrorContains(t, err, "RESET MASTER")
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "RESET MASTER") || strings.Contains(err.Error(), "RESET BINARY LOGS AND GTIDS"))
 
 	// We expect this query to be executed
 	db.AddQuery("RESET MASTER", &sqltypes.Result{})
+	db.AddQuery("RESET BINARY LOGS AND GTIDS", &sqltypes.Result{})
 	err = testMysqld.ResetReplication(ctx)
 	assert.NoError(t, err)
 }
@@ -741,8 +751,7 @@ func TestSemiSyncExtensionLoaded(t *testing.T) {
 	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|varchar"), "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|ON"))

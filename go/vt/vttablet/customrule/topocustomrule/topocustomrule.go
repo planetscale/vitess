@@ -22,7 +22,9 @@ package topocustomrule
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"sync"
 	"time"
@@ -32,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
@@ -43,8 +46,8 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&ruleCell, "topocustomrule_cell", ruleCell, "topo cell for customrules file.")
-	fs.StringVar(&rulePath, "topocustomrule_path", rulePath, "path for customrules file. Disabled if empty.")
+	utils.SetFlagStringVar(fs, &ruleCell, "topocustomrule-cell", ruleCell, "topo cell for customrules file.")
+	utils.SetFlagStringVar(fs, &rulePath, "topocustomrule-path", rulePath, "path for customrules file. Disabled if empty.")
 }
 
 func init() {
@@ -98,7 +101,7 @@ func (cr *topoCustomRule) start() {
 	go func() {
 		for {
 			if err := cr.oneWatch(); err != nil {
-				log.Warningf("Background watch of topo custom rule failed: %v", err)
+				log.Warn(fmt.Sprintf("Background watch of topo custom rule failed: %v", err))
 			}
 
 			cr.mu.Lock()
@@ -106,11 +109,11 @@ func (cr *topoCustomRule) start() {
 			cr.mu.Unlock()
 
 			if stopped {
-				log.Warningf("Topo custom rule was terminated")
+				log.Warn("Topo custom rule was terminated")
 				return
 			}
 
-			log.Warningf("Sleeping for %v before trying again", sleepDuringTopoFailure)
+			log.Warn(fmt.Sprintf("Sleeping for %v before trying again", sleepDuringTopoFailure))
 			time.Sleep(sleepDuringTopoFailure)
 		}
 	}()
@@ -134,7 +137,7 @@ func (cr *topoCustomRule) apply(wd *topo.WatchData) error {
 	if !reflect.DeepEqual(cr.qrs, qrs) {
 		cr.qrs = qrs.Copy()
 		cr.qsc.SetQueryRules(topoCustomRuleSource, qrs)
-		log.Infof("Custom rule version %v fetched from topo and applied to vttablet", wd.Version)
+		log.Info(fmt.Sprintf("Custom rule version %v fetched from topo and applied to vttablet", wd.Version))
 	}
 
 	return nil
@@ -190,10 +193,9 @@ func (cr *topoCustomRule) oneWatch() error {
 			}
 			return err
 		}
-
 	}
 
-	return fmt.Errorf("watch terminated with no error")
+	return errors.New("watch terminated with no error")
 }
 
 // activateTopoCustomRules activates topo dynamic custom rule mechanism.
@@ -203,7 +205,8 @@ func activateTopoCustomRules(qsc tabletserver.Controller) {
 
 		cr, err := newTopoCustomRule(qsc, ruleCell, rulePath)
 		if err != nil {
-			log.Fatalf("cannot start TopoCustomRule: %v", err)
+			log.Error(fmt.Sprintf("cannot start TopoCustomRule: %v", err))
+			os.Exit(1)
 		}
 		cr.start()
 

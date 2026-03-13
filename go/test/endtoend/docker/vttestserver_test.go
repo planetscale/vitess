@@ -17,17 +17,15 @@ limitations under the License.
 package docker
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestMain(m *testing.M) {
@@ -42,7 +40,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestUnsharded(t *testing.T) {
-	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
 			vtest := newVttestserver(image, []string{"unsharded_ks"}, []int{1}, 1000, 33574)
@@ -54,7 +52,7 @@ func TestUnsharded(t *testing.T) {
 			err = vtest.waitUntilDockerHealthy(10)
 			require.NoError(t, err)
 
-			ctx := context.Background()
+			ctx := t.Context()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
 				Port: vtest.basePort + 3,
@@ -71,7 +69,7 @@ func TestUnsharded(t *testing.T) {
 }
 
 func TestSharded(t *testing.T) {
-	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
 			vtest := newVttestserver(image, []string{"ks"}, []int{2}, 1000, 33574)
@@ -83,7 +81,7 @@ func TestSharded(t *testing.T) {
 			err = vtest.waitUntilDockerHealthy(10)
 			require.NoError(t, err)
 
-			ctx := context.Background()
+			ctx := t.Context()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
 				Port: vtest.basePort + 3,
@@ -101,7 +99,7 @@ func TestSharded(t *testing.T) {
 }
 
 func TestMysqlMaxCons(t *testing.T) {
-	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
 			vtest := newVttestserver(image, []string{"ks"}, []int{2}, 100000, 33574)
@@ -113,7 +111,7 @@ func TestMysqlMaxCons(t *testing.T) {
 			err = vtest.waitUntilDockerHealthy(10)
 			require.NoError(t, err)
 
-			ctx := context.Background()
+			ctx := t.Context()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
 				Port: vtest.basePort + 3,
@@ -128,7 +126,7 @@ func TestMysqlMaxCons(t *testing.T) {
 
 // TestVtctldCommands tests that vtctld commands can be run with the docker image.
 func TestVtctldCommands(t *testing.T) {
-	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
 			vtest := newVttestserver(image, []string{"long_ks_name"}, []int{2}, 100, 33574)
@@ -150,12 +148,12 @@ func TestVtctldCommands(t *testing.T) {
 }
 
 func TestLargeNumberOfKeyspaces(t *testing.T) {
-	dockerImages := []string{vttestserverMysql57image, vttestserverMysql80image}
+	dockerImages := []string{vttestserverMysql80image, vttestserverMysql84image}
 	for _, image := range dockerImages {
 		t.Run(image, func(t *testing.T) {
 			var keyspaces []string
 			var numShards []int
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				keyspaces = append(keyspaces, fmt.Sprintf("unsharded_ks%d", i))
 				numShards = append(numShards, 1)
 			}
@@ -169,7 +167,7 @@ func TestLargeNumberOfKeyspaces(t *testing.T) {
 			err = vtest.waitUntilDockerHealthy(15)
 			require.NoError(t, err)
 
-			ctx := context.Background()
+			ctx := t.Context()
 			vttestParams := mysql.ConnParams{
 				Host: "localhost",
 				Port: vtest.basePort + 3,

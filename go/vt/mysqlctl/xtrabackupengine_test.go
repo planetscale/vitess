@@ -51,6 +51,7 @@ func TestFindReplicationPosition(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, want, pos.String())
 }
+
 func TestFindReplicationPositionFromXtrabackupInfo(t *testing.T) {
 	input := `tool_version = 8.0.35-30
 	binlog_pos = filename 'vt-0476396352-bin.000005', position '310088991', GTID of the last change '145e508e-ae54-11e9-8ce6-46824dd1815e:1-3,
@@ -135,6 +136,16 @@ func TestStripeRoundTrip(t *testing.T) {
 func TestShouldDrainForBackupXtrabackup(t *testing.T) {
 	be := &XtrabackupEngine{}
 
+	// Test default behavior (should not drain)
+	originalValue := xtrabackupShouldDrain
+	defer func() { xtrabackupShouldDrain = originalValue }()
+
+	xtrabackupShouldDrain = false
 	assert.False(t, be.ShouldDrainForBackup(nil))
 	assert.False(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
+
+	// Test configurable behavior (should drain when flag is set)
+	xtrabackupShouldDrain = true
+	assert.True(t, be.ShouldDrainForBackup(nil))
+	assert.True(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
 }
