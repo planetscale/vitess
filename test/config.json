@@ -589,7 +589,7 @@
       ],
       "Command": [],
       "Manual": false,
-      "Shard": "ers_prs_newfeatures_heavy",
+      "Shard": "emergencyreparent_heavy",
       "Tags": [
         "upgrade_downgrade_reparent"
       ],
@@ -608,7 +608,7 @@
       ],
       "Command": [],
       "Manual": false,
-      "Shard": "ers_prs_newfeatures_heavy",
+      "Shard": "plannedreparent_heavy",
       "Tags": [
         "upgrade_downgrade_reparent"
       ],
@@ -624,7 +624,7 @@
       "Args": [],
       "Command": [],
       "Manual": false,
-      "Shard": "ers_prs_newfeatures_heavy",
+      "Shard": "newfeatures_heavy",
       "Tags": [
         ""
       ],
