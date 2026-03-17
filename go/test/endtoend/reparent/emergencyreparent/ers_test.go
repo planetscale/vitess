@@ -49,15 +49,44 @@ func TestTrivialERS(t *testing.T) {
 		out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
 		log.Info(fmt.Sprintf("ERS loop %d.  EmergencyReparentShard Output: %v", i, out))
 		require.NoError(t, err)
-		time.Sleep(5 * time.Second)
+		waitForHealthyPrimaryAndReplication(t, clusterInstance, tablets)
 	}
 	// We should do the same for vtctl binary
 	for i := 1; i <= 4; i++ {
 		out, err := utils.ErsWithVtctldClient(clusterInstance)
 		log.Info(fmt.Sprintf("ERS-vtctldclient loop %d.  EmergencyReparentShard Output: %v", i, out))
 		require.NoError(t, err)
-		time.Sleep(5 * time.Second)
+		waitForHealthyPrimaryAndReplication(t, clusterInstance, tablets)
 	}
+}
+
+func waitForHealthyPrimaryAndReplication(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablets []*cluster.Vttablet) {
+	t.Helper()
+
+	var primary *cluster.Vttablet
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		primary = nil
+		for _, tablet := range tablets {
+			tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
+			require.NoError(c, err)
+			if tabletInfo.GetType() == topodatapb.TabletType_PRIMARY {
+				require.Nil(c, primary, "multiple primaries found")
+				primary = tablet
+			}
+		}
+		require.NotNil(c, primary, "no primary found")
+	}, 15*time.Second, 500*time.Millisecond)
+
+	utils.ValidateTopology(t, clusterInstance, false)
+	utils.CheckPrimaryTablet(t, clusterInstance, primary)
+
+	replicas := make([]*cluster.Vttablet, 0, len(tablets)-1)
+	for _, tablet := range tablets {
+		if tablet.Alias != primary.Alias {
+			replicas = append(replicas, tablet)
+		}
+	}
+	utils.ConfirmReplication(t, primary, replicas)
 }
 
 func TestReparentIgnoreReplicas(t *testing.T) {
