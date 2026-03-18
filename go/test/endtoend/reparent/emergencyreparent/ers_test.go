@@ -39,9 +39,8 @@ import (
 func TestTrivialERS(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
-	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+	waitForHealthyReparentCluster(t, clusterInstance)
 
 	// We should be able to do a series of ERS-es, even if nothing
 	// is down, without issue
@@ -49,15 +48,64 @@ func TestTrivialERS(t *testing.T) {
 		out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
 		log.Info(fmt.Sprintf("ERS loop %d.  EmergencyReparentShard Output: %v", i, out))
 		require.NoError(t, err)
-		time.Sleep(5 * time.Second)
+		waitForHealthyReparentCluster(t, clusterInstance)
 	}
 	// We should do the same for vtctl binary
 	for i := 1; i <= 4; i++ {
 		out, err := utils.ErsWithVtctldClient(clusterInstance)
 		log.Info(fmt.Sprintf("ERS-vtctldclient loop %d.  EmergencyReparentShard Output: %v", i, out))
 		require.NoError(t, err)
-		time.Sleep(5 * time.Second)
+		waitForHealthyReparentCluster(t, clusterInstance)
 	}
+}
+
+func waitForHealthyReparentCluster(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
+	t.Helper()
+
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	var primary *cluster.Vttablet
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Validate")
+		require.NoError(c, err)
+		require.Contains(c, out, "no issues found")
+
+		var currentPrimary *cluster.Vttablet
+		replicas := 0
+
+		for _, tablet := range tablets {
+			tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablet.Alias)
+			require.NoError(c, err)
+
+			switch tabletInfo.GetType() {
+			case topodatapb.TabletType_PRIMARY:
+				if currentPrimary != nil {
+					assert.Failf(c, "multiple primaries", "found more than one primary tablet")
+					return
+				}
+				currentPrimary = tablet
+			case topodatapb.TabletType_REPLICA:
+				replicas++
+			default:
+				assert.Failf(c, "unexpected tablet type", "tablet %s has type %s", tablet.Alias, tabletInfo.GetType())
+				return
+			}
+		}
+
+		require.NotNil(c, currentPrimary)
+		require.Equal(c, len(tablets)-1, replicas)
+		primary = currentPrimary
+	}, 30*time.Second, time.Second, "cluster did not become healthy after emergency reparent")
+
+	utils.CheckPrimaryTablet(t, clusterInstance, primary)
+
+	replicas := make([]*cluster.Vttablet, 0, len(tablets)-1)
+	for _, tablet := range tablets {
+		if tablet != primary {
+			replicas = append(replicas, tablet)
+		}
+	}
+	utils.ConfirmReplication(t, primary, replicas)
 }
 
 func TestReparentIgnoreReplicas(t *testing.T) {
