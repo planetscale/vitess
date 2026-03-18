@@ -482,18 +482,40 @@
         "binlog-compression"
       ]
     },
-    "onlineddl_vrepl_stress_suite": {
+    "onlineddl_vrepl_stress_suite_group1": {
       "File": "unused.go",
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress_suite"
       ],
       "Args": [
+        "-run",
+        "^TestVreplStressSchemaChangesGroup1$",
         "-timeout",
         "30m"
       ],
       "Command": [],
       "Manual": false,
-      "Shard": "onlineddl_vrepl_stress_suite",
+      "Shard": "onlineddl_vrepl_stress_suite_group1",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "binlog-compression"
+      ]
+    },
+    "onlineddl_vrepl_stress_suite_group2": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress_suite"
+      ],
+      "Args": [
+        "-run",
+        "^TestVreplStressSchemaChangesGroup2$",
+        "-timeout",
+        "30m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "onlineddl_vrepl_stress_suite_group2",
       "Tags": [],
       "Needs": [
         "larger-runner",

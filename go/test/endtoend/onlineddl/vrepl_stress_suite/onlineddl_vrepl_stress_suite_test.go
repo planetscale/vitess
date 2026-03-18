@@ -476,7 +476,22 @@ func TestMain(m *testing.M) {
 	}
 }
 
-func TestVreplStressSchemaChanges(t *testing.T) {
+func splitTestCases(cases []testcase) ([]testcase, []testcase) {
+	mid := (len(cases) + 1) / 2
+	return cases[:mid], cases[mid:]
+}
+
+func TestVreplStressSchemaChangesGroup1(t *testing.T) {
+	cases, _ := splitTestCases(testCases)
+	runVreplStressSchemaChanges(t, cases)
+}
+
+func TestVreplStressSchemaChangesGroup2(t *testing.T) {
+	_, cases := splitTestCases(testCases)
+	runVreplStressSchemaChanges(t, cases)
+}
+
+func runVreplStressSchemaChanges(t *testing.T, cases []testcase) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 	require.Equal(t, 1, len(shards[0].Vttablets))
@@ -486,7 +501,7 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 	require.NoError(t, err)
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
-	for _, testcase := range testCases {
+	for _, testcase := range cases {
 		require.NotEmpty(t, testcase.name)
 		t.Run(testcase.name, func(t *testing.T) {
 			t.Run("cancel pending migrations", func(t *testing.T) {
