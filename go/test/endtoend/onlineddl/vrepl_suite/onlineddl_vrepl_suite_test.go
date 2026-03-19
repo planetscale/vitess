@@ -64,6 +64,74 @@ const (
 	testFilterEnvVar = "ONLINEDDL_SUITE_TEST_FILTER"
 )
 
+var vreplSuiteSchemaChangesGroup1 = map[string]struct{}{
+	"add-fulltext":                      {},
+	"alter-charset-non-utf8-80-vcopier": {},
+	"autoinc-copy-deletes":              {},
+	"autoinc-copy-deletes-user-defined": {},
+	"autoinc-copy-simple-mysql80":       {},
+	"bigint-change-nullable":            {},
+	"bit-dml":                           {},
+	"char-collate-binary":               {},
+	"datetime":                          {},
+	"datetime-1970":                     {},
+	"datetime-submillis":                {},
+	"datetime-to-timestamp":             {},
+	"different-pk":                      {},
+	"different-pk-int-to-text":          {},
+	"drop-null-add-not-null":            {},
+	"drop-pk":                           {},
+	"enum-rename":                       {},
+	"enum-to-varchar":                   {},
+	"enum-to-varchar-rename":            {},
+	"enum-whitespace":                   {},
+	"existing-zero-in-datetime":         {},
+	"fail-binary-no-default-value":      {},
+	"fail-cannot-be-null":               {},
+	"fail-different-pk-new-pk-column":   {},
+	"fail-drop-pk":                      {},
+	"fail-duplicate-entry2":             {},
+	"fail-enum-data-truncated":          {},
+	"fail-enum-truncate-changelog":      {},
+	"fail-enum-truncate-copy":           {},
+	"fail-int-to-geometry":              {},
+	"fail-nonexistent-column":           {},
+	"fail-partial-text-pk":              {},
+	"fail-rename-table":                 {},
+	"fail-syntax-error":                 {},
+	"fail-utf8-to-datetime-2":           {},
+	"fail-utf8mb4-to-json-empty":        {},
+	"fail-utf8mb4-to-json-invalid":      {},
+	"fail-zero-in-datetime":             {},
+	"generated-columns-add57":           {},
+	"generated-columns57":               {},
+	"geometry57":                        {},
+	"json57":                            {},
+	"latin1text":                        {},
+	"many-columns":                      {},
+	"modify-change-case":                {},
+	"no-shared-uk":                      {},
+	"partial-text-pk-full":              {},
+	"reduce-pk":                         {},
+	"rename-inserts-only":               {},
+	"rename-none-column":                {},
+	"rename-reorder-column":             {},
+	"rename-retype-json":                {},
+	"spatial57":                         {},
+	"swap-uk":                           {},
+	"swap-uk-uk":                        {},
+	"timestamp-datetime":                {},
+	"trivial":                           {},
+	"tz-datetime":                       {},
+	"unsigned":                          {},
+	"unsigned-modify":                   {},
+	"unsigned-rename":                   {},
+	"utf8":                              {},
+	"utf8-to-datetime":                  {},
+	"utf8mb4-to-int":                    {},
+	"utf8mb4-to-json":                   {},
+}
+
 // Use $VREPL_SUITE_TEST_FILTER environment variable to filter tests by name.
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -131,9 +199,23 @@ func TestMain(m *testing.M) {
 	}
 }
 
-func TestVreplSuiteSchemaChanges(t *testing.T) {
-	shards := clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+func TestVreplSuiteSchemaChangesGroup1(t *testing.T) {
+	runVreplSuiteSchemaChanges(t, isVreplSuiteSchemaChangesGroup1)
+}
+
+func TestVreplSuiteSchemaChangesGroup2(t *testing.T) {
+	runVreplSuiteSchemaChanges(t, func(testName string) bool {
+		return !isVreplSuiteSchemaChangesGroup1(testName)
+	})
+}
+
+func isVreplSuiteSchemaChangesGroup1(testName string) bool {
+	_, ok := vreplSuiteSchemaChangesGroup1[testName]
+	return ok
+}
+
+func runVreplSuiteSchemaChanges(t *testing.T, shouldRun func(string) bool) {
+	require.Len(t, clusterInstance.Keyspaces[0].Shards, 1)
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
@@ -152,7 +234,7 @@ func TestVreplSuiteSchemaChanges(t *testing.T) {
 		//
 		// In this stress test, we enable Online DDL if the variable 'rename_table_preserve_foreign_key' is present. The Online DDL mechanism will in turn
 		// query for this variable, and manipulate it, when starting the migration and when cutting over.
-		rs, err := shards[0].Vttablets[0].VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
+		rs, err := getTablet().VttabletProcess.QueryTablet("show global variables like 'rename_table_preserve_foreign_key'", keyspaceName, false)
 		require.NoError(t, err)
 		fkOnlineDDLPossible = len(rs.Rows) > 0
 		t.Logf("MySQL support for 'rename_table_preserve_foreign_key': %v", fkOnlineDDLPossible)
@@ -164,7 +246,9 @@ func TestVreplSuiteSchemaChanges(t *testing.T) {
 		if !f.IsDir() {
 			continue
 		}
-		// this is a test!
+		if !shouldRun(f.Name()) {
+			continue
+		}
 		t.Run(f.Name(), func(t *testing.T) {
 			testSingle(t, f.Name(), fkOnlineDDLPossible)
 		})
