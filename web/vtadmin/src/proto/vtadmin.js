@@ -104460,6 +104460,7 @@ export const query = $root.query = (() => {
          * @property {boolean|null} [fetch_last_insert_id] ExecuteOptions fetch_last_insert_id
          * @property {boolean|null} [in_dml_execution] ExecuteOptions in_dml_execution
          * @property {number|Long|null} [transaction_timeout] ExecuteOptions transaction_timeout
+         * @property {boolean|null} [no_result] ExecuteOptions no_result
          */
 
         /**
@@ -104606,6 +104607,14 @@ export const query = $root.query = (() => {
          */
         ExecuteOptions.prototype.transaction_timeout = null;
 
+        /**
+         * ExecuteOptions no_result.
+         * @member {boolean} no_result
+         * @memberof query.ExecuteOptions
+         * @instance
+         */
+        ExecuteOptions.prototype.no_result = false;
+
         // OneOf field names bound to virtual getters and setters
         let $oneOfFields;
 
@@ -104686,6 +104695,8 @@ export const query = $root.query = (() => {
                 writer.uint32(/* id 19, wireType 0 =*/152).bool(message.in_dml_execution);
             if (message.transaction_timeout != null && Object.hasOwnProperty.call(message, "transaction_timeout"))
                 writer.uint32(/* id 20, wireType 0 =*/160).int64(message.transaction_timeout);
+            if (message.no_result != null && Object.hasOwnProperty.call(message, "no_result"))
+                writer.uint32(/* id 21, wireType 0 =*/168).bool(message.no_result);
             return writer;
         };
 
@@ -104791,6 +104802,10 @@ export const query = $root.query = (() => {
                     }
                 case 20: {
                         message.transaction_timeout = reader.int64();
+                        break;
+                    }
+                case 21: {
+                        message.no_result = reader.bool();
                         break;
                     }
                 default:
@@ -104932,6 +104947,9 @@ export const query = $root.query = (() => {
                 if (!$util.isInteger(message.transaction_timeout) && !(message.transaction_timeout && $util.isInteger(message.transaction_timeout.low) && $util.isInteger(message.transaction_timeout.high)))
                     return "transaction_timeout: integer|Long expected";
             }
+            if (message.no_result != null && message.hasOwnProperty("no_result"))
+                if (typeof message.no_result !== "boolean")
+                    return "no_result: boolean expected";
             return null;
         };
 
@@ -105157,6 +105175,8 @@ export const query = $root.query = (() => {
                     message.transaction_timeout = object.transaction_timeout;
                 else if (typeof object.transaction_timeout === "object")
                     message.transaction_timeout = new $util.LongBits(object.transaction_timeout.low >>> 0, object.transaction_timeout.high >>> 0).toNumber();
+            if (object.no_result != null)
+                message.no_result = Boolean(object.no_result);
             return message;
         };
 
@@ -105193,6 +105213,7 @@ export const query = $root.query = (() => {
                 object.priority = "";
                 object.fetch_last_insert_id = false;
                 object.in_dml_execution = false;
+                object.no_result = false;
             }
             if (message.included_fields != null && message.hasOwnProperty("included_fields"))
                 object.included_fields = options.enums === String ? $root.query.ExecuteOptions.IncludedFields[message.included_fields] === undefined ? message.included_fields : $root.query.ExecuteOptions.IncludedFields[message.included_fields] : message.included_fields;
@@ -105244,6 +105265,8 @@ export const query = $root.query = (() => {
                 if (options.oneofs)
                     object._transaction_timeout = "transaction_timeout";
             }
+            if (message.no_result != null && message.hasOwnProperty("no_result"))
+                object.no_result = message.no_result;
             return object;
         };
 
