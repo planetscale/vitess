@@ -43499,6 +43499,7 @@ export const topodata = $root.topodata = (() => {
              * @property {Array.<string>|null} [cells] TabletControl cells
              * @property {Array.<string>|null} [denied_tables] TabletControl denied_tables
              * @property {boolean|null} [frozen] TabletControl frozen
+             * @property {boolean|null} [allow_reads] TabletControl allow_reads
              */
 
             /**
@@ -43551,6 +43552,14 @@ export const topodata = $root.topodata = (() => {
             TabletControl.prototype.frozen = false;
 
             /**
+             * TabletControl allow_reads.
+             * @member {boolean} allow_reads
+             * @memberof topodata.Shard.TabletControl
+             * @instance
+             */
+            TabletControl.prototype.allow_reads = false;
+
+            /**
              * Creates a new TabletControl instance using the specified properties.
              * @function create
              * @memberof topodata.Shard.TabletControl
@@ -43584,6 +43593,8 @@ export const topodata = $root.topodata = (() => {
                         writer.uint32(/* id 4, wireType 2 =*/34).string(message.denied_tables[i]);
                 if (message.frozen != null && Object.hasOwnProperty.call(message, "frozen"))
                     writer.uint32(/* id 5, wireType 0 =*/40).bool(message.frozen);
+                if (message.allow_reads != null && Object.hasOwnProperty.call(message, "allow_reads"))
+                    writer.uint32(/* id 6, wireType 0 =*/48).bool(message.allow_reads);
                 return writer;
             };
 
@@ -43638,6 +43649,10 @@ export const topodata = $root.topodata = (() => {
                         }
                     case 5: {
                             message.frozen = reader.bool();
+                            break;
+                        }
+                    case 6: {
+                            message.allow_reads = reader.bool();
                             break;
                         }
                     default:
@@ -43709,6 +43724,9 @@ export const topodata = $root.topodata = (() => {
                 if (message.frozen != null && message.hasOwnProperty("frozen"))
                     if (typeof message.frozen !== "boolean")
                         return "frozen: boolean expected";
+                if (message.allow_reads != null && message.hasOwnProperty("allow_reads"))
+                    if (typeof message.allow_reads !== "boolean")
+                        return "allow_reads: boolean expected";
                 return null;
             };
 
@@ -43792,6 +43810,8 @@ export const topodata = $root.topodata = (() => {
                 }
                 if (object.frozen != null)
                     message.frozen = Boolean(object.frozen);
+                if (object.allow_reads != null)
+                    message.allow_reads = Boolean(object.allow_reads);
                 return message;
             };
 
@@ -43815,6 +43835,7 @@ export const topodata = $root.topodata = (() => {
                 if (options.defaults) {
                     object.tablet_type = options.enums === String ? "UNKNOWN" : 0;
                     object.frozen = false;
+                    object.allow_reads = false;
                 }
                 if (message.tablet_type != null && message.hasOwnProperty("tablet_type"))
                     object.tablet_type = options.enums === String ? $root.topodata.TabletType[message.tablet_type] === undefined ? message.tablet_type : $root.topodata.TabletType[message.tablet_type] : message.tablet_type;
@@ -43830,6 +43851,8 @@ export const topodata = $root.topodata = (() => {
                 }
                 if (message.frozen != null && message.hasOwnProperty("frozen"))
                     object.frozen = message.frozen;
+                if (message.allow_reads != null && message.hasOwnProperty("allow_reads"))
+                    object.allow_reads = message.allow_reads;
                 return object;
             };
 
