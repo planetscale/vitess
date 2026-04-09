@@ -7,7 +7,7 @@ updates:
     cooldown:
       default-days: 14
     groups:
-      all:
+      go:
         patterns:
           - "*"
 
@@ -18,7 +18,7 @@ updates:
     cooldown:
       default-days: 14
     groups:
-      all:
+      actions:
         patterns:
           - "*"
 
@@ -29,7 +29,7 @@ updates:
     cooldown:
       default-days: 14
     groups:
-      all:
+      java:
         patterns:
           - "*"
 
@@ -38,9 +38,9 @@ updates:
     schedule:
       interval: "weekly"
     cooldown:
-      default-days: 14
+      default-days: 30
     groups:
-      all:
+      vtadmin-npm:
         patterns:
           - "*"
 
@@ -54,6 +54,9 @@ updates:
       - "/docker/vttestserver"
       - "/examples/compose/external_db/mysql"
       - "/go/mysql/collations/tools/colldump"
+      - "/test/antithesis/compose"
+      - "/test/antithesis/compose/antithesis-client"
+      - "/test/antithesis/compose/source_db/mysql"
     schedule:
       interval: "weekly"
     cooldown:
@@ -63,6 +66,6 @@ updates:
         versions:
           - ">= 8.5"
     groups:
-      all:
+      docker:
         patterns:
           - "*"
