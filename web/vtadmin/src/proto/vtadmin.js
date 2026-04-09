@@ -43499,6 +43499,7 @@ export const topodata = $root.topodata = (() => {
              * @property {Array.<string>|null} [cells] TabletControl cells
              * @property {Array.<string>|null} [denied_tables] TabletControl denied_tables
              * @property {boolean|null} [frozen] TabletControl frozen
+             * @property {boolean|null} [allow_reads] TabletControl allow_reads
              */
 
             /**
@@ -43551,6 +43552,14 @@ export const topodata = $root.topodata = (() => {
             TabletControl.prototype.frozen = false;
 
             /**
+             * TabletControl allow_reads.
+             * @member {boolean} allow_reads
+             * @memberof topodata.Shard.TabletControl
+             * @instance
+             */
+            TabletControl.prototype.allow_reads = false;
+
+            /**
              * Creates a new TabletControl instance using the specified properties.
              * @function create
              * @memberof topodata.Shard.TabletControl
@@ -43584,6 +43593,8 @@ export const topodata = $root.topodata = (() => {
                         writer.uint32(/* id 4, wireType 2 =*/34).string(message.denied_tables[i]);
                 if (message.frozen != null && Object.hasOwnProperty.call(message, "frozen"))
                     writer.uint32(/* id 5, wireType 0 =*/40).bool(message.frozen);
+                if (message.allow_reads != null && Object.hasOwnProperty.call(message, "allow_reads"))
+                    writer.uint32(/* id 6, wireType 0 =*/48).bool(message.allow_reads);
                 return writer;
             };
 
@@ -43638,6 +43649,10 @@ export const topodata = $root.topodata = (() => {
                         }
                     case 5: {
                             message.frozen = reader.bool();
+                            break;
+                        }
+                    case 6: {
+                            message.allow_reads = reader.bool();
                             break;
                         }
                     default:
@@ -43709,6 +43724,9 @@ export const topodata = $root.topodata = (() => {
                 if (message.frozen != null && message.hasOwnProperty("frozen"))
                     if (typeof message.frozen !== "boolean")
                         return "frozen: boolean expected";
+                if (message.allow_reads != null && message.hasOwnProperty("allow_reads"))
+                    if (typeof message.allow_reads !== "boolean")
+                        return "allow_reads: boolean expected";
                 return null;
             };
 
@@ -43792,6 +43810,8 @@ export const topodata = $root.topodata = (() => {
                 }
                 if (object.frozen != null)
                     message.frozen = Boolean(object.frozen);
+                if (object.allow_reads != null)
+                    message.allow_reads = Boolean(object.allow_reads);
                 return message;
             };
 
@@ -43815,6 +43835,7 @@ export const topodata = $root.topodata = (() => {
                 if (options.defaults) {
                     object.tablet_type = options.enums === String ? "UNKNOWN" : 0;
                     object.frozen = false;
+                    object.allow_reads = false;
                 }
                 if (message.tablet_type != null && message.hasOwnProperty("tablet_type"))
                     object.tablet_type = options.enums === String ? $root.topodata.TabletType[message.tablet_type] === undefined ? message.tablet_type : $root.topodata.TabletType[message.tablet_type] : message.tablet_type;
@@ -43830,6 +43851,8 @@ export const topodata = $root.topodata = (() => {
                 }
                 if (message.frozen != null && message.hasOwnProperty("frozen"))
                     object.frozen = message.frozen;
+                if (message.allow_reads != null && message.hasOwnProperty("allow_reads"))
+                    object.allow_reads = message.allow_reads;
                 return object;
             };
 
@@ -101639,6 +101662,593 @@ export const binlogdata = $root.binlogdata = (() => {
         return VStreamResultsResponse;
     })();
 
+    binlogdata.BinlogDumpGTIDRequest = (function() {
+
+        /**
+         * Properties of a BinlogDumpGTIDRequest.
+         * @memberof binlogdata
+         * @interface IBinlogDumpGTIDRequest
+         * @property {vtrpc.ICallerID|null} [effective_caller_id] BinlogDumpGTIDRequest effective_caller_id
+         * @property {query.IVTGateCallerID|null} [immediate_caller_id] BinlogDumpGTIDRequest immediate_caller_id
+         * @property {query.ITarget|null} [target] BinlogDumpGTIDRequest target
+         * @property {string|null} [binlog_filename] BinlogDumpGTIDRequest binlog_filename
+         * @property {number|Long|null} [binlog_position] BinlogDumpGTIDRequest binlog_position
+         * @property {string|null} [gtid_set] BinlogDumpGTIDRequest gtid_set
+         * @property {number|null} [flags] BinlogDumpGTIDRequest flags
+         */
+
+        /**
+         * Constructs a new BinlogDumpGTIDRequest.
+         * @memberof binlogdata
+         * @classdesc Represents a BinlogDumpGTIDRequest.
+         * @implements IBinlogDumpGTIDRequest
+         * @constructor
+         * @param {binlogdata.IBinlogDumpGTIDRequest=} [properties] Properties to set
+         */
+        function BinlogDumpGTIDRequest(properties) {
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * BinlogDumpGTIDRequest effective_caller_id.
+         * @member {vtrpc.ICallerID|null|undefined} effective_caller_id
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @instance
+         */
+        BinlogDumpGTIDRequest.prototype.effective_caller_id = null;
+
+        /**
+         * BinlogDumpGTIDRequest immediate_caller_id.
+         * @member {query.IVTGateCallerID|null|undefined} immediate_caller_id
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @instance
+         */
+        BinlogDumpGTIDRequest.prototype.immediate_caller_id = null;
+
+        /**
+         * BinlogDumpGTIDRequest target.
+         * @member {query.ITarget|null|undefined} target
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @instance
+         */
+        BinlogDumpGTIDRequest.prototype.target = null;
+
+        /**
+         * BinlogDumpGTIDRequest binlog_filename.
+         * @member {string} binlog_filename
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @instance
+         */
+        BinlogDumpGTIDRequest.prototype.binlog_filename = "";
+
+        /**
+         * BinlogDumpGTIDRequest binlog_position.
+         * @member {number|Long} binlog_position
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @instance
+         */
+        BinlogDumpGTIDRequest.prototype.binlog_position = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+        /**
+         * BinlogDumpGTIDRequest gtid_set.
+         * @member {string} gtid_set
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @instance
+         */
+        BinlogDumpGTIDRequest.prototype.gtid_set = "";
+
+        /**
+         * BinlogDumpGTIDRequest flags.
+         * @member {number} flags
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @instance
+         */
+        BinlogDumpGTIDRequest.prototype.flags = 0;
+
+        /**
+         * Creates a new BinlogDumpGTIDRequest instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @static
+         * @param {binlogdata.IBinlogDumpGTIDRequest=} [properties] Properties to set
+         * @returns {binlogdata.BinlogDumpGTIDRequest} BinlogDumpGTIDRequest instance
+         */
+        BinlogDumpGTIDRequest.create = function create(properties) {
+            return new BinlogDumpGTIDRequest(properties);
+        };
+
+        /**
+         * Encodes the specified BinlogDumpGTIDRequest message. Does not implicitly {@link binlogdata.BinlogDumpGTIDRequest.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @static
+         * @param {binlogdata.IBinlogDumpGTIDRequest} message BinlogDumpGTIDRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        BinlogDumpGTIDRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.effective_caller_id != null && Object.hasOwnProperty.call(message, "effective_caller_id"))
+                $root.vtrpc.CallerID.encode(message.effective_caller_id, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.immediate_caller_id != null && Object.hasOwnProperty.call(message, "immediate_caller_id"))
+                $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.target != null && Object.hasOwnProperty.call(message, "target"))
+                $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.binlog_filename != null && Object.hasOwnProperty.call(message, "binlog_filename"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.binlog_filename);
+            if (message.binlog_position != null && Object.hasOwnProperty.call(message, "binlog_position"))
+                writer.uint32(/* id 5, wireType 0 =*/40).uint64(message.binlog_position);
+            if (message.gtid_set != null && Object.hasOwnProperty.call(message, "gtid_set"))
+                writer.uint32(/* id 6, wireType 2 =*/50).string(message.gtid_set);
+            if (message.flags != null && Object.hasOwnProperty.call(message, "flags"))
+                writer.uint32(/* id 7, wireType 0 =*/56).uint32(message.flags);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified BinlogDumpGTIDRequest message, length delimited. Does not implicitly {@link binlogdata.BinlogDumpGTIDRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @static
+         * @param {binlogdata.IBinlogDumpGTIDRequest} message BinlogDumpGTIDRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        BinlogDumpGTIDRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a BinlogDumpGTIDRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.BinlogDumpGTIDRequest} BinlogDumpGTIDRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        BinlogDumpGTIDRequest.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.BinlogDumpGTIDRequest();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 2: {
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 3: {
+                        message.target = $root.query.Target.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 4: {
+                        message.binlog_filename = reader.string();
+                        break;
+                    }
+                case 5: {
+                        message.binlog_position = reader.uint64();
+                        break;
+                    }
+                case 6: {
+                        message.gtid_set = reader.string();
+                        break;
+                    }
+                case 7: {
+                        message.flags = reader.uint32();
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a BinlogDumpGTIDRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.BinlogDumpGTIDRequest} BinlogDumpGTIDRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        BinlogDumpGTIDRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a BinlogDumpGTIDRequest message.
+         * @function verify
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        BinlogDumpGTIDRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.effective_caller_id != null && message.hasOwnProperty("effective_caller_id")) {
+                let error = $root.vtrpc.CallerID.verify(message.effective_caller_id);
+                if (error)
+                    return "effective_caller_id." + error;
+            }
+            if (message.immediate_caller_id != null && message.hasOwnProperty("immediate_caller_id")) {
+                let error = $root.query.VTGateCallerID.verify(message.immediate_caller_id);
+                if (error)
+                    return "immediate_caller_id." + error;
+            }
+            if (message.target != null && message.hasOwnProperty("target")) {
+                let error = $root.query.Target.verify(message.target);
+                if (error)
+                    return "target." + error;
+            }
+            if (message.binlog_filename != null && message.hasOwnProperty("binlog_filename"))
+                if (!$util.isString(message.binlog_filename))
+                    return "binlog_filename: string expected";
+            if (message.binlog_position != null && message.hasOwnProperty("binlog_position"))
+                if (!$util.isInteger(message.binlog_position) && !(message.binlog_position && $util.isInteger(message.binlog_position.low) && $util.isInteger(message.binlog_position.high)))
+                    return "binlog_position: integer|Long expected";
+            if (message.gtid_set != null && message.hasOwnProperty("gtid_set"))
+                if (!$util.isString(message.gtid_set))
+                    return "gtid_set: string expected";
+            if (message.flags != null && message.hasOwnProperty("flags"))
+                if (!$util.isInteger(message.flags))
+                    return "flags: integer expected";
+            return null;
+        };
+
+        /**
+         * Creates a BinlogDumpGTIDRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.BinlogDumpGTIDRequest} BinlogDumpGTIDRequest
+         */
+        BinlogDumpGTIDRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.BinlogDumpGTIDRequest)
+                return object;
+            let message = new $root.binlogdata.BinlogDumpGTIDRequest();
+            if (object.effective_caller_id != null) {
+                if (typeof object.effective_caller_id !== "object")
+                    throw TypeError(".binlogdata.BinlogDumpGTIDRequest.effective_caller_id: object expected");
+                message.effective_caller_id = $root.vtrpc.CallerID.fromObject(object.effective_caller_id);
+            }
+            if (object.immediate_caller_id != null) {
+                if (typeof object.immediate_caller_id !== "object")
+                    throw TypeError(".binlogdata.BinlogDumpGTIDRequest.immediate_caller_id: object expected");
+                message.immediate_caller_id = $root.query.VTGateCallerID.fromObject(object.immediate_caller_id);
+            }
+            if (object.target != null) {
+                if (typeof object.target !== "object")
+                    throw TypeError(".binlogdata.BinlogDumpGTIDRequest.target: object expected");
+                message.target = $root.query.Target.fromObject(object.target);
+            }
+            if (object.binlog_filename != null)
+                message.binlog_filename = String(object.binlog_filename);
+            if (object.binlog_position != null)
+                if ($util.Long)
+                    (message.binlog_position = $util.Long.fromValue(object.binlog_position)).unsigned = true;
+                else if (typeof object.binlog_position === "string")
+                    message.binlog_position = parseInt(object.binlog_position, 10);
+                else if (typeof object.binlog_position === "number")
+                    message.binlog_position = object.binlog_position;
+                else if (typeof object.binlog_position === "object")
+                    message.binlog_position = new $util.LongBits(object.binlog_position.low >>> 0, object.binlog_position.high >>> 0).toNumber(true);
+            if (object.gtid_set != null)
+                message.gtid_set = String(object.gtid_set);
+            if (object.flags != null)
+                message.flags = object.flags >>> 0;
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a BinlogDumpGTIDRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @static
+         * @param {binlogdata.BinlogDumpGTIDRequest} message BinlogDumpGTIDRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        BinlogDumpGTIDRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.defaults) {
+                object.effective_caller_id = null;
+                object.immediate_caller_id = null;
+                object.target = null;
+                object.binlog_filename = "";
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, true);
+                    object.binlog_position = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.binlog_position = options.longs === String ? "0" : 0;
+                object.gtid_set = "";
+                object.flags = 0;
+            }
+            if (message.effective_caller_id != null && message.hasOwnProperty("effective_caller_id"))
+                object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options);
+            if (message.immediate_caller_id != null && message.hasOwnProperty("immediate_caller_id"))
+                object.immediate_caller_id = $root.query.VTGateCallerID.toObject(message.immediate_caller_id, options);
+            if (message.target != null && message.hasOwnProperty("target"))
+                object.target = $root.query.Target.toObject(message.target, options);
+            if (message.binlog_filename != null && message.hasOwnProperty("binlog_filename"))
+                object.binlog_filename = message.binlog_filename;
+            if (message.binlog_position != null && message.hasOwnProperty("binlog_position"))
+                if (typeof message.binlog_position === "number")
+                    object.binlog_position = options.longs === String ? String(message.binlog_position) : message.binlog_position;
+                else
+                    object.binlog_position = options.longs === String ? $util.Long.prototype.toString.call(message.binlog_position) : options.longs === Number ? new $util.LongBits(message.binlog_position.low >>> 0, message.binlog_position.high >>> 0).toNumber(true) : message.binlog_position;
+            if (message.gtid_set != null && message.hasOwnProperty("gtid_set"))
+                object.gtid_set = message.gtid_set;
+            if (message.flags != null && message.hasOwnProperty("flags"))
+                object.flags = message.flags;
+            return object;
+        };
+
+        /**
+         * Converts this BinlogDumpGTIDRequest to JSON.
+         * @function toJSON
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        BinlogDumpGTIDRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for BinlogDumpGTIDRequest
+         * @function getTypeUrl
+         * @memberof binlogdata.BinlogDumpGTIDRequest
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        BinlogDumpGTIDRequest.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/binlogdata.BinlogDumpGTIDRequest";
+        };
+
+        return BinlogDumpGTIDRequest;
+    })();
+
+    binlogdata.BinlogDumpResponse = (function() {
+
+        /**
+         * Properties of a BinlogDumpResponse.
+         * @memberof binlogdata
+         * @interface IBinlogDumpResponse
+         * @property {Uint8Array|null} [raw] BinlogDumpResponse raw
+         */
+
+        /**
+         * Constructs a new BinlogDumpResponse.
+         * @memberof binlogdata
+         * @classdesc Represents a BinlogDumpResponse.
+         * @implements IBinlogDumpResponse
+         * @constructor
+         * @param {binlogdata.IBinlogDumpResponse=} [properties] Properties to set
+         */
+        function BinlogDumpResponse(properties) {
+            if (properties)
+                for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * BinlogDumpResponse raw.
+         * @member {Uint8Array} raw
+         * @memberof binlogdata.BinlogDumpResponse
+         * @instance
+         */
+        BinlogDumpResponse.prototype.raw = $util.newBuffer([]);
+
+        /**
+         * Creates a new BinlogDumpResponse instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.BinlogDumpResponse
+         * @static
+         * @param {binlogdata.IBinlogDumpResponse=} [properties] Properties to set
+         * @returns {binlogdata.BinlogDumpResponse} BinlogDumpResponse instance
+         */
+        BinlogDumpResponse.create = function create(properties) {
+            return new BinlogDumpResponse(properties);
+        };
+
+        /**
+         * Encodes the specified BinlogDumpResponse message. Does not implicitly {@link binlogdata.BinlogDumpResponse.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.BinlogDumpResponse
+         * @static
+         * @param {binlogdata.IBinlogDumpResponse} message BinlogDumpResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        BinlogDumpResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.raw != null && Object.hasOwnProperty.call(message, "raw"))
+                writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.raw);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified BinlogDumpResponse message, length delimited. Does not implicitly {@link binlogdata.BinlogDumpResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.BinlogDumpResponse
+         * @static
+         * @param {binlogdata.IBinlogDumpResponse} message BinlogDumpResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        BinlogDumpResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a BinlogDumpResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.BinlogDumpResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.BinlogDumpResponse} BinlogDumpResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        BinlogDumpResponse.decode = function decode(reader, length, error) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            let end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.BinlogDumpResponse();
+            while (reader.pos < end) {
+                let tag = reader.uint32();
+                if (tag === error)
+                    break;
+                switch (tag >>> 3) {
+                case 1: {
+                        message.raw = reader.bytes();
+                        break;
+                    }
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a BinlogDumpResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.BinlogDumpResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.BinlogDumpResponse} BinlogDumpResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        BinlogDumpResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a BinlogDumpResponse message.
+         * @function verify
+         * @memberof binlogdata.BinlogDumpResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        BinlogDumpResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.raw != null && message.hasOwnProperty("raw"))
+                if (!(message.raw && typeof message.raw.length === "number" || $util.isString(message.raw)))
+                    return "raw: buffer expected";
+            return null;
+        };
+
+        /**
+         * Creates a BinlogDumpResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.BinlogDumpResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.BinlogDumpResponse} BinlogDumpResponse
+         */
+        BinlogDumpResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.BinlogDumpResponse)
+                return object;
+            let message = new $root.binlogdata.BinlogDumpResponse();
+            if (object.raw != null)
+                if (typeof object.raw === "string")
+                    $util.base64.decode(object.raw, message.raw = $util.newBuffer($util.base64.length(object.raw)), 0);
+                else if (object.raw.length >= 0)
+                    message.raw = object.raw;
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a BinlogDumpResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.BinlogDumpResponse
+         * @static
+         * @param {binlogdata.BinlogDumpResponse} message BinlogDumpResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        BinlogDumpResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            let object = {};
+            if (options.defaults)
+                if (options.bytes === String)
+                    object.raw = "";
+                else {
+                    object.raw = [];
+                    if (options.bytes !== Array)
+                        object.raw = $util.newBuffer(object.raw);
+                }
+            if (message.raw != null && message.hasOwnProperty("raw"))
+                object.raw = options.bytes === String ? $util.base64.encode(message.raw, 0, message.raw.length) : options.bytes === Array ? Array.prototype.slice.call(message.raw) : message.raw;
+            return object;
+        };
+
+        /**
+         * Converts this BinlogDumpResponse to JSON.
+         * @function toJSON
+         * @memberof binlogdata.BinlogDumpResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        BinlogDumpResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the default type url for BinlogDumpResponse
+         * @function getTypeUrl
+         * @memberof binlogdata.BinlogDumpResponse
+         * @static
+         * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns {string} The default type url
+         */
+        BinlogDumpResponse.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+            if (typeUrlPrefix === undefined) {
+                typeUrlPrefix = "type.googleapis.com";
+            }
+            return typeUrlPrefix + "/binlogdata.BinlogDumpResponse";
+        };
+
+        return BinlogDumpResponse;
+    })();
+
     return binlogdata;
 })();
 
@@ -103873,6 +104483,7 @@ export const query = $root.query = (() => {
          * @property {boolean|null} [fetch_last_insert_id] ExecuteOptions fetch_last_insert_id
          * @property {boolean|null} [in_dml_execution] ExecuteOptions in_dml_execution
          * @property {number|Long|null} [transaction_timeout] ExecuteOptions transaction_timeout
+         * @property {boolean|null} [no_result] ExecuteOptions no_result
          */
 
         /**
@@ -104019,6 +104630,14 @@ export const query = $root.query = (() => {
          */
         ExecuteOptions.prototype.transaction_timeout = null;
 
+        /**
+         * ExecuteOptions no_result.
+         * @member {boolean} no_result
+         * @memberof query.ExecuteOptions
+         * @instance
+         */
+        ExecuteOptions.prototype.no_result = false;
+
         // OneOf field names bound to virtual getters and setters
         let $oneOfFields;
 
@@ -104099,6 +104718,8 @@ export const query = $root.query = (() => {
                 writer.uint32(/* id 19, wireType 0 =*/152).bool(message.in_dml_execution);
             if (message.transaction_timeout != null && Object.hasOwnProperty.call(message, "transaction_timeout"))
                 writer.uint32(/* id 20, wireType 0 =*/160).int64(message.transaction_timeout);
+            if (message.no_result != null && Object.hasOwnProperty.call(message, "no_result"))
+                writer.uint32(/* id 21, wireType 0 =*/168).bool(message.no_result);
             return writer;
         };
 
@@ -104204,6 +104825,10 @@ export const query = $root.query = (() => {
                     }
                 case 20: {
                         message.transaction_timeout = reader.int64();
+                        break;
+                    }
+                case 21: {
+                        message.no_result = reader.bool();
                         break;
                     }
                 default:
@@ -104345,6 +104970,9 @@ export const query = $root.query = (() => {
                 if (!$util.isInteger(message.transaction_timeout) && !(message.transaction_timeout && $util.isInteger(message.transaction_timeout.low) && $util.isInteger(message.transaction_timeout.high)))
                     return "transaction_timeout: integer|Long expected";
             }
+            if (message.no_result != null && message.hasOwnProperty("no_result"))
+                if (typeof message.no_result !== "boolean")
+                    return "no_result: boolean expected";
             return null;
         };
 
@@ -104570,6 +105198,8 @@ export const query = $root.query = (() => {
                     message.transaction_timeout = object.transaction_timeout;
                 else if (typeof object.transaction_timeout === "object")
                     message.transaction_timeout = new $util.LongBits(object.transaction_timeout.low >>> 0, object.transaction_timeout.high >>> 0).toNumber();
+            if (object.no_result != null)
+                message.no_result = Boolean(object.no_result);
             return message;
         };
 
@@ -104606,6 +105236,7 @@ export const query = $root.query = (() => {
                 object.priority = "";
                 object.fetch_last_insert_id = false;
                 object.in_dml_execution = false;
+                object.no_result = false;
             }
             if (message.included_fields != null && message.hasOwnProperty("included_fields"))
                 object.included_fields = options.enums === String ? $root.query.ExecuteOptions.IncludedFields[message.included_fields] === undefined ? message.included_fields : $root.query.ExecuteOptions.IncludedFields[message.included_fields] : message.included_fields;
@@ -104657,6 +105288,8 @@ export const query = $root.query = (() => {
                 if (options.oneofs)
                     object._transaction_timeout = "transaction_timeout";
             }
+            if (message.no_result != null && message.hasOwnProperty("no_result"))
+                object.no_result = message.no_result;
             return object;
         };
 
