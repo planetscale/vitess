@@ -381,6 +381,11 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Replication is stopped",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
+		// ReplicationStopped must be recovered before PrimarySemiSyncBlocked: a
+		// replica whose replication is stopped cannot send semi-sync ACKs, which
+		// may be the direct cause of the primary blocking. Restarting replication
+		// first can resolve the primary's problem without an ERS.
+		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped
 		},

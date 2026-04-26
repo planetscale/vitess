@@ -165,6 +165,11 @@ func TestRequiresOrderedExecution(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "ReplicationStopped requires ordered execution (BeforeAnalyses: PrimarySemiSyncBlocked)",
+			problem:  GetDetectionAnalysisProblem(ReplicationStopped),
+			expected: true,
+		},
+		{
 			name: "referenced by another problem's AfterAnalyses",
 			problem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustNotBeSet, Priority: detectionAnalysisPriorityMedium},
@@ -264,6 +269,17 @@ func TestCompareDetectionAnalysisProblems(t *testing.T) {
 			},
 			expected: 1,
 		},
+		{
+			name: "ReplicationStopped before PrimarySemiSyncBlocked",
+			a: &DetectionAnalysisProblem{
+				Meta:           &DetectionAnalysisProblemMeta{Analysis: ReplicationStopped},
+				BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked},
+			},
+			b: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncBlocked},
+			},
+			expected: -1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -308,4 +324,28 @@ func TestGroupDetectionAnalysesByShard(t *testing.T) {
 	ks2 := result["ks2/0"]
 	require.Len(t, ks2, 1)
 	assert.Equal(t, PrimaryIsReadOnly, ks2[0].Analysis)
+}
+
+// TestSortDetectionAnalysesReplicationStoppedBeforePrimarySemiSyncBlocked verifies
+// that ReplicationStopped sorts before PrimarySemiSyncBlocked when both are present,
+// so that the replica's replication is restarted first and may naturally unblock the primary.
+func TestSortDetectionAnalysesReplicationStoppedBeforePrimarySemiSyncBlocked(t *testing.T) {
+	analyses := []*DetectionAnalysis{
+		{
+			Analysis:         PrimarySemiSyncBlocked,
+			AnalyzedKeyspace: "ks",
+			AnalyzedShard:    "0",
+			TabletType:       topodatapb.TabletType_PRIMARY,
+		},
+		{
+			Analysis:         ReplicationStopped,
+			AnalyzedKeyspace: "ks",
+			AnalyzedShard:    "0",
+			TabletType:       topodatapb.TabletType_REPLICA,
+		},
+	}
+	sortDetectionAnalyses(analyses)
+	require.Len(t, analyses, 2)
+	assert.Equal(t, ReplicationStopped, analyses[0].Analysis)
+	assert.Equal(t, PrimarySemiSyncBlocked, analyses[1].Analysis)
 }

@@ -18,6 +18,7 @@ package inst
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -50,9 +51,10 @@ func initializeAnalysisDaoPostConfiguration() {
 }
 
 type clusterAnalysis struct {
-	hasShardWideAction bool
-	totalTablets       int
-	primaryAlias       *topodatapb.TabletAlias
+	hasShardWideAction    bool
+	shardWideAnalysisCode AnalysisCode
+	totalTablets          int
+	primaryAlias          *topodatapb.TabletAlias
 
 	// primaryTimestamp is the most recent primary term start time observed for the shard.
 	primaryTimestamp time.Time
@@ -414,10 +416,6 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		ca := clusters[keyspaceShard]
 		// Increment the total number of tablets.
 		ca.totalTablets += 1
-		if ca.hasShardWideAction {
-			// We can only take one shard-wide action at a time.
-			return nil
-		}
 		if ca.durability == nil {
 			// We failed to load the durability policy, so we shouldn't run any analysis
 			return nil
@@ -435,7 +433,31 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				matchedProblems = append(matchedProblems, problem)
 			}
 		}
-		if len(matchedProblems) > 0 {
+		if ca.hasShardWideAction {
+			// A shard-wide action is already queued. Suppress this tablet's analysis
+			// unless it declares a BeforeAnalyses dependency on the shard-wide action,
+			// meaning its recovery must run first (e.g. ReplicationStopped on a
+			// semi-sync acker replica before PrimarySemiSyncBlocked on the primary).
+			if len(matchedProblems) == 0 {
+				return nil
+			}
+			sortDetectionAnalysisMatchedProblems(matchedProblems)
+			var chosen *DetectionAnalysisProblem
+			for _, p := range matchedProblems {
+				if slices.Contains(p.BeforeAnalyses, ca.shardWideAnalysisCode) {
+					chosen = p
+					break
+				}
+			}
+			if chosen == nil {
+				return nil
+			}
+			for _, p := range matchedProblems {
+				a.AnalysisMatchedProblems = append(a.AnalysisMatchedProblems, p.Meta)
+			}
+			a.Analysis = chosen.Meta.Analysis
+			a.Description = chosen.Meta.Description
+		} else if len(matchedProblems) > 0 {
 			sortDetectionAnalysisMatchedProblems(matchedProblems)
 			for _, problem := range matchedProblems {
 				a.AnalysisMatchedProblems = append(a.AnalysisMatchedProblems, problem.Meta)
@@ -446,7 +468,10 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			chosenProblem := matchedProblems[0]
 			a.Analysis = chosenProblem.Meta.Analysis
 			a.Description = chosenProblem.Meta.Description
-			ca.hasShardWideAction = chosenProblem.Meta.Priority == detectionAnalysisPriorityShardWideAction
+			if chosenProblem.Meta.Priority == detectionAnalysisPriorityShardWideAction {
+				ca.hasShardWideAction = true
+				ca.shardWideAnalysisCode = chosenProblem.Meta.Analysis
+			}
 		}
 
 		{

@@ -1188,6 +1188,149 @@ func TestStalePrimary(t *testing.T) {
 	}
 }
 
+// TestReplicationStoppedSurvivesPrimarySemiSyncBlocked verifies that when a shard-wide
+// PrimarySemiSyncBlocked action is detected, a replica's ReplicationStopped analysis
+// still surfaces (instead of being suppressed) because ReplicationStopped declares a
+// BeforeAnalyses dependency on PrimarySemiSyncBlocked. The two recoveries must be
+// ordered: restart the replica's replication first, which may naturally unblock the primary.
+func TestReplicationStoppedSurvivesPrimarySemiSyncBlocked(t *testing.T) {
+	info := []*test.InfoForRecoveryAnalysis{
+		{
+			// Primary with PrimarySemiSyncBlocked (shard-wide action).
+			TabletInfo: &topodatapb.Tablet{
+				Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Hostname:      "localhost",
+				Keyspace:      "ks",
+				Shard:         "0",
+				Type:          topodatapb.TabletType_PRIMARY,
+				MysqlHostname: "localhost",
+				MysqlPort:     6708,
+			},
+			DurabilityPolicy:                   policy.DurabilitySemiSync,
+			LastCheckValid:                     1,
+			CountReplicas:                      1,
+			CountValidReplicas:                 1,
+			CountValidReplicatingReplicas:      1,
+			IsPrimary:                          1,
+			SemiSyncPrimaryEnabled:             1,
+			SemiSyncPrimaryStatus:              1,
+			SemiSyncPrimaryWaitForReplicaCount: 1,
+			CountSemiSyncReplicasEnabled:       1,
+			SemiSyncPrimaryClients:             0,
+			SemiSyncBlocked:                    1,
+			CurrentTabletType:                  int(topodatapb.TabletType_PRIMARY),
+		},
+		{
+			// Replica with stopped replication (would be the semi-sync acker).
+			TabletInfo: &topodatapb.Tablet{
+				Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Hostname:      "localhost",
+				Keyspace:      "ks",
+				Shard:         "0",
+				Type:          topodatapb.TabletType_REPLICA,
+				MysqlHostname: "localhost",
+				MysqlPort:     6709,
+			},
+			DurabilityPolicy: policy.DurabilitySemiSync,
+			PrimaryTabletInfo: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			},
+			LastCheckValid:         1,
+			ReadOnly:               1,
+			ReplicationStopped:     1,
+			SemiSyncReplicaEnabled: 1,
+		},
+	}
+
+	var rowMaps []sqlutils.RowMap
+	for _, a := range info {
+		a.SetValuesFromTabletInfo()
+		rowMaps = append(rowMaps, a.ConvertToRowMap())
+	}
+	oldDB := db.Db
+	defer func() { db.Db = oldDB }()
+	db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
+
+	got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
+	require.NoError(t, err)
+
+	// Both analyses must be present: ReplicationStopped on the replica and
+	// PrimarySemiSyncBlocked on the primary.
+	require.Len(t, got, 2)
+	codes := map[AnalysisCode]bool{}
+	for _, a := range got {
+		codes[a.Analysis] = true
+	}
+	require.True(t, codes[ReplicationStopped], "expected ReplicationStopped to survive shard-wide suppression")
+	require.True(t, codes[PrimarySemiSyncBlocked], "expected PrimarySemiSyncBlocked to be present")
+}
+
+// TestNonDependentAnalysisSuppressedByShardWideAction verifies that an analysis
+// without a BeforeAnalyses dependency on the shard-wide action is still suppressed.
+func TestNonDependentAnalysisSuppressedByShardWideAction(t *testing.T) {
+	info := []*test.InfoForRecoveryAnalysis{
+		{
+			// Primary with PrimarySemiSyncBlocked (shard-wide action).
+			TabletInfo: &topodatapb.Tablet{
+				Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Hostname:      "localhost",
+				Keyspace:      "ks",
+				Shard:         "0",
+				Type:          topodatapb.TabletType_PRIMARY,
+				MysqlHostname: "localhost",
+				MysqlPort:     6708,
+			},
+			DurabilityPolicy:                   policy.DurabilitySemiSync,
+			LastCheckValid:                     1,
+			CountReplicas:                      1,
+			CountValidReplicas:                 1,
+			CountValidReplicatingReplicas:      1,
+			IsPrimary:                          1,
+			SemiSyncPrimaryEnabled:             1,
+			SemiSyncPrimaryStatus:              1,
+			SemiSyncPrimaryWaitForReplicaCount: 1,
+			CountSemiSyncReplicasEnabled:       1,
+			SemiSyncPrimaryClients:             0,
+			SemiSyncBlocked:                    1,
+			CurrentTabletType:                  int(topodatapb.TabletType_PRIMARY),
+		},
+		{
+			// Replica that is read-write (ReplicaIsWritable) — no BeforeAnalyses on PrimarySemiSyncBlocked.
+			TabletInfo: &topodatapb.Tablet{
+				Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Hostname:      "localhost",
+				Keyspace:      "ks",
+				Shard:         "0",
+				Type:          topodatapb.TabletType_REPLICA,
+				MysqlHostname: "localhost",
+				MysqlPort:     6709,
+			},
+			DurabilityPolicy: policy.DurabilitySemiSync,
+			PrimaryTabletInfo: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			},
+			LastCheckValid: 1,
+			ReadOnly:       0, // writable → ReplicaIsWritable
+		},
+	}
+
+	var rowMaps []sqlutils.RowMap
+	for _, a := range info {
+		a.SetValuesFromTabletInfo()
+		rowMaps = append(rowMaps, a.ConvertToRowMap())
+	}
+	oldDB := db.Db
+	defer func() { db.Db = oldDB }()
+	db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
+
+	got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
+	require.NoError(t, err)
+
+	// Only PrimarySemiSyncBlocked should appear; ReplicaIsWritable has no dependency on it.
+	require.Len(t, got, 1)
+	require.Equal(t, PrimarySemiSyncBlocked, got[0].Analysis)
+}
+
 // TestGetDetectionAnalysis tests the entire GetDetectionAnalysis. It inserts data into the database and runs the function.
 // The database is not faked. This is intended to give more test coverage. This test is more comprehensive but more expensive than TestGetDetectionAnalysisDecision.
 // This test is somewhere between a unit test, and an end-to-end test. It is specifically useful for testing situations which are hard to come by in end-to-end test, but require

@@ -833,6 +833,26 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 	}
 }
 
+// shardWideRecoveryIgnoredTablets returns the tablet aliases to skip during the
+// pre-recovery shard refresh. Dead primaries are skipped because they are
+// unreachable. Reachable-but-unhealthy primaries (PrimarySemiSyncBlocked,
+// PrimaryDiskStalled) are NOT skipped so that checkIfAlreadyFixed evaluates
+// fresh state — the problem may have resolved itself if a dependency recovery
+// (e.g. ReplicationStopped) already ran.
+func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, analysisEntry *inst.DetectionAnalysis) []*topodatapb.TabletAlias {
+	var tabletsToIgnore []*topodatapb.TabletAlias
+	if recoveryFunctionCode == recoverDeadPrimaryFunc {
+		switch analysisEntry.Analysis {
+		case inst.PrimarySemiSyncBlocked, inst.PrimaryDiskStalled:
+			// Reachable primary — do not skip; refresh so checkIfAlreadyFixed
+			// can see whether the problem has already been resolved.
+		default:
+			tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
+		}
+	}
+	return tabletsToIgnore
+}
+
 // isShardWideRecovery returns whether the given recovery is a recovery that affects all tablets in a shard
 func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
@@ -950,11 +970,8 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		// of a shard because a new tablet could have been promoted, and we need to have this visibility
 		// before we run a shard-wide operation of our own.
 		if isShardWideRecovery(checkAndRecoverFunctionCode) {
-			tabletsToIgnore := make([]*topodatapb.TabletAlias, 0)
-			if checkAndRecoverFunctionCode == recoverDeadPrimaryFunc {
-				tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
-			}
-			// We ignore the dead primary tablet because it is going to be unreachable. If all the other tablets aren't able to reach this tablet either,
+			tabletsToIgnore := shardWideRecoveryIgnoredTablets(checkAndRecoverFunctionCode, analysisEntry)
+			// We ignore dead primary tablets because they are going to be unreachable. If all the other tablets aren't able to reach this tablet either,
 			// we can proceed with the dead primary recovery. We don't need to refresh the information for this dead tablet.
 			logger.Info("Force refreshing all shard tablets")
 			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, tabletsToIgnore)
