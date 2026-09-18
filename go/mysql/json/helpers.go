@@ -25,9 +25,59 @@ import (
 
 const hashPrefixJSON = 0xCCBB
 
+// Hash writes a hash of v that is equal for any two values that compare
+// equal under MySQL JSON comparison semantics. Unlike WeightString, which
+// follows MySQL in fingerprinting arrays and objects by cardinality only,
+// the hash covers the full content of nested documents, so callers may
+// treat a hash match as equality.
 func (v *Value) Hash(h *vthash.Hasher) {
 	h.Write16(hashPrefixJSON)
-	_, _ = h.Write(v.WeightString(nil))
+	v.hashContent(h)
+}
+
+func (v *Value) hashContent(h *vthash.Hasher) {
+	t := v.Type()
+	h.Write16(uint16(t))
+	switch t {
+	case TypeNull:
+	case TypeNumber:
+		dec, ok := v.Decimal()
+		if !ok {
+			_, _ = h.WriteString(v.s)
+			return
+		}
+		dec.Hash(h)
+	case TypeString, TypeOpaque, TypeBit, TypeBlob:
+		h.Write32(uint32(len(v.s)))
+		_, _ = h.WriteString(v.s)
+	case TypeBoolean:
+		if v == ValueTrue {
+			h.Write8(1)
+		} else {
+			h.Write8(0)
+		}
+	case TypeDate:
+		d, _ := v.Date()
+		d.Hash(h)
+	case TypeDateTime:
+		dt, _ := v.DateTime()
+		dt.Hash(h)
+	case TypeTime:
+		tm, _ := v.Time()
+		tm.Hash(h)
+	case TypeArray:
+		h.Write32(uint32(len(v.a)))
+		for _, e := range v.a {
+			e.hashContent(h)
+		}
+	case TypeObject:
+		h.Write32(uint32(v.o.Len()))
+		v.o.Visit(func(key string, e *Value) {
+			h.Write32(uint32(len(key)))
+			_, _ = h.WriteString(key)
+			e.hashContent(h)
+		})
+	}
 }
 
 func (v *Value) ToRawBytes() []byte {

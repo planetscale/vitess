@@ -170,3 +170,59 @@ func typeForOffset(i int) evalengine.Type {
 		panic(i)
 	}
 }
+
+// TestHashJoinJSONKeys checks that a hash join on JSON keys only matches rows
+// whose documents are equal, not merely arrays or objects of the same
+// cardinality.
+func TestHashJoinJSONKeys(t *testing.T) {
+	lhs := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("id|doc", "int64|json"),
+				`1|[1]`,
+				`2|{"a": 1}`,
+				`3|[1, 2]`,
+			),
+		},
+	}
+	rhs := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("id|doc", "int64|json"),
+				`10|[2]`,
+				`20|{"b": 1}`,
+				`30|[1.0, 2]`,
+			),
+		},
+	}
+
+	typ, err := evalengine.CoerceTypes(
+		evalengine.NewType(sqltypes.TypeJSON, collations.CollationBinaryID),
+		evalengine.NewType(sqltypes.TypeJSON, collations.CollationBinaryID),
+		collations.MySQL8(),
+	)
+	require.NoError(t, err)
+
+	jn := &HashJoin{
+		Opcode:         LeftJoin,
+		Left:           lhs,
+		Right:          rhs,
+		Cols:           []int{-1, -2, 1, 2},
+		LHSKey:         1,
+		RHSKey:         1,
+		Collation:      typ.Collation(),
+		ComparisonType: typ.Type(),
+		CollationEnv:   collations.MySQL8(),
+	}
+
+	expected := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|doc|id|doc", "int64|json|int64|json"),
+		`1|[1]|null|null`,
+		`2|{"a": 1}|null|null`,
+		`3|[1, 2]|30|[1.0, 2]`,
+	)
+
+	r, err := jn.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	require.NoError(t, err)
+	expectResultAnyOrder(t, r, expected)
+}

@@ -1130,11 +1130,9 @@ func TestCompilerNonConstant(t *testing.T) {
 	}
 }
 
-// TestJSONInStaticTable checks that IN over folded JSON literals does not
-// compile the static hash table: JSON arrays and objects hash by kind and
-// cardinality only, so a hash hit is not equality. Compilation fails until
-// the compiler learns to push JSON literals; the follow-up literal change
-// flips this test to compiled evaluation.
+// TestJSONInStaticTable checks that IN over folded JSON literals gives the
+// same answer from the interpreter and from the compiled static hash table:
+// same-cardinality arrays and objects with different contents must not match.
 func TestJSONInStaticTable(t *testing.T) {
 	testCases := []struct {
 		expression string
@@ -1160,6 +1158,21 @@ func TestJSONInStaticTable(t *testing.T) {
 			expression: `column0 IN (JSON_OBJECT('a', 1))`,
 			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`))},
 			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 NOT IN (JSON_ARRAY(2), JSON_ARRAY(3))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 IN (JSON_ARRAY(1.0, JSON_OBJECT('b', 2)))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1, {"b": 2}]`))},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `column0 IN (JSON_ARRAY(1, JSON_OBJECT('b', 3)))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1, {"b": 2}]`))},
+			result:     `INT64(0)`,
 		},
 	}
 
@@ -1190,8 +1203,11 @@ func TestJSONInStaticTable(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tc.result, res.String())
 
-			_, err = untyped.Compile(env)
-			require.ErrorContains(t, err, "unsupported literal kind")
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+			res, err = env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
 		})
 	}
 }

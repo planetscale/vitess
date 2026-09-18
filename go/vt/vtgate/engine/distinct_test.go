@@ -70,6 +70,10 @@ func TestDistinct(t *testing.T) {
 		inputs:         r("myid", "varchar", "monkey", "horse", "Horse", "Monkey", "horses", "MONKEY"),
 		expectedResult: r("myid", "varchar", "monkey", "horse", "horses"),
 	}, {
+		testName:       "json documents with the same cardinality but different contents",
+		inputs:         r("doc", "json", `[1]`, `[2]`, `[1]`, `{"a": 1}`, `{"b": 1}`, `{"a": 1}`, `1`, `1.0`),
+		expectedResult: r("doc", "json", `[1]`, `[2]`, `{"a": 1}`, `{"b": 1}`, `1`),
+	}, {
 		testName:       "mixed columns",
 		collations:     []collations.ID{collations.CollationUtf8mb4ID, collations.Unknown},
 		inputs:         r("myid|id", "varchar|int64", "monkey|1", "horse|1", "Horse|1", "Monkey|1", "horses|1", "MONKEY|2"),

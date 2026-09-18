@@ -48,6 +48,22 @@ func TestHashCodes(t *testing.T) {
 		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"2": "bar", "1": "foo"}`)), true, nil},
 		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), false, nil},
 		{sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), false, nil},
+		// JSON arrays and objects with the same cardinality but different contents must not collide.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[2]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"b": 1}`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 2}`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [4]}]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), true, nil},
+		// Numerically equal JSON numbers hash the same, nested or not.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1.0`)), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1, 2.50]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1.0, 2.5]`)), true, nil},
+		// JSON scalars of different types never compare equal.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"1"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`true`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`true`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`false`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`null`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"AB"`)), false, nil},
 	}
 
 	for _, tc := range cases {
@@ -154,6 +170,22 @@ func TestHashCodes128(t *testing.T) {
 		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"2": "bar", "1": "foo"}`)), true, nil},
 		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), false, nil},
 		{sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), false, nil},
+		// JSON arrays and objects with the same cardinality but different contents must not collide.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[2]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"b": 1}`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 2}`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [4]}]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), true, nil},
+		// Numerically equal JSON numbers hash the same, nested or not.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1.0`)), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1, 2.50]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1.0, 2.5]`)), true, nil},
+		// JSON scalars of different types never compare equal.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"1"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`true`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`true`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`false`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`null`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"AB"`)), false, nil},
 	}
 
 	for _, tc := range cases {
