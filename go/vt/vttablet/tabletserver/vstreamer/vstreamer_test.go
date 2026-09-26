@@ -320,8 +320,54 @@ func TestNoBlob(t *testing.T) {
 	defer cancel()
 	err := vstream(streamCtx, t, pos, nil, keyrangeFilter, ch, false)
 	close(ch)
-	require.ErrorContains(t, err, "a row moving into the target key range has a partial after image")
+	require.ErrorContains(t, err, "a row moving into the target key range has a partial after image from which column blb cannot be reconstructed")
 	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+
+	// The same move is fine when the filter does not select the omitted blob:
+	// every emitted value is present.
+	projectedFE := &TestFieldEvent{
+		table: "t9",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	tsu := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t9(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t9",
+					Filter: "select id1, val from t9 where in_keyrange(id1, 'hash', '-80')",
+				}},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsu.Close()
+	tsu.Init()
+	tsu.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t9 values (6, 1, 'blob1', 'aaa')", noEvents}, // 80-
+		{"update t9 set id1 = 5 where id1 = 6", []TestRowEvent{ // moves into -80, blob omitted but not selected
+			{event: projectedFE.String()},
+			{spec: &TestRowEventSpec{table: "t9", changes: []TestRowChange{{
+				after: []string{"5", "aaa"},
+				// The image is still partial: the legacy bitmap is in source order
+				// (id1, id2, blb, val) with the blob absent, the projected one
+				// covers the emitted (id1, val), both present.
+				dataColumnsRaw:      &binlogdatapb.RowChange_Bitmap{Count: 4, Cols: []byte{0x0b}},
+				afterDataColumnsRaw: &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{0x03}},
+			}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsu.Run()
 
 	movedFE := &TestFieldEvent{
 		table: "t8",

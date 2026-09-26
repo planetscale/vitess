@@ -1238,18 +1238,22 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			// both before and after images are filtered out
 			continue
 		}
-		if hasVindex && !beforeOK && afterOK && len(beforeRawValues) > 0 && partial {
+		if hasVindex && !beforeOK && afterOK && len(beforeRawValues) > 0 {
 			// An UPDATE whose row moves into the target key range is sent with
 			// only its after image, which the consumer has to apply as an
-			// INSERT. Under binlog_row_image=NOBLOB that image omits the
-			// unchanged BLOB/TEXT columns, and unlike a real INSERT (where an
-			// omitted column simply took its default) there is no existing
-			// target row to keep their values from: the row cannot be
-			// reproduced. Fail closed here, where we still know this was an
-			// UPDATE, rather than let the target insert defaults or NULLs.
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-				"table %s: a row moving into the target key range has a partial after image (binlog_row_image=NOBLOB omitted unchanged BLOB/TEXT columns) and cannot be inserted on the target; you will need to use binlog_row_image=FULL",
-				plan.Table.Name)
+			// INSERT. If that image does not carry every emitted value, because
+			// binlog_row_image=NOBLOB omitted an unchanged BLOB/TEXT column or
+			// binlog_row_value_options=PARTIAL_JSON sent a JSON diff that needs
+			// the previous value, the row cannot be reproduced: unlike a real
+			// INSERT, where an omitted column simply took its default, there is
+			// no existing target row to take the missing values from. Fail
+			// closed here, where we still know this was an UPDATE, rather than
+			// let the target insert defaults or NULLs.
+			if col := plan.unreconstructibleAfterColumn(&rows.DataColumns, &row.JSONPartialValues); col != "" {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"table %s: a row moving into the target key range has a partial after image from which column %s cannot be reconstructed (binlog_row_image=NOBLOB omitted it, or binlog_row_value_options=PARTIAL_JSON sent a partial value) and the row cannot be inserted on the target; you will need to use binlog_row_image=FULL without PARTIAL_JSON",
+					plan.Table.Name, col)
+			}
 		}
 
 		// at least one image passes the filter and is not a sharded filter
