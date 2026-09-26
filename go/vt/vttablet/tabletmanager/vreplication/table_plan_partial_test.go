@@ -265,6 +265,61 @@ func TestApplyChangePartialLegacyInsertBitmapShort(t *testing.T) {
 	require.ErrorContains(t, err, "unable to create partial insert query for dst")
 }
 
+// TestApplyChangePartialGroupedPlans confirms that partial INSERT and UPDATE
+// statements for grouped plans keep the semantics of the full statements, so
+// that a row event does not behave differently only because NOBLOB or
+// PARTIAL_JSON marked it partial: a fully grouped plan (insertIgnore, first
+// value wins) uses "insert ignore" for both, and a partially grouped plan
+// (insertOnDup, last value wins) adds "on duplicate key update" over the
+// present columns to its INSERT while its UPDATE stays a plain update.
+func TestApplyChangePartialGroupedPlans(t *testing.T) {
+	fields := []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT32},
+		{Name: "val", Type: querypb.Type_VARBINARY},
+		{Name: "blb", Type: querypb.Type_BLOB},
+	}
+	// Streamed order (id, val, blb) with the blob omitted.
+	blobOmitted := bitmap(true, true, false)
+	fullImage := bitmap(true, true, true)
+	before := &querypb.Row{Lengths: []int64{1, 3, -1}, Values: []byte("1aaa")}
+	after := &querypb.Row{Lengths: []int64{1, 3, -1}, Values: []byte("1bbb")}
+	afterFull := &querypb.Row{Lengths: []int64{1, 3, 5}, Values: []byte("1bbbblob1")}
+
+	t.Run("insertIgnore", func(t *testing.T) {
+		tp := buildTestTablePlan(t, "dst", "select id, val, blb from src group by id, val, blb", fields)
+		tp.Stats = binlogplayer.NewStats()
+
+		executed, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{After: after, AfterDataColumns: blobOmitted})
+		require.NoError(t, err)
+		require.Equal(t, []string{"insert ignore into dst(id,val) values (1,_binary'bbb')"}, executed, "partial insert")
+
+		executed, err = applyChangeQueries(t, tp, &binlogdatapb.RowChange{Before: before, After: after, AfterDataColumns: blobOmitted})
+		require.NoError(t, err)
+		require.Equal(t, []string{"insert ignore into dst(id,val) values (1,_binary'bbb')"}, executed, "partial update")
+
+		executed, err = applyChangeQueries(t, tp, &binlogdatapb.RowChange{Before: before, After: afterFull, AfterDataColumns: fullImage})
+		require.NoError(t, err)
+		require.Equal(t, []string{"insert ignore into dst(id,val,blb) values (1,_binary'bbb',_binary'blob1')"}, executed, "full update, still partial-marked")
+	})
+
+	t.Run("insertOnDup", func(t *testing.T) {
+		tp := buildTestTablePlan(t, "dst", "select id, val, blb from src group by id", fields)
+		tp.Stats = binlogplayer.NewStats()
+
+		executed, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{After: after, AfterDataColumns: blobOmitted})
+		require.NoError(t, err)
+		require.Equal(t, []string{"insert into dst(id,val) values (1,_binary'bbb') on duplicate key update val=values(val)"}, executed, "partial insert")
+
+		executed, err = applyChangeQueries(t, tp, &binlogdatapb.RowChange{Before: before, After: after, AfterDataColumns: blobOmitted})
+		require.NoError(t, err)
+		require.Equal(t, []string{"update dst set val=_binary'bbb' where id=1"}, executed, "partial update")
+
+		executed, err = applyChangeQueries(t, tp, &binlogdatapb.RowChange{After: afterFull, AfterDataColumns: fullImage})
+		require.NoError(t, err)
+		require.Equal(t, []string{"insert into dst(id,val,blb) values (1,_binary'bbb',_binary'blob1') on duplicate key update val=values(val), blb=values(blb)"}, executed, "full insert, still partial-marked")
+	})
+}
+
 // TestApplyChangePartialInsertOmittedColumns pins down partial INSERTs. A
 // column absent from a true INSERT's NOBLOB image was not set by the source
 // statement (MySQL omits BLOB/TEXT columns that are not in the write set), so
@@ -395,8 +450,10 @@ func TestApplyChangePartialAggregatePlansRejected(t *testing.T) {
 		})
 	}
 
-	t.Run("group by without aggregates is applied", func(t *testing.T) {
-		// This is the shape of an owned lookup vindex backfill (insertIgnore plan).
+	t.Run("group by without aggregates is applied with the plan's semantics", func(t *testing.T) {
+		// This is the shape of an owned lookup vindex backfill (insertIgnore
+		// plan): first value wins, so an UPDATE is an insert ignore, as with a
+		// full image. See TestApplyChangePartialGroupedPlans.
 		tp := buildTestTablePlan(t, "dst", "select id, val from src group by id, val", fields)
 		tp.Stats = binlogplayer.NewStats()
 		require.True(t, tp.supportsPartialImages())
@@ -404,7 +461,7 @@ func TestApplyChangePartialAggregatePlansRejected(t *testing.T) {
 			Before: before, After: after, AfterDataColumns: bitmap(true, true),
 		})
 		require.NoError(t, err)
-		require.Equal(t, []string{"update dst set val=_binary'bbb' where id=1"}, executed)
+		require.Equal(t, []string{"insert ignore into dst(id,val) values (1,_binary'bbb')"}, executed)
 	})
 
 	t.Run("plain projection is fine", func(t *testing.T) {

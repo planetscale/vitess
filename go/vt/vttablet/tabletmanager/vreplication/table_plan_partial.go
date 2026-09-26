@@ -176,7 +176,10 @@ func (tp *TablePlan) mappedDataColumnsFor(streamed *binlogdatapb.RowChange_Bitma
 // the row bytes, so BeforeDataColumns must be consulted before treating a
 // present input as unchanged. When every present input is known in the before
 // image and none of them changed, the expression's value did not change either,
-// so leaving it out of the partial query is correct.
+// so leaving it out of the partial query is correct. As with every column that
+// a partial image leaves out, the expression is then not re-evaluated on the
+// target: a filter using a non-deterministic function (uuid(), now(), ...) is
+// not reproducible under any row image mode and is not made so here.
 func (tp *TablePlan) checkMixedColExprs(mapped *mappedDataColumns, rowChange *binlogdatapb.RowChange) error {
 	if len(mapped.mixed) == 0 {
 		return nil
@@ -297,7 +300,13 @@ func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuf
 }
 
 func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuffer, dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
-	buf.Myprintf("insert into %v(", tpb.name)
+	// Same statement shape as generateInsertPart: a fully grouped plan keeps
+	// the first value it sees.
+	if tpb.onInsert == insertIgnore {
+		buf.Myprintf("insert ignore into %v(", tpb.name)
+	} else {
+		buf.Myprintf("insert into %v(", tpb.name)
+	}
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
 		if int64(ind) >= dataColumns.Count {
@@ -361,15 +370,39 @@ func (tpb *tablePlanBuilder) createPartialInsertQuery(dataColumns *binlogdatapb.
 			return nil, err
 		}
 	}
+	tpb.generatePartialOnDupPart(buf, dataColumns)
 	return buf.ParsedQuery(), nil
+}
+
+// generatePartialOnDupPart is generateOnDupPart restricted to the columns
+// present in the image, so that a partial INSERT for a grouped plan keeps the
+// "last value wins" semantics of the full statement. Aggregate plans never
+// reach the partial generators (see supportsPartialImages).
+func (tpb *tablePlanBuilder) generatePartialOnDupPart(buf *sqlparser.TrackedBuffer, dataColumns *binlogdatapb.RowChange_Bitmap) {
+	if tpb.onInsert != insertOnDup {
+		return
+	}
+	separator := " on duplicate key update "
+	for ind, cexpr := range tpb.colExprs {
+		if cexpr.isGrouped || cexpr.isPK || cexpr.isGenerated || !isBitSet(dataColumns.Cols, ind) {
+			continue
+		}
+		buf.Myprintf("%s%v=values(%v)", separator, cexpr.colName, cexpr.colName)
+		separator = ", "
+	}
 }
 
 // createPartialUpdateQuery generates the UPDATE for a partial row image. It
 // returns a nil query and no error when none of the writable target columns is
 // present in the image, e.g. when the only change in the source row was to a
 // column that the filter does not select: there is nothing to update on the
-// target and the row event should be treated as a no-op.
+// target and the row event should be treated as a no-op. For a fully grouped
+// plan the UPDATE is an "insert ignore", as in generateUpdateStatement: the
+// first value wins and an existing row is left alone.
 func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
+	if tpb.onInsert == insertIgnore {
+		return tpb.createPartialInsertQuery(dataColumns)
+	}
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	buf.Myprintf("update %v set ", tpb.name)
